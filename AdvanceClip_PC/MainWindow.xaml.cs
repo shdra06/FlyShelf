@@ -229,6 +229,10 @@ namespace AdvanceClip
             {
                 Classes.Logger.LogAction("WIDGET_FAIL", $"Failed to create taskbar widget: {ex.Message}");
             }
+
+            // Apply smooth animated scrolling to the shelf ListView
+            Classes.SmoothScrollBehavior.ApplyToListControl(ShelfListView);
+            Classes.SmoothScrollBehavior.ApplyToAllScrollViewers(this);
         }
 
         protected override void OnClosed(EventArgs e)
@@ -588,6 +592,20 @@ namespace AdvanceClip
             this.MaxHeight = _viewModel.CurrentFlyShelfMaxHeight;
             this.Width = _viewModel.CurrentFlyShelfWidth;
 
+            // Force a deterministic height so the window doesn't bounce around with SizeToContent
+            if (mode == 0)
+            {
+                // Mini mode: let content drive height, capped by MaxHeight
+                this.SizeToContent = SizeToContent.Height;
+                this.Height = double.NaN;
+            }
+            else
+            {
+                // Mode 1/2: use the stored height exactly — no content-driven fluctuation
+                this.SizeToContent = SizeToContent.Manual;
+                this.Height = _viewModel.CurrentFlyShelfMaxHeight;
+            }
+
             var workArea = SystemParameters.WorkArea;
             double safeWidth = double.IsNaN(this.Width) ? 360 : this.Width;
             if (safeWidth <= 0) safeWidth = 320;
@@ -748,8 +766,19 @@ namespace AdvanceClip
         {
             if (e.NewSize.Width > 100 && e.NewSize.Height > 100)
             {
-                Classes.SettingsManager.Current.MiniFormWidth = (int)e.NewSize.Width;
-                Classes.SettingsManager.Current.MiniFormHeight = (int)e.NewSize.Height;
+                // Only persist size changes for the CURRENT mode — prevents mode 1
+                // content-driven height from corrupting mode 0 stored dimensions
+                if (_viewModel.CurrentMode == 0)
+                {
+                    Classes.SettingsManager.Current.MiniFormWidth = (int)e.NewSize.Width;
+                    Classes.SettingsManager.Current.MiniFormHeight = (int)e.NewSize.Height;
+                }
+                else if (_viewModel.CurrentMode == 1)
+                {
+                    Classes.SettingsManager.Current.MediumFormWidth = (int)e.NewSize.Width;
+                    Classes.SettingsManager.Current.MediumFormHeight = (int)e.NewSize.Height;
+                }
+                // Mode 2 (Full) is always screen-relative, no persistence needed
             }
         }
 

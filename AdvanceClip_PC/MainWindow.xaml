@@ -87,7 +87,7 @@
         <ListView Name="ShelfListView" Grid.Row="1" ItemsSource="{Binding DroppedItems}" Background="#01000000" BorderThickness="0" Margin="12,0,12,12"
                   Focusable="True" KeyboardNavigation.DirectionalNavigation="Contained"
                   ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Hidden"
-                  ScrollViewer.CanContentScroll="True" VirtualizingPanel.ScrollUnit="Pixel"
+                  ScrollViewer.CanContentScroll="False" VirtualizingPanel.ScrollUnit="Pixel"
                   SelectionMode="Extended" MouseMove="ShelfListView_MouseMove" PreviewMouseLeftButtonDown="ShelfListView_PreviewMouseLeftButtonDown"
                   PreviewMouseLeftButtonUp="ShelfListView_PreviewMouseLeftButtonUp"
                   MouseDoubleClick="ShelfListView_MouseDoubleClick" SelectionChanged="ShelfListView_SelectionChanged"
