@@ -12,7 +12,7 @@ namespace AdvanceClip.Classes
 
         public static void Initialize()
         {
-            string basePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AdvanceClip", "RuntimeCore");
+            string basePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FlyShelf", "RuntimeCore");
             ExecutionDir = basePath;
 
             string trueExePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? Assembly.GetExecutingAssembly().Location;
@@ -29,8 +29,8 @@ namespace AdvanceClip.Classes
             try { if (Directory.Exists(ExecutionDir)) Directory.Delete(ExecutionDir, true); } catch { }
             Directory.CreateDirectory(ExecutionDir);
 
-            ExtractResource("AdvanceClip.Scripts.zip", Path.Combine(ExecutionDir, "Scripts"));
-            ExtractResource("AdvanceClip.WebClient.zip", Path.Combine(ExecutionDir, "Resources", "WebClient"));
+            ExtractResource("FlyShelf.Scripts.zip", Path.Combine(ExecutionDir, "Scripts"));
+            ExtractResource("FlyShelf.WebClient.zip", Path.Combine(ExecutionDir, "Resources", "WebClient"));
 
             File.WriteAllText(verFile, currentVer.ToString());
         }

@@ -19,6 +19,8 @@ namespace AdvanceClip.Classes
         private System.Timers.Timer _healthTimer;      // Periodic tunnel health monitor
 
         public string GlobalUrl { get; private set; } = "Initializing...";
+        /// <summary>Previous tunnel URL — used to purge stale file entries from Firebase when URL changes.</summary>
+        public string PreviousGlobalUrl { get; private set; } = "";
         /// <summary>
         /// True ONLY when the tunnel has been self-verified (HTTP 200 on /api/health).
         /// False if verification was inconclusive (HTTP 400/530/timeout).
@@ -41,7 +43,7 @@ namespace AdvanceClip.Classes
 
             try
             {
-                string agentDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AdvanceClip", "agent");
+                string agentDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "agent");
                 Directory.CreateDirectory(agentDir);
                 string exePath = Path.Combine(agentDir, "cloudflared.exe");
 
@@ -106,6 +108,11 @@ namespace AdvanceClip.Classes
                             {
                                 Logger.LogAction("CF_STDERR", $"Ignoring system URL: {match.Value}");
                                 return;
+                            }
+                            // Track old URL for stale entry cleanup
+                            if (GlobalUrl.Contains("trycloudflare.com") && GlobalUrl != match.Value)
+                            {
+                                PreviousGlobalUrl = GlobalUrl;
                             }
                             GlobalUrl = match.Value;
                             tunnelUrlReceived = true;

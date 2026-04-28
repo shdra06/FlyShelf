@@ -540,7 +540,7 @@ namespace AdvanceClip
                             if (cName != "Shell_TrayWnd" && cName != "Shell_SecondaryTrayWnd" && cName != "WorkerW" && cName != "Progman")
                             {
                                 GetWindowText(wnd, sb, 256);
-                                if (sb.Length > 0 && sb.ToString() != "AdvanceClip" && sb.ToString() != "FlyShelf" && sb.ToString() != "Program Manager")
+                                if (sb.Length > 0 && sb.ToString() != "FlyShelf" && sb.ToString() != "Program Manager")
                                 {
                                     target = wnd;
                                     return false; 

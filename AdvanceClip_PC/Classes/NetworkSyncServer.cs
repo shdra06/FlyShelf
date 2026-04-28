@@ -2,17 +2,22 @@ using System;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Net.Security;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Text.Json;
+using System.Collections.Generic;
 using AdvanceClip.ViewModels;
 
 namespace AdvanceClip.Classes
 {
     public class NetworkSyncServer
     {
+        public static NetworkSyncServer? Instance { get; private set; }
         private HttpListener _listener;
         private Thread _listenerThread;
         private bool _isRunning = false;
@@ -20,6 +25,8 @@ namespace AdvanceClip.Classes
         private CloudflareDaemon _cfDaemon = new CloudflareDaemon();
         private System.Timers.Timer _heartbeatTimer;
         private System.Net.Sockets.TcpListener _proxyListener = null;
+        private bool _proxyRunning = false;
+        private int _proxyInternalPort = 0;
         private static readonly HttpClient _httpClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(30) };
         
         public string ServerUrl { get; private set; } = "Not Running";
@@ -27,13 +34,152 @@ namespace AdvanceClip.Classes
         public string GlobalUrl => _cfDaemon.GlobalUrl;
         public int CurrentPort { get; private set; } = 3000;
 
+        private static readonly string[] _allowedRoots = {
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"),
+            Path.GetTempPath()
+        };
+
+        private static readonly DateTime _downloadGracePeriodEnd = DateTime.MinValue; // Auth always enforced
+
+        // ═══════════════════════════════════════════════════════════════════
+        // TLS: Self-signed certificate for LAN HTTPS
+        // ═══════════════════════════════════════════════════════════════════
+        private const int TLS_PORT = 9443;
+        private System.Net.Sockets.TcpListener? _tlsListener;
+        private bool _tlsRunning = false;
+        private X509Certificate2? _tlsCert;
+        public string TlsThumbprint { get; private set; } = "";
+        public string TlsUrl { get; private set; } = "";
+
+        /// <summary>
+        /// Loads or generates a self-signed X509 certificate for HTTPS.
+        /// Stored in %AppData%\AdvanceClip\server.pfx (persists across restarts).
+        /// </summary>
+        private X509Certificate2 EnsureTlsCertificate()
+        {
+            string certDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf");
+            Directory.CreateDirectory(certDir);
+            string certPath = Path.Combine(certDir, "server.pfx");
+
+            // Try to load existing cert
+            if (File.Exists(certPath))
+            {
+                try
+                {
+                    var existing = X509CertificateLoader.LoadPkcs12FromFile(certPath, "advanceclip_tls", X509KeyStorageFlags.Exportable);
+                    // Check if cert is still valid (not expired, has at least 30 days left)
+                    if (existing.NotAfter > DateTime.Now.AddDays(30))
+                    {
+                        Logger.LogAction("TLS", $"Loaded existing certificate: {existing.Thumbprint} (expires {existing.NotAfter:yyyy-MM-dd})");
+                        return existing;
+                    }
+                    existing.Dispose();
+                    Logger.LogAction("TLS", "Certificate expiring soon — regenerating");
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("TLS", $"Failed to load cert: {ex.Message} — regenerating");
+                }
+            }
+
+            // Generate new self-signed cert
+            Logger.LogAction("TLS", "Generating new self-signed certificate...");
+            using var rsa = RSA.Create(2048);
+            var req = new CertificateRequest(
+                "CN=FlyShelf Local Server",
+                rsa,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pkcs1);
+
+            // Add Subject Alternative Names for LAN IPs
+            var sanBuilder = new SubjectAlternativeNameBuilder();
+            sanBuilder.AddDnsName("localhost");
+            sanBuilder.AddDnsName(Environment.MachineName);
+            sanBuilder.AddIpAddress(System.Net.IPAddress.Loopback);
+            // Add current LAN IP
+            try
+            {
+                using var socket = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Dgram, 0);
+                socket.Connect("8.8.8.8", 65530);
+                if (socket.LocalEndPoint is System.Net.IPEndPoint ep)
+                    sanBuilder.AddIpAddress(ep.Address);
+            }
+            catch { }
+            req.CertificateExtensions.Add(sanBuilder.Build());
+
+            // Valid for 2 years
+            var cert = req.CreateSelfSigned(DateTimeOffset.Now.AddDays(-1), DateTimeOffset.Now.AddYears(2));
+
+            // Export with private key
+            var exported = cert.Export(X509ContentType.Pfx, "advanceclip_tls");
+            File.WriteAllBytes(certPath, exported);
+
+            // Re-import from file (ensures proper key storage)
+            var finalCert = X509CertificateLoader.LoadPkcs12FromFile(certPath, "advanceclip_tls", X509KeyStorageFlags.Exportable);
+            Logger.LogAction("TLS", $"Generated certificate: {finalCert.Thumbprint} (expires {finalCert.NotAfter:yyyy-MM-dd})");
+            return finalCert;
+        }
+
+        /// <summary>
+        /// Validates that a requested file path is within an allowed directory
+        /// or is currently in the clipboard history. Prevents arbitrary file read.
+        /// </summary>
+        private bool IsPathAllowed(string requestedPath)
+        {
+            try
+            {
+                string resolved = Path.GetFullPath(requestedPath);
+                foreach (var root in _allowedRoots)
+                {
+                    if (resolved.StartsWith(Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+                // Check if file is currently in the clipboard (live items)
+                var activePaths = GetAllActiveFilePaths();
+                return activePaths.Contains(resolved, StringComparer.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// Returns all file paths currently held by clipboard items.
+        /// </summary>
+        private HashSet<string> GetAllActiveFilePaths()
+        {
+            var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    foreach (var item in _viewModel.DroppedItems)
+                    {
+                        if (!string.IsNullOrEmpty(item.FilePath))
+                            paths.Add(Path.GetFullPath(item.FilePath));
+                        if (!string.IsNullOrEmpty(item.ZippedArchivePath))
+                            paths.Add(Path.GetFullPath(item.ZippedArchivePath));
+                    }
+                });
+            }
+            catch { }
+            return paths;
+        }
+
         public NetworkSyncServer(FlyShelfViewModel viewModel)
         {
+            Instance = this;
             _viewModel = viewModel;
             _cfDaemon.GlobalUrlUpdated += (url) => { 
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.RefreshLocalServerData()); 
                 if (!string.IsNullOrEmpty(url) && url.Contains(".trycloudflare.com"))
                 {
+                    // Purge Firebase entries with the old dead Cloudflare URL before caching the new one
+                    string oldUrl = _cfDaemon.PreviousGlobalUrl;
+                    if (!string.IsNullOrEmpty(oldUrl) && oldUrl != url)
+                    {
+                        Logger.LogAction("TUNNEL CHANGE", $"URL changed: {oldUrl.Substring(0, Math.Min(40, oldUrl.Length))}... → {url.Substring(0, Math.Min(40, url.Length))}...");
+                        _ = FirebaseSyncManager.PurgeStaleFileEntries(oldUrl);
+                    }
                     FirebaseSyncManager.CachedGlobalUrl = url; // Cache for file download URL construction
                     FirebaseSyncManager.CachedTunnelVerified = _cfDaemon.IsTunnelVerified; // Only allow file downloads if verified
                     _ = FirebaseSyncManager.PushTunnelUrl(url, true, ServerUrl);
@@ -210,6 +356,29 @@ namespace AdvanceClip.Classes
                 _heartbeatTimer.AutoReset = true;
                 _heartbeatTimer.Start();
                 Logger.LogAction("HEARTBEAT", "Firebase device heartbeat started (60s interval)");
+                // ═══════════════════════════════════════════════════════════════════
+                // TLS LAYER: Start HTTPS proxy on port 9443 → forwards to HTTP server
+                // ═══════════════════════════════════════════════════════════════════
+                try
+                {
+                    _tlsCert = EnsureTlsCertificate();
+                    TlsThumbprint = _tlsCert.Thumbprint;
+
+                    _tlsListener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Any, TLS_PORT);
+                    _tlsListener.Start();
+                    _tlsRunning = true;
+
+                    _ = Task.Run(async () => await TlsProxyLoop());
+
+                    // Determine LAN IP for TLS URL
+                    string tlsIp = localIp;
+                    TlsUrl = $"https://{tlsIp}:{TLS_PORT}";
+                    Logger.LogAction("TLS", $"✅ HTTPS server started on {TlsUrl} (thumbprint: {TlsThumbprint})");
+                }
+                catch (Exception tlsEx)
+                {
+                    Logger.LogAction("TLS", $"⚠️ HTTPS server failed to start: {tlsEx.Message} — LAN sync will use HTTP only");
+                }
             }
             catch (Exception ex)
             {
@@ -225,8 +394,6 @@ namespace AdvanceClip.Classes
         // TcpListener on 0.0.0.0:publicPort accepts any connection and
         // proxies the raw TCP stream to HttpListener on localhost:internalPort.
         // ═══════════════════════════════════════════════════════════════════
-        private bool _proxyRunning = false;
-        private int _proxyInternalPort = 18999;
 
         private async Task TcpProxyLoop(int internalPort)
         {
@@ -315,6 +482,102 @@ namespace AdvanceClip.Classes
             catch { } // Connection closed — normal
         }
 
+        // ═══════════════════════════════════════════════════════════════════
+        // TLS Proxy: Accepts HTTPS connections on port 9443, terminates TLS,
+        // then proxies the decrypted HTTP stream to HttpListener on localhost.
+        // This provides encrypted LAN sync without requiring netsh or admin.
+        // ═══════════════════════════════════════════════════════════════════
+        private async Task TlsProxyLoop()
+        {
+            while (_tlsRunning && _tlsListener != null)
+            {
+                try
+                {
+                    var client = await _tlsListener!.AcceptTcpClientAsync();
+                    _ = Task.Run(() => TlsProxyConnection(client));
+                }
+                catch (ObjectDisposedException) { break; }
+                catch (System.Net.Sockets.SocketException) { break; }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("TLS", $"Accept error: {ex.Message}");
+                    if (!_tlsRunning) break;
+                    await Task.Delay(100);
+                }
+            }
+        }
+
+        private async Task TlsProxyConnection(System.Net.Sockets.TcpClient client)
+        {
+            try
+            {
+                using (client)
+                {
+                    client.NoDelay = true;
+                    var networkStream = client.GetStream();
+
+                    // Wrap in SslStream — this terminates TLS
+                    using var sslStream = new SslStream(networkStream, false);
+                    await sslStream.AuthenticateAsServerAsync(_tlsCert!, false, System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13, false);
+
+                    // Connect to the local HTTP server
+                    using var target = new System.Net.Sockets.TcpClient();
+                    // Route to the internal port if proxy mode, else to the public port
+                    int targetPort = _proxyInternalPort > 0 ? _proxyInternalPort : CurrentPort;
+                    await target.ConnectAsync("localhost", targetPort);
+                    target.NoDelay = true;
+                    var targetStream = target.GetStream();
+
+                    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+
+                    // Read HTTP headers from the decrypted stream
+                    var headerBytes = new List<byte>(4096);
+                    byte[] buf = new byte[1];
+                    int headerEnd = -1;
+
+                    while (headerBytes.Count < 16384)
+                    {
+                        int read = await sslStream.ReadAsync(buf, 0, 1, cts.Token);
+                        if (read == 0) return;
+                        headerBytes.Add(buf[0]);
+
+                        int len = headerBytes.Count;
+                        if (len >= 4 &&
+                            headerBytes[len - 4] == (byte)'\r' &&
+                            headerBytes[len - 3] == (byte)'\n' &&
+                            headerBytes[len - 2] == (byte)'\r' &&
+                            headerBytes[len - 1] == (byte)'\n')
+                        {
+                            headerEnd = len;
+                            break;
+                        }
+                    }
+
+                    if (headerEnd <= 0) return;
+
+                    // Rewrite Host header to match HttpListener's expected prefix
+                    string headerText = Encoding.ASCII.GetString(headerBytes.ToArray(), 0, headerEnd);
+                    string rewritten = System.Text.RegularExpressions.Regex.Replace(
+                        headerText,
+                        @"(?i)Host:\s*[^\r\n]+",
+                        $"Host: localhost:{targetPort}");
+
+                    byte[] rewrittenBytes = Encoding.ASCII.GetBytes(rewritten);
+                    await targetStream.WriteAsync(rewrittenBytes, 0, rewrittenBytes.Length, cts.Token);
+
+                    // Bi-directional relay: sslStream ↔ targetStream
+                    var t1 = sslStream.CopyToAsync(targetStream, cts.Token);
+                    var t2 = targetStream.CopyToAsync(sslStream, cts.Token);
+                    await Task.WhenAny(t1, t2);
+                }
+            }
+            catch (System.Security.Authentication.AuthenticationException ex)
+            {
+                Logger.LogAction("TLS", $"Client TLS handshake failed: {ex.Message}");
+            }
+            catch { } // Connection closed — normal
+        }
+
         public void Stop()
         {
             if (!_isRunning) return;
@@ -326,6 +589,11 @@ namespace AdvanceClip.Classes
             _ = FirebaseSyncManager.PushTunnelUrl("offline", false, "");
             try { _listener?.Stop(); } catch { }
             try { _proxyListener?.Stop(); } catch { }
+            // Stop TLS proxy
+            _tlsRunning = false;
+            try { _tlsListener?.Stop(); } catch { }
+            try { _tlsCert?.Dispose(); } catch { }
+            TlsUrl = "";
             System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.RefreshLocalServerData());
         }
 
@@ -394,7 +662,7 @@ namespace AdvanceClip.Classes
                 
                 res.AddHeader("Access-Control-Allow-Origin", "*");
                 res.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                res.AddHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Original-Date, X-Advance-Client");
+                res.AddHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Original-Date, X-FlyShelf-Client");
                 res.AddHeader("Access-Control-Expose-Headers", "X-Global-Url");
                 if (!string.IsNullOrEmpty(GlobalUrl)) res.AddHeader("X-Global-Url", GlobalUrl);
 
@@ -426,8 +694,25 @@ namespace AdvanceClip.Classes
                 }
                 else if (path == "/download" && req.HttpMethod == "GET")
                 {
-                    // File downloads must be PUBLIC (no auth) — Cloudflare tunnel passes these
-                    await ServeFileDownload(req, res);
+                    // SECURITY: /download requires authentication (pairing key or PIN)
+                    string dlPairingKey = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"] ?? "";
+                    string dlPin = req.Headers["Authorization"]?.Replace("Bearer ", "") ?? req.QueryString["pin"] ?? "";
+                    bool dlAuthed = DevicePairingManager.IsDevicePaired(dlPairingKey) ||
+                                   (!string.IsNullOrEmpty(dlPin) && dlPin == SettingsManager.Current.WebClientPinToken);
+
+                    if (!dlAuthed)
+                    {
+                        Logger.LogAction("SECURITY", $"⛔ Rejected unauthenticated /download from {req.RemoteEndPoint}");
+                        byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"401 — Download requires authentication\"}");
+                        res.StatusCode = 401;
+                        res.ContentType = "application/json";
+                        res.OutputStream.Write(err, 0, err.Length);
+                        res.Close();
+                    }
+                    else
+                    {
+                        await ServeFileDownload(req, res);
+                    }
                 }
                 else if (path == "/api/pair" && req.HttpMethod == "POST")
                 {
@@ -474,7 +759,7 @@ namespace AdvanceClip.Classes
                     string providedPin = req.Headers["Authorization"]?.Replace("Bearer ", "") ?? req.QueryString["pin"];
                     string pairingKey = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"];
                     
-                    bool isNativeMobileCompanion = req.Headers["User-Agent"]?.Contains("AdvanceClipMobile_Native") == true || req.Headers["X-Advance-Client"] == "MobileCompanion" || req.Headers["X-Advance-Client"] == "DesktopSync";
+                    bool isNativeMobileCompanion = req.Headers["User-Agent"]?.Contains("FlyShelfMobile_Native") == true || req.Headers["X-FlyShelf-Client"] == "MobileCompanion" || req.Headers["X-FlyShelf-Client"] == "DesktopSync";
                     bool isPairedDevice = DevicePairingManager.IsDevicePaired(pairingKey);
                     
                     if (!isNativeMobileCompanion && !isPairedDevice && (string.IsNullOrEmpty(providedPin) || providedPin != SettingsManager.Current.WebClientPinToken))
@@ -591,9 +876,11 @@ namespace AdvanceClip.Classes
                 // Rebuild cache
                 System.Windows.Application.Current.Dispatcher.Invoke(() =>
                 {
+                    string deviceId = SettingsManager.Current.DeviceId ?? "PC";
                     var payload = _viewModel.DroppedItems.Take(15).Select(x => new
                     {
                         id = x.GetHashCode().ToString() + "_" + x.DateCopied.Ticks.ToString(),
+                        EventId = $"{deviceId}_{((DateTimeOffset)x.DateCopied).ToUnixTimeMilliseconds()}_{x.GetHashCode():X4}",
                         Title = string.IsNullOrEmpty(x.FileName) ? (x.RawContent?.Length > 20 ? x.RawContent.Substring(0, 20) + "..." : x.RawContent) : x.FileName,
                         Type = x.ItemType.ToString(),
                         PreviewUrl = (x.ItemType == ClipboardItemType.Image || x.ItemType == ClipboardItemType.QRCode) ? (!string.IsNullOrEmpty(x.FilePath) ? $"/download?path={Uri.EscapeDataString(x.FilePath)}" : (x.RawContent ?? "")) : "",
@@ -672,7 +959,7 @@ namespace AdvanceClip.Classes
                 }
 
                 string dateString = DateTime.Now.ToString("dd-MM-yyyy");
-                string uploadDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "AdvanceClip", "Clipboard", sourceDevice, dateString);
+                string uploadDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FlyShelf", "Clipboard", sourceDevice, dateString);
                 Directory.CreateDirectory(uploadDir);
 
                 string encodedName = req.Headers["X-File-Name"] ?? req.QueryString["name"];
@@ -802,9 +1089,9 @@ namespace AdvanceClip.Classes
                     try { batchName = Uri.UnescapeDataString(batchName); } catch { }
                 }
                 
-                if (string.IsNullOrWhiteSpace(batchName)) batchName = "AdvanceClip_Mobile_Transfer";
+                if (string.IsNullOrWhiteSpace(batchName)) batchName = "FlyShelf_Mobile_Transfer";
 
-                string archiveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "AdvanceClip", "Synced", batchName);
+                string archiveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FlyShelf", "Synced", batchName);
                 Directory.CreateDirectory(archiveDir);
 
                 string originalDateStr = req.Headers["X-Original-Date"];
@@ -914,7 +1201,7 @@ namespace AdvanceClip.Classes
 
                 // Save to Downloads/Synced/Relay_{sender}/
                 string relayDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), 
-                    "Downloads", "AdvanceClip", "Relay", senderDevice.Replace(" ", "_"));
+                    "Downloads", "FlyShelf", "Relay", senderDevice.Replace(" ", "_"));
                 Directory.CreateDirectory(relayDir);
 
                 int counter = 1;
@@ -1096,7 +1383,7 @@ namespace AdvanceClip.Classes
                 }
 
                 // Merge all chunks in order
-                string archiveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "AdvanceClip", "Synced", batchName);
+                string archiveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FlyShelf", "Synced", batchName);
                 Directory.CreateDirectory(archiveDir);
 
                 int counter = 1;
@@ -1420,6 +1707,22 @@ namespace AdvanceClip.Classes
                 return;
             }
 
+            // SECURITY: Path sandbox — reject files outside allowed directories
+            if (!IsPathAllowed(path))
+            {
+                Logger.LogAction("SECURITY", $"🚫 BLOCKED path traversal attempt: {path} from {req.RemoteEndPoint}");
+                try
+                {
+                    byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"403 — Access denied: path not in allowed directory\"}");
+                    res.StatusCode = 403;
+                    res.ContentType = "application/json";
+                    res.OutputStream.Write(err, 0, err.Length);
+                    res.Close();
+                }
+                catch { }
+                return;
+            }
+
             try
             {
                 var fileInfo = new FileInfo(path);
@@ -1453,6 +1756,22 @@ namespace AdvanceClip.Classes
                 res.AddHeader("Cache-Control", "no-store");
                 res.AddHeader("Access-Control-Allow-Origin", "*");
                 res.AddHeader("Accept-Ranges", "bytes");
+
+                // Compute SHA-256 hash for file integrity verification
+                string fileHash = "";
+                try
+                {
+                    using (var hashStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1048576, FileOptions.SequentialScan))
+                    {
+                        var sha = System.Security.Cryptography.SHA256.HashData(hashStream);
+                        fileHash = BitConverter.ToString(sha).Replace("-", "").ToLowerInvariant();
+                    }
+                    res.AddHeader("X-Content-SHA256", fileHash);
+                }
+                catch (Exception hashEx)
+                {
+                    Logger.LogAction("DOWNLOAD", $"Hash computation failed: {hashEx.Message}");
+                }
 
                 res.StatusCode = 200;
                 res.ContentLength64 = fileSize;

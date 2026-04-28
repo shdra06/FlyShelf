@@ -6,7 +6,7 @@
         xmlns:vm="clr-namespace:AdvanceClip.ViewModels"
         xmlns:settings="clr-namespace:AdvanceClip.Classes"
         xmlns:gif="https://github.com/XamlAnimatedGif/XamlAnimatedGif"
-        Title="AdvanceClip Ecosystem" 
+        Title="FlyShelf Ecosystem" 
         Height="650" 
         Width="900"
         MinWidth="300" MinHeight="400"
@@ -84,7 +84,7 @@
             </Grid.ColumnDefinitions>
             <StackPanel Grid.Column="0" Orientation="Horizontal">
                 <Image Source="/Resources/ClipFlowIcon.png" Width="22" Height="22" Margin="0,0,12,0" RenderOptions.BitmapScalingMode="HighQuality"/>
-                <TextBlock Text="AdvanceClip" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                <TextBlock Text="FlyShelf" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                 <TextBlock Text="Desktop Hub" FontSize="15" FontWeight="Normal" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center" Margin="6,0,0,0" Opacity="0.6"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" WindowChrome.IsHitTestVisibleInChrome="True">
@@ -1177,7 +1177,7 @@
                                                     <TextBlock Text="CLOUDFLARE" FontSize="10" FontWeight="Bold" Foreground="#10B981" VerticalAlignment="Center"/>
                                                 </Border>
                                             </StackPanel>
-                                            <TextBlock Text="Securely broadcast your clipboard worldwide via a TryCloudflare reverse proxy inside AdvanceClip." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,4,16,0" TextWrapping="Wrap" LineHeight="18"/>
+                                            <TextBlock Text="Securely broadcast your clipboard worldwide via a TryCloudflare reverse proxy inside FlyShelf." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,4,16,0" TextWrapping="Wrap" LineHeight="18"/>
                                         </StackPanel>
                                         <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalCloudflare, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                     </Grid>
@@ -1621,7 +1621,7 @@
                             <!-- Settings Meta -->
                             <StackPanel Margin="0,0,0,6">
                                 <TextBlock Text="Core Settings" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
-                                <TextBlock Text="Personalize the behavior and look of AdvanceClip." FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                                <TextBlock Text="Personalize the behavior and look of FlyShelf." FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,4,0,0" TextWrapping="Wrap" />
                             </StackPanel>
                             <Border Height="2" CornerRadius="1" HorizontalAlignment="Left" Width="60" Margin="0,8,0,20">
                                 <Border.Background>
@@ -1707,7 +1707,7 @@
                                                 </Border>
                                                 <TextBlock Text="Drag Behavior" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                                             </StackPanel>
-                                            <TextBlock Text="Keep items in history after dragging out of AdvanceClip." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="11" TextWrapping="Wrap" LineHeight="16" Margin="0,0,12,0"/>
+                                            <TextBlock Text="Keep items in history after dragging out of FlyShelf." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="11" TextWrapping="Wrap" LineHeight="16" Margin="0,0,12,0"/>
                                         </StackPanel>
                                         <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=KeepItemOnDragOut, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                     </Grid>

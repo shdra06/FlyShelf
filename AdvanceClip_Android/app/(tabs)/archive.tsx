@@ -133,7 +133,7 @@ export default function ConnectScreen() {
         try {
           const res = await fetch(`${url}/api/health`, { 
             method: 'GET', 
-            headers: { 'X-Advance-Client': 'MobileCompanion' }, 
+            headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, 
             signal: AbortSignal.timeout(2000) 
           });
           if (res.ok) {
@@ -193,7 +193,7 @@ export default function ConnectScreen() {
           }
           for (const url of localCandidates) {
             try {
-              const res = await fetch(`${url}/api/health`, { method: 'GET', headers: { 'X-Advance-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(2000) });
+              const res = await fetch(`${url}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(2000) });
               if (res.ok) { localReachable = true; resolvedLocalUrl = url; break; }
             } catch(e) {}
           }
@@ -207,7 +207,7 @@ export default function ConnectScreen() {
         if (hasCloudflare && !localReachable) {
           try {
             const cfUrl = dev.GlobalUrl.endsWith('/') ? dev.GlobalUrl.slice(0, -1) : dev.GlobalUrl;
-            const res = await fetch(`${cfUrl}/api/health`, { method: 'GET', headers: { 'X-Advance-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(3000) });
+            const res = await fetch(`${cfUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(3000) });
             if (res.ok) {
               globals.push({ ...dev, resolvedUrl: cfUrl, connectionType: 'cloudflare' });
             } else {
@@ -503,7 +503,7 @@ export default function ConnectScreen() {
                 httpMethod: 'POST',
                 uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
                 headers: {
-                  'X-Advance-Client': 'MobileCompanion',
+                  'X-FlyShelf-Client': 'MobileCompanion',
                   'X-Original-Date': (asset.creationTime || Date.now()).toString(),
                   'X-File-Name': encodeURIComponent(asset.filename || 'file.bin'),
                   'X-Batch-Name': encodeURIComponent(batchName),
@@ -558,7 +558,7 @@ export default function ConnectScreen() {
               httpMethod: 'POST',
               uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
               headers: {
-                'X-Advance-Client': 'MobileCompanion',
+                'X-FlyShelf-Client': 'MobileCompanion',
                 'X-Upload-Session': sessionId,
                 'X-Chunk-Index': i.toString(),
               }
@@ -582,7 +582,7 @@ export default function ConnectScreen() {
       const finRes = await fetch(`${baseUrl}/api/upload_finalize`, {
         method: 'POST',
         headers: {
-          'X-Advance-Client': 'MobileCompanion',
+          'X-FlyShelf-Client': 'MobileCompanion',
           'X-Upload-Session': sessionId,
           'X-File-Name': encodeURIComponent(asset.filename || 'file.bin'),
           'X-Batch-Name': encodeURIComponent(batch),

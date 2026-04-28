@@ -54,8 +54,8 @@ namespace AdvanceClip.Classes
             // 1. Main clipboard feed: SSE streaming (near-instant delivery)
             Task.Run(() => RunSSEStream(_cts.Token));
 
-            // 2. Forced sync: lightweight poll every 5 seconds
-            Task.Run(() => RunForcedSyncPoller(_cts.Token));
+            // 2. Forced sync: real-time SSE stream (replaces 5s polling)
+            Task.Run(() => RunForcedSyncSSE(_cts.Token));
         }
 
         public void StopPolling()
@@ -270,6 +270,27 @@ namespace AdvanceClip.Classes
 
             string rawContent = data.TryGetProperty("Raw", out var t3) ? t3.GetString() : "";
             string itemType = data.TryGetProperty("Type", out var t) ? t.GetString() : "Text";
+            string title = data.TryGetProperty("Title", out var t2) ? t2.GetString() : "Cloud Payload";
+            string downloadUrl = data.TryGetProperty("DownloadUrl", out var t6) ? t6.GetString() : "";
+            string senderUrl = data.TryGetProperty("SenderUrl", out var t7) ? t7.GetString() : "";
+
+            // AES-256-GCM decryption: if Encrypted flag is set, decrypt sensitive fields
+            bool isEncrypted = data.TryGetProperty("Encrypted", out var encProp) && encProp.ValueKind == JsonValueKind.True;
+            if (isEncrypted)
+            {
+                try
+                {
+                    rawContent = SyncCrypto.Decrypt(rawContent) ?? rawContent;
+                    title = SyncCrypto.Decrypt(title) ?? title;
+                    if (!string.IsNullOrEmpty(downloadUrl))
+                        downloadUrl = SyncCrypto.Decrypt(downloadUrl) ?? downloadUrl;
+                }
+                catch (Exception cryptoEx)
+                {
+                    Logger.LogAction("SYNC_CRYPTO", $"Decryption failed for item {key}: {cryptoEx.Message}");
+                    // Fall through with encrypted values — they'll appear as garbage but won't crash
+                }
+            }
 
             // Skip empty text items — never allow blank cards
             bool isFileType = itemType == "Image" || itemType == "ImageLink" || itemType == "Pdf" ||
@@ -282,10 +303,11 @@ namespace AdvanceClip.Classes
                 Id = key,
                 Timestamp = timestamp,
                 Type = itemType,
-                Title = data.TryGetProperty("Title", out var t2) ? t2.GetString() : "Cloud Payload",
+                Title = title,
                 Raw = rawContent,
-                DownloadUrl = data.TryGetProperty("DownloadUrl", out var t6) ? t6.GetString() : "",
-                SenderUrl = data.TryGetProperty("SenderUrl", out var t7) ? t7.GetString() : "",
+                DownloadUrl = downloadUrl,
+                SenderUrl = senderUrl,
+                FileHash = data.TryGetProperty("FileHash", out var fh) ? fh.GetString() ?? "" : "",
                 SourceDeviceName = sourceDevice
             };
         }
@@ -404,51 +426,126 @@ namespace AdvanceClip.Classes
         }
 
         // ═══════════════════════════════════════════════════════════════════
-        // FORCED SYNC POLLER: Lightweight check for items force-sent to us
+        // FORCED SYNC SSE: Real-time stream for items force-sent to this device
+        // Replaces the old 5s polling loop — delivery is now ~100-300ms
         // ═══════════════════════════════════════════════════════════════════
-        private async Task RunForcedSyncPoller(CancellationToken ct)
+        private async Task RunForcedSyncSSE(CancellationToken ct)
         {
+            int reconnectDelay = 1000;
+            const int MAX_RECONNECT_DELAY = 30_000;
+
             while (!ct.IsCancellationRequested)
             {
                 try
                 {
                     string deviceId = SettingsManager.Current.DeviceId;
-                    if (!string.IsNullOrEmpty(deviceId))
+                    if (string.IsNullOrEmpty(deviceId))
                     {
-                        string forcedUrl = $"{FIREBASE_BASE}/forced_sync/{deviceId}.json";
-                        var forcedRes = await _pollClient.GetAsync(forcedUrl, ct);
-                        if (forcedRes.IsSuccessStatusCode)
+                        await Task.Delay(5000, ct);
+                        continue;
+                    }
+
+                    string forcedUrl = $"{FIREBASE_BASE}/forced_sync/{deviceId}.json";
+                    var request = new HttpRequestMessage(HttpMethod.Get, forcedUrl);
+                    request.Headers.Add("Accept", "text/event-stream");
+
+                    using var response = await _streamClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        Logger.LogAction("FORCED SYNC SSE", $"HTTP {(int)response.StatusCode} — retrying in {reconnectDelay}ms");
+                        await Task.Delay(reconnectDelay, ct);
+                        reconnectDelay = Math.Min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
+                        continue;
+                    }
+
+                    reconnectDelay = 1000;
+                    Logger.LogAction("FORCED SYNC SSE", "Real-time stream CONNECTED ✓");
+
+                    using var stream = await response.Content.ReadAsStreamAsync();
+                    using var reader = new StreamReader(stream);
+
+                    string currentEvent = "";
+                    string currentData = "";
+
+                    while (!ct.IsCancellationRequested)
+                    {
+                        string? line = await reader.ReadLineAsync();
+                        if (line == null) break;
+
+                        if (line.StartsWith("event:"))
+                            currentEvent = line.Substring(6).Trim();
+                        else if (line.StartsWith("data:"))
+                            currentData = line.Substring(5).Trim();
+                        else if (string.IsNullOrEmpty(line))
                         {
-                            var forcedJson = await forcedRes.Content.ReadAsStringAsync();
-                            if (!string.IsNullOrWhiteSpace(forcedJson) && forcedJson != "null")
+                            if (!string.IsNullOrEmpty(currentData) && currentData != "null" && currentEvent == "put")
                             {
-                                ProcessForcedSyncPayload(forcedJson, deviceId);
+                                try
+                                {
+                                    using var doc = JsonDocument.Parse(currentData);
+                                    var root = doc.RootElement;
+                                    string path = root.TryGetProperty("path", out var p) ? p.GetString() ?? "/" : "/";
+                                    if (!root.TryGetProperty("data", out var data) || data.ValueKind == JsonValueKind.Null)
+                                    {
+                                        currentEvent = ""; currentData = ""; continue;
+                                    }
+
+                                    // Re-serialize the data to JSON for ProcessForcedSyncPayload
+                                    if (path == "/")
+                                    {
+                                        // Full payload: data is the entire forced_sync/{deviceId} node
+                                        if (data.ValueKind == JsonValueKind.Object)
+                                            ProcessForcedSyncPayload(data.GetRawText(), deviceId);
+                                    }
+                                    else
+                                    {
+                                        // Single item: path is /{key}, data is the item
+                                        string key = path.TrimStart('/');
+                                        if (data.ValueKind == JsonValueKind.Object)
+                                        {
+                                            string wrappedJson = "{" + $"\"{key}\":{data.GetRawText()}" + "}";
+                                            ProcessForcedSyncPayload(wrappedJson, deviceId);
+                                        }
+                                    }
+                                }
+                                catch (Exception parseEx)
+                                {
+                                    Logger.LogAction("FORCED SYNC SSE", $"Parse error: {parseEx.Message}");
+                                }
                             }
+                            currentEvent = "";
+                            currentData = "";
                         }
                     }
+
+                    Logger.LogAction("FORCED SYNC SSE", "Stream closed — reconnecting...");
                 }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
-                    Logger.LogAction("FORCED SYNC", "Poll error: " + ex.Message);
+                    Logger.LogAction("FORCED SYNC SSE", $"Stream error: {ex.Message} — retrying in {reconnectDelay}ms");
+                    try { await Task.Delay(reconnectDelay, ct); } catch { break; }
+                    reconnectDelay = Math.Min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
                 }
-
-                try { await Task.Delay(5000, ct); } catch { break; }
             }
+
+            Logger.LogAction("FORCED SYNC SSE", "Stream STOPPED.");
         }
 
         private async Task FetchAndInjectCloudFile(CloudItem cloudItem)
         {
             ClipboardItem? progressClip = null;
+            string filePath = "";
             try
             {
                 string senderName = string.IsNullOrWhiteSpace(cloudItem.SourceDeviceName) ? "CloudSync" : cloudItem.SourceDeviceName.Replace(" ", "_");
-                string extractPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "Synced", senderName);
+                string extractPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", senderName);
                 Directory.CreateDirectory(extractPath);
 
                 string fallbackExt = cloudItem.Type == "Pdf" ? ".pdf" : cloudItem.Type == "Archive" ? ".zip" : cloudItem.Type == "Video" ? ".mp4" : cloudItem.Type == "Audio" ? ".mp3" : cloudItem.Type == "Document" ? ".docx" : cloudItem.Type == "Presentation" ? ".pptx" : ".jpg";
                 string safeTitle = (cloudItem.Title ?? "file").Replace("/", "_").Replace("\\", "_");
-                string filePath = Path.Combine(extractPath, safeTitle);
+                filePath = Path.Combine(extractPath, safeTitle);
                 if (!Path.HasExtension(safeTitle)) filePath += fallbackExt;
 
                 int counter = 1;
@@ -593,6 +690,115 @@ namespace AdvanceClip.Classes
                     }
                 }
 
+                // SHA-256 integrity verification — verify downloaded file matches source hash
+                bool integrityOk = true;
+                if (!string.IsNullOrEmpty(cloudItem.FileHash))
+                {
+                    try
+                    {
+                        using var verifyStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1048576);
+                        var localHash = System.Security.Cryptography.SHA256.HashData(verifyStream);
+                        string localHashHex = BitConverter.ToString(localHash).Replace("-", "").ToLowerInvariant();
+                        if (localHashHex != cloudItem.FileHash)
+                        {
+                            Logger.LogAction("INTEGRITY", $"❌ SHA-256 MISMATCH for {cloudItem.Title}: expected {cloudItem.FileHash.Substring(0, 16)}..., got {localHashHex.Substring(0, 16)}...");
+                            integrityOk = false;
+                            // Delete corrupted file
+                            try { File.Delete(filePath); } catch { }
+                        }
+                        else
+                        {
+                            Logger.LogAction("INTEGRITY", $"✅ SHA-256 verified: {cloudItem.Title} ({cloudItem.FileHash.Substring(0, 16)}...)");
+                        }
+                    }
+                    catch (Exception hashEx)
+                    {
+                        Logger.LogAction("INTEGRITY", $"Hash verification failed: {hashEx.Message}");
+                    }
+                }
+                // Also check HTTP header hash if available
+                else if (response.Headers.TryGetValues("X-Content-SHA256", out var hashValues))
+                {
+                    string serverHash = hashValues.FirstOrDefault() ?? "";
+                    if (!string.IsNullOrEmpty(serverHash))
+                    {
+                        try
+                        {
+                            using var verifyStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1048576);
+                            var localHash = System.Security.Cryptography.SHA256.HashData(verifyStream);
+                            string localHashHex = BitConverter.ToString(localHash).Replace("-", "").ToLowerInvariant();
+                            if (localHashHex != serverHash)
+                            {
+                                Logger.LogAction("INTEGRITY", $"❌ SHA-256 MISMATCH (HTTP header) for {cloudItem.Title}");
+                                integrityOk = false;
+                                try { File.Delete(filePath); } catch { }
+                            }
+                            else
+                            {
+                                Logger.LogAction("INTEGRITY", $"✅ SHA-256 verified (HTTP header): {cloudItem.Title}");
+                            }
+                        }
+                        catch { }
+                    }
+                }
+
+                // If integrity check failed, retry download ONCE
+                if (!integrityOk)
+                {
+                    Logger.LogAction("INTEGRITY", $"🔄 Retrying download due to corruption: {cloudItem.Title}");
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        if (progressClip != null)
+                            progressClip.RawContent = $"🔄 Re-downloading (integrity check failed) — {cloudItem.Title}";
+                    });
+
+                    try
+                    {
+                        using var retryClient = new HttpClient() { Timeout = TimeSpan.FromMinutes(10) };
+                        var retryResponse = await retryClient.GetAsync(successUrl);
+                        if (retryResponse.IsSuccessStatusCode)
+                        {
+                            using var retryContent = await retryResponse.Content.ReadAsStreamAsync();
+                            using var retryFile = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, 262144);
+                            await retryContent.CopyToAsync(retryFile);
+
+                            // Verify retry
+                            if (!string.IsNullOrEmpty(cloudItem.FileHash))
+                            {
+                                using var rv = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                                var rh = System.Security.Cryptography.SHA256.HashData(rv);
+                                string rhHex = BitConverter.ToString(rh).Replace("-", "").ToLowerInvariant();
+                                integrityOk = rhHex == cloudItem.FileHash;
+                                if (!integrityOk)
+                                {
+                                    Logger.LogAction("INTEGRITY", $"❌ RETRY ALSO FAILED — file may be corrupted at source: {cloudItem.Title}");
+                                }
+                                else
+                                {
+                                    Logger.LogAction("INTEGRITY", $"✅ Retry succeeded — file verified: {cloudItem.Title}");
+                                }
+                            }
+                            else integrityOk = true; // No hash to verify against
+                        }
+                    }
+                    catch (Exception retryEx)
+                    {
+                        Logger.LogAction("INTEGRITY", $"Retry download failed: {retryEx.Message}");
+                    }
+                }
+
+                // If integrity verification failed even after retry, abort — don't inject corrupted file
+                if (!integrityOk)
+                {
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        if (progressClip != null)
+                            _viewModel.DroppedItems.Remove(progressClip);
+                        AdvanceClip.Windows.ToastWindow.ShowToast($"❌ {cloudItem.Title} — file corrupted during transfer");
+                    });
+                    return;
+                }
+
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
                 {
                     if (progressClip != null)
@@ -641,20 +847,51 @@ namespace AdvanceClip.Classes
                     // Mark as cloud-sourced so clipboard echo doesn't re-push to Firebase
                     string fileFp = $"IMG::{(clip.FormattedSize ?? "")}";
                     _viewModel.MarkAsCloudSourced(fileFp);
+
+                    // Track download completion via downloadedBy model
+                    // This marks us as having downloaded, then checks if all targets are done
+                    if (!string.IsNullOrEmpty(cloudItem.Id))
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await FirebaseSyncManager.MarkFileDownloaded(cloudItem.Id);
+                                Logger.LogAction("SYNC_TRACK", $"Marked download complete: {cloudItem.Title} [{cloudItem.Id}]");
+                            }
+                            catch (Exception delEx)
+                            {
+                                Logger.LogAction("SYNC_TRACK", $"MarkFileDownloaded failed: {delEx.Message}");
+                            }
+                        });
+                    }
                 });
             }
             catch (Exception ex)
             {
                 Logger.LogAction("FIREBASE SSE", $"File Download Error: {ex.Message} | URL: {cloudItem.Raw}");
+                
+                // Drop the failed entry completely — don't bloat UI or Firebase with un-downloadable ghosts
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     if (progressClip != null)
-                    {
-                        progressClip.RawContent = $"❌ Download failed: {cloudItem.Title}";
-                        progressClip.FileName = cloudItem.Title;
-                    }
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"❌ Download failed: {cloudItem.Title}");
+                        _viewModel.DroppedItems.Remove(progressClip);
+                    AdvanceClip.Windows.ToastWindow.ShowToast($"❌ Dropped: {cloudItem.Title} — source unreachable");
                 });
+                
+                // Clean up partial file on disk
+                try { if (File.Exists(filePath)) File.Delete(filePath); } catch { }
+                
+                // Delete the dead entry from Firebase so other devices don't try to download it either
+                if (!string.IsNullOrEmpty(cloudItem.Id))
+                {
+                    string pairingKey = DevicePairingManager.EnsurePairingKey();
+                    if (!string.IsNullOrEmpty(pairingKey))
+                    {
+                        _ = FirebaseSyncManager.DeleteFirebaseEntry(pairingKey, cloudItem.Id);
+                        Logger.LogAction("PURGE", $"Deleted unreachable Firebase entry: {cloudItem.Title} [{cloudItem.Id}]");
+                    }
+                }
             }
         }
 
@@ -667,6 +904,7 @@ namespace AdvanceClip.Classes
             public string Raw { get; set; }
             public string DownloadUrl { get; set; }
             public string SenderUrl { get; set; }
+            public string FileHash { get; set; }
             public string SourceDeviceName { get; set; }
         }
 

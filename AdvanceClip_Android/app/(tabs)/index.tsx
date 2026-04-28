@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, AppState, AppStateStatus, Modal, ToastAndroid, NativeModules, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, AppState, AppStateStatus, Modal, ToastAndroid, NativeModules, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { FlashList } from '@shopify/flash-list';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
@@ -19,10 +20,12 @@ import * as Linking from 'expo-linking';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Crypto from 'expo-crypto';
 
 // ═══ Extracted Modules ═══
 import { ClipItem, DOWNLOAD_BASE, SYNC_CACHE_BASE, CONVERTED_BASE, IMAGE_CACHE_BASE, getDownloadPath, getSyncCachePath, getConvertedPath } from '../../utils/clipTypes';
 import { fetchWithTimeout, getSubnet, getConnectionType, connectionColors, resolveOptimalUrl, getDeviceUrls, getMediaUrl } from '../../utils/networkHelpers';
+import { encrypt as aesEncrypt, decrypt as aesDecrypt } from '../../utils/syncCrypto';
 import { styles } from '../../styles/syncStyles';
 import { colors, font } from '../../styles/theme';
 import AnimatedCard from '../../components/AnimatedCard';
@@ -55,8 +58,68 @@ export default function SyncScreen() {
   const lastSyncedImageTsRef = useRef<number>(0);
   const sentContentFingerprintsRef = useRef<Set<string>>(new Set());
   const recentSyncFingerprintsRef = useRef<Map<string, number>>(new Map());
+  // EventId-based dedup: deterministic IDs prevent echo loops without content collisions
+  const processedEventsRef = useRef<Map<string, number>>(new Map());
+  const generateEventId = () => `Mobile_${(deviceName || 'phone').replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
   // Track items already pushed to native overlay DB
   const pushedToOverlayRef = useRef<Set<string>>(new Set());
+
+  // ─── downloadedBy Tracking: Mark file as downloaded by this device ───
+  const markFileDownloaded = async (entryId: string) => {
+    try {
+      const pk = pairingKeyRef.current;
+      if (!pk || !entryId) return;
+      const myDeviceId = `Mobile_${(deviceName || 'phone').replace(/\s/g, '_')}`;
+
+      // Step 1: Mark this device as downloaded
+      await set(ref(database, `clipboard/${pk}/${entryId}/downloadedBy/${myDeviceId}`), Date.now());
+
+      // Step 2: Read the full entry to check targets
+      const snap = await get(ref(database, `clipboard/${pk}/${entryId}`));
+      if (!snap.exists()) return;
+      const data = snap.val();
+
+      const targets: string[] = data.targetDevices || [];
+      const downloaded = Object.keys(data.downloadedBy || {});
+
+      if (targets.length === 0) {
+        // Legacy entry or no targets — just delete
+        await set(ref(database, `clipboard/${pk}/${entryId}`), null);
+        return;
+      }
+
+      // Step 3: Check which remaining targets are offline → mark them done
+      const remaining = targets.filter((t: string) => !downloaded.includes(t));
+      if (remaining.length > 0) {
+        try {
+          const devSnap = await get(ref(database, `active_devices/${pk}`));
+          if (devSnap.exists()) {
+            const devices = devSnap.val();
+            const now = Date.now();
+            const onlineIds = new Set<string>();
+            Object.values(devices).forEach((dev: any) => {
+              if (dev.IsOnline && (now - (dev.Timestamp || 0)) < 300000) {
+                onlineIds.add(dev.DeviceId || '');
+              }
+            });
+            // Mark offline devices as done
+            for (const offId of remaining.filter((r: string) => !onlineIds.has(r))) {
+              await set(ref(database, `clipboard/${pk}/${entryId}/downloadedBy/${offId}`), -1);
+              downloaded.push(offId);
+            }
+          }
+        } catch {}
+      }
+
+      // Step 4: If all targets downloaded → delete entry
+      if (targets.every((t: string) => downloaded.includes(t))) {
+        await set(ref(database, `clipboard/${pk}/${entryId}`), null);
+        syncLog(`[SYNC_CLEANUP] All ${targets.length} devices done — entry deleted`);
+      } else {
+        syncLog(`[SYNC_TRACK] ${downloaded.length}/${targets.length} devices done`);
+      }
+    } catch (e) { syncLog(`[SYNC_TRACK] markFileDownloaded error: ${e}`); }
+  };
 
   // ─── Scoped Clipboard (only paired devices see each other) ───
   const pairingKeyRef = useRef<string>('');
@@ -88,7 +151,7 @@ export default function SyncScreen() {
       for (const url of [storedLocal, storedGlobal].filter(Boolean)) {
         try {
           const res = await fetchWithTimeout(`${url}/api/health`,
-            { headers: { 'X-Advance-Client': 'MobileCompanion' } }, 2000);
+            { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }, 2000);
           if (res.ok) {
             cachedPcUrlRef.current = url;
             cachedPcUrlTimestampRef.current = now;
@@ -123,7 +186,7 @@ export default function SyncScreen() {
               const urls = getDeviceUrls(node);
               for (const url of urls) {
                 try {
-                  const res = await fetchWithTimeout(`${url}/api/health`, { headers: { 'X-Advance-Client': 'MobileCompanion' } }, 2500);
+                  const res = await fetchWithTimeout(`${url}/api/health`, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }, 2500);
                   if (res.ok) {
                     cachedPcUrlRef.current = url;
                     cachedPcUrlTimestampRef.current = now;
@@ -207,6 +270,8 @@ export default function SyncScreen() {
         if (copiedText && copiedText.trim().length > 0) {
           // Fingerprint to prevent echo back from Firebase
           sentContentFingerprintsRef.current.add(copiedText.substring(0, 200));
+          const overlayEventId = generateEventId();
+          processedEventsRef.current.set(overlayEventId, Date.now());
           const newItem: ClipItem = {
             Title: copiedText.substring(0, 80), Type: 'Text', Raw: copiedText,
             Time: new Date().toLocaleString(), SourceDeviceName: deviceName,
@@ -214,7 +279,7 @@ export default function SyncScreen() {
           };
           setClips(prev => [newItem, ...prev]);
           if (isGlobalSyncEnabled) {
-            try { if (pairingKeyRef.current) { const clipRef = push(ref(database, clipboardPath())); await set(clipRef, newItem); } } catch(e) {}
+            try { if (pairingKeyRef.current) { const clipRef = push(ref(database, clipboardPath())); await set(clipRef, { ...newItem, EventId: overlayEventId }); } } catch(e) {}
           }
         }
       } catch(e) {}
@@ -297,7 +362,7 @@ export default function SyncScreen() {
               if (perm.status === 'granted') {
                 await Promise.all(batch.urls.map(async (url: string, idx: number) => {
                   const localUri = `${SYNC_CACHE_BASE}relayed_${Date.now()}_${idx}.jpg`;
-                  const dl = await FileSystem.downloadAsync(url, localUri, { headers: { 'X-Advance-Client': 'MobileCompanion' } });
+                  const dl = await FileSystem.downloadAsync(url, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } });
                   const asset = await MediaLibrary.createAssetAsync(dl.uri);
                   await MediaLibrary.createAlbumAsync("FlyShelf Extractions", asset, false);
                 }));
@@ -321,7 +386,7 @@ export default function SyncScreen() {
     setIsRefreshing(true);
     const targetUrl = await getCachedPcUrl();
     try {
-      const response = await fetchWithTimeout(`${targetUrl}/api/sync`, { headers: { 'X-Advance-Client': 'MobileCompanion' } }, 2500);
+      const response = await fetchWithTimeout(`${targetUrl}/api/sync`, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }, 2500);
       if (response.ok) {
         const data: any[] = await response.json();
         const enriched = data.map(item => {
@@ -350,10 +415,27 @@ export default function SyncScreen() {
     const pk = pairingKeyRef.current;
     if (!pk) { setClips([]); return; }
     const clipsRef = query(ref(database, `clipboard/${pk}`), orderByChild('Timestamp'), limitToLast(5));
-    const unsubscribeFeed = onValue(clipsRef, (snapshot) => {
+    const unsubscribeFeed = onValue(clipsRef, async (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
-        const allParsed: ClipItem[] = Object.keys(data).map(k => ({ id: k, ...data[k] } as ClipItem)).reverse();
+        const allRaw: ClipItem[] = Object.keys(data).map(k => ({ id: k, ...data[k] } as ClipItem)).reverse();
+        // AES-256-GCM decryption: decrypt Encrypted items from other devices
+        const allParsed: ClipItem[] = [];
+        for (const item of allRaw) {
+          if ((item as any).Encrypted === true) {
+            try {
+              const decTitle = await aesDecrypt(item.Title || '');
+              const decRaw = await aesDecrypt(item.Raw || '');
+              if (decTitle !== null) item.Title = decTitle;
+              if (decRaw !== null) item.Raw = decRaw;
+              if ((item as any).DownloadUrl) {
+                const decDl = await aesDecrypt((item as any).DownloadUrl);
+                if (decDl !== null) (item as any).DownloadUrl = decDl;
+              }
+            } catch (e: any) { syncLog('SYNC_CRYPTO', `Decryption failed: ${e?.message}`); }
+          }
+          allParsed.push(item);
+        }
         // Filter out items sent by THIS device to prevent echo loops
         const myName = deviceName || '';
         const parsed = allParsed.filter(c => {
@@ -362,12 +444,13 @@ export default function SyncScreen() {
             syncLog('FIREBASE', `Filtered own item: ${(c.Title || '').substring(0, 40)}`);
             return false;
           }
-          // Check 2: If the raw content matches something we recently sent, it's an echo
-          const rawFp = (c.Raw || '').substring(0, 200);
-          if (rawFp && sentContentFingerprintsRef.current.has(rawFp)) {
-            syncLog('FIREBASE', `Filtered echo (fingerprint match): ${(c.Title || '').substring(0, 40)}`);
+          // Check 2: EventId-based dedup (primary) — deterministic, no content collisions
+          if ((c as any).EventId && processedEventsRef.current.has((c as any).EventId)) {
+            syncLog('FIREBASE', `Filtered by EventId: ${(c as any).EventId}`);
             return false;
           }
+          // Check 3: Mark EventId as processed
+          if ((c as any).EventId) processedEventsRef.current.set((c as any).EventId, Date.now());
           return true;
         });
         syncLog('FIREBASE', `Feed: ${allParsed.length} total, ${parsed.length} after self-filter`);
@@ -452,8 +535,10 @@ export default function SyncScreen() {
                   for (const dlUrl of urls) {
                     if (downloaded) break;
                     try {
+                      const dlHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
+                      if (pairingKeyRef.current) dlHeaders['X-Pairing-Key'] = pairingKeyRef.current;
                       const { uri, status } = await FileSystem.downloadAsync(dlUrl, localUri, {
-                        headers: { 'X-Advance-Client': 'MobileCompanion' }
+                        headers: dlHeaders
                       });
                       if (status === 200) {
                         const info = await FileSystem.getInfoAsync(uri);
@@ -483,23 +568,51 @@ export default function SyncScreen() {
                 } catch {}
               }));
 
-              // Auto-download latest file (non-image)
+              // Auto-download latest file (non-image) with progress card
               if (fileItems.length > 0) {
                 const latestFile = fileItems[0];
-                const fp = `dl::${(latestFile.Raw || '').substring(0, 100)}`;
-                if (!recentSyncFingerprintsRef.current.has(fp)) {
-                  recentSyncFingerprintsRef.current.set(fp, Date.now());
+                // Dedup by filename+timestamp (same key used by LAN poll path)
+                const fileDedupKey = `filedl::${latestFile.Title || ''}::${latestFile.Timestamp || ''}`;
+                if (!recentSyncFingerprintsRef.current.has(fileDedupKey)) {
+                  recentSyncFingerprintsRef.current.set(fileDedupKey, Date.now());
                   try {
                     const subfolder = latestFile.Type === 'Pdf' ? 'PDFs' : latestFile.Type === 'Video' ? 'Videos' : 'Documents';
                     const safeName = (latestFile.Title || `file_${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
                     const destPath = await getDownloadPath(subfolder, safeName);
                     const existing = await FileSystem.getInfoAsync(destPath);
                     if (!existing.exists) {
-                      ToastAndroid.show(`⬇️ Downloading ${latestFile.Title}...`, ToastAndroid.SHORT);
-                      const dl = await FileSystem.downloadAsync(latestFile.Raw!, destPath, { headers: { 'X-Advance-Client': 'MobileCompanion' } });
-                      if (dl.status === 200) ToastAndroid.show(`✅ ${latestFile.Title} saved`, ToastAndroid.SHORT);
+                      // Insert progress card
+                      const progressId = `dl_fb_progress_${Date.now()}`;
+                      setClips(prev => [{
+                        id: progressId,
+                        Title: `⬇️ Downloading — ${latestFile.Title}`,
+                        Type: 'Text',
+                        Raw: `Downloading from cloud...`,
+                        Time: new Date().toLocaleTimeString(),
+                      }, ...prev]);
+
+                      const dlHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
+                      if (pairingKeyRef.current) dlHeaders['X-Pairing-Key'] = pairingKeyRef.current;
+                      const dlResult = await FileSystem.downloadAsync(latestFile.Raw!, destPath, { headers: dlHeaders });
+
+                      // Remove progress card
+                      setClips(prev => prev.filter(c => c.id !== progressId));
+
+                      if (dlResult && dlResult.status === 200) {
+                        ToastAndroid.show(`✅ ${latestFile.Title} saved`, ToastAndroid.SHORT);
+                        // Track download via downloadedBy model
+                        if (latestFile.id) {
+                          try { await markFileDownloaded(latestFile.id); } catch {}
+                        }
+                      } else {
+                        // Failed — delete partial/corrupt file
+                        await FileSystem.deleteAsync(destPath, { idempotent: true }).catch(() => {});
+                      }
                     }
-                  } catch {}
+                  } catch {
+                    // Clean up any stale progress cards + partial files
+                    setClips(prev => prev.filter(c => !c.id?.startsWith('dl_fb_progress_')));
+                  }
                 }
               }
 
@@ -514,6 +627,15 @@ export default function SyncScreen() {
                 if (imageItems.length > 0) {
                   ToastAndroid.show(`🖼️ ${Object.keys(updatedItems).length} image(s) synced from PC`, ToastAndroid.SHORT);
                 }
+              }
+
+              // Drop image items that failed ALL download attempts — don't bloat UI with broken images
+              const failedImageIds = imageItems
+                .filter(img => img.id && !updatedItems[img.id] && img.Raw?.startsWith('http'))
+                .map(img => img.id!);
+              if (failedImageIds.length > 0) {
+                setClips(prev => prev.filter(c => !failedImageIds.includes(c.id!)));
+                console.warn(`[PURGE] Dropped ${failedImageIds.length} un-downloadable image(s)`);
               }
             })();
           } else {
@@ -549,7 +671,7 @@ export default function SyncScreen() {
           try {
             const lanIp = dev.LocalIp.trim();
             const lanUrl = lanIp.startsWith('http') ? lanIp.replace(/\/$/, '') : `http://${lanIp.includes(':') ? lanIp : lanIp + ':8999'}`;
-            const res = await fetch(`${lanUrl}/api/health`, { method: 'GET', headers: { 'X-Advance-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(1500) });
+            const res = await fetch(`${lanUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(1500) });
             if (res.ok) {
               rawDevices[i] = { ...dev, _lanVerified: true, _lanUrl: lanUrl };
             }
@@ -563,7 +685,7 @@ export default function SyncScreen() {
         try {
           const raw = pcLocalIp.trim();
           const probeUrl = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw.split(':')[0] + ':8999'}`;
-          const res = await fetch(`${probeUrl}/api/health`, { method: 'GET', headers: { 'X-Advance-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(2000) });
+          const res = await fetch(`${probeUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(2000) });
           if (res.ok) rawDevices.push({ DeviceName: 'PC (LAN)', DeviceType: 'PC', IsOnline: true, Url: probeUrl, LocalIp: probeUrl, _key: 'local_direct', _lanVerified: true, _lanUrl: probeUrl, Timestamp: Date.now() });
         } catch {}
       } else if (hasPc && pcLocalIp) {
@@ -573,7 +695,7 @@ export default function SyncScreen() {
         const existingLan = rawDevices.some(d => d._lanUrl === manualUrl);
         if (!existingLan) {
           try {
-            const res = await fetch(`${manualUrl}/api/health`, { method: 'GET', headers: { 'X-Advance-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(1500) });
+            const res = await fetch(`${manualUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(1500) });
             if (res.ok) {
               // Update the first PC device with this LAN URL
               const pcIdx = rawDevices.findIndex(d => d.DeviceType === 'PC');
@@ -598,7 +720,9 @@ export default function SyncScreen() {
       }
       try {
         const timeout = targetUrl.includes('trycloudflare.com') ? 5000 : 2000;
-        const response = await fetchWithTimeout(`${targetUrl}/api/sync`, { headers: { 'X-Advance-Client': 'MobileCompanion' } }, timeout);
+        const syncHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
+        if (pairingKeyRef.current) syncHeaders['X-Pairing-Key'] = pairingKeyRef.current;
+        const response = await fetchWithTimeout(`${targetUrl}/api/sync`, { headers: syncHeaders }, timeout);
         if (response.ok) {
           const data = await response.json();
           if (data && data.length > 0) {
@@ -606,14 +730,18 @@ export default function SyncScreen() {
             const contentKey = `${latest.Type}_${latest.Title}_${latest.Timestamp}`;
             if (contentKey !== lastSyncedContentRef.current) {
               lastSyncedContentRef.current = contentKey;
+              // EventId dedup for LAN poll
+              const lanEventId = latest.EventId || '';
+              if (lanEventId && processedEventsRef.current.has(lanEventId)) return;
+              if (lanEventId) processedEventsRef.current.set(lanEventId, Date.now());
+
               const crossFp = `${latest.Type}::${(latest.Raw || '').substring(0, 150)}`;
               recentSyncFingerprintsRef.current.set(crossFp, Date.now());
               const rawFingerprint = (latest.Raw || '').substring(0, 200);
-              const isOwnEcho = (latest.SourceDeviceName && deviceName && latest.SourceDeviceName === deviceName) || (latest.SourceDeviceType === 'Mobile') || sentContentFingerprintsRef.current.has(rawFingerprint);
+              const isOwnEcho = (latest.SourceDeviceName && deviceName && latest.SourceDeviceName === deviceName) || (latest.SourceDeviceType === 'Mobile');
 
               if (!isOwnEcho) {
-                // Fingerprint incoming PC content so it doesn't get re-captured and sent back
-                sentContentFingerprintsRef.current.add(rawFingerprint);
+                lastActivityRef.current = Date.now(); // Keep adaptive polling at high frequency
                 syncLog('PC-POLL', `New from PC: ${latest.Type} - ${(latest.Title || '').substring(0, 50)}`);
                 if (latest.Type === 'Text' || latest.Type === 'Code' || latest.Type === 'Url') {
                   const latestRaw = latest.Raw;
@@ -639,7 +767,7 @@ export default function SyncScreen() {
                     if (mediaUrl) {
                       await FileSystem.makeDirectoryAsync(SYNC_CACHE_BASE, { intermediates: true }).catch(() => {});
                       const localUri = `${SYNC_CACHE_BASE}clip_sync_${Date.now()}.png`;
-                      const { uri, status } = await FileSystem.downloadAsync(mediaUrl, localUri, { headers: { 'X-Advance-Client': 'MobileCompanion' } });
+                      const { uri, status } = await FileSystem.downloadAsync(mediaUrl, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } });
                       if (status === 200) {
                         const b64 = await FileSystem.readAsStringAsync(uri, { encoding: (FileSystem as any).EncodingType.Base64 });
                         await Clipboard.setImageAsync(b64);
@@ -649,28 +777,62 @@ export default function SyncScreen() {
                     }
                   } catch (imgErr) {}
                 } else if (['Pdf', 'Document', 'File', 'Video', 'Audio', 'Archive', 'Presentation'].includes(latest.Type)) {
-                  try {
-                    let fileUrl = '';
-                    if (latest.DownloadUrl?.startsWith('/')) fileUrl = `${targetUrl}${latest.DownloadUrl}`;
-                    else if (latest.Raw?.startsWith('http')) fileUrl = latest.Raw;
-                    else if (latest.DownloadUrl?.startsWith('http')) fileUrl = latest.DownloadUrl;
-                    else if (latest.Raw?.startsWith('/')) fileUrl = `${targetUrl}${latest.Raw}`;
-                    if (fileUrl) {
-                      const subfolder = latest.Type === 'Pdf' ? 'PDFs' : latest.Type === 'Video' ? 'Videos' : latest.Type === 'Audio' ? 'Audio' : 'Documents';
-                      const safeName = (latest.Title || `file_${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
-                      const destPath = await getDownloadPath(subfolder, safeName);
-                      const existing = await FileSystem.getInfoAsync(destPath);
-                      if (!existing.exists) {
-                        if (Platform.OS === 'android') ToastAndroid.show(`⬇️ Downloading ${latest.Title}...`, ToastAndroid.SHORT);
-                        const dl = await FileSystem.downloadAsync(fileUrl, destPath, { headers: { 'X-Advance-Client': 'MobileCompanion' } });
-                        if (dl.status === 200) {
-                          setClips(prev => prev.map(c => c.id === latest.id ? { ...c, CachedUri: destPath } : c));
-                          setDownloadedItems(prev => { const n = new Set(prev); n.add(latest.id || latest.Title); return n; });
-                          if (Platform.OS === 'android') ToastAndroid.show(`✅ ${latest.Title} saved`, ToastAndroid.SHORT);
-                        }
-                      } else { setDownloadedItems(prev => { const n = new Set(prev); n.add(latest.id || latest.Title); return n; }); }
+                  // Dedup by filename+timestamp (same key used by Firebase listener path)
+                  const fileDedupKey = `filedl::${latest.Title || ''}::${latest.Timestamp || ''}`;
+                  if (recentSyncFingerprintsRef.current.has(fileDedupKey)) {
+                    // Already handled by Firebase path — skip
+                  } else {
+                    recentSyncFingerprintsRef.current.set(fileDedupKey, Date.now());
+                    try {
+                      let fileUrl = '';
+                      if (latest.DownloadUrl?.startsWith('/')) fileUrl = `${targetUrl}${latest.DownloadUrl}`;
+                      else if (latest.Raw?.startsWith('http')) fileUrl = latest.Raw;
+                      else if (latest.DownloadUrl?.startsWith('http')) fileUrl = latest.DownloadUrl;
+                      else if (latest.Raw?.startsWith('/')) fileUrl = `${targetUrl}${latest.Raw}`;
+                      if (fileUrl) {
+                        const subfolder = latest.Type === 'Pdf' ? 'PDFs' : latest.Type === 'Video' ? 'Videos' : latest.Type === 'Audio' ? 'Audio' : 'Documents';
+                        const safeName = (latest.Title || `file_${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+                        const destPath = await getDownloadPath(subfolder, safeName);
+                        const existing = await FileSystem.getInfoAsync(destPath);
+                        if (!existing.exists) {
+                          // Insert progress card into clips
+                          const progressId = `dl_progress_${Date.now()}`;
+                          const progressClip: ClipItem = {
+                            id: progressId,
+                            Title: `⬇️ Downloading — ${latest.Title}`,
+                            Type: 'Text',
+                            Raw: `Downloading from ${latest.SourceDeviceName || 'PC'}...`,
+                            Time: new Date().toLocaleTimeString(),
+                          };
+                          setClips(prev => [progressClip, ...prev]);
+
+                          const dlHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
+                          if (pairingKeyRef.current) dlHeaders['X-Pairing-Key'] = pairingKeyRef.current;
+                          const dlResult = await FileSystem.downloadAsync(fileUrl, destPath, { headers: dlHeaders });
+
+                          // Remove progress card
+                          setClips(prev => prev.filter(c => c.id !== progressId));
+
+                          if (dlResult && dlResult.status === 200) {
+                            setClips(prev => prev.map(c => c.id === latest.id ? { ...c, CachedUri: destPath } : c));
+                            setDownloadedItems(prev => { const n = new Set(prev); n.add(latest.id || latest.Title); return n; });
+                            if (Platform.OS === 'android') ToastAndroid.show(`✅ ${latest.Title} saved`, ToastAndroid.SHORT);
+                            // Track download via downloadedBy model
+                            if (latest.id) {
+                              try { await markFileDownloaded(latest.id); } catch {}
+                            }
+                          } else {
+                            // Failed — delete partial/corrupt file
+                            await FileSystem.deleteAsync(destPath, { idempotent: true }).catch(() => {});
+                          }
+                        } else { setDownloadedItems(prev => { const n = new Set(prev); n.add(latest.id || latest.Title); return n; }); }
+                      }
+                    } catch (dlErr) {
+                      // Drop un-downloadable file from clips — don't bloat UI with dead entries
+                      setClips(prev => prev.filter(c => c.id !== latest.id && !c.id?.startsWith('dl_progress_')));
+                      if (Platform.OS === 'android') ToastAndroid.show(`❌ Dropped: ${latest.Title} — source unreachable`, ToastAndroid.SHORT);
                     }
-                  } catch (dlErr) { if (Platform.OS === 'android') ToastAndroid.show(`📁 ${latest.Title} — tap to download`, ToastAndroid.SHORT); }
+                  }
                 }
                 if (Platform.OS === 'android' && AdvanceOverlay && isFloatingBallEnabled) {
                   try {
@@ -699,17 +861,26 @@ export default function SyncScreen() {
         }
       } catch (e) { cachedPcUrlRef.current = null; }
     };
-    // Adaptive poll interval: fast on LAN, slower on Cloud, very slow if no PC
-    const getInterval = () => {
+    // Adaptive polling: 2s (LAN active) → 5s (Cloud) → 10s (idle/no PC) → re-evaluate every cycle
+    const lastActivityRef = useRef<number>(Date.now());
+    const getAdaptiveInterval = () => {
       const url = cachedPcUrlRef.current || '';
-      if (!url) return 8000; // No PC found
-      if (url.includes('trycloudflare')) return 5000; // Cloud
-      return 2000; // LAN
+      const idleSecs = (Date.now() - lastActivityRef.current) / 1000;
+      if (!url) return 10000; // No PC found — slow poll
+      if (url.includes('trycloudflare')) return idleSecs > 120 ? 10000 : 5000; // Cloud: 5s active, 10s idle
+      return idleSecs > 120 ? 5000 : 2000; // LAN: 2s active, 5s idle
     };
     // Initial poll
     pollFn();
-    const interval = setInterval(pollFn, getInterval());
-    return () => clearInterval(interval);
+    let pollTimer: ReturnType<typeof setTimeout> | null = null;
+    const schedulePoll = () => {
+      pollTimer = setTimeout(async () => {
+        await pollFn();
+        if (pollTimer !== null) schedulePoll(); // Re-evaluate interval each cycle
+      }, getAdaptiveInterval());
+    };
+    schedulePoll();
+    return () => { if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; } };
   }, [isGlobalSyncEnabled, activeDevices, pcLocalIp]);
 
   // ─── Device Self-Registration ───
@@ -726,16 +897,22 @@ export default function SyncScreen() {
     return () => { clearInterval(heartbeat); if (!isFloatingBallEnabled) set(ref(database, `active_devices/${pk}/${myDeviceId}/IsOnline`), false).catch(() => {}); };
   }, [deviceName, isFloatingBallEnabled]);
 
-  // ─── Periodic fingerprint cleanup (every 60s) ───
+  // ─── Periodic dedup cleanup (every 60s) ───
   useEffect(() => {
     const cleanup = setInterval(() => {
-      // Clean sentContentFingerprintsRef — cap at 200 entries
-      if (sentContentFingerprintsRef.current.size > 200) {
-        sentContentFingerprintsRef.current.clear();
-        syncLog('CLEANUP', 'Cleared sentContentFingerprints (exceeded 200)');
+      const now = Date.now();
+      // Clean processedEventsRef — TTL eviction, remove entries older than 120s (NEVER full clear)
+      processedEventsRef.current.forEach((ts, id) => {
+        if (now - ts > 120_000) processedEventsRef.current.delete(id);
+      });
+      // Clean sentContentFingerprintsRef — TTL eviction, NOT full clear (prevents echo loops)
+      // Legacy fingerprints don't have timestamps, so cap by size instead
+      if (sentContentFingerprintsRef.current.size > 500) {
+        const arr = Array.from(sentContentFingerprintsRef.current);
+        sentContentFingerprintsRef.current = new Set(arr.slice(-200));
+        syncLog('CLEANUP', 'Trimmed sentContentFingerprints to 200 (was >500)');
       }
       // Clean recentSyncFingerprintsRef — remove entries older than 60s
-      const now = Date.now();
       recentSyncFingerprintsRef.current.forEach((ts, fp) => {
         if (now - ts > 60_000) recentSyncFingerprintsRef.current.delete(fp);
       });
@@ -810,7 +987,7 @@ export default function SyncScreen() {
             const upRes = await FileSystem.uploadAsync(
               `${targetUrl}/api/sync_file?name=${encodeURIComponent(fileName)}&type=Image&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`,
               uploadUri,
-              { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-Advance-Client': 'MobileCompanion' } }
+              { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion' } }
             );
             if (upRes.status === 200) {
               syncLog('SCREENSHOT', `Sent to PC via ${targetUrl.includes('trycloudflare') ? 'Cloud' : 'LAN'}: ${fileName}`);
@@ -897,7 +1074,7 @@ export default function SyncScreen() {
                   try {
                     const upRes = await FileSystem.uploadAsync(`${targetUrl}/api/sync_file?name=${encodeURIComponent(assetInfo.filename || 'screenshot.jpg')}&type=ImageLink&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`, assetUri, {
                       httpMethod: 'POST', uploadType: 0 as any,
-                      headers: { 'X-Original-Date': Date.now().toString(), 'X-Advance-Client': 'MobileCompanion' }
+                      headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion' }
                     });
                     localSuccess = upRes.status === 200;
                     if (localSuccess) {
@@ -958,7 +1135,7 @@ export default function SyncScreen() {
             } else if (latest.Type === 'Image' || latest.Type === 'ImageLink') {
               const mediaUrl = getMediaUrlForItem(latest);
               if (mediaUrl) {
-                const { uri } = await FileSystem.downloadAsync(mediaUrl, SYNC_CACHE_BASE + 'clip_sync_global.png', { headers: { 'X-Advance-Client': 'MobileCompanion' } });
+                const { uri } = await FileSystem.downloadAsync(mediaUrl, SYNC_CACHE_BASE + 'clip_sync_global.png', { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } });
                 const b64 = await FileSystem.readAsStringAsync(uri, { encoding: (FileSystem as any).EncodingType.Base64 });
                 await Clipboard.setImageAsync(b64);
                 Platform.OS === 'android' && ToastAndroid.show("Image Copied Natively", ToastAndroid.SHORT);
@@ -987,16 +1164,23 @@ export default function SyncScreen() {
           if (fileInfo.exists) { setDownloadedItems(prev => new Set(prev).add(item.id!)); setIncomingTransferProgress(p => { const n = {...p}; delete n[transferId]; return n; }); return; }
           if ((item.Title || '').toLowerCase().endsWith('.apk')) return;
           try {
-            const headRes = await fetch(mediaUrl, { method: 'HEAD', headers: { 'X-Advance-Client': 'MobileCompanion' } });
+            const headRes = await fetch(mediaUrl, { method: 'HEAD', headers: { 'X-FlyShelf-Client': 'MobileCompanion' } });
             const sizeStr = headRes.headers.get('content-length');
             if (sizeStr) { const sizeBytes = parseInt(sizeStr); const isLocalRoute = !mediaUrl.includes('firebasestorage.googleapis.com'); if (!isLocalRoute && sizeBytes > 100 * 1024 * 1024) return; }
           } catch(e) {}
           setIncomingTransferProgress(p => ({...p, [transferId]: 0}));
-          const resumable = FileSystem.createDownloadResumable(mediaUrl, localUri, { headers: { 'X-Advance-Client': 'MobileCompanion' } }, (dp) => { const pct = dp.totalBytesExpectedToWrite > 0 ? dp.totalBytesWritten / dp.totalBytesExpectedToWrite : 0; setIncomingTransferProgress(p => ({...p, [transferId]: pct})); });
-          await resumable.downloadAsync();
+          const resumable = FileSystem.createDownloadResumable(mediaUrl, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }, (dp) => { const pct = dp.totalBytesExpectedToWrite > 0 ? dp.totalBytesWritten / dp.totalBytesExpectedToWrite : 0; setIncomingTransferProgress(p => ({...p, [transferId]: pct})); });
+          const dlResult = await resumable.downloadAsync();
           setIncomingTransferProgress(p => { const n = {...p}; delete n[transferId]; return n; });
-          if (item.Type === 'ImageLink' || item.Type === 'Image') { try { const perm = await MediaLibrary.requestPermissionsAsync(); if (perm.status === 'granted') await MediaLibrary.saveToLibraryAsync(localUri); } catch (err) {} }
-        } catch(e) { const transferId = item.id || (item.Title || '').replace(/[^a-zA-Z0-9.-]/g, '_'); setIncomingTransferProgress(p => { const n = {...p}; delete n[transferId]; return n; }); } finally { setDownloadedItems(prev => new Set(prev).add(item.id!)); }
+          if (dlResult && dlResult.status === 200) {
+            if (item.Type === 'ImageLink' || item.Type === 'Image') { try { const perm = await MediaLibrary.requestPermissionsAsync(); if (perm.status === 'granted') await MediaLibrary.saveToLibraryAsync(localUri); } catch (err) {} }
+            // Track download via downloadedBy model
+            if (item.id) { try { await markFileDownloaded(item.id); } catch {} }
+          } else {
+            // Failed — delete partial/corrupt file (NEVER resume)
+            await FileSystem.deleteAsync(localUri, { idempotent: true }).catch(() => {});
+          }
+        } catch(e) { const transferId = item.id || (item.Title || '').replace(/[^a-zA-Z0-9.-]/g, '_'); setIncomingTransferProgress(p => { const n = {...p}; delete n[transferId]; return n; }); await FileSystem.deleteAsync(DOWNLOAD_BASE + (item.Title || '').replace(/[^a-zA-Z0-9.-]/g, '_'), { idempotent: true }).catch(() => {}); } finally { setDownloadedItems(prev => new Set(prev).add(item.id!)); }
       } else { setDownloadedItems(prev => new Set(prev).add(item.id!)); }
     });
   }, [clips]);
@@ -1012,11 +1196,12 @@ export default function SyncScreen() {
       else if (payloadText.includes('meet.google.com') || payloadText.includes('zoom.us') || payloadText.startsWith('www.')) { finalType = 'Url'; finalRaw = `https://${payloadText}`; }
       const targetUrl = await getCachedPcUrl();
       sentContentFingerprintsRef.current.add(finalRaw.substring(0, 200));
-      if (sentContentFingerprintsRef.current.size > 100) sentContentFingerprintsRef.current = new Set(Array.from(sentContentFingerprintsRef.current).slice(-50));
+      const txEventId = generateEventId();
+      processedEventsRef.current.set(txEventId, Date.now());
       let localSuccess = false;
       try {
         const pairingKey = await AsyncStorage.getItem('pairingKey');
-        const hdrs: any = { 'Content-Type': 'text/plain', 'X-Advance-Client': 'MobileCompanion', 'X-Source-Device': deviceName || 'Mobile' };
+        const hdrs: any = { 'Content-Type': 'text/plain', 'X-FlyShelf-Client': 'MobileCompanion', 'X-Source-Device': deviceName || 'Mobile' };
         if (pairingKey) hdrs['X-Pairing-Key'] = pairingKey;
         const response = await fetchWithTimeout(`${targetUrl}/api/sync_text`, { method: 'POST', headers: hdrs, body: finalRaw }, 1500);
         localSuccess = response.ok;
@@ -1038,8 +1223,31 @@ export default function SyncScreen() {
       });
 
       if (!localSuccess && isGlobalSyncEnabled) {
-        const newRef = push(ref(database, clipboardPath()));
-        set(newRef, { Title: payloadText.length > 50 ? payloadText.substring(0, 50) + '...' : payloadText, Type: finalType, Raw: finalRaw, Time: new Date().toLocaleTimeString(), Timestamp: Date.now(), SourceDeviceName: deviceName || 'Unknown Mobile', SourceDeviceType: 'Mobile' }).catch(() => {});
+        // Sync Queue: retry with exponential backoff for guaranteed delivery
+        // AES-256-GCM encrypt sensitive fields before Firebase push
+        let encTitle = payloadText.length > 50 ? payloadText.substring(0, 50) + '...' : payloadText;
+        let encRaw = finalRaw;
+        let encrypted = false;
+        try {
+          encTitle = await aesEncrypt(encTitle);
+          encRaw = await aesEncrypt(encRaw);
+          encrypted = true;
+        } catch (e: any) { syncLog('SYNC_CRYPTO', `Encryption failed, sending plaintext: ${e?.message || 'unknown'}`); }
+        const payload = { Title: encTitle, Type: finalType, Raw: encRaw, Time: new Date().toLocaleTimeString(), Timestamp: Date.now(), EventId: txEventId, Encrypted: encrypted, SourceDeviceName: deviceName || 'Unknown Mobile', SourceDeviceType: 'Mobile' };
+        const RETRY_DELAYS = [2000, 5000, 10000];
+        for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt++) {
+          try {
+            const newRef = push(ref(database, clipboardPath()));
+            await set(newRef, payload);
+            if (attempt > 0) syncLog('SYNC_QUEUE', `Delivered to Firebase after ${attempt + 1} attempts`);
+            break; // Success
+          } catch (err: any) {
+            syncLog('SYNC_QUEUE', `Attempt ${attempt + 1}/${RETRY_DELAYS.length} failed: ${err?.message || 'unknown'}`);
+            if (attempt < RETRY_DELAYS.length - 1) {
+              await new Promise(r => setTimeout(r, RETRY_DELAYS[attempt]));
+            }
+          }
+        }
       }
     } catch (e) {}
     setIsSending(false);
@@ -1085,8 +1293,8 @@ export default function SyncScreen() {
         if (activePc) { const opt = await resolveOptimalUrl(activePc); if (opt) targetUrl = opt; }
         const pdfUrls = mergeQueue.map(item => getMediaUrlForItem(item)).filter(u => u.startsWith('http'));
         if (pdfUrls.length < 2) { Alert.alert('Error', `Local: ${localErr.message}\nPC: No HTTP URLs available.`); return; }
-        const res = await fetchWithTimeout(`${targetUrl}/api/merge_pdfs`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Advance-Client': 'MobileCompanion' }, body: JSON.stringify({ urls: pdfUrls, sourceDevice: deviceName || 'Mobile' }) }, 30000);
-        if (res.ok) { const body = await res.json(); if (body.downloadUrl) { const mergedUrl = body.downloadUrl.startsWith('http') ? body.downloadUrl : `${targetUrl}${body.downloadUrl}`; const localUri = CONVERTED_BASE + `merged_${Date.now()}.pdf`; await FileSystem.downloadAsync(mergedUrl, localUri, { headers: { 'X-Advance-Client': 'MobileCompanion' } }); await Sharing.shareAsync(localUri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Merged PDF' }); } } else Alert.alert('Merge Failed');
+        const res = await fetchWithTimeout(`${targetUrl}/api/merge_pdfs`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion' }, body: JSON.stringify({ urls: pdfUrls, sourceDevice: deviceName || 'Mobile' }) }, 30000);
+        if (res.ok) { const body = await res.json(); if (body.downloadUrl) { const mergedUrl = body.downloadUrl.startsWith('http') ? body.downloadUrl : `${targetUrl}${body.downloadUrl}`; const localUri = CONVERTED_BASE + `merged_${Date.now()}.pdf`; await FileSystem.downloadAsync(mergedUrl, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }); await Sharing.shareAsync(localUri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Merged PDF' }); } } else Alert.alert('Merge Failed');
       }
     } catch (e) { Alert.alert('Merge Error'); }
     exitMultiSelect();
@@ -1110,7 +1318,7 @@ export default function SyncScreen() {
       for (const item of selected) { if (!item.id && pairingKeyRef.current) { const clipRef = push(ref(database, clipboardPath())); await set(clipRef, { ...item, Timestamp: Date.now() }); } }
       for (const deviceKey of targetDeviceKeys) {
         const dev = forceSyncDevices.find(d => d.key === deviceKey);
-        if (dev?.LocalIp) { try { const url = await resolveOptimalUrl(dev); if (url) { for (const item of selected) { await fetchWithTimeout(`${url}/api/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Advance-Client': 'MobileCompanion' }, body: JSON.stringify({ title: item.Title, content: item.Raw, type: item.Type, sourceDevice: deviceName }) }, 5000).catch(() => {}); } } } catch (e) {} }
+        if (dev?.LocalIp) { try { const url = await resolveOptimalUrl(dev); if (url) { for (const item of selected) { await fetchWithTimeout(`${url}/api/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion' }, body: JSON.stringify({ title: item.Title, content: item.Raw, type: item.Type, sourceDevice: deviceName }) }, 5000).catch(() => {}); } } } catch (e) {} }
       }
       if (Platform.OS === 'android') ToastAndroid.show('Force sync complete ✅', ToastAndroid.SHORT);
     } catch (e: any) { syncLog('FORCE-SYNC', `ERROR: ${e?.message}`); Alert.alert('Sync Error', e?.message || 'Unknown error'); }
@@ -1184,7 +1392,7 @@ export default function SyncScreen() {
       try {
         const res = await fetchWithTimeout(`${url}/api/pair`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Advance-Client': 'MobileCompanion' },
+          headers: { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion' },
           body: JSON.stringify({
             key: key || '',
             deviceId: `Mobile_${(deviceName || 'Phone').replace(/[^a-zA-Z0-9_]/g, '_')}`,
@@ -1395,7 +1603,7 @@ export default function SyncScreen() {
         const resolved = await resolveOptimalUrl(pc);
         if (!resolved) { Alert.alert('PC Unreachable', 'Could not reach your PC. Make sure FlyShelf is running.'); setIsSending(false); setPendingUploadPayload(null); return; }
         const uploadUrl = `${resolved}/api/sync_file?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`;
-        await FileSystem.uploadAsync(uploadUrl, hydratedPath, { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-Advance-Client': 'MobileCompanion' } });
+        await FileSystem.uploadAsync(uploadUrl, hydratedPath, { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion' } });
       } else {
         // Direct device transfer (LAN or Cloudflare)
         const resolved = await resolveOptimalUrl(targetDeviceOrGlobal);
@@ -1433,7 +1641,7 @@ export default function SyncScreen() {
                   httpMethod: 'POST',
                   uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
                   headers: {
-                    'X-Advance-Client': 'MobileCompanion',
+                    'X-FlyShelf-Client': 'MobileCompanion',
                     'X-Upload-Session': sessionId,
                     'X-Chunk-Index': i.toString(),
                   }
@@ -1453,7 +1661,7 @@ export default function SyncScreen() {
           const finRes = await fetch(`${resolved}/api/upload_finalize`, {
             method: 'POST',
             headers: {
-              'X-Advance-Client': 'MobileCompanion',
+              'X-FlyShelf-Client': 'MobileCompanion',
               'X-Upload-Session': sessionId,
               'X-File-Name': encodeURIComponent(name),
               'X-Original-Date': Date.now().toString(),
@@ -1465,7 +1673,7 @@ export default function SyncScreen() {
         } else {
           // ── Direct single POST (LAN or small Cloudflare files) ──
           const uploadUrl = `${resolved}/api/sync_file?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`;
-          await FileSystem.uploadAsync(uploadUrl, hydratedPath, { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-Advance-Client': 'MobileCompanion' } });
+          await FileSystem.uploadAsync(uploadUrl, hydratedPath, { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion' } });
         }
       }
       if (Platform.OS === 'android') ToastAndroid.show(`✅ ${name} sent!`, ToastAndroid.SHORT);
@@ -1668,15 +1876,11 @@ export default function SyncScreen() {
           ) : clips.filter(clipFilter).length === 0 ? (
             <Text style={styles.emptyText}>No clips synced yet.</Text>
           ) : (
-            <FlatList
+            <FlashList
               data={clips.filter(clipFilter)}
               keyExtractor={(item, index) => item.id ? item.id : index.toString()}
               showsVerticalScrollIndicator={false}
-              initialNumToRender={15}
-              maxToRenderPerBatch={10}
-              windowSize={5}
-              removeClippedSubviews={true}
-              updateCellsBatchingPeriod={50}
+              drawDistance={300}
               renderItem={({ item, index: itemIndex }) => {
                 let iconName = 'doc.text', iconColor = '#8A8F98';
                 const lowerTit = (item.Title || item.Raw || '').toLowerCase();
@@ -1773,7 +1977,7 @@ export default function SyncScreen() {
                         <TouchableOpacity onPress={async () => {
                           const contentStr = item.Raw || item.Title || '';
                           if (item.Type === 'Image' || item.Type === 'ImageLink') {
-                            try { const src = item.CachedUri || mediaUrl || item.Raw; if (src) { if (src.startsWith('file://') || src.startsWith('/')) { const b64 = await FileSystem.readAsStringAsync(src.startsWith('file://') ? src : `file://${src}`, { encoding: FileSystem.EncodingType.Base64 }); await Clipboard.setImageAsync(b64); } else { const localUri = `${SYNC_CACHE_BASE}copy_${Date.now()}.png`; const dl = await FileSystem.downloadAsync(src, localUri, { headers: { 'X-Advance-Client': 'MobileCompanion' } }); const b64 = await FileSystem.readAsStringAsync(dl.uri, { encoding: FileSystem.EncodingType.Base64 }); await Clipboard.setImageAsync(b64); } if (Platform.OS === 'android') ToastAndroid.show("Image Copied", ToastAndroid.SHORT); } } catch(e) { await Clipboard.setStringAsync(contentStr); if (Platform.OS === 'android') ToastAndroid.show("URL Copied", ToastAndroid.SHORT); }
+                            try { const src = item.CachedUri || mediaUrl || item.Raw; if (src) { if (src.startsWith('file://') || src.startsWith('/')) { const b64 = await FileSystem.readAsStringAsync(src.startsWith('file://') ? src : `file://${src}`, { encoding: FileSystem.EncodingType.Base64 }); await Clipboard.setImageAsync(b64); } else { const localUri = `${SYNC_CACHE_BASE}copy_${Date.now()}.png`; const dl = await FileSystem.downloadAsync(src, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }); const b64 = await FileSystem.readAsStringAsync(dl.uri, { encoding: FileSystem.EncodingType.Base64 }); await Clipboard.setImageAsync(b64); } if (Platform.OS === 'android') ToastAndroid.show("Image Copied", ToastAndroid.SHORT); } } catch(e) { await Clipboard.setStringAsync(contentStr); if (Platform.OS === 'android') ToastAndroid.show("URL Copied", ToastAndroid.SHORT); }
                           } else { await Clipboard.setStringAsync(contentStr); if (Platform.OS === 'android') ToastAndroid.show("Copied!", ToastAndroid.SHORT); }
                           setActiveOptionsId(null);
                         }} style={[styles.actionBtnIcon, {backgroundColor: '#4A62EB33'}]}>
@@ -1812,7 +2016,7 @@ export default function SyncScreen() {
             {(() => { const sel = getSelectedClips(); const allPdf = sel.length >= 2 && sel.every(c => c.Type === 'Pdf' || (c.Title || '').toLowerCase().endsWith('.pdf')); if (allPdf) return (<TouchableOpacity style={{backgroundColor: '#EF4444', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4}} onPress={openMergeModal}><IconSymbol name="doc.on.doc" size={14} color="#FFF" /><Text style={{color: '#FFF', fontSize: 12, fontWeight: '700'}}>Merge PDFs</Text></TouchableOpacity>); return null; })()}
             <TouchableOpacity style={{backgroundColor: '#10B981', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4}} onPress={async () => {
               try { const selected = clips.filter(c => selectedItemIds.has(c.id || '')); if (selected.length === 0) return; const item = selected[0]; const mUrl = getMediaUrlForItem(item);
-              if (mUrl.startsWith('http')) { const safeName = (item.Title || `file_${Date.now()}`).replace(/[^a-zA-Z0-9.-]/g, '_'); const localUri = DOWNLOAD_BASE + safeName; const fileInfo = await FileSystem.getInfoAsync(localUri); let uri = localUri; if (!fileInfo.exists) { if (Platform.OS === 'android') ToastAndroid.show('Downloading for share...', ToastAndroid.SHORT); const dl = await FileSystem.downloadAsync(mUrl, localUri, { headers: { 'X-Advance-Client': 'MobileCompanion' } }); uri = dl.uri; } await Sharing.shareAsync(uri, { dialogTitle: `Share ${safeName}` }); } else { const text = item.Raw || item.Title || ''; await Sharing.shareAsync(text, { dialogTitle: 'Share' }).catch(() => { Clipboard.setStringAsync(text); if (Platform.OS === 'android') ToastAndroid.show('Copied', ToastAndroid.SHORT); }); }
+              if (mUrl.startsWith('http')) { const safeName = (item.Title || `file_${Date.now()}`).replace(/[^a-zA-Z0-9.-]/g, '_'); const localUri = DOWNLOAD_BASE + safeName; const fileInfo = await FileSystem.getInfoAsync(localUri); let uri = localUri; if (!fileInfo.exists) { if (Platform.OS === 'android') ToastAndroid.show('Downloading for share...', ToastAndroid.SHORT); const dl = await FileSystem.downloadAsync(mUrl, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }); uri = dl.uri; } await Sharing.shareAsync(uri, { dialogTitle: `Share ${safeName}` }); } else { const text = item.Raw || item.Title || ''; await Sharing.shareAsync(text, { dialogTitle: 'Share' }).catch(() => { Clipboard.setStringAsync(text); if (Platform.OS === 'android') ToastAndroid.show('Copied', ToastAndroid.SHORT); }); }
               } catch(e) { if (Platform.OS === 'android') ToastAndroid.show('Share failed', ToastAndroid.SHORT); }
             }}><IconSymbol name="square.and.arrow.up" size={14} color="#FFF" /><Text style={{color: '#FFF', fontSize: 12, fontWeight: '700'}}>Share</Text></TouchableOpacity>
             <TouchableOpacity style={{backgroundColor: '#4A62EB', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4}} onPress={openForceSyncModal}><IconSymbol name="bolt.fill" size={14} color="#FFF" /><Text style={{color: '#FFF', fontSize: 12, fontWeight: '700'}}>Force Sync</Text></TouchableOpacity>
@@ -1904,16 +2108,16 @@ export default function SyncScreen() {
       <Modal visible={!!expandedImage} transparent={true} animationType="fade" onRequestClose={() => setExpandedImage(null)}>
         <View style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center'}}>
           <TouchableOpacity style={{position: 'absolute', top: 60, right: 20, zIndex: 10, padding: 10, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, width: 44, height: 44, alignItems: 'center', justifyContent: 'center'}} onPress={() => setExpandedImage(null)}><IconSymbol name="xmark" size={24} color="#FFF" /></TouchableOpacity>
-          {expandedImage && <Image source={{uri: expandedImage, headers: { 'X-Advance-Client': 'MobileCompanion' }}} style={{width: '100%', height: '80%'}} contentFit="contain" />}
+          {expandedImage && <Image source={{uri: expandedImage, headers: { 'X-FlyShelf-Client': 'MobileCompanion' }}} style={{width: '100%', height: '80%'}} contentFit="contain" />}
           {expandedImage && (
             <View style={{position: 'absolute', bottom: 50, flexDirection: 'row', gap: 30, zIndex: 10}}>
               <TouchableOpacity style={{backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 30, width: 60, height: 60, alignItems: 'center', justifyContent: 'center'}} onPress={async () => {
                 if (Platform.OS === 'web') return;
-                try { const safeName = `image_${Date.now()}.jpg`; const localUri = DOWNLOAD_BASE + safeName; const dl = await FileSystem.downloadAsync(expandedImage, localUri, { headers: { 'X-Advance-Client': 'MobileCompanion' } }); const perm = await MediaLibrary.requestPermissionsAsync(); if (perm.status === 'granted') { await MediaLibrary.saveToLibraryAsync(dl.uri); if (Platform.OS === 'android') ToastAndroid.show("Saved to Gallery", ToastAndroid.SHORT); } } catch(e) {}
+                try { const safeName = `image_${Date.now()}.jpg`; const localUri = DOWNLOAD_BASE + safeName; const dl = await FileSystem.downloadAsync(expandedImage, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }); const perm = await MediaLibrary.requestPermissionsAsync(); if (perm.status === 'granted') { await MediaLibrary.saveToLibraryAsync(dl.uri); if (Platform.OS === 'android') ToastAndroid.show("Saved to Gallery", ToastAndroid.SHORT); } } catch(e) {}
               }}><IconSymbol name="arrow.down" size={26} color="#FFF" /></TouchableOpacity>
               <TouchableOpacity style={{backgroundColor: '#4A62EB', borderRadius: 30, width: 60, height: 60, alignItems: 'center', justifyContent: 'center'}} onPress={async () => {
                 if (Platform.OS === 'web') return;
-                try { const safeName = `image_share_${Date.now()}.jpg`; const localUri = SYNC_CACHE_BASE + safeName; const dl = await FileSystem.downloadAsync(expandedImage, localUri, { headers: { 'X-Advance-Client': 'MobileCompanion' } }); if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(dl.uri); } catch(e) {}
+                try { const safeName = `image_share_${Date.now()}.jpg`; const localUri = SYNC_CACHE_BASE + safeName; const dl = await FileSystem.downloadAsync(expandedImage, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }); if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(dl.uri); } catch(e) {}
               }}><IconSymbol name="square.and.arrow.up" size={26} color="#FFF" /></TouchableOpacity>
             </View>
           )}

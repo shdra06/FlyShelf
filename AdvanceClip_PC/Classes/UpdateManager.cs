@@ -14,7 +14,7 @@ namespace AdvanceClip.Classes
         // UPDATE THIS URL when your GitHub repo is created.
         // Format: https://raw.githubusercontent.com/{user}/{repo}/main/version.json
         // ═══════════════════════════════════════════════════════════════
-        private const string VERSION_URL = "https://raw.githubusercontent.com/shdra06/AdvanceClip/main/version.json";
+        private const string VERSION_URL = "https://raw.githubusercontent.com/shdra06/FlyShelf/main/version.json";
 
         private static readonly HttpClient _client = new HttpClient() { Timeout = TimeSpan.FromSeconds(15) };
         private static readonly HttpClient _downloadClient = new HttpClient(new HttpClientHandler
@@ -28,6 +28,7 @@ namespace AdvanceClip.Classes
         public string LatestVersion { get; private set; } = "";
         public string Changelog { get; private set; } = "";
         public string DownloadUrl { get; private set; } = "";
+        public string ExpectedHash { get; private set; } = ""; // SHA-256 hash for integrity verification
         public bool IsUpdateAvailable { get; private set; }
 
         // Events for UI binding
@@ -56,6 +57,7 @@ namespace AdvanceClip.Classes
                 Changelog = root.TryGetProperty("pc_changelog", out var c) ? c.GetString() ?? "" : 
                            (root.TryGetProperty("changelog", out var c2) ? c2.GetString() ?? "" : "");
                 DownloadUrl = root.TryGetProperty("pc_download", out var d) ? d.GetString() ?? "" : "";
+                ExpectedHash = root.TryGetProperty("pc_sha256", out var h) ? h.GetString()?.ToLowerInvariant() ?? "" : "";
 
                 if (string.IsNullOrEmpty(LatestVersion))
                 {
@@ -155,9 +157,31 @@ namespace AdvanceClip.Classes
                 }
 
                 DownloadProgressChanged?.Invoke(100);
-                StatusChanged?.Invoke("Download complete! Ready to install.");
                 Logger.LogAction("UPDATE", $"Downloaded {totalRead / 1048576.0:F1} MB to {tempExePath}");
 
+                // SECURITY: SHA-256 hash verification
+                if (!string.IsNullOrEmpty(ExpectedHash))
+                {
+                    StatusChanged?.Invoke("Verifying integrity...");
+                    using var sha = System.Security.Cryptography.SHA256.Create();
+                    using var verifyStream = File.OpenRead(tempExePath);
+                    string actualHash = BitConverter.ToString(sha.ComputeHash(verifyStream)).Replace("-", "").ToLowerInvariant();
+
+                    if (actualHash != ExpectedHash)
+                    {
+                        Logger.LogAction("UPDATE", $"\u274c HASH MISMATCH! Expected: {ExpectedHash}, Got: {actualHash}");
+                        StatusChanged?.Invoke("\u274c Download corrupted \u2014 hash mismatch. Please retry.");
+                        try { File.Delete(tempExePath); } catch { }
+                        return false;
+                    }
+                    Logger.LogAction("UPDATE", $"\u2705 Hash verified: {actualHash}");
+                }
+                else
+                {
+                    Logger.LogAction("UPDATE", "\u26a0\ufe0f No hash in version.json \u2014 skipping integrity check (pre-v2.6.0 release)");
+                }
+
+                StatusChanged?.Invoke("Download complete! Verified and ready to install.");
                 return true;
             }
             catch (Exception ex)

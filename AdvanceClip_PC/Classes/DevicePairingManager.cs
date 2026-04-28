@@ -44,7 +44,7 @@ namespace AdvanceClip.Classes
     {
         private static readonly string _storagePath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            "AdvanceClip", "paired_devices.json");
+            "FlyShelf", "paired_devices.json");
 
         private static List<PairedDevice> _pairedDevices = new();
         private static readonly object _lock = new();

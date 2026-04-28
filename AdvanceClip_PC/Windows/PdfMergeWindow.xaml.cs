@@ -294,7 +294,7 @@ namespace AdvanceClip.Windows
             string userFileName = OutputNameBox.Text.Trim();
             if (string.IsNullOrEmpty(userFileName)) userFileName = $"Merged_{DateTime.Now:yyyyMMdd_HHmmss}";
             if (!userFileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) userFileName += ".pdf";
-            string mergeDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "AdvanceClip", "Merged");
+            string mergeDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FlyShelf", "Merged");
             Directory.CreateDirectory(mergeDir);
             string outputPath = Path.Combine(mergeDir, userFileName);
 

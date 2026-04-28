@@ -82,6 +82,8 @@ export const getDeviceUrls = (device: any): string[] => {
   add(device.LocalIp);
   // Then the Url field (often same as LocalIp, but may differ)
   add(device.Url);
+  // TLS LAN (encrypted local — preferred over Cloudflare when on same network)
+  if (device.TlsUrl) add(device.TlsUrl);
   // Then Cloudflare (works from anywhere)
   add(device.GlobalUrl);
 
@@ -116,7 +118,7 @@ export const resolveOptimalUrl = async (
         }
         const res = await fetchFn(`${url}/api/health`, {
           method: 'GET',
-          headers: { 'X-Advance-Client': 'MobileCompanion' },
+          headers: { 'X-FlyShelf-Client': 'MobileCompanion' },
         }, 2000);
         if (res.ok) return url;
         throw new Error(`${url} returned ${res.status}`);

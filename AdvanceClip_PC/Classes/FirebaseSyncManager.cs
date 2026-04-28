@@ -151,20 +151,90 @@ namespace AdvanceClip.Classes
                     }
                 }
                 
+                // AES-256-GCM encryption: encrypt sensitive fields before pushing to Firebase
+                string encTitle = string.IsNullOrEmpty(item.FileName)
+                    ? (item.RawContent?.Length > 30 ? item.RawContent.Substring(0, 30) + "..." : item.RawContent ?? "")
+                    : item.FileName;
+                string encRaw = raw;
+                string encDownloadUrl = downloadUrl;
+                bool encrypted = false;
+
+                try
+                {
+                    encTitle = SyncCrypto.Encrypt(encTitle);
+                    encRaw = SyncCrypto.Encrypt(encRaw);
+                    if (!string.IsNullOrEmpty(encDownloadUrl))
+                        encDownloadUrl = SyncCrypto.Encrypt(encDownloadUrl);
+                    encrypted = true;
+                }
+                catch (Exception cryptoEx)
+                {
+                    Logger.LogAction("SYNC_CRYPTO", $"Encryption failed, sending plaintext: {cryptoEx.Message}");
+                }
+                // Compute SHA-256 hash for file integrity verification
+                string fileHash = "";
+                if (!string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath))
+                {
+                    try
+                    {
+                        using var hashStream = new FileStream(item.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                        var sha = System.Security.Cryptography.SHA256.HashData(hashStream);
+                        fileHash = BitConverter.ToString(sha).Replace("-", "").ToLowerInvariant();
+                    }
+                    catch { }
+                }
+
+                // For file items: determine which devices should receive this file
+                List<string> targetDeviceIds = new();
+                if (isFilePayload)
+                {
+                    try
+                    {
+                        string pairingKey = DevicePairingManager.EnsurePairingKey();
+                        string devicesUrl = $"{FIREBASE_BASE}/active_devices/{pairingKey}.json";
+                        var devResponse = await _client.GetAsync(devicesUrl);
+                        if (devResponse.IsSuccessStatusCode)
+                        {
+                            string devJson = await devResponse.Content.ReadAsStringAsync();
+                            if (!string.IsNullOrWhiteSpace(devJson) && devJson != "null")
+                            {
+                                using var devDoc = JsonDocument.Parse(devJson);
+                                string myId = SettingsManager.Current.DeviceId ?? "";
+                                foreach (var prop in devDoc.RootElement.EnumerateObject())
+                                {
+                                    var dev = prop.Value;
+                                    bool isOnline = dev.TryGetProperty("IsOnline", out var io) && io.GetBoolean();
+                                    long ts = dev.TryGetProperty("Timestamp", out var tsv) ? tsv.GetInt64() : 0;
+                                    string devId = dev.TryGetProperty("DeviceId", out var di) ? di.GetString() ?? prop.Name : prop.Name;
+                                    // Include only: online, recent heartbeat (<5 min), not self
+                                    if (isOnline && (nowMs - ts) < 300_000 && devId != myId)
+                                        targetDeviceIds.Add(devId);
+                                }
+                            }
+                        }
+                        Logger.LogAction("FIREBASE SYNC", $"File targets: {targetDeviceIds.Count} active devices ({string.Join(", ", targetDeviceIds)})");
+                    }
+                    catch (Exception devEx) { Logger.LogAction("FIREBASE SYNC", $"Device query failed: {devEx.Message}"); }
+                }
+
                 var payload = new
                 {
-                    Title = string.IsNullOrEmpty(item.FileName) ? (item.RawContent?.Length > 30 ? item.RawContent.Substring(0, 30) + "..." : item.RawContent) : item.FileName,
+                    Title = encTitle,
                     Type = item.ItemType.ToString(),
-                    Raw = raw,
-                    PreviewUrl = downloadUrl != "" ? downloadUrl : "",
-                    DownloadUrl = downloadUrl,
+                    Raw = encRaw,
+                    PreviewUrl = encDownloadUrl != "" ? encDownloadUrl : "",
+                    DownloadUrl = encDownloadUrl,
                     FileName = item.FileName ?? "",
                     FileSize = !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath) ? new FileInfo(item.FilePath).Length : 0,
-                    SenderUrl = !string.IsNullOrEmpty(CachedGlobalUrl) ? CachedGlobalUrl : CachedLocalUrl ?? "", // Cloudflare or LAN URL so receivers can build download links
+                    FileHash = fileHash,
+                    SenderUrl = !string.IsNullOrEmpty(CachedGlobalUrl) ? CachedGlobalUrl : CachedLocalUrl ?? "",
                     Time = item.DateCopied.ToString("HH:mm:ss"),
                     Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                    EventId = $"{SettingsManager.Current.DeviceId ?? "PC"}_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Guid.NewGuid().ToString("N").Substring(0, 6)}",
+                    Encrypted = encrypted,
                     SourceDeviceName = deviceName,
-                    SourceDeviceType = "PC"
+                    SourceDeviceType = "PC",
+                    targetDevices = isFilePayload ? targetDeviceIds : new List<string>(),
                 };
 
                 string json = JsonSerializer.Serialize(payload);
@@ -174,29 +244,53 @@ namespace AdvanceClip.Classes
                 
                 if (response.IsSuccessStatusCode)
                 {
-
                     Logger.LogAction("FIREBASE SYNC", $"Pushed item to global cloud as '{deviceName}'");
                     
-                    // Auto-delete: 90s for text, 30min for files (need time to download large files)
                     string responseBody = await response.Content.ReadAsStringAsync();
                     try
                     {
                         var responseObj = JsonSerializer.Deserialize<Dictionary<string, string>>(responseBody);
                         if (responseObj != null && responseObj.TryGetValue("name", out string? entryKey) && !string.IsNullOrEmpty(entryKey))
                         {
-                            _ = Task.Run(async () =>
+                            if (!isFilePayload)
                             {
-                                int deleteDelay = isFilePayload ? AUTO_DELETE_FILE_MS : AUTO_DELETE_TEXT_MS;
-                                await Task.Delay(deleteDelay);
-                                try
+                                // TEXT items: auto-delete after 5 minutes
+                                _ = Task.Run(async () =>
                                 {
-                                    string pairingKey = DevicePairingManager.EnsurePairingKey();
-                                    string deleteUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryKey}.json";
-                                    await _client.DeleteAsync(deleteUrl);
-                                    Logger.LogAction("FIREBASE CLEANUP", $"Auto-deleted entry '{entryKey}'");
-                                }
-                                catch { }
-                            });
+                                    await Task.Delay(AUTO_DELETE_TEXT_MS);
+                                    try
+                                    {
+                                        string pk = DevicePairingManager.EnsurePairingKey();
+                                        await _client.DeleteAsync($"{FIREBASE_BASE}/clipboard/{pk}/{entryKey}.json");
+                                        Logger.LogAction("FIREBASE CLEANUP", $"Auto-deleted text entry '{entryKey}'");
+                                    }
+                                    catch { }
+                                });
+                            }
+                            else
+                            {
+                                // FILE items: TTL safety net (24h) — downloadedBy model handles normal cleanup
+                                _ = Task.Run(async () =>
+                                {
+                                    await Task.Delay(AUTO_DELETE_FILE_MS);
+                                    try
+                                    {
+                                        string pk = DevicePairingManager.EnsurePairingKey();
+                                        // Check if entry still exists (may have been deleted by downloadedBy)
+                                        var checkRes = await _client.GetAsync($"{FIREBASE_BASE}/clipboard/{pk}/{entryKey}.json");
+                                        if (checkRes.IsSuccessStatusCode)
+                                        {
+                                            string checkBody = await checkRes.Content.ReadAsStringAsync();
+                                            if (!string.IsNullOrWhiteSpace(checkBody) && checkBody != "null")
+                                            {
+                                                await _client.DeleteAsync($"{FIREBASE_BASE}/clipboard/{pk}/{entryKey}.json");
+                                                Logger.LogAction("FIREBASE CLEANUP", $"TTL expired — force-deleted file entry '{entryKey}'");
+                                            }
+                                        }
+                                    }
+                                    catch { }
+                                });
+                            }
                         }
                     }
                     catch { }
@@ -250,6 +344,183 @@ namespace AdvanceClip.Classes
             return "";
         }
 
+        /// <summary>
+        /// Purge Firebase clipboard entries whose DownloadUrl contains a dead Cloudflare URL.
+        /// Called when tunnel restarts and gets a new subdomain — old URLs become permanently unreachable.
+        /// </summary>
+        public static async Task PurgeStaleFileEntries(string deadUrl)
+        {
+            if (string.IsNullOrEmpty(deadUrl) || !deadUrl.Contains("trycloudflare.com")) return;
+            
+            try
+            {
+                string pairingKey = DevicePairingManager.EnsurePairingKey();
+                if (string.IsNullOrEmpty(pairingKey)) return;
+
+                string url = $"{FIREBASE_BASE}/clipboard/{pairingKey}.json";
+                var response = await _client.GetAsync(url);
+                if (!response.IsSuccessStatusCode) return;
+
+                string json = await response.Content.ReadAsStringAsync();
+                if (string.IsNullOrWhiteSpace(json) || json == "null") return;
+
+                using var doc = JsonDocument.Parse(json);
+                int purged = 0;
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    try
+                    {
+                        var entry = prop.Value;
+                        // Check if Raw or DownloadUrl contains the dead Cloudflare URL
+                        string raw = entry.TryGetProperty("Raw", out var r) ? r.GetString() ?? "" : "";
+                        string dlUrl = entry.TryGetProperty("DownloadUrl", out var d) ? d.GetString() ?? "" : "";
+                        
+                        if (raw.Contains(deadUrl) || dlUrl.Contains(deadUrl))
+                        {
+                            string title = entry.TryGetProperty("Title", out var t) ? t.GetString() ?? "" : "";
+                            await DeleteFirebaseEntry(pairingKey, prop.Name);
+                            purged++;
+                            Logger.LogAction("PURGE", $"Deleted stale file entry: {title} (dead URL: {deadUrl.Substring(0, Math.Min(40, deadUrl.Length))}...)");
+                        }
+                    }
+                    catch { }
+                }
+
+                if (purged > 0)
+                    Logger.LogAction("PURGE", $"✅ Purged {purged} stale file entries with dead Cloudflare URL");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("PURGE", $"Failed to purge stale entries: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Delete a specific clipboard entry from Firebase by its key.
+        /// </summary>
+        public static async Task DeleteFirebaseEntry(string pairingKey, string entryKey)
+        {
+            try
+            {
+                string deleteUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryKey}.json";
+                await _client.DeleteAsync(deleteUrl);
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Mark a file entry as downloaded by this device. When all target devices
+        /// have downloaded, the entry is automatically deleted from Firebase.
+        /// Offline devices are skipped (not blocking deletion).
+        /// </summary>
+        public static async Task MarkFileDownloaded(string entryId)
+        {
+            try
+            {
+                string pairingKey = DevicePairingManager.EnsurePairingKey();
+                if (string.IsNullOrEmpty(pairingKey)) return;
+                string myDeviceId = SettingsManager.Current.DeviceId ?? "PC";
+
+                // Step 1: Mark this device as having downloaded the file
+                string markUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryId}/downloadedBy/{myDeviceId}.json";
+                var markContent = new StringContent(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(), Encoding.UTF8, "application/json");
+                await _client.PutAsync(markUrl, markContent);
+
+                // Step 2: Read the full entry to check if all targets have downloaded
+                string entryUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryId}.json";
+                var response = await _client.GetAsync(entryUrl);
+                if (!response.IsSuccessStatusCode) return;
+
+                string json = await response.Content.ReadAsStringAsync();
+                if (string.IsNullOrWhiteSpace(json) || json == "null") return;
+
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                // Get targetDevices array
+                var targetDevices = new List<string>();
+                if (root.TryGetProperty("targetDevices", out var targets) && targets.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var t in targets.EnumerateArray())
+                    {
+                        string devId = t.GetString() ?? "";
+                        if (!string.IsNullOrEmpty(devId)) targetDevices.Add(devId);
+                    }
+                }
+
+                // Get downloadedBy object
+                var downloaded = new HashSet<string>();
+                if (root.TryGetProperty("downloadedBy", out var dlBy) && dlBy.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var prop in dlBy.EnumerateObject())
+                        downloaded.Add(prop.Name);
+                }
+
+                // Step 3: Check active status of remaining targets
+                // If a target device is offline (no recent heartbeat), mark it as done
+                var remaining = targetDevices.Where(d => !downloaded.Contains(d)).ToList();
+                if (remaining.Count > 0)
+                {
+                    try
+                    {
+                        string devicesUrl = $"{FIREBASE_BASE}/active_devices/{pairingKey}.json";
+                        var devResponse = await _client.GetAsync(devicesUrl);
+                        if (devResponse.IsSuccessStatusCode)
+                        {
+                            string devJson = await devResponse.Content.ReadAsStringAsync();
+                            var onlineIds = new HashSet<string>();
+                            if (!string.IsNullOrWhiteSpace(devJson) && devJson != "null")
+                            {
+                                using var devDoc = JsonDocument.Parse(devJson);
+                                long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                                foreach (var prop in devDoc.RootElement.EnumerateObject())
+                                {
+                                    var dev = prop.Value;
+                                    bool isOnline = dev.TryGetProperty("IsOnline", out var io) && io.GetBoolean();
+                                    long ts = dev.TryGetProperty("Timestamp", out var tsv) ? tsv.GetInt64() : 0;
+                                    if (isOnline && (now - ts) < 300_000)
+                                        onlineIds.Add(dev.TryGetProperty("DeviceId", out var di) ? di.GetString() ?? prop.Name : prop.Name);
+                                }
+                            }
+
+                            // Mark offline devices as done (they can't download anyway)
+                            foreach (var offlineId in remaining.Where(r => !onlineIds.Contains(r)))
+                            {
+                                string offlineUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryId}/downloadedBy/{offlineId}.json";
+                                await _client.PutAsync(offlineUrl, new StringContent("-1", Encoding.UTF8, "application/json"));
+                                downloaded.Add(offlineId);
+                                Logger.LogAction("SYNC_TRACK", $"Marked offline device as done: {offlineId}");
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                // Step 4: If all target devices have downloaded (or are offline), delete entry
+                if (targetDevices.Count > 0 && targetDevices.All(d => downloaded.Contains(d)))
+                {
+                    await DeleteFirebaseEntry(pairingKey, entryId);
+                    Logger.LogAction("SYNC_CLEANUP", $"All {targetDevices.Count} devices done — entry deleted: {entryId}");
+                }
+                else if (targetDevices.Count == 0)
+                {
+                    // No target devices were set (legacy entry or text) — just delete
+                    await DeleteFirebaseEntry(pairingKey, entryId);
+                    Logger.LogAction("SYNC_CLEANUP", $"No targetDevices — entry deleted: {entryId}");
+                }
+                else
+                {
+                    int done = downloaded.Count;
+                    int total = targetDevices.Count;
+                    Logger.LogAction("SYNC_TRACK", $"Downloaded by {done}/{total} devices — waiting for {total - done} more");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("SYNC_TRACK", $"MarkFileDownloaded error: {ex.Message}");
+            }
+        }
+
         public static async Task PushTunnelUrl(string url, bool isOnline, string localIp = "")
         {
             try
@@ -262,6 +533,8 @@ namespace AdvanceClip.Classes
                     Url = localIp.Contains("http") ? localIp : url,
                     LocalIp = localIp,
                     GlobalUrl = url.Contains("trycloudflare.com") ? url : "",
+                    TlsUrl = NetworkSyncServer.Instance?.TlsUrl ?? "",
+                    TlsThumbprint = NetworkSyncServer.Instance?.TlsThumbprint ?? "",
                     IsOnline = isOnline,
                     Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                 };

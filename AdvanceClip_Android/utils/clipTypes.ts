@@ -15,7 +15,7 @@ export type ClipItem = {
 };
 
 // ═══ Organized Storage Paths ═══
-export const DOWNLOAD_BASE = `${(FileSystem as any).documentDirectory}FlyShelf/Downloads/`;
+export const DOWNLOAD_BASE = `${(FileSystem as any).documentDirectory}FlyShelf/`;
 export const SYNC_CACHE_BASE = `${(FileSystem as any).cacheDirectory}FlyShelf/SyncCache/`;
 export const CONVERTED_BASE = `${(FileSystem as any).documentDirectory}FlyShelf/Converted/`;
 export const IMAGE_CACHE_BASE = `${(FileSystem as any).documentDirectory}FlyShelf/Downloads/Images/`;

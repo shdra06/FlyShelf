@@ -53,7 +53,7 @@ namespace AdvanceClip.Classes
         private System.Collections.ObjectModel.ObservableCollection<string> _customSnifferPaths = new System.Collections.ObjectModel.ObservableCollection<string>();
         public System.Collections.ObjectModel.ObservableCollection<string> CustomSnifferPaths { get => _customSnifferPaths; set => SetProperty(ref _customSnifferPaths, value); }
 
-        private string _customArchiveExtractionPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "AdvanceClip", "Extracted");
+        private string _customArchiveExtractionPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FlyShelf", "Extracted");
         public string CustomArchiveExtractionPath { get => _customArchiveExtractionPath; set => SetProperty(ref _customArchiveExtractionPath, value); }
         
         private string _deviceName = System.Environment.MachineName;
@@ -91,7 +91,7 @@ namespace AdvanceClip.Classes
         private static string GetConfigPath()
         {
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var dir = Path.Combine(appData, "AdvanceClip");
+            var dir = Path.Combine(appData, "FlyShelf");
             Directory.CreateDirectory(dir);
             return Path.Combine(dir, "config.json");
         }

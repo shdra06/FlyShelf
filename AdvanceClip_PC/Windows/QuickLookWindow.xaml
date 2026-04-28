@@ -23,7 +23,7 @@
                 
                 <!-- Native UI Header (Avoids Airspace Issues with Win32 WebBrowser) -->
                 <Grid Grid.Row="0" Background="#90111111" MouseLeftButtonDown="Window_MouseLeftButtonDown">
-                    <TextBlock Text="Quick Look Engine - AdvanceClip" Foreground="#AAAAAA" VerticalAlignment="Center" Margin="15,0,0,0" FontWeight="SemiBold" FontSize="12" IsHitTestVisible="False"/>
+                    <TextBlock Text="Quick Look Engine - FlyShelf" Foreground="#AAAAAA" VerticalAlignment="Center" Margin="15,0,0,0" FontWeight="SemiBold" FontSize="12" IsHitTestVisible="False"/>
                     <ui:Button Click="CloseButton_Click" Appearance="Transparent" Foreground="White" HorizontalAlignment="Right" Margin="10,0,10,0" VerticalAlignment="Center">
                         <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24"/></ui:Button.Icon>
                     </ui:Button>

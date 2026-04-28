@@ -18,6 +18,9 @@ namespace AdvanceClip.ViewModels
     {
         public ObservableCollection<ClipboardItem> DroppedItems { get; } = new ObservableCollection<ClipboardItem>();
         private Stack<System.Collections.Generic.List<ClipboardItem>> _deletedItemsHistory = new Stack<System.Collections.Generic.List<ClipboardItem>>();
+        // Limit parallel image/icon decodes to prevent memory spikes on bulk file copies
+        private static readonly System.Threading.SemaphoreSlim _iconDecodeSemaphore = new System.Threading.SemaphoreSlim(2, 2);
+
 
         /// <summary>
         /// Loads persisted clipboard history from disk and rebuilds Icon previews.
@@ -328,6 +331,7 @@ namespace AdvanceClip.ViewModels
                     {
                         LocalServer.Start();
                     }
+                    AdvanceClip.Classes.SyncQueue.Start(); // Guaranteed-delivery sync queue
                     Sniffer.StartSniffing();
                     if (AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync)
                     {
@@ -445,7 +449,7 @@ namespace AdvanceClip.ViewModels
         private string GetDbPath()
         {
             var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-            var dir = Path.Combine(appData, "AdvanceClip");
+            var dir = Path.Combine(appData, "FlyShelf");
             Directory.CreateDirectory(dir);
             return Path.Combine(dir, "pinned_items.json");
         }
@@ -703,155 +707,144 @@ namespace AdvanceClip.ViewModels
 
             if (files != null && files.Length > 0)
             {
+                // ═══ BATCH FILE PROCESSING ═══
+                // Cap at 100 files per clipboard event to prevent UI freeze.
+                // Files beyond the cap are silently dropped — users rarely need 100+ items at once.
+                const int MAX_FILES_PER_BATCH = 100;
+                if (files.Length > MAX_FILES_PER_BATCH)
+                {
+                    AdvanceClip.Classes.Logger.LogAction("DRAG IN", $"Batch capped: {files.Length} files → processing first {MAX_FILES_PER_BATCH}");
+                    files = files.Take(MAX_FILES_PER_BATCH).ToArray();
+                }
+
+                // Phase 1: Collect items — fast, no icon loading, no sync, no UI notifications
+                var newItems = new List<(ClipboardItem item, string path)>();
+                var bumped = new List<ClipboardItem>(); // Existing items to move to top
+
                 foreach (string file in files)
                 {
-                    AdvanceClip.Classes.Logger.LogAction("DRAG IN", $"Extracted FileDrop payload: {file}");
-
                     var existingFile = DroppedItems.FirstOrDefault(i => i.FilePath == file);
                     if (existingFile != null)
                     {
-                        AdvanceClip.Classes.Logger.LogAction("DRAG IN", $"Live Sync: Physical file modified, updating existing card size and pushing to top.");
                         existingFile.RefreshPhysicalStats();
-                        DroppedItems.Remove(existingFile);
-                        DroppedItems.Insert(0, existingFile);
-
-                        if (forceClipboardSync)
-                        {
-                            Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                try
-                                {
-                                    MainWindow.SetWritingClipboard(true);
-                                    var dropList = new System.Collections.Specialized.StringCollection { file };
-                                    System.Windows.Clipboard.SetFileDropList(dropList);
-                                }
-                                catch { }
-                                finally { MainWindow.SetWritingClipboard(false); }
-                            });
-                        }
+                        bumped.Add(existingFile);
                         continue;
                     }
+                    newItems.Add((new ClipboardItem(file), file));
+                }
 
-                    var item = new ClipboardItem(file);
-                    if (item.ItemType == ClipboardItemType.Image)
+                // Phase 2: Batch-insert into ObservableCollection — single UI notification burst
+                // Move bumped items to top first
+                foreach (var existing in bumped)
+                {
+                    DroppedItems.Remove(existing);
+                    DroppedItems.Insert(0, existing);
+                }
+
+                // Insert new items in reverse order so first file ends up at index 0
+                for (int i = newItems.Count - 1; i >= 0; i--)
+                {
+                    DroppedItems.Insert(0, newItems[i].item);
+                }
+                PruneOldItems();
+                OnPropertyChanged(nameof(ShelfVisibility));
+
+                AdvanceClip.Classes.Logger.LogAction("DRAG IN", $"Batch inserted {newItems.Count} new + {bumped.Count} bumped files");
+
+                // Phase 3: Background — load icons + run sync (completely off the UI thread)
+                if (newItems.Count > 0)
+                {
+                    var capturedNewItems = newItems.ToList();
+                    _ = System.Threading.Tasks.Task.Run(async () =>
                     {
-                        System.Threading.Tasks.Task.Run(() =>
+                        foreach (var (item, filePath) in capturedNewItems)
                         {
+                            // Icon loading — throttled to 2 parallel decodes to prevent memory spikes
+                            await _iconDecodeSemaphore.WaitAsync();
                             try
                             {
-                                var bmp = new BitmapImage();
-                                bmp.BeginInit();
-                                bmp.UriSource = new Uri(file);
-                                bmp.DecodePixelWidth = 250;
-                                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                                bmp.EndInit();
-                                bmp.Freeze();
-                                Application.Current.Dispatcher.InvokeAsync(() => item.Icon = bmp);
-                            }
-                            catch { } 
-                        });
-                    }
-                    else
-                    {
-                        System.Threading.Tasks.Task.Run(() =>
-                        {
-                            // For folders, get the shell folder icon; for files, get file icon
-                            var icon = GetIcon(file);
-                            if (icon != null)
-                            {
-                                Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
-                            }
-                        });
-                    }
-                    
-                    if (AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync && !skipFirebaseSync)
-                    {
-                        var archPath = AdvanceClip.Classes.SettingsManager.Current.CustomArchiveExtractionPath;
-                        if (string.IsNullOrWhiteSpace(archPath)) archPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "AdvanceClip", "Extracted");
-                        bool isGlobalDownload = file.StartsWith(archPath, StringComparison.OrdinalIgnoreCase);
-
-                        if (!isGlobalDownload)
-                        {
-                            // Determine actual sync path: for folders, wait for zip then use that
-                            bool isFolder = item.ItemType == ClipboardItemType.Folder;
-                            
-                            if (isFolder)
-                            {
-                                // Folder sync — wait for zip to complete, then use unified helper
-                                var capturedItem = item;
-                                _ = System.Threading.Tasks.Task.Run(async () =>
+                                if (item.ItemType == ClipboardItemType.Image)
                                 {
+                                    try
+                                    {
+                                        var bmp = new BitmapImage();
+                                        bmp.BeginInit();
+                                        bmp.UriSource = new Uri(filePath);
+                                        bmp.DecodePixelWidth = 250;
+                                        bmp.CacheOption = BitmapCacheOption.OnLoad;
+                                        bmp.EndInit();
+                                        bmp.Freeze();
+                                        Application.Current.Dispatcher.InvokeAsync(() => item.Icon = bmp);
+                                    }
+                                    catch { }
+                                }
+                                else
+                                {
+                                    var icon = GetIcon(filePath);
+                                    if (icon != null)
+                                    {
+                                        Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
+                                    }
+                                }
+                            }
+                            finally { _iconDecodeSemaphore.Release(); }
+
+
+                            // Firebase sync — skip for large batches (>10 files) to prevent flooding
+                            if (capturedNewItems.Count > 10 || !AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync || skipFirebaseSync)
+                                continue;
+
+                            var archPath = AdvanceClip.Classes.SettingsManager.Current.CustomArchiveExtractionPath;
+                            if (string.IsNullOrWhiteSpace(archPath)) archPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FlyShelf", "Extracted");
+                            bool isGlobalDownload = filePath.StartsWith(archPath, StringComparison.OrdinalIgnoreCase);
+
+                            if (!isGlobalDownload)
+                            {
+                                if (item.ItemType == ClipboardItemType.Folder)
+                                {
+                                    var capturedItem = item;
                                     for (int wait = 0; wait < 120; wait++)
                                     {
                                         if (!string.IsNullOrEmpty(capturedItem.ZippedArchivePath) && File.Exists(capturedItem.ZippedArchivePath))
                                             break;
                                         await System.Threading.Tasks.Task.Delay(500);
                                     }
-                                    if (string.IsNullOrEmpty(capturedItem.ZippedArchivePath) || !File.Exists(capturedItem.ZippedArchivePath))
-                                    {
-                                        AdvanceClip.Classes.Logger.LogAction("FOLDER SYNC", $"Zip not ready for '{capturedItem.FileName}'");
-                                        return;
-                                    }
-                                    await SyncFileToDevicesAsync(capturedItem.ZippedArchivePath, capturedItem, label: "FOLDER");
-                                });
-                                goto SkipFileSync;
-                            }
+                                    if (!string.IsNullOrEmpty(capturedItem.ZippedArchivePath) && File.Exists(capturedItem.ZippedArchivePath))
+                                        await SyncFileToDevicesAsync(capturedItem.ZippedArchivePath, capturedItem, label: "FOLDER");
+                                    continue;
+                                }
 
-                            // Skip incomplete/temporary downloads
-                            string fileExt = Path.GetExtension(file).ToLowerInvariant();
-                            if (fileExt is ".crdownload" or ".part" or ".tmp" or ".download" or ".partial")
-                            {
-                                AdvanceClip.Classes.Logger.LogAction("FILE SYNC", $"Skipped incomplete download: {Path.GetFileName(file)}");
-                                goto SkipFileSync;
-                            }
+                                string fileExt = Path.GetExtension(filePath).ToLowerInvariant();
+                                if (fileExt is ".crdownload" or ".part" or ".tmp" or ".download" or ".partial")
+                                    continue;
 
-                            // Verify file is accessible
-                            try
-                            {
-                                using var probe = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                            }
-                            catch (IOException)
-                            {
-                                AdvanceClip.Classes.Logger.LogAction("FILE SYNC", $"Skipped locked file: {Path.GetFileName(file)}");
-                                goto SkipFileSync;
-                            }
-                            catch { }
+                                try { using var probe = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite); }
+                                catch (IOException) { continue; }
+                                catch { }
 
-                            // Unified file sync
-                            {
-                                string capturedFile = file;
-                                var capturedItem = item;
-                                _ = System.Threading.Tasks.Task.Run(async () => await SyncFileToDevicesAsync(capturedFile, capturedItem, label: "FILE"));
+                                await SyncFileToDevicesAsync(filePath, item, label: "FILE");
                             }
-                            SkipFileSync:;
                         }
-                    }
-                    
-                    // Pushing natively to the top of the Stack (LIFO format)
-                    DroppedItems.Insert(0, item);
-                    PruneOldItems();
-                    
-                    if (forceClipboardSync)
-                    {
-                        Application.Current.Dispatcher.InvokeAsync(async () =>
-                        {
-                            try
-                            {
-                                MainWindow.SetWritingClipboard(true);
-                                var dropList = new System.Collections.Specialized.StringCollection();
-                                dropList.Add(file);
-                                System.Windows.Clipboard.SetFileDropList(dropList);
-                                // Delay clearing the flag — Windows dispatches clipboard change
-                                // notifications asynchronously, so OnClipboardChanged fires AFTER
-                                // SetWritingClipboard(false) if we clear immediately.
-                                await System.Threading.Tasks.Task.Delay(500);
-                            }
-                            catch { }
-                            finally { MainWindow.SetWritingClipboard(false); }
-                        });
-                    }
+                    });
                 }
-                OnPropertyChanged(nameof(ShelfVisibility));
+
+                // Clipboard writeback (only for single file or bumped items)
+                if (forceClipboardSync && files.Length <= 10)
+                {
+                    Application.Current.Dispatcher.InvokeAsync(async () =>
+                    {
+                        try
+                        {
+                            MainWindow.SetWritingClipboard(true);
+                            var dropList = new System.Collections.Specialized.StringCollection();
+                            dropList.Add(files[0]);
+                            System.Windows.Clipboard.SetFileDropList(dropList);
+                            await System.Threading.Tasks.Task.Delay(500);
+                        }
+                        catch { }
+                        finally { MainWindow.SetWritingClipboard(false); }
+                    });
+                }
             }
             else if (data.GetDataPresent(DataFormats.Bitmap) || data.GetDataPresent(DataFormats.Dib) || data.GetDataPresent(typeof(BitmapSource)))
             {
@@ -1145,7 +1138,7 @@ namespace AdvanceClip.ViewModels
                             string txtFp = $"TXT::{(item.RawContent ?? "").Substring(0, Math.Min(200, (item.RawContent ?? "").Length))}";
                             if (!IsCloudSourced(txtFp))
                             {
-                                _ = AdvanceClip.Classes.FirebaseSyncManager.PushToGlobalSync(item);
+                                AdvanceClip.Classes.SyncQueue.Enqueue(item);
                             }
                             else
                             {

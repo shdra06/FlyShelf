@@ -8,7 +8,7 @@ namespace AdvanceClip.Classes
 {
     public static class Logger
     {
-        private static readonly string LogDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AdvanceClip", "Logs");
+        private static readonly string LogDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
         private static readonly string LogFile = Path.Combine(LogDirectory, "activity_log.txt");
         private static readonly string NetLogFile = Path.Combine(LogDirectory, "network_diagnostics.txt");
         
@@ -138,7 +138,7 @@ namespace AdvanceClip.Classes
             {
                 var sb = new System.Text.StringBuilder();
                 sb.AppendLine("╔══════════════════════════════════════════════════════════════╗");
-                sb.AppendLine("║           ADVANCECLIP NETWORK DIAGNOSTICS SNAPSHOT          ║");
+                sb.AppendLine("║              FLYSHELF NETWORK DIAGNOSTICS SNAPSHOT           ║");
                 sb.AppendLine($"║  Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}                            ║");
                 sb.AppendLine("╚══════════════════════════════════════════════════════════════╝");
                 sb.AppendLine();
@@ -205,7 +205,7 @@ namespace AdvanceClip.Classes
 
                 // cloudflared.exe binary check
                 sb.AppendLine("── CLOUDFLARED BINARY ──");
-                string exePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AdvanceClip", "agent", "cloudflared.exe");
+                string exePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "agent", "cloudflared.exe");
                 if (File.Exists(exePath))
                 {
                     var fi = new FileInfo(exePath);

@@ -61,7 +61,7 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
-        const string appName = "AdvanceClip_SingleInstance_Mutex_Global";
+        const string appName = "FlyShelf_SingleInstance_Mutex_Global";
         bool createdNew;
 
         _mutex = new System.Threading.Mutex(true, appName, out createdNew);
@@ -88,7 +88,7 @@ public partial class App : Application
             using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
             {
                 // Environment.ProcessPath guarantees absolute pathing even for self-contained SingleFile bundles 
-                if (key != null) key.SetValue("AdvanceClip", Environment.ProcessPath ?? System.Reflection.Assembly.GetExecutingAssembly().Location);
+                if (key != null) key.SetValue("FlyShelf", Environment.ProcessPath ?? System.Reflection.Assembly.GetExecutingAssembly().Location);
             }
         }
         catch (Exception) { /* Swallow permission constraint exceptions gracefully */ }
@@ -126,7 +126,7 @@ public partial class App : Application
             {
                 Window namingWindow = new Window
                 {
-                    Title = "AdvanceClip Initialization",
+                    Title = "FlyShelf Initialization",
                     Width = 450,
                     Height = 260,
                     WindowStartupLocation = WindowStartupLocation.CenterScreen,
@@ -147,7 +147,7 @@ public partial class App : Application
                 var stack = new System.Windows.Controls.StackPanel { Margin = new Thickness(30), VerticalAlignment = VerticalAlignment.Center };
                 
                 stack.Children.Add(new System.Windows.Controls.TextBlock { 
-                    Text = "AdvanceClip Mesh Registration", 
+                    Text = "FlyShelf Mesh Registration", 
                     FontSize = 22, 
                     FontWeight = FontWeights.Bold, 
                     Foreground = System.Windows.Media.Brushes.White,
@@ -231,6 +231,34 @@ public partial class App : Application
             // Provide immediate feedback that the service captured the network without waiting for graphics
             AdvanceClip.Windows.ToastWindow.ShowToast("Service online");
 
+            // ═══ SLEEP/RESUME RECOVERY ═══
+            // When PC wakes from sleep, all sockets die and Cloudflare tunnel breaks.
+            // Force-restart the tunnel (old URL is dead) and push fresh LAN heartbeat.
+            Microsoft.Win32.SystemEvents.PowerModeChanged += (s, ev) =>
+            {
+                if (ev.Mode == Microsoft.Win32.PowerModes.Resume)
+                {
+                    AdvanceClip.Classes.Logger.LogAction("POWER", "⚡ PC resumed from sleep — force-restarting network in 5s");
+                    _ = System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        await System.Threading.Tasks.Task.Delay(5000); // Wait for network stack to stabilize
+                        
+                        // Force-restart Cloudflare tunnel — the old URL is dead after sleep
+                        // The GlobalUrlUpdated event will auto-purge stale Firebase entries
+                        var server = AdvanceClip.Classes.NetworkSyncServer.Instance;
+                        if (server != null)
+                        {
+                            AdvanceClip.Classes.Logger.LogAction("POWER", "Killing stale Cloudflare tunnel — will get new URL...");
+                            // Push heartbeat with LAN IP ONLY (no stale Cloudflare URL) so Android can reach us via LAN immediately
+                            try { await AdvanceClip.Classes.FirebaseSyncManager.PushTunnelUrl(server.DisplayUrl, true, server.DisplayUrl); }
+                            catch (Exception ex) { AdvanceClip.Classes.Logger.LogAction("POWER", $"LAN heartbeat failed: {ex.Message}"); }
+                        }
+                        
+                        AdvanceClip.Classes.Logger.DumpNetworkDiagnostics();
+                        AdvanceClip.Classes.Logger.LogAction("POWER", "✅ Post-sleep recovery complete — Cloudflare will auto-restart via health monitor");
+                    });
+                }
+            };
 
             // Offload the massive WPF XAML layout rasterization payload directly to the background!
             // This drops AdvanceClip's actual active startup boot time from ~2000ms straight to < 10ms!

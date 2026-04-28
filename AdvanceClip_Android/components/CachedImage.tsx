@@ -35,7 +35,7 @@ const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: 
           const uri = imgUri.startsWith('file://') ? imgUri : `file://${imgUri}`;
           
           // Check if the file is in our app's storage (always accessible)
-          const isAppLocal = imgUri.includes('AdvanceClip') || imgUri.includes('expo') || imgUri.includes('cache');
+          const isAppLocal = imgUri.includes('FlyShelf') || imgUri.includes('expo') || imgUri.includes('cache');
           
           if (isAppLocal) {
             const info = await FileSystem.getInfoAsync(uri);
@@ -97,7 +97,7 @@ const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: 
           for (let attempt = 0; attempt < 3; attempt++) {
             try {
               const dl = await FileSystem.downloadAsync(imgUri, permUri, {
-                headers: { 'X-Advance-Client': 'MobileCompanion' }
+                headers: { 'X-FlyShelf-Client': 'MobileCompanion' }
               });
               if (dl.status === 200) {
                 const dlInfo = await FileSystem.getInfoAsync(dl.uri);

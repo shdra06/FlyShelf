@@ -12,7 +12,7 @@ async function readPdfBytes(uri: string): Promise<Uint8Array> {
     // Remote file: download to temp location first
     const tempPath = `${FileSystem.cacheDirectory}pdf_temp_${Date.now()}_${Math.random().toString(36).slice(2)}.pdf`;
     const { uri: localUri } = await FileSystem.downloadAsync(uri, tempPath, {
-      headers: { 'X-Advance-Client': 'MobileCompanion' },
+      headers: { 'X-FlyShelf-Client': 'MobileCompanion' },
     });
     const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
     await FileSystem.deleteAsync(localUri, { idempotent: true });

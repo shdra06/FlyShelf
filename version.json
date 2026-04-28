@@ -1,8 +1,9 @@
 {
-  "pc_version": "2.5.0",
-  "pc_download": "https://github.com/shdra06/AdvanceClip/releases/download/v2.5.0/FlyShelf.exe",
-  "android_version": "2.5.0",
-  "android_download": "https://github.com/shdra06/AdvanceClip/releases/download/v2.5.0/FlyShelf_Mobile.apk",
-  "pc_changelog": "v2.5.0: Full sync audit — fixed clipboard write race conditions (6 locations), scoped device discovery to pairing key for privacy, Firebase echo prevention for 3-device setups, adaptive poll intervals, memory leak fixes.",
-  "android_changelog": "v2.5.0: Full sync audit — scoped device discovery to pairing key, adaptive poll intervals (2s LAN/5s Cloud), fingerprint cleanup, overlay dedup, stale closure fix, reduced battery usage."
+  "pc_version": "2.9.0",
+  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v2.9.0/FlyShelf.exe",
+  "pc_sha256": "5fc1fe5ba4f7bd8f3662bd4db991abbae18ea45146217cedbe25b5541b9d9683",
+  "pc_changelog": "v2.9.0: downloadedBy multi-device tracking (smart offline handling), /download auth enforced (no grace period), forced sync SSE (replaces 5s polling), file integrity verification, Firebase URL lifecycle hardening.",
+  "android_version": "2.9.0",
+  "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v2.9.0/FlyShelf_Mobile.apk",
+  "android_changelog": "v2.9.0: downloadedBy multi-device tracking, download progress restoration, atomic file cleanup on failure, Firebase URL lifecycle hardening."
 }

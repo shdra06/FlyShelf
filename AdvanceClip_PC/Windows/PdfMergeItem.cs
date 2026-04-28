@@ -100,7 +100,7 @@ namespace AdvanceClip.Windows
 
         private static string ConvertWordToPdf(string wordPath)
         {
-            string tempPdf = Path.Combine(Path.GetTempPath(), "AdvanceClip_Merge", Path.GetFileNameWithoutExtension(wordPath) + ".pdf");
+            string tempPdf = Path.Combine(Path.GetTempPath(), "FlyShelf_Merge", Path.GetFileNameWithoutExtension(wordPath) + ".pdf");
             Directory.CreateDirectory(Path.GetDirectoryName(tempPdf));
 
             dynamic wordApp = null;

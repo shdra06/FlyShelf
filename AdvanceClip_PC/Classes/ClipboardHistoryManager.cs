@@ -10,18 +10,28 @@ namespace AdvanceClip.Classes
 {
     /// <summary>
     /// Persists clipboard history (text + images) to disk so items survive app restarts.
-    /// Images are stored permanently in %AppData%\AdvanceClip\Images\.
-    /// Metadata is serialized to %AppData%\AdvanceClip\clipboard_history.json.
+    /// Uses an append-only journal for writes (fast, no full-file rewrite) with periodic compaction.
+    /// Images are stored permanently in %AppData%\FlyShelf\Images\.
+    /// Metadata is serialized to %AppData%\FlyShelf\clipboard_history.json (compacted form).
+    /// Journal entries are appended to %AppData%\FlyShelf\clipboard_journal.jsonl.
     /// </summary>
     public static class ClipboardHistoryManager
     {
         private static readonly string _appDataDir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AdvanceClip");
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf");
         private static readonly string _historyPath = Path.Combine(_appDataDir, "clipboard_history.json");
+        private static readonly string _journalPath = Path.Combine(_appDataDir, "clipboard_journal.jsonl");
         private static readonly string _imagesDir = Path.Combine(_appDataDir, "Images");
 
         private static Timer? _debounceTimer;
+        private static Timer? _compactionTimer;
         private static readonly object _lock = new object();
+        private static int _journalEntryCount = 0;
+
+        /// <summary>Maximum items to retain in history. Oldest items are evicted beyond this cap.</summary>
+        private const int MAX_HISTORY_ITEMS = 2000;
+        /// <summary>Compact after this many journal entries to prevent unbounded file growth.</summary>
+        private const int COMPACTION_THRESHOLD = 100;
 
         /// <summary>
         /// Returns the permanent image storage directory, creating it if needed.
@@ -43,50 +53,75 @@ namespace AdvanceClip.Classes
 
         /// <summary>
         /// Loads persisted clipboard history from disk.
+        /// First loads the compacted snapshot, then replays the journal on top.
         /// Returns empty list if no history exists or on error.
         /// </summary>
         public static List<ViewModels.ClipboardItem> LoadHistory()
         {
             try
             {
-                if (!File.Exists(_historyPath))
-                    return new List<ViewModels.ClipboardItem>();
+                var items = new List<ViewModels.ClipboardItem>();
 
-                var json = File.ReadAllText(_historyPath);
-                var items = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(json);
-                
-                if (items == null)
-                    return new List<ViewModels.ClipboardItem>();
-
-                // Filter out items whose files no longer exist (for file-based items)
-                var validItems = new List<ViewModels.ClipboardItem>();
-                foreach (var item in items)
+                // Step 1: Load compacted snapshot
+                if (File.Exists(_historyPath))
                 {
-                    // Text/Code/URL items are always valid (they store RawContent)
-                    if (item.ItemType == ViewModels.ClipboardItemType.Text ||
-                        item.ItemType == ViewModels.ClipboardItemType.Code ||
-                        item.ItemType == ViewModels.ClipboardItemType.Url)
-                    {
-                        validItems.Add(item);
-                        continue;
-                    }
-
-                    // Image items — check if the persistent image file still exists
-                    if (item.ItemType == ViewModels.ClipboardItemType.Image ||
-                        item.ItemType == ViewModels.ClipboardItemType.QRCode)
-                    {
-                        if (!string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath))
-                        {
-                            validItems.Add(item);
-                        }
-                        continue;
-                    }
-
-                    // File-based items — keep regardless (FilePath may be on external drive etc.)
-                    validItems.Add(item);
+                    var json = File.ReadAllText(_historyPath);
+                    var snapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(json);
+                    if (snapshot != null)
+                        items.AddRange(snapshot);
                 }
 
-                Logger.LogAction("HISTORY_LOAD", $"Loaded {validItems.Count} items from clipboard history");
+                // Step 2: Replay journal entries on top of snapshot
+                if (File.Exists(_journalPath))
+                {
+                    var lines = File.ReadAllLines(_journalPath);
+                    foreach (var line in lines)
+                    {
+                        if (string.IsNullOrWhiteSpace(line)) continue;
+                        try
+                        {
+                            var entry = JsonSerializer.Deserialize<JournalEntry>(line);
+                            if (entry == null) continue;
+
+                            switch (entry.Action)
+                            {
+                                case "add":
+                                    if (entry.Item != null)
+                                        items.Insert(0, entry.Item);
+                                    break;
+                                case "delete":
+                                    if (!string.IsNullOrEmpty(entry.ItemId))
+                                        items.RemoveAll(i => GetItemId(i) == entry.ItemId);
+                                    break;
+                                case "clear":
+                                    items.Clear();
+                                    break;
+                            }
+                        }
+                        catch { /* Skip malformed journal entries */ }
+                    }
+                    _journalEntryCount = lines.Length;
+                }
+
+                // Filter out items whose files no longer exist
+                var validItems = FilterValidItems(items);
+
+                // Enforce cap
+                if (validItems.Count > MAX_HISTORY_ITEMS)
+                    validItems = validItems.Take(MAX_HISTORY_ITEMS).ToList();
+
+                Logger.LogAction("HISTORY_LOAD", $"Loaded {validItems.Count} items (snapshot + {_journalEntryCount} journal entries)");
+
+                // If journal was large, auto-compact on load
+                if (_journalEntryCount > 0)
+                {
+                    _ = System.Threading.Tasks.Task.Run(() =>
+                    {
+                        try { CompactNow(validItems); }
+                        catch { }
+                    });
+                }
+
                 return validItems;
             }
             catch (Exception ex)
@@ -97,7 +132,55 @@ namespace AdvanceClip.Classes
         }
 
         /// <summary>
+        /// Appends a new item to the journal (fast — single line append, no full rewrite).
+        /// </summary>
+        public static void AppendToJournal(ViewModels.ClipboardItem item)
+        {
+            try
+            {
+                Directory.CreateDirectory(_appDataDir);
+                var entry = new JournalEntry { Action = "add", Item = item, ItemId = GetItemId(item) };
+                var json = JsonSerializer.Serialize(entry);
+                lock (_lock)
+                {
+                    File.AppendAllText(_journalPath, json + "\n");
+                    _journalEntryCount++;
+
+                    // Auto-compact when journal gets large
+                    if (_journalEntryCount >= COMPACTION_THRESHOLD)
+                    {
+                        ScheduleCompaction();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("JOURNAL_WRITE_ERROR", $"Failed to append journal: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Appends a delete entry to the journal.
+        /// </summary>
+        public static void AppendDeleteToJournal(ViewModels.ClipboardItem item)
+        {
+            try
+            {
+                Directory.CreateDirectory(_appDataDir);
+                var entry = new JournalEntry { Action = "delete", ItemId = GetItemId(item) };
+                var json = JsonSerializer.Serialize(entry);
+                lock (_lock)
+                {
+                    File.AppendAllText(_journalPath, json + "\n");
+                    _journalEntryCount++;
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>
         /// Saves clipboard history to disk. Debounced — waits 500ms after last call to avoid disk thrashing.
+        /// This performs a FULL compaction (snapshot rewrite + journal clear).
         /// </summary>
         public static void SaveHistoryDebounced(ObservableCollection<ViewModels.ClipboardItem> items)
         {
@@ -109,7 +192,7 @@ namespace AdvanceClip.Classes
         }
 
         /// <summary>
-        /// Immediately saves clipboard history to disk.
+        /// Immediately saves clipboard history to disk (full compaction).
         /// </summary>
         public static void SaveHistoryNow(ObservableCollection<ViewModels.ClipboardItem> items)
         {
@@ -128,18 +211,129 @@ namespace AdvanceClip.Classes
                     return; // Collection was being modified, skip this save
                 }
 
-                var options = new JsonSerializerOptions { WriteIndented = false };
-                var json = JsonSerializer.Serialize(snapshot, options);
-                
-                // Write to temp file first, then atomic rename for safety
-                var tempPath = _historyPath + ".tmp";
-                File.WriteAllText(tempPath, json);
-                File.Move(tempPath, _historyPath, true);
+                // Enforce cap before saving
+                if (snapshot.Count > MAX_HISTORY_ITEMS)
+                    snapshot = snapshot.Take(MAX_HISTORY_ITEMS).ToList();
+
+                CompactNow(snapshot);
             }
             catch (Exception ex)
             {
                 Logger.LogAction("HISTORY_SAVE_ERROR", $"Failed to save history: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Writes the full snapshot to disk and clears the journal.
+        /// Atomic: writes to temp file first, then renames.
+        /// </summary>
+        private static void CompactNow(List<ViewModels.ClipboardItem> items)
+        {
+            lock (_lock)
+            {
+                try
+                {
+                    var options = new JsonSerializerOptions { WriteIndented = false };
+                    var json = JsonSerializer.Serialize(items, options);
+
+                    // Write to temp file first, then atomic rename for safety
+                    var tempPath = _historyPath + ".tmp";
+                    File.WriteAllText(tempPath, json);
+                    File.Move(tempPath, _historyPath, true);
+
+                    // Clear journal
+                    if (File.Exists(_journalPath))
+                        File.Delete(_journalPath);
+                    _journalEntryCount = 0;
+
+                    Logger.LogAction("HISTORY_COMPACT", $"Compacted {items.Count} items, journal cleared");
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("HISTORY_COMPACT_ERROR", $"Compaction failed: {ex.Message}");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Schedules a compaction 5 seconds in the future (debounced).
+        /// </summary>
+        private static void ScheduleCompaction()
+        {
+            _compactionTimer?.Dispose();
+            _compactionTimer = new Timer(_ =>
+            {
+                // Read current state from disk for compaction
+                try
+                {
+                    var items = LoadHistoryRaw();
+                    if (items.Count > 0)
+                        CompactNow(items);
+                }
+                catch { }
+            }, null, 5000, Timeout.Infinite);
+        }
+
+        /// <summary>
+        /// Internal: loads without logging or auto-compaction (used by ScheduleCompaction).
+        /// </summary>
+        private static List<ViewModels.ClipboardItem> LoadHistoryRaw()
+        {
+            var items = new List<ViewModels.ClipboardItem>();
+            if (File.Exists(_historyPath))
+            {
+                var json = File.ReadAllText(_historyPath);
+                var snapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(json);
+                if (snapshot != null) items.AddRange(snapshot);
+            }
+            if (File.Exists(_journalPath))
+            {
+                foreach (var line in File.ReadAllLines(_journalPath))
+                {
+                    if (string.IsNullOrWhiteSpace(line)) continue;
+                    try
+                    {
+                        var entry = JsonSerializer.Deserialize<JournalEntry>(line);
+                        if (entry?.Action == "add" && entry.Item != null)
+                            items.Insert(0, entry.Item);
+                        else if (entry?.Action == "delete" && entry.ItemId != null)
+                            items.RemoveAll(i => GetItemId(i) == entry.ItemId);
+                        else if (entry?.Action == "clear")
+                            items.Clear();
+                    }
+                    catch { }
+                }
+            }
+            return FilterValidItems(items).Take(MAX_HISTORY_ITEMS).ToList();
+        }
+
+        /// <summary>
+        /// Filters out items whose referenced files no longer exist.
+        /// </summary>
+        private static List<ViewModels.ClipboardItem> FilterValidItems(List<ViewModels.ClipboardItem> items)
+        {
+            var validItems = new List<ViewModels.ClipboardItem>();
+            foreach (var item in items)
+            {
+                if (item.ItemType == ViewModels.ClipboardItemType.Text ||
+                    item.ItemType == ViewModels.ClipboardItemType.Code ||
+                    item.ItemType == ViewModels.ClipboardItemType.Url)
+                {
+                    validItems.Add(item);
+                    continue;
+                }
+
+                if (item.ItemType == ViewModels.ClipboardItemType.Image ||
+                    item.ItemType == ViewModels.ClipboardItemType.QRCode)
+                {
+                    if (!string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath))
+                        validItems.Add(item);
+                    continue;
+                }
+
+                validItems.Add(item);
+            }
+            return validItems;
         }
 
         /// <summary>
@@ -161,6 +355,22 @@ namespace AdvanceClip.Classes
                 }
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Generates a deterministic ID for a clipboard item (for journal delete tracking).
+        /// </summary>
+        private static string GetItemId(ViewModels.ClipboardItem item)
+        {
+            return $"{item.ItemType}_{item.DateCopied.Ticks}_{item.GetHashCode():X4}";
+        }
+
+        /// <summary>Journal entry for append-only log.</summary>
+        private class JournalEntry
+        {
+            public string Action { get; set; } = ""; // "add", "delete", "clear"
+            public ViewModels.ClipboardItem? Item { get; set; }
+            public string? ItemId { get; set; }
         }
     }
 }

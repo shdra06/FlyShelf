@@ -208,7 +208,7 @@ namespace AdvanceClip.Windows
         private void SaveSettings_Click(object sender, RoutedEventArgs e)
         {
             SettingsManager.Save();
-            MessageBox.Show("Configuration updated successfully.", "AdvanceClip", MessageBoxButton.OK, MessageBoxImage.Information);
+            MessageBox.Show("Configuration updated successfully.", "FlyShelf", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         private void ResetClipboardSize_Click(object sender, RoutedEventArgs e)
@@ -277,7 +277,7 @@ namespace AdvanceClip.Windows
             try
             {
                 // Main activity log
-                string logFile = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "AdvanceClip", "Logs", "activity_log.txt");
+                string logFile = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs", "activity_log.txt");
                 if (System.IO.File.Exists(logFile))
                 {
                     LogsTextBox.Text = System.IO.File.ReadAllText(logFile);
@@ -343,7 +343,7 @@ namespace AdvanceClip.Windows
         {
             try
             {
-                string logsDir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "AdvanceClip", "Logs");
+                string logsDir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
                 if (!System.IO.Directory.Exists(logsDir)) System.IO.Directory.CreateDirectory(logsDir);
                 System.Diagnostics.Process.Start("explorer.exe", logsDir);
             }
@@ -413,7 +413,7 @@ namespace AdvanceClip.Windows
         {
             try
             {
-                string logPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AdvanceClip", "Logs", "activity_log.txt");
+                string logPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs", "activity_log.txt");
                 if (!System.IO.File.Exists(logPath)) return "No log file found.";
 
                 // Read last 500 lines and filter for server-related entries
