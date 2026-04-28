@@ -229,10 +229,6 @@ namespace AdvanceClip
             {
                 Classes.Logger.LogAction("WIDGET_FAIL", $"Failed to create taskbar widget: {ex.Message}");
             }
-
-            // Apply smooth animated scrolling to the shelf ListView
-            Classes.SmoothScrollBehavior.ApplyToListControl(ShelfListView);
-            Classes.SmoothScrollBehavior.ApplyToAllScrollViewers(this);
         }
 
         protected override void OnClosed(EventArgs e)

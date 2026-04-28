@@ -934,6 +934,7 @@ namespace AdvanceClip.Classes
                         string raw = data.TryGetProperty("Raw", out var t3) ? t3.GetString() ?? "" : "";
                         string source = data.TryGetProperty("ForcedBy", out var t4) ? t4.GetString() ?? "" :
                                        (data.TryGetProperty("SourceDeviceName", out var t5) ? t5.GetString() ?? "" : "");
+                        string sourceDeviceType = data.TryGetProperty("SourceDeviceType", out var t5b) ? t5b.GetString() ?? "Unknown" : "Unknown";
                         string downloadUrl = data.TryGetProperty("DownloadUrl", out var t6) ? t6.GetString() ?? "" : "";
                         string senderUrl = data.TryGetProperty("SenderUrl", out var t7) ? t7.GetString() ?? "" : "";
 
@@ -972,7 +973,7 @@ namespace AdvanceClip.Classes
                                     Extension = "FORCED",
                                     ItemType = type == "Url" ? ClipboardItemType.Url : ClipboardItemType.Text,
                                     SourceDeviceName = source,
-                                    SourceDeviceType = "Mobile",
+                                    SourceDeviceType = sourceDeviceType,
                                     TransferMethod = "ForceSend"
                                 };
                                 clip.EvaluateSmartActions();

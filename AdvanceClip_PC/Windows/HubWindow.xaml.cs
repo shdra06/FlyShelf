@@ -92,14 +92,7 @@ namespace AdvanceClip.Windows
             var deviceRefreshTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
             deviceRefreshTimer.Tick += (s, ev) => RefreshDevices_Click(null, null);
             deviceRefreshTimer.Start();
-            Loaded += (s, ev) =>
-            {
-                RefreshDevices_Click(null, null);
-                // Apply buttery-smooth animated scrolling to every ScrollViewer in the window
-                SmoothScrollBehavior.ApplyToAllScrollViewers(this);
-                // Also ensure the main clipboard ListView uses pixel scrolling (required for smooth animation)
-                SmoothScrollBehavior.ApplyToListControl(HubListView);
-            };
+            Loaded += (s, ev) => RefreshDevices_Click(null, null);
         }
 
         private void DroppedItems_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
