@@ -34,8 +34,8 @@ namespace AdvanceClip.Classes
         // Time-windowed dedup: track fingerprint → last push time (10s cooldown)
         private static readonly Dictionary<string, long> _recentPushTimes = new();
         private const int DEDUP_COOLDOWN_MS = 10_000; // 10 seconds — same content within this window is skipped
-        private const int AUTO_DELETE_TEXT_MS = 30 * 60_000; // 30 minutes — gives all devices time to receive
-        private const int AUTO_DELETE_FILE_MS = 24 * 60 * 60_000; // 24 hours for file items (large files need time to download)
+        private const int AUTO_DELETE_TEXT_MS = 5 * 60_000; // 5 minutes
+        private const int AUTO_DELETE_FILE_MS = 6 * 60 * 60_000; // 6 hours safety net
 
         public static async Task PushToGlobalSync(ClipboardItem item)
         {
@@ -234,6 +234,24 @@ namespace AdvanceClip.Classes
                     targetDevices = targetDeviceIds,
                 };
 
+                // ═══ CLEAN SLATE: Wipe all previous entries before pushing new item ═══
+                // This keeps Firebase clean — only the latest item exists at any time.
+                // Previous pending entries are irrelevant once a new copy happens.
+                try
+                {
+                    string pairingKey = DevicePairingManager.EnsurePairingKey();
+                    if (!string.IsNullOrEmpty(pairingKey))
+                    {
+                        // DELETE the entire clipboard node for this pairing key, then push fresh
+                        await _client.DeleteAsync($"{FIREBASE_BASE}/clipboard/{pairingKey}.json");
+                        Logger.LogAction("FIREBASE SYNC", "🧹 Wiped previous entries — clean slate for new item");
+                    }
+                }
+                catch (Exception wipeEx)
+                {
+                    Logger.LogAction("FIREBASE SYNC", $"Wipe failed (non-fatal): {wipeEx.Message}");
+                }
+
                 string json = JsonSerializer.Serialize(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
@@ -414,6 +432,29 @@ namespace AdvanceClip.Classes
         }
 
         /// <summary>
+        /// Signal that this device has STARTED downloading a file.
+        /// Sender can see this status to know the item was received.
+        /// </summary>
+        public static async Task MarkDownloading(string entryId)
+        {
+            try
+            {
+                string pairingKey = DevicePairingManager.EnsurePairingKey();
+                if (string.IsNullOrEmpty(pairingKey)) return;
+                string myDeviceId = SettingsManager.Current.DeviceId ?? "PC";
+
+                string statusUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryId}/downloadStatus/{myDeviceId}.json";
+                string statusJson = $"{{\"status\":\"downloading\",\"startedAt\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
+                await _client.PutAsync(statusUrl, new StringContent(statusJson, Encoding.UTF8, "application/json"));
+                Logger.LogAction("SYNC_STATUS", $"Signaled DOWNLOADING: {entryId}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("SYNC_STATUS", $"MarkDownloading failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
         /// Mark a file entry as downloaded by this device. When all target devices
         /// have downloaded, the entry is automatically deleted from Firebase.
         /// Offline devices are skipped (not blocking deletion).
@@ -430,6 +471,16 @@ namespace AdvanceClip.Classes
                 string markUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryId}/downloadedBy/{myDeviceId}.json";
                 var markContent = new StringContent(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(), Encoding.UTF8, "application/json");
                 await _client.PutAsync(markUrl, markContent);
+
+                // Step 1b: Signal "downloaded" status so sender knows this device is done
+                try
+                {
+                    string statusUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryId}/downloadStatus/{myDeviceId}.json";
+                    string statusJson = $"{{\"status\":\"downloaded\",\"completedAt\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
+                    await _client.PutAsync(statusUrl, new StringContent(statusJson, Encoding.UTF8, "application/json"));
+                    Logger.LogAction("SYNC_STATUS", $"Signaled DOWNLOADED: {entryId}");
+                }
+                catch { }
 
                 // Step 2: Read the full entry to check if all targets have downloaded
                 string entryUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryId}.json";
@@ -512,10 +563,9 @@ namespace AdvanceClip.Classes
                 }
                 else if (targetDevices.Count == 0)
                 {
-                    // No targetDevices set — DON'T delete. Let the 24h TTL handle cleanup.
-                    // Other devices may still need this entry (e.g., PC→PC sync where the
-                    // push didn't know about all recipients).
-                    Logger.LogAction("SYNC_TRACK", $"No targetDevices on entry — skipping auto-delete, TTL will handle: {entryId}");
+                    // No targetDevices — delete immediately. New items wipe old ones anyway.
+                    await DeleteFirebaseEntry(pairingKey, entryId);
+                    Logger.LogAction("SYNC_CLEANUP", $"No targetDevices — entry deleted: {entryId}");
                 }
                 else
                 {

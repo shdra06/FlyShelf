@@ -590,6 +590,16 @@ namespace AdvanceClip.Classes
                     _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                 });
 
+                // Signal "downloading" to Firebase — sender can see this device is actively receiving
+                if (!string.IsNullOrEmpty(cloudItem.Id))
+                {
+                    _ = Task.Run(async () =>
+                    {
+                        try { await FirebaseSyncManager.MarkDownloading(cloudItem.Id); }
+                        catch { }
+                    });
+                }
+
                 // No auth header needed — /download is now public (before auth barrier)
                 // Enhanced download with fallback: try primary URL, then alternative URLs
                 HttpResponseMessage response = null;

@@ -2,7 +2,7 @@
   "pc_version": "2.9.0",
   "pc_changelog": "v2.9.0 — Sync fixes, category bar fix, Firebase cleanup\n\n• Fixed Android sync race condition\n• Accumulative sync — no more re-downloading old files\n• Startup cleanup purges stale Firebase entries\n• Fixed category bar text clipping in Files section\n• Wallpaper frosted glass header refinement",
   "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v2.9.0/FlyShelf.exe",
-  "pc_sha256": "5212389f3f3a5b2c131adb6693e5a344d4b45f82f6f3a5fd1f674bddc0df796f",
+  "pc_sha256": "37f07d917477a7bfc7a2ca71790841e1103ce8831ff0e72f997dfab402ea84a0",
   "android_version": "2.9.0",
   "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v2.9.0/AdvanceClip_Mobile.apk"
 }
