@@ -34,7 +34,7 @@ namespace AdvanceClip.Classes
         // Time-windowed dedup: track fingerprint → last push time (10s cooldown)
         private static readonly Dictionary<string, long> _recentPushTimes = new();
         private const int DEDUP_COOLDOWN_MS = 10_000; // 10 seconds — same content within this window is skipped
-        private const int AUTO_DELETE_TEXT_MS = 5 * 60_000; // 5 minutes — matches backlog catch-up window
+        private const int AUTO_DELETE_TEXT_MS = 30 * 60_000; // 30 minutes — gives all devices time to receive
         private const int AUTO_DELETE_FILE_MS = 24 * 60 * 60_000; // 24 hours for file items (large files need time to download)
 
         public static async Task PushToGlobalSync(ClipboardItem item)
@@ -184,38 +184,34 @@ namespace AdvanceClip.Classes
                     catch { }
                 }
 
-                // For file items: determine which devices should receive this file
+                // Determine ALL paired devices that should receive this item
+                // Include ALL devices (online + offline) — offline ones auto-complete after 1hr
                 List<string> targetDeviceIds = new();
-                if (isFilePayload)
+                try
                 {
-                    try
+                    string pairingKey = DevicePairingManager.EnsurePairingKey();
+                    string devicesUrl = $"{FIREBASE_BASE}/active_devices/{pairingKey}.json";
+                    var devResponse = await _client.GetAsync(devicesUrl);
+                    if (devResponse.IsSuccessStatusCode)
                     {
-                        string pairingKey = DevicePairingManager.EnsurePairingKey();
-                        string devicesUrl = $"{FIREBASE_BASE}/active_devices/{pairingKey}.json";
-                        var devResponse = await _client.GetAsync(devicesUrl);
-                        if (devResponse.IsSuccessStatusCode)
+                        string devJson = await devResponse.Content.ReadAsStringAsync();
+                        if (!string.IsNullOrWhiteSpace(devJson) && devJson != "null")
                         {
-                            string devJson = await devResponse.Content.ReadAsStringAsync();
-                            if (!string.IsNullOrWhiteSpace(devJson) && devJson != "null")
+                            using var devDoc = JsonDocument.Parse(devJson);
+                            string myId = SettingsManager.Current.DeviceId ?? "";
+                            foreach (var prop in devDoc.RootElement.EnumerateObject())
                             {
-                                using var devDoc = JsonDocument.Parse(devJson);
-                                string myId = SettingsManager.Current.DeviceId ?? "";
-                                foreach (var prop in devDoc.RootElement.EnumerateObject())
-                                {
-                                    var dev = prop.Value;
-                                    bool isOnline = dev.TryGetProperty("IsOnline", out var io) && io.GetBoolean();
-                                    long ts = dev.TryGetProperty("Timestamp", out var tsv) ? tsv.GetInt64() : 0;
-                                    string devId = dev.TryGetProperty("DeviceId", out var di) ? di.GetString() ?? prop.Name : prop.Name;
-                                    // Include only: online, recent heartbeat (<5 min), not self
-                                    if (isOnline && (nowMs - ts) < 300_000 && devId != myId)
-                                        targetDeviceIds.Add(devId);
-                                }
+                                var dev = prop.Value;
+                                string devId = dev.TryGetProperty("DeviceId", out var di) ? di.GetString() ?? prop.Name : prop.Name;
+                                // Include ALL paired devices except self
+                                if (devId != myId)
+                                    targetDeviceIds.Add(devId);
                             }
                         }
-                        Logger.LogAction("FIREBASE SYNC", $"File targets: {targetDeviceIds.Count} active devices ({string.Join(", ", targetDeviceIds)})");
                     }
-                    catch (Exception devEx) { Logger.LogAction("FIREBASE SYNC", $"Device query failed: {devEx.Message}"); }
+                    Logger.LogAction("FIREBASE SYNC", $"Broadcast targets: {targetDeviceIds.Count} paired devices ({string.Join(", ", targetDeviceIds)})");
                 }
+                catch (Exception devEx) { Logger.LogAction("FIREBASE SYNC", $"Device query failed: {devEx.Message}"); }
 
                 var payload = new
                 {
@@ -233,8 +229,9 @@ namespace AdvanceClip.Classes
                     EventId = $"{SettingsManager.Current.DeviceId ?? "PC"}_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Guid.NewGuid().ToString("N").Substring(0, 6)}",
                     Encrypted = encrypted,
                     SourceDeviceName = deviceName,
+                    SourceDeviceId = SettingsManager.Current.DeviceId ?? "",
                     SourceDeviceType = "PC",
-                    targetDevices = isFilePayload ? targetDeviceIds : new List<string>(),
+                    targetDevices = targetDeviceIds,
                 };
 
                 string json = JsonSerializer.Serialize(payload);
@@ -356,6 +353,7 @@ namespace AdvanceClip.Classes
             {
                 string pairingKey = DevicePairingManager.EnsurePairingKey();
                 if (string.IsNullOrEmpty(pairingKey)) return;
+                string myDeviceId = SettingsManager.Current.DeviceId ?? "";
 
                 string url = $"{FIREBASE_BASE}/clipboard/{pairingKey}.json";
                 var response = await _client.GetAsync(url);
@@ -371,6 +369,13 @@ namespace AdvanceClip.Classes
                     try
                     {
                         var entry = prop.Value;
+                        // SAFETY: Only purge entries from THIS device — don't nuke other devices' entries
+                        string sourceId = entry.TryGetProperty("SourceDeviceId", out var sid) ? sid.GetString() ?? "" : "";
+                        string sourceName = entry.TryGetProperty("SourceDeviceName", out var sn) ? sn.GetString() ?? "" : "";
+                        bool isMyEntry = (!string.IsNullOrEmpty(sourceId) && sourceId == myDeviceId) ||
+                                         (string.IsNullOrEmpty(sourceId) && string.Equals(sourceName, SettingsManager.Current.DeviceName, StringComparison.OrdinalIgnoreCase));
+                        if (!isMyEntry) continue;
+
                         // Check if Raw or DownloadUrl contains the dead Cloudflare URL
                         string raw = entry.TryGetProperty("Raw", out var r) ? r.GetString() ?? "" : "";
                         string dlUrl = entry.TryGetProperty("DownloadUrl", out var d) ? d.GetString() ?? "" : "";
@@ -380,14 +385,14 @@ namespace AdvanceClip.Classes
                             string title = entry.TryGetProperty("Title", out var t) ? t.GetString() ?? "" : "";
                             await DeleteFirebaseEntry(pairingKey, prop.Name);
                             purged++;
-                            Logger.LogAction("PURGE", $"Deleted stale file entry: {title} (dead URL: {deadUrl.Substring(0, Math.Min(40, deadUrl.Length))}...)");
+                            Logger.LogAction("PURGE", $"Deleted MY stale file entry: {title} (dead URL: {deadUrl.Substring(0, Math.Min(40, deadUrl.Length))}...)");
                         }
                     }
                     catch { }
                 }
 
                 if (purged > 0)
-                    Logger.LogAction("PURGE", $"✅ Purged {purged} stale file entries with dead Cloudflare URL");
+                    Logger.LogAction("PURGE", $"✅ Purged {purged} of MY stale file entries with dead Cloudflare URL");
             }
             catch (Exception ex)
             {
@@ -457,7 +462,8 @@ namespace AdvanceClip.Classes
                 }
 
                 // Step 3: Check active status of remaining targets
-                // If a target device is offline (no recent heartbeat), mark it as done
+                // Mark devices as auto-complete if they've been offline for >1 hour
+                // (gives them time to come online, but doesn't block cleanup forever)
                 var remaining = targetDevices.Where(d => !downloaded.Contains(d)).ToList();
                 if (remaining.Count > 0)
                 {
@@ -468,28 +474,30 @@ namespace AdvanceClip.Classes
                         if (devResponse.IsSuccessStatusCode)
                         {
                             string devJson = await devResponse.Content.ReadAsStringAsync();
-                            var onlineIds = new HashSet<string>();
                             if (!string.IsNullOrWhiteSpace(devJson) && devJson != "null")
                             {
                                 using var devDoc = JsonDocument.Parse(devJson);
                                 long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                                const long OFFLINE_GRACE_MS = 60 * 60_000; // 1 hour grace period
                                 foreach (var prop in devDoc.RootElement.EnumerateObject())
                                 {
                                     var dev = prop.Value;
+                                    string devId = dev.TryGetProperty("DeviceId", out var di) ? di.GetString() ?? prop.Name : prop.Name;
+                                    if (!remaining.Contains(devId)) continue;
+
                                     bool isOnline = dev.TryGetProperty("IsOnline", out var io) && io.GetBoolean();
                                     long ts = dev.TryGetProperty("Timestamp", out var tsv) ? tsv.GetInt64() : 0;
-                                    if (isOnline && (now - ts) < 300_000)
-                                        onlineIds.Add(dev.TryGetProperty("DeviceId", out var di) ? di.GetString() ?? prop.Name : prop.Name);
-                                }
-                            }
+                                    long offlineFor = now - ts;
 
-                            // Mark offline devices as done (they can't download anyway)
-                            foreach (var offlineId in remaining.Where(r => !onlineIds.Contains(r)))
-                            {
-                                string offlineUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryId}/downloadedBy/{offlineId}.json";
-                                await _client.PutAsync(offlineUrl, new StringContent("-1", Encoding.UTF8, "application/json"));
-                                downloaded.Add(offlineId);
-                                Logger.LogAction("SYNC_TRACK", $"Marked offline device as done: {offlineId}");
+                                    // Only auto-complete if offline for more than 1 hour
+                                    if (!isOnline || offlineFor > OFFLINE_GRACE_MS)
+                                    {
+                                        string offlineUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryId}/downloadedBy/{devId}.json";
+                                        await _client.PutAsync(offlineUrl, new StringContent("-1", Encoding.UTF8, "application/json"));
+                                        downloaded.Add(devId);
+                                        Logger.LogAction("SYNC_TRACK", $"Auto-completed offline device ({offlineFor / 60_000}min offline): {devId}");
+                                    }
+                                }
                             }
                         }
                     }

@@ -255,12 +255,23 @@ namespace AdvanceClip.Classes
             // Skip items older than session start
             if (timestamp <= _lastProcessedTimestamp) return null;
 
-            // Self-echo prevention
+            // Self-echo prevention — use SourceDeviceId (precise) with DeviceName fallback
+            string sourceDeviceId = data.TryGetProperty("SourceDeviceId", out var srcId) ? srcId.GetString() ?? "" : "";
             string sourceDevice = data.TryGetProperty("SourceDeviceName", out var srcName) ? srcName.GetString() ?? "" : "";
             string sourceType = data.TryGetProperty("SourceDeviceType", out var srcType) ? srcType.GetString() ?? "" : "";
+            string myDeviceId = SettingsManager.Current.DeviceId ?? "";
             string myDeviceName = SettingsManager.Current.DeviceName ?? "";
 
-            if (!string.IsNullOrEmpty(myDeviceName) &&
+            // Primary: filter by DeviceId (guaranteed unique)
+            if (!string.IsNullOrEmpty(sourceDeviceId) && !string.IsNullOrEmpty(myDeviceId) &&
+                sourceDeviceId == myDeviceId)
+            {
+                _processedIds.Add(key);
+                return null;
+            }
+            // Fallback: filter by DeviceName + type (for old payloads without SourceDeviceId)
+            if (string.IsNullOrEmpty(sourceDeviceId) &&
+                !string.IsNullOrEmpty(myDeviceName) &&
                 string.Equals(sourceDevice, myDeviceName, StringComparison.OrdinalIgnoreCase) &&
                 sourceType == "PC")
             {
@@ -308,7 +319,8 @@ namespace AdvanceClip.Classes
                 DownloadUrl = downloadUrl,
                 SenderUrl = senderUrl,
                 FileHash = data.TryGetProperty("FileHash", out var fh) ? fh.GetString() ?? "" : "",
-                SourceDeviceName = sourceDevice
+                SourceDeviceName = sourceDevice,
+                SourceDeviceId = sourceDeviceId
             };
         }
 
@@ -421,6 +433,16 @@ namespace AdvanceClip.Classes
                     });
 
                     AdvanceClip.Windows.ToastWindow.ShowToast($"⚡ {cloudItem.SourceDeviceName}: {(cloudItem.Raw?.Length > 40 ? cloudItem.Raw.Substring(0, 40) + "..." : cloudItem.Raw)}");
+
+                    // Receipt confirmation: mark this item as received by this device
+                    if (!string.IsNullOrEmpty(cloudItem.Id))
+                    {
+                        _ = Task.Run(async () =>
+                        {
+                            try { await FirebaseSyncManager.MarkFileDownloaded(cloudItem.Id); }
+                            catch { }
+                        });
+                    }
                 }
             });
         }
@@ -899,6 +921,7 @@ namespace AdvanceClip.Classes
             public string SenderUrl { get; set; }
             public string FileHash { get; set; }
             public string SourceDeviceName { get; set; }
+            public string SourceDeviceId { get; set; }
         }
 
         private void ProcessForcedSyncPayload(string json, string deviceId)
