@@ -6,13 +6,29 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
-import android.content.ClipboardManager
-import android.content.ClipData
 import android.widget.Toast
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import java.net.URLEncoder
 
 class ScreenshotObserver(private val context: Context) : ContentObserver(Handler(Looper.getMainLooper())) {
 
     private var lastScreenshotTime = 0L
+
+    companion object {
+        /** The last detected screenshot absolute path — polled by React Native JS */
+        @Volatile
+        var lastDetectedScreenshotPath: String = ""
+
+        /** PC URL for native auto-upload (set from JS via AdvanceOverlayModule) */
+        @Volatile
+        var pcUrl: String = ""
+
+        /** Device name for upload headers */
+        @Volatile
+        var deviceName: String = "Mobile"
+    }
 
     override fun onChange(selfChange: Boolean, uri: Uri?) {
         super.onChange(selfChange, uri)
@@ -36,11 +52,73 @@ class ScreenshotObserver(private val context: Context) : ContentObserver(Handler
                         val lower = path.lowercase()
                         if (lower.contains("screenshot") || lower.contains("screen_shot") || lower.contains("screen shot")) {
                             lastScreenshotTime = now
-                            Toast.makeText(context, "Screenshot detected by FlyShelf", Toast.LENGTH_SHORT).show()
+                            lastDetectedScreenshotPath = path
+                            
+                            Handler(Looper.getMainLooper()).post {
+                                Toast.makeText(context, "📸 Screenshot detected — syncing...", Toast.LENGTH_SHORT).show()
+                            }
+
+                            // Auto-upload to PC in background if URL is available
+                            if (pcUrl.isNotEmpty()) {
+                                Thread {
+                                    try {
+                                        uploadScreenshotToPC(path)
+                                    } catch (e: Exception) {
+                                        // Upload failed silently — JS poller will pick it up as fallback
+                                    }
+                                }.start()
+                            }
                         }
                     }
                 }
             }
         } catch (e: Exception) {}
+    }
+
+    /**
+     * Upload screenshot directly to PC from the native foreground service.
+     * This works even when the React Native JS thread is suspended (app backgrounded).
+     */
+    private fun uploadScreenshotToPC(filePath: String) {
+        val file = File(filePath)
+        if (!file.exists() || file.length() == 0L) return
+
+        val fileName = file.name
+        val encodedName = URLEncoder.encode(fileName, "UTF-8")
+        val encodedDevice = URLEncoder.encode(deviceName, "UTF-8")
+        val uploadUrl = "${pcUrl}/api/sync_file?name=$encodedName&type=ImageLink&sourceDevice=$encodedDevice"
+
+        val boundary = "----FlyShelfBoundary${System.currentTimeMillis()}"
+        val conn = URL(uploadUrl).openConnection() as HttpURLConnection
+        conn.requestMethod = "POST"
+        conn.doOutput = true
+        conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=$boundary")
+        conn.setRequestProperty("X-FlyShelf-Client", "MobileCompanion")
+        conn.connectTimeout = 5000
+        conn.readTimeout = 15000
+
+        conn.outputStream.use { out ->
+            val writer = out.bufferedWriter()
+            writer.write("--$boundary\r\n")
+            writer.write("Content-Disposition: form-data; name=\"file\"; filename=\"$fileName\"\r\n")
+            writer.write("Content-Type: image/png\r\n\r\n")
+            writer.flush()
+
+            file.inputStream().use { input ->
+                input.copyTo(out, bufferSize = 65536)
+            }
+
+            writer.write("\r\n--$boundary--\r\n")
+            writer.flush()
+        }
+
+        val responseCode = conn.responseCode
+        conn.disconnect()
+
+        if (responseCode == 200) {
+            Handler(Looper.getMainLooper()).post {
+                Toast.makeText(context, "📸 Screenshot synced to PC!", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 }

@@ -3,6 +3,7 @@
   "pc_changelog": "v2.9.0 — Sync fixes, category bar fix, Firebase cleanup\n\n• Fixed Android sync race condition\n• Accumulative sync — no more re-downloading old files\n• Startup cleanup purges stale Firebase entries\n• Fixed category bar text clipping in Files section\n• Wallpaper frosted glass header refinement",
   "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v2.9.0/FlyShelf.exe",
   "pc_sha256": "652653e895914fe27c332cb2a3a36803e7018ad26282417a7e3b4bf5ea6374dc",
-  "android_version": "2.9.0",
-  "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v2.9.0/AdvanceClip_Mobile.apk"
+  "android_version": "2.9.1",
+  "android_changelog": "v2.9.1 — Remove Device Fix & Background Screenshot Sync\n\n• Fixed: Removed paired devices still showing as 'Paired' on home screen\n• Fixed: Screenshot detector now works when app is backgrounded (floating ball only)\n• Native auto-upload: Screenshots sync to PC directly from foreground service\n• Added missing native bridge methods (setPcUrl, setDeviceName, setClipboardSuppressed)",
+  "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v2.9.1/FlyShelf_Mobile.apk"
 }

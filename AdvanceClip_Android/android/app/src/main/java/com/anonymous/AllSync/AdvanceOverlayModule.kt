@@ -1,5 +1,6 @@
 package com.anonymous.AllSync
 
+import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings
@@ -87,5 +88,34 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
         } else {
             promise.resolve(null)
         }
+    }
+
+    @ReactMethod
+    fun getLatestScreenshot(promise: Promise) {
+        val path = ScreenshotObserver.lastDetectedScreenshotPath
+        if (path.isNotEmpty()) {
+            promise.resolve(path)
+        } else {
+            promise.resolve(null)
+        }
+    }
+
+    @ReactMethod
+    fun setPcUrl(url: String) {
+        ScreenshotObserver.pcUrl = url
+    }
+
+    @ReactMethod
+    fun setDeviceName(name: String) {
+        ScreenshotObserver.deviceName = name
+    }
+
+    @ReactMethod
+    fun setClipboardSuppressed(text: String) {
+        try {
+            val cm = reactApplicationContext.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            OverlayService.lastCopiedText = text
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("FlyShelf", text))
+        } catch (e: Exception) {}
     }
 }

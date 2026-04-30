@@ -40,7 +40,7 @@ const { AdvanceOverlay } = NativeModules;
 // MAIN SCREEN
 // ════════════════════════════════════════════════════════
 export default function SyncScreen() {
-  const { pcLocalIp, deviceName, setDeviceName, isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, addPairedDevice, pairingKey: contextPairingKey, regeneratePairingKey } = useSettings();
+  const { pcLocalIp, deviceName, setDeviceName, isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, addPairedDevice, pairedDevices, pairingKey: contextPairingKey, regeneratePairingKey } = useSettings();
 
   useEffect(() => {
     if (Platform.OS === 'android' && AdvanceOverlay && isFloatingBallEnabled) {
@@ -1615,6 +1615,13 @@ export default function SyncScreen() {
   useEffect(() => {
     AsyncStorage.getItem('pairedPcName').then(name => { if (name) setPairedPcName(name); });
   }, []);
+
+  // Clear pairedPcName when all paired devices are removed in Settings
+  useEffect(() => {
+    if (pairedDevices.length === 0) {
+      setPairedPcName(null);
+    }
+  }, [pairedDevices]);
 
   // ─── Heavy Upload ───
   const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB (under Cloudflare 100MB limit)

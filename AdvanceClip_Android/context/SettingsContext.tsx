@@ -180,6 +180,13 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     setPairedDevicesState(prev => {
       const updated = prev.filter(d => d.deviceId !== deviceId);
       AsyncStorage.setItem('@pairedDevices', JSON.stringify(updated)).catch(() => {});
+      // If no devices remain, clear all legacy pairing state so the home screen
+      // stops showing "Paired with ..." for a device that was removed.
+      if (updated.length === 0) {
+        AsyncStorage.multiRemove([
+          'pairedPcName', 'pairedPcId', 'pairedLocalUrl', 'pairedGlobalUrl', 'pairedPin',
+        ]).catch(() => {});
+      }
       return updated;
     });
   };
