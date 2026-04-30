@@ -8,64 +8,69 @@ using System.Windows.Media;
 namespace AdvanceClip.Classes
 {
     /// <summary>
-    /// Physics-based smooth scroll for WPF. Intercepts PreviewMouseWheel on any
-    /// ScrollViewer/ListView and applies velocity-based deceleration for a
-    /// macOS-like feel. Works with both touchpad (small frequent deltas) and
-    /// mouse wheel (large ±120 deltas).
-    ///
-    /// Usage:
-    ///   SmoothScroll.Attach(myListView);       // specific control
-    ///   SmoothScroll.AttachToWindow(myWindow);  // all ScrollViewers in window
+    /// Physics-based smooth scroll for WPF with two profiles:
+    ///   LIST  — very slow, for clipboard item lists (many small items)
+    ///   PAGE  — normal speed, for settings/full-page content
     /// </summary>
     public static class SmoothScroll
     {
-        // ═══ Configuration ═══
-        private const double Friction = 0.85;           // Per-frame velocity decay (0.85 = smooth, 0.7 = snappy)
-        private const double MaxVelocity = 60;           // Max pixels per frame
-        private const double MinVelocity = 0.3;          // Stop threshold
-        private const double MouseWheelMultiplier = 0.3;  // Scale for mouse wheel (±120 → ~36px impulse)
-        private const double TouchpadMultiplier = 0.6;    // Scale for touchpad (small deltas → gentle scroll)
-        private const double DeltaCapTouchpad = 40;       // Max single touchpad delta to accept
-        private const double DeltaCapMouse = 200;         // Max single mouse delta to accept
+        // ═══ LIST profile (clipboard items — must be slow) ═══
+        private const double ListFriction = 0.93;
+        private const double ListMaxVelocity = 14;
+        private const double ListTouchpadMul = 0.05;
+        private const double ListMouseMul = 0.08;
+        private const double ListMinImpulse = 0.25;
 
-        // ═══ Per-ScrollViewer state ═══
+        // ═══ PAGE profile (settings, diagnostics — calm, controlled) ═══
+        private const double PageFriction = 0.93;
+        private const double PageMaxVelocity = 20;
+        private const double PageTouchpadMul = 0.12;
+        private const double PageMouseMul = 0.10;
+        private const double PageMinImpulse = 0.5;
+
+        // ═══ Shared ═══
+        private const double MinVelocity = 0.12;
+        private const double DeltaCapTouchpad = 20;
+        private const double DeltaCapMouse = 160;
+
+        private enum Profile { List, Page }
+
         private class ScrollState
         {
             public double Velocity;
             public bool IsAnimating;
+            public Profile Mode;
         }
 
         private static readonly Dictionary<ScrollViewer, ScrollState> _states = new();
+        private static readonly HashSet<ScrollViewer> _listScrollViewers = new();
         private static bool _renderingAttached = false;
 
         /// <summary>
-        /// Attach smooth scrolling to a specific control (ScrollViewer or ListView).
+        /// Attach LIST profile (very slow) to a specific ListView.
+        /// Use for clipboard item lists.
         /// </summary>
-        public static void Attach(FrameworkElement element)
+        public static void AttachList(FrameworkElement element)
         {
-            element.PreviewMouseWheel += OnPreviewMouseWheel;
+            element.PreviewMouseWheel += OnListPreviewMouseWheel;
         }
 
         /// <summary>
-        /// Attach smooth scrolling to ALL ScrollViewers in a Window.
-        /// Catches PreviewMouseWheel at the window level and finds the nearest
-        /// scrollable ancestor of the event source.
+        /// Attach PAGE profile (normal speed) to ALL ScrollViewers in a Window.
+        /// Skips ScrollViewers already registered as LIST.
         /// </summary>
         public static void AttachToWindow(Window window)
         {
             window.PreviewMouseWheel += OnWindowPreviewMouseWheel;
         }
 
-        /// <summary>
-        /// Detach smooth scrolling from a control.
-        /// </summary>
         public static void Detach(FrameworkElement element)
         {
-            element.PreviewMouseWheel -= OnPreviewMouseWheel;
+            element.PreviewMouseWheel -= OnListPreviewMouseWheel;
         }
 
-        // ═══ Specific control handler ═══
-        private static void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        // ═══ LIST handler ═══
+        private static void OnListPreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
             ScrollViewer? sv = null;
             if (sender is ScrollViewer s)
@@ -75,60 +80,62 @@ namespace AdvanceClip.Classes
 
             if (sv == null) return;
 
-            ApplyScrollImpulse(sv, e);
+            _listScrollViewers.Add(sv); // Mark as list-mode
+            ApplyImpulse(sv, e, Profile.List);
         }
 
-        // ═══ Window-level handler — finds nearest scrollable ancestor ═══
+        // ═══ Window-level PAGE handler ═══
         private static void OnWindowPreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
-            // Walk up from the original source to find the nearest ScrollViewer
             DependencyObject? source = e.OriginalSource as DependencyObject;
             ScrollViewer? sv = FindScrollViewerAncestor(source);
 
             if (sv == null) return;
-
-            // Only smooth-scroll if this ScrollViewer actually has content to scroll
             if (sv.ScrollableHeight <= 0) return;
 
-            ApplyScrollImpulse(sv, e);
+            // If this ScrollViewer is already handled as LIST, skip (it has its own handler)
+            if (_listScrollViewers.Contains(sv)) return;
+
+            ApplyImpulse(sv, e, Profile.Page);
         }
 
-        private static void ApplyScrollImpulse(ScrollViewer sv, MouseWheelEventArgs e)
+        private static void ApplyImpulse(ScrollViewer sv, MouseWheelEventArgs e, Profile mode)
         {
             e.Handled = true;
 
-            // Get or create state
             if (!_states.TryGetValue(sv, out var state))
             {
-                state = new ScrollState();
+                state = new ScrollState { Mode = mode };
                 _states[sv] = state;
             }
 
-            // Detect touchpad vs mouse: touchpad sends small deltas, mouse sends ±120
             double rawDelta = e.Delta;
             bool isTouchpad = Math.Abs(rawDelta) < 120;
-            double impulse;
 
+            // Pick multipliers based on profile
+            double touchMul = mode == Profile.List ? ListTouchpadMul : PageTouchpadMul;
+            double mouseMul = mode == Profile.List ? ListMouseMul : PageMouseMul;
+            double minImpulse = mode == Profile.List ? ListMinImpulse : PageMinImpulse;
+            double maxVel = mode == Profile.List ? ListMaxVelocity : PageMaxVelocity;
+
+            double impulse;
             if (isTouchpad)
             {
-                // Cap and scale touchpad delta
                 double capped = Math.Sign(rawDelta) * Math.Min(Math.Abs(rawDelta), DeltaCapTouchpad);
-                impulse = capped * TouchpadMultiplier;
+                impulse = capped * touchMul;
+                // Guarantee minimum so very slow scrolls don't skip
+                if (Math.Abs(impulse) < minImpulse && impulse != 0)
+                    impulse = Math.Sign(impulse) * minImpulse;
             }
             else
             {
-                // Mouse wheel: ±120 per notch, cap extreme values
                 double capped = Math.Sign(rawDelta) * Math.Min(Math.Abs(rawDelta), DeltaCapMouse);
-                impulse = capped * MouseWheelMultiplier;
+                impulse = capped * mouseMul;
             }
 
-            // Add impulse to velocity (negative because scroll offset increases downward)
             state.Velocity -= impulse;
+            state.Velocity = Math.Clamp(state.Velocity, -maxVel, maxVel);
 
-            // Clamp velocity
-            state.Velocity = Math.Clamp(state.Velocity, -MaxVelocity, MaxVelocity);
-
-            // Start animation if not already running
             if (!state.IsAnimating)
             {
                 state.IsAnimating = true;
@@ -156,17 +163,13 @@ namespace AdvanceClip.Classes
 
                 if (!state.IsAnimating) continue;
 
-                // Apply velocity
                 double newOffset = sv.VerticalOffset + state.Velocity;
-
-                // Clamp to bounds
                 newOffset = Math.Clamp(newOffset, 0, sv.ScrollableHeight);
                 sv.ScrollToVerticalOffset(newOffset);
 
-                // Apply friction
-                state.Velocity *= Friction;
+                double friction = state.Mode == Profile.List ? ListFriction : PageFriction;
+                state.Velocity *= friction;
 
-                // Stop when velocity is negligible
                 if (Math.Abs(state.Velocity) < MinVelocity)
                 {
                     state.Velocity = 0;
@@ -178,7 +181,6 @@ namespace AdvanceClip.Classes
                 }
             }
 
-            // Unhook rendering when nothing is animating (save CPU)
             if (!anyActive)
             {
                 CompositionTarget.Rendering -= OnRendering;
@@ -186,9 +188,6 @@ namespace AdvanceClip.Classes
             }
         }
 
-        /// <summary>
-        /// Walk up the visual tree to find the nearest ScrollViewer ancestor.
-        /// </summary>
         private static ScrollViewer? FindScrollViewerAncestor(DependencyObject? element)
         {
             while (element != null)
@@ -200,9 +199,6 @@ namespace AdvanceClip.Classes
             return null;
         }
 
-        /// <summary>
-        /// Find the first child of type T in the visual tree.
-        /// </summary>
         private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
         {
             for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)

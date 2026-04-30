@@ -154,6 +154,13 @@ namespace AdvanceClip
                     }
                 }
             };
+
+            // Live-refresh wallpaper when user changes it in settings
+            Classes.SettingsManager.Current.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(Classes.AdvanceSettings.ClipboardWallpaperPath))
+                    Dispatcher.InvokeAsync(() => ApplyWallpaper());
+            };
         }
 
         [DllImport("user32.dll", SetLastError = true)]
@@ -230,8 +237,106 @@ namespace AdvanceClip
                 Classes.Logger.LogAction("WIDGET_FAIL", $"Failed to create taskbar widget: {ex.Message}");
             }
 
-            // Attach physics-based smooth scrolling
-            Classes.SmoothScroll.Attach(ShelfListView);
+            // Attach LIST-mode smooth scrolling (very slow for clipboard items)
+            Classes.SmoothScroll.AttachList(ShelfListView);
+
+            // Apply wallpaper if configured
+            ApplyWallpaper();
+        }
+
+        /// <summary>
+        /// Applies the user's wallpaper with frosted glass header + theme color gradient.
+        /// </summary>
+        private void ApplyWallpaper()
+        {
+            string path = Classes.SettingsManager.Current.ClipboardWallpaperPath;
+
+            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
+            {
+                // No wallpaper — hide all layers
+                WallpaperBg.Visibility = Visibility.Collapsed;
+                WallpaperThemeOverlay.Visibility = Visibility.Collapsed;
+                WallpaperFrostHeader.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            try
+            {
+                var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                bmp.BeginInit();
+                bmp.UriSource = new Uri(path, UriKind.Absolute);
+                bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                bmp.DecodePixelWidth = 400; // Keep it lightweight
+                bmp.EndInit();
+                bmp.Freeze();
+
+                // Layer 1: Background image
+                WallpaperBg.Source = bmp;
+                WallpaperBg.Visibility = Visibility.Visible;
+
+                // Layer 3: Frosted glass header
+                WallpaperFrostImg.Source = bmp;
+                WallpaperFrostHeader.Visibility = Visibility.Visible;
+
+                // Extract dominant color for theme gradient
+                var dominantColor = ExtractDominantColor(bmp);
+                var centerColor = System.Windows.Media.Color.FromArgb(40, dominantColor.R, dominantColor.G, dominantColor.B);
+                var edgeColor = System.Windows.Media.Color.FromArgb(140, (byte)(dominantColor.R / 4), (byte)(dominantColor.G / 4), (byte)(dominantColor.B / 4));
+
+                WallpaperRadialBrush.GradientStops[0].Color = centerColor;
+                WallpaperRadialBrush.GradientStops[1].Color = edgeColor;
+                WallpaperThemeOverlay.Visibility = Visibility.Visible;
+
+                // Tint the frost header with the theme color
+                WallpaperFrostTint.Background = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromArgb(90, dominantColor.R, dominantColor.G, dominantColor.B));
+            }
+            catch
+            {
+                WallpaperBg.Visibility = Visibility.Collapsed;
+                WallpaperThemeOverlay.Visibility = Visibility.Collapsed;
+                WallpaperFrostHeader.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        /// <summary>
+        /// Quick dominant color extraction by sampling a few pixels from the center.
+        /// </summary>
+        private static System.Windows.Media.Color ExtractDominantColor(System.Windows.Media.Imaging.BitmapImage bmp)
+        {
+            try
+            {
+                var formatted = new System.Windows.Media.Imaging.FormatConvertedBitmap(bmp, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+                int w = formatted.PixelWidth;
+                int h = formatted.PixelHeight;
+                int stride = w * 4;
+                byte[] pixels = new byte[stride * h];
+                formatted.CopyPixels(pixels, stride, 0);
+
+                // Sample 9 points in center region
+                int totalR = 0, totalG = 0, totalB = 0, count = 0;
+                int[] xs = { w / 4, w / 2, 3 * w / 4 };
+                int[] ys = { h / 4, h / 2, 3 * h / 4 };
+
+                foreach (int x in xs)
+                    foreach (int y in ys)
+                    {
+                        int idx = y * stride + x * 4;
+                        if (idx + 2 < pixels.Length)
+                        {
+                            totalB += pixels[idx];
+                            totalG += pixels[idx + 1];
+                            totalR += pixels[idx + 2];
+                            count++;
+                        }
+                    }
+
+                if (count > 0)
+                    return System.Windows.Media.Color.FromRgb((byte)(totalR / count), (byte)(totalG / count), (byte)(totalB / count));
+            }
+            catch { }
+
+            return System.Windows.Media.Color.FromRgb(99, 102, 241); // Fallback indigo
         }
 
         protected override void OnClosed(EventArgs e)

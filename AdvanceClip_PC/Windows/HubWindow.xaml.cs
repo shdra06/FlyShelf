@@ -96,7 +96,9 @@ namespace AdvanceClip.Windows
             Loaded += (s, ev) =>
             {
                 RefreshDevices_Click(null, null);
-                // Smooth-scroll ALL scrollable areas (clipboard, settings, diagnostics, etc.)
+                // LIST profile for clipboard items (very slow, precise)
+                Classes.SmoothScroll.AttachList(HubListView);
+                // PAGE profile for everything else (settings, diagnostics — normal speed)
                 Classes.SmoothScroll.AttachToWindow(this);
             };
         }

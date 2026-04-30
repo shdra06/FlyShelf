@@ -27,6 +27,41 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
+        <!-- ═══ WALLPAPER LAYERS (hidden when no wallpaper set) ═══ -->
+        <!-- Layer 1: Full background image (center, fills entire window) -->
+        <Image x:Name="WallpaperBg" Grid.RowSpan="2" Stretch="UniformToFill" Opacity="0.25"
+               RenderOptions.BitmapScalingMode="HighQuality" Visibility="Collapsed"
+               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        
+        <!-- Layer 2: Theme color gradient overlay emanating from center -->
+        <Border x:Name="WallpaperThemeOverlay" Grid.RowSpan="2" Visibility="Collapsed" IsHitTestVisible="False">
+            <Border.Background>
+                <RadialGradientBrush x:Name="WallpaperRadialBrush" Center="0.5,0.5" RadiusX="0.8" RadiusY="0.9">
+                    <GradientStop Color="#00000000" Offset="0"/>
+                    <GradientStop Color="#60000000" Offset="1"/>
+                </RadialGradientBrush>
+            </Border.Background>
+        </Border>
+
+        <!-- Layer 3: Frosted glass header — blurred zoomed-out wallpaper at top -->
+        <Border x:Name="WallpaperFrostHeader" Grid.Row="0" Visibility="Collapsed" IsHitTestVisible="False"
+                ClipToBounds="True" CornerRadius="12,12,0,0">
+            <Grid>
+                <Image x:Name="WallpaperFrostImg" Stretch="UniformToFill" Opacity="0.35"
+                       RenderOptions.BitmapScalingMode="HighQuality"
+                       HorizontalAlignment="Center" VerticalAlignment="Top" Margin="-20,-10,-20,0">
+                    <Image.RenderTransform>
+                        <ScaleTransform ScaleX="1.3" ScaleY="1.3" CenterX="130" CenterY="25"/>
+                    </Image.RenderTransform>
+                    <Image.Effect>
+                        <BlurEffect Radius="25" KernelType="Gaussian"/>
+                    </Image.Effect>
+                </Image>
+                <!-- Tinted glass overlay -->
+                <Border x:Name="WallpaperFrostTint" Background="#40000000"/>
+            </Grid>
+        </Border>
+
         <tray:NotifyIcon
             FocusOnLeftClick="False"
             Icon="pack://application:,,,/Resources/ClipFlowLogo.ico"
