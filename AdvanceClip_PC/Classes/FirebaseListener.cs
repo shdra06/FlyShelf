@@ -882,16 +882,9 @@ namespace AdvanceClip.Classes
                 // Clean up partial file on disk
                 try { if (File.Exists(filePath)) File.Delete(filePath); } catch { }
                 
-                // Delete the dead entry from Firebase so other devices don't try to download it either
-                if (!string.IsNullOrEmpty(cloudItem.Id))
-                {
-                    string pairingKey = DevicePairingManager.EnsurePairingKey();
-                    if (!string.IsNullOrEmpty(pairingKey))
-                    {
-                        _ = FirebaseSyncManager.DeleteFirebaseEntry(pairingKey, cloudItem.Id);
-                        Logger.LogAction("PURGE", $"Deleted unreachable Firebase entry: {cloudItem.Title} [{cloudItem.Id}]");
-                    }
-                }
+                // DON'T delete the Firebase entry — other devices may still need it.
+                // The 24h TTL safety net will handle cleanup for truly orphaned entries.
+                Logger.LogAction("FIREBASE SSE", $"Download failed but keeping Firebase entry for other devices: {cloudItem.Title} [{cloudItem.Id}]");
             }
         }
 

@@ -504,9 +504,10 @@ namespace AdvanceClip.Classes
                 }
                 else if (targetDevices.Count == 0)
                 {
-                    // No target devices were set (legacy entry or text) — just delete
-                    await DeleteFirebaseEntry(pairingKey, entryId);
-                    Logger.LogAction("SYNC_CLEANUP", $"No targetDevices — entry deleted: {entryId}");
+                    // No targetDevices set — DON'T delete. Let the 24h TTL handle cleanup.
+                    // Other devices may still need this entry (e.g., PC→PC sync where the
+                    // push didn't know about all recipients).
+                    Logger.LogAction("SYNC_TRACK", $"No targetDevices on entry — skipping auto-delete, TTL will handle: {entryId}");
                 }
                 else
                 {
