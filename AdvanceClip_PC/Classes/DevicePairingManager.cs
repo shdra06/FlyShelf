@@ -412,6 +412,10 @@ namespace AdvanceClip.Classes
                     FirebaseSyncManager.CachedLocalUrl ?? "");
 
                 Logger.LogAction("PAIR CODE", $"✅ Local-only paired with {info.deviceName} (key adoption)");
+                
+                // Notify the code-provider that we joined — write a handshake to Firebase
+                _ = WriteHandshakeToFirebase(info.pairingKey, info.deviceId);
+                
                 return (true, info.deviceName);
             }
 
@@ -457,6 +461,10 @@ namespace AdvanceClip.Classes
                             FirebaseSyncManager.CachedLocalUrl ?? "");
 
                         Logger.LogAction("PAIR CODE", $"✅ Paired with {info.deviceName} via {url}");
+                        
+                        // Notify the code-provider that we joined
+                        _ = WriteHandshakeToFirebase(info.pairingKey, info.deviceId);
+                        
                         return (true, info.deviceName);
                     }
                     
@@ -477,10 +485,114 @@ namespace AdvanceClip.Classes
                 SettingsManager.Current.PairingKey = info.pairingKey;
                 SettingsManager.Save();
                 TryPairDevice(info.pairingKey, info.deviceId, info.deviceName, info.deviceType, "deferred");
+                
+                _ = FirebaseSyncManager.PushTunnelUrl(
+                    FirebaseSyncManager.CachedGlobalUrl ?? FirebaseSyncManager.CachedLocalUrl ?? "",
+                    true,
+                    FirebaseSyncManager.CachedLocalUrl ?? "");
+                
+                _ = WriteHandshakeToFirebase(info.pairingKey, info.deviceId);
+                
                 return (true, info.deviceName);
             }
 
             return (false, info.deviceName);
+        }
+
+        /// <summary>
+        /// Write a handshake notification to Firebase so the code-provider knows this device joined.
+        /// The code-provider polls this node and auto-adds the joiner to its paired devices list.
+        /// </summary>
+        private static async Task WriteHandshakeToFirebase(string pairingKey, string remoteDeviceId)
+        {
+            try
+            {
+                string myDeviceId = SettingsManager.Current.DeviceId ?? "";
+                string myDeviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
+                var handshake = new
+                {
+                    deviceId = myDeviceId,
+                    deviceName = myDeviceName,
+                    deviceType = "PC",
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                };
+                string json = JsonSerializer.Serialize(handshake);
+                string url = $"{FIREBASE_BASE}/pairing_handshake/{pairingKey}/{myDeviceId}.json";
+                await _httpClient.PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
+                Logger.LogAction("PAIR HANDSHAKE", $"Wrote handshake to Firebase for key {pairingKey.Substring(0, 8)}...");
+                
+                // Auto-expire handshake after 10 minutes
+                _ = Task.Run(async () =>
+                {
+                    await Task.Delay(10 * 60_000);
+                    try { await _httpClient.DeleteAsync(url); } catch { }
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("PAIR HANDSHAKE", $"Failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Check for handshake notifications from devices that joined via our pairing code.
+        /// Auto-registers them in our paired devices list.
+        /// </summary>
+        public static async Task CheckForHandshakes()
+        {
+            try
+            {
+                string pairingKey = EnsurePairingKey();
+                if (string.IsNullOrEmpty(pairingKey)) return;
+
+                string url = $"{FIREBASE_BASE}/pairing_handshake/{pairingKey}.json";
+                var response = await _httpClient.GetAsync(url);
+                if (!response.IsSuccessStatusCode) return;
+
+                string json = await response.Content.ReadAsStringAsync();
+                if (string.IsNullOrWhiteSpace(json) || json == "null") return;
+
+                using var doc = JsonDocument.Parse(json);
+                string myDeviceId = SettingsManager.Current.DeviceId ?? "";
+                bool anyNew = false;
+
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    string devId = prop.Value.TryGetProperty("deviceId", out var di) ? di.GetString() ?? "" : "";
+                    string devName = prop.Value.TryGetProperty("deviceName", out var dn) ? dn.GetString() ?? "" : "";
+                    string devType = prop.Value.TryGetProperty("deviceType", out var dt) ? dt.GetString() ?? "PC" : "PC";
+
+                    if (devId == myDeviceId || string.IsNullOrEmpty(devId)) continue;
+
+                    // Check if we already have this device
+                    bool alreadyPaired;
+                    lock (_lock)
+                    {
+                        alreadyPaired = _pairedDevices.Any(d => d.DeviceId == devId);
+                    }
+
+                    if (!alreadyPaired)
+                    {
+                        TryPairDevice(pairingKey, devId, devName, devType, "handshake");
+                        Logger.LogAction("PAIR HANDSHAKE", $"✅ Auto-registered new device from handshake: {devName} ({devType})");
+                        anyNew = true;
+
+                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            AdvanceClip.Windows.ToastWindow.ShowToast($"🔗 {devName} joined your sync group!");
+                        });
+                    }
+
+                    // Clean up processed handshake
+                    try { await _httpClient.DeleteAsync($"{FIREBASE_BASE}/pairing_handshake/{pairingKey}/{prop.Name}.json"); } catch { }
+                }
+
+                if (anyNew) Save();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("PAIR HANDSHAKE", $"Check failed: {ex.Message}");
+            }
         }
 
         // ═══ Persistence ═══

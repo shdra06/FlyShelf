@@ -352,6 +352,8 @@ namespace AdvanceClip.Classes
                 _heartbeatTimer.Elapsed += (s, e) =>
                 {
                     _ = FirebaseSyncManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl);
+                    // Check for new devices that joined via pairing code
+                    _ = DevicePairingManager.CheckForHandshakes();
                 };
                 _heartbeatTimer.AutoReset = true;
                 _heartbeatTimer.Start();
