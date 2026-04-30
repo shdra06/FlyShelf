@@ -45,8 +45,10 @@ namespace AdvanceClip.Windows
                     }
                     else
                     {
-                        this.Width = Math.Min(bitmap.PixelWidth, SystemParameters.WorkArea.Width * 0.7);
-                        this.Height = Math.Min(bitmap.PixelHeight, SystemParameters.WorkArea.Height * 0.7);
+                        double dpiX = bitmap.DpiX > 0 ? bitmap.DpiX / 96.0 : 1.0;
+                        double dpiY = bitmap.DpiY > 0 ? bitmap.DpiY / 96.0 : 1.0;
+                        this.Width = Math.Min(bitmap.PixelWidth / dpiX, SystemParameters.WorkArea.Width * 0.7);
+                        this.Height = Math.Min(bitmap.PixelHeight / dpiY, SystemParameters.WorkArea.Height * 0.7);
                     }
                     
                     _isImageLoaded = true;
@@ -135,7 +137,7 @@ namespace AdvanceClip.Windows
                 // Allows the entire floating object to act as a 100% native draggable window!
                 if (e.LeftButton == MouseButtonState.Pressed && e.ClickCount == 1)
                 {
-                    this.DragMove();
+                    try { this.DragMove(); } catch { }
                 }
             }
         }

@@ -371,6 +371,7 @@ namespace AdvanceClip.Windows
                 Clipboard.SetText(BuildCsv());
                 ToastWindow.ShowToast("Table copied as CSV 📋");
             }
+            catch { ToastWindow.ShowToast("Clipboard busy — try again"); }
             finally { MainWindow._isWritingClipboard = false; }
         }
 
@@ -382,6 +383,7 @@ namespace AdvanceClip.Windows
                 Clipboard.SetText(BuildTsv());
                 ToastWindow.ShowToast("Table copied as TSV 📋");
             }
+            catch { ToastWindow.ShowToast("Clipboard busy — try again"); }
             finally { MainWindow._isWritingClipboard = false; }
         }
 

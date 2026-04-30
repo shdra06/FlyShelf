@@ -39,5 +39,11 @@ namespace AdvanceClip.Windows
             _autoCloseTimer?.Stop();
             try { Close(); } catch { }
         }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            _autoCloseTimer?.Stop();
+            base.OnClosed(e);
+        }
     }
 }

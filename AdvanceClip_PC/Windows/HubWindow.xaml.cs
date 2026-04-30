@@ -17,6 +17,7 @@ namespace AdvanceClip.Windows
         private FlyShelfViewModel _viewModel;
         private UpdateManager _updateManager = new UpdateManager();
         private bool _updateDownloaded = false;
+        private System.Windows.Threading.DispatcherTimer? _deviceRefreshTimer;
 
         public HubWindow(FlyShelfViewModel viewModel)
         {
@@ -89,9 +90,9 @@ namespace AdvanceClip.Windows
             // No auto-update at startup — manual only via the button
 
             // Auto-refresh device list every 30 seconds + on initial load
-            var deviceRefreshTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-            deviceRefreshTimer.Tick += (s, ev) => RefreshDevices_Click(null, null);
-            deviceRefreshTimer.Start();
+            _deviceRefreshTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+            _deviceRefreshTimer.Tick += (s, ev) => RefreshDevices_Click(null, null);
+            _deviceRefreshTimer.Start();
             Loaded += (s, ev) => RefreshDevices_Click(null, null);
         }
 
@@ -1202,8 +1203,8 @@ namespace AdvanceClip.Windows
         {
             if (sender is FrameworkElement fe && fe.DataContext is ViewModels.ClipboardItem item && item.HasDetectedColor)
             {
-                System.Windows.Clipboard.SetText(Classes.ColorHelper.ToHex(item.ColorR, item.ColorG, item.ColorB));
-                Windows.ToastWindow.ShowToast($"Hex copied: {item.DetectedColor} 🎨");
+                try { System.Windows.Clipboard.SetText(Classes.ColorHelper.ToHex(item.ColorR, item.ColorG, item.ColorB)); Windows.ToastWindow.ShowToast($"Hex copied: {item.DetectedColor} 🎨"); }
+                catch { Windows.ToastWindow.ShowToast("Clipboard busy — try again"); }
             }
         }
 
@@ -1212,8 +1213,8 @@ namespace AdvanceClip.Windows
             if (sender is FrameworkElement fe && fe.DataContext is ViewModels.ClipboardItem item && item.HasDetectedColor)
             {
                 string rgb = Classes.ColorHelper.ToRgb(item.ColorR, item.ColorG, item.ColorB);
-                System.Windows.Clipboard.SetText(rgb);
-                Windows.ToastWindow.ShowToast($"RGB copied: {rgb} 🎨");
+                try { System.Windows.Clipboard.SetText(rgb); Windows.ToastWindow.ShowToast($"RGB copied: {rgb} 🎨"); }
+                catch { Windows.ToastWindow.ShowToast("Clipboard busy — try again"); }
             }
         }
 
@@ -1222,9 +1223,15 @@ namespace AdvanceClip.Windows
             if (sender is FrameworkElement fe && fe.DataContext is ViewModels.ClipboardItem item && item.HasDetectedColor)
             {
                 string hsl = Classes.ColorHelper.ToHsl(item.ColorR, item.ColorG, item.ColorB);
-                System.Windows.Clipboard.SetText(hsl);
-                Windows.ToastWindow.ShowToast($"HSL copied: {hsl} 🎨");
+                try { System.Windows.Clipboard.SetText(hsl); Windows.ToastWindow.ShowToast($"HSL copied: {hsl} 🎨"); }
+                catch { Windows.ToastWindow.ShowToast("Clipboard busy — try again"); }
             }
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            _deviceRefreshTimer?.Stop();
+            base.OnClosed(e);
         }
     }
 

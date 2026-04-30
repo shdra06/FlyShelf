@@ -5,8 +5,12 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Graph Plotter" Height="520" Width="680"
         WindowStartupLocation="CenterScreen"
+        WindowStyle="None"
         ResizeMode="CanResize" MinWidth="400" MinHeight="350"
         Background="Transparent">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="6" CornerRadius="12" GlassFrameThickness="-1" />
+    </WindowChrome.WindowChrome>
 
     <Grid>
         <!-- Header -->
@@ -17,11 +21,12 @@
         </Grid.RowDefinitions>
 
         <!-- Title Bar -->
-        <Border Grid.Row="0" Background="#0AFFFFFF" Padding="16,12">
+        <Border Grid.Row="0" Background="#0AFFFFFF" Padding="16,12" MouseLeftButtonDown="TitleBar_MouseDown">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <ui:SymbolIcon Grid.Column="0" Symbol="MathFormatLinear24" FontSize="20" Foreground="#A78BFA" Margin="0,0,10,0" VerticalAlignment="Center"/>
@@ -34,6 +39,10 @@
                     <ui:Button Content="⟳" Appearance="Secondary" Padding="10,4" CornerRadius="8" Click="ResetZoom_Click" Margin="0,0,4,0" FontSize="14"/>
                     <ui:Button Content="+" Appearance="Secondary" Padding="10,4" CornerRadius="8" Click="ZoomIn_Click" FontSize="16" FontWeight="Bold"/>
                 </StackPanel>
+                <ui:Button Grid.Column="3" Appearance="Transparent" Click="Close_Click" ToolTip="Close" Margin="8,0,0,0"
+                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}">
+                    <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" FontSize="14"/></ui:Button.Icon>
+                </ui:Button>
             </Grid>
         </Border>
 

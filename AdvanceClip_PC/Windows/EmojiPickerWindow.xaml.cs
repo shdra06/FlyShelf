@@ -167,7 +167,7 @@ namespace AdvanceClip.Windows
         }
 
         private void EmojiSearchBox_TextChanged(object sender, TextChangedEventArgs e) => FilterEmojis();
-        private void Header_MouseDown(object sender, MouseButtonEventArgs e) { if (e.LeftButton == MouseButtonState.Pressed) DragMove(); }
+        private void Header_MouseDown(object sender, MouseButtonEventArgs e) { if (e.LeftButton == MouseButtonState.Pressed) try { DragMove(); } catch { } }
         private void Close_Click(object sender, RoutedEventArgs e) => Close();
         private void Window_Deactivated(object sender, EventArgs e) => Close();
     }

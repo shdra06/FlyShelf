@@ -252,5 +252,13 @@ namespace AdvanceClip.Windows
         }
 
         private void GraphCanvas_SizeChanged(object sender, SizeChangedEventArgs e) => DrawGraph();
+
+        private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ChangedButton == MouseButton.Left)
+                try { this.DragMove(); } catch { }
+        }
+
+        private void Close_Click(object sender, RoutedEventArgs e) => this.Close();
     }
 }
