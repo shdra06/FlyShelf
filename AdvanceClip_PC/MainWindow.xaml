@@ -43,22 +43,26 @@
             </Border.Background>
         </Border>
 
-        <!-- Layer 3: Frosted glass header — blurred zoomed-out wallpaper at top -->
-        <Border x:Name="WallpaperFrostHeader" Grid.Row="0" Visibility="Collapsed" IsHitTestVisible="False"
-                ClipToBounds="True" CornerRadius="12,12,0,0">
+        <!-- Layer 3: Frosted glass header — subtle blur with smooth fade-out -->
+        <Border x:Name="WallpaperFrostHeader" Grid.RowSpan="2" Visibility="Collapsed" IsHitTestVisible="False"
+                ClipToBounds="True" CornerRadius="12,12,0,0" Height="54" VerticalAlignment="Top">
+            <Border.OpacityMask>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#FF000000" Offset="0"/>
+                    <GradientStop Color="#AA000000" Offset="0.5"/>
+                    <GradientStop Color="#00000000" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.OpacityMask>
             <Grid>
-                <Image x:Name="WallpaperFrostImg" Stretch="UniformToFill" Opacity="0.35"
+                <Image x:Name="WallpaperFrostImg" Stretch="UniformToFill" Opacity="0.2"
                        RenderOptions.BitmapScalingMode="HighQuality"
-                       HorizontalAlignment="Center" VerticalAlignment="Top" Margin="-20,-10,-20,0">
-                    <Image.RenderTransform>
-                        <ScaleTransform ScaleX="1.3" ScaleY="1.3" CenterX="130" CenterY="25"/>
-                    </Image.RenderTransform>
+                       HorizontalAlignment="Center" VerticalAlignment="Center">
                     <Image.Effect>
-                        <BlurEffect Radius="25" KernelType="Gaussian"/>
+                        <BlurEffect Radius="12" KernelType="Gaussian"/>
                     </Image.Effect>
                 </Image>
-                <!-- Tinted glass overlay -->
-                <Border x:Name="WallpaperFrostTint" Background="#40000000"/>
+                <!-- Subtle tinted glass overlay -->
+                <Border x:Name="WallpaperFrostTint" Background="#25000000"/>
             </Grid>
         </Border>
 

@@ -412,9 +412,35 @@ export default function SyncScreen() {
       setClips([]);
       return;
     }
-    const pk = pairingKeyRef.current;
-    if (!pk) { setClips([]); return; }
-    const clipsRef = query(ref(database, `clipboard/${pk}`), orderByChild('Timestamp'), limitToLast(5));
+    // CRITICAL: Use contextPairingKey (state) instead of ref to avoid race condition.
+    // The ref may not be populated yet on first mount since AsyncStorage.getItem is async.
+    const pk = contextPairingKey || pairingKeyRef.current;
+    if (!pk) { syncLog('FIREBASE', 'No pairing key yet — waiting for context to load...'); return; }
+    // Keep the ref in sync so other code paths also have it
+    pairingKeyRef.current = pk;
+
+    // ─── Startup Cleanup: Purge stale entries older than 1 hour ───
+    (async () => {
+      try {
+        const allSnap = await get(ref(database, `clipboard/${pk}`));
+        if (allSnap.exists()) {
+          const allData = allSnap.val();
+          const now = Date.now();
+          const ONE_HOUR = 60 * 60 * 1000;
+          let purged = 0;
+          for (const key of Object.keys(allData)) {
+            const entry = allData[key];
+            if (entry.Timestamp && (now - entry.Timestamp) > ONE_HOUR) {
+              await set(ref(database, `clipboard/${pk}/${key}`), null);
+              purged++;
+            }
+          }
+          if (purged > 0) syncLog('CLEANUP', `Purged ${purged} stale Firebase entries (>1hr old)`);
+        }
+      } catch (e) { syncLog('CLEANUP', `Startup cleanup error: ${e}`); }
+    })();
+
+    const clipsRef = query(ref(database, `clipboard/${pk}`), orderByChild('Timestamp'), limitToLast(20));
     const unsubscribeFeed = onValue(clipsRef, async (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
@@ -654,7 +680,6 @@ export default function SyncScreen() {
       }
     });
 
-    // pk already declared above at line 340
     if (!pk) { setActiveDevices([]); return; }
     const nodesRef = query(ref(database, `active_devices/${pk}`));
     const unsubscribeNodes = onValue(nodesRef, async (snapshot) => {
