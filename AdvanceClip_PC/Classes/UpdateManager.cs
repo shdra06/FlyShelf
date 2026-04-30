@@ -11,9 +11,10 @@ namespace AdvanceClip.Classes
     public class UpdateManager
     {
         // ═══════════════════════════════════════════════════════════════
-        // UPDATE THIS URL when your GitHub repo is created.
-        // Format: https://raw.githubusercontent.com/{user}/{repo}/main/version.json
+        // Uses GitHub Releases API (works for both public and private repos).
+        // Falls back to version.json for backwards compatibility.
         // ═══════════════════════════════════════════════════════════════
+        private const string RELEASES_API = "https://api.github.com/repos/shdra06/FlyShelf/releases/latest";
         private const string VERSION_URL = "https://raw.githubusercontent.com/shdra06/FlyShelf/main/version.json";
 
         private static readonly HttpClient _client = new HttpClient() { Timeout = TimeSpan.FromSeconds(15) };
@@ -38,26 +39,84 @@ namespace AdvanceClip.Classes
 
         /// <summary>
         /// Checks GitHub for a newer version. Returns true if update is available.
+        /// Tries the Releases API first (works for private repos), then falls back to version.json.
         /// </summary>
         public async Task<bool> CheckForUpdateAsync()
         {
             try
             {
                 StatusChanged?.Invoke("Checking for updates...");
-                Logger.LogAction("UPDATE", $"Checking {VERSION_URL}");
+                Logger.LogAction("UPDATE", $"Current version: {CurrentVersion}");
 
-                // Add cache-busting to avoid stale CDN responses
-                string url = $"{VERSION_URL}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
-                string json = await _client.GetStringAsync(url);
-                
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
+                // ── Strategy 1: GitHub Releases API (private-repo compatible) ──
+                bool foundViaApi = false;
+                try
+                {
+                    var request = new HttpRequestMessage(HttpMethod.Get, RELEASES_API);
+                    request.Headers.Add("User-Agent", "FlyShelf-AutoUpdater");
+                    request.Headers.Add("Accept", "application/vnd.github+json");
 
-                LatestVersion = root.TryGetProperty("pc_version", out var v) ? v.GetString() ?? "" : "";
-                Changelog = root.TryGetProperty("pc_changelog", out var c) ? c.GetString() ?? "" : 
-                           (root.TryGetProperty("changelog", out var c2) ? c2.GetString() ?? "" : "");
-                DownloadUrl = root.TryGetProperty("pc_download", out var d) ? d.GetString() ?? "" : "";
-                ExpectedHash = root.TryGetProperty("pc_sha256", out var h) ? h.GetString()?.ToLowerInvariant() ?? "" : "";
+                    var response = await _client.SendAsync(request);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        string json = await response.Content.ReadAsStringAsync();
+                        using var doc = JsonDocument.Parse(json);
+                        var root = doc.RootElement;
+
+                        // tag_name is "v2.9.0" — strip the 'v' prefix
+                        string tagName = root.TryGetProperty("tag_name", out var tag) ? tag.GetString() ?? "" : "";
+                        LatestVersion = tagName.TrimStart('v', 'V');
+
+                        // Changelog from release body
+                        Changelog = root.TryGetProperty("body", out var body) ? body.GetString() ?? "" : "";
+
+                        // Find FlyShelf.exe in the release assets
+                        if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var asset in assets.EnumerateArray())
+                            {
+                                string name = asset.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                                if (name.Equals("FlyShelf.exe", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    DownloadUrl = asset.TryGetProperty("browser_download_url", out var dl) ? dl.GetString() ?? "" : "";
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(LatestVersion) && !string.IsNullOrEmpty(DownloadUrl))
+                        {
+                            foundViaApi = true;
+                            Logger.LogAction("UPDATE", $"Found via Releases API: v{LatestVersion}");
+                        }
+                    }
+                }
+                catch (Exception apiEx)
+                {
+                    Logger.LogAction("UPDATE", $"Releases API failed: {apiEx.Message} — trying version.json fallback");
+                }
+
+                // ── Strategy 2: version.json fallback (public repo / raw content) ──
+                if (!foundViaApi)
+                {
+                    try
+                    {
+                        string url = $"{VERSION_URL}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+                        string json = await _client.GetStringAsync(url);
+                        using var doc = JsonDocument.Parse(json);
+                        var root = doc.RootElement;
+
+                        LatestVersion = root.TryGetProperty("pc_version", out var v) ? v.GetString() ?? "" : "";
+                        Changelog = root.TryGetProperty("pc_changelog", out var c) ? c.GetString() ?? "" :
+                                   (root.TryGetProperty("changelog", out var c2) ? c2.GetString() ?? "" : "");
+                        DownloadUrl = root.TryGetProperty("pc_download", out var d) ? d.GetString() ?? "" : "";
+                        ExpectedHash = root.TryGetProperty("pc_sha256", out var h) ? h.GetString()?.ToLowerInvariant() ?? "" : "";
+                    }
+                    catch (Exception jsonEx)
+                    {
+                        Logger.LogAction("UPDATE", $"version.json also failed: {jsonEx.Message}");
+                    }
+                }
 
                 if (string.IsNullOrEmpty(LatestVersion))
                 {
