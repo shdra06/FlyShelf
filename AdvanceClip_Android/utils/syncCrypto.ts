@@ -5,108 +5,52 @@
  * Key derivation: PBKDF2-SHA256 with 100,000 iterations from the pairing key.
  * Encrypted format: Base64(nonce(12B) + ciphertext + tag(16B))
  * 
+ * Uses Web Crypto API directly for maximum compatibility with the PC's .NET AesGcm.
  * Both PC and Android use identical key derivation and encryption,
  * so encrypted items are interoperable across platforms.
  */
 
-import { AESEncryptionKey, AESSealedData, aesEncryptAsync, aesDecryptAsync, digestStringAsync, CryptoDigestAlgorithm } from 'expo-crypto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { syncLog } from './debugLog';
 
 // Must match PC-side constants in SyncCrypto.cs
 const PBKDF2_ITERATIONS = 100_000;
 const SALT_STRING = 'AdvanceClip_v2.6.0_SyncSalt';
-const KEY_SIZE_BYTES = 32; // AES-256
+const KEY_SIZE_BITS = 256; // AES-256
+const NONCE_SIZE = 12; // GCM standard
+const TAG_SIZE = 16; // GCM auth tag
 
-let _cachedKey: AESEncryptionKey | null = null;
+let _cachedKey: CryptoKey | null = null;
 let _cachedPairingKey: string | null = null;
 
 /**
- * Converts a hex string to Uint8Array.
- */
-function hexToBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) {
-    bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
-  }
-  return bytes;
-}
-
-/**
- * Converts Uint8Array to hex string.
- */
-function bytesToHex(bytes: Uint8Array): string {
-  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-/**
- * PBKDF2-SHA256 key derivation (pure JS implementation matching .NET's Rfc2898DeriveBytes).
- * This produces the exact same 32-byte key as the PC side for the same pairing key.
- */
-async function pbkdf2Sha256(password: string, salt: Uint8Array, iterations: number, keyLength: number): Promise<Uint8Array> {
-  const encoder = new TextEncoder();
-  const passwordBytes = encoder.encode(password);
-
-  // PBKDF2 with HMAC-SHA256
-  const numBlocks = Math.ceil(keyLength / 32); // SHA-256 = 32 bytes
-  const result = new Uint8Array(keyLength);
-
-  for (let blockIdx = 1; blockIdx <= numBlocks; blockIdx++) {
-    // U1 = HMAC-SHA256(password, salt || INT32_BE(blockIdx))
-    const blockInput = new Uint8Array(salt.length + 4);
-    blockInput.set(salt, 0);
-    blockInput[salt.length] = (blockIdx >>> 24) & 0xff;
-    blockInput[salt.length + 1] = (blockIdx >>> 16) & 0xff;
-    blockInput[salt.length + 2] = (blockIdx >>> 8) & 0xff;
-    blockInput[salt.length + 3] = blockIdx & 0xff;
-
-    let u = await hmacSha256(passwordBytes, blockInput);
-    const block = new Uint8Array(u);
-
-    for (let i = 1; i < iterations; i++) {
-      u = await hmacSha256(passwordBytes, u);
-      for (let j = 0; j < block.length; j++) {
-        block[j] ^= u[j];
-      }
-    }
-
-    const offset = (blockIdx - 1) * 32;
-    const copyLen = Math.min(32, keyLength - offset);
-    result.set(block.subarray(0, copyLen), offset);
-  }
-
-  return result;
-}
-
-/**
- * HMAC-SHA256 using Web Crypto API (available in React Native via Hermes).
- */
-async function hmacSha256(key: Uint8Array, message: Uint8Array): Promise<Uint8Array> {
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    key,
-    { name: 'HMAC', hash: 'SHA-256' },
-    false,
-    ['sign']
-  );
-  const signature = await crypto.subtle.sign('HMAC', cryptoKey, message);
-  return new Uint8Array(signature);
-}
-
-/**
- * Derives the AES-256 key from the pairing key.
+ * Derives the AES-256 key from the pairing key using Web Crypto PBKDF2.
+ * This is hardware-accelerated and produces identical output to .NET's Rfc2898DeriveBytes.
  * Cached for the lifetime of the pairing session.
  */
-async function getKey(): Promise<AESEncryptionKey> {
+async function getKey(): Promise<CryptoKey> {
   const pairingKey = await AsyncStorage.getItem('pairingKey');
   if (!pairingKey) throw new Error('Cannot encrypt — no pairing key set');
 
   if (_cachedKey && _cachedPairingKey === pairingKey) return _cachedKey;
 
   const encoder = new TextEncoder();
+  const passwordBytes = encoder.encode(pairingKey);
   const salt = encoder.encode(SALT_STRING);
-  const keyBytes = await pbkdf2Sha256(pairingKey, salt, PBKDF2_ITERATIONS, KEY_SIZE_BYTES);
 
-  _cachedKey = await AESEncryptionKey.import(keyBytes);
+  // Import password as PBKDF2 key material
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw', passwordBytes, 'PBKDF2', false, ['deriveKey']
+  );
+
+  // Derive AES-GCM key using PBKDF2-SHA256
+  _cachedKey = await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: KEY_SIZE_BITS },
+    false,
+    ['encrypt', 'decrypt']
+  );
   _cachedPairingKey = pairingKey;
   return _cachedKey;
 }
@@ -115,40 +59,80 @@ async function getKey(): Promise<AESEncryptionKey> {
  * Encrypts plaintext using AES-256-GCM.
  * Returns Base64 string in format: nonce(12B) + ciphertext + tag(16B)
  * Compatible with PC-side SyncCrypto.Decrypt()
+ * 
+ * Note: Web Crypto AES-GCM produces ciphertext with tag appended,
+ * so the output format is: nonce + (ciphertext || tag), which is identical
+ * to the PC's format of nonce + ciphertext + tag.
  */
 export async function encrypt(plaintext: string): Promise<string> {
   if (!plaintext) return plaintext;
-  const key = await getKey();
+  
+  try {
+    const key = await getKey();
+    const encoder = new TextEncoder();
+    const plaintextBytes = encoder.encode(plaintext);
 
-  // Encode plaintext to base64 (expo-crypto expects base64 input)
-  const plaintextBase64 = btoa(unescape(encodeURIComponent(plaintext)));
+    // Generate random 12-byte nonce
+    const nonce = new Uint8Array(NONCE_SIZE);
+    crypto.getRandomValues(nonce);
 
-  const sealedData = await aesEncryptAsync(plaintextBase64, key);
+    // Encrypt with AES-GCM (output = ciphertext + tag appended)
+    const encryptedBuffer = await crypto.subtle.encrypt(
+      { name: 'AES-GCM', iv: nonce, tagLength: TAG_SIZE * 8 },
+      key,
+      plaintextBytes
+    );
 
-  // Get combined format: IV + ciphertext + tag (as base64)
-  const combined = await sealedData.combined('base64');
-  return combined;
+    // Pack: nonce + ciphertextWithTag
+    const encrypted = new Uint8Array(encryptedBuffer);
+    const combined = new Uint8Array(NONCE_SIZE + encrypted.length);
+    combined.set(nonce, 0);
+    combined.set(encrypted, NONCE_SIZE);
+
+    // Convert to base64
+    return uint8ArrayToBase64(combined);
+  } catch (e: any) {
+    syncLog('SYNC_CRYPTO', `Encrypt failed: ${e?.message}`);
+    return plaintext; // Fallback: send plaintext
+  }
 }
 
 /**
  * Decrypts AES-256-GCM ciphertext (Base64 encoded).
  * Returns null if decryption fails.
  * Compatible with PC-side SyncCrypto.Encrypt()
+ * 
+ * Expected input format: Base64(nonce(12B) + ciphertext + tag(16B))
+ * Web Crypto expects: iv + ciphertextWithTag (tag appended to ciphertext)
  */
 export async function decrypt(base64Ciphertext: string): Promise<string | null> {
   if (!base64Ciphertext) return base64Ciphertext;
 
   try {
     const key = await getKey();
+    
+    // Decode base64 to bytes
+    const packed = base64ToUint8Array(base64Ciphertext);
+    
+    if (packed.length < NONCE_SIZE + TAG_SIZE) return null; // Too short
 
-    // Parse combined format: IV(12B) + ciphertext + tag(16B)
-    const sealedData = AESSealedData.fromCombined(base64Ciphertext);
+    // Extract nonce (first 12 bytes)
+    const nonce = packed.slice(0, NONCE_SIZE);
+    // Remaining bytes = ciphertext + tag (Web Crypto expects them combined)
+    const ciphertextWithTag = packed.slice(NONCE_SIZE);
 
-    const decryptedBase64 = await aesDecryptAsync(sealedData, key, { output: 'base64' });
+    // Decrypt with AES-GCM
+    const decryptedBuffer = await crypto.subtle.decrypt(
+      { name: 'AES-GCM', iv: nonce, tagLength: TAG_SIZE * 8 },
+      key,
+      ciphertextWithTag
+    );
 
-    // Decode from base64 back to UTF-8 string
-    return decodeURIComponent(escape(atob(decryptedBase64 as string)));
-  } catch {
+    // Decode UTF-8
+    const decoder = new TextDecoder();
+    return decoder.decode(decryptedBuffer);
+  } catch (e: any) {
+    syncLog('SYNC_CRYPTO', `Decrypt failed: ${e?.message}`);
     return null; // Wrong key, tampered data, or unencrypted plaintext
   }
 }
@@ -161,8 +145,8 @@ export function isEncrypted(value: string): boolean {
   if (!value || value.length < 40) return false;
   if (value.includes(' ') || value.includes('\n') || value.includes('\r')) return false;
   try {
-    const decoded = atob(value);
-    return decoded.length >= 28; // nonce(12) + tag(16) minimum
+    const decoded = base64ToUint8Array(value);
+    return decoded.length >= NONCE_SIZE + TAG_SIZE; // nonce(12) + tag(16) minimum
   } catch {
     return false;
   }
@@ -174,4 +158,23 @@ export function isEncrypted(value: string): boolean {
 export function clearKeyCache() {
   _cachedKey = null;
   _cachedPairingKey = null;
+}
+
+// ── Helpers ──
+
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function base64ToUint8Array(base64: string): Uint8Array {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }

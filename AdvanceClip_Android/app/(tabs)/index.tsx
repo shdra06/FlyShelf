@@ -458,6 +458,10 @@ export default function SyncScreen() {
                 const decDl = await aesDecrypt((item as any).DownloadUrl);
                 if (decDl !== null) (item as any).DownloadUrl = decDl;
               }
+              if ((item as any).PreviewUrl) {
+                const decPv = await aesDecrypt((item as any).PreviewUrl);
+                if (decPv !== null) (item as any).PreviewUrl = decPv;
+              }
             } catch (e: any) { syncLog('SYNC_CRYPTO', `Decryption failed: ${e?.message}`); }
           }
           allParsed.push(item);
