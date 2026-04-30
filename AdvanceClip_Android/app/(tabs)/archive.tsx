@@ -991,7 +991,7 @@ export default function ConnectScreen() {
       </View>
 
       {/* Type Filter Chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, maxHeight: 36 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 6, marginBottom: 10, alignItems: 'center' }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 10 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 6, paddingVertical: 4 }}>
         {(['All', 'PDFs', 'Docs', 'Images', 'Videos'] as const).map(t => (
           <TouchableOpacity key={t} style={[s.sourceChip, activeTab === t && s.sourceChipActive]} onPress={() => setActiveTab(t)}>
             <Text style={[s.sourceChipText, activeTab === t && s.sourceChipTextActive]}>

@@ -440,7 +440,7 @@ export default function SyncScreen() {
       } catch (e) { syncLog('CLEANUP', `Startup cleanup error: ${e}`); }
     })();
 
-    const clipsRef = query(ref(database, `clipboard/${pk}`), orderByChild('Timestamp'), limitToLast(20));
+    const clipsRef = query(ref(database, `clipboard/${pk}`), orderByChild('Timestamp'), limitToLast(1));
     const unsubscribeFeed = onValue(clipsRef, async (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
@@ -508,8 +508,12 @@ export default function SyncScreen() {
           );
 
           if (imageItems.length > 0 || fileItems.length > 0) {
-            // Set clips immediately with Firebase data (images will show loading spinners via CachedImage)
-            setClips(parsed);
+            // Accumulate: prepend new items (dedup by id), don't replace the whole list
+            setClips(prev => {
+              const existingIds = new Set(prev.map(c => c.id).filter(Boolean));
+              const newItems = parsed.filter(p => p.id && !existingIds.has(p.id));
+              return newItems.length > 0 ? [...newItems, ...prev] : prev;
+            });
 
             // Background: download all images and update clips with local URIs
             (async () => {
@@ -665,14 +669,20 @@ export default function SyncScreen() {
               }
             })();
           } else {
-            // No image/file items — just set clips directly, merging local screenshots
-            const merged = [...localScreenshotsRef.current.filter(ls => !parsed.some(p => p.Title === ls.Title)), ...parsed];
-            setClips(merged);
+            // No image/file items — accumulate new text/url items
+            setClips(prev => {
+              const existingIds = new Set(prev.map(c => c.id).filter(Boolean));
+              const newItems = parsed.filter(p => p.id && !existingIds.has(p.id));
+              const screenshots = localScreenshotsRef.current.filter(ls => !prev.some(p => p.Title === ls.Title) && !parsed.some(p => p.Title === ls.Title));
+              return newItems.length > 0 || screenshots.length > 0 ? [...screenshots, ...newItems, ...prev] : prev;
+            });
           }
         } else {
-          // Merge local screenshots even when no Firebase image items
-          const merged = [...localScreenshotsRef.current.filter(ls => !parsed.some(p => p.Title === ls.Title)), ...parsed];
-          setClips(merged);
+          // Accumulate local screenshots
+          setClips(prev => {
+            const screenshots = localScreenshotsRef.current.filter(ls => !prev.some(p => p.Title === ls.Title));
+            return screenshots.length > 0 ? [...screenshots, ...prev] : prev;
+          });
         }
       } else {
         // No Firebase data — show only local screenshots
