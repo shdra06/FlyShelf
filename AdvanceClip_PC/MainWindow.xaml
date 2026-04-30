@@ -95,8 +95,7 @@
                   VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling"
                   VirtualizingPanel.CacheLengthUnit="Item" VirtualizingPanel.CacheLength="10,10"
                   AlternationCount="10"
-                  PreviewKeyDown="ShelfListView_KeyDown"
-                  PreviewMouseWheel="ListView_PreviewMouseWheel">
+                  PreviewKeyDown="ShelfListView_KeyDown">
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
                     <Setter Property="FocusVisualStyle" Value="{x:Null}"/>

@@ -93,34 +93,12 @@ namespace AdvanceClip.Windows
             _deviceRefreshTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
             _deviceRefreshTimer.Tick += (s, ev) => RefreshDevices_Click(null, null);
             _deviceRefreshTimer.Start();
-            Loaded += (s, ev) => RefreshDevices_Click(null, null);
-        }
-
-        /// <summary>
-        /// Slows scroll speed for mouse wheel and precision touchpad.
-        /// </summary>
-        private void ListView_PreviewMouseWheel(object sender, System.Windows.Input.MouseWheelEventArgs e)
-        {
-            if (sender is not System.Windows.Controls.ListView lv) return;
-            e.Handled = true;
-
-            var sv = FindVisualChild<System.Windows.Controls.ScrollViewer>(lv);
-            if (sv == null) return;
-
-            bool isTouchpad = Math.Abs(e.Delta) < 120;
-            double scrollAmount;
-
-            if (isTouchpad)
+            Loaded += (s, ev) =>
             {
-                scrollAmount = e.Delta * 0.5;
-            }
-            else
-            {
-                double notches = e.Delta / 120.0;
-                scrollAmount = notches * 50;
-            }
-
-            sv.ScrollToVerticalOffset(sv.VerticalOffset - scrollAmount);
+                RefreshDevices_Click(null, null);
+                // Smooth-scroll ALL scrollable areas (clipboard, settings, diagnostics, etc.)
+                Classes.SmoothScroll.AttachToWindow(this);
+            };
         }
 
         private void DroppedItems_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)

@@ -229,6 +229,9 @@ namespace AdvanceClip
             {
                 Classes.Logger.LogAction("WIDGET_FAIL", $"Failed to create taskbar widget: {ex.Message}");
             }
+
+            // Attach physics-based smooth scrolling
+            Classes.SmoothScroll.Attach(ShelfListView);
         }
 
         protected override void OnClosed(EventArgs e)
@@ -949,36 +952,6 @@ namespace AdvanceClip
             }
         }
 
-        /// <summary>
-        /// Slows down scroll speed for both mouse wheel and precision touchpad.
-        /// Mouse wheel: delta=±120 per notch → scroll ~50px instead of default ~144px
-        /// Touchpad: small deltas (1–30) → reduce by half for gentler swipes
-        /// </summary>
-        private void ListView_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-        {
-            if (sender is not ListView lv) return;
-            e.Handled = true;
-
-            var sv = FindVisualChild<ScrollViewer>(lv);
-            if (sv == null) return;
-
-            bool isTouchpad = Math.Abs(e.Delta) < 120;
-            double scrollAmount;
-
-            if (isTouchpad)
-            {
-                // Touchpad: small precision deltas — reduce by half
-                scrollAmount = e.Delta * 0.5;
-            }
-            else
-            {
-                // Mouse wheel: ±120 per notch — scroll ~50px per notch
-                double notches = e.Delta / 120.0;
-                scrollAmount = notches * 50;
-            }
-
-            sv.ScrollToVerticalOffset(sv.VerticalOffset - scrollAmount);
-        }
 
         private void ShelfListView_KeyDown(object sender, KeyEventArgs e)
         {
