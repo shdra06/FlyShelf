@@ -24,9 +24,19 @@ namespace AdvanceClip.Windows
         private static readonly Color DangerColor = Color.FromRgb(0xEF, 0x44, 0x44); // #EF4444
         private static readonly Color WarningColor = Color.FromRgb(0xF5, 0x9E, 0x0B); // #F59E0B
 
+        // Cache resource brushes at startup so Timer_Tick never calls FindResource
+        private Brush _primaryTextBrush;
+        private Brush _secondaryTextBrush;
+
         public TimerWindow(string contextString)
         {
             InitializeComponent();
+            
+            // Cache brushes NOW — avoids FindResource calls during tick which crash
+            // when another window disrupts the visual tree
+            _primaryTextBrush = (Brush)FindResource("MicaWPF.Brushes.TextFillColorPrimary");
+            _secondaryTextBrush = (Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
+            
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) }; // Smooth 20fps updates
             _timer.Tick += Timer_Tick;
 
@@ -81,64 +91,71 @@ namespace AdvanceClip.Windows
 
         private void Timer_Tick(object? sender, EventArgs e)
         {
-            if (_remaining.TotalSeconds <= 0)
+            try
             {
-                _timer.Stop();
-                _isRunning = false;
-                _isFinished = true;
-                ActionText.Text = "✓  Dismiss";
-                PrimaryBtnBorder.Background = new SolidColorBrush(DangerColor);
-                TimeDisplay.Text = "00:00";
-                TimeDisplay.Foreground = new SolidColorBrush(DangerColor);
-                PercentText.Text = "0%";
-                PercentText.Foreground = new SolidColorBrush(DangerColor);
-                StatusText.Text = "TIME'S UP!";
-                StatusText.Opacity = 1.0;
-                StatusText.Foreground = new SolidColorBrush(DangerColor);
-                DrawProgressArc(0);
-                try { System.Media.SystemSounds.Exclamation.Play(); } catch { }
-                this.Topmost = true;
-                this.Activate();
-                // Flash effect
-                StartFlashAnimation();
-                return;
+                if (_remaining.TotalSeconds <= 0)
+                {
+                    _timer.Stop();
+                    _isRunning = false;
+                    _isFinished = true;
+                    ActionText.Text = "✓  Dismiss";
+                    PrimaryBtnBorder.Background = new SolidColorBrush(DangerColor);
+                    TimeDisplay.Text = "00:00";
+                    TimeDisplay.Foreground = new SolidColorBrush(DangerColor);
+                    PercentText.Text = "0%";
+                    PercentText.Foreground = new SolidColorBrush(DangerColor);
+                    StatusText.Text = "TIME'S UP!";
+                    StatusText.Opacity = 1.0;
+                    StatusText.Foreground = new SolidColorBrush(DangerColor);
+                    DrawProgressArc(0);
+                    try { System.Media.SystemSounds.Exclamation.Play(); } catch { }
+                    this.Topmost = true;
+                    this.Activate();
+                    StartFlashAnimation();
+                    return;
+                }
+
+                // Subtract elapsed time since last tick for accuracy
+                var now = DateTime.Now;
+                if (_lastTickSecond == DateTime.MinValue) _lastTickSecond = now;
+                var elapsed = now - _lastTickSecond;
+                _lastTickSecond = now;
+                _remaining = _remaining.Subtract(elapsed);
+                if (_remaining.TotalSeconds < 0) _remaining = TimeSpan.Zero;
+
+                UpdateTimeDisplay();
+                double progress = _totalDuration.TotalSeconds > 0 ? _remaining.TotalSeconds / _totalDuration.TotalSeconds : 0;
+                DrawProgressArc(progress);
+
+                // Update percentage
+                int pct = (int)(progress * 100);
+                PercentText.Text = $"{pct}%";
+
+                // Color transitions based on remaining time — uses cached brushes, never FindResource
+                if (progress < 0.1)
+                {
+                    TimeDisplay.Foreground = new SolidColorBrush(DangerColor);
+                    PercentText.Foreground = new SolidColorBrush(DangerColor);
+                    StatusText.Text = "HURRY!";
+                    StatusText.Opacity = 0.8;
+                }
+                else if (progress < 0.25)
+                {
+                    TimeDisplay.Foreground = new SolidColorBrush(WarningColor);
+                    StatusText.Text = "LOW";
+                    StatusText.Opacity = 0.5;
+                }
+                else
+                {
+                    TimeDisplay.Foreground = _primaryTextBrush;
+                    StatusText.Text = "RUNNING";
+                    StatusText.Opacity = 0.3;
+                }
             }
-
-            // Subtract elapsed time since last tick for accuracy
-            var now = DateTime.Now;
-            if (_lastTickSecond == DateTime.MinValue) _lastTickSecond = now;
-            var elapsed = now - _lastTickSecond;
-            _lastTickSecond = now;
-            _remaining = _remaining.Subtract(elapsed);
-            if (_remaining.TotalSeconds < 0) _remaining = TimeSpan.Zero;
-
-            UpdateTimeDisplay();
-            double progress = _totalDuration.TotalSeconds > 0 ? _remaining.TotalSeconds / _totalDuration.TotalSeconds : 0;
-            DrawProgressArc(progress);
-
-            // Update percentage
-            int pct = (int)(progress * 100);
-            PercentText.Text = $"{pct}%";
-
-            // Color transitions based on remaining time
-            if (progress < 0.1)
+            catch (Exception ex)
             {
-                TimeDisplay.Foreground = new SolidColorBrush(DangerColor);
-                PercentText.Foreground = new SolidColorBrush(DangerColor);
-                StatusText.Text = "HURRY!";
-                StatusText.Opacity = 0.8;
-            }
-            else if (progress < 0.25)
-            {
-                TimeDisplay.Foreground = new SolidColorBrush(WarningColor);
-                StatusText.Text = "LOW";
-                StatusText.Opacity = 0.5;
-            }
-            else
-            {
-                TimeDisplay.Foreground = (Brush)FindResource("MicaWPF.Brushes.TextFillColorPrimary");
-                StatusText.Text = "RUNNING";
-                StatusText.Opacity = 0.3;
+                // Never crash the app — just log and keep ticking
+                Classes.Logger.LogAction("TIMER", $"Tick error: {ex.Message}");
             }
         }
 
@@ -309,8 +326,8 @@ namespace AdvanceClip.Windows
             StatusText.Text = "READY";
             StatusText.Opacity = 0.3;
             PercentText.Text = "100%";
-            PercentText.Foreground = (Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
-            TimeDisplay.Foreground = (Brush)FindResource("MicaWPF.Brushes.TextFillColorPrimary");
+            PercentText.Foreground = _secondaryTextBrush;
+            TimeDisplay.Foreground = _primaryTextBrush;
             TimeDisplay.Opacity = 1.0;
             PrimaryBtnBorder.Background = new LinearGradientBrush(
                 new GradientStopCollection {
@@ -322,7 +339,9 @@ namespace AdvanceClip.Windows
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
         {
             if (e.ChangedButton == MouseButton.Left)
-                this.DragMove();
+            {
+                try { this.DragMove(); } catch { }
+            }
         }
 
         private void Close_Click(object sender, RoutedEventArgs e)
