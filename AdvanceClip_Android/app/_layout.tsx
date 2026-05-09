@@ -1,3 +1,7 @@
+// MUST be first — installs global.crypto polyfill (Hermes lacks crypto.subtle)
+import { install as installCrypto } from 'react-native-quick-crypto';
+installCrypto();
+
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';

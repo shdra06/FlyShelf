@@ -580,6 +580,85 @@ namespace AdvanceClip.Classes
             }
         }
 
+        /// <summary>
+        /// Look up a sender device's current Cloudflare tunnel URL from Firebase.
+        /// Used when downloading files: the original entry's URL may be stale if the sender restarted its tunnel.
+        /// </summary>
+        public static async Task<string> GetSenderCurrentUrl(string senderDeviceId)
+        {
+            if (string.IsNullOrEmpty(senderDeviceId)) return "";
+            try
+            {
+                string pairingKey = DevicePairingManager.EnsurePairingKey();
+                if (string.IsNullOrEmpty(pairingKey)) return "";
+
+                string url = $"{FIREBASE_BASE}/active_devices/{pairingKey}/{senderDeviceId}.json";
+                var response = await _client.GetAsync(url);
+                if (!response.IsSuccessStatusCode) return "";
+
+                string json = await response.Content.ReadAsStringAsync();
+                if (string.IsNullOrWhiteSpace(json) || json == "null") return "";
+
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("GlobalUrl", out var gurl))
+                    return gurl.GetString() ?? "";
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("FIREBASE SSE", $"GetSenderCurrentUrl failed: {ex.Message}");
+            }
+            return "";
+        }
+
+        /// <summary>
+        /// Fallback: Find a sender's current GlobalUrl by scanning active devices by DeviceName.
+        /// Used when GetSenderCurrentUrl fails because the Firebase entry's SourceDeviceId
+        /// doesn't match the active_devices key format (name vs full ID).
+        /// </summary>
+        public static async Task<string> FindSenderUrlByName(string senderDeviceName)
+        {
+            if (string.IsNullOrEmpty(senderDeviceName)) return "";
+            try
+            {
+                string pairingKey = DevicePairingManager.EnsurePairingKey();
+                if (string.IsNullOrEmpty(pairingKey)) return "";
+
+                string url = $"{FIREBASE_BASE}/active_devices/{pairingKey}.json";
+                var response = await _client.GetAsync(url);
+                if (!response.IsSuccessStatusCode) return "";
+
+                string json = await response.Content.ReadAsStringAsync();
+                if (string.IsNullOrWhiteSpace(json) || json == "null") return "";
+
+                using var doc = JsonDocument.Parse(json);
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    if (prop.Value.TryGetProperty("DeviceName", out var nameEl))
+                    {
+                        string name = nameEl.GetString() ?? "";
+                        if (name.Equals(senderDeviceName, StringComparison.OrdinalIgnoreCase) ||
+                            prop.Name.Contains(senderDeviceName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (prop.Value.TryGetProperty("GlobalUrl", out var gurl))
+                            {
+                                string globalUrl = gurl.GetString() ?? "";
+                                if (!string.IsNullOrEmpty(globalUrl) && globalUrl.Contains("trycloudflare.com"))
+                                {
+                                    Logger.LogAction("FIREBASE SSE", $"Found sender URL by name '{senderDeviceName}': {globalUrl}");
+                                    return globalUrl;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("FIREBASE SSE", $"FindSenderUrlByName failed: {ex.Message}");
+            }
+            return "";
+        }
+
         public static async Task PushTunnelUrl(string url, bool isOnline, string localIp = "")
         {
             try

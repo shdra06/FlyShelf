@@ -1,9 +1,9 @@
 {
-  "pc_version": "2.9.0",
-  "pc_changelog": "v2.9.0 — Sync fixes, category bar fix, Firebase cleanup\n\n• Fixed Android sync race condition\n• Accumulative sync — no more re-downloading old files\n• Startup cleanup purges stale Firebase entries\n• Fixed category bar text clipping in Files section\n• Wallpaper frosted glass header refinement",
-  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v2.9.0/FlyShelf.exe",
-  "pc_sha256": "652653e895914fe27c332cb2a3a36803e7018ad26282417a7e3b4bf5ea6374dc",
-  "android_version": "2.9.1",
-  "android_changelog": "v2.9.1 — Remove Device Fix & Background Screenshot Sync\n\n• Fixed: Removed paired devices still showing as 'Paired' on home screen\n• Fixed: Screenshot detector now works when app is backgrounded (floating ball only)\n• Native auto-upload: Screenshots sync to PC directly from foreground service\n• Added missing native bridge methods (setPcUrl, setDeviceName, setClipboardSuppressed)",
-  "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v2.9.1/FlyShelf_Mobile.apk"
+  "pc_version": "3.0.0",
+  "pc_changelog": "v3.0.0 — Networking Overhaul, Performance & Size Optimization\n\n• CRITICAL: Fixed CORS missing X-Pairing-Key — root cause of all cross-device HTTP 400 errors\n• Fixed: Integrity retry downloads now include authentication headers\n• Fixed: Name-based sender URL fallback when device ID format doesn't match\n• Startup optimization: Deferred icon loading — window appears instantly, icons load progressively\n• Removed unused MaterialDesignThemes (9.5MB) and Newtonsoft.Json dependencies\n• Smooth scroll physics with frame-time normalization and direction-reversal braking",
+  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v3.0.0/FlyShelf.exe",
+  "pc_sha256": "e30f428f5b50379f5b93d51b29c7fc6a5da27c826686c303c8ae502688c6af3a",
+  "android_version": "3.0.0",
+  "android_changelog": "v3.0.0 — Cross-Device Sync Reliability & Size Optimization\n\n• Fixed: Android uploads now include X-Pairing-Key for proper authentication\n• Fixed: Fresh Cloudflare URL lookup from active_devices before downloading\n• Removed 6 unused native dependencies (haptics, symbols, slider, web, worklets, status-bar)\n• Reduced APK size with dependency cleanup",
+  "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v3.0.0/FlyShelf_Mobile.apk"
 }

@@ -600,13 +600,18 @@ namespace AdvanceClip.Classes
                     });
                 }
 
-                // No auth header needed — /download is now public (before auth barrier)
+                // AUTHENTICATION: /download requires pairing key or PIN
                 // Enhanced download with fallback: try primary URL, then alternative URLs
                 HttpResponseMessage response = null;
                 int maxRetries = 3;
                 int[] retryDelays = { 2000, 5000, 8000 }; // 2s, 5s, 8s
 
                 using var downloadClient = new HttpClient() { Timeout = TimeSpan.FromMinutes(10) };
+                // Add authentication headers so the sender's /download endpoint accepts the request
+                string pairingKey = DevicePairingManager.EnsurePairingKey();
+                if (!string.IsNullOrEmpty(pairingKey))
+                    downloadClient.DefaultRequestHeaders.Add("X-Pairing-Key", pairingKey);
+                downloadClient.DefaultRequestHeaders.Add("X-FlyShelf-Client", "DesktopSync");
                 
                 // Build fallback URL list: primary first, then alternatives
                 var urlsToTry = new List<string> { cloudItem.Raw };
@@ -614,6 +619,33 @@ namespace AdvanceClip.Classes
                 // If primary is Cloudflare, add DownloadUrl and SenderUrl-based alternatives
                 if (cloudItem.Raw.Contains(".trycloudflare.com"))
                 {
+                    // Try to get the sender's CURRENT tunnel URL from Firebase
+                    // The entry's URL may be stale (sender restarted tunnel)
+                    try
+                    {
+                        string senderCurrentUrl = await FirebaseSyncManager.GetSenderCurrentUrl(cloudItem.SourceDeviceId);
+                        // Fallback: ID-based lookup often fails because SourceDeviceId (e.g. "LAPTOP-JMHPDLG7")
+                        // doesn't match the active_devices key (e.g. "PC_LAPTOP-JMHPDLG7_SONAL").
+                        // Try name-based scan as fallback.
+                        if (string.IsNullOrEmpty(senderCurrentUrl))
+                            senderCurrentUrl = await FirebaseSyncManager.FindSenderUrlByName(cloudItem.SourceDeviceName);
+                        if (!string.IsNullOrEmpty(senderCurrentUrl) && senderCurrentUrl.Contains(".trycloudflare.com"))
+                        {
+                            // Extract the /download?path=... from the original URL and rebuild with current tunnel
+                            var pathMatch = System.Text.RegularExpressions.Regex.Match(cloudItem.Raw, @"(/download\?path=.+)$");
+                            if (pathMatch.Success)
+                            {
+                                string freshUrl = senderCurrentUrl.TrimEnd('/') + pathMatch.Groups[1].Value;
+                                if (freshUrl != cloudItem.Raw)
+                                {
+                                    urlsToTry.Insert(0, freshUrl); // Try fresh URL FIRST
+                                    Logger.LogAction("FIREBASE SSE", $"Using sender's current tunnel URL: {senderCurrentUrl}");
+                                }
+                            }
+                        }
+                    }
+                    catch { /* Best effort — fall back to original URL */ }
+
                     // DownloadUrl might be a Firebase Storage URL (firebasestorage.googleapis.com)
                     if (!string.IsNullOrEmpty(cloudItem.DownloadUrl) && cloudItem.DownloadUrl.StartsWith("http") && cloudItem.DownloadUrl != cloudItem.Raw)
                         urlsToTry.Add(cloudItem.DownloadUrl);
@@ -787,6 +819,10 @@ namespace AdvanceClip.Classes
                     try
                     {
                         using var retryClient = new HttpClient() { Timeout = TimeSpan.FromMinutes(10) };
+                        string retryPairingKey = DevicePairingManager.EnsurePairingKey();
+                        if (!string.IsNullOrEmpty(retryPairingKey))
+                            retryClient.DefaultRequestHeaders.Add("X-Pairing-Key", retryPairingKey);
+                        retryClient.DefaultRequestHeaders.Add("X-FlyShelf-Client", "DesktopSync");
                         var retryResponse = await retryClient.GetAsync(successUrl);
                         if (retryResponse.IsSuccessStatusCode)
                         {

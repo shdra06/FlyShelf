@@ -67,34 +67,31 @@ async function getKey(): Promise<CryptoKey> {
 export async function encrypt(plaintext: string): Promise<string> {
   if (!plaintext) return plaintext;
   
-  try {
-    const key = await getKey();
-    const encoder = new TextEncoder();
-    const plaintextBytes = encoder.encode(plaintext);
+  // Do NOT catch errors here — let them propagate to the caller
+  // so the caller can correctly set Encrypted: false when crypto fails.
+  const key = await getKey();
+  const encoder = new TextEncoder();
+  const plaintextBytes = encoder.encode(plaintext);
 
-    // Generate random 12-byte nonce
-    const nonce = new Uint8Array(NONCE_SIZE);
-    crypto.getRandomValues(nonce);
+  // Generate random 12-byte nonce
+  const nonce = new Uint8Array(NONCE_SIZE);
+  crypto.getRandomValues(nonce);
 
-    // Encrypt with AES-GCM (output = ciphertext + tag appended)
-    const encryptedBuffer = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv: nonce, tagLength: TAG_SIZE * 8 },
-      key,
-      plaintextBytes
-    );
+  // Encrypt with AES-GCM (output = ciphertext + tag appended)
+  const encryptedBuffer = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: nonce, tagLength: TAG_SIZE * 8 },
+    key,
+    plaintextBytes
+  );
 
-    // Pack: nonce + ciphertextWithTag
-    const encrypted = new Uint8Array(encryptedBuffer);
-    const combined = new Uint8Array(NONCE_SIZE + encrypted.length);
-    combined.set(nonce, 0);
-    combined.set(encrypted, NONCE_SIZE);
+  // Pack: nonce + ciphertextWithTag
+  const encrypted = new Uint8Array(encryptedBuffer);
+  const combined = new Uint8Array(NONCE_SIZE + encrypted.length);
+  combined.set(nonce, 0);
+  combined.set(encrypted, NONCE_SIZE);
 
-    // Convert to base64
-    return uint8ArrayToBase64(combined);
-  } catch (e: any) {
-    syncLog('SYNC_CRYPTO', `Encrypt failed: ${e?.message}`);
-    return plaintext; // Fallback: send plaintext
-  }
+  // Convert to base64
+  return uint8ArrayToBase64(combined);
 }
 
 /**

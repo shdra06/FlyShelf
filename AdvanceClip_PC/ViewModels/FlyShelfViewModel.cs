@@ -39,44 +39,32 @@ namespace AdvanceClip.ViewModels
                 if (!string.IsNullOrEmpty(key)) existingKeys.Add(key);
             }
             
+            // Phase 1: Add all items IMMEDIATELY with no icons — makes the UI appear instantly
+            var itemsNeedingIcons = new List<ClipboardItem>();
             foreach (var item in items)
             {
-                // Skip empty items — no content, no file, no image
                 if (IsEffectivelyEmpty(item)) continue;
                 
-                // Skip if already loaded (prevents pinned item duplication)
                 string itemKey = GetDeduplicationKey(item);
                 if (!string.IsNullOrEmpty(itemKey) && !existingKeys.Add(itemKey))
                     continue;
 
-                // Rebuild BitmapImage icon from persisted FilePath
-                if ((item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
-                    && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath))
-                {
-                    try
-                    {
-                        item.Icon = LoadImageThumbnail(item.FilePath);
-                    }
-                    catch (Exception imgEx)
-                    {
-                        Classes.Logger.LogAction("ICON LOAD", $"Failed for {item.FilePath}: {imgEx.Message}");
-                    }
-                }
-                else if (item.ItemType == ClipboardItemType.File || item.ItemType == ClipboardItemType.Document ||
-                         item.ItemType == ClipboardItemType.Pdf || item.ItemType == ClipboardItemType.Archive ||
-                         item.ItemType == ClipboardItemType.Video || item.ItemType == ClipboardItemType.Audio ||
-                         item.ItemType == ClipboardItemType.Presentation)
-                {
-                    if (!string.IsNullOrEmpty(item.FilePath))
-                        item.Icon = GetIcon(item.FilePath);
-                }
-
-                // Heal legacy items: card UI binds to FileName, so if it's empty the card looks blank
+                // Heal legacy items
                 if (string.IsNullOrWhiteSpace(item.FileName) && !string.IsNullOrWhiteSpace(item.RawContent))
                     item.FileName = item.RawContent.Length > 800 ? item.RawContent.Substring(0, 800) + "..." : item.RawContent;
 
                 item.EvaluateSmartActions();
                 DroppedItems.Add(item);
+                
+                // Queue for background icon loading
+                bool needsIcon = (item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
+                    && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath);
+                bool needsFileIcon = !needsIcon && (item.ItemType == ClipboardItemType.File || item.ItemType == ClipboardItemType.Document ||
+                    item.ItemType == ClipboardItemType.Pdf || item.ItemType == ClipboardItemType.Archive ||
+                    item.ItemType == ClipboardItemType.Video || item.ItemType == ClipboardItemType.Audio ||
+                    item.ItemType == ClipboardItemType.Presentation) && !string.IsNullOrEmpty(item.FilePath);
+                if (needsIcon || needsFileIcon)
+                    itemsNeedingIcons.Add(item);
             }
             OnPropertyChanged(nameof(ShelfVisibility));
 
@@ -85,6 +73,36 @@ namespace AdvanceClip.ViewModels
             {
                 Classes.ClipboardHistoryManager.SaveHistoryDebounced(DroppedItems);
             };
+
+            // Phase 2: Load icons in background — batched to limit memory pressure
+            if (itemsNeedingIcons.Count > 0)
+            {
+                _ = System.Threading.Tasks.Task.Run(async () =>
+                {
+                    foreach (var item in itemsNeedingIcons)
+                    {
+                        await _iconDecodeSemaphore.WaitAsync();
+                        try
+                        {
+                            if ((item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
+                                && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath))
+                            {
+                                var icon = LoadImageThumbnail(item.FilePath);
+                                if (icon != null)
+                                    Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
+                            }
+                            else if (!string.IsNullOrEmpty(item.FilePath))
+                            {
+                                var icon = GetIcon(item.FilePath);
+                                if (icon != null)
+                                    Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
+                            }
+                        }
+                        catch { }
+                        finally { _iconDecodeSemaphore.Release(); }
+                    }
+                });
+            }
         }
 
         /// <summary>

@@ -563,6 +563,30 @@ export default function SyncScreen() {
                       });
                     }
                   }
+                  // Query sender's CURRENT Cloudflare URL from active_devices
+                  // The original rawUrl may be stale if the sender restarted its tunnel
+                  if (rawUrl.includes('trycloudflare.com') && rawUrl.includes('/download')) {
+                    try {
+                      const pk = pairingKeyRef.current;
+                      if (pk) {
+                        const { get: firebaseGet } = await import('firebase/database');
+                        const devicesSnap = await firebaseGet(ref(database, `active_devices/${pk}`));
+                        if (devicesSnap.exists()) {
+                          const devices = devicesSnap.val();
+                          const downloadPath = rawUrl.substring(rawUrl.indexOf('/download'));
+                          for (const devId of Object.keys(devices)) {
+                            const dev = devices[devId];
+                            if (dev.GlobalUrl && dev.GlobalUrl.includes('trycloudflare.com') && dev.DeviceType === 'PC') {
+                              const freshUrl = `${dev.GlobalUrl.replace(/\/$/, '')}${downloadPath}`;
+                              if (freshUrl !== rawUrl && !urls.includes(freshUrl)) {
+                                urls.unshift(freshUrl); // Try fresh URL FIRST
+                              }
+                            }
+                          }
+                        }
+                      }
+                    } catch {}
+                  }
                   urls.push(rawUrl); // Original Cloudflare URL as fallback
 
                   let downloaded = false;
@@ -1113,7 +1137,7 @@ export default function SyncScreen() {
                   try {
                     const upRes = await FileSystem.uploadAsync(`${targetUrl}/api/sync_file?name=${encodeURIComponent(assetInfo.filename || 'screenshot.jpg')}&type=ImageLink&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`, assetUri, {
                       httpMethod: 'POST', uploadType: 0 as any,
-                      headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion' }
+                      headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion', ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}) }
                     });
                     localSuccess = upRes.status === 200;
                     if (localSuccess) {

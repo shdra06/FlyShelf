@@ -2,7 +2,7 @@
   "expo": {
     "name": "FlyShelf",
     "slug": "AllSync",
-    "version": "2.9.1",
+    "version": "3.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "allsync",
@@ -72,8 +72,8 @@
       "expo-notifications",
       "expo-task-manager",
       "expo-background-fetch",
-      
-      "./plugins/withOverlayService"
+      "./plugins/withOverlayService",
+      "react-native-quick-crypto"
     ],
     "experiments": {
       "typedRoutes": true,

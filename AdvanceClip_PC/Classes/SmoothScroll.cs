@@ -8,30 +8,35 @@ using System.Windows.Media;
 namespace AdvanceClip.Classes
 {
     /// <summary>
-    /// Physics-based smooth scroll for WPF with two profiles:
-    ///   LIST  — very slow, for clipboard item lists (many small items)
-    ///   PAGE  — normal speed, for settings/full-page content
+    /// Natural-feeling smooth scroll for WPF, modeled after Windows 11 native clipboard.
+    /// Uses frame-time-based physics with exponential ease-out deceleration.
+    ///
+    /// Two profiles:
+    ///   LIST  — clipboard item lists (moderate speed, tight feel)
+    ///   PAGE  — settings, diagnostics (faster, more page-like)
     /// </summary>
     public static class SmoothScroll
     {
-        // ═══ LIST profile (clipboard items — must be slow) ═══
-        private const double ListFriction = 0.93;
-        private const double ListMaxVelocity = 14;
-        private const double ListTouchpadMul = 0.05;
-        private const double ListMouseMul = 0.08;
-        private const double ListMinImpulse = 0.25;
+        // ═══ LIST profile (clipboard / flyshelf — moderate, responsive) ═══
+        private const double ListFriction        = 0.88;   // per-frame decay (lower = stops faster)
+        private const double ListMaxVelocity     = 60;     // px/frame cap
+        private const double ListTouchpadMul     = 0.35;   // touchpad impulse scale
+        private const double ListMouseMul        = 0.45;   // mouse wheel impulse scale
+        private const double ListMinImpulse      = 0.4;    // minimum impulse so slow scrolls still register
 
-        // ═══ PAGE profile (settings, diagnostics — calm, controlled) ═══
-        private const double PageFriction = 0.93;
-        private const double PageMaxVelocity = 20;
-        private const double PageTouchpadMul = 0.12;
-        private const double PageMouseMul = 0.10;
-        private const double PageMinImpulse = 0.5;
+        // ═══ PAGE profile (settings, diagnostics — bigger sweeps) ═══
+        private const double PageFriction        = 0.90;
+        private const double PageMaxVelocity     = 80;
+        private const double PageTouchpadMul     = 0.45;
+        private const double PageMouseMul        = 0.55;
+        private const double PageMinImpulse      = 0.6;
 
-        // ═══ Shared ═══
-        private const double MinVelocity = 0.12;
-        private const double DeltaCapTouchpad = 20;
-        private const double DeltaCapMouse = 160;
+        // ═══ Shared constants ═══
+        private const double MinVelocity         = 0.08;   // below this → stop
+        private const double DeltaCapTouchpad    = 60;     // clamp raw touchpad delta
+        private const double DeltaCapMouse       = 240;    // clamp raw mouse delta
+        private const double DirectionBreakMul   = 0.3;    // velocity retained on direction reversal
+        private const double TargetFrameMs       = 16.667; // 60 fps baseline
 
         private enum Profile { List, Page }
 
@@ -40,15 +45,15 @@ namespace AdvanceClip.Classes
             public double Velocity;
             public bool IsAnimating;
             public Profile Mode;
+            public long LastFrameTick;
         }
 
         private static readonly Dictionary<ScrollViewer, ScrollState> _states = new();
         private static readonly HashSet<ScrollViewer> _listScrollViewers = new();
-        private static bool _renderingAttached = false;
+        private static bool _renderingAttached;
 
         /// <summary>
-        /// Attach LIST profile (very slow) to a specific ListView.
-        /// Use for clipboard item lists.
+        /// Attach LIST profile to a specific ListView/ItemsControl.
         /// </summary>
         public static void AttachList(FrameworkElement element)
         {
@@ -56,8 +61,7 @@ namespace AdvanceClip.Classes
         }
 
         /// <summary>
-        /// Attach PAGE profile (normal speed) to ALL ScrollViewers in a Window.
-        /// Skips ScrollViewers already registered as LIST.
+        /// Attach PAGE profile to ALL ScrollViewers in a Window (skips LIST ones).
         /// </summary>
         public static void AttachToWindow(Window window)
         {
@@ -80,7 +84,7 @@ namespace AdvanceClip.Classes
 
             if (sv == null) return;
 
-            _listScrollViewers.Add(sv); // Mark as list-mode
+            _listScrollViewers.Add(sv);
             ApplyImpulse(sv, e, Profile.List);
         }
 
@@ -92,8 +96,6 @@ namespace AdvanceClip.Classes
 
             if (sv == null) return;
             if (sv.ScrollableHeight <= 0) return;
-
-            // If this ScrollViewer is already handled as LIST, skip (it has its own handler)
             if (_listScrollViewers.Contains(sv)) return;
 
             ApplyImpulse(sv, e, Profile.Page);
@@ -110,20 +112,22 @@ namespace AdvanceClip.Classes
             }
 
             double rawDelta = e.Delta;
+
+            // Touchpad detection: touchpads typically send deltas < 120 (one notch = ±120)
+            // Precision touchpads on Windows send high-resolution deltas in rapid succession
             bool isTouchpad = Math.Abs(rawDelta) < 120;
 
-            // Pick multipliers based on profile
-            double touchMul = mode == Profile.List ? ListTouchpadMul : PageTouchpadMul;
-            double mouseMul = mode == Profile.List ? ListMouseMul : PageMouseMul;
-            double minImpulse = mode == Profile.List ? ListMinImpulse : PageMinImpulse;
-            double maxVel = mode == Profile.List ? ListMaxVelocity : PageMaxVelocity;
+            double touchMul   = mode == Profile.List ? ListTouchpadMul   : PageTouchpadMul;
+            double mouseMul   = mode == Profile.List ? ListMouseMul      : PageMouseMul;
+            double minImpulse = mode == Profile.List ? ListMinImpulse    : PageMinImpulse;
+            double maxVel     = mode == Profile.List ? ListMaxVelocity   : PageMaxVelocity;
 
             double impulse;
             if (isTouchpad)
             {
                 double capped = Math.Sign(rawDelta) * Math.Min(Math.Abs(rawDelta), DeltaCapTouchpad);
                 impulse = capped * touchMul;
-                // Guarantee minimum so very slow scrolls don't skip
+                // Guarantee minimum so very gentle scrolls still register
                 if (Math.Abs(impulse) < minImpulse && impulse != 0)
                     impulse = Math.Sign(impulse) * minImpulse;
             }
@@ -133,12 +137,20 @@ namespace AdvanceClip.Classes
                 impulse = capped * mouseMul;
             }
 
+            // Direction reversal: if scrolling the opposite way, partially brake first
+            // This prevents the "bouncy" feel when quickly changing direction
+            if (state.Velocity != 0 && Math.Sign(state.Velocity) != Math.Sign(-impulse))
+            {
+                state.Velocity *= DirectionBreakMul;
+            }
+
             state.Velocity -= impulse;
             state.Velocity = Math.Clamp(state.Velocity, -maxVel, maxVel);
 
             if (!state.IsAnimating)
             {
                 state.IsAnimating = true;
+                state.LastFrameTick = Environment.TickCount64;
                 EnsureRenderingAttached();
             }
         }
@@ -155,6 +167,7 @@ namespace AdvanceClip.Classes
         private static void OnRendering(object? sender, EventArgs e)
         {
             bool anyActive = false;
+            long now = Environment.TickCount64;
 
             foreach (var kvp in _states)
             {
@@ -163,14 +176,31 @@ namespace AdvanceClip.Classes
 
                 if (!state.IsAnimating) continue;
 
-                double newOffset = sv.VerticalOffset + state.Velocity;
+                // Frame-time compensation: normalize velocity against 60fps baseline
+                // If a frame takes 32ms instead of 16ms, move proportionally more
+                long elapsed = now - state.LastFrameTick;
+                if (elapsed <= 0) elapsed = 1;
+                double timeScale = elapsed / TargetFrameMs;
+                // Clamp time scale to avoid huge jumps on lag spikes (e.g., window resize)
+                timeScale = Math.Min(timeScale, 3.0);
+                state.LastFrameTick = now;
+
+                // Apply velocity with frame-time compensation
+                double displacement = state.Velocity * timeScale;
+                double newOffset = sv.VerticalOffset + displacement;
                 newOffset = Math.Clamp(newOffset, 0, sv.ScrollableHeight);
                 sv.ScrollToVerticalOffset(newOffset);
 
+                // Exponential deceleration (friction applied per frame, scaled by time)
                 double friction = state.Mode == Profile.List ? ListFriction : PageFriction;
-                state.Velocity *= friction;
+                // Apply friction proportional to elapsed time:
+                // For 1 frame (16.67ms), apply friction once. For 2 frames, apply twice, etc.
+                state.Velocity *= Math.Pow(friction, timeScale);
 
-                if (Math.Abs(state.Velocity) < MinVelocity)
+                // Stop if at boundary or velocity negligible
+                bool atBound = (newOffset <= 0 && state.Velocity < 0) ||
+                               (newOffset >= sv.ScrollableHeight && state.Velocity > 0);
+                if (Math.Abs(state.Velocity) < MinVelocity || atBound)
                 {
                     state.Velocity = 0;
                     state.IsAnimating = false;
