@@ -1,0 +1,66 @@
+{
+  "rules": {
+    "clipboard": {
+      "$pairingKey": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        "$entryId": {
+          ".validate": "newData.hasChildren(['Type', 'Timestamp'])"
+        }
+      },
+      ".read": false,
+      ".write": false
+    },
+    "active_devices": {
+      "$pairingKey": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      },
+      ".read": false,
+      ".write": false
+    },
+    "pairing_codes": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['deviceId', 'pairingKey'])"
+      },
+      ".read": false,
+      ".write": false
+    },
+    "pairing_handshake": {
+      "$pairingKey": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      },
+      ".read": false,
+      ".write": false
+    },
+    "forced_sync": {
+      "$deviceId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      },
+      ".read": false,
+      ".write": false
+    },
+    "device_groups": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "global_clipboard": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    },
+    "nodes": {
+      "$pairingKey": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      },
+      ".read": false,
+      ".write": false
+    },
+    ".read": false,
+    ".write": false
+  }
+}

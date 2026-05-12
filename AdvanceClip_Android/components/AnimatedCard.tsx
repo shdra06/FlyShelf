@@ -1,12 +1,15 @@
 /**
  * AnimatedCard — Premium card wrapper with staggered entrance + press feedback
  * 
+ * Entrance animation only runs on FIRST mount — subsequent re-mounts (from list
+ * data changes) skip it to prevent the whole feed flashing.
+ * 
  * Usage:
  *   <AnimatedCard index={i} onPress={() => ...}>
  *     <YourCardContent />
  *   </AnimatedCard>
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { ViewStyle, StyleProp } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -21,9 +24,15 @@ import Animated, {
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { spring as springConfig, timing, colors, shadows } from '../styles/theme';
 
+// Global set to track which item keys have already played their entrance
+// This persists across re-renders so items don't re-animate when the list updates
+const animatedItemKeys = new Set<string>();
+
 interface AnimatedCardProps {
   children: React.ReactNode;
   index?: number;
+  /** Unique key for this card to track entrance state across re-renders */
+  itemKey?: string;
   onPress?: () => void;
   onLongPress?: () => void;
   style?: StyleProp<ViewStyle>;
@@ -34,16 +43,21 @@ interface AnimatedCardProps {
 export default function AnimatedCard({
   children,
   index = 0,
+  itemKey,
   onPress,
   onLongPress,
   style,
   skipEntrance = false,
 }: AnimatedCardProps) {
   // ─── Entrance Animation ───
-  const entrance = useSharedValue(skipEntrance ? 1 : 0);
+  // Check if this item has already been animated before
+  const alreadyAnimated = itemKey ? animatedItemKeys.has(itemKey) : false;
+  const shouldSkip = skipEntrance || alreadyAnimated;
+
+  const entrance = useSharedValue(shouldSkip ? 1 : 0);
 
   useEffect(() => {
-    if (!skipEntrance) {
+    if (!shouldSkip) {
       const delay = Math.min(index * timing.staggerDelay, 300); // cap at 300ms
       entrance.value = withDelay(
         delay,
@@ -52,6 +66,8 @@ export default function AnimatedCard({
           easing: Easing.bezier(0.22, 1, 0.36, 1),
         })
       );
+      // Mark as animated so it won't re-animate on list data changes
+      if (itemKey) animatedItemKeys.add(itemKey);
     }
   }, []);
 
@@ -103,4 +119,9 @@ export default function AnimatedCard({
       </Animated.View>
     </GestureDetector>
   );
+}
+
+/** Clear animation tracking (call on feed wipe / full reset) */
+export function resetAnimatedCards() {
+  animatedItemKeys.clear();
 }

@@ -79,9 +79,13 @@ namespace AdvanceClip.Classes
         private string _pairingKey = "";
         public string PairingKey { get => _pairingKey; set => SetProperty(ref _pairingKey, value); }
 
-        // Math Solver
-        private bool _enableMathSolver = false;
-        public bool EnableMathSolver { get => _enableMathSolver; set => SetProperty(ref _enableMathSolver, value); }
+        // Shake to Open
+        private bool _enableShakeToOpen = true;
+        public bool EnableShakeToOpen { get => _enableShakeToOpen; set => SetProperty(ref _enableShakeToOpen, value); }
+
+        // Taskbar Widget
+        private bool _enableTaskbarWidget = true;
+        public bool EnableTaskbarWidget { get => _enableTaskbarWidget; set => SetProperty(ref _enableTaskbarWidget, value); }
     }
 
     public static class SettingsManager

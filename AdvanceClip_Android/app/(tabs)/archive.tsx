@@ -69,6 +69,10 @@ export default function ConnectScreen() {
   const [newGroupName, setNewGroupName] = useState('');
   const [selectedGroupDevices, setSelectedGroupDevices] = useState<Set<string>>(new Set());
 
+  // Files browser state (must be before any early returns to satisfy hooks rules)
+  const [isConnectExpanded, setIsConnectExpanded] = useState(false);
+  const [fileSearchText, setFileSearchText] = useState('');
+
   // Real-time Firebase sync for groups
   useEffect(() => {
     const groupsRef = dbRef(database, 'device_groups');
@@ -275,57 +279,78 @@ export default function ConnectScreen() {
 
   // Media scan — uses native MediaStore for instant document discovery
   const scanMedia = async () => {
-    if (hasPermission === false) return;
+    if (hasPermission === false) {
+      if (Platform.OS === 'android') ToastAndroid.show('Permission denied — enable storage access in Settings', ToastAndroid.LONG);
+      return;
+    }
     setIsScanning(true);
     setMediaAssets([]);
     setSelectedIds(new Set());
     setBrowserFiles([]);
+    if (Platform.OS === 'android') ToastAndroid.show('🔍 Scanning files...', ToastAndroid.SHORT);
     
     try {
       let allFound: any[] = [];
 
       // 1. Gallery scan for images/videos with date filter (via expo-media-library)
-      let hasNextPage = true;
-      let after = undefined;
-      while (hasNextPage) {
-        let media = await MediaLibrary.getAssetsAsync({
-          first: 100,
-          after: after,
-          mediaType: ['photo', 'video'],
-          createdAfter: startDate.getTime(),
-          createdBefore: endDate.getTime(),
-          sortBy: [[MediaLibrary.SortBy.creationTime, false]]
-        });
-        allFound = [...allFound, ...media.assets.map(a => ({ ...a, source: 'Camera' }))];
-        hasNextPage = media.hasNextPage;
-        after = media.endCursor;
+      try {
+        let hasNextPage = true;
+        let after = undefined;
+        while (hasNextPage) {
+          let media = await MediaLibrary.getAssetsAsync({
+            first: 100,
+            after: after,
+            mediaType: ['photo', 'video'],
+            createdAfter: startDate.getTime(),
+            createdBefore: endDate.getTime(),
+            sortBy: [[MediaLibrary.SortBy.creationTime, false]]
+          });
+          allFound = [...allFound, ...media.assets.map(a => ({ ...a, source: 'Camera' }))];
+          hasNextPage = media.hasNextPage;
+          after = media.endCursor;
+        }
+      } catch (mediaErr: any) {
+        console.warn('MediaLibrary scan failed:', mediaErr?.message);
       }
 
       // 2. Native MediaStore scan for PDFs, docs, archives (instant — same as Android file manager)
+      let nativeScanWorked = false;
       if (Platform.OS === 'android') {
         try {
           const { DocumentScanner } = NativeModules;
-          if (DocumentScanner) {
+          if (DocumentScanner && typeof DocumentScanner.scanDocuments === 'function') {
             const docs: any[] = await DocumentScanner.scanDocuments();
             if (docs && docs.length > 0) {
               allFound = [...allFound, ...docs];
-              if (Platform.OS === 'android') {
-                ToastAndroid.show(`Found ${docs.length} documents`, ToastAndroid.SHORT);
-              }
+              nativeScanWorked = true;
+              ToastAndroid.show(`📄 Found ${docs.length} documents`, ToastAndroid.SHORT);
+            } else {
+              ToastAndroid.show('No documents found via MediaStore', ToastAndroid.SHORT);
             }
+          } else {
+            console.warn('DocumentScanner module not available');
           }
         } catch (e: any) {
-          // Fallback: manual filesystem scan if native module fails
-          console.warn('DocumentScanner native module failed, falling back:', e.message);
-          await fallbackFileScan(allFound);
+          console.warn('DocumentScanner native module failed:', e?.message);
+          if (Platform.OS === 'android') ToastAndroid.show('Native scan failed, using fallback...', ToastAndroid.SHORT);
         }
-      } else {
+      }
+
+      // 3. Always run fallback filesystem scan to supplement (catches files MediaStore might miss)
+      if (!nativeScanWorked) {
         await fallbackFileScan(allFound);
       }
 
       const uniqueAssets = Array.from(new Map(allFound.map(item => [item.id, item])).values());
       uniqueAssets.sort((a, b) => b.creationTime - a.creationTime);
       setMediaAssets(uniqueAssets);
+      
+      if (Platform.OS === 'android') {
+        const imgCount = uniqueAssets.filter(a => a.mediaType === 'photo').length;
+        const vidCount = uniqueAssets.filter(a => a.mediaType === 'video').length;
+        const docCount = uniqueAssets.filter(a => a.mediaType === 'pdf' || a.mediaType === 'doc').length;
+        ToastAndroid.show(`✅ ${imgCount} images, ${vidCount} videos, ${docCount} docs`, ToastAndroid.LONG);
+      }
     } catch (e) { console.error(e); }
     setIsScanning(false);
   };
@@ -963,14 +988,7 @@ export default function ConnectScreen() {
     } catch {}
   };
 
-  const [isConnectExpanded, setIsConnectExpanded] = useState(false);
-  const [fileSearchText, setFileSearchText] = useState('');
 
-  useEffect(() => {
-    if (hasPermission !== false && mediaAssets.length === 0 && !isScanning) {
-      scanMedia();
-    }
-  }, [hasPermission]);
 
   // ─── MAIN SCREEN: Files Browser ───
   return (

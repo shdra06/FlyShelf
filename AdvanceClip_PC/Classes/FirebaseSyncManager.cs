@@ -15,11 +15,20 @@ namespace AdvanceClip.Classes
         private static readonly HttpClient _client = new HttpClient();
         private const string FIREBASE_BASE = "https://advance-sync-default-rtdb.firebaseio.com";
         
+        /// <summary>
+        /// Wraps a Firebase REST URL with the auth token. ALL Firebase calls must use this.
+        /// </summary>
+        private static async Task<string> AuthUrl(string path)
+        {
+            string url = $"{FIREBASE_BASE}/{path}";
+            return await FirebaseAuthManager.AuthenticateUrl(url);
+        }
+        
         /// <summary>Returns the scoped clipboard path for this device's pairing key.</summary>
-        private static string GetScopedClipboardUrl()
+        private static async Task<string> GetScopedClipboardUrl()
         {
             string pairingKey = DevicePairingManager.EnsurePairingKey();
-            return $"{FIREBASE_BASE}/clipboard/{pairingKey}.json";
+            return (await AuthUrl($"clipboard/{pairingKey}.json"));
         }
         
         // Public Cloudflare URL for constructing file download links
@@ -28,12 +37,17 @@ namespace AdvanceClip.Classes
         public static bool CachedTunnelVerified { get; set; } = false;
         // Local LAN server URL as fallback when Cloudflare is off
         public static string CachedLocalUrl { get; set; } = "";
+        // Track the last URL pushed to Firebase so we only write on change (not every 60s)
+        private static string _lastPushedTunnelUrl = "";
+        // Count of paired devices recently reached via direct connection (LAN/Cloudflare)
+        // When this equals total paired devices, Firebase clipboard push can be skipped.
+        public static int DirectlyConnectedDeviceCount { get; set; } = 0;
         // Firebase Storage bucket for global file uploads when Cloudflare is unavailable
         private const string FIREBASE_STORAGE_BUCKET = "advance-sync.appspot.com";
         
-        // Time-windowed dedup: track fingerprint → last push time (10s cooldown)
+        // Time-windowed dedup: track fingerprint â†’ last push time (10s cooldown)
         private static readonly Dictionary<string, long> _recentPushTimes = new();
-        private const int DEDUP_COOLDOWN_MS = 10_000; // 10 seconds — same content within this window is skipped
+        private const int DEDUP_COOLDOWN_MS = 10_000; // 10 seconds â€” same content within this window is skipped
         private const int AUTO_DELETE_TEXT_MS = 5 * 60_000; // 5 minutes
         private const int AUTO_DELETE_FILE_MS = 6 * 60 * 60_000; // 6 hours safety net
 
@@ -45,7 +59,7 @@ namespace AdvanceClip.Classes
             // CRITICAL: Do not sync unless device has been explicitly paired
             if (!DevicePairingManager.HasPairingKey)
             {
-                Logger.LogAction("FIREBASE SYNC", "Blocked — no pairing key. Pair with another device first.");
+                Logger.LogAction("FIREBASE SYNC", "Blocked â€” no pairing key. Pair with another device first.");
                 return;
             }
 
@@ -78,13 +92,22 @@ namespace AdvanceClip.Classes
 
             try
             {
+                // PHASE 3 OPTIMIZATION: Skip Firebase push for TEXT items when devices are directly connected.
+                // If at least 1 device is polling /api/sync (LAN or Cloudflare), it already gets text instantly.
+                // File items still go to Firebase because they need the download URL to be discoverable.
+                bool isTextType = item.ItemType == ClipboardItemType.Text || item.ItemType == ClipboardItemType.Url || item.ItemType == ClipboardItemType.Code;
+                if (isTextType && DirectlyConnectedDeviceCount > 0)
+                {
+                    Logger.LogAction("FIREBASE SYNC", $"Skipped Firebase push â€” {DirectlyConnectedDeviceCount} device(s) connected directly via LAN/Cloudflare");
+                    return;
+                }
 
-                // For files: always wait for Cloudflare tunnel first — it's the only reliable cross-network URL
+                // For files: always wait for Cloudflare tunnel first â€” it's the only reliable cross-network URL
                 // BUT: if RawContent is already an HTTP URL (set by SyncFileToDevicesAsync via CloneForSync),
-                // then this item already has a resolved download URL — treat it as pre-resolved, not a local file.
+                // then this item already has a resolved download URL â€” treat it as pre-resolved, not a local file.
                 bool rawIsPreResolved = !string.IsNullOrEmpty(item.RawContent) && (item.RawContent.StartsWith("http://") || item.RawContent.StartsWith("https://"));
                 bool isFile = !rawIsPreResolved && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath);
-                bool isFilePayload = isFile || rawIsPreResolved; // True for any file/image with download URL — used for auto-delete timing
+                bool isFilePayload = isFile || rawIsPreResolved; // True for any file/image with download URL â€” used for auto-delete timing
                 string downloadUrl = rawIsPreResolved ? item.RawContent : "";
                 string raw = item.RawContent ?? "";
 
@@ -97,17 +120,26 @@ namespace AdvanceClip.Classes
                         Logger.LogAction("FIREBASE SYNC", $"Skipped incomplete download: {item.FileName}");
                         return;
                     }
-                    // If tunnel not ready yet, wait up to 30s before proceeding
+                    // If tunnel not ready yet, wait up to 5s (reduced from 30s)
+                    // When devices are directly connected via LAN, they get files via /download anyway
                     if (string.IsNullOrEmpty(CachedGlobalUrl) || !CachedGlobalUrl.Contains("trycloudflare.com"))
                     {
-                        Logger.LogAction("FIREBASE SYNC", $"Waiting for Cloudflare tunnel before sending '{item.FileName}'...");
-                        for (int i = 0; i < 60; i++) // 60 x 500ms = 30s max
+                        // Skip Cloudflare wait entirely if all paired devices are directly connected
+                        if (DirectlyConnectedDeviceCount > 0)
                         {
-                            await Task.Delay(500);
-                            if (!string.IsNullOrEmpty(CachedGlobalUrl) && CachedGlobalUrl.Contains("trycloudflare.com"))
+                            Logger.LogAction("FIREBASE SYNC", $"Skip Cloudflare wait — {DirectlyConnectedDeviceCount} device(s) connected directly via LAN");
+                        }
+                        else
+                        {
+                            Logger.LogAction("FIREBASE SYNC", $"Waiting for Cloudflare tunnel before sending '{item.FileName}'...");
+                            for (int i = 0; i < 10; i++) // 10 x 500ms = 5s max (was 30s)
                             {
-                                Logger.LogAction("FIREBASE SYNC", $"Cloudflare ready after {(i + 1) * 500}ms");
-                                break;
+                                await Task.Delay(500);
+                                if (!string.IsNullOrEmpty(CachedGlobalUrl) && CachedGlobalUrl.Contains("trycloudflare.com"))
+                                {
+                                    Logger.LogAction("FIREBASE SYNC", $"Cloudflare ready after {(i + 1) * 500}ms");
+                                    break;
+                                }
                             }
                         }
                     }
@@ -118,36 +150,36 @@ namespace AdvanceClip.Classes
                     // Only use Cloudflare URL if the tunnel has been VERIFIED working (HTTP 200 self-ping)
                     downloadUrl = $"{CachedGlobalUrl}/download?path={Uri.EscapeDataString(item.FilePath)}";
                     raw = downloadUrl;
-                    Logger.LogAction("FIREBASE SYNC", $"File '{item.FileName}' → Cloudflare (verified): {downloadUrl}");
+                    Logger.LogAction("FIREBASE SYNC", $"File '{item.FileName}' â†’ Cloudflare (verified): {downloadUrl}");
                 }
                 else if (isFile && !string.IsNullOrEmpty(CachedGlobalUrl) && CachedGlobalUrl.Contains("trycloudflare.com") && !CachedTunnelVerified)
                 {
-                    // Tunnel URL exists but NOT verified — skip it and use Firebase Storage
-                    Logger.LogAction("FIREBASE SYNC", $"⚠️ Cloudflare tunnel exists but NOT verified — skipping for '{item.FileName}', using Firebase Storage fallback");
+                    // Tunnel URL exists but NOT verified â€” skip it and use Firebase Storage
+                    Logger.LogAction("FIREBASE SYNC", $"âš ï¸ Cloudflare tunnel exists but NOT verified â€” skipping for '{item.FileName}', using Firebase Storage fallback");
                 }
                 if (isFile && string.IsNullOrEmpty(downloadUrl))
                 {
-                    // No working Cloudflare — try Firebase Storage upload
+                    // No working Cloudflare â€” try Firebase Storage upload
 
-                    Logger.LogAction("FIREBASE SYNC", $"Cloudflare unavailable — uploading '{item.FileName}' to Firebase Storage...");
+                    Logger.LogAction("FIREBASE SYNC", $"Cloudflare unavailable â€” uploading '{item.FileName}' to Firebase Storage...");
                     string storageUrl = await UploadFileToStorageAsync(item.FilePath);
                     if (!string.IsNullOrEmpty(storageUrl))
                     {
                         downloadUrl = storageUrl;
                         raw = storageUrl;
-                        Logger.LogAction("FIREBASE SYNC", $"File '{item.FileName}' → Firebase Storage: {storageUrl}");
+                        Logger.LogAction("FIREBASE SYNC", $"File '{item.FileName}' â†’ Firebase Storage: {storageUrl}");
                     }
                     else
                     {
-                        // Both Cloudflare and Firebase Storage failed — don't write useless LAN URL
-                        Logger.LogAction("FIREBASE SYNC", $"⚠️ Cannot sync file '{item.FileName}' — no Cloudflare tunnel and Firebase Storage upload failed. File is only available on LAN.");
+                        // Both Cloudflare and Firebase Storage failed â€” don't write useless LAN URL
+                        Logger.LogAction("FIREBASE SYNC", $"âš ï¸ Cannot sync file '{item.FileName}' â€” no Cloudflare tunnel and Firebase Storage upload failed. File is only available on LAN.");
                         
                         // Show toast on PC so user knows
                         System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                            AdvanceClip.Windows.ToastWindow.ShowToast($"⚠️ {item.FileName} — Cloudflare offline, can't share remotely");
+                            AdvanceClip.Windows.ToastWindow.ShowToast($"âš ï¸ {item.FileName} â€” Cloudflare offline, can't share remotely");
                         });
 
-                        return; // Skip this file — don't push an unreachable URL to Firebase
+                        return; // Skip this file â€” don't push an unreachable URL to Firebase
                     }
                 }
                 
@@ -185,12 +217,12 @@ namespace AdvanceClip.Classes
                 }
 
                 // Determine ALL paired devices that should receive this item
-                // Include ALL devices (online + offline) — offline ones auto-complete after 1hr
+                // Include ALL devices (online + offline) â€” offline ones auto-complete after 1hr
                 List<string> targetDeviceIds = new();
                 try
                 {
                     string pairingKey = DevicePairingManager.EnsurePairingKey();
-                    string devicesUrl = $"{FIREBASE_BASE}/active_devices/{pairingKey}.json";
+                    string devicesUrl = (await AuthUrl($"active_devices/{pairingKey}.json"));
                     var devResponse = await _client.GetAsync(devicesUrl);
                     if (devResponse.IsSuccessStatusCode)
                     {
@@ -234,8 +266,8 @@ namespace AdvanceClip.Classes
                     targetDevices = targetDeviceIds,
                 };
 
-                // ═══ CLEAN SLATE: Wipe all previous entries before pushing new item ═══
-                // This keeps Firebase clean — only the latest item exists at any time.
+                // â•â•â• CLEAN SLATE: Wipe all previous entries before pushing new item â•â•â•
+                // This keeps Firebase clean â€” only the latest item exists at any time.
                 // Previous pending entries are irrelevant once a new copy happens.
                 try
                 {
@@ -243,8 +275,8 @@ namespace AdvanceClip.Classes
                     if (!string.IsNullOrEmpty(pairingKey))
                     {
                         // DELETE the entire clipboard node for this pairing key, then push fresh
-                        await _client.DeleteAsync($"{FIREBASE_BASE}/clipboard/{pairingKey}.json");
-                        Logger.LogAction("FIREBASE SYNC", "🧹 Wiped previous entries — clean slate for new item");
+                        await _client.DeleteAsync((await AuthUrl($"clipboard/{pairingKey}.json")));
+                        Logger.LogAction("FIREBASE SYNC", "ðŸ§¹ Wiped previous entries â€” clean slate for new item");
                     }
                 }
                 catch (Exception wipeEx)
@@ -255,7 +287,7 @@ namespace AdvanceClip.Classes
                 string json = JsonSerializer.Serialize(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                var response = await _client.PostAsync(GetScopedClipboardUrl(), content);
+                var response = await _client.PostAsync(await GetScopedClipboardUrl(), content);
                 
                 if (response.IsSuccessStatusCode)
                 {
@@ -276,7 +308,7 @@ namespace AdvanceClip.Classes
                                     try
                                     {
                                         string pk = DevicePairingManager.EnsurePairingKey();
-                                        await _client.DeleteAsync($"{FIREBASE_BASE}/clipboard/{pk}/{entryKey}.json");
+                                        await _client.DeleteAsync((await AuthUrl($"clipboard/{pk}/{entryKey}.json")));
                                         Logger.LogAction("FIREBASE CLEANUP", $"Auto-deleted text entry '{entryKey}'");
                                     }
                                     catch { }
@@ -284,7 +316,7 @@ namespace AdvanceClip.Classes
                             }
                             else
                             {
-                                // FILE items: TTL safety net (24h) — downloadedBy model handles normal cleanup
+                                // FILE items: TTL safety net (24h) â€” downloadedBy model handles normal cleanup
                                 _ = Task.Run(async () =>
                                 {
                                     await Task.Delay(AUTO_DELETE_FILE_MS);
@@ -292,14 +324,14 @@ namespace AdvanceClip.Classes
                                     {
                                         string pk = DevicePairingManager.EnsurePairingKey();
                                         // Check if entry still exists (may have been deleted by downloadedBy)
-                                        var checkRes = await _client.GetAsync($"{FIREBASE_BASE}/clipboard/{pk}/{entryKey}.json");
+                                        var checkRes = await _client.GetAsync((await AuthUrl($"clipboard/{pk}/{entryKey}.json")));
                                         if (checkRes.IsSuccessStatusCode)
                                         {
                                             string checkBody = await checkRes.Content.ReadAsStringAsync();
                                             if (!string.IsNullOrWhiteSpace(checkBody) && checkBody != "null")
                                             {
-                                                await _client.DeleteAsync($"{FIREBASE_BASE}/clipboard/{pk}/{entryKey}.json");
-                                                Logger.LogAction("FIREBASE CLEANUP", $"TTL expired — force-deleted file entry '{entryKey}'");
+                                                await _client.DeleteAsync((await AuthUrl($"clipboard/{pk}/{entryKey}.json")));
+                                                Logger.LogAction("FIREBASE CLEANUP", $"TTL expired â€” force-deleted file entry '{entryKey}'");
                                             }
                                         }
                                     }
@@ -323,7 +355,7 @@ namespace AdvanceClip.Classes
             var fileName = Path.GetFileName(filePath);
             var safeName = "archives/" + fileName + "_" + DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-            // Try multiple bucket names — Firebase project naming can vary
+            // Try multiple bucket names â€” Firebase project naming can vary
             string[] buckets = new[]
             {
                 "advance-sync-default-rtdb.firebasestorage.app",
@@ -355,13 +387,13 @@ namespace AdvanceClip.Classes
                 }
             }
 
-            Logger.LogAction("FIREBASE STORAGE", "All buckets failed — file upload not possible");
+            Logger.LogAction("FIREBASE STORAGE", "All buckets failed â€” file upload not possible");
             return "";
         }
 
         /// <summary>
         /// Purge Firebase clipboard entries whose DownloadUrl contains a dead Cloudflare URL.
-        /// Called when tunnel restarts and gets a new subdomain — old URLs become permanently unreachable.
+        /// Called when tunnel restarts and gets a new subdomain â€” old URLs become permanently unreachable.
         /// </summary>
         public static async Task PurgeStaleFileEntries(string deadUrl)
         {
@@ -373,7 +405,7 @@ namespace AdvanceClip.Classes
                 if (string.IsNullOrEmpty(pairingKey)) return;
                 string myDeviceId = SettingsManager.Current.DeviceId ?? "";
 
-                string url = $"{FIREBASE_BASE}/clipboard/{pairingKey}.json";
+                string url = (await AuthUrl($"clipboard/{pairingKey}.json"));
                 var response = await _client.GetAsync(url);
                 if (!response.IsSuccessStatusCode) return;
 
@@ -387,7 +419,7 @@ namespace AdvanceClip.Classes
                     try
                     {
                         var entry = prop.Value;
-                        // SAFETY: Only purge entries from THIS device — don't nuke other devices' entries
+                        // SAFETY: Only purge entries from THIS device â€” don't nuke other devices' entries
                         string sourceId = entry.TryGetProperty("SourceDeviceId", out var sid) ? sid.GetString() ?? "" : "";
                         string sourceName = entry.TryGetProperty("SourceDeviceName", out var sn) ? sn.GetString() ?? "" : "";
                         bool isMyEntry = (!string.IsNullOrEmpty(sourceId) && sourceId == myDeviceId) ||
@@ -410,7 +442,7 @@ namespace AdvanceClip.Classes
                 }
 
                 if (purged > 0)
-                    Logger.LogAction("PURGE", $"✅ Purged {purged} of MY stale file entries with dead Cloudflare URL");
+                    Logger.LogAction("PURGE", $"âœ… Purged {purged} of MY stale file entries with dead Cloudflare URL");
             }
             catch (Exception ex)
             {
@@ -425,7 +457,7 @@ namespace AdvanceClip.Classes
         {
             try
             {
-                string deleteUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryKey}.json";
+                string deleteUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryKey}.json"));
                 await _client.DeleteAsync(deleteUrl);
             }
             catch { }
@@ -443,7 +475,7 @@ namespace AdvanceClip.Classes
                 if (string.IsNullOrEmpty(pairingKey)) return;
                 string myDeviceId = SettingsManager.Current.DeviceId ?? "PC";
 
-                string statusUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryId}/downloadStatus/{myDeviceId}.json";
+                string statusUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}/downloadStatus/{myDeviceId}.json"));
                 string statusJson = $"{{\"status\":\"downloading\",\"startedAt\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
                 await _client.PutAsync(statusUrl, new StringContent(statusJson, Encoding.UTF8, "application/json"));
                 Logger.LogAction("SYNC_STATUS", $"Signaled DOWNLOADING: {entryId}");
@@ -468,14 +500,14 @@ namespace AdvanceClip.Classes
                 string myDeviceId = SettingsManager.Current.DeviceId ?? "PC";
 
                 // Step 1: Mark this device as having downloaded the file
-                string markUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryId}/downloadedBy/{myDeviceId}.json";
+                string markUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}/downloadedBy/{myDeviceId}.json"));
                 var markContent = new StringContent(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds().ToString(), Encoding.UTF8, "application/json");
                 await _client.PutAsync(markUrl, markContent);
 
                 // Step 1b: Signal "downloaded" status so sender knows this device is done
                 try
                 {
-                    string statusUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryId}/downloadStatus/{myDeviceId}.json";
+                    string statusUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}/downloadStatus/{myDeviceId}.json"));
                     string statusJson = $"{{\"status\":\"downloaded\",\"completedAt\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
                     await _client.PutAsync(statusUrl, new StringContent(statusJson, Encoding.UTF8, "application/json"));
                     Logger.LogAction("SYNC_STATUS", $"Signaled DOWNLOADED: {entryId}");
@@ -483,7 +515,7 @@ namespace AdvanceClip.Classes
                 catch { }
 
                 // Step 2: Read the full entry to check if all targets have downloaded
-                string entryUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryId}.json";
+                string entryUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}.json"));
                 var response = await _client.GetAsync(entryUrl);
                 if (!response.IsSuccessStatusCode) return;
 
@@ -520,7 +552,7 @@ namespace AdvanceClip.Classes
                 {
                     try
                     {
-                        string devicesUrl = $"{FIREBASE_BASE}/active_devices/{pairingKey}.json";
+                        string devicesUrl = (await AuthUrl($"active_devices/{pairingKey}.json"));
                         var devResponse = await _client.GetAsync(devicesUrl);
                         if (devResponse.IsSuccessStatusCode)
                         {
@@ -543,7 +575,7 @@ namespace AdvanceClip.Classes
                                     // Only auto-complete if offline for more than 1 hour
                                     if (!isOnline || offlineFor > OFFLINE_GRACE_MS)
                                     {
-                                        string offlineUrl = $"{FIREBASE_BASE}/clipboard/{pairingKey}/{entryId}/downloadedBy/{devId}.json";
+                                        string offlineUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}/downloadedBy/{devId}.json"));
                                         await _client.PutAsync(offlineUrl, new StringContent("-1", Encoding.UTF8, "application/json"));
                                         downloaded.Add(devId);
                                         Logger.LogAction("SYNC_TRACK", $"Auto-completed offline device ({offlineFor / 60_000}min offline): {devId}");
@@ -559,19 +591,19 @@ namespace AdvanceClip.Classes
                 if (targetDevices.Count > 0 && targetDevices.All(d => downloaded.Contains(d)))
                 {
                     await DeleteFirebaseEntry(pairingKey, entryId);
-                    Logger.LogAction("SYNC_CLEANUP", $"All {targetDevices.Count} devices done — entry deleted: {entryId}");
+                    Logger.LogAction("SYNC_CLEANUP", $"All {targetDevices.Count} devices done â€” entry deleted: {entryId}");
                 }
                 else if (targetDevices.Count == 0)
                 {
-                    // No targetDevices — delete immediately. New items wipe old ones anyway.
+                    // No targetDevices â€” delete immediately. New items wipe old ones anyway.
                     await DeleteFirebaseEntry(pairingKey, entryId);
-                    Logger.LogAction("SYNC_CLEANUP", $"No targetDevices — entry deleted: {entryId}");
+                    Logger.LogAction("SYNC_CLEANUP", $"No targetDevices â€” entry deleted: {entryId}");
                 }
                 else
                 {
                     int done = downloaded.Count;
                     int total = targetDevices.Count;
-                    Logger.LogAction("SYNC_TRACK", $"Downloaded by {done}/{total} devices — waiting for {total - done} more");
+                    Logger.LogAction("SYNC_TRACK", $"Downloaded by {done}/{total} devices â€” waiting for {total - done} more");
                 }
             }
             catch (Exception ex)
@@ -592,7 +624,7 @@ namespace AdvanceClip.Classes
                 string pairingKey = DevicePairingManager.EnsurePairingKey();
                 if (string.IsNullOrEmpty(pairingKey)) return "";
 
-                string url = $"{FIREBASE_BASE}/active_devices/{pairingKey}/{senderDeviceId}.json";
+                string url = (await AuthUrl($"active_devices/{pairingKey}/{senderDeviceId}.json"));
                 var response = await _client.GetAsync(url);
                 if (!response.IsSuccessStatusCode) return "";
 
@@ -623,7 +655,7 @@ namespace AdvanceClip.Classes
                 string pairingKey = DevicePairingManager.EnsurePairingKey();
                 if (string.IsNullOrEmpty(pairingKey)) return "";
 
-                string url = $"{FIREBASE_BASE}/active_devices/{pairingKey}.json";
+                string url = (await AuthUrl($"active_devices/{pairingKey}.json"));
                 var response = await _client.GetAsync(url);
                 if (!response.IsSuccessStatusCode) return "";
 
@@ -659,10 +691,22 @@ namespace AdvanceClip.Classes
             return "";
         }
 
-        public static async Task PushTunnelUrl(string url, bool isOnline, string localIp = "")
+        /// <summary>
+        /// Push device registration to Firebase. Optimized: only writes when URL actually changes
+        /// or when going offline. Reduces Firebase writes from ~1440/day to ~2-5/day per user.
+        /// </summary>
+        /// <param name="forceWrite">If true, bypasses the URL-change check (used for going offline)</param>
+        public static async Task PushTunnelUrl(string url, bool isOnline, string localIp = "", bool forceWrite = false)
         {
             try
             {
+                // PHASE 2 OPTIMIZATION: Only push to Firebase when URL actually changes or going offline
+                string urlFingerprint = $"{url}|{localIp}|{isOnline}";
+                if (!forceWrite && urlFingerprint == _lastPushedTunnelUrl)
+                {
+                    return; // URL hasn't changed â€” skip Firebase write
+                }
+
                 var payload = new
                 {
                     DeviceId = SettingsManager.Current.DeviceId,
@@ -682,12 +726,13 @@ namespace AdvanceClip.Classes
 
                 // Use PUT to register or update our specific Device node (scoped to pairing key)
                 string pairingKey = DevicePairingManager.EnsurePairingKey();
-                if (string.IsNullOrEmpty(pairingKey)) { Logger.LogAction("FIREBASE SYNC", "Skipped device registration — no pairing key"); return; }
-                string tunnelNodeUrl = $"https://advance-sync-default-rtdb.firebaseio.com/active_devices/{pairingKey}/{SettingsManager.Current.DeviceId}.json";
+                if (string.IsNullOrEmpty(pairingKey)) { Logger.LogAction("FIREBASE SYNC", "Skipped device registration â€” no pairing key"); return; }
+                string tunnelNodeUrl = (await AuthUrl($"active_devices/{pairingKey}/{SettingsManager.Current.DeviceId}.json"));
                 var response = await _client.PutAsync(tunnelNodeUrl, content);
                 
                 if (response.IsSuccessStatusCode)
                 {
+                    _lastPushedTunnelUrl = urlFingerprint;
                     Logger.LogAction("FIREBASE SYNC", $"Tunnel DNS updated: {url} [{isOnline}]");
                 }
             }
@@ -699,7 +744,7 @@ namespace AdvanceClip.Classes
 
         /// <summary>
         /// Force-send clipboard items to specific target devices via Firebase forced_sync node.
-        /// Files of ANY size are supported — uses Cloudflare download URLs (no upload needed).
+        /// Files of ANY size are supported â€” uses Cloudflare download URLs (no upload needed).
         /// </summary>
         public static async Task<int> ForceSendToDevices(List<ClipboardItem> items, List<string> targetDeviceIds)
         {
@@ -718,18 +763,18 @@ namespace AdvanceClip.Classes
 
                         if (isFile)
                         {
-                            // Use Cloudflare URL (preferred — no size limit, instant)
+                            // Use Cloudflare URL (preferred â€” no size limit, instant)
                             if (!string.IsNullOrEmpty(CachedGlobalUrl) && CachedGlobalUrl.Contains("trycloudflare.com"))
                             {
                                 downloadUrl = $"{CachedGlobalUrl}/download?path={Uri.EscapeDataString(item.FilePath)}";
                                 raw = downloadUrl;
                                 long fileSize = new FileInfo(item.FilePath).Length;
-                                Logger.LogAction("FORCED SYNC", $"File '{item.FileName}' ({fileSize / (1024*1024)}MB) → Cloudflare URL");
+                                Logger.LogAction("FORCED SYNC", $"File '{item.FileName}' ({fileSize / (1024*1024)}MB) â†’ Cloudflare URL");
                             }
                             else
                             {
                                 // Wait for Cloudflare tunnel
-                                Logger.LogAction("FORCED SYNC", $"No Cloudflare yet — waiting up to 20s...");
+                                Logger.LogAction("FORCED SYNC", $"No Cloudflare yet â€” waiting up to 20s...");
                                 for (int i = 0; i < 40; i++)
                                 {
                                     await Task.Delay(500);
@@ -740,7 +785,7 @@ namespace AdvanceClip.Classes
                                 {
                                     downloadUrl = $"{CachedGlobalUrl}/download?path={Uri.EscapeDataString(item.FilePath)}";
                                     raw = downloadUrl;
-                                    Logger.LogAction("FORCED SYNC", $"File '{item.FileName}' → Cloudflare URL (delayed)");
+                                    Logger.LogAction("FORCED SYNC", $"File '{item.FileName}' â†’ Cloudflare URL (delayed)");
                                 }
                                 else
                                 {
@@ -751,14 +796,14 @@ namespace AdvanceClip.Classes
                                     {
                                         downloadUrl = storageUrl;
                                         raw = storageUrl;
-                                        Logger.LogAction("FORCED SYNC", $"File '{item.FileName}' → Firebase Storage");
+                                        Logger.LogAction("FORCED SYNC", $"File '{item.FileName}' â†’ Firebase Storage");
                                     }
                                     else
                                     {
                                         // Both Cloudflare and Firebase Storage failed
-                                        Logger.LogAction("FORCED SYNC", $"⚠️ Cannot send file '{item.FileName}' remotely — no tunnel, no storage");
+                                        Logger.LogAction("FORCED SYNC", $"âš ï¸ Cannot send file '{item.FileName}' remotely â€” no tunnel, no storage");
                                         System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                                            AdvanceClip.Windows.ToastWindow.ShowToast($"⚠️ {item.FileName} — can't share remotely (no tunnel)");
+                                            AdvanceClip.Windows.ToastWindow.ShowToast($"âš ï¸ {item.FileName} â€” can't share remotely (no tunnel)");
                                         });
                                         continue;
                                     }
@@ -784,7 +829,7 @@ namespace AdvanceClip.Classes
 
                         string json = JsonSerializer.Serialize(payload);
                         var content = new StringContent(json, Encoding.UTF8, "application/json");
-                        string url2 = $"https://advance-sync-default-rtdb.firebaseio.com/forced_sync/{targetId}.json";
+                        string url2 = (await AuthUrl($"forced_sync/{targetId}.json"));
                         var response = await _client.PostAsync(url2, content);
                         if (response.IsSuccessStatusCode) sent++;
                     }
@@ -807,7 +852,7 @@ namespace AdvanceClip.Classes
             {
                 string pairingKey = DevicePairingManager.EnsurePairingKey();
                 if (string.IsNullOrEmpty(pairingKey)) return devices;
-                string url = $"https://advance-sync-default-rtdb.firebaseio.com/active_devices/{pairingKey}.json";
+                string url = (await AuthUrl($"active_devices/{pairingKey}.json"));
                 var response = await _client.GetAsync(url);
                 if (response.IsSuccessStatusCode)
                 {
@@ -830,7 +875,7 @@ namespace AdvanceClip.Classes
                             {
                                 long deviceTs = ts.GetInt64();
                                 long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                                if (nowMs - deviceTs > 120_000) online = false; // Stale — hasn't heartbeated in 2 min
+                                if (nowMs - deviceTs > 120_000) online = false; // Stale â€” hasn't heartbeated in 2 min
                             }
                             
                             devices.Add((prop.Name, name, type, online, localIp, globalUrl));
@@ -855,7 +900,7 @@ namespace AdvanceClip.Classes
             {
                 string pairingKey = DevicePairingManager.EnsurePairingKey();
                 if (string.IsNullOrEmpty(pairingKey)) return;
-                string url = $"https://advance-sync-default-rtdb.firebaseio.com/active_devices/{pairingKey}.json";
+                string url = (await AuthUrl($"active_devices/{pairingKey}.json"));
                 var response = await _client.GetAsync(url);
                 if (response.IsSuccessStatusCode)
                 {
@@ -879,13 +924,13 @@ namespace AdvanceClip.Classes
 
                                 if (deviceTs > 0 && (nowMs - deviceTs) < STALE_THRESHOLD_MS)
                                 {
-                                    // Old-format device is still active — keep it
+                                    // Old-format device is still active â€” keep it
                                     Logger.LogAction("FIREBASE CLEANUP", $"Keeping active old-format device: {prop.Name}");
                                     continue;
                                 }
 
-                                // Stale GUID-based entry — safe to remove
-                                string deleteUrl = $"https://advance-sync-default-rtdb.firebaseio.com/active_devices/{pairingKey}/{prop.Name}.json";
+                                // Stale GUID-based entry â€” safe to remove
+                                string deleteUrl = (await AuthUrl($"active_devices/{pairingKey}/{prop.Name}.json"));
                                 await _client.DeleteAsync(deleteUrl);
                                 Logger.LogAction("FIREBASE CLEANUP", $"Removed stale device: {prop.Name}");
                             }
@@ -899,14 +944,14 @@ namespace AdvanceClip.Classes
             }
         }
 
-        // ═══ Device Groups CRUD ═══
+        // â•â•â• Device Groups CRUD â•â•â•
 
         public static async Task<List<DeviceGroupInfo>> GetDeviceGroups()
         {
             var result = new List<DeviceGroupInfo>();
             try
             {
-                string url = "https://advance-sync-default-rtdb.firebaseio.com/device_groups.json";
+                string url = (await AuthUrl("device_groups.json"));
                 var response = await _client.GetStringAsync(url);
                 if (!string.IsNullOrWhiteSpace(response) && response != "null")
                 {
@@ -936,7 +981,7 @@ namespace AdvanceClip.Classes
         {
             try
             {
-                string url = $"https://advance-sync-default-rtdb.firebaseio.com/device_groups/{groupId}.json";
+                string url = (await AuthUrl($"device_groups/{groupId}.json"));
                 var payload = new { name, deviceNames };
                 var json = JsonSerializer.Serialize(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
@@ -953,7 +998,7 @@ namespace AdvanceClip.Classes
         {
             try
             {
-                string url = $"https://advance-sync-default-rtdb.firebaseio.com/device_groups/{groupId}.json";
+                string url = (await AuthUrl($"device_groups/{groupId}.json"));
                 await _client.DeleteAsync(url);
                 Logger.LogAction("FIREBASE", $"Deleted group {groupId}");
             }
@@ -971,3 +1016,7 @@ namespace AdvanceClip.Classes
         public List<string> DeviceNames { get; set; } = new();
     }
 }
+
+
+
+

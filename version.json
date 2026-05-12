@@ -1,9 +1,9 @@
 {
-  "pc_version": "3.0.0",
-  "pc_changelog": "v3.0.0 — Networking Overhaul, Performance & Size Optimization\n\n• CRITICAL: Fixed CORS missing X-Pairing-Key — root cause of all cross-device HTTP 400 errors\n• Fixed: Integrity retry downloads now include authentication headers\n• Fixed: Name-based sender URL fallback when device ID format doesn't match\n• Startup optimization: Deferred icon loading — window appears instantly, icons load progressively\n• Removed unused MaterialDesignThemes (9.5MB) and Newtonsoft.Json dependencies\n• Smooth scroll physics with frame-time normalization and direction-reversal braking",
-  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v3.0.0/FlyShelf.exe",
-  "pc_sha256": "e30f428f5b50379f5b93d51b29c7fc6a5da27c826686c303c8ae502688c6af3a",
-  "android_version": "3.0.0",
-  "android_changelog": "v3.0.0 — Cross-Device Sync Reliability & Size Optimization\n\n• Fixed: Android uploads now include X-Pairing-Key for proper authentication\n• Fixed: Fresh Cloudflare URL lookup from active_devices before downloading\n• Removed 6 unused native dependencies (haptics, symbols, slider, web, worklets, status-bar)\n• Reduced APK size with dependency cleanup",
-  "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v3.0.0/FlyShelf_Mobile.apk"
+  "pc_version": "4.0.0",
+  "pc_changelog": "v4.0.0 — Build Optimization & Widget Controls\n\n• Removed PdfSharp, MathSolver, GraphWindow, PdfMergeWindow for leaner build\n• Added Taskbar Widget toggle in Settings (system tray always visible)\n• Dynamic widget positioning — auto-avoids Windows widgets & system tray\n• Fixed widget visibility bug when taskbar redraws\n• Shake to Open toggle in Settings",
+  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v4.0.0/FlyShelf.exe",
+  "pc_sha256": "",
+  "android_version": "4.1.0",
+  "android_changelog": "v4.1.0 — Smart Sync & File Discovery\n\n• Search bar + category filters (Text, Images, Docs) for quick clip access\n• Native MediaStore document scanner — finds PDFs, docs, APKs on all Android devices\n• Simplified sync: first connect waits silently, no history dump\n• Smart dedup: duplicates move to top instead of being ignored\n• Redownload App button in Settings\n• Improved Redmi/MIUI file scanning compatibility",
+  "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v4.1.0/FlyShelf_Mobile.apk"
 }

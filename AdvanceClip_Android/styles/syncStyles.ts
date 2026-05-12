@@ -120,7 +120,8 @@ export const styles = StyleSheet.create({
   inputArea: {
     flexDirection: 'row',
     paddingHorizontal: space.xl,
-    paddingVertical: 14,
+    paddingVertical: 6,
+    paddingBottom: 70, // Account for absolutely-positioned tab bar (64px height + 6px padding)
     backgroundColor: colors.bg.card,
     borderTopWidth: 1,
     borderTopColor: colors.border.subtle,
@@ -133,8 +134,8 @@ export const styles = StyleSheet.create({
     fontFamily: font.regular,
     borderRadius: radius.xl,
     paddingHorizontal: space.xl,
-    paddingTop: 14,
-    paddingBottom: 14,
+    paddingTop: 8,
+    paddingBottom: 8,
     fontSize: 15,
     maxHeight: 120,
     borderWidth: 1,
@@ -142,11 +143,11 @@ export const styles = StyleSheet.create({
   },
   sendButton: {
     marginLeft: space.md,
-    marginBottom: 5,
+    marginBottom: 2,
   },
   attachButton: {
     marginRight: space.md,
-    marginBottom: 10,
+    marginBottom: 4,
     justifyContent: 'center',
     alignItems: 'center',
   },

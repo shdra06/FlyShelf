@@ -241,7 +241,8 @@ namespace AdvanceClip.Classes
                 try
                 {
                     using var client = new System.Net.Http.HttpClient() { Timeout = TimeSpan.FromSeconds(5) };
-                    var t = client.GetAsync("https://advance-sync-default-rtdb.firebaseio.com/.json?shallow=true").Result;
+                    var authUrl = FirebaseAuthManager.AuthenticateUrl("https://advance-sync-default-rtdb.firebaseio.com/.json?shallow=true").Result;
+                    var t = client.GetAsync(authUrl).Result;
                     sb.AppendLine($"  Firebase RTDB:     HTTP {(int)t.StatusCode} {(t.IsSuccessStatusCode ? "✓" : "✗")}");
                 }
                 catch (Exception ex) { sb.AppendLine($"  Firebase RTDB:     FAILED — {ex.InnerException?.Message ?? ex.Message}"); }

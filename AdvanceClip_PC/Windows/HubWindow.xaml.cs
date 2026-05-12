@@ -562,15 +562,7 @@ namespace AdvanceClip.Windows
 
         private void MergeSelectedPdfsBtn_Click(object sender, RoutedEventArgs e)
         {
-            var selectedPdfs = _viewModel.DroppedItems.Where(i => i.IsSelected && i.ItemType == ClipboardItemType.Pdf).ToList();
-
-            if (selectedPdfs.Count > 1)
-            {
-                var mergeWindow = new AdvanceClip.Windows.PdfMergeWindow(selectedPdfs, _viewModel);
-                mergeWindow.Show();
-                this.Hide();
-                foreach (var item in _viewModel.DroppedItems) item.IsSelected = false;
-            }
+            ToastWindow.ShowToast("PDF Merge removed in v4.0 for a lighter build.");
         }
 
         private void AddSnifferPath_Click(object sender, RoutedEventArgs e)

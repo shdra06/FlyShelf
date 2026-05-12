@@ -263,13 +263,7 @@ namespace AdvanceClip.ViewModels
                 catch { }
             });
             MergeSelectedPdfsCommand = new RelayCommand(() => {
-                var selected = DroppedItems.Where(i => i.IsSelected && i.ItemType == ClipboardItemType.Pdf).ToList();
-                if (selected.Count > 1)
-                {
-                    var mergeWindow = new AdvanceClip.Windows.PdfMergeWindow(selected, this);
-                    mergeWindow.Show();
-                    foreach (var item in DroppedItems) item.IsSelected = false;
-                }
+                AdvanceClip.Windows.ToastWindow.ShowToast("PDF Merge removed in v4.0 for a lighter build.");
             });
             OpenFileLocationCommand = new RelayCommand<ClipboardItem>(item => {
                 if (item == null || string.IsNullOrEmpty(item.FilePath)) return;
@@ -745,6 +739,7 @@ namespace AdvanceClip.ViewModels
                     if (existingFile != null)
                     {
                         existingFile.RefreshPhysicalStats();
+                        existingFile.DateCopied = DateTime.Now; // Fresh timestamp so it sorts to top on mobile
                         bumped.Add(existingFile);
                         continue;
                     }
@@ -768,6 +763,19 @@ namespace AdvanceClip.ViewModels
                 OnPropertyChanged(nameof(ShelfVisibility));
 
                 AdvanceClip.Classes.Logger.LogAction("DRAG IN", $"Batch inserted {newItems.Count} new + {bumped.Count} bumped files");
+
+                // Instantly push SSE event to connected mobile clients (zero-latency sync)
+                if (newItems.Count > 0)
+                {
+                    var first = newItems[0].item;
+                    AdvanceClip.Classes.NetworkSyncServer.Instance?.NotifyClipboardChanged(first.ItemType.ToString(), first.FileName ?? first.RawContent?.Substring(0, Math.Min(40, first.RawContent?.Length ?? 0)) ?? "");
+                }
+                else if (bumped.Count > 0)
+                {
+                    // Bumped files (re-copied) also need to notify mobile — they expect the latest item
+                    var first = bumped[0];
+                    AdvanceClip.Classes.NetworkSyncServer.Instance?.NotifyClipboardChanged(first.ItemType.ToString(), first.FileName ?? first.RawContent?.Substring(0, Math.Min(40, first.RawContent?.Length ?? 0)) ?? "");
+                }
 
                 // Phase 3: Background — load icons + run sync (completely off the UI thread)
                 if (newItems.Count > 0)
@@ -843,6 +851,31 @@ namespace AdvanceClip.ViewModels
                                 await SyncFileToDevicesAsync(filePath, item, label: "FILE");
                             }
                         }
+                    });
+                }
+                // Phase 3b: Firebase sync for BUMPED files (re-copied items that already exist in the list)
+                // Only sync the first bumped file — same behavior as new files
+                if (newItems.Count == 0 && bumped.Count > 0 && !skipFirebaseSync
+                    && AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync)
+                {
+                    var capturedBumped = bumped[0];
+                    var capturedPath = capturedBumped.FilePath;
+                    _ = System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        try
+                        {
+                            string ext = Path.GetExtension(capturedPath).ToLowerInvariant();
+                            if (ext is ".crdownload" or ".part" or ".tmp" or ".download" or ".partial") return;
+                            
+                            // Check the file isn't a download we extracted ourselves
+                            var archPath = AdvanceClip.Classes.SettingsManager.Current.CustomArchiveExtractionPath;
+                            if (string.IsNullOrWhiteSpace(archPath)) archPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FlyShelf", "Extracted");
+                            if (capturedPath.StartsWith(archPath, StringComparison.OrdinalIgnoreCase)) return;
+
+                            await SyncFileToDevicesAsync(capturedPath, capturedBumped, label: "FILE");
+                            AdvanceClip.Classes.Logger.LogAction("FILE SYNC", $"Re-synced bumped file: {capturedBumped.FileName}");
+                        }
+                        catch (Exception ex) { AdvanceClip.Classes.Logger.LogAction("FILE SYNC", $"Bumped sync error: {ex.Message}"); }
                     });
                 }
 
@@ -927,6 +960,52 @@ namespace AdvanceClip.ViewModels
                     // Standard Stack Logic (Index 0)
                     DroppedItems.Insert(0, item);
                     PruneOldItems();
+                    // Push instant notification to mobile clients
+                    AdvanceClip.Classes.NetworkSyncServer.Instance?.NotifyClipboardChanged(item.ItemType.ToString(), item.FileName ?? "");
+
+                    // Clipboard preservation: external tools may overwrite clipboard with text ~500ms-4s later.
+                    // We use the full-size bitmap (capturedBmp) to avoid size-mismatch dedup issues.
+                    // Guard is set for the ENTIRE preservation window to prevent any re-processing.
+                    if (!forceClipboardSync && capturedBmp != null)
+                    {
+                        var preserveBmp = capturedBmp; // Full-size frozen bitmap — not the 250px thumbnail
+                        // Set guard immediately and keep it for the full preservation window
+                        MainWindow.SetWritingClipboard(true);
+                        _ = System.Threading.Tasks.Task.Run(async () =>
+                        {
+                            // Stage 1: quick check at 800ms
+                            await System.Threading.Tasks.Task.Delay(800);
+                            await Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                try
+                                {
+                                    if (!System.Windows.Clipboard.ContainsImage())
+                                    {
+                                        System.Windows.Clipboard.SetImage(preserveBmp);
+                                        Classes.Logger.LogAction("CLIPBOARD", "Re-asserted bitmap after external overwrite (stage 1)");
+                                    }
+                                }
+                                catch { }
+                            });
+                            // Stage 2: second check at 2500ms for slower overwrites
+                            await System.Threading.Tasks.Task.Delay(1700);
+                            await Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                try
+                                {
+                                    if (!System.Windows.Clipboard.ContainsImage())
+                                    {
+                                        System.Windows.Clipboard.SetImage(preserveBmp);
+                                        Classes.Logger.LogAction("CLIPBOARD", "Re-asserted bitmap after external overwrite (stage 2)");
+                                    }
+                                }
+                                catch { }
+                            });
+                            // Clear guard after full preservation window + buffer
+                            await System.Threading.Tasks.Task.Delay(500);
+                            MainWindow.SetWritingClipboard(false);
+                        });
+                    }
 
                     System.Threading.Tasks.Task.Run(() => 
                     {
@@ -1044,6 +1123,8 @@ namespace AdvanceClip.ViewModels
                             existingMatch.FileName = existingMatch.RawContent.Length > 800 ? existingMatch.RawContent.Substring(0, 800) + "..." : existingMatch.RawContent;
                         DroppedItems.Insert(0, existingMatch);
                         AdvanceClip.Classes.Logger.LogAction("DRAG IN", $"Bumped existing item to top (dedup, pinned={existingMatch.IsPinned})");
+                        // Push instant notification to mobile clients
+                        AdvanceClip.Classes.NetworkSyncServer.Instance?.NotifyClipboardChanged(existingMatch.ItemType.ToString(), existingMatch.FileName ?? existingMatch.RawContent?.Substring(0, Math.Min(40, existingMatch.RawContent?.Length ?? 0)) ?? "");
                         return;
                     }
 
@@ -1172,6 +1253,8 @@ namespace AdvanceClip.ViewModels
                             
                             DroppedItems.Insert(0, item);
                             PruneOldItems();
+                            // Push instant notification to mobile clients
+                            AdvanceClip.Classes.NetworkSyncServer.Instance?.NotifyClipboardChanged(item.ItemType.ToString(), item.FileName ?? item.RawContent?.Substring(0, Math.Min(40, item.RawContent?.Length ?? 0)) ?? "");
                             
                             if (item.SmartActionType == "SetTimer" && System.Text.RegularExpressions.Regex.IsMatch(item.RawContent.Trim(), @"^\/\d+$"))
                             {

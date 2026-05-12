@@ -28,6 +28,60 @@ namespace AdvanceClip.Classes
         private bool _proxyRunning = false;
         private int _proxyInternalPort = 0;
         private static readonly HttpClient _httpClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(30) };
+
+        // ═══════════════════════════════════════════════════════════════════
+        // Phase 3: Track directly-connected devices (via LAN/Cloudflare)
+        // When all paired devices are polling /api/sync directly, we can
+        // skip pushing clipboard data to Firebase entirely.
+        // ═══════════════════════════════════════════════════════════════════
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, long> _directDeviceLastSeen = new();
+        private const long DIRECT_DEVICE_STALE_MS = 30_000; // 30s — device must poll at least this often
+
+        /// <summary>
+        /// Returns the count of paired devices that have polled /api/sync within the last 30 seconds.
+        /// Used by FirebaseSyncManager to decide whether Firebase push can be skipped.
+        /// </summary>
+        public int GetDirectlyConnectedDeviceCount()
+        {
+            long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            int count = 0;
+            foreach (var kvp in _directDeviceLastSeen)
+            {
+                if (now - kvp.Value < DIRECT_DEVICE_STALE_MS)
+                    count++;
+                else
+                    _directDeviceLastSeen.TryRemove(kvp.Key, out _);
+            }
+            return count;
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // Long-Poll: Real-time push to mobile clients via blocked HTTP request
+        // ═══════════════════════════════════════════════════════════════════
+        private readonly List<TaskCompletionSource<string>> _longPollWaiters = new List<TaskCompletionSource<string>>();
+        private readonly object _longPollLock = new object();
+
+        /// <summary>
+        /// Call this whenever the clipboard changes to instantly unblock all waiting long-poll clients.
+        /// </summary>
+        public void NotifyClipboardChanged(string itemType = "clipboard", string title = "")
+        {
+            // Invalidate the sync cache so the next /api/sync poll returns fresh data
+            _cachedSyncJson = null;
+
+            string payload = $"{{\"type\":\"{itemType}\",\"title\":\"{title.Replace("\"", "'").Replace("\n", " ")}\",\"ts\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
+            int waiterCount;
+            lock (_longPollLock)
+            {
+                waiterCount = _longPollWaiters.Count;
+                foreach (var tcs in _longPollWaiters)
+                {
+                    tcs.TrySetResult(payload);
+                }
+                _longPollWaiters.Clear();
+            }
+            Logger.LogAction("PUSH", $"NotifyClipboardChanged: {itemType} — unblocked {waiterCount} waiting client(s)");
+        }
         
         public string ServerUrl { get; private set; } = "Not Running";
         public string DisplayUrl => ServerUrl.Split(',')[0];
@@ -36,7 +90,13 @@ namespace AdvanceClip.Classes
 
         private static readonly string[] _allowedRoots = {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AdvanceClip"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"),
+            Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            // OneDrive-redirected Desktop & Documents (common on Win10/11)
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "OneDrive", "Desktop"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "OneDrive", "Documents"),
             Path.GetTempPath()
         };
 
@@ -347,17 +407,20 @@ namespace AdvanceClip.Classes
                 _ = _cfDaemon.StartAsync(CurrentPort);
                 _ = FirebaseSyncManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl);
 
-                // Heartbeat: keep this PC visible in Firebase active_devices
-                _heartbeatTimer = new System.Timers.Timer(60_000);
+                // Heartbeat: reduced from 60s to 300s — Firebase writes are now throttled
+                // inside PushTunnelUrl (only writes on URL change). Timer is mainly for
+                // checking pairing handshakes and keeping the tunnel URL fresh in cache.
+                _heartbeatTimer = new System.Timers.Timer(300_000); // 5 minutes
                 _heartbeatTimer.Elapsed += (s, e) =>
                 {
+                    // PushTunnelUrl is now smart — it only writes to Firebase if URL changed
                     _ = FirebaseSyncManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl);
                     // Check for new devices that joined via pairing code
                     _ = DevicePairingManager.CheckForHandshakes();
                 };
                 _heartbeatTimer.AutoReset = true;
                 _heartbeatTimer.Start();
-                Logger.LogAction("HEARTBEAT", "Firebase device heartbeat started (60s interval)");
+                Logger.LogAction("HEARTBEAT", "Device heartbeat started (300s interval, Firebase writes only on URL change)");
                 // ═══════════════════════════════════════════════════════════════════
                 // TLS LAYER: Start HTTPS proxy on port 9443 → forwards to HTTP server
                 // ═══════════════════════════════════════════════════════════════════
@@ -588,7 +651,7 @@ namespace AdvanceClip.Classes
             ServerUrl = "Offline";
             try { _heartbeatTimer?.Stop(); _heartbeatTimer?.Dispose(); } catch { }
             _cfDaemon.Stop();
-            _ = FirebaseSyncManager.PushTunnelUrl("offline", false, "");
+            _ = FirebaseSyncManager.PushTunnelUrl("offline", false, "", forceWrite: true);
             try { _listener?.Stop(); } catch { }
             try { _proxyListener?.Stop(); } catch { }
             // Stop TLS proxy
@@ -781,7 +844,45 @@ namespace AdvanceClip.Classes
                     }
                     else if (path == "/api/sync" && req.HttpMethod == "GET")
                     {
+                        // Track this device as directly connected (Phase 3)
+                        string deviceId = req.Headers["X-Pairing-Key"] ?? req.Headers["X-Device-Id"] ?? req.RemoteEndPoint?.Address?.ToString() ?? "unknown";
+                        _directDeviceLastSeen[deviceId] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        FirebaseSyncManager.DirectlyConnectedDeviceCount = GetDirectlyConnectedDeviceCount();
                         ServeClipboardData(res);
+                    }
+                    else if (path == "/api/events" && req.HttpMethod == "GET")
+                    {
+                        // Long-poll endpoint — blocks until clipboard changes or 30s timeout
+                        // React Native can't use SSE/ReadableStream, so we use long-polling instead
+                        var tcs = new TaskCompletionSource<string>();
+                        lock (_longPollLock) { _longPollWaiters.Add(tcs); }
+                        try
+                        {
+                            var timeoutTask = Task.Delay(30000);
+                            var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
+                            
+                            if (completedTask == tcs.Task)
+                            {
+                                // Clipboard changed! Return the event data
+                                string payload = await tcs.Task;
+                                byte[] data = Encoding.UTF8.GetBytes(payload);
+                                res.StatusCode = 200;
+                                res.ContentType = "application/json";
+                                res.ContentLength64 = data.Length;
+                                res.OutputStream.Write(data, 0, data.Length);
+                            }
+                            else
+                            {
+                                // Timeout — return 204 No Content (no new events)
+                                res.StatusCode = 204;
+                            }
+                        }
+                        catch { res.StatusCode = 500; }
+                        finally
+                        {
+                            lock (_longPollLock) { _longPollWaiters.Remove(tcs); }
+                            try { res.Close(); } catch { }
+                        }
                     }
                     else if (path == "/api/sync_text" && req.HttpMethod == "POST")
                     {
@@ -855,7 +956,7 @@ namespace AdvanceClip.Classes
         private byte[]? _cachedSyncJson = null;
         private long _cachedSyncTimestamp = 0;
         private int _cachedItemCount = 0;
-        private const int SYNC_CACHE_TTL_MS = 2000; // Cache for 2 seconds (Cloudflare round-trip is ~300ms)
+        private const int SYNC_CACHE_TTL_MS = 500; // Cache for 500ms — fast invalidation for real-time sync
 
         private void ServeClipboardData(HttpListenerResponse res)
         {
@@ -879,7 +980,9 @@ namespace AdvanceClip.Classes
                 System.Windows.Application.Current.Dispatcher.Invoke(() =>
                 {
                     string deviceId = SettingsManager.Current.DeviceId ?? "PC";
-                    var payload = _viewModel.DroppedItems.Take(15).Select(x => new
+                    var payload = _viewModel.DroppedItems
+                        .Where(x => x.Extension != "MOBILE") // Don't echo Mobile items back
+                        .Take(15).Select(x => new
                     {
                         id = x.GetHashCode().ToString() + "_" + x.DateCopied.Ticks.ToString(),
                         EventId = $"{deviceId}_{((DateTimeOffset)x.DateCopied).ToUnixTimeMilliseconds()}_{x.GetHashCode():X4}",
@@ -887,12 +990,22 @@ namespace AdvanceClip.Classes
                         Type = x.ItemType.ToString(),
                         PreviewUrl = (x.ItemType == ClipboardItemType.Image || x.ItemType == ClipboardItemType.QRCode) ? (!string.IsNullOrEmpty(x.FilePath) ? $"/download?path={Uri.EscapeDataString(x.FilePath)}" : (x.RawContent ?? "")) : "",
                         DownloadUrl = !string.IsNullOrEmpty(x.FilePath) ? $"/download?path={Uri.EscapeDataString(x.FilePath)}" : (x.RawContent ?? ""),
-                        Raw = x.RawContent ?? "",
+                        Raw = x.RawContent ?? x.FileName ?? "",
+                        FileName = x.FileName ?? "",
                         Time = x.DateCopied.ToString("HH:mm:ss"),
                         Timestamp = ((DateTimeOffset)x.DateCopied).ToUnixTimeMilliseconds(),
                         SourceDeviceName = x.Extension == "MOBILE" ? "Mobile" : (SettingsManager.Current.DeviceName ?? Environment.MachineName),
                         SourceDeviceType = x.Extension == "MOBILE" ? "Mobile" : "PC"
-                    }).ToList();
+                    })
+                    // Sort by freshness — bumped items get DateCopied = Now, so they appear first
+                    .OrderByDescending(x => x.Timestamp)
+                    .ToList();
+
+                    // Filter out encrypted/Base64 blobs that echo back from mobile
+                    payload.RemoveAll(x => {
+                        var raw = x.Raw ?? x.Title ?? "";
+                        return raw.Length > 30 && !raw.Contains(' ') && System.Text.RegularExpressions.Regex.IsMatch(raw, @"^[A-Za-z0-9+/=\r\n]+$");
+                    });
 
                     string json = JsonSerializer.Serialize(payload);
                     _cachedSyncJson = Encoding.UTF8.GetBytes(json);
@@ -927,7 +1040,7 @@ namespace AdvanceClip.Classes
             _cachedSyncJson = null;
 
             // Process asynchronously on UI thread (fire-and-forget)
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
             {
                 var clip = new ClipboardItem
                 {
@@ -940,7 +1053,21 @@ namespace AdvanceClip.Classes
                 _viewModel.DroppedItems.Insert(0, clip);
                 _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                 
-                try { System.Windows.Clipboard.SetText(text); } catch { }
+                // ECHO PREVENTION: Mark this text as cloud-sourced so the clipboard monitor
+                // doesn't re-push it to Firebase when we set the Windows clipboard below.
+                string txtFp = $"TXT::{text.Substring(0, Math.Min(200, text.Length))}";
+                _viewModel.MarkAsCloudSourced(txtFp);
+                
+                // Suppress clipboard monitor during our write
+                try 
+                { 
+                    MainWindow.SetWritingClipboard(true);
+                    System.Windows.Clipboard.SetText(text);
+                    await System.Threading.Tasks.Task.Delay(500);
+                } 
+                catch { }
+                finally { MainWindow.SetWritingClipboard(false); }
+                
                 AdvanceClip.Windows.ToastWindow.ShowToast($"Text from {sourceDevice}! 📱");
             });
         }
@@ -1270,7 +1397,7 @@ namespace AdvanceClip.Classes
                     string json = System.Text.Json.JsonSerializer.Serialize(payload);
                     var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
                     var fbRes = await _httpClient.PostAsync(
-                        "https://advance-sync-default-rtdb.firebaseio.com/clipboard.json", content);
+                        await FirebaseAuthManager.AuthenticateUrl("https://advance-sync-default-rtdb.firebaseio.com/clipboard.json"), content);
 
                     if (fbRes.IsSuccessStatusCode)
                     {
@@ -1283,7 +1410,7 @@ namespace AdvanceClip.Classes
                                 _ = Task.Run(async () =>
                                 {
                                     await Task.Delay(24 * 60 * 60_000);
-                                    try { await _httpClient.DeleteAsync($"https://advance-sync-default-rtdb.firebaseio.com/clipboard/{entryKey}.json"); } catch { }
+                                    try { await _httpClient.DeleteAsync(await FirebaseAuthManager.AuthenticateUrl($"https://advance-sync-default-rtdb.firebaseio.com/clipboard/{entryKey}.json")); } catch { }
                                 });
                             }
                         }
@@ -1759,32 +1886,31 @@ namespace AdvanceClip.Classes
                 res.AddHeader("Access-Control-Allow-Origin", "*");
                 res.AddHeader("Accept-Ranges", "bytes");
 
-                // Compute SHA-256 hash for file integrity verification
-                string fileHash = "";
-                try
-                {
-                    using (var hashStream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1048576, FileOptions.SequentialScan))
-                    {
-                        var sha = System.Security.Cryptography.SHA256.HashData(hashStream);
-                        fileHash = BitConverter.ToString(sha).Replace("-", "").ToLowerInvariant();
-                    }
-                    res.AddHeader("X-Content-SHA256", fileHash);
-                }
-                catch (Exception hashEx)
-                {
-                    Logger.LogAction("DOWNLOAD", $"Hash computation failed: {hashEx.Message}");
-                }
-
                 res.StatusCode = 200;
                 res.ContentLength64 = fileSize;
+                res.SendChunked = false;
 
-                // High-performance streaming — 1MB buffer reduces syscall overhead for large files
-                // FileShare.ReadWrite allows serving files even when other apps have them open
-                using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1048576, FileOptions.SequentialScan);
-                await fs.CopyToAsync(res.OutputStream, 1048576); // 1MB chunks for maximum throughput
-                await res.OutputStream.FlushAsync();
-
-                Logger.LogAction("DOWNLOAD", $"Completed: {safeFileName} ({fileSize / 1024}KB)");
+                // Fast path: small files (≤5MB) — single read + write for minimal latency
+                if (fileSize <= 5 * 1024 * 1024)
+                {
+                    byte[] fileBytes = await File.ReadAllBytesAsync(path);
+                    await res.OutputStream.WriteAsync(fileBytes, 0, fileBytes.Length);
+                    await res.OutputStream.FlushAsync();
+                    Logger.LogAction("DOWNLOAD", $"Completed (fast): {safeFileName} ({fileSize / 1024}KB)");
+                }
+                else
+                {
+                    // Large files: stream with 1MB buffer for maximum throughput
+                    using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1048576, FileOptions.SequentialScan | FileOptions.Asynchronous);
+                    byte[] buffer = new byte[1048576]; // 1MB buffer
+                    int bytesRead;
+                    while ((bytesRead = await fs.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    {
+                        await res.OutputStream.WriteAsync(buffer, 0, bytesRead);
+                    }
+                    await res.OutputStream.FlushAsync();
+                    Logger.LogAction("DOWNLOAD", $"Completed (stream): {safeFileName} ({fileSize / 1024}KB)");
+                }
             }
             catch (HttpListenerException ex) { Logger.LogAction("DOWNLOAD", $"Client disconnected: {ex.Message}"); }
             catch (IOException ex) { Logger.LogAction("DOWNLOAD", $"Pipe broken: {ex.Message}"); }

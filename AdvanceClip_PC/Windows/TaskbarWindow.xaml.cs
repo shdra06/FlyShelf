@@ -26,6 +26,11 @@ namespace AdvanceClip.Windows
         private int _lastTaskbarHeight = -1;
         private Rect _lastTaskbarFrameRect = Rect.Empty;
 
+        // Cached free-zone detection
+        private int _cachedFreeZoneLeft = -1;
+        private int _cachedFreeZoneWidth = -1;
+        private DateTime _lastFreeZoneScan = DateTime.MinValue;
+
         public TaskbarWindow()
         {
             InitializeComponent();
@@ -33,9 +38,35 @@ namespace AdvanceClip.Windows
             _timer = new DispatcherTimer();
             _timer.Interval = TimeSpan.FromMilliseconds(500); // 2fps is plenty — taskbar rarely moves
             _timer.Tick += (s, e) => UpdatePosition();
-            _timer.Start();
 
-            Show();
+            // Listen for the toggle setting change
+            SettingsManager.Current.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(AdvanceSettings.EnableTaskbarWidget))
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        if (SettingsManager.Current.EnableTaskbarWidget)
+                        {
+                            Show();
+                            SetupWindow();
+                            _timer.Start();
+                        }
+                        else
+                        {
+                            _timer.Stop();
+                            Visibility = Visibility.Hidden;
+                        }
+                    });
+                }
+            };
+
+            if (SettingsManager.Current.EnableTaskbarWidget)
+            {
+                Show();
+                _timer.Start();
+            }
+
             Classes.Logger.LogAction("WIDGET", "TaskbarWindow created and Show() called");
         }
 
@@ -68,6 +99,11 @@ namespace AdvanceClip.Windows
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
+            if (!SettingsManager.Current.EnableTaskbarWidget)
+            {
+                Visibility = Visibility.Hidden;
+                return;
+            }
             SetupWindow();
             _mainWindow = (MainWindow)Application.Current.MainWindow;
             Widget.SetMainWindow(_mainWindow);
@@ -178,6 +214,13 @@ namespace AdvanceClip.Windows
 
         private void UpdatePosition()
         {
+            if (!SettingsManager.Current.EnableTaskbarWidget)
+            {
+                if (Visibility != Visibility.Hidden)
+                    Visibility = Visibility.Hidden;
+                return;
+            }
+
             try
             {
                 var interop = new WindowInteropHelper(this);
@@ -257,6 +300,103 @@ namespace AdvanceClip.Windows
             }
         }
 
+        /// <summary>
+        /// Finds a free clickable zone on the taskbar by scanning for the gap between
+        /// the Start/Search/Widgets area and the system tray.
+        /// Uses Win32 child-window enumeration to detect occupied regions,
+        /// then places the widget in the remaining free space.
+        /// Falls back to the user's alignment preference if detection fails.
+        /// </summary>
+        private (int left, int width) FindTaskbarFreeZone(IntPtr taskbarHandle, int taskbarWidth, double dpiScale)
+        {
+            // Cache for 2 seconds to avoid expensive enumeration every 500ms
+            if (_cachedFreeZoneLeft >= 0 && (DateTime.Now - _lastFreeZoneScan).TotalSeconds < 2)
+                return (_cachedFreeZoneLeft, _cachedFreeZoneWidth);
+
+            try
+            {
+                // Enumerate direct child windows of the taskbar to find occupied zones
+                var occupiedZones = new List<(int left, int right)>();
+                
+                EnumChildWindows(taskbarHandle, (hwnd, lParam) =>
+                {
+                    // Only consider visible, direct children
+                    if (!IsWindowVisible(hwnd) || GetParent(hwnd) != taskbarHandle)
+                        return true;
+
+                    GetWindowRect(hwnd, out RECT childRect);
+                    
+                    // Convert to taskbar-local coordinates
+                    POINT childPt = new() { X = childRect.Left, Y = childRect.Top };
+                    ScreenToClient(taskbarHandle, ref childPt);
+                    int childWidth = childRect.Right - childRect.Left;
+                    
+                    if (childWidth > 5) // Skip tiny/invisible elements
+                    {
+                        occupiedZones.Add((childPt.X, childPt.X + childWidth));
+                    }
+                    return true;
+                }, IntPtr.Zero);
+
+                if (occupiedZones.Count > 0)
+                {
+                    // Sort by left position
+                    occupiedZones.Sort((a, b) => a.left.CompareTo(b.left));
+
+                    // Find the largest gap between occupied zones
+                    int bestGapLeft = 0, bestGapWidth = 0;
+                    int lastRight = 0;
+                    
+                    foreach (var zone in occupiedZones)
+                    {
+                        int gapWidth = zone.left - lastRight;
+                        if (gapWidth > bestGapWidth)
+                        {
+                            bestGapWidth = gapWidth;
+                            bestGapLeft = lastRight;
+                        }
+                        if (zone.right > lastRight)
+                            lastRight = zone.right;
+                    }
+                    
+                    // Also check gap after last occupied zone to end of taskbar
+                    int trailingGap = taskbarWidth - lastRight;
+                    if (trailingGap > bestGapWidth)
+                    {
+                        bestGapWidth = trailingGap;
+                        bestGapLeft = lastRight;
+                    }
+
+                    if (bestGapWidth > 60) // Only use if there's meaningful space
+                    {
+                        _cachedFreeZoneLeft = bestGapLeft;
+                        _cachedFreeZoneWidth = bestGapWidth;
+                        _lastFreeZoneScan = DateTime.Now;
+                        return (bestGapLeft, bestGapWidth);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("WIDGET", $"Free zone detection failed: {ex.Message}");
+            }
+
+            // Fallback: full taskbar width with padding
+            _cachedFreeZoneLeft = 12;
+            _cachedFreeZoneWidth = taskbarWidth - 24;
+            _lastFreeZoneScan = DateTime.Now;
+            return (12, taskbarWidth - 24);
+        }
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumChildWindows(IntPtr hWndParent, EnumWindowsDelegate lpEnumFunc, IntPtr lParam);
+
+        private delegate bool EnumWindowsDelegate(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
         private Rect PositionWidget(IntPtr taskbarHandle, RECT taskbarRect, double dpiScale, bool isSizeChanged)
         {
             var (logicalWidth, logicalHeight) = Widget.CalculateSize(dpiScale);
@@ -267,18 +407,30 @@ namespace AdvanceClip.Windows
             int taskbarHeight = taskbarRect.Bottom - taskbarRect.Top;
             int widgetTop = (taskbarHeight - physicalHeight) / 2;
             
-            int widgetLeft = 12; // 0 = Left Default (Snap to far left corner with padding)
             int taskbarWidth = taskbarRect.Right - taskbarRect.Left;
             int align = SettingsManager.Current.WidgetTaskbarAlignment;
-            
-            if (align == 1) // Centered
+
+            // Detect free zone on the taskbar (avoiding Windows widgets, system tray, etc.)
+            var (freeLeft, freeWidth) = FindTaskbarFreeZone(taskbarHandle, taskbarWidth, dpiScale);
+
+            int widgetLeft;
+            if (align == 1) // Centered in free zone
             {
-                widgetLeft = (taskbarWidth - physicalWidth) / 2;
+                widgetLeft = freeLeft + (freeWidth - physicalWidth) / 2;
             }
-            else if (align == 2) // Right Side
+            else if (align == 2) // Right side of free zone
             {
-                widgetLeft = taskbarWidth - physicalWidth - 200;
+                widgetLeft = freeLeft + freeWidth - physicalWidth - 8;
             }
+            else // Left side of free zone (default)
+            {
+                widgetLeft = freeLeft + 8;
+            }
+
+            // Clamp to valid range
+            if (widgetLeft < 4) widgetLeft = 4;
+            if (widgetLeft + physicalWidth > taskbarWidth - 4)
+                widgetLeft = taskbarWidth - physicalWidth - 4;
 
             Canvas.SetLeft(Widget, widgetLeft / dpiScale);
             Canvas.SetTop(Widget, widgetTop / dpiScale);

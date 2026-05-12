@@ -87,10 +87,55 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             
+            <!-- Search Bar — expands inline when toggled -->
+            <Border x:Name="SearchBarContainer" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,6,0" Visibility="Collapsed"
+                    Background="#18FFFFFF" CornerRadius="8" BorderBrush="#30FFFFFF" BorderThickness="1" Padding="6,2"
+                    Panel.ZIndex="10" PreviewMouseLeftButtonDown="SearchBar_PreviewMouseDown">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Grid Grid.Column="0" Background="Transparent">
+                        <TextBlock x:Name="SearchPlaceholder" Text="Search" Foreground="#50FFFFFF" VerticalAlignment="Center" FontSize="12" IsHitTestVisible="False" Margin="4,0,0,0"/>
+                        <TextBox x:Name="SearchTextBox" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
+                                 FontSize="12" VerticalAlignment="Center" CaretBrush="White" Padding="4,2" Margin="0"
+                                 HorizontalContentAlignment="Left"
+                                 TextChanged="SearchTextBox_TextChanged" PreviewKeyDown="SearchTextBox_PreviewKeyDown">
+                            <TextBox.Style>
+                                <Style TargetType="TextBox">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                    <Setter Property="Focusable" Value="True"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="TextBox">
+                                                <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                                                    <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
+                                                </Border>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </TextBox.Style>
+                        </TextBox>
+                    </Grid>
+                    <!-- Clear search button -->
+                    <ui:Button Grid.Column="1" Focusable="False" Appearance="Secondary" Foreground="#9CA3AF" Click="ClearSearch_Click" ToolTip="Clear Search" Margin="2,0,0,0" Padding="4,2" CornerRadius="6">
+                        <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss12" FontSize="10"/></ui:Button.Icon>
+                    </ui:Button>
+                </Grid>
+            </Border>
+            
             <Border Grid.Column="0" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
             
             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                 
+                <!-- Search Toggle -->
+                <ui:Button x:Name="SearchToggleBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="SearchToggle_Click" ToolTip="Search Clipboard (Ctrl+F)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
+                    <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" /></ui:Button.Icon>
+                </ui:Button>
+
                 <ui:Button Name="ToggleExpandBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="OpenApp_Click" ToolTip="Open Full Advance Hub" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
                     <ui:Button.Icon><ui:SymbolIcon Symbol="Maximize24" /></ui:Button.Icon>
                 </ui:Button>

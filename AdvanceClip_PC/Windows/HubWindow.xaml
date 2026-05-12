@@ -935,10 +935,7 @@
                                                     <TextBlock Text="{Binding FormattedSize}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" />
                                                 </Border>
                                                 <TextBlock Text="{Binding DateCopied, StringFormat='{}{0:HH:mm}'}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" Opacity="0.6"/>
-                                                <!-- Math result badge -->
-                                                <Border Background="#1AF59E0B" CornerRadius="4" Padding="6,2" Margin="6,0,0,0" Visibility="{Binding HasMathResult, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                                    <TextBlock Text="{Binding MathResult}" FontSize="10" FontWeight="Bold" Foreground="#EAB308" FontFamily="Consolas"/>
-                                                </Border>
+
                                                 <!-- Color swatch preview -->
                                                 <Border Width="28" Height="14" CornerRadius="3" Margin="6,0,0,0" Background="{Binding DetectedColorBrush}" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}" ToolTip="{Binding DetectedColor}">
                                                     <Border.Effect>
@@ -1960,7 +1957,7 @@
                             </Grid>
 
 
-                            <!-- Math Auto-Solver -->
+                            <!-- Shake to Open -->
                             <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,12,0,12">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -1972,18 +1969,46 @@
                                             <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                        <GradientStop Color="#F59E0B" Offset="0"/>
-                                                        <GradientStop Color="#EAB308" Offset="1"/>
+                                                        <GradientStop Color="#8B5CF6" Offset="0"/>
+                                                        <GradientStop Color="#A78BFA" Offset="1"/>
                                                     </LinearGradientBrush>
                                                 </Border.Background>
-                                                <ui:SymbolIcon Symbol="Calculator24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                <ui:SymbolIcon Symbol="CursorClick24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
-                                            <TextBlock Text="Math Auto-Solver" FontWeight="Bold" FontSize="14" Foreground="#EAB308" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Shake to Open" FontWeight="Bold" FontSize="14" Foreground="#A78BFA" VerticalAlignment="Center"/>
                                         </StackPanel>
-                                        <TextBlock Text="Auto-solve math expressions copied to clipboard. Equations with x show a Plot Graph button." 
+                                        <TextBlock Text="Rapidly shake your mouse while holding left-click to summon FlyShelf at your cursor position." 
                                                    Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
                                     </StackPanel>
-                                    <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableMathSolver, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableShakeToOpen, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </Grid>
+                            </Border>
+
+                            <!-- Theme & Appearance -->
+                            <!-- Taskbar Widget Toggle -->
+                            <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                            <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                        <GradientStop Color="#0EA5E9" Offset="0"/>
+                                                        <GradientStop Color="#38BDF8" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <ui:SymbolIcon Symbol="Pin24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock Text="Taskbar Widget" FontWeight="Bold" FontSize="14" Foreground="#38BDF8" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <TextBlock Text="Show the FlyShelf quick-access widget embedded in your taskbar. System tray icon stays visible regardless." 
+                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                    </StackPanel>
+                                    <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableTaskbarWidget, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                 </Grid>
                             </Border>
 

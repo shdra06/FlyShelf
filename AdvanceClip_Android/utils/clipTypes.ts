@@ -12,6 +12,7 @@ export type ClipItem = {
   IsPinned?: boolean;
   Timestamp?: number;
   CachedUri?: string;
+  _receivedVia?: 'LAN' | 'Cloud' | 'Local';
 };
 
 // ═══ Organized Storage Paths ═══

@@ -325,7 +325,7 @@ public partial class App : Application
     {
         if (nCode >= 0 && wParam == (IntPtr)WM_MOUSEMOVE)
         {
-            if ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0)
+        if ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0 && AdvanceClip.Classes.SettingsManager.Current.EnableShakeToOpen)
             {
                 MSLLHOOKSTRUCT hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
                 

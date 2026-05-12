@@ -90,7 +90,7 @@ export default function SettingsScreen() {
       const data = await res.json();
       const latest = data.android_version || '1.0.0';
       const dl = data.android_download || '';
-      const log = data.changelog || 'Bug fixes and improvements';
+      const log = data.changelog || data.android_changelog || 'Bug fixes and improvements';
 
       setLatestVersion(latest);
       setChangelog(log);
@@ -116,6 +116,34 @@ export default function SettingsScreen() {
     } catch (e) {
       setUpdateStatus('error');
       Alert.alert('Error', 'Could not check for updates. Check your internet connection.');
+    }
+  }, []);
+
+  // Force update: always downloads the latest APK regardless of current version
+  // Used when the user needs to reinstall after uninstalling a signing-mismatched build
+  const forceUpdate = useCallback(async () => {
+    try {
+      setUpdateStatus('checking');
+      const res = await fetch(`${VERSION_URL}?t=${Date.now()}`);
+      const data = await res.json();
+      const latest = data.android_version || '1.0.0';
+      const dl = data.android_download || '';
+      const log = data.changelog || data.android_changelog || 'Bug fixes and improvements';
+
+      setLatestVersion(latest);
+      setChangelog(log);
+      setDownloadUrl(dl);
+
+      if (dl) {
+        setUpdateStatus('available');
+        autoDownloadAndInstall(dl, latest);
+      } else {
+        setUpdateStatus('error');
+        Alert.alert('Error', 'No download URL found in version manifest.');
+      }
+    } catch (e) {
+      setUpdateStatus('error');
+      Alert.alert('Error', 'Could not fetch update info. Check your internet connection.');
     }
   }, []);
 
@@ -171,52 +199,7 @@ export default function SettingsScreen() {
 
   const downloadAndInstall = useCallback(async () => {
     if (!downloadUrl) return;
-    try {
-      setUpdateStatus('downloading');
-      setUpdateProgress(0);
-
-      // Clean old APKs
-      try {
-        const cacheDir = (FileSystem as any).cacheDirectory;
-        const cacheFiles = await FileSystem.readDirectoryAsync(cacheDir);
-        for (const file of cacheFiles) {
-          if (file.startsWith('FlyShelf_') && file.endsWith('.apk')) {
-            await FileSystem.deleteAsync(`${cacheDir}${file}`, { idempotent: true });
-          }
-        }
-      } catch {}
-
-      const apkUri = `${(FileSystem as any).cacheDirectory}FlyShelf_v${latestVersion}_${Date.now()}.apk`;
-
-      const downloadResumable = FileSystem.createDownloadResumable(
-        downloadUrl,
-        apkUri,
-        { headers: { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } },
-        (progress) => {
-          const pct = progress.totalBytesExpectedToWrite > 0
-            ? Math.round((progress.totalBytesWritten / progress.totalBytesExpectedToWrite) * 100)
-            : 0;
-          setUpdateProgress(pct);
-        }
-      );
-
-      const result = await downloadResumable.downloadAsync();
-      if (!result?.uri) throw new Error('Download returned no URI');
-
-      // Verify APK size
-      const fileInfo = await FileSystem.getInfoAsync(result.uri);
-      if (!fileInfo.exists || (fileInfo as any).size < 1_000_000) {
-        throw new Error(`Download too small (${(fileInfo as any).size || 0} bytes) — likely a redirect or error page`);
-      }
-
-      setDownloadedApkUri(result.uri);
-      setUpdateStatus('ready');
-      await installApk(result.uri);
-
-    } catch (e: any) {
-      setUpdateStatus('error');
-      Alert.alert('Download Failed', e?.message || 'Could not download the update APK.');
-    }
+    await autoDownloadAndInstall(downloadUrl, latestVersion);
   }, [downloadUrl, latestVersion]);
 
   const installApk = useCallback(async (uri?: string) => {
@@ -233,6 +216,23 @@ export default function SettingsScreen() {
         type: 'application/vnd.android.package-archive',
       });
     } catch (e: any) {
+      const errMsg = e?.message || '';
+      
+      // Detect signing key mismatch — Android throws INSTALL_FAILED_UPDATE_INCOMPATIBLE
+      if (errMsg.includes('INCOMPATIBLE') || errMsg.includes('signatures') || errMsg.includes('not installed')) {
+        Alert.alert(
+          '⚠️ Signing Key Mismatch',
+          'The installed version was signed with a different key. You must:\n\n' +
+          '1. Uninstall the current FlyShelf app\n' +
+          '2. Install the new APK fresh\n\n' +
+          'Your settings and paired devices will be preserved in the cloud.',
+          [
+            { text: 'OK', style: 'default' },
+          ]
+        );
+        return;
+      }
+
       // Fallback: try opening via Linking
       try {
         const { Linking } = require('react-native');
@@ -616,6 +616,56 @@ export default function SettingsScreen() {
               <Text style={[styles.helperText, { marginTop: 12 }]}>
                 Downloads the latest APK from GitHub and opens the Android installer. Make sure "Install from Unknown Sources" is enabled for this app.
               </Text>
+
+              {/* Force Re-download — always fetches latest APK regardless of version */}
+              <TouchableOpacity
+                style={{
+                  marginTop: 14,
+                  backgroundColor: '#2A2F3A',
+                  borderRadius: 12,
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: '#F59E0B33',
+                }}
+                onPress={forceUpdate}
+                disabled={updateStatus === 'checking' || updateStatus === 'downloading'}
+              >
+                <Text style={{ color: '#F59E0B', fontWeight: '700', fontSize: 13 }}>
+                  🔄 Force Re-download Latest APK
+                </Text>
+              </TouchableOpacity>
+              <Text style={[styles.helperText, { color: '#F59E0B88' }]}>
+                Use this if "App not installed" — uninstall the old app first, then tap this to download and install the latest version fresh.
+              </Text>
+
+              {/* Redownload App — downloads latest APK and triggers install */}
+              <TouchableOpacity
+                style={{
+                  marginTop: 14,
+                  backgroundColor: '#161922',
+                  borderRadius: 12,
+                  paddingVertical: 14,
+                  paddingHorizontal: 16,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 8,
+                  borderWidth: 1,
+                  borderColor: '#6366F133',
+                }}
+                onPress={forceUpdate}
+                disabled={updateStatus === 'checking' || updateStatus === 'downloading'}
+              >
+                <Text style={{ fontSize: 16 }}>📥</Text>
+                <Text style={{ color: '#6366F1', fontWeight: '700', fontSize: 13 }}>
+                  {updateStatus === 'downloading' ? `Downloading... ${updateProgress}%` : 'Redownload App'}
+                </Text>
+              </TouchableOpacity>
+              <Text style={[styles.helperText, { color: '#6366F188' }]}>
+                Downloads the latest APK fresh, replaces the old one, and opens the installer.
+              </Text>
             </View>
           </View>
 
@@ -649,8 +699,8 @@ export default function SettingsScreen() {
             </Text>
           </View>
 
-          {/* Bottom padding so scroll doesn't cut off */}
-          <View style={{ height: 60 }} />
+          {/* Bottom padding so scroll doesn't cut off behind tab bar */}
+          <View style={{ height: 100 }} />
 
         </ScrollView>
       </KeyboardAvoidingView>

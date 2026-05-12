@@ -17,11 +17,17 @@ namespace AdvanceClip.Classes
         private static readonly HttpClient _pollClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
         private const string FIREBASE_BASE = "https://advance-sync-default-rtdb.firebaseio.com";
         
+        /// <summary>Wraps a Firebase REST URL with auth token.</summary>
+        private static async Task<string> AuthUrl(string path)
+        {
+            return await FirebaseAuthManager.AuthenticateUrl($"{FIREBASE_BASE}/{path}");
+        }
+        
         /// <summary>Returns the scoped clipboard URL for the current pairing key (private sync room).</summary>
-        private static string GetScopedClipboardUrl()
+        private static async Task<string> GetScopedClipboardUrl()
         {
             string pairingKey = DevicePairingManager.EnsurePairingKey();
-            return $"{FIREBASE_BASE}/clipboard/{pairingKey}.json";
+            return await AuthUrl($"clipboard/{pairingKey}.json");
         }
         private FlyShelfViewModel _viewModel;
         private long _lastProcessedTimestamp = 0;
@@ -40,7 +46,7 @@ namespace AdvanceClip.Classes
             // CRITICAL: Do not listen to Firebase unless device is paired
             if (!DevicePairingManager.HasPairingKey)
             {
-                Logger.LogAction("FIREBASE LISTENER", "Blocked — no pairing key. Pair with another device to enable cloud sync.");
+                Logger.LogAction("FIREBASE LISTENER", "Blocked Ã¢â‚¬â€ no pairing key. Pair with another device to enable cloud sync.");
                 return;
             }
 
@@ -67,10 +73,10 @@ namespace AdvanceClip.Classes
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════════
+        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
         // SSE STREAM: Firebase REST API with Accept: text/event-stream
         // Delivers new clipboard items in ~100-300ms instead of 3s polling
-        // ═══════════════════════════════════════════════════════════════════
+        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
         private async Task RunSSEStream(CancellationToken ct)
         {
             int reconnectDelay = 1000; // Start with 1s, exponential backoff on failures
@@ -81,13 +87,13 @@ namespace AdvanceClip.Classes
                 // Guard: exit if pairing key was cleared
                 if (!DevicePairingManager.HasPairingKey)
                 {
-                    Logger.LogAction("FIREBASE SSE", "No pairing key — stream exiting.");
+                    Logger.LogAction("FIREBASE SSE", "No pairing key Ã¢â‚¬â€ stream exiting.");
                     return;
                 }
 
                 try
                 {
-                    string streamUrl = GetScopedClipboardUrl();
+                    string streamUrl = await GetScopedClipboardUrl();
 
                     var request = new HttpRequestMessage(HttpMethod.Get, streamUrl);
                     request.Headers.Add("Accept", "text/event-stream");
@@ -96,15 +102,15 @@ namespace AdvanceClip.Classes
                     
                     if (!response.IsSuccessStatusCode)
                     {
-                        Logger.LogAction("FIREBASE SSE", $"Stream HTTP {(int)response.StatusCode} — retrying in {reconnectDelay}ms");
+                        Logger.LogAction("FIREBASE SSE", $"Stream HTTP {(int)response.StatusCode} Ã¢â‚¬â€ retrying in {reconnectDelay}ms");
                         await Task.Delay(reconnectDelay, ct);
                         reconnectDelay = Math.Min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
                         continue;
                     }
 
-                    // Connected successfully — reset backoff
+                    // Connected successfully Ã¢â‚¬â€ reset backoff
                     reconnectDelay = 1000;
-                    Logger.LogAction("FIREBASE SSE", "Real-time stream CONNECTED ✓");
+                    Logger.LogAction("FIREBASE SSE", "Real-time stream CONNECTED Ã¢Å“â€œ");
 
                     using var stream = await response.Content.ReadAsStreamAsync();
                     using var reader = new StreamReader(stream);
@@ -137,13 +143,13 @@ namespace AdvanceClip.Classes
                         }
                     }
 
-                    // Stream ended (server closed connection) — reconnect
-                    Logger.LogAction("FIREBASE SSE", "Stream closed by server — reconnecting...");
+                    // Stream ended (server closed connection) Ã¢â‚¬â€ reconnect
+                    Logger.LogAction("FIREBASE SSE", "Stream closed by server Ã¢â‚¬â€ reconnecting...");
                 }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
-                    Logger.LogAction("FIREBASE SSE", $"Stream error: {ex.Message} — retrying in {reconnectDelay}ms");
+                    Logger.LogAction("FIREBASE SSE", $"Stream error: {ex.Message} Ã¢â‚¬â€ retrying in {reconnectDelay}ms");
                     try { await Task.Delay(reconnectDelay, ct); } catch { break; }
                     reconnectDelay = Math.Min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
                 }
@@ -155,9 +161,9 @@ namespace AdvanceClip.Classes
         private void ProcessSSEEvent(string eventType, string jsonData)
         {
             // Firebase SSE events:
-            // "put"   → { "path": "/key" or "/", "data": { ... } }
-            // "patch" → { "path": "/key", "data": { ... } }
-            // "keep-alive" → ignore
+            // "put"   Ã¢â€ â€™ { "path": "/key" or "/", "data": { ... } }
+            // "patch" Ã¢â€ â€™ { "path": "/key", "data": { ... } }
+            // "keep-alive" Ã¢â€ â€™ ignore
 
             if (eventType == "keep-alive") return;
             if (eventType != "put" && eventType != "patch") return;
@@ -175,7 +181,7 @@ namespace AdvanceClip.Classes
 
                 if (path == "/")
                 {
-                    // Full payload refresh — process all items
+                    // Full payload refresh Ã¢â‚¬â€ process all items
                     if (data.ValueKind == JsonValueKind.Object)
                     {
                         ProcessFullPayload(data);
@@ -183,7 +189,7 @@ namespace AdvanceClip.Classes
                 }
                 else
                 {
-                    // Single item update — path is "/{key}"
+                    // Single item update Ã¢â‚¬â€ path is "/{key}"
                     string itemKey = path.TrimStart('/');
                     if (data.ValueKind == JsonValueKind.Object)
                     {
@@ -255,7 +261,7 @@ namespace AdvanceClip.Classes
             // Skip items older than session start
             if (timestamp <= _lastProcessedTimestamp) return null;
 
-            // Self-echo prevention — use SourceDeviceId (precise) with DeviceName fallback
+            // Self-echo prevention Ã¢â‚¬â€ use SourceDeviceId (precise) with DeviceName fallback
             string sourceDeviceId = data.TryGetProperty("SourceDeviceId", out var srcId) ? srcId.GetString() ?? "" : "";
             string sourceDevice = data.TryGetProperty("SourceDeviceName", out var srcName) ? srcName.GetString() ?? "" : "";
             string sourceType = data.TryGetProperty("SourceDeviceType", out var srcType) ? srcType.GetString() ?? "" : "";
@@ -299,11 +305,11 @@ namespace AdvanceClip.Classes
                 catch (Exception cryptoEx)
                 {
                     Logger.LogAction("SYNC_CRYPTO", $"Decryption failed for item {key}: {cryptoEx.Message}");
-                    // Fall through with encrypted values — they'll appear as garbage but won't crash
+                    // Fall through with encrypted values Ã¢â‚¬â€ they'll appear as garbage but won't crash
                 }
             }
 
-            // Skip empty text items — never allow blank cards
+            // Skip empty text items Ã¢â‚¬â€ never allow blank cards
             bool isFileType = itemType == "Image" || itemType == "ImageLink" || itemType == "Pdf" ||
                               itemType == "Archive" || itemType == "Video" || itemType == "Document" ||
                               itemType == "File" || itemType == "Presentation" || itemType == "Audio";
@@ -326,11 +332,11 @@ namespace AdvanceClip.Classes
 
         private void InjectCloudItem(CloudItem cloudItem)
         {
-            Logger.LogAction("FIREBASE SSE", $"⚡ INSTANT from '{cloudItem.SourceDeviceName}': {cloudItem.Type}");
+            Logger.LogAction("FIREBASE SSE", $"Ã¢Å¡Â¡ INSTANT from '{cloudItem.SourceDeviceName}': {cloudItem.Type}");
 
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
-                // Strict duplicate enforcement — catches P2P + Firebase race condition
+                // Strict duplicate enforcement Ã¢â‚¬â€ catches P2P + Firebase race condition
                 // Check by exact Raw match
                 var existsLocally = _viewModel.DroppedItems.Any(i => i.RawContent == cloudItem.Raw && !string.IsNullOrWhiteSpace(cloudItem.Raw));
                 
@@ -349,7 +355,7 @@ namespace AdvanceClip.Classes
 
                 if (existsLocally)
                 {
-                    Logger.LogAction("FIREBASE SSE", "Skipped duplicate — already exists locally (P2P or local copy).");
+                    Logger.LogAction("FIREBASE SSE", "Skipped duplicate Ã¢â‚¬â€ already exists locally (P2P or local copy).");
                     return;
                 }
 
@@ -372,7 +378,7 @@ namespace AdvanceClip.Classes
                     // Step 4: Raw is a relative path like /download?path=..., combine with SenderUrl
                     else if (!string.IsNullOrEmpty(cloudItem.SenderUrl) && cloudItem.SenderUrl.StartsWith("http") && resolvedUrl.StartsWith("/"))
                         resolvedUrl = cloudItem.SenderUrl.TrimEnd('/') + resolvedUrl;
-                    // Step 5: Raw contains a file path like C:\... — try to build URL from SenderUrl
+                    // Step 5: Raw contains a file path like C:\... Ã¢â‚¬â€ try to build URL from SenderUrl
                     else if (!string.IsNullOrEmpty(cloudItem.SenderUrl) && cloudItem.SenderUrl.StartsWith("http") && isFilePayload)
                         resolvedUrl = cloudItem.SenderUrl.TrimEnd('/') + "/download?path=" + Uri.EscapeDataString(resolvedUrl);
                 }
@@ -384,7 +390,7 @@ namespace AdvanceClip.Classes
                 }
                 else
                 {
-                    // Skip blank text items — never create empty cards
+                    // Skip blank text items Ã¢â‚¬â€ never create empty cards
                     if (string.IsNullOrWhiteSpace(cloudItem.Raw))
                     {
                         Logger.LogAction("FIREBASE SSE", "Skipped empty/whitespace-only text item from cloud.");
@@ -414,7 +420,7 @@ namespace AdvanceClip.Classes
 
                     // Auto-copy text to system clipboard for instant paste
                     // CRITICAL: Must guard with _isWritingClipboard to prevent echo loop
-                    // (clipboard change → recapture → push back to Firebase → infinite loop)
+                    // (clipboard change Ã¢â€ â€™ recapture Ã¢â€ â€™ push back to Firebase Ã¢â€ â€™ infinite loop)
                     _ = Task.Run(async () =>
                     {
                         await System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
@@ -424,7 +430,7 @@ namespace AdvanceClip.Classes
                                 MainWindow.SetWritingClipboard(true);
                                 if (!string.IsNullOrEmpty(cloudItem.Raw))
                                     System.Windows.Clipboard.SetText(cloudItem.Raw);
-                                // Delay clearing — WM_CLIPBOARDUPDATE is dispatched async by Windows
+                                // Delay clearing Ã¢â‚¬â€ WM_CLIPBOARDUPDATE is dispatched async by Windows
                                 await System.Threading.Tasks.Task.Delay(500);
                             }
                             catch { }
@@ -432,7 +438,7 @@ namespace AdvanceClip.Classes
                         });
                     });
 
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"⚡ {cloudItem.SourceDeviceName}: {(cloudItem.Raw?.Length > 40 ? cloudItem.Raw.Substring(0, 40) + "..." : cloudItem.Raw)}");
+                    AdvanceClip.Windows.ToastWindow.ShowToast($"Ã¢Å¡Â¡ {cloudItem.SourceDeviceName}: {(cloudItem.Raw?.Length > 40 ? cloudItem.Raw.Substring(0, 40) + "..." : cloudItem.Raw)}");
 
                     // Receipt confirmation: mark this item as received by this device
                     if (!string.IsNullOrEmpty(cloudItem.Id))
@@ -447,10 +453,10 @@ namespace AdvanceClip.Classes
             });
         }
 
-        // ═══════════════════════════════════════════════════════════════════
+        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
         // FORCED SYNC SSE: Real-time stream for items force-sent to this device
-        // Replaces the old 5s polling loop — delivery is now ~100-300ms
-        // ═══════════════════════════════════════════════════════════════════
+        // Replaces the old 5s polling loop Ã¢â‚¬â€ delivery is now ~100-300ms
+        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
         private async Task RunForcedSyncSSE(CancellationToken ct)
         {
             int reconnectDelay = 1000;
@@ -467,7 +473,7 @@ namespace AdvanceClip.Classes
                         continue;
                     }
 
-                    string forcedUrl = $"{FIREBASE_BASE}/forced_sync/{deviceId}.json";
+                    string forcedUrl = (await AuthUrl($"forced_sync/{deviceId}.json"));
                     var request = new HttpRequestMessage(HttpMethod.Get, forcedUrl);
                     request.Headers.Add("Accept", "text/event-stream");
 
@@ -475,14 +481,14 @@ namespace AdvanceClip.Classes
 
                     if (!response.IsSuccessStatusCode)
                     {
-                        Logger.LogAction("FORCED SYNC SSE", $"HTTP {(int)response.StatusCode} — retrying in {reconnectDelay}ms");
+                        Logger.LogAction("FORCED SYNC SSE", $"HTTP {(int)response.StatusCode} Ã¢â‚¬â€ retrying in {reconnectDelay}ms");
                         await Task.Delay(reconnectDelay, ct);
                         reconnectDelay = Math.Min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
                         continue;
                     }
 
                     reconnectDelay = 1000;
-                    Logger.LogAction("FORCED SYNC SSE", "Real-time stream CONNECTED ✓");
+                    Logger.LogAction("FORCED SYNC SSE", "Real-time stream CONNECTED Ã¢Å“â€œ");
 
                     using var stream = await response.Content.ReadAsStreamAsync();
                     using var reader = new StreamReader(stream);
@@ -541,12 +547,12 @@ namespace AdvanceClip.Classes
                         }
                     }
 
-                    Logger.LogAction("FORCED SYNC SSE", "Stream closed — reconnecting...");
+                    Logger.LogAction("FORCED SYNC SSE", "Stream closed Ã¢â‚¬â€ reconnecting...");
                 }
                 catch (OperationCanceledException) { break; }
                 catch (Exception ex)
                 {
-                    Logger.LogAction("FORCED SYNC SSE", $"Stream error: {ex.Message} — retrying in {reconnectDelay}ms");
+                    Logger.LogAction("FORCED SYNC SSE", $"Stream error: {ex.Message} Ã¢â‚¬â€ retrying in {reconnectDelay}ms");
                     try { await Task.Delay(reconnectDelay, ct); } catch { break; }
                     reconnectDelay = Math.Min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
                 }
@@ -581,7 +587,7 @@ namespace AdvanceClip.Classes
                 {
                     progressClip = new ClipboardItem
                     {
-                        RawContent = $"⏳ Downloading from {cloudItem.SourceDeviceName}...",
+                        RawContent = $"Ã¢ÂÂ³ Downloading from {cloudItem.SourceDeviceName}...",
                         FileName = cloudItem.Title,
                         Extension = "DOWNLOADING",
                         ItemType = ClipboardItemType.Text
@@ -590,7 +596,7 @@ namespace AdvanceClip.Classes
                     _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                 });
 
-                // Signal "downloading" to Firebase — sender can see this device is actively receiving
+                // Signal "downloading" to Firebase Ã¢â‚¬â€ sender can see this device is actively receiving
                 if (!string.IsNullOrEmpty(cloudItem.Id))
                 {
                     _ = Task.Run(async () =>
@@ -644,7 +650,7 @@ namespace AdvanceClip.Classes
                             }
                         }
                     }
-                    catch { /* Best effort — fall back to original URL */ }
+                    catch { /* Best effort Ã¢â‚¬â€ fall back to original URL */ }
 
                     // DownloadUrl might be a Firebase Storage URL (firebasestorage.googleapis.com)
                     if (!string.IsNullOrEmpty(cloudItem.DownloadUrl) && cloudItem.DownloadUrl.StartsWith("http") && cloudItem.DownloadUrl != cloudItem.Raw)
@@ -674,7 +680,7 @@ namespace AdvanceClip.Classes
                                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                                 {
                                     if (progressClip != null)
-                                        progressClip.RawContent = $"🔄 Retry {attempt + 1}/{maxRetries} — {cloudItem.Title}";
+                                        progressClip.RawContent = $"Ã°Å¸â€â€ž Retry {attempt + 1}/{maxRetries} Ã¢â‚¬â€ {cloudItem.Title}";
                                 });
                                 await Task.Delay(retryDelays[attempt - 1]);
                             }
@@ -704,11 +710,11 @@ namespace AdvanceClip.Classes
                     if (urlsToTry.IndexOf(tryUrl) < urlsToTry.Count - 1)
                     {
                         string nextUrl = urlsToTry[urlsToTry.IndexOf(tryUrl) + 1];
-                        Logger.LogAction("FIREBASE SSE", $"Primary URL failed — trying fallback: {nextUrl}");
+                        Logger.LogAction("FIREBASE SSE", $"Primary URL failed Ã¢â‚¬â€ trying fallback: {nextUrl}");
                         System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         {
                             if (progressClip != null)
-                                progressClip.RawContent = $"🔄 Trying alternate download source — {cloudItem.Title}";
+                                progressClip.RawContent = $"Ã°Å¸â€â€ž Trying alternate download source Ã¢â‚¬â€ {cloudItem.Title}";
                         });
                     }
                 }
@@ -744,17 +750,17 @@ namespace AdvanceClip.Classes
                             string readStr = totalRead > 1_073_741_824 ? $"{totalRead / 1_073_741_824.0:F1}GB" : $"{totalRead / 1_048_576.0:F1}MB";
                             int pct = totalBytes > 0 ? (int)(totalRead * 100 / totalBytes) : -1;
                             string statusText = pct >= 0
-                                ? $"⬇️ {pct}% — {readStr}/{totalSizeStr} — {cloudItem.Title}"
-                                : $"⬇️ {readStr} — {cloudItem.Title}";
+                                ? $"Ã¢Â¬â€¡Ã¯Â¸Â {pct}% Ã¢â‚¬â€ {readStr}/{totalSizeStr} Ã¢â‚¬â€ {cloudItem.Title}"
+                                : $"Ã¢Â¬â€¡Ã¯Â¸Â {readStr} Ã¢â‚¬â€ {cloudItem.Title}";
 
-                            // Non-blocking — don't stall the download waiting for UI
+                            // Non-blocking Ã¢â‚¬â€ don't stall the download waiting for UI
                             progressClip.RawContent = statusText;
                             progressClip.FileName = $"{cloudItem.Title} ({pct}%)";
                         }
                     }
                 }
 
-                // SHA-256 integrity verification — verify downloaded file matches source hash
+                // SHA-256 integrity verification Ã¢â‚¬â€ verify downloaded file matches source hash
                 bool integrityOk = true;
                 if (!string.IsNullOrEmpty(cloudItem.FileHash))
                 {
@@ -765,14 +771,14 @@ namespace AdvanceClip.Classes
                         string localHashHex = BitConverter.ToString(localHash).Replace("-", "").ToLowerInvariant();
                         if (localHashHex != cloudItem.FileHash)
                         {
-                            Logger.LogAction("INTEGRITY", $"❌ SHA-256 MISMATCH for {cloudItem.Title}: expected {cloudItem.FileHash.Substring(0, 16)}..., got {localHashHex.Substring(0, 16)}...");
+                            Logger.LogAction("INTEGRITY", $"Ã¢ÂÅ’ SHA-256 MISMATCH for {cloudItem.Title}: expected {cloudItem.FileHash.Substring(0, 16)}..., got {localHashHex.Substring(0, 16)}...");
                             integrityOk = false;
                             // Delete corrupted file
                             try { File.Delete(filePath); } catch { }
                         }
                         else
                         {
-                            Logger.LogAction("INTEGRITY", $"✅ SHA-256 verified: {cloudItem.Title} ({cloudItem.FileHash.Substring(0, 16)}...)");
+                            Logger.LogAction("INTEGRITY", $"Ã¢Å“â€¦ SHA-256 verified: {cloudItem.Title} ({cloudItem.FileHash.Substring(0, 16)}...)");
                         }
                     }
                     catch (Exception hashEx)
@@ -793,13 +799,13 @@ namespace AdvanceClip.Classes
                             string localHashHex = BitConverter.ToString(localHash).Replace("-", "").ToLowerInvariant();
                             if (localHashHex != serverHash)
                             {
-                                Logger.LogAction("INTEGRITY", $"❌ SHA-256 MISMATCH (HTTP header) for {cloudItem.Title}");
+                                Logger.LogAction("INTEGRITY", $"Ã¢ÂÅ’ SHA-256 MISMATCH (HTTP header) for {cloudItem.Title}");
                                 integrityOk = false;
                                 try { File.Delete(filePath); } catch { }
                             }
                             else
                             {
-                                Logger.LogAction("INTEGRITY", $"✅ SHA-256 verified (HTTP header): {cloudItem.Title}");
+                                Logger.LogAction("INTEGRITY", $"Ã¢Å“â€¦ SHA-256 verified (HTTP header): {cloudItem.Title}");
                             }
                         }
                         catch { }
@@ -809,11 +815,11 @@ namespace AdvanceClip.Classes
                 // If integrity check failed, retry download ONCE
                 if (!integrityOk)
                 {
-                    Logger.LogAction("INTEGRITY", $"🔄 Retrying download due to corruption: {cloudItem.Title}");
+                    Logger.LogAction("INTEGRITY", $"Ã°Å¸â€â€ž Retrying download due to corruption: {cloudItem.Title}");
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                     {
                         if (progressClip != null)
-                            progressClip.RawContent = $"🔄 Re-downloading (integrity check failed) — {cloudItem.Title}";
+                            progressClip.RawContent = $"Ã°Å¸â€â€ž Re-downloading (integrity check failed) Ã¢â‚¬â€ {cloudItem.Title}";
                     });
 
                     try
@@ -839,11 +845,11 @@ namespace AdvanceClip.Classes
                                 integrityOk = rhHex == cloudItem.FileHash;
                                 if (!integrityOk)
                                 {
-                                    Logger.LogAction("INTEGRITY", $"❌ RETRY ALSO FAILED — file may be corrupted at source: {cloudItem.Title}");
+                                    Logger.LogAction("INTEGRITY", $"Ã¢ÂÅ’ RETRY ALSO FAILED Ã¢â‚¬â€ file may be corrupted at source: {cloudItem.Title}");
                                 }
                                 else
                                 {
-                                    Logger.LogAction("INTEGRITY", $"✅ Retry succeeded — file verified: {cloudItem.Title}");
+                                    Logger.LogAction("INTEGRITY", $"Ã¢Å“â€¦ Retry succeeded Ã¢â‚¬â€ file verified: {cloudItem.Title}");
                                 }
                             }
                             else integrityOk = true; // No hash to verify against
@@ -855,14 +861,14 @@ namespace AdvanceClip.Classes
                     }
                 }
 
-                // If integrity verification failed even after retry, abort — don't inject corrupted file
+                // If integrity verification failed even after retry, abort Ã¢â‚¬â€ don't inject corrupted file
                 if (!integrityOk)
                 {
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                     {
                         if (progressClip != null)
                             _viewModel.DroppedItems.Remove(progressClip);
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"❌ {cloudItem.Title} — file corrupted during transfer");
+                        AdvanceClip.Windows.ToastWindow.ShowToast($"Ã¢ÂÅ’ {cloudItem.Title} Ã¢â‚¬â€ file corrupted during transfer");
                     });
                     return;
                 }
@@ -880,7 +886,7 @@ namespace AdvanceClip.Classes
                         : $"{fileInfo.Length / 1_048_576.0:F1} MB";
 
                     try { MainWindow.SetWritingClipboard(true); System.Windows.Clipboard.SetFileDropList(new System.Collections.Specialized.StringCollection { filePath }); await System.Threading.Tasks.Task.Delay(500); } catch { } finally { MainWindow.SetWritingClipboard(false); }
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"✅ {cloudItem.Title} ({sizeStr}) from {cloudItem.SourceDeviceName}");
+                    AdvanceClip.Windows.ToastWindow.ShowToast($"Ã¢Å“â€¦ {cloudItem.Title} ({sizeStr}) from {cloudItem.SourceDeviceName}");
 
                     var clip = new ClipboardItem(filePath);
                     clip.SourceDeviceName = cloudItem.SourceDeviceName ?? "Remote";
@@ -939,18 +945,18 @@ namespace AdvanceClip.Classes
             {
                 Logger.LogAction("FIREBASE SSE", $"File Download Error: {ex.Message} | URL: {cloudItem.Raw}");
                 
-                // Drop the failed entry completely — don't bloat UI or Firebase with un-downloadable ghosts
+                // Drop the failed entry completely Ã¢â‚¬â€ don't bloat UI or Firebase with un-downloadable ghosts
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     if (progressClip != null)
                         _viewModel.DroppedItems.Remove(progressClip);
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"❌ Dropped: {cloudItem.Title} — source unreachable");
+                    AdvanceClip.Windows.ToastWindow.ShowToast($"Ã¢ÂÅ’ Dropped: {cloudItem.Title} Ã¢â‚¬â€ source unreachable");
                 });
                 
                 // Clean up partial file on disk
                 try { if (File.Exists(filePath)) File.Delete(filePath); } catch { }
                 
-                // DON'T delete the Firebase entry — other devices may still need it.
+                // DON'T delete the Firebase entry Ã¢â‚¬â€ other devices may still need it.
                 // The 24h TTL safety net will handle cleanup for truly orphaned entries.
                 Logger.LogAction("FIREBASE SSE", $"Download failed but keeping Firebase entry for other devices: {cloudItem.Title} [{cloudItem.Id}]");
             }
@@ -1025,7 +1031,7 @@ namespace AdvanceClip.Classes
                             }
                             else
                             {
-                                // Skip blank items — never allow empty cards
+                                // Skip blank items Ã¢â‚¬â€ never allow empty cards
                                 if (string.IsNullOrWhiteSpace(raw)) return;
 
                                 var clip = new ClipboardItem
@@ -1043,7 +1049,7 @@ namespace AdvanceClip.Classes
                                 _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                             }
 
-                            AdvanceClip.Windows.ToastWindow.ShowToast($"⚡ Force Sync from {source}");
+                            AdvanceClip.Windows.ToastWindow.ShowToast($"Ã¢Å¡Â¡ Force Sync from {source}");
                         });
 
                         keysToDelete.Add(prop.Name);
@@ -1051,7 +1057,7 @@ namespace AdvanceClip.Classes
 
                     foreach (var key in keysToDelete)
                     {
-                        string deleteUrl = $"{FIREBASE_BASE}/forced_sync/{deviceId}/{key}.json";
+                        string deleteUrl = (await AuthUrl($"forced_sync/{deviceId}/{key}.json"));
                         try { await _pollClient.DeleteAsync(deleteUrl); } catch { }
                     }
                 }
@@ -1063,3 +1069,5 @@ namespace AdvanceClip.Classes
         }
     }
 }
+
+

@@ -262,17 +262,7 @@ namespace AdvanceClip.ViewModels
         private string _smartActionType = "";
         public string SmartActionType { get => _smartActionType; set { if(_smartActionType!=value){_smartActionType=value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SmartActionType)));} } }
 
-        // --- MATH SOLVER PROPERTIES ---
-        private string _mathResult = "";
-        public string MathResult { get => _mathResult; set { if(_mathResult!=value){_mathResult=value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(MathResult))); PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasMathResult)));} } }
-        public bool HasMathResult => !string.IsNullOrEmpty(_mathResult);
 
-        private bool _isPlottable;
-        public bool IsPlottable { get => _isPlottable; set { if(_isPlottable!=value){_isPlottable=value; PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPlottable)));} } }
-
-        private string _plotEquation = "";
-        [JsonIgnore]
-        public string PlotEquation { get => _plotEquation; set { _plotEquation = value; } }
 
         // --- COLOR DETECTION PROPERTIES ---
         private string _detectedColor = "";
@@ -368,28 +358,7 @@ namespace AdvanceClip.ViewModels
                 }
             }
 
-            // ═══ MATH SOLVER (independent of smart action — always evaluate) ═══
-            if (!string.IsNullOrEmpty(RawContent) && AdvanceClip.Classes.SettingsManager.Current.EnableMathSolver)
-            {
-                // Check for plottable equations (contains x variable)
-                if (AdvanceClip.Classes.MathSolver.IsPlottableEquation(RawContent))
-                {
-                    IsPlottable = true;
-                    PlotEquation = RawContent;
-                    SmartActionName = "📊 Plot Graph";
-                    SmartActionIcon = "DataLine24";
-                    SmartActionType = "PlotGraph";
-                    HasSmartAction = true;
-                }
-                // Try to solve simple expressions
-                else if (AdvanceClip.Classes.MathSolver.TrySolveExpression(RawContent, out double mathResult))
-                {
-                    // Format nicely: integers as integers, decimals with reasonable precision
-                    MathResult = mathResult == Math.Floor(mathResult) && Math.Abs(mathResult) < 1e15
-                        ? $"= {(long)mathResult}" 
-                        : $"= {mathResult:G10}";
-                }
-            }
+
 
             // ═══ COLOR DETECTION (always evaluate) ═══
             if (!string.IsNullOrEmpty(RawContent))

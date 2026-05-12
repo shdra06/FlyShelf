@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -51,6 +51,12 @@ namespace AdvanceClip.Classes
         private static readonly HttpClient _httpClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
         private const string FIREBASE_BASE = "https://advance-sync-default-rtdb.firebaseio.com";
         
+        /// <summary>Wraps a Firebase REST URL with auth token.</summary>
+        private static async Task<string> AuthUrl(string path)
+        {
+            return await FirebaseAuthManager.AuthenticateUrl($"{FIREBASE_BASE}/{path}");
+        }
+        
         /// <summary>Current active pairing code for this device (displayed in UI).</summary>
         public static string CurrentPairingCode { get; private set; } = "";
 
@@ -62,7 +68,7 @@ namespace AdvanceClip.Classes
 
         /// <summary>
         /// Returns the current pairing key, or empty string if not yet paired.
-        /// Does NOT auto-generate — pairing key is only created when:
+        /// Does NOT auto-generate Ã¢â‚¬â€ pairing key is only created when:
         /// 1) User generates a QR code / pairing code (first device creates the room)
         /// 2) User scans/enters a code from another device (joins existing room)
         /// </summary>
@@ -102,14 +108,14 @@ namespace AdvanceClip.Classes
             return SettingsManager.Current.PairingKey;
         }
 
-        // ═══ QR Code Generation ═══
+        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â QR Code Generation Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
         /// <summary>
         /// Builds the JSON payload for the QR code containing all connection info.
         /// </summary>
         public static string BuildQRPayload(string localUrl, string globalUrl, string pin)
         {
-            // This is when the PC becomes the "room creator" — generate key if needed
+            // This is when the PC becomes the "room creator" Ã¢â‚¬â€ generate key if needed
             string pairingKey = CreatePairingKeyIfNeeded();
             var payload = new
             {
@@ -150,7 +156,7 @@ namespace AdvanceClip.Classes
                 // ZXing.Net generates a System.Drawing.Bitmap
                 using var bitmap = writer.Write(payload);
 
-                // Convert System.Drawing.Bitmap → WPF BitmapSource
+                // Convert System.Drawing.Bitmap Ã¢â€ â€™ WPF BitmapSource
                 var bitmapData = bitmap.LockBits(
                     new System.Drawing.Rectangle(0, 0, bitmap.Width, bitmap.Height),
                     System.Drawing.Imaging.ImageLockMode.ReadOnly,
@@ -176,7 +182,7 @@ namespace AdvanceClip.Classes
             }
         }
 
-        // ═══ Paired Device Management ═══
+        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â Paired Device Management Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
         public static List<PairedDevice> GetPairedDevices()
         {
@@ -192,7 +198,7 @@ namespace AdvanceClip.Classes
             string expectedKey = EnsurePairingKey();
             if (pairingKey != expectedKey)
             {
-                Logger.LogAction("PAIR", $"❌ Invalid pairing key from {deviceName} ({remoteIP})");
+                Logger.LogAction("PAIR", $"Ã¢ÂÅ’ Invalid pairing key from {deviceName} ({remoteIP})");
                 return false;
             }
 
@@ -205,7 +211,7 @@ namespace AdvanceClip.Classes
                     existing.LastSeen = DateTime.Now;
                     existing.LastKnownIP = remoteIP;
                     existing.DeviceName = deviceName;
-                    Logger.LogAction("PAIR", $"🔄 Re-paired existing device: {deviceName}");
+                    Logger.LogAction("PAIR", $"Ã°Å¸â€â€ž Re-paired existing device: {deviceName}");
                 }
                 else
                 {
@@ -219,7 +225,7 @@ namespace AdvanceClip.Classes
                         LastSeen = DateTime.Now,
                         LastKnownIP = remoteIP
                     });
-                    Logger.LogAction("PAIR", $"✅ New device paired: {deviceName} ({deviceType}) from {remoteIP}");
+                    Logger.LogAction("PAIR", $"Ã¢Å“â€¦ New device paired: {deviceName} ({deviceType}) from {remoteIP}");
                 }
             }
 
@@ -264,7 +270,7 @@ namespace AdvanceClip.Classes
             Logger.LogAction("PAIR", $"Removed device: {deviceId}");
         }
 
-        // ═══ Short Pairing Code System ═══
+        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â Short Pairing Code System Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
         /// <summary>
         /// Generate a 6-character alphanumeric code (no ambiguous chars like I/1/O/0).
@@ -287,21 +293,67 @@ namespace AdvanceClip.Classes
             string code = GenerateShortCode();
             try
             {
-                var payload = new
+                // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â Clean up any previous code from this device Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+                // If the PC was killed before cleanup ran, stale codes stay in Firebase
+                // and cause "Code Expired" on phones. Delete any previous code first.
+                if (!string.IsNullOrEmpty(CurrentPairingCode))
+                {
+                    try
+                    {
+                        await _httpClient.DeleteAsync((await AuthUrl($"pairing_codes/{CurrentPairingCode}.json")));
+                        Logger.LogAction("PAIR CODE", $"Cleaned up previous code: {CurrentPairingCode}");
+                    }
+                    catch { }
+                }
+
+                // Also scan Firebase for any stale codes from this device ID and remove them
+                try
+                {
+                    string myDeviceId = SettingsManager.Current.DeviceId ?? "";
+                    var scanRes = await _httpClient.GetAsync($"{FIREBASE_BASE}/pairing_codes.json?orderBy=\"deviceId\"&equalTo=\"{myDeviceId}\"");
+                    if (scanRes.IsSuccessStatusCode)
+                    {
+                        string scanJson = await scanRes.Content.ReadAsStringAsync();
+                        if (!string.IsNullOrWhiteSpace(scanJson) && scanJson != "null")
+                        {
+                            using var doc = JsonDocument.Parse(scanJson);
+                            foreach (var prop in doc.RootElement.EnumerateObject())
+                            {
+                                try
+                                {
+                                    await _httpClient.DeleteAsync((await AuthUrl($"pairing_codes/{prop.Name}.json")));
+                                    Logger.LogAction("PAIR CODE", $"Purged stale code: {prop.Name}");
+                                }
+                                catch { }
+                            }
+                        }
+                    }
+                }
+                catch { /* Non-critical Ã¢â‚¬â€ proceed even if scan fails */ }
+
+                // Build JSON manually to use Firebase server timestamp {".sv":"timestamp"}
+                // This ensures the timestamp comes from Firebase's server, not the PC clock,
+                // so the phone's TTL check always works regardless of clock drift.
+                string pairingKey = CreatePairingKeyIfNeeded();
+                string jsonPayload = JsonSerializer.Serialize(new
                 {
                     deviceId = SettingsManager.Current.DeviceId,
                     deviceName = SettingsManager.Current.DeviceName,
                     deviceType = "PC",
-                    pairingKey = CreatePairingKeyIfNeeded(),
+                    pairingKey,
                     localUrl = FirebaseSyncManager.CachedLocalUrl ?? "",
                     globalUrl = FirebaseSyncManager.CachedGlobalUrl ?? "",
                     pin = SettingsManager.Current.WebClientPinToken ?? "",
-                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-                };
+                });
+                // Inject Firebase server timestamp Ã¢â‚¬â€ {".sv":"timestamp"} is resolved server-side
+                var jsonObj = System.Text.Json.Nodes.JsonNode.Parse(jsonPayload).AsObject();
+                var svTimestamp = new System.Text.Json.Nodes.JsonObject();
+                svTimestamp[".sv"] = "timestamp";
+                jsonObj["timestamp"] = svTimestamp;
+                string json = jsonObj.ToJsonString();
 
-                string json = JsonSerializer.Serialize(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-                var response = await _httpClient.PutAsync($"{FIREBASE_BASE}/pairing_codes/{code}.json", content);
+                var response = await _httpClient.PutAsync((await AuthUrl($"pairing_codes/{code}.json")), content);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -314,7 +366,7 @@ namespace AdvanceClip.Classes
                         await Task.Delay(5 * 60_000);
                         try
                         {
-                            await _httpClient.DeleteAsync($"{FIREBASE_BASE}/pairing_codes/{code}.json");
+                            await _httpClient.DeleteAsync((await AuthUrl($"pairing_codes/{code}.json")));
                             if (CurrentPairingCode == code) CurrentPairingCode = "";
                             Logger.LogAction("PAIR CODE", $"Expired pairing code: {code}");
                         }
@@ -341,7 +393,7 @@ namespace AdvanceClip.Classes
             try
             {
                 string upperCode = code.Trim().ToUpperInvariant();
-                var response = await _httpClient.GetAsync($"{FIREBASE_BASE}/pairing_codes/{upperCode}.json");
+                var response = await _httpClient.GetAsync((await AuthUrl($"pairing_codes/{upperCode}.json")));
                 if (!response.IsSuccessStatusCode) return null;
 
                 string json = await response.Content.ReadAsStringAsync();
@@ -381,18 +433,18 @@ namespace AdvanceClip.Classes
             if (info == null)
                 return (false, "");
 
-            // Try to reach the device and pair — LAN first, then Cloudflare
+            // Try to reach the device and pair Ã¢â‚¬â€ LAN first, then Cloudflare
             string[] urls = new[] { info.localUrl, info.globalUrl }
                 .Where(u => !string.IsNullOrEmpty(u) && u.StartsWith("http"))
                 .ToArray();
 
-            // ═══ CASE 1: Mobile device with no HTTP server ═══
+            // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â CASE 1: Mobile device with no HTTP server Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
             // When a mobile generates a code, it has no localUrl/globalUrl.
-            // We can't POST /api/pair to it — instead, adopt the shared pairing key
+            // We can't POST /api/pair to it Ã¢â‚¬â€ instead, adopt the shared pairing key
             // directly and register the device locally. The shared key enables cloud sync.
             if (urls.Length == 0)
             {
-                Logger.LogAction("PAIR CODE", $"Device {info.deviceName} has no HTTP URLs — performing local-only key adoption");
+                Logger.LogAction("PAIR CODE", $"Device {info.deviceName} has no HTTP URLs Ã¢â‚¬â€ performing local-only key adoption");
                 
                 // Adopt the remote device's pairing key as our own (shared room)
                 if (!string.IsNullOrEmpty(info.pairingKey))
@@ -411,15 +463,15 @@ namespace AdvanceClip.Classes
                     true,
                     FirebaseSyncManager.CachedLocalUrl ?? "");
 
-                Logger.LogAction("PAIR CODE", $"✅ Local-only paired with {info.deviceName} (key adoption)");
+                Logger.LogAction("PAIR CODE", $"Ã¢Å“â€¦ Local-only paired with {info.deviceName} (key adoption)");
                 
-                // Notify the code-provider that we joined — write a handshake to Firebase
+                // Notify the code-provider that we joined Ã¢â‚¬â€ write a handshake to Firebase
                 _ = WriteHandshakeToFirebase(info.pairingKey, info.deviceId);
                 
                 return (true, info.deviceName);
             }
 
-            // ═══ CASE 2: Device has HTTP server — try to reach it ═══
+            // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â CASE 2: Device has HTTP server Ã¢â‚¬â€ try to reach it Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
             foreach (var url in urls)
             {
                 try
@@ -460,7 +512,7 @@ namespace AdvanceClip.Classes
                             true,
                             FirebaseSyncManager.CachedLocalUrl ?? "");
 
-                        Logger.LogAction("PAIR CODE", $"✅ Paired with {info.deviceName} via {url}");
+                        Logger.LogAction("PAIR CODE", $"Ã¢Å“â€¦ Paired with {info.deviceName} via {url}");
                         
                         // Notify the code-provider that we joined
                         _ = WriteHandshakeToFirebase(info.pairingKey, info.deviceId);
@@ -476,12 +528,12 @@ namespace AdvanceClip.Classes
                 }
             }
 
-            // ═══ CASE 3: Device has URLs but is unreachable — adopt key anyway ═══
+            // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â CASE 3: Device has URLs but is unreachable Ã¢â‚¬â€ adopt key anyway Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
             // The device was found in Firebase, so the pairing key is valid.
             // Save it so cloud sync works once the device comes online.
             if (!string.IsNullOrEmpty(info.pairingKey))
             {
-                Logger.LogAction("PAIR CODE", $"Device {info.deviceName} unreachable — adopting key for deferred pairing");
+                Logger.LogAction("PAIR CODE", $"Device {info.deviceName} unreachable Ã¢â‚¬â€ adopting key for deferred pairing");
                 SettingsManager.Current.PairingKey = info.pairingKey;
                 SettingsManager.Save();
                 TryPairDevice(info.pairingKey, info.deviceId, info.deviceName, info.deviceType, "deferred");
@@ -517,7 +569,7 @@ namespace AdvanceClip.Classes
                     timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                 };
                 string json = JsonSerializer.Serialize(handshake);
-                string url = $"{FIREBASE_BASE}/pairing_handshake/{pairingKey}/{myDeviceId}.json";
+                string url = (await AuthUrl($"pairing_handshake/{pairingKey}/{myDeviceId}.json"));
                 await _httpClient.PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"));
                 Logger.LogAction("PAIR HANDSHAKE", $"Wrote handshake to Firebase for key {pairingKey.Substring(0, 8)}...");
                 
@@ -545,7 +597,7 @@ namespace AdvanceClip.Classes
                 string pairingKey = EnsurePairingKey();
                 if (string.IsNullOrEmpty(pairingKey)) return;
 
-                string url = $"{FIREBASE_BASE}/pairing_handshake/{pairingKey}.json";
+                string url = (await AuthUrl($"pairing_handshake/{pairingKey}.json"));
                 var response = await _httpClient.GetAsync(url);
                 if (!response.IsSuccessStatusCode) return;
 
@@ -574,17 +626,17 @@ namespace AdvanceClip.Classes
                     if (!alreadyPaired)
                     {
                         TryPairDevice(pairingKey, devId, devName, devType, "handshake");
-                        Logger.LogAction("PAIR HANDSHAKE", $"✅ Auto-registered new device from handshake: {devName} ({devType})");
+                        Logger.LogAction("PAIR HANDSHAKE", $"Ã¢Å“â€¦ Auto-registered new device from handshake: {devName} ({devType})");
                         anyNew = true;
 
                         System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         {
-                            AdvanceClip.Windows.ToastWindow.ShowToast($"🔗 {devName} joined your sync group!");
+                            AdvanceClip.Windows.ToastWindow.ShowToast($"Ã°Å¸â€â€” {devName} joined your sync group!");
                         });
                     }
 
                     // Clean up processed handshake
-                    try { await _httpClient.DeleteAsync($"{FIREBASE_BASE}/pairing_handshake/{pairingKey}/{prop.Name}.json"); } catch { }
+                    try { await _httpClient.DeleteAsync((await AuthUrl($"pairing_handshake/{pairingKey}/{prop.Name}.json"))); } catch { }
                 }
 
                 if (anyNew) Save();
@@ -595,7 +647,7 @@ namespace AdvanceClip.Classes
             }
         }
 
-        // ═══ Persistence ═══
+        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â Persistence Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
 
 
         private static void Load()
@@ -631,3 +683,5 @@ namespace AdvanceClip.Classes
         }
     }
 }
+
+

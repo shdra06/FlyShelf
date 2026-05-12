@@ -449,7 +449,7 @@ namespace AdvanceClip
                 {
                     _clipboardDebounceTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background)
                     {
-                        Interval = TimeSpan.FromMilliseconds(350) // 350ms collapses Snipping Tool's dual clipboard events (~200ms apart)
+                        Interval = TimeSpan.FromMilliseconds(150) // 150ms debounce — fast response while still collapsing burst events
                     };
                     _clipboardDebounceTimer.Tick += (s, ev) =>
                     {
@@ -936,6 +936,138 @@ namespace AdvanceClip
             _isDragHovering = false;
         }
 
+        // ═══ SEARCH FEATURE ═══
+        private bool _isSearchActive = false;
+        private System.ComponentModel.ICollectionView _collectionView;
+
+        private void SearchToggle_Click(object sender, RoutedEventArgs e)
+        {
+            _isSearchActive = !_isSearchActive;
+            if (_isSearchActive)
+            {
+                // Activate the window so it receives keyboard input (normally it's a non-activating overlay)
+                this.Activate();
+                SearchBarContainer.Visibility = Visibility.Visible;
+                SearchToggleBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x14, 0xB8, 0xA6));
+                // Delay focus — the TextBox needs to be visible and rendered first
+                Dispatcher.InvokeAsync(() =>
+                {
+                    SearchTextBox.Focus();
+                    Keyboard.Focus(SearchTextBox);
+                    SearchTextBox.CaretIndex = 0;
+                }, System.Windows.Threading.DispatcherPriority.Input);
+            }
+            else
+            {
+                CloseSearch();
+            }
+        }
+
+        private void SearchTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            string query = SearchTextBox.Text;
+            SearchPlaceholder.Visibility = string.IsNullOrEmpty(query) ? Visibility.Visible : Visibility.Collapsed;
+            ApplySearchFilter(query);
+        }
+
+        private void SearchTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape)
+            {
+                CloseSearch();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Enter && ShelfListView.Items.Count > 0)
+            {
+                // Select first visible result and paste it
+                ShelfListView.SelectedIndex = 0;
+                if (ShelfListView.SelectedItem is ClipboardItem selected)
+                {
+                    CloseSearch();
+                    _ = CopyItemAndPaste(selected, hideWindow: true);
+                }
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Down && ShelfListView.Items.Count > 0)
+            {
+                // Move focus to the list so user can arrow-navigate results
+                ShelfListView.SelectedIndex = 0;
+                var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(0) as ListViewItem;
+                container?.Focus();
+                e.Handled = true;
+            }
+        }
+
+        private void SearchBar_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            // Activate window and focus the textbox when clicking anywhere on the search bar
+            this.Activate();
+            Dispatcher.InvokeAsync(() =>
+            {
+                SearchTextBox.Focus();
+                Keyboard.Focus(SearchTextBox);
+            }, System.Windows.Threading.DispatcherPriority.Input);
+        }
+
+        private void ClearSearch_Click(object sender, RoutedEventArgs e)
+        {
+            CloseSearch();
+        }
+
+        private void CloseSearch()
+        {
+            _isSearchActive = false;
+            SearchTextBox.Text = "";
+            SearchBarContainer.Visibility = Visibility.Collapsed;
+            SearchToggleBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
+            // Remove filter
+            if (_collectionView != null)
+            {
+                _collectionView.Filter = null;
+            }
+            // Move focus back to the list view
+            ShelfListView.Focus();
+        }
+
+        private void ApplySearchFilter(string query)
+        {
+            if (_collectionView == null)
+            {
+                _collectionView = System.Windows.Data.CollectionViewSource.GetDefaultView(ShelfListView.ItemsSource);
+            }
+            if (_collectionView == null) return;
+
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                _collectionView.Filter = null;
+                return;
+            }
+
+            string[] terms = query.ToLowerInvariant().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            _collectionView.Filter = obj =>
+            {
+                if (obj is not ClipboardItem item) return false;
+
+                // Build a searchable composite string from all relevant fields
+                string searchable = string.Join(" ",
+                    item.FileName ?? "",
+                    item.RawContent ?? "",
+                    System.IO.Path.GetFileName(item.FilePath ?? ""),
+                    item.Extension ?? "",
+                    item.ItemType.ToString(),
+                    item.SourceDeviceName ?? "",
+                    item.FormattedSize ?? ""
+                ).ToLowerInvariant();
+
+                // All terms must match (AND logic for multi-word queries)
+                foreach (var term in terms)
+                {
+                    if (!searchable.Contains(term)) return false;
+                }
+                return true;
+            };
+        }
+
         private void PinSpecific_Click(object sender, MouseButtonEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
@@ -1049,11 +1181,7 @@ namespace AdvanceClip
                 {
                     try { System.Windows.Clipboard.SetText(item.RawContent); AdvanceClip.Windows.ToastWindow.ShowToast("QR Text Copied!"); } catch { }
                 }
-                else if (item.SmartActionType == "PlotGraph" && item.IsPlottable)
-                {
-                    var graphWindow = new AdvanceClip.Windows.GraphWindow(item.PlotEquation);
-                    graphWindow.Show();
-                }
+
             }
         }
 
@@ -1076,7 +1204,28 @@ namespace AdvanceClip
             }
             else if (e.Key == Key.Escape)
             {
-                this.Hide();
+                if (_isSearchActive)
+                {
+                    CloseSearch();
+                }
+                else
+                {
+                    this.Hide();
+                }
+                e.Handled = true;
+            }
+            else if (e.Key == Key.F && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                // Ctrl+F opens search
+                if (!_isSearchActive)
+                {
+                    SearchToggle_Click(sender, e);
+                }
+                else
+                {
+                    SearchTextBox.Focus();
+                    SearchTextBox.SelectAll();
+                }
                 e.Handled = true;
             }
             else if (e.Key == Key.Down || e.Key == Key.Up)
@@ -1611,9 +1760,7 @@ namespace AdvanceClip
             var selectedPdfs = ShelfListView.SelectedItems.Cast<ClipboardItem>().ToList();
             if (selectedPdfs.Count > 1)
             {
-                var mergeWindow = new AdvanceClip.Windows.PdfMergeWindow(selectedPdfs, _viewModel);
-                mergeWindow.Show();
-                this.Hide();
+                AdvanceClip.Windows.ToastWindow.ShowToast("PDF Merge removed in v4.0 for a lighter build.");
                 ShelfListView.SelectedItems.Clear();
             }
         }

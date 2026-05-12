@@ -65,6 +65,8 @@ const MAPPING = {
   'play.fill': 'play-arrow',
   'bolt.fill': 'flash-on',
   'macwindow': 'picture-in-picture-alt',
+  'doc.text.viewfinder': 'open-in-new',
+  'arrow.up.doc': 'file-upload',
 } as IconMapping;
 
 /**
