@@ -31,6 +31,13 @@ namespace AdvanceClip.Windows
         private int _cachedFreeZoneWidth = -1;
         private DateTime _lastFreeZoneScan = DateTime.MinValue;
 
+        // Position stability — avoid redundant SetWindowPos calls that cause flicker
+        private int _lastWidgetLeft = -1;
+        private int _lastWidgetTop = -1;
+        private int _lastWidgetW = -1;
+        private int _lastWidgetH = -1;
+        private Rect _lastWidgetRect = Rect.Empty;
+
         public TaskbarWindow()
         {
             InitializeComponent();
@@ -286,13 +293,28 @@ namespace AdvanceClip.Windows
                 POINT containerPos = new() { X = taskbarRect.Left, Y = taskbarRect.Top };
                 ScreenToClient(taskbarHandle, ref containerPos);
 
-                SetWindowPos(taskbarWindowHandle, 0,
-                         containerPos.X, containerPos.Y,
-                         taskbarWidth, taskbarHeight,
-                         SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS | SWP_SHOWWINDOW);
+                // Only call SetWindowPos if the container position/size actually changed — avoids flicker
+                if (containerPos.X != _lastWidgetLeft || containerPos.Y != _lastWidgetTop ||
+                    taskbarWidth != _lastWidgetW || taskbarHeight != _lastWidgetH)
+                {
+                    SetWindowPos(taskbarWindowHandle, 0,
+                             containerPos.X, containerPos.Y,
+                             taskbarWidth, taskbarHeight,
+                             SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS | SWP_SHOWWINDOW);
+                    _lastWidgetLeft = containerPos.X;
+                    _lastWidgetTop = containerPos.Y;
+                    _lastWidgetW = taskbarWidth;
+                    _lastWidgetH = taskbarHeight;
+                }
 
                 var wRect = PositionWidget(taskbarHandle, taskbarRect, dpiScale, isSizeChanged);
-                UpdateWindowRegion(taskbarWindowHandle, wRect);
+
+                // Only update the clipping region if the widget rect actually moved
+                if (wRect != _lastWidgetRect)
+                {
+                    UpdateWindowRegion(taskbarWindowHandle, wRect);
+                    _lastWidgetRect = wRect;
+                }
             }
             finally
             {
@@ -309,8 +331,8 @@ namespace AdvanceClip.Windows
         /// </summary>
         private (int left, int width) FindTaskbarFreeZone(IntPtr taskbarHandle, int taskbarWidth, double dpiScale)
         {
-            // Cache for 2 seconds to avoid expensive enumeration every 500ms
-            if (_cachedFreeZoneLeft >= 0 && (DateTime.Now - _lastFreeZoneScan).TotalSeconds < 2)
+            // Cache for 5 seconds to avoid expensive enumeration every 500ms
+            if (_cachedFreeZoneLeft >= 0 && (DateTime.Now - _lastFreeZoneScan).TotalSeconds < 5)
                 return (_cachedFreeZoneLeft, _cachedFreeZoneWidth);
 
             try

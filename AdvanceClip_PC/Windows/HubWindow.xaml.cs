@@ -548,16 +548,7 @@ namespace AdvanceClip.Windows
 
         private void UpdateMergeButton()
         {
-            var selectedPdfs = _viewModel.DroppedItems.Where(i => i.IsSelected && i.ItemType == ClipboardItemType.Pdf).ToList();
-            if (selectedPdfs.Count > 1)
-            {
-                MergeSelectedPdfsText.Text = $"Merge {selectedPdfs.Count} PDFs";
-                MergeSelectedPdfsBtn.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                MergeSelectedPdfsBtn.Visibility = Visibility.Collapsed;
-            }
+            // Merge button removed in v4.1 for cleaner layout
         }
 
         private void MergeSelectedPdfsBtn_Click(object sender, RoutedEventArgs e)

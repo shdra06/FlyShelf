@@ -332,49 +332,50 @@
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     
-                    <Grid Grid.Row="0" Margin="0,0,0,12">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Margin="0,0,0,4">
                         
-                        <!-- Clipboard Header -->
-                        <Grid Grid.Row="0" Margin="0,0,0,4">
+                        <!-- Search Box (compact — no header above) -->
+                        <Grid Grid.Row="0" Margin="0,0,0,8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0">
-                                <StackPanel Orientation="Horizontal">
-                                    <TextBlock Text="📋" FontSize="24" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                    <TextBlock Text="Clipboard" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                                </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
-                                    <Border CornerRadius="10" Padding="10,3" Margin="0,0,8,0">
-                                        <Border.Background>
-                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                                <GradientStop Color="#186366F1" Offset="0"/>
-                                                <GradientStop Color="#108B5CF6" Offset="1"/>
-                                            </LinearGradientBrush>
-                                        </Border.Background>
-                                        <TextBlock FontSize="12" FontWeight="SemiBold" Foreground="#A78BFA">
-                                            <TextBlock.Text>
-                                                <MultiBinding StringFormat="{}{0} items">
-                                                    <Binding Path="DroppedItems.Count" />
-                                                </MultiBinding>
-                                            </TextBlock.Text>
-                                        </TextBlock>
-                                    </Border>
-                                </StackPanel>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Top" Margin="0,4,0,0">
-                                <ui:Button x:Name="MergeSelectedPdfsBtn" Appearance="Primary" Padding="10,6" Margin="0,0,6,0" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" CornerRadius="10" ToolTip="Merge selected PDFs">
-                                    <StackPanel Orientation="Horizontal">
-                                        <ui:SymbolIcon Symbol="DocumentCopy24" FontSize="14" Margin="0,0,6,0" />
-                                        <TextBlock x:Name="MergeSelectedPdfsText" Text="Merge PDFs" FontWeight="SemiBold" FontSize="12"/>
+                            <Border Grid.Column="0" CornerRadius="12" Padding="0">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#08FFFFFF"/>
+                                        <Setter Property="BorderBrush" Value="#15FFFFFF"/>
+                                        <Setter Property="BorderThickness" Value="1"/>
+                                        <Style.Triggers>
+                                            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                                <Setter Property="Background" Value="#0CFFFFFF"/>
+                                                <Setter Property="BorderBrush" Value="#306366F1"/>
+                                            </Trigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <Grid>
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0" IsHitTestVisible="False"
+                                                x:Name="SearchPlaceholderPanel">
+                                        <ui:SymbolIcon Symbol="Search24" FontSize="14" Foreground="#35FFFFFF" Margin="0,0,8,0"/>
+                                        <TextBlock Text="Search clips..." Foreground="#35FFFFFF" FontSize="12.5"/>
                                     </StackPanel>
-                                </ui:Button>
+                                    <TextBox x:Name="SearchBox" Background="Transparent" BorderThickness="0" 
+                                             Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
+                                             FontSize="12.5" Padding="14,10" CaretBrush="#6366F1"
+                                             TextChanged="SearchBox_TextChanged"/>
+                                </Grid>
+                            </Border>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
+                                <Border CornerRadius="8" Padding="8,4" Margin="0,0,6,0" Background="#0A6366F1">
+                                    <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="#8B92A0">
+                                        <TextBlock.Text>
+                                            <MultiBinding StringFormat="{}{0}">
+                                                <Binding Path="DroppedItems.Count" />
+                                            </MultiBinding>
+                                        </TextBlock.Text>
+                                    </TextBlock>
+                                </Border>
                                 <ui:Button Appearance="Secondary" Padding="8,6" CornerRadius="10" ToolTip="Select All" Click="SelectAll_Click" Margin="0,0,6,0">
                                     <ui:SymbolIcon Symbol="CheckmarkCircle24" FontSize="14" />
                                 </ui:Button>
@@ -398,48 +399,10 @@
                                 </ui:Button>
                             </StackPanel>
                         </Grid>
-                        <!-- Accent line with shimmer effect -->
-                        <Border Grid.Row="1" Height="2" CornerRadius="1" HorizontalAlignment="Left" Width="80" Margin="0,8,0,14">
-                            <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                    <GradientStop Color="#6366F1" Offset="0"/>
-                                    <GradientStop Color="#A78BFA" Offset="0.5"/>
-                                    <GradientStop Color="#6366F1" Offset="1"/>
-                                </LinearGradientBrush>
-                            </Border.Background>
-                        </Border>
-                        
-                        <!-- Search Box -->
-                        <Border Grid.Row="2" CornerRadius="12" Padding="0" Margin="0,0,0,0">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Setter Property="Background" Value="#08FFFFFF"/>
-                                    <Setter Property="BorderBrush" Value="#15FFFFFF"/>
-                                    <Setter Property="BorderThickness" Value="1"/>
-                                    <Style.Triggers>
-                                        <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                            <Setter Property="Background" Value="#0CFFFFFF"/>
-                                            <Setter Property="BorderBrush" Value="#306366F1"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <Grid>
-                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0" IsHitTestVisible="False"
-                                            x:Name="SearchPlaceholderPanel">
-                                    <ui:SymbolIcon Symbol="Search24" FontSize="14" Foreground="#35FFFFFF" Margin="0,0,8,0"/>
-                                    <TextBlock Text="Search scripts, links, files, PDFs..." Foreground="#35FFFFFF" FontSize="12.5"/>
-                                </StackPanel>
-                                <TextBox x:Name="SearchBox" Background="Transparent" BorderThickness="0" 
-                                         Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
-                                         FontSize="12.5" Padding="14,10" CaretBrush="#6366F1"
-                                         TextChanged="SearchBox_TextChanged"/>
-                            </Grid>
-                        </Border>
                     </Grid>
                     
                     <!-- Filter Chips — Pill-shaped with gradients -->
-                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,14">
+                    <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
                         <RadioButton Content="All" IsChecked="True" Checked="Filter_Checked" Tag="All" Margin="0,0,5,0">
                             <RadioButton.Style>
                                 <Style TargetType="RadioButton">
@@ -671,7 +634,7 @@
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Setter Property="Background" Value="#08FFFFFF" />
-                                            <Setter Property="BorderBrush" Value="#0CFFFFFF" />
+                                            <Setter Property="BorderBrush" Value="Transparent" />
                                             <Setter Property="BorderThickness" Value="1" />
                                             <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
                                             <Setter Property="RenderTransform">
@@ -686,7 +649,7 @@
                                                 </DataTrigger>
                                                 <Trigger Property="IsMouseOver" Value="True">
                                                     <Setter Property="Background" Value="#0EFFFFFF" />
-                                                    <Setter Property="BorderBrush" Value="#206366F1" />
+                                                    <Setter Property="BorderBrush" Value="#15FFFFFF" />
                                                     <Trigger.EnterActions>
                                                         <BeginStoryboard>
                                                             <Storyboard>
