@@ -1,8 +1,8 @@
 {
-  "pc_version": "4.0.0",
-  "pc_changelog": "v4.0.0 — Build Optimization & Widget Controls\n\n• Removed PdfSharp, MathSolver, GraphWindow, PdfMergeWindow for leaner build\n• Added Taskbar Widget toggle in Settings (system tray always visible)\n• Dynamic widget positioning — auto-avoids Windows widgets & system tray\n• Fixed widget visibility bug when taskbar redraws\n• Shake to Open toggle in Settings",
-  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v4.0.0/FlyShelf.exe",
-  "pc_sha256": "",
+  "pc_version": "4.1.0",
+  "pc_changelog": "v4.1.0 — UI Polish, Widget Stability & Virtual Desktop Fix\n\n• Removed large 'Clipboard' header — maximized clip list space\n• Fixed red DWM window border when focused\n• Clip card borders now transparent (no more red tint artifacts)\n• Taskbar widget: position caching eliminates flickering\n• Virtual desktop support: Expand opens on current desktop\n• Compact search bar with inline item count",
+  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v4.1.0/FlyShelf.exe",
+  "pc_sha256": "a968459a66fb63d3a5bb4ea0d23717941f7a8e7c49d9815cffc681ffb97401a9",
   "android_version": "4.1.0",
   "android_changelog": "v4.1.0 — Smart Sync & File Discovery\n\n• Search bar + category filters (Text, Images, Docs) for quick clip access\n• Native MediaStore document scanner — finds PDFs, docs, APKs on all Android devices\n• Simplified sync: first connect waits silently, no history dump\n• Smart dedup: duplicates move to top instead of being ignored\n• Redownload App button in Settings\n• Improved Redmi/MIUI file scanning compatibility",
   "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v4.1.0/FlyShelf_Mobile.apk"

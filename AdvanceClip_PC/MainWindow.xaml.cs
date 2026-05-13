@@ -1665,6 +1665,31 @@ namespace AdvanceClip
         {
             try
             {
+                if (_hubWindowInstance != null && _hubWindowInstance.IsLoaded)
+                {
+                    // If the window is on another virtual desktop, close and recreate it
+                    // on the current desktop instead of letting Windows switch desktops
+                    bool needsRecreate = false;
+                    try
+                    {
+                        var hwnd = new System.Windows.Interop.WindowInteropHelper(_hubWindowInstance).Handle;
+                        if (hwnd != IntPtr.Zero)
+                        {
+                            var vdm = (AdvanceClip.Classes.NativeMethods.IVirtualDesktopManager)new AdvanceClip.Classes.NativeMethods.VirtualDesktopManager();
+                            int hr = vdm.IsWindowOnCurrentVirtualDesktop(hwnd, out bool onCurrent);
+                            if (hr == 0 && !onCurrent)
+                                needsRecreate = true;
+                        }
+                    }
+                    catch { /* COM not available on older Windows — skip desktop check */ }
+
+                    if (needsRecreate)
+                    {
+                        _hubWindowInstance.ForceShutdownRelease();
+                        _hubWindowInstance = null;
+                    }
+                }
+
                 if (_hubWindowInstance == null || !_hubWindowInstance.IsLoaded)
                 {
                     _hubWindowInstance = new Windows.HubWindow(_viewModel);

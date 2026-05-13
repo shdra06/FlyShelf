@@ -8,7 +8,10 @@ using AdvanceClip.Classes;
 using AdvanceClip.ViewModels;
 using MicaWPF.Controls;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Windows.Interop;
 using System.Threading.Tasks;
+using static AdvanceClip.Classes.NativeMethods;
 
 namespace AdvanceClip.Windows
 {
@@ -158,6 +161,30 @@ namespace AdvanceClip.Windows
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
+            SuppressWindowBorder();
+        }
+
+        protected override void OnActivated(EventArgs e)
+        {
+            base.OnActivated(e);
+            SuppressWindowBorder();
+        }
+
+        /// <summary>
+        /// Removes the red DWM window border by setting DWMWA_BORDER_COLOR to DWMWA_COLOR_NONE.
+        /// </summary>
+        private void SuppressWindowBorder()
+        {
+            try
+            {
+                var hwnd = new WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    int colorNone = DWMWA_COLOR_NONE;
+                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref colorNone, Marshal.SizeOf<int>());
+                }
+            }
+            catch { }
         }
 
 
@@ -773,6 +800,7 @@ namespace AdvanceClip.Windows
             }
             catch (Exception ex) { Logger.LogAction("GROUPS UI", $"Create error: {ex.Message}"); }
         }
+
 
         private async void EditGroupBtn_Click(object sender, RoutedEventArgs e)
         {

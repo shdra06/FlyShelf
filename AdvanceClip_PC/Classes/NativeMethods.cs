@@ -370,4 +370,27 @@ public static partial class NativeMethods
     internal static partial int SHQueryUserNotificationState(out QUERY_USER_NOTIFICATION_STATE pquns);
 
     #endregion
+
+    #region Virtual Desktop COM
+
+    [ComImport]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    [Guid("a5cd92ff-29be-454c-8d04-d82879fb3f1b")]
+    internal interface IVirtualDesktopManager
+    {
+        [PreserveSig]
+        int IsWindowOnCurrentVirtualDesktop(IntPtr topLevelWindow, out bool onCurrentDesktop);
+
+        [PreserveSig]
+        int GetWindowDesktopId(IntPtr topLevelWindow, out Guid desktopId);
+
+        [PreserveSig]
+        int MoveWindowToDesktop(IntPtr topLevelWindow, ref Guid desktopId);
+    }
+
+    [ComImport]
+    [Guid("aa509086-5ca9-4c25-8f95-589d3c07b48a")]
+    internal class VirtualDesktopManager { }
+
+    #endregion
 }
