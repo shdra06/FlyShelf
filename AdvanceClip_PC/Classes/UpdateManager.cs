@@ -171,6 +171,9 @@ namespace AdvanceClip.Classes
 
             try
             {
+                // Clean up any leftover file from a previous failed attempt
+                try { if (File.Exists(tempExePath)) File.Delete(tempExePath); } catch { }
+
                 StatusChanged?.Invoke("Downloading update...");
                 Logger.LogAction("UPDATE", $"Downloading from {DownloadUrl}");
 
@@ -193,38 +196,45 @@ namespace AdvanceClip.Classes
 
                 long totalBytes = response.Content.Headers.ContentLength ?? -1;
                 
-                using var contentStream = await response.Content.ReadAsStreamAsync();
-                using var fileStream = new FileStream(tempExePath, FileMode.Create, FileAccess.Write, FileShare.None, 1048576);
-                
-                byte[] buffer = new byte[1048576]; // 1MB buffer
-                long totalRead = 0;
-                int bytesRead;
-
-                while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                // Download to file — explicit using blocks so streams are CLOSED before hash check
+                using (var contentStream = await response.Content.ReadAsStreamAsync())
+                using (var fileStream = new FileStream(tempExePath, FileMode.Create, FileAccess.Write, FileShare.None, 1048576))
                 {
-                    await fileStream.WriteAsync(buffer, 0, bytesRead);
-                    totalRead += bytesRead;
+                    byte[] buffer = new byte[1048576]; // 1MB buffer
+                    long totalRead = 0;
+                    int bytesRead;
 
-                    if (totalBytes > 0)
+                    while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                     {
-                        int pct = (int)(totalRead * 100 / totalBytes);
-                        DownloadProgressChanged?.Invoke(pct);
-                        
-                        string sizeMB = $"{totalRead / 1048576.0:F1}/{totalBytes / 1048576.0:F1} MB";
-                        StatusChanged?.Invoke($"Downloading... {pct}% ({sizeMB})");
+                        await fileStream.WriteAsync(buffer, 0, bytesRead);
+                        totalRead += bytesRead;
+
+                        if (totalBytes > 0)
+                        {
+                            int pct = (int)(totalRead * 100 / totalBytes);
+                            DownloadProgressChanged?.Invoke(pct);
+                            
+                            string sizeMB = $"{totalRead / 1048576.0:F1}/{totalBytes / 1048576.0:F1} MB";
+                            StatusChanged?.Invoke($"Downloading... {pct}% ({sizeMB})");
+                        }
                     }
-                }
+
+                    await fileStream.FlushAsync();
+                } // ← fileStream is now CLOSED here
 
                 DownloadProgressChanged?.Invoke(100);
-                Logger.LogAction("UPDATE", $"Downloaded {totalRead / 1048576.0:F1} MB to {tempExePath}");
+                Logger.LogAction("UPDATE", $"Download complete: {tempExePath}");
 
-                // SECURITY: SHA-256 hash verification
+                // SECURITY: SHA-256 hash verification (file is now fully closed and unlocked)
                 if (!string.IsNullOrEmpty(ExpectedHash))
                 {
                     StatusChanged?.Invoke("Verifying integrity...");
-                    using var sha = System.Security.Cryptography.SHA256.Create();
-                    using var verifyStream = File.OpenRead(tempExePath);
-                    string actualHash = BitConverter.ToString(sha.ComputeHash(verifyStream)).Replace("-", "").ToLowerInvariant();
+                    string actualHash;
+                    using (var sha = System.Security.Cryptography.SHA256.Create())
+                    using (var verifyStream = File.OpenRead(tempExePath))
+                    {
+                        actualHash = BitConverter.ToString(sha.ComputeHash(verifyStream)).Replace("-", "").ToLowerInvariant();
+                    }
 
                     if (actualHash != ExpectedHash)
                     {
@@ -237,7 +247,7 @@ namespace AdvanceClip.Classes
                 }
                 else
                 {
-                    Logger.LogAction("UPDATE", "\u26a0\ufe0f No hash in version.json \u2014 skipping integrity check (pre-v2.6.0 release)");
+                    Logger.LogAction("UPDATE", "\u26a0\ufe0f No hash in version.json \u2014 skipping integrity check");
                 }
 
                 StatusChanged?.Invoke("Download complete! Verified and ready to install.");
