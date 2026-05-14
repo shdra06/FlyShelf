@@ -38,6 +38,9 @@ namespace AdvanceClip.Classes
         private bool _enableLocalNetworkSync = false;
         public bool EnableLocalNetworkSync { get => _enableLocalNetworkSync; set => SetProperty(ref _enableLocalNetworkSync, value); }
         
+        private bool _enableLocalLAN = true;
+        public bool EnableLocalLAN { get => _enableLocalLAN; set => SetProperty(ref _enableLocalLAN, value); }
+        
         private bool _enableGlobalCloudflare = false;
         public bool EnableGlobalCloudflare { get => _enableGlobalCloudflare; set => SetProperty(ref _enableGlobalCloudflare, value); }
         

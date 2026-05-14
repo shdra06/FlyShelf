@@ -1111,20 +1111,27 @@
                             </StackPanel>
                             <Border Style="{StaticResource PremiumSettingStyle}">
                                 <StackPanel>
+                                    <!-- LAN Toggle -->
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                            <TextBlock Text="Enable Phone Connection (Local Range)" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                                            <TextBlock Text="Start the lightweight clipboard server on your private router Wi-Fi." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,4,16,0" TextWrapping="Wrap" LineHeight="18"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="Local Network" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                <Border Background="#220EA5E9" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
+                                                    <TextBlock Text="LAN" FontSize="10" FontWeight="Bold" Foreground="#0EA5E9" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock Text="Sync clipboard with devices on the same Wi-Fi network via direct IP connection." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,4,16,0" TextWrapping="Wrap" LineHeight="18"/>
                                         </StackPanel>
-                                        <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableLocalNetworkSync, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableLocalLAN, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                     </Grid>
                                     
                                     <Border BorderThickness="0,1,0,0" BorderBrush="#11FFFFFF" Margin="0,16" />
                                     
+                                    <!-- Cloudflare Toggle -->
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
@@ -1251,54 +1258,127 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <!-- Paired Devices List -->
+                                    <!-- ═══ LIVE P2P PEER STATUS ═══ -->
                                     <Border BorderThickness="0,1,0,0" BorderBrush="#11FFFFFF" Margin="0,4,0,14" />
 
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                         <Border Width="8" Height="8" CornerRadius="4" Background="#10B981" Margin="0,0,8,0" VerticalAlignment="Center"/>
                                         <TextBlock Text="Paired Devices" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
+                                        <Border Background="#1510B981" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
+                                            <TextBlock x:Name="PeerCountBadge" Text="0 online" FontSize="10" FontWeight="Bold" Foreground="#10B981"/>
+                                        </Border>
+                                        <ui:Button Content="🔄 Force Sync" Appearance="Secondary" Padding="8,3" CornerRadius="6" 
+                                                   Click="ForcePeerSync_Click" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                   ToolTip="Re-fetch all peer URLs from Firebase and reconnect"/>
                                     </StackPanel>
-                                    <ItemsControl x:Name="PairedDevicesPanel">
+
+                                    <!-- Live P2P status from PeerManager (5s heartbeat) -->
+                                    <ItemsControl x:Name="PeerStatusPanel">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Border Background="#08FFFFFF" CornerRadius="8" Padding="10,8" Margin="0,0,0,4">
+                                                <Border CornerRadius="10" Padding="12,10" Margin="0,0,0,5">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="#08FFFFFF"/>
+                                                            <Setter Property="BorderBrush" Value="#10FFFFFF"/>
+                                                            <Setter Property="BorderThickness" Value="1"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsAlive}" Value="True">
+                                                                    <Setter Property="Background" Value="#0810B981"/>
+                                                                    <Setter Property="BorderBrush" Value="#2010B981"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
                                                     <Grid>
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="Auto"/>
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="Auto"/>
                                                             <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
-                                                        <ui:SymbolIcon Grid.Column="0" FontSize="16" Foreground="#A78BFA" Margin="0,0,10,0" VerticalAlignment="Center">
+
+                                                        <!-- Device icon -->
+                                                        <ui:SymbolIcon Grid.Column="0" Symbol="Desktop24" FontSize="18" Margin="0,0,10,0" VerticalAlignment="Center">
                                                             <ui:SymbolIcon.Style>
                                                                 <Style TargetType="ui:SymbolIcon">
-                                                                    <Setter Property="Symbol" Value="Phone24"/>
+                                                                    <Setter Property="Foreground" Value="#50FFFFFF"/>
                                                                     <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding DeviceType}" Value="PC">
-                                                                            <Setter Property="Symbol" Value="Desktop24"/>
-                                                                        </DataTrigger>
-                                                                        <DataTrigger Binding="{Binding DeviceType}" Value="Browser">
-                                                                            <Setter Property="Symbol" Value="Globe24"/>
+                                                                        <DataTrigger Binding="{Binding IsAlive}" Value="True">
+                                                                            <Setter Property="Foreground" Value="#A78BFA"/>
                                                                         </DataTrigger>
                                                                     </Style.Triggers>
                                                                 </Style>
                                                             </ui:SymbolIcon.Style>
                                                         </ui:SymbolIcon>
+
+                                                        <!-- Name + transport info -->
                                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                             <TextBlock Text="{Binding DeviceName}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                                                            <TextBlock FontSize="9" Foreground="#A78BFA88">
-                                                                <TextBlock.Text>
-                                                                    <MultiBinding StringFormat="{}Paired {0:MMM dd} • Last seen {1:MMM dd HH:mm}">
-                                                                        <Binding Path="PairedAt"/>
-                                                                        <Binding Path="LastSeen"/>
-                                                                    </MultiBinding>
-                                                                </TextBlock.Text>
+                                                            <TextBlock Text="{Binding StatusText}" FontSize="9" Foreground="#60FFFFFF" Margin="0,1,0,0"/>
+                                                        </StackPanel>
+
+                                                        <!-- LAN status dot -->
+                                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0">
+                                                            <Border Width="7" Height="7" CornerRadius="4" Margin="0,0,4,0" VerticalAlignment="Center">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Background" Value="#30FFFFFF"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsLanActive}" Value="True">
+                                                                                <Setter Property="Background" Value="#10B981"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                            </Border>
+                                                            <TextBlock Text="LAN" FontSize="9" FontWeight="SemiBold" VerticalAlignment="Center">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Foreground" Value="#30FFFFFF"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsLanActive}" Value="True">
+                                                                                <Setter Property="Foreground" Value="#10B981"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
                                                             </TextBlock>
                                                         </StackPanel>
-                                                        <TextBlock Grid.Column="2" Text="{Binding LastKnownIP}" FontSize="9" Foreground="#30FFFFFF" VerticalAlignment="Center" Margin="0,0,8,0"/>
-                                                        <Button Grid.Column="3" Content="✕" Tag="{Binding DeviceId}" Click="RemovePairedDevice_Click" 
+
+                                                        <!-- Cloud status dot -->
+                                                        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0">
+                                                            <Border Width="7" Height="7" CornerRadius="4" Margin="0,0,4,0" VerticalAlignment="Center">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Background" Value="#30FFFFFF"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsCloudActive}" Value="True">
+                                                                                <Setter Property="Background" Value="#F59E0B"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                            </Border>
+                                                            <TextBlock Text="Cloud" FontSize="9" FontWeight="SemiBold" VerticalAlignment="Center">
+                                                                <TextBlock.Style>
+                                                                    <Style TargetType="TextBlock">
+                                                                        <Setter Property="Foreground" Value="#30FFFFFF"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsCloudActive}" Value="True">
+                                                                                <Setter Property="Foreground" Value="#F59E0B"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </TextBlock.Style>
+                                                            </TextBlock>
+                                                        </StackPanel>
+
+                                                        <!-- Remove button -->
+                                                        <Button Grid.Column="4" Content="✕" Tag="{Binding DeviceId}" Click="RemovePairedDevice_Click" 
                                                                 Padding="4,2" FontSize="10" Background="Transparent" BorderThickness="0" 
-                                                                Foreground="#EF4444" Cursor="Hand" ToolTip="Remove device" VerticalAlignment="Center"/>
+                                                                Foreground="#EF4444" Cursor="Hand" ToolTip="Remove device" VerticalAlignment="Center" Margin="6,0,0,0"/>
                                                     </Grid>
                                                 </Border>
                                             </DataTemplate>
@@ -1308,31 +1388,6 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- RESTART SERVER + DIAGNOSTICS -->
-                            <Border Style="{StaticResource PremiumSettingStyle}" Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableLocalNetworkSync, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                        <Border Width="28" Height="28" CornerRadius="7" Background="#1AEF4444" Margin="0,0,10,0">
-                                            <ui:SymbolIcon Symbol="WrenchScrewdriver24" FontSize="14" Foreground="#EF4444" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Border>
-                                        <TextBlock Text="Server Troubleshooting" FontWeight="Bold" FontSize="16" Foreground="#EF4444" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                    <TextBlock Text="If the local server or Cloudflare tunnel isn't working, restart the server below. The diagnostic log shows exactly what happened during the bind process." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,0,0,14" TextWrapping="Wrap" LineHeight="18" />
-                                    
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                        <ui:Button Content="🔄 Restart Server" Appearance="Danger" Padding="14,8" CornerRadius="10" Click="RestartServer_Click" Margin="0,0,8,0" />
-                                        <ui:Button Content="📋 Copy Diagnostics" Appearance="Secondary" Padding="14,8" CornerRadius="10" Click="CopyServerDiagnostics_Click" />
-                                    </StackPanel>
-                                    
-                                    <!-- Live diagnostic log -->
-                                    <TextBlock Text="Server Bind Log" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,8"/>
-                                    <Border Background="#08FFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1" CornerRadius="10" Padding="12" MaxHeight="300">
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                                            <TextBlock Name="ServerDiagnosticsLog" FontFamily="Consolas" FontSize="11" Foreground="#10B981" TextWrapping="Wrap" Text="Click 'Restart Server' to see live diagnostics..." />
-                                        </ScrollViewer>
-                                    </Border>
-                                </StackPanel>
-                            </Border>
 
                             <!-- ACTIVE DEVICES SECTION -->
                             <StackPanel Orientation="Horizontal" Margin="0,10,0,14">
@@ -2101,14 +2156,12 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
                     
                     <StackPanel Grid.Row="0">
                         <StackPanel Margin="0,0,0,6">
-                            <TextBlock Text="Telemetry &amp; Audit Logs" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
-                            <TextBlock Text="Internal execution records, background events, and fault diagnostics." FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                            <TextBlock Text="System Logs" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
+                            <TextBlock Text="Unified execution log — clipboard events, network sync, server diagnostics, and fault traces." FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,4,0,0" TextWrapping="Wrap" />
                         </StackPanel>
                         <Border Height="2" CornerRadius="1" HorizontalAlignment="Left" Width="60" Margin="0,8,0,14">
                             <Border.Background>
@@ -2119,16 +2172,46 @@
                             </Border.Background>
                         </Border>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                            <ui:Button Content="Refresh Logs" Appearance="Secondary" Padding="14,7" CornerRadius="8" Margin="0,0,8,0" Click="RefreshLogs_Click">
+                            <ui:Button x:Name="SendAllLogsBtn" Appearance="Primary" Padding="14,7" CornerRadius="8" Margin="0,0,8,0" Click="SendAllLogs_Click" ToolTip="Copy all system, network, and server logs to clipboard as text">
+                                <ui:Button.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#6366F1" Offset="0"/>
+                                        <GradientStop Color="#8B5CF6" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </ui:Button.Background>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Send24" FontSize="14" Margin="0,0,6,0"/>
+                                    <TextBlock Text="Send All Logs" FontWeight="SemiBold" FontSize="12"/>
+                                </StackPanel>
+                            </ui:Button>
+                            <ui:Button Content="Refresh" Appearance="Secondary" Padding="14,7" CornerRadius="8" Margin="0,0,8,0" Click="RefreshLogs_Click">
                                 <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" /></ui:Button.Icon>
                             </ui:Button>
-                            <ui:Button Content="📋 Copy Network Logs" Appearance="Primary" Padding="14,7" CornerRadius="8" Margin="0,0,8,0" Click="CopyNetworkLogs_Click" ToolTip="Copy last 200 network/Cloudflare/Firebase log lines to clipboard" />
-                            <ui:Button Content="🔍 Run Diagnostics" Appearance="Caution" Padding="14,7" CornerRadius="8" Margin="0,0,8,0" Click="RunDiagnostics_Click" ToolTip="Capture full system state: NICs, DNS, ports, Cloudflare status" />
                             <ui:Button Content="📂 Open Logs Folder" Appearance="Secondary" Padding="14,7" CornerRadius="8" Click="OpenLogsFolder_Click" />
                         </StackPanel>
-                    </StackPanel>
 
-                    <!-- Main activity log -->
+                        <!-- Server Troubleshooting (moved from Network tab) -->
+                        <Border Background="#08FFFFFF" BorderBrush="#15EF4444" BorderThickness="1" CornerRadius="12" Padding="16,12" Margin="0,6,0,10">
+                            <StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <Border Width="24" Height="24" CornerRadius="6" Background="#1AEF4444" Margin="0,0,8,0">
+                                        <ui:SymbolIcon Symbol="WrenchScrewdriver24" FontSize="12" Foreground="#EF4444" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Text="Server Troubleshooting" FontWeight="Bold" FontSize="13" Foreground="#EF4444" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <ui:Button Content="🔄 Restart Server" Appearance="Danger" Padding="10,5" CornerRadius="8" Click="RestartServer_Click" Margin="0,0,6,0" FontSize="11"/>
+                                    <ui:Button Content="📋 Copy Diagnostics" Appearance="Secondary" Padding="10,5" CornerRadius="8" Click="CopyServerDiagnostics_Click" FontSize="11"/>
+                                </StackPanel>
+                                <Border Background="#06FFFFFF" CornerRadius="8" Padding="10" MaxHeight="150">
+                                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                                        <TextBlock Name="ServerDiagnosticsLog" FontFamily="Consolas" FontSize="10" Foreground="#10B981" TextWrapping="Wrap" Text="Click 'Restart Server' to see diagnostics..." />
+                                    </ScrollViewer>
+                                </Border>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                    <!-- Unified log viewer -->
                     <Border Grid.Row="1" Background="#08FFFFFF" BorderBrush="#10FFFFFF" BorderThickness="1" CornerRadius="14" Padding="0" Margin="0,0,0,8" ClipToBounds="True">
                         <Grid>
                             <Grid.RowDefinitions>
@@ -2140,38 +2223,10 @@
                                     <Ellipse Width="10" Height="10" Fill="#EF4444" Margin="0,0,6,0"/>
                                     <Ellipse Width="10" Height="10" Fill="#F59E0B" Margin="0,0,6,0"/>
                                     <Ellipse Width="10" Height="10" Fill="#10B981" Margin="0,0,12,0"/>
-                                    <TextBlock Text="system.log" FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" FontFamily="Consolas"/>
+                                    <TextBlock Text="flyshelf_unified.log" FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" FontFamily="Consolas"/>
                                 </StackPanel>
                             </Border>
                             <TextBox Grid.Row="1" x:Name="LogsTextBox" IsReadOnly="True" Background="Transparent" BorderThickness="0" FontFamily="Consolas" FontSize="13" Foreground="#10B981" TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" AcceptsReturn="True" SelectionBrush="#3310B981" Padding="16,12" />
-                        </Grid>
-                    </Border>
-
-                    <!-- Network diagnostics header -->
-                    <StackPanel Grid.Row="2" Margin="0,4,0,6">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="🌐" FontSize="16" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Network Diagnostics" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
-                            <TextBlock Text=" — Cloudflare / Firebase / Sync events" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" Margin="6,0,0,0"/>
-                        </StackPanel>
-                    </StackPanel>
-
-                    <!-- Network diagnostics log -->
-                    <Border Grid.Row="3" Background="#08FFFFFF" BorderBrush="#1AF59E0B" BorderThickness="1" CornerRadius="14" Padding="0" Margin="0,0,0,16" ClipToBounds="True">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-                            <Border Grid.Row="0" Background="#0AF59E0B" Padding="16,8">
-                                <StackPanel Orientation="Horizontal">
-                                    <Ellipse Width="10" Height="10" Fill="#F59E0B" Margin="0,0,6,0"/>
-                                    <Ellipse Width="10" Height="10" Fill="#10B981" Margin="0,0,6,0"/>
-                                    <Ellipse Width="10" Height="10" Fill="#6366F1" Margin="0,0,12,0"/>
-                                    <TextBlock Text="network_diagnostics.log" FontSize="11" Foreground="#F59E0B" VerticalAlignment="Center" FontFamily="Consolas"/>
-                                </StackPanel>
-                            </Border>
-                            <TextBox Grid.Row="1" x:Name="NetLogsTextBox" IsReadOnly="True" Background="Transparent" BorderThickness="0" FontFamily="Consolas" FontSize="12" Foreground="#F59E0B" TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" AcceptsReturn="True" SelectionBrush="#33F59E0B" Padding="16,12" />
                         </Grid>
                     </Border>
                 </Grid>

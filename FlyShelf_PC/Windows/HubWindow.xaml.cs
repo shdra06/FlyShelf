@@ -317,33 +317,84 @@ namespace AdvanceClip.Windows
         {
             try
             {
-                // Main activity log
-                string logFile = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs", "activity_log.txt");
+                var sb = new System.Text.StringBuilder();
+                string logsDir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
+
+                // 1. Main activity log
+                string logFile = System.IO.Path.Combine(logsDir, "activity_log.txt");
                 if (System.IO.File.Exists(logFile))
                 {
-                    LogsTextBox.Text = System.IO.File.ReadAllText(logFile);
-                    LogsTextBox.ScrollToEnd();
-                }
-                else
-                {
-                    LogsTextBox.Text = "System Telemetry clean. No hardware logs recorded.";
+                    string activityLog = System.IO.File.ReadAllText(logFile);
+                    sb.AppendLine("══════════════════════════════════════════════════════════");
+                    sb.AppendLine("  ACTIVITY LOG");
+                    sb.AppendLine("══════════════════════════════════════════════════════════");
+                    sb.AppendLine(activityLog);
                 }
 
-                // Network diagnostics log
+                // 2. Network diagnostics log
                 string netLogFile = Logger.GetNetworkLogPath();
                 if (System.IO.File.Exists(netLogFile))
                 {
-                    NetLogsTextBox.Text = System.IO.File.ReadAllText(netLogFile);
-                    NetLogsTextBox.ScrollToEnd();
+                    string netLog = System.IO.File.ReadAllText(netLogFile);
+                    sb.AppendLine();
+                    sb.AppendLine("══════════════════════════════════════════════════════════");
+                    sb.AppendLine("  NETWORK DIAGNOSTICS");
+                    sb.AppendLine("══════════════════════════════════════════════════════════");
+                    sb.AppendLine(netLog);
                 }
-                else
+
+                // 3. Server bind/troubleshooting diagnostics
+                string serverDiag = GetServerDiagnostics();
+                if (!string.IsNullOrWhiteSpace(serverDiag) && !serverDiag.StartsWith("No"))
                 {
-                    NetLogsTextBox.Text = "No network diagnostics recorded yet.\nClick 'Run Diagnostics' to capture a snapshot.";
+                    sb.AppendLine();
+                    sb.AppendLine("══════════════════════════════════════════════════════════");
+                    sb.AppendLine("  SERVER TROUBLESHOOTING");
+                    sb.AppendLine("══════════════════════════════════════════════════════════");
+                    sb.AppendLine(serverDiag);
                 }
+
+                LogsTextBox.Text = sb.Length > 0 ? sb.ToString() : "No logs recorded yet.";
+                LogsTextBox.ScrollToEnd();
             }
             catch (Exception ex)
             {
-                LogsTextBox.Text = $"Failed to parse telemetry: {ex.Message}";
+                LogsTextBox.Text = $"Failed to parse logs: {ex.Message}";
+            }
+        }
+
+        private void SendAllLogs_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // Force refresh first
+                RefreshLogs_Click(null, null);
+                
+                string logText = LogsTextBox.Text;
+                if (string.IsNullOrWhiteSpace(logText) || logText == "No logs recorded yet.")
+                {
+                    ToastWindow.ShowToast("⚠️ No logs to send");
+                    return;
+                }
+
+                // Prepend system info header
+                var header = new System.Text.StringBuilder();
+                header.AppendLine("═══════════════════════════════════════════════════════════");
+                header.AppendLine($"  FlyShelf Full Diagnostic Report");
+                header.AppendLine($"  PC: {Environment.MachineName}");
+                header.AppendLine($"  OS: {Environment.OSVersion}");
+                header.AppendLine($"  Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                header.AppendLine($"  Version: {UpdateManager.CurrentVersion}");
+                header.AppendLine("═══════════════════════════════════════════════════════════");
+                header.AppendLine();
+                header.Append(logText);
+
+                Clipboard.SetText(header.ToString());
+                ToastWindow.ShowToast("📋 All logs copied to clipboard — paste and send to developer!");
+            }
+            catch (Exception ex)
+            {
+                ToastWindow.ShowToast($"❌ Failed to copy: {ex.Message}");
             }
         }
 
@@ -360,7 +411,6 @@ namespace AdvanceClip.Windows
                 ToastWindow.ShowToast($"❌ Failed to copy: {ex.Message}");
             }
         }
-
         private async void SendLogsToDashboard_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -1178,8 +1228,31 @@ namespace AdvanceClip.Windows
             try
             {
                 var devices = DevicePairingManager.GetPairedDevices();
-                PairedDevicesPanel.ItemsSource = devices;
-                NoPairedDevicesText.Visibility = devices.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                var peerStatuses = PeerManager.Instance?.GetPeerStatuses();
+
+                // Build merged list with live P2P status
+                var mergedList = devices.Select(d =>
+                {
+                    var peer = peerStatuses?.FirstOrDefault(p => p.DeviceId == d.DeviceId);
+                    return new PeerStatusItem
+                    {
+                        DeviceId = d.DeviceId,
+                        DeviceName = d.DeviceName,
+                        IsAlive = peer?.IsAlive ?? false,
+                        Transport = peer?.Transport ?? "offline",
+                        IsLanActive = !string.IsNullOrEmpty(peer?.LanUrl) && (peer?.IsAlive ?? false),
+                        IsCloudActive = !string.IsNullOrEmpty(peer?.CloudflareUrl) && (peer?.IsAlive ?? false),
+                        StatusText = peer?.IsAlive == true
+                            ? $"Connected via {peer.Transport} • Last seen {peer.LastSeen:HH:mm:ss}"
+                            : "Offline"
+                    };
+                }).ToList();
+
+                PeerStatusPanel.ItemsSource = mergedList;
+                NoPairedDevicesText.Visibility = mergedList.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+
+                int onlineCount = mergedList.Count(p => p.IsAlive);
+                PeerCountBadge.Text = $"{onlineCount} online";
             }
             catch (Exception ex)
             {
@@ -1206,6 +1279,25 @@ namespace AdvanceClip.Windows
                 Windows.ToastWindow.ShowToast("Pairing info copied! 📋");
             }
             catch { }
+        }
+
+        private async void ForcePeerSync_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Windows.ToastWindow.ShowToast("🔄 Force syncing peers...");
+                if (PeerManager.Instance != null)
+                {
+                    await PeerManager.Instance.ForceResync();
+                }
+                RefreshPairedDevicesList();
+                Windows.ToastWindow.ShowToast("✅ Peer sync complete!");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("HUB", $"Force sync failed: {ex.Message}");
+                Windows.ToastWindow.ShowToast("⚠️ Sync failed — check logs");
+            }
         }
 
         private void RemovePairedDevice_Click(object sender, RoutedEventArgs e)

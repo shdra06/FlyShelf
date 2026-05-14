@@ -10,6 +10,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using ZXing;
 using ZXing.Common;
+using AdvanceClip.Windows;
 using ZXing.Windows.Compatibility;
 
 namespace AdvanceClip.Classes
@@ -53,6 +54,9 @@ namespace AdvanceClip.Classes
         public static event Action<string> OnDevicePaired;
         private static readonly HttpClient _httpClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
         private const string FIREBASE_BASE = "https://advance-sync-default-rtdb.firebaseio.com";
+
+        /// <summary>Maximum number of paired devices allowed. Remove existing devices to pair new ones.</summary>
+        public const int MAX_PAIRED_DEVICES = 10;
         
         /// <summary>Wraps a Firebase REST URL with auth token.</summary>
         private static async Task<string> AuthUrl(string path)
@@ -214,10 +218,23 @@ namespace AdvanceClip.Classes
                     existing.LastSeen = DateTime.Now;
                     existing.LastKnownIP = remoteIP;
                     existing.DeviceName = deviceName;
-                    Logger.LogAction("PAIR", $"Ã°Å¸â€â€ž Re-paired existing device: {deviceName}");
+                    Logger.LogAction("PAIR", $"Ã°Å¸â€ â€ž Re-paired existing device: {deviceName}");
                 }
                 else
                 {
+                    // Enforce pairing limit
+                    if (_pairedDevices.Count >= MAX_PAIRED_DEVICES)
+                    {
+                        Logger.LogAction("PAIR", $"⚠️ Pairing limit reached ({MAX_PAIRED_DEVICES} devices). Rejected: {deviceName}");
+                        try
+                        {
+                            System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
+                                ToastWindow.ShowToast($"⚠️ Pairing limit reached ({MAX_PAIRED_DEVICES} devices)\nRemove existing devices to add new ones."));
+                        }
+                        catch { }
+                        return false;
+                    }
+
                     _pairedDevices.Add(new PairedDevice
                     {
                         DeviceId = deviceId,
@@ -228,7 +245,7 @@ namespace AdvanceClip.Classes
                         LastSeen = DateTime.Now,
                         LastKnownIP = remoteIP
                     });
-                    Logger.LogAction("PAIR", $"Ã¢Å“â€¦ New device paired: {deviceName} ({deviceType}) from {remoteIP}");
+                    Logger.LogAction("PAIR", $"✅ New device paired: {deviceName} ({deviceType}) from {remoteIP}");
                 }
             }
 

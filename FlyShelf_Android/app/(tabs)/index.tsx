@@ -804,12 +804,13 @@ export default function SyncScreen() {
       } catch (e) { syncLog('CLEANUP', `Startup cleanup error: ${e}`); }
     })();
 
-    // ─── Active Devices: ONE-TIME FETCH instead of persistent listener ───
-    // This eliminates 1 persistent WebSocket connection per user.
-    // The LAN poller discovers PC URLs directly via X-Global-Url headers.
-    const fetchActiveDevices = async () => {
+    // ─── Active Devices: REAL-TIME onValue listener ───
+    // Catches PC URLs the instant they appear — critical because
+    // v5 PC auto-deletes its URL from Firebase after 5 seconds.
+    // The listener caches URLs locally so they survive deletion.
+    const peerDevicesRef = ref(database, `active_devices/${pk}`);
+    const unsubscribeDevices = onValue(peerDevicesRef, async (snapshot) => {
       try {
-        const snapshot = await get(ref(database, `active_devices/${pk}`));
         let rawDevices: any[] = [];
         if (snapshot.exists()) {
           const data = snapshot.val();
@@ -829,9 +830,20 @@ export default function SyncScreen() {
               }
             } catch {}
           }
-          // Phase 4: Persist Cloudflare URL for next app launch
+          // Cache Cloudflare URL locally — survives the 5-second Firebase auto-delete
           if (dev.DeviceType === 'PC' && dev.GlobalUrl && dev.GlobalUrl.includes('trycloudflare.com')) {
             AsyncStorage.setItem('lastCloudflareUrl', dev.GlobalUrl).catch(() => {});
+            AsyncStorage.setItem('pairedGlobalUrl', dev.GlobalUrl).catch(() => {});
+            // Also update the in-memory PC URL cache immediately
+            cachedPcUrlRef.current = dev.GlobalUrl;
+            cachedPcUrlTimestampRef.current = Date.now();
+            syncLog('PEER SSE', `⚡ PC URL cached: ${dev.GlobalUrl.substring(0, 50)}`);
+          }
+          // Cache LAN URL if available
+          if (dev.DeviceType === 'PC' && dev.LocalIp) {
+            const lanIp = dev.LocalIp.trim();
+            const lanUrl = lanIp.startsWith('http') ? lanIp.replace(/\/$/, '') : `http://${lanIp.includes(':') ? lanIp : lanIp + ':8999'}`;
+            AsyncStorage.setItem('pairedLocalUrl', lanUrl).catch(() => {});
           }
         }
         // Fallback: probe manual IP from Settings
@@ -863,14 +875,11 @@ export default function SyncScreen() {
           syncLog('FIREBASE', 'No PC found — activating Firebase clipboard listener immediately');
           connectFirebaseClipboardListener(pk);
         }
-      } catch (e) { syncLog('FIREBASE', `Active devices fetch error: ${e}`); }
-    };
-    fetchActiveDevices();
-    // Re-fetch active devices every 5 minutes (not a persistent listener)
-    const devicesRefreshTimer = setInterval(fetchActiveDevices, 300_000);
+      } catch (e) { syncLog('FIREBASE', `Active devices listener error: ${e}`); }
+    });
 
     return () => {
-      clearInterval(devicesRefreshTimer);
+      unsubscribeDevices();
       if (firebaseUnsubFeedRef.current) { firebaseUnsubFeedRef.current(); firebaseUnsubFeedRef.current = null; }
       if (firebaseFallbackTimerRef.current) { clearTimeout(firebaseFallbackTimerRef.current); firebaseFallbackTimerRef.current = null; }
     };
@@ -1770,7 +1779,23 @@ export default function SyncScreen() {
   // ─── Force Sync ───
   const openForceSyncModal = async () => {
     if (selectedItemIds.size === 0) { Alert.alert('Nothing Selected'); return; }
-    try { const pk = pairingKeyRef.current; if (!pk) { setForceSyncDevices([]); setIsForceSyncModalVisible(true); return; } const { get: firebaseGet } = await import('firebase/database'); const snapshot = await firebaseGet(ref(database, `active_devices/${pk}`)); if (snapshot.exists()) { const data = snapshot.val(); setForceSyncDevices(Object.keys(data).map(k => ({ key: k, ...data[k] })).filter(d => d.DeviceName !== deviceName)); } else setForceSyncDevices([]); } catch (e) { setForceSyncDevices([]); }
+    // v5: Use cached activeDevices first (URLs may be auto-deleted from Firebase after 5s)
+    try {
+      if (activeDevicesRef.current.length > 0) {
+        const devs = activeDevicesRef.current.filter((d: any) => d.DeviceName !== deviceName);
+        setForceSyncDevices(devs.map((d: any) => ({ key: d._key || d.DeviceId, ...d })));
+      } else {
+        // Fallback: try Firebase (might be empty if URLs were cleaned)
+        const pk = pairingKeyRef.current;
+        if (!pk) { setForceSyncDevices([]); setIsForceSyncModalVisible(true); return; }
+        const { get: firebaseGet } = await import('firebase/database');
+        const snapshot = await firebaseGet(ref(database, `active_devices/${pk}`));
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          setForceSyncDevices(Object.keys(data).map(k => ({ key: k, ...data[k] })).filter(d => d.DeviceName !== deviceName));
+        } else setForceSyncDevices([]);
+      }
+    } catch (e) { setForceSyncDevices([]); }
     setIsForceSyncModalVisible(true);
   };
   const executeForcedSync = async (targetDeviceKeys: string[]) => {

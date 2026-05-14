@@ -310,6 +310,31 @@ namespace AdvanceClip.ViewModels
                     else LocalServer.Stop();
                     OnPropertyChanged(nameof(LocalServer));
                 }
+                else if (e.PropertyName == nameof(AdvanceClip.Classes.AdvanceSettings.EnableLocalLAN))
+                {
+                    // LAN toggle changed — auto-manage the master server toggle
+                    bool lanOn = AdvanceClip.Classes.SettingsManager.Current.EnableLocalLAN;
+                    bool cfOn = AdvanceClip.Classes.SettingsManager.Current.EnableGlobalCloudflare;
+                    
+                    if (lanOn || cfOn)
+                    {
+                        // At least one transport active — ensure server is running
+                        if (!AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync)
+                            AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync = true;
+                    }
+                    else
+                    {
+                        // Both transports off — stop the server
+                        AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync = false;
+                    }
+                    
+                    // Force PeerManager to re-handshake with new transport preference
+                    _ = System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        if (AdvanceClip.Classes.PeerManager.Instance != null) await AdvanceClip.Classes.PeerManager.Instance.ForceResync();
+                    });
+                    AdvanceClip.Classes.Logger.LogAction("SETTINGS", $"LAN transport: {(lanOn ? "ON" : "OFF")}");
+                }
                 else if (e.PropertyName == nameof(AdvanceClip.Classes.AdvanceSettings.EnableGlobalFirebaseSync))
                 {
                     if (AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync)
@@ -339,6 +364,14 @@ namespace AdvanceClip.ViewModels
             {
                 System.Threading.Tasks.Task.Run(() =>
                 {
+                    // Auto-reconcile: server should be up if either transport is on
+                    bool lanOn = AdvanceClip.Classes.SettingsManager.Current.EnableLocalLAN;
+                    bool cfOn = AdvanceClip.Classes.SettingsManager.Current.EnableGlobalCloudflare;
+                    if ((lanOn || cfOn) && !AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync)
+                    {
+                        AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync = true;
+                    }
+                    
                     if (AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync) 
                     {
                         LocalServer.Start();
@@ -633,38 +666,21 @@ namespace AdvanceClip.ViewModels
                 var srv = LocalServer;
                 bool tunnelOk = AdvanceClip.Classes.FirebaseSyncManager.CachedTunnelVerified;
 
-                // PRIORITY 1: Cloudflare tunnel (free, unlimited size)
+                // PRIORITY 1: Direct P2P push to connected peers via Cloudflare tunnel
                 if (srv != null && !string.IsNullOrEmpty(srv.GlobalUrl) && srv.GlobalUrl.Contains("trycloudflare.com") && tunnelOk)
                 {
                     string downloadUrl = $"{srv.GlobalUrl}/download?path={Uri.EscapeDataString(filePath)}";
-                    AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"Sending '{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) via Cloudflare");
+                    AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"Sending '{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) via Cloudflare P2P");
                     var syncItem = item.CloneForSync(downloadUrl);
                     await AdvanceClip.Classes.FirebaseSyncManager.PushToGlobalSync(syncItem);
                     Application.Current.Dispatcher.Invoke(() =>
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"{label} ({FormatFileSize(fSize)}) synced via Cloudflare \ud83c\udf10"));
+                        AdvanceClip.Windows.ToastWindow.ShowToast($"{label} ({FormatFileSize(fSize)}) synced via P2P \ud83c\udf10"));
                     return;
                 }
 
-                // PRIORITY 2: Firebase Storage (only for non-image files, size-limited)
-                // Images NEVER go to Firebase Storage — Cloudflare tunnel is required for images
-                if (label != "IMAGE" && fSize > 0 && fSize < maxFirebaseBytes)
-                {
-                    AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"Uploading '{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) to Firebase Storage");
-                    string fbUrl = await AdvanceClip.Classes.FirebaseSyncManager.UploadFileToStorageAsync(filePath);
-                    if (!string.IsNullOrEmpty(fbUrl))
-                    {
-                        var syncItem = item.CloneForSync(fbUrl);
-                        await AdvanceClip.Classes.FirebaseSyncManager.PushToGlobalSync(syncItem);
-                        Application.Current.Dispatcher.Invoke(() =>
-                            AdvanceClip.Windows.ToastWindow.ShowToast($"{label} synced via Firebase \u2601\ufe0f"));
-                        return;
-                    }
-                    AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", "Firebase Storage upload returned null");
-                    return;
-                }
-
-                // Fallback: too large and no Cloudflare
-                AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"'{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) — no Cloudflare, exceeds Firebase limit");
+                // No Cloudflare tunnel available — file cannot be synced remotely
+                // Firebase Storage is NEVER used for content transfer
+                AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"'{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) — no Cloudflare tunnel, file not synced");
                 Application.Current.Dispatcher.Invoke(() =>
                     AdvanceClip.Windows.ToastWindow.ShowToast($"\u26a0\ufe0f {Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) — needs Cloudflare tunnel"));
             }

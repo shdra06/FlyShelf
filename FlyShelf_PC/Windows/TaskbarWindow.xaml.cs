@@ -72,6 +72,15 @@ namespace AdvanceClip.Windows
             {
                 Show();
                 _timer.Start();
+
+                // Fix: SetupWindow needs to run AFTER the window handle is created.
+                // Window_Loaded may fire too early. Delay to ensure taskbar is ready.
+                Dispatcher.BeginInvoke(async () =>
+                {
+                    await Task.Delay(800); // Give Windows time to create the HWND
+                    if (SettingsManager.Current.EnableTaskbarWidget)
+                        SetupWindow();
+                }, DispatcherPriority.Background);
             }
 
             Classes.Logger.LogAction("WIDGET", "TaskbarWindow created and Show() called");

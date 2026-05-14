@@ -7,8 +7,8 @@ using AdvanceClip.ViewModels;
 namespace AdvanceClip.Classes
 {
     /// <summary>
-    /// Reliable sync queue: guarantees delivery to Firebase with exponential backoff retries.
-    /// Replaces fire-and-forget PushToGlobalSync calls with a queue that retries on failure.
+    /// Reliable sync queue: guarantees delivery via P2P (LAN/Cloudflare) with retries.
+    /// Firebase is NEVER used for content transfer — only direct P2P delivery.
     /// Items are processed sequentially to maintain ordering and avoid race conditions.
     /// </summary>
     public static class SyncQueue
@@ -18,8 +18,8 @@ namespace AdvanceClip.Classes
         private static CancellationTokenSource? _cts;
         private static bool _running = false;
 
-        private const int MAX_RETRIES = 5;
-        private static readonly int[] RETRY_DELAYS_MS = { 2000, 5000, 10000, 20000, 30000 };
+        private const int MAX_RETRIES = 3;
+        private static readonly int[] RETRY_DELAYS_MS = { 1000, 3000, 5000 };
 
         /// <summary>
         /// Enqueue a clipboard item for sync. Returns immediately — delivery is guaranteed via retries.
@@ -104,10 +104,10 @@ namespace AdvanceClip.Classes
 
                     switch (job.Channel)
                     {
-                        case "firebase":
+                        case "p2p":
+                        case "firebase": // legacy callers — all go through P2P now
                             await FirebaseSyncManager.PushToGlobalSync(job.Item);
                             break;
-                        // Future: case "lan": await LanSyncManager.Push(job.Item); break;
                     }
 
                     // Success — no exception thrown

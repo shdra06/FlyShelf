@@ -23,6 +23,14 @@ namespace AdvanceClip.Classes
             string url = $"{FIREBASE_BASE}/{path}";
             return await FirebaseAuthManager.AuthenticateUrl(url);
         }
+
+        /// <summary>
+        /// Public version of AuthUrl for use by PeerManager and other classes.
+        /// </summary>
+        public static async Task<string> AuthUrlPublic(string path)
+        {
+            return await AuthUrl(path);
+        }
         
         /// <summary>Returns the scoped clipboard path for this device's pairing key.</summary>
         private static async Task<string> GetScopedClipboardUrl()
@@ -92,261 +100,49 @@ namespace AdvanceClip.Classes
 
             try
             {
-                // PHASE 3 OPTIMIZATION: Skip Firebase push for TEXT items when devices are directly connected.
-                // If at least 1 device is polling /api/sync (LAN or Cloudflare), it already gets text instantly.
-                // File items still go to Firebase because they need the download URL to be discoverable.
+                // ═══ v5 PEER-ONLY: Push directly to connected peers ═══
+                // PeerManager sends text/files directly via LAN or Cloudflare.
+                // Firebase is NEVER used for content transfer — only for device discovery & URL exchange.
                 bool isTextType = item.ItemType == ClipboardItemType.Text || item.ItemType == ClipboardItemType.Url || item.ItemType == ClipboardItemType.Code;
-                if (isTextType && DirectlyConnectedDeviceCount > 0)
-                {
-                    Logger.LogAction("FIREBASE SYNC", $"Skipped Firebase push â€” {DirectlyConnectedDeviceCount} device(s) connected directly via LAN/Cloudflare");
-                    return;
-                }
+                bool isFileEarly = !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath);
 
-                // For files: always wait for Cloudflare tunnel first â€” it's the only reliable cross-network URL
-                // BUT: if RawContent is already an HTTP URL (set by SyncFileToDevicesAsync via CloneForSync),
-                // then this item already has a resolved download URL â€” treat it as pre-resolved, not a local file.
-                bool rawIsPreResolved = !string.IsNullOrEmpty(item.RawContent) && (item.RawContent.StartsWith("http://") || item.RawContent.StartsWith("https://"));
-                bool isFile = !rawIsPreResolved && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath);
-                bool isFilePayload = isFile || rawIsPreResolved; // True for any file/image with download URL â€” used for auto-delete timing
-                string downloadUrl = rawIsPreResolved ? item.RawContent : "";
-                string raw = item.RawContent ?? "";
-
-                if (isFile)
+                if (PeerManager.Instance != null && PeerManager.Instance.AliveCount > 0)
                 {
-                    // Skip incomplete/locked download files
-                    string ext = Path.GetExtension(item.FilePath).ToLowerInvariant();
-                    if (ext is ".crdownload" or ".part" or ".tmp" or ".download" or ".partial")
+                    int delivered = 0;
+
+                    if (isTextType || !isFileEarly)
                     {
-                        Logger.LogAction("FIREBASE SYNC", $"Skipped incomplete download: {item.FileName}");
-                        return;
+                        // TEXT: push directly to all peers
+                        string peerTitle = !string.IsNullOrEmpty(item.FileName)
+                            ? item.FileName
+                            : (item.RawContent?.Length > 30 ? item.RawContent.Substring(0, 30) + "..." : item.RawContent ?? "");
+                        delivered = await PeerManager.Instance.PushTextToAllPeers(
+                            item.RawContent ?? "", peerTitle, item.ItemType.ToString());
                     }
-                    // If tunnel not ready yet, wait up to 5s (reduced from 30s)
-                    // When devices are directly connected via LAN, they get files via /download anyway
-                    if (string.IsNullOrEmpty(CachedGlobalUrl) || !CachedGlobalUrl.Contains("trycloudflare.com"))
+                    else if (isFileEarly)
                     {
-                        // Skip Cloudflare wait entirely if all paired devices are directly connected
-                        if (DirectlyConnectedDeviceCount > 0)
-                        {
-                            Logger.LogAction("FIREBASE SYNC", $"Skip Cloudflare wait — {DirectlyConnectedDeviceCount} device(s) connected directly via LAN");
-                        }
-                        else
-                        {
-                            Logger.LogAction("FIREBASE SYNC", $"Waiting for Cloudflare tunnel before sending '{item.FileName}'...");
-                            for (int i = 0; i < 10; i++) // 10 x 500ms = 5s max (was 30s)
-                            {
-                                await Task.Delay(500);
-                                if (!string.IsNullOrEmpty(CachedGlobalUrl) && CachedGlobalUrl.Contains("trycloudflare.com"))
-                                {
-                                    Logger.LogAction("FIREBASE SYNC", $"Cloudflare ready after {(i + 1) * 500}ms");
-                                    break;
-                                }
-                            }
-                        }
+                        // FILE: upload directly to all peers via multipart
+                        delivered = await PeerManager.Instance.PushFileToAllPeers(
+                            item.FilePath, item.FileName ?? Path.GetFileName(item.FilePath), item.ItemType.ToString());
                     }
-                }
 
-                if (isFile && !string.IsNullOrEmpty(CachedGlobalUrl) && CachedGlobalUrl.Contains("trycloudflare.com") && CachedTunnelVerified)
-                {
-                    // Only use Cloudflare URL if the tunnel has been VERIFIED working (HTTP 200 self-ping)
-                    downloadUrl = $"{CachedGlobalUrl}/download?path={Uri.EscapeDataString(item.FilePath)}";
-                    raw = downloadUrl;
-                    Logger.LogAction("FIREBASE SYNC", $"File '{item.FileName}' â†’ Cloudflare (verified): {downloadUrl}");
-                }
-                else if (isFile && !string.IsNullOrEmpty(CachedGlobalUrl) && CachedGlobalUrl.Contains("trycloudflare.com") && !CachedTunnelVerified)
-                {
-                    // Tunnel URL exists but NOT verified â€” skip it and use Firebase Storage
-                    Logger.LogAction("FIREBASE SYNC", $"âš ï¸ Cloudflare tunnel exists but NOT verified â€” skipping for '{item.FileName}', using Firebase Storage fallback");
-                }
-                if (isFile && string.IsNullOrEmpty(downloadUrl))
-                {
-                    // No working Cloudflare â€” try Firebase Storage upload
-
-                    Logger.LogAction("FIREBASE SYNC", $"Cloudflare unavailable â€” uploading '{item.FileName}' to Firebase Storage...");
-                    string storageUrl = await UploadFileToStorageAsync(item.FilePath);
-                    if (!string.IsNullOrEmpty(storageUrl))
+                    if (delivered > 0)
                     {
-                        downloadUrl = storageUrl;
-                        raw = storageUrl;
-                        Logger.LogAction("FIREBASE SYNC", $"File '{item.FileName}' â†’ Firebase Storage: {storageUrl}");
+                        Logger.LogAction("PEER SYNC", $"Delivered to {delivered} peer(s) directly via P2P");
                     }
                     else
                     {
-                        // Both Cloudflare and Firebase Storage failed â€” don't write useless LAN URL
-                        Logger.LogAction("FIREBASE SYNC", $"âš ï¸ Cannot sync file '{item.FileName}' â€” no Cloudflare tunnel and Firebase Storage upload failed. File is only available on LAN.");
-                        
-                        // Show toast on PC so user knows
-                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                            AdvanceClip.Windows.ToastWindow.ShowToast($"âš ï¸ {item.FileName} â€” Cloudflare offline, can't share remotely");
-                        });
-
-                        return; // Skip this file â€” don't push an unreachable URL to Firebase
+                        Logger.LogAction("PEER SYNC", $"⚠️ Direct P2P delivery failed — no peers accepted the {(isTextType ? "text" : "file")}");
                     }
                 }
-                
-                // AES-256-GCM encryption: encrypt sensitive fields before pushing to Firebase
-                string encTitle = string.IsNullOrEmpty(item.FileName)
-                    ? (item.RawContent?.Length > 30 ? item.RawContent.Substring(0, 30) + "..." : item.RawContent ?? "")
-                    : item.FileName;
-                string encRaw = raw;
-                string encDownloadUrl = downloadUrl;
-                bool encrypted = false;
-
-                try
+                else
                 {
-                    encTitle = SyncCrypto.Encrypt(encTitle);
-                    encRaw = SyncCrypto.Encrypt(encRaw);
-                    if (!string.IsNullOrEmpty(encDownloadUrl))
-                        encDownloadUrl = SyncCrypto.Encrypt(encDownloadUrl);
-                    encrypted = true;
-                }
-                catch (Exception cryptoEx)
-                {
-                    Logger.LogAction("SYNC_CRYPTO", $"Encryption failed, sending plaintext: {cryptoEx.Message}");
-                }
-                // Compute SHA-256 hash for file integrity verification
-                string fileHash = "";
-                if (!string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath))
-                {
-                    try
-                    {
-                        using var hashStream = new FileStream(item.FilePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                        var sha = System.Security.Cryptography.SHA256.HashData(hashStream);
-                        fileHash = BitConverter.ToString(sha).Replace("-", "").ToLowerInvariant();
-                    }
-                    catch { }
-                }
-
-                // Determine ALL paired devices that should receive this item
-                // Include ALL devices (online + offline) â€” offline ones auto-complete after 1hr
-                List<string> targetDeviceIds = new();
-                try
-                {
-                    string pairingKey = DevicePairingManager.EnsurePairingKey();
-                    string devicesUrl = (await AuthUrl($"active_devices/{pairingKey}.json"));
-                    var devResponse = await _client.GetAsync(devicesUrl);
-                    if (devResponse.IsSuccessStatusCode)
-                    {
-                        string devJson = await devResponse.Content.ReadAsStringAsync();
-                        if (!string.IsNullOrWhiteSpace(devJson) && devJson != "null")
-                        {
-                            using var devDoc = JsonDocument.Parse(devJson);
-                            string myId = SettingsManager.Current.DeviceId ?? "";
-                            foreach (var prop in devDoc.RootElement.EnumerateObject())
-                            {
-                                var dev = prop.Value;
-                                string devId = dev.TryGetProperty("DeviceId", out var di) ? di.GetString() ?? prop.Name : prop.Name;
-                                // Include ALL paired devices except self
-                                if (devId != myId)
-                                    targetDeviceIds.Add(devId);
-                            }
-                        }
-                    }
-                    Logger.LogAction("FIREBASE SYNC", $"Broadcast targets: {targetDeviceIds.Count} paired devices ({string.Join(", ", targetDeviceIds)})");
-                }
-                catch (Exception devEx) { Logger.LogAction("FIREBASE SYNC", $"Device query failed: {devEx.Message}"); }
-
-                var payload = new
-                {
-                    Title = encTitle,
-                    Type = item.ItemType.ToString(),
-                    Raw = encRaw,
-                    PreviewUrl = encDownloadUrl != "" ? encDownloadUrl : "",
-                    DownloadUrl = encDownloadUrl,
-                    FileName = item.FileName ?? "",
-                    FileSize = !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath) ? new FileInfo(item.FilePath).Length : 0,
-                    FileHash = fileHash,
-                    SenderUrl = !string.IsNullOrEmpty(CachedGlobalUrl) ? CachedGlobalUrl : CachedLocalUrl ?? "",
-                    Time = item.DateCopied.ToString("HH:mm:ss"),
-                    Timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
-                    EventId = $"{SettingsManager.Current.DeviceId ?? "PC"}_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}_{Guid.NewGuid().ToString("N").Substring(0, 6)}",
-                    Encrypted = encrypted,
-                    SourceDeviceName = deviceName,
-                    SourceDeviceId = SettingsManager.Current.DeviceId ?? "",
-                    SourceDeviceType = "PC",
-                    targetDevices = targetDeviceIds,
-                };
-
-                // â•â•â• CLEAN SLATE: Wipe all previous entries before pushing new item â•â•â•
-                // This keeps Firebase clean â€” only the latest item exists at any time.
-                // Previous pending entries are irrelevant once a new copy happens.
-                try
-                {
-                    string pairingKey = DevicePairingManager.EnsurePairingKey();
-                    if (!string.IsNullOrEmpty(pairingKey))
-                    {
-                        // DELETE the entire clipboard node for this pairing key, then push fresh
-                        await _client.DeleteAsync((await AuthUrl($"clipboard/{pairingKey}.json")));
-                        Logger.LogAction("FIREBASE SYNC", "ðŸ§¹ Wiped previous entries â€” clean slate for new item");
-                    }
-                }
-                catch (Exception wipeEx)
-                {
-                    Logger.LogAction("FIREBASE SYNC", $"Wipe failed (non-fatal): {wipeEx.Message}");
-                }
-
-                string json = JsonSerializer.Serialize(payload);
-                var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                var response = await _client.PostAsync(await GetScopedClipboardUrl(), content);
-                
-                if (response.IsSuccessStatusCode)
-                {
-                    Logger.LogAction("FIREBASE SYNC", $"Pushed item to global cloud as '{deviceName}'");
-                    
-                    string responseBody = await response.Content.ReadAsStringAsync();
-                    try
-                    {
-                        var responseObj = JsonSerializer.Deserialize<Dictionary<string, string>>(responseBody);
-                        if (responseObj != null && responseObj.TryGetValue("name", out string? entryKey) && !string.IsNullOrEmpty(entryKey))
-                        {
-                            if (!isFilePayload)
-                            {
-                                // TEXT items: auto-delete after 5 minutes
-                                _ = Task.Run(async () =>
-                                {
-                                    await Task.Delay(AUTO_DELETE_TEXT_MS);
-                                    try
-                                    {
-                                        string pk = DevicePairingManager.EnsurePairingKey();
-                                        await _client.DeleteAsync((await AuthUrl($"clipboard/{pk}/{entryKey}.json")));
-                                        Logger.LogAction("FIREBASE CLEANUP", $"Auto-deleted text entry '{entryKey}'");
-                                    }
-                                    catch { }
-                                });
-                            }
-                            else
-                            {
-                                // FILE items: TTL safety net (24h) â€” downloadedBy model handles normal cleanup
-                                _ = Task.Run(async () =>
-                                {
-                                    await Task.Delay(AUTO_DELETE_FILE_MS);
-                                    try
-                                    {
-                                        string pk = DevicePairingManager.EnsurePairingKey();
-                                        // Check if entry still exists (may have been deleted by downloadedBy)
-                                        var checkRes = await _client.GetAsync((await AuthUrl($"clipboard/{pk}/{entryKey}.json")));
-                                        if (checkRes.IsSuccessStatusCode)
-                                        {
-                                            string checkBody = await checkRes.Content.ReadAsStringAsync();
-                                            if (!string.IsNullOrWhiteSpace(checkBody) && checkBody != "null")
-                                            {
-                                                await _client.DeleteAsync((await AuthUrl($"clipboard/{pk}/{entryKey}.json")));
-                                                Logger.LogAction("FIREBASE CLEANUP", $"TTL expired â€” force-deleted file entry '{entryKey}'");
-                                            }
-                                        }
-                                    }
-                                    catch { }
-                                });
-                            }
-                        }
-                    }
-                    catch { }
+                    Logger.LogAction("PEER SYNC", $"⚠️ No peers online — {(isTextType ? "text" : "file")} not delivered");
                 }
             }
             catch (Exception ex)
             {
-
-                Logger.LogAction("FIREBASE ERROR", ex.Message);
+                Logger.LogAction("PEER SYNC ERROR", ex.Message);
             }
         }
 

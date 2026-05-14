@@ -39,6 +39,18 @@ namespace AdvanceClip.Classes
         private const long DIRECT_DEVICE_STALE_MS = 30_000; // 30s — device must poll at least this often
 
         /// <summary>
+        /// Detect transport method from HTTP request. Returns ("LAN" or "Cloudflare", sourceDeviceLabel).
+        /// </summary>
+        private static (string transport, string label) DetectTransport(HttpListenerRequest req)
+        {
+            string host = req.Headers["Host"] ?? req.Url?.Host ?? "";
+            if (host.Contains(".trycloudflare.com"))
+                return ("Cloudflare", "☁ Cloud");
+            else
+                return ("LAN", "📡 LAN");
+        }
+
+        /// <summary>
         /// Returns the count of paired devices that have polled /api/sync within the last 30 seconds.
         /// Used by FirebaseSyncManager to decide whether Firebase push can be skipped.
         /// </summary>
@@ -251,13 +263,45 @@ namespace AdvanceClip.Classes
             {
                 if (e.PropertyName == nameof(AdvanceSettings.EnableGlobalCloudflare))
                 {
-                    if (SettingsManager.Current.EnableGlobalCloudflare && _isRunning)
+                    bool cfOn = SettingsManager.Current.EnableGlobalCloudflare;
+                    bool lanOn = SettingsManager.Current.EnableLocalLAN;
+                    
+                    // Auto-manage server: if either transport is on, server must be running
+                    if (cfOn && !SettingsManager.Current.EnableLocalNetworkSync)
+                    {
+                        SettingsManager.Current.EnableLocalNetworkSync = true; // starts server
+                    }
+                    else if (!cfOn && !lanOn)
+                    {
+                        SettingsManager.Current.EnableLocalNetworkSync = false; // stops server
+                    }
+                    
+                    if (cfOn && _isRunning)
                     {
                         _ = _cfDaemon.StartAsync(CurrentPort);
+                        // When tunnel comes up, ForceResync to broadcast new URL to all peers
+                        _ = Task.Run(async () =>
+                        {
+                            await Task.Delay(5000); // Wait for tunnel to establish
+                            if (PeerManager.Instance != null)
+                            {
+                                Logger.LogAction("NETWORK", "Cloudflare ON — triggering peer resync");
+                                await PeerManager.Instance.ForceResync();
+                            }
+                        });
                     }
-                    else
+                    else if (!cfOn)
                     {
                         _cfDaemon.Stop();
+                        // Notify peers we're going offline from cloud
+                        _ = Task.Run(async () =>
+                        {
+                            if (PeerManager.Instance != null)
+                            {
+                                Logger.LogAction("NETWORK", "Cloudflare OFF — triggering peer resync");
+                                await PeerManager.Instance.ForceResync();
+                            }
+                        });
                     }
                 }
             };
@@ -445,6 +489,27 @@ namespace AdvanceClip.Classes
                 {
                     Logger.LogAction("TLS", $"⚠️ HTTPS server failed to start: {tlsEx.Message} — LAN sync will use HTTP only");
                 }
+
+                // ═══════════════════════════════════════════════════════════════════
+                // v5 PEER MANAGER: Direct P2P communication engine
+                // Discovers peers, handshakes, and pushes data directly via LAN/Cloudflare.
+                // Firebase is only used for URL discovery (~5 seconds at startup).
+                // ═══════════════════════════════════════════════════════════════════
+                _ = Task.Run(async () =>
+                {
+                    // Wait a bit for Cloudflare tunnel to establish first
+                    await Task.Delay(8000);
+                    try
+                    {
+                        var peerManager = new PeerManager();
+                        await peerManager.StartAsync();
+                        Logger.LogAction("PEER", $"v5 PeerManager initialized — {peerManager.AliveCount} peer(s) connected");
+                    }
+                    catch (Exception pmEx)
+                    {
+                        Logger.LogAction("PEER", $"PeerManager startup error: {pmEx.Message}");
+                    }
+                });
             }
             catch (Exception ex)
             {
@@ -1042,10 +1107,38 @@ namespace AdvanceClip.Classes
             // SPEED: Read body first, then respond 200 IMMEDIATELY so the sender isn't blocked
             string text;
             string sourceDevice;
+            string itemType = null;
             using (var reader = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8))
             {
                 text = await reader.ReadToEndAsync();
                 sourceDevice = req.Headers["X-Source-Device"] ?? "Mobile";
+            }
+
+            // v5 PeerManager sends JSON: {"type":"Url","title":"...","data":"actual text","sourceDeviceId":"..."}
+            // Parse it to extract the actual content. Fall back to raw body for plain text senders.
+            if (text.TrimStart().StartsWith("{"))
+            {
+                try
+                {
+                    using var doc = System.Text.Json.JsonDocument.Parse(text);
+                    var root = doc.RootElement;
+                    if (root.TryGetProperty("data", out var dataProp))
+                    {
+                        text = dataProp.GetString() ?? text;
+                    }
+                    if (root.TryGetProperty("type", out var typeProp))
+                    {
+                        itemType = typeProp.GetString();
+                    }
+                    if (root.TryGetProperty("sourceDeviceName", out var srcProp))
+                    {
+                        sourceDevice = srcProp.GetString() ?? sourceDevice;
+                    }
+                }
+                catch
+                {
+                    // Not valid JSON — treat entire body as plain text (legacy sender)
+                }
             }
 
             // Respond instantly — don't make Android wait for UI processing
@@ -1056,14 +1149,28 @@ namespace AdvanceClip.Classes
             _cachedSyncJson = null;
 
             // Process asynchronously on UI thread (fire-and-forget)
+            string capturedText = text;
+            string capturedSource = sourceDevice;
+            string capturedType = itemType;
+            var capturedTransport = DetectTransport(req);
             System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
             {
+                // Determine item type from payload or text content
+                ClipboardItemType clipType;
+                if (!string.IsNullOrEmpty(capturedType) && Enum.TryParse<ClipboardItemType>(capturedType, true, out var parsed))
+                    clipType = parsed;
+                else
+                    clipType = capturedText.StartsWith("http") ? ClipboardItemType.Url : ClipboardItemType.Text;
+
                 var clip = new ClipboardItem
                 {
-                    RawContent = text,
-                    FileName = text.Length > 40 ? text.Substring(0, 40) + "..." : text,
-                    Extension = "MOBILE",
-                    ItemType = text.StartsWith("http") ? ClipboardItemType.Url : ClipboardItemType.Text
+                    RawContent = capturedText,
+                    FileName = capturedText.Length > 40 ? capturedText.Substring(0, 40) + "..." : capturedText,
+                    Extension = capturedTransport.label,
+                    ItemType = clipType,
+                    SourceDeviceName = capturedSource,
+                    SourceDeviceType = capturedSource.Contains("PC") || capturedSource.Contains("LAPTOP") || capturedSource.Contains("DESKTOP") ? "PC" : "Mobile",
+                    TransferMethod = capturedTransport.transport
                 };
                 clip.EvaluateSmartActions();
                 _viewModel.DroppedItems.Insert(0, clip);
@@ -1071,20 +1178,20 @@ namespace AdvanceClip.Classes
                 
                 // ECHO PREVENTION: Mark this text as cloud-sourced so the clipboard monitor
                 // doesn't re-push it to Firebase when we set the Windows clipboard below.
-                string txtFp = $"TXT::{text.Substring(0, Math.Min(200, text.Length))}";
+                string txtFp = $"TXT::{capturedText.Substring(0, Math.Min(200, capturedText.Length))}";
                 _viewModel.MarkAsCloudSourced(txtFp);
                 
                 // Suppress clipboard monitor during our write
                 try 
                 { 
                     MainWindow.SetWritingClipboard(true);
-                    System.Windows.Clipboard.SetText(text);
+                    System.Windows.Clipboard.SetText(capturedText);
                     await System.Threading.Tasks.Task.Delay(500);
                 } 
                 catch { }
                 finally { MainWindow.SetWritingClipboard(false); }
                 
-                AdvanceClip.Windows.ToastWindow.ShowToast($"Text from {sourceDevice}! 📱");
+                AdvanceClip.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport.transport}! 📱");
             });
         }
 
@@ -1102,6 +1209,7 @@ namespace AdvanceClip.Classes
                 {
                     sourceDevice = "Mobile";
                 }
+                var fileTransport = DetectTransport(req);
 
                 string dateString = DateTime.Now.ToString("dd-MM-yyyy");
                 string uploadDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FlyShelf", "Clipboard", sourceDevice, dateString);
@@ -1154,6 +1262,31 @@ namespace AdvanceClip.Classes
                         }
                     }
                     
+                    // ── Extract filename from multipart Content-Disposition if X-File-Name was missing ──
+                    if (rawName == "uploaded_file.dat" && headerEnd > 0)
+                    {
+                        string partHeaders = Encoding.UTF8.GetString(body, 0, headerEnd);
+                        // Look for: filename="actual_name.png"  or filename*=UTF-8''encoded_name
+                        var fnMatch = System.Text.RegularExpressions.Regex.Match(partHeaders,
+                            @"filename=""?([^""\r\n]+)""?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        if (fnMatch.Success)
+                        {
+                            string extracted = fnMatch.Groups[1].Value.Trim();
+                            try { extracted = Uri.UnescapeDataString(extracted); } catch { }
+                            if (!string.IsNullOrWhiteSpace(extracted) && extracted != "file")
+                            {
+                                rawName = extracted;
+                                // Recalculate path with correct filename
+                                counter = 1;
+                                finalPath = Path.Combine(uploadDir, rawName);
+                                while (File.Exists(finalPath))
+                                {
+                                    finalPath = Path.Combine(uploadDir, $"{Path.GetFileNameWithoutExtension(rawName)}_{counter++}{Path.GetExtension(rawName)}");
+                                }
+                            }
+                        }
+                    }
+
                     if (headerEnd > 0)
                     {
                         // Find trailing boundary
@@ -1235,6 +1368,9 @@ namespace AdvanceClip.Classes
                 }
                 
                 if (string.IsNullOrWhiteSpace(batchName)) batchName = "FlyShelf_Mobile_Transfer";
+                string archiveSource = req.Headers["X-Source-Device"] ?? req.QueryString["sourceDevice"] ?? "Mobile";
+                try { archiveSource = Uri.UnescapeDataString(archiveSource); } catch { }
+                var archiveTransport = DetectTransport(req);
 
                 string archiveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FlyShelf", "Synced", batchName);
                 Directory.CreateDirectory(archiveDir);
@@ -1307,7 +1443,10 @@ namespace AdvanceClip.Classes
                                 FileName = rawName,
                                 FilePath = finalPath,
                                 Extension = Path.GetExtension(finalPath).TrimStart('.').ToUpper(),
-                                ItemType = ClipboardItemType.File
+                                ItemType = ClipboardItemType.File,
+                                SourceDeviceName = archiveSource,
+                                SourceDeviceType = archiveSource.Contains("PC") || archiveSource.Contains("LAPTOP") || archiveSource.Contains("DESKTOP") ? "PC" : "Mobile",
+                                TransferMethod = archiveTransport.transport
                             };
                             clip.EvaluateSmartActions();
                             _viewModel.DroppedItems.Insert(0, clip);
@@ -1519,6 +1658,9 @@ namespace AdvanceClip.Classes
                 if (!string.IsNullOrEmpty(batchName))
                     try { batchName = Uri.UnescapeDataString(batchName); } catch { }
                 if (string.IsNullOrWhiteSpace(batchName)) batchName = "AdvanceClip_Chunked_Transfer";
+                string sourceDevice = req.Headers["X-Source-Device"] ?? "Remote";
+                try { sourceDevice = Uri.UnescapeDataString(sourceDevice); } catch { }
+                var chunkTransport = DetectTransport(req);
 
                 if (!_chunkSessions.TryGetValue(sessionId, out string chunkDir) || !Directory.Exists(chunkDir))
                 {
@@ -1587,7 +1729,10 @@ namespace AdvanceClip.Classes
                             FileName = rawName,
                             FilePath = finalPath,
                             Extension = Path.GetExtension(finalPath).TrimStart('.').ToUpper(),
-                            ItemType = ClipboardItemType.File
+                            ItemType = ClipboardItemType.File,
+                            SourceDeviceName = sourceDevice,
+                            SourceDeviceType = sourceDevice.Contains("PC") || sourceDevice.Contains("LAPTOP") || sourceDevice.Contains("DESKTOP") ? "PC" : "Mobile",
+                            TransferMethod = chunkTransport.transport
                         };
                         clip.EvaluateSmartActions();
                         _viewModel.DroppedItems.Insert(0, clip);

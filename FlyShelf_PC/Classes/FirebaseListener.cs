@@ -57,11 +57,15 @@ namespace AdvanceClip.Classes
 
             Logger.LogAction("FIREBASE LISTENER", "Starting SSE real-time stream + forced sync poller.");
 
-            // 1. Main clipboard feed: SSE streaming (near-instant delivery)
-            Task.Run(() => RunSSEStream(_cts.Token));
+            // 1. Main clipboard feed: DISABLED — Firebase is no longer used for content transfer
+            //    All content now flows via P2P (LAN/Cloudflare direct push)
+            // Task.Run(() => RunSSEStream(_cts.Token));
 
             // 2. Forced sync: real-time SSE stream (replaces 5s polling)
             Task.Run(() => RunForcedSyncSSE(_cts.Token));
+
+            // 3. Peer URL discovery: SSE stream on active_devices — instant reconnect when any peer comes online
+            Task.Run(() => RunPeerDiscoverySSE(_cts.Token));
         }
 
         public void StopPolling()
@@ -561,6 +565,191 @@ namespace AdvanceClip.Classes
             Logger.LogAction("FORCED SYNC SSE", "Stream STOPPED.");
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // PEER DISCOVERY SSE: Watch active_devices for URL changes
+        // When any device posts a new URL, all paired devices instantly
+        // pick it up, update PeerManager, and the URL auto-deletes.
+        // ═══════════════════════════════════════════════════════════════
+
+        private async Task RunPeerDiscoverySSE(CancellationToken ct)
+        {
+            const int INITIAL_RECONNECT = 2000;
+            const int MAX_RECONNECT = 30000;
+            int reconnectDelay = INITIAL_RECONNECT;
+            string myDeviceId = SettingsManager.Current.DeviceId ?? Environment.MachineName;
+
+            while (!ct.IsCancellationRequested)
+            {
+                try
+                {
+                    string pairingKey = DevicePairingManager.EnsurePairingKey();
+                    if (string.IsNullOrEmpty(pairingKey))
+                    {
+                        await Task.Delay(5000, ct);
+                        continue;
+                    }
+
+                    string url = await AuthUrl($"active_devices/{pairingKey}.json");
+                    var request = new HttpRequestMessage(HttpMethod.Get, url);
+                    request.Headers.Add("Accept", "text/event-stream");
+
+                    var response = await _streamClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        Logger.LogAction("PEER SSE", $"HTTP {(int)response.StatusCode} — retrying in {reconnectDelay}ms");
+                        await Task.Delay(reconnectDelay, ct);
+                        reconnectDelay = Math.Min(reconnectDelay * 2, MAX_RECONNECT);
+                        continue;
+                    }
+
+                    Logger.LogAction("PEER SSE", "Watching active_devices for URL changes ✓");
+                    reconnectDelay = INITIAL_RECONNECT;
+
+                    using var stream = await response.Content.ReadAsStreamAsync();
+                    using var reader = new StreamReader(stream);
+                    string currentEvent = "";
+                    string currentData = "";
+
+                    while (!reader.EndOfStream && !ct.IsCancellationRequested)
+                    {
+                        string? line = await reader.ReadLineAsync();
+                        if (line == null) break;
+
+                        if (line.StartsWith("event:")) currentEvent = line.Substring(6).Trim();
+                        else if (line.StartsWith("data:")) currentData = line.Substring(5).Trim();
+                        else if (string.IsNullOrEmpty(line) && !string.IsNullOrEmpty(currentData))
+                        {
+                            // Process URL change event — only put/patch with valid JSON data
+                            if ((currentEvent == "put" || currentEvent == "patch") && 
+                                !string.IsNullOrWhiteSpace(currentData) && currentData != "null")
+                            {
+                                _ = Task.Run(() => ProcessPeerUrlChange(currentData, myDeviceId, ct));
+                            }
+                            currentEvent = "";
+                            currentData = "";
+                        }
+                    }
+
+                    Logger.LogAction("PEER SSE", "Stream closed — reconnecting...");
+                }
+                catch (OperationCanceledException) { break; }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("PEER SSE", $"Error: {ex.Message} — retrying in {reconnectDelay}ms");
+                    try { await Task.Delay(reconnectDelay, ct); } catch { break; }
+                    reconnectDelay = Math.Min(reconnectDelay * 2, MAX_RECONNECT);
+                }
+            }
+
+            Logger.LogAction("PEER SSE", "Discovery stream STOPPED.");
+        }
+
+        private async Task ProcessPeerUrlChange(string jsonData, string myDeviceId, CancellationToken ct)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(jsonData) || jsonData == "null")
+                    return;
+                using var doc = JsonDocument.Parse(jsonData);
+                var root = doc.RootElement;
+
+                // Firebase SSE "put" has { "path": "/...", "data": {...} }
+                if (!root.TryGetProperty("data", out var data) || data.ValueKind == JsonValueKind.Null)
+                    return;
+
+                // Could be a single device update (path: "/DeviceId") or full snapshot (path: "/")
+                string path = root.TryGetProperty("path", out var p) ? p.GetString() ?? "/" : "/";
+
+                var peerManager = PeerManager.Instance;
+                if (peerManager == null) return;
+
+                bool anyNewPeer = false;
+
+                if (path == "/")
+                {
+                    // Full snapshot — scan all devices
+                    if (data.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var prop in data.EnumerateObject())
+                        {
+                            if (ProcessSingleDeviceUrl(prop.Name, prop.Value, myDeviceId, peerManager))
+                                anyNewPeer = true;
+                        }
+                    }
+                }
+                else
+                {
+                    // Single device update — path is like "/DeviceId" or "/DeviceId/GlobalUrl"
+                    string deviceKey = path.TrimStart('/').Split('/')[0];
+                    if (!string.IsNullOrEmpty(deviceKey) && deviceKey != myDeviceId)
+                    {
+                        if (data.ValueKind == JsonValueKind.Object)
+                        {
+                            if (ProcessSingleDeviceUrl(deviceKey, data, myDeviceId, peerManager))
+                                anyNewPeer = true;
+                        }
+                    }
+                }
+
+                // If we detected new/updated peer URLs, trigger handshake immediately
+                if (anyNewPeer)
+                {
+                    Logger.LogAction("PEER SSE", "New peer URL detected — handshaking now...");
+                    // Small delay to let the other device's server be ready
+                    await Task.Delay(1000, ct);
+                    await peerManager.ForceResync();
+
+                    // Auto-delete: wait 5 seconds then clean the URL from Firebase
+                    _ = Task.Run(async () =>
+                    {
+                        await Task.Delay(5000, ct);
+                        await CleanupPeerUrlFromFirebase(myDeviceId, ct);
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("PEER SSE", $"ProcessPeerUrlChange error: {ex.Message}");
+            }
+        }
+
+        private bool ProcessSingleDeviceUrl(string deviceKey, JsonElement data, string myDeviceId, PeerManager peerManager)
+        {
+            if (deviceKey == myDeviceId) return false;
+
+            string globalUrl = data.TryGetProperty("GlobalUrl", out var gu) ? gu.GetString() ?? "" : "";
+            string localUrl = data.TryGetProperty("LocalIp", out var li) ? li.GetString() ?? "" : "";
+            string deviceName = data.TryGetProperty("DeviceName", out var dn) ? dn.GetString() ?? deviceKey : deviceKey;
+
+            if (string.IsNullOrEmpty(globalUrl) && string.IsNullOrEmpty(localUrl))
+                return false;
+
+            Logger.LogAction("PEER SSE", $"⚡ URL arrived for {deviceName}: CF={globalUrl} LAN={localUrl}");
+            return true;
+        }
+
+        private async Task CleanupPeerUrlFromFirebase(string myDeviceId, CancellationToken ct)
+        {
+            try
+            {
+                string pairingKey = DevicePairingManager.EnsurePairingKey();
+                if (string.IsNullOrEmpty(pairingKey)) return;
+
+                // Only delete OUR OWN URL (each device cleans up after itself)
+                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                string gUrl = await AuthUrl($"active_devices/{pairingKey}/{myDeviceId}/GlobalUrl.json");
+                await client.DeleteAsync(gUrl);
+                string lUrl = await AuthUrl($"active_devices/{pairingKey}/{myDeviceId}/LocalIp.json");
+                await client.DeleteAsync(lUrl);
+
+                Logger.LogAction("PEER SSE", $"🧹 Auto-cleaned our URLs from Firebase (5s TTL)");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("PEER SSE", $"Cleanup error: {ex.Message}");
+            }
+        }
+
         private async Task FetchAndInjectCloudFile(CloudItem cloudItem)
         {
             ClipboardItem? progressClip = null;
@@ -609,8 +798,8 @@ namespace AdvanceClip.Classes
                 // AUTHENTICATION: /download requires pairing key or PIN
                 // Enhanced download with fallback: try primary URL, then alternative URLs
                 HttpResponseMessage response = null;
-                int maxRetries = 3;
-                int[] retryDelays = { 2000, 5000, 8000 }; // 2s, 5s, 8s
+                int maxRetries = 2;
+                int[] retryDelays = { 500, 1500 }; // Fast retries — DNS errors skip instantly
 
                 using var downloadClient = new HttpClient() { Timeout = TimeSpan.FromMinutes(10) };
                 // Add authentication headers so the sender's /download endpoint accepts the request
@@ -684,6 +873,9 @@ namespace AdvanceClip.Classes
                     catch { /* Best effort — LAN fallback is optional */ }
                 }
 
+                // De-duplicate URLs (same URL can appear via multiple resolution paths)
+                urlsToTry = urlsToTry.Distinct().ToList();
+
                 string successUrl = null;
                 foreach (var tryUrl in urlsToTry)
                 {
@@ -718,7 +910,20 @@ namespace AdvanceClip.Classes
                         }
                         catch (Exception retryEx)
                         {
-                            Logger.LogAction("FIREBASE SSE", $"Download attempt {attempt + 1} error: {retryEx.Message}");
+                            string errMsg = retryEx.Message;
+                            Logger.LogAction("FIREBASE SSE", $"Download attempt {attempt + 1} error: {errMsg}");
+
+                            // DNS failure = "No such host is known" — this URL is permanently dead,
+                            // don't waste time retrying. Jump to the next URL immediately.
+                            bool isDnsFailure = errMsg.Contains("No such host") || errMsg.Contains("name or address could not be resolved");
+                            // Connection refused = server is down, also not retryable on same URL
+                            bool isConnectionRefused = errMsg.Contains("actively refused") || errMsg.Contains("Connection refused");
+
+                            if (isDnsFailure || isConnectionRefused)
+                            {
+                                Logger.LogAction("FIREBASE SSE", $"Non-retryable error — skipping to next URL");
+                                break; // Break inner retry loop, move to next URL
+                            }
                         }
                     }
                     

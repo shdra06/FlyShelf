@@ -179,6 +179,8 @@ namespace AdvanceClip.Classes
                 sb.AppendLine("── SYNC SETTINGS ──");
                 sb.AppendLine($"  GlobalFirebaseSync:    {SettingsManager.Current.EnableGlobalFirebaseSync}");
                 sb.AppendLine($"  GlobalCloudflare:      {SettingsManager.Current.EnableGlobalCloudflare}");
+                sb.AppendLine($"  LocalLAN:              {SettingsManager.Current.EnableLocalLAN}");
+                sb.AppendLine($"  LocalNetworkSync:      {SettingsManager.Current.EnableLocalNetworkSync}");
                 sb.AppendLine();
 
                 // Cloudflare State

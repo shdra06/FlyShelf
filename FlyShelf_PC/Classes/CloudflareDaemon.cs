@@ -17,6 +17,7 @@ namespace AdvanceClip.Classes
         private bool _stopped = false;  // True when Stop() is called — prevents auto-retry
         private const long MIN_EXE_SIZE = 10_000_000; // cloudflared.exe should be >10MB
         private System.Timers.Timer _healthTimer;      // Periodic tunnel health monitor
+        private int _quicErrorCount = 0;                 // Track consecutive QUIC/datagram failures for fast auto-restart
 
         public string GlobalUrl { get; private set; } = "Initializing...";
         /// <summary>Previous tunnel URL — used to purge stale file entries from Firebase when URL changes.</summary>
@@ -99,6 +100,32 @@ namespace AdvanceClip.Classes
                         // Only log errors/warnings, not verbose info lines
                         bool isImportant = e.Data.Contains("ERR") || e.Data.Contains("WRN") || e.Data.Contains("trycloudflare.com") || e.Data.Contains("failed") || e.Data.Contains("error");
                         if (isImportant) Logger.LogAction("CF_STDERR", e.Data);
+
+                        // Track QUIC/datagram failures — if the QUIC connection keeps dying,
+                        // restart the tunnel with protocol switch instead of waiting 3 health failures
+                        if (e.Data.Contains("failed to run the datagram handler") ||
+                            e.Data.Contains("control stream encountered a failure") ||
+                            e.Data.Contains("no recent network activity"))
+                        {
+                            _quicErrorCount++;
+                            if (_quicErrorCount >= 5 && !_stopped)
+                            {
+                                _quicErrorCount = 0;
+                                Logger.LogAction("CLOUDFLARE", $"⚡ {_quicErrorCount + 5} QUIC failures detected — auto-restarting tunnel with protocol switch...");
+                                _consecutiveFailures++; // This triggers protocol toggle in StartTunnelCore
+                                StopHealthMonitor();
+                                GlobalUrl = "QUIC failing — restarting...";
+                                GlobalUrlUpdated?.Invoke(GlobalUrl);
+                                _ = Task.Run(async () =>
+                                {
+                                    KillExisting();
+                                    await Task.Delay(2000);
+                                    await StartTunnelCore();
+                                });
+                                return;
+                            }
+                        }
+
                         Match match = Regex.Match(e.Data, @"https://([a-zA-Z0-9-]+)\.trycloudflare\.com");
                         if (match.Success)
                         {
@@ -118,8 +145,11 @@ namespace AdvanceClip.Classes
                             tunnelUrlReceived = true;
                             IsTunnelVerified = false; // Not verified until self-ping succeeds
                             _consecutiveFailures = 0; // Reset on success
-                            Logger.LogAction("CLOUDFLARE", $"Tunnel URL: {GlobalUrl}");
-                            GlobalUrlUpdated?.Invoke(GlobalUrl);
+                            _quicErrorCount = 0;       // Reset QUIC error count on new URL
+                            Logger.LogAction("CLOUDFLARE", $"Tunnel URL received: {GlobalUrl} (waiting for DNS propagation before publishing...)");
+                            // DON'T fire GlobalUrlUpdated here — URL is published to Firebase
+                            // only AFTER DNS verification succeeds (in the verification block below).
+                            // Publishing before DNS propagates causes "No such host" on receivers.
                         }
                     }
                     catch (Exception ex) { Logger.LogAction("CF_EVENT_ERROR", ex.Message); }
@@ -155,9 +185,7 @@ namespace AdvanceClip.Classes
                 if (tunnelUrlReceived)
                 {
                     // Verify the tunnel by checking if the LOCAL server responds on localhost.
-                    // We DON'T ping the public Cloudflare URL because the sender's own DNS may
-                    // not resolve *.trycloudflare.com (common on restrictive networks).
-                    // If localhost responds AND cloudflared gave us a URL, the tunnel works.
+                    // Then verify DNS is resolvable so receivers can actually reach us.
                     await Task.Delay(3000); // Give cloudflared time to establish the proxy
                     
                     bool verified = false;
@@ -186,7 +214,40 @@ namespace AdvanceClip.Classes
                         await Task.Delay(2000);
                     }
                     
-                    // Phase 2: Optional — try the public URL too (works on networks with good DNS)
+                    // Phase 2: Wait for DNS propagation before publishing URL to Firebase.
+                    // Without this, receivers get "No such host" because Cloudflare's DNS
+                    // hasn't propagated the new subdomain yet.
+                    if (verified)
+                    {
+                        bool dnsReady = false;
+                        for (int d = 0; d < 4; d++) // Up to 4 attempts (0s, 2s, 4s, 6s)
+                        {
+                            try
+                            {
+                                // Extract hostname from URL for DNS check
+                                var uri = new Uri(GlobalUrl);
+                                var addresses = await System.Net.Dns.GetHostAddressesAsync(uri.Host);
+                                if (addresses.Length > 0)
+                                {
+                                    dnsReady = true;
+                                    Logger.LogAction("CLOUDFLARE", $"✅ DNS resolved: {uri.Host} → {addresses[0]} ({d * 2}s wait)");
+                                    break;
+                                }
+                            }
+                            catch (Exception dnsEx)
+                            {
+                                Logger.LogAction("CLOUDFLARE", $"DNS not ready (attempt {d + 1}/4): {dnsEx.Message}");
+                            }
+                            if (d < 3) await Task.Delay(2000); // Wait 2s between DNS checks
+                        }
+                        
+                        if (!dnsReady)
+                        {
+                            Logger.LogAction("CLOUDFLARE", "⚠️ DNS propagation timeout — publishing URL anyway (receivers will use fallback)");
+                        }
+                    }
+
+                    // Phase 3: Optional — try the public URL too (works on networks with good DNS)
                     if (!verified)
                     {
                         Logger.LogAction("CLOUDFLARE", "Local server check failed — trying public URL as fallback...");
@@ -219,6 +280,8 @@ namespace AdvanceClip.Classes
                         Logger.LogAction("CLOUDFLARE", $"⚠️ File sync will use Firebase Storage fallback instead of Cloudflare tunnel.");
                     }
                     
+                    // NOW publish the URL to Firebase — DNS has had time to propagate
+                    Logger.LogAction("CLOUDFLARE", $"Publishing tunnel URL to Firebase: {GlobalUrl}");
                     GlobalUrlUpdated?.Invoke(GlobalUrl);
                     StartHealthMonitor(); // Begin periodic health checks
                     return;
