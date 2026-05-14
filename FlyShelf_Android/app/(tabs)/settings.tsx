@@ -8,7 +8,7 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import Constants from 'expo-constants';
 import { colors, font, radius, shadows, space } from '../../styles/theme';
 import AnimatedPressable from '../../components/AnimatedPressable';
-import { getDebugLogs, clearDebugLogs } from '../../utils/debugLog';
+import { getDebugLogs, clearDebugLogs, getNetworkLogs, getNetworkLogsText, clearNetworkLogs, onNetworkLogChange, getNetworkLogCount } from '../../utils/debugLog';
 import * as Clipboard from 'expo-clipboard';
 
 const APP_VERSION = Constants.expoConfig?.version || '1.0.0';
@@ -50,6 +50,29 @@ export default function SettingsScreen() {
   const [downloadedApkUri, setDownloadedApkUri] = useState('');
 
   const { AdvanceOverlay } = NativeModules;
+
+  // ═══ Network Log Viewer State ═══
+  const [showNetLogs, setShowNetLogs] = useState(false);
+  const [netLogEntries, setNetLogEntries] = useState<string[]>([]);
+  const [netLogCount, setNetLogCount] = useState(0);
+
+  useEffect(() => {
+    // Subscribe to network log changes for real-time updates
+    const unsub = onNetworkLogChange(() => {
+      if (showNetLogs) {
+        setNetLogEntries(getNetworkLogs().slice(0, 100));
+      }
+      setNetLogCount(getNetworkLogCount());
+    });
+    setNetLogCount(getNetworkLogCount());
+    return unsub;
+  }, [showNetLogs]);
+
+  useEffect(() => {
+    if (showNetLogs) {
+      setNetLogEntries(getNetworkLogs().slice(0, 100));
+    }
+  }, [showNetLogs]);
 
 
 
@@ -669,33 +692,176 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          {/* Debug Logs */}
+          {/* Network Log Viewer */}
           <View style={{ backgroundColor: '#141824', borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <IconSymbol name="doc.text.fill" size={20} color="#6B7280" />
-              <Text style={{ color: '#F0F2F5', fontSize: 16, fontWeight: '700' }}>Debug Logs</Text>
-            </View>
-            <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
+            {/* Header row with toggle */}
+            <TouchableOpacity
+              onPress={() => setShowNetLogs(!showNetLogs)}
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Text style={{ fontSize: 18 }}>🌐</Text>
+                <Text style={{ color: '#F0F2F5', fontSize: 16, fontWeight: '700' }}>Network Logs</Text>
+                {netLogCount > 0 && (
+                  <View style={{ backgroundColor: '#6366F133', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2 }}>
+                    <Text style={{ color: '#6366F1', fontSize: 11, fontWeight: '700' }}>{netLogCount}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={{ color: '#6B7280', fontSize: 18 }}>{showNetLogs ? '▲' : '▼'}</Text>
+            </TouchableOpacity>
+
+            {/* Action buttons — row 1 */}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
               <TouchableOpacity
-                style={{ flex: 1, backgroundColor: '#2A2F3A', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#3B4252' }}
+                style={{ flex: 1, backgroundColor: '#1E2330', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#2A2F3A' }}
                 onPress={async () => {
-                  const logs = getDebugLogs();
-                  if (!logs) { Alert.alert('No Logs', 'No sync activity logged yet.'); return; }
+                  const logs = getNetworkLogsText();
+                  if (!logs) { Alert.alert('No Logs', 'No network activity logged yet.'); return; }
                   await Clipboard.setStringAsync(logs);
-                  Alert.alert('Copied!', `${logs.split('\n').length} log entries copied to clipboard.`);
+                  Alert.alert('Copied!', `${logs.split('\n').length} network log entries copied.`);
                 }}
               >
-                <Text style={{ color: '#8B5CF6', fontWeight: '700', fontSize: 13 }}>📋 Copy Sync Logs</Text>
+                <Text style={{ color: '#60A5FA', fontWeight: '700', fontSize: 12 }}>📋 Copy</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={{ backgroundColor: '#2A2F3A', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#3B4252' }}
-                onPress={() => { clearDebugLogs(); Alert.alert('Cleared', 'Debug logs cleared.'); }}
+                style={{ flex: 1, backgroundColor: '#1E2330', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#2A2F3A' }}
+                onPress={async () => {
+                  const allLogs = getDebugLogs();
+                  if (!allLogs) { Alert.alert('No Logs', 'No activity logged yet.'); return; }
+                  await Clipboard.setStringAsync(allLogs);
+                  Alert.alert('Copied!', `${allLogs.split('\n').length} total log entries copied.`);
+                }}
               >
-                <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 13 }}>🗑️</Text>
+                <Text style={{ color: '#8B5CF6', fontWeight: '700', fontSize: 12 }}>📋 All Logs</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ backgroundColor: '#1E2330', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#2A2F3A', paddingHorizontal: 16 }}
+                onPress={() => {
+                  clearNetworkLogs();
+                  clearDebugLogs();
+                  setNetLogEntries([]);
+                  setNetLogCount(0);
+                  Alert.alert('Cleared', 'All logs cleared.');
+                }}
+              >
+                <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 12 }}>🗑️</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Send to PC Dashboard button */}
+            <TouchableOpacity
+              style={{ backgroundColor: '#1A2744', borderRadius: 12, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#1E3A5F', marginTop: 8 }}
+              onPress={async () => {
+                try {
+                  const logs = getNetworkLogs();
+                  if (logs.length === 0) { Alert.alert('No Logs', 'No network logs to send.'); return; }
+                  // Resolve PC URL
+                  const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
+                  const [localUrl, globalUrl, pk] = await Promise.all([
+                    AsyncStorage.getItem('pairedLocalUrl'),
+                    AsyncStorage.getItem('pairedGlobalUrl'),
+                    AsyncStorage.getItem('pairingKey'),
+                  ]);
+                  const candidates = [localUrl, globalUrl].filter(u => u && u.startsWith('http')) as string[];
+                  if (candidates.length === 0) { Alert.alert('No PC', 'No paired PC URL found. Pair with a PC first.'); return; }
+                  let sent = false;
+                  for (const url of candidates) {
+                    try {
+                      const headers: any = { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion', 'X-Device-Name': deviceName || 'Mobile' };
+                      if (pk) headers['X-Pairing-Key'] = pk;
+                      const ctrl = new AbortController();
+                      const timer = setTimeout(() => ctrl.abort(), 6000);
+                      const res = await fetch(`${url}/api/logs`, { method: 'POST', headers, body: JSON.stringify(logs), signal: ctrl.signal });
+                      clearTimeout(timer);
+                      if (res.ok) { sent = true; break; }
+                    } catch {}
+                  }
+                  if (sent) {
+                    Alert.alert('Sent! ✅', `${logs.length} log entries sent to PC dashboard.\n\nView at: your-pc/logs?pin=YOUR_PIN`);
+                  } else {
+                    Alert.alert('Failed', 'Could not reach PC. Make sure FlyShelf is running on PC.');
+                  }
+                } catch (e: any) { Alert.alert('Error', e?.message || 'Unknown error'); }
+              }}
+            >
+              <Text style={{ color: '#3B82F6', fontWeight: '700', fontSize: 13 }}>📤 Send Logs to PC Dashboard</Text>
+            </TouchableOpacity>
+
+            {/* Inline log viewer */}
+            {showNetLogs && (
+              <View style={{
+                marginTop: 14,
+                backgroundColor: '#0B0E14',
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: '#1A1F2E',
+                maxHeight: 350,
+                overflow: 'hidden',
+              }}>
+                {/* Log header bar */}
+                <View style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  backgroundColor: '#10131A',
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#1A1F2E',
+                }}>
+                  <Text style={{ color: '#4B5563', fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: '600' }}>
+                    LIVE NETWORK FEED — {netLogEntries.length} entries
+                  </Text>
+                  <TouchableOpacity onPress={() => setNetLogEntries(getNetworkLogs().slice(0, 100))}>
+                    <Text style={{ color: '#6366F1', fontSize: 10, fontWeight: '700' }}>↻ Refresh</Text>
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView
+                  style={{ maxHeight: 300, paddingHorizontal: 12, paddingVertical: 8 }}
+                  showsVerticalScrollIndicator={true}
+                  nestedScrollEnabled={true}
+                >
+                  {netLogEntries.length === 0 ? (
+                    <Text style={{ color: '#374151', fontSize: 12, fontStyle: 'italic', textAlign: 'center', paddingVertical: 20, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                      No network activity yet.{'\n'}Sync events will appear here in real-time.
+                    </Text>
+                  ) : (
+                    netLogEntries.map((entry, idx) => {
+                      // Color-code by content
+                      let textColor = '#6B7280';
+                      const upper = entry.toUpperCase();
+                      if (upper.includes('ERROR') || upper.includes('FAIL') || upper.includes('✗')) textColor = '#EF4444';
+                      else if (upper.includes('FIREBASE') || upper.includes('CLOUDFLARE') || upper.includes('CF_')) textColor = '#F59E0B';
+                      else if (upper.includes('DOWNLOAD') || upper.includes('DL-QUEUE') || upper.includes('✓') || upper.includes('✅')) textColor = '#10B981';
+                      else if (upper.includes('HTTP') || upper.includes('PC-POLL') || upper.includes('CONNECT')) textColor = '#60A5FA';
+                      else if (upper.includes('PAIR') || upper.includes('AUTH')) textColor = '#A78BFA';
+                      else if (upper.includes('SCREENSHOT') || upper.includes('MEDIA')) textColor = '#EC4899';
+
+                      return (
+                        <Text
+                          key={idx}
+                          style={{
+                            color: textColor,
+                            fontSize: 10,
+                            fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+                            lineHeight: 16,
+                            marginBottom: 2,
+                          }}
+                          selectable={true}
+                        >
+                          {entry}
+                        </Text>
+                      );
+                    })
+                  )}
+                </ScrollView>
+              </View>
+            )}
+
             <Text style={styles.helperText}>
-              Copies recent sync events (screenshots, Firebase, downloads) to clipboard. Share with developer for troubleshooting.
+              Network-only logs: Firebase sync, HTTP requests, Cloudflare, downloads, pairing. Tap header to {showNetLogs ? 'collapse' : 'expand'} the live viewer.
             </Text>
           </View>
 

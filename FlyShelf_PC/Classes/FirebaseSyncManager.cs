@@ -692,6 +692,66 @@ namespace AdvanceClip.Classes
         }
 
         /// <summary>
+        /// Get a sender's LAN URL by scanning active devices by name.
+        /// Used as last-resort fallback when all Cloudflare URLs are dead (DNS errors).
+        /// The file can still be downloaded over LAN if both PCs are on the same network.
+        /// </summary>
+        public static async Task<string> FindSenderLanUrl(string senderDeviceName)
+        {
+            if (string.IsNullOrEmpty(senderDeviceName)) return "";
+            try
+            {
+                string pairingKey = DevicePairingManager.EnsurePairingKey();
+                if (string.IsNullOrEmpty(pairingKey)) return "";
+
+                string url = (await AuthUrl($"active_devices/{pairingKey}.json"));
+                var response = await _client.GetAsync(url);
+                if (!response.IsSuccessStatusCode) return "";
+
+                string json = await response.Content.ReadAsStringAsync();
+                if (string.IsNullOrWhiteSpace(json) || json == "null") return "";
+
+                using var doc = JsonDocument.Parse(json);
+                foreach (var prop in doc.RootElement.EnumerateObject())
+                {
+                    if (prop.Value.TryGetProperty("DeviceName", out var nameEl))
+                    {
+                        string name = nameEl.GetString() ?? "";
+                        if (name.Equals(senderDeviceName, StringComparison.OrdinalIgnoreCase) ||
+                            prop.Name.Contains(senderDeviceName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Return the LocalIp (HTTP URL like http://192.168.1.x:8999)
+                            if (prop.Value.TryGetProperty("LocalIp", out var lip))
+                            {
+                                string lanUrl = lip.GetString() ?? "";
+                                if (!string.IsNullOrEmpty(lanUrl) && lanUrl.StartsWith("http"))
+                                {
+                                    Logger.LogAction("FIREBASE SSE", $"Found sender LAN URL by name '{senderDeviceName}': {lanUrl}");
+                                    return lanUrl;
+                                }
+                            }
+                            // Also check the Url field (which might be the LAN URL)
+                            if (prop.Value.TryGetProperty("Url", out var urlProp))
+                            {
+                                string directUrl = urlProp.GetString() ?? "";
+                                if (!string.IsNullOrEmpty(directUrl) && directUrl.StartsWith("http") && !directUrl.Contains("trycloudflare"))
+                                {
+                                    Logger.LogAction("FIREBASE SSE", $"Found sender direct URL by name '{senderDeviceName}': {directUrl}");
+                                    return directUrl;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("FIREBASE SSE", $"FindSenderLanUrl failed: {ex.Message}");
+            }
+            return "";
+        }
+
+        /// <summary>
         /// Push device registration to Firebase. Optimized: only writes when URL actually changes
         /// or when going offline. Reduces Firebase writes from ~1440/day to ~2-5/day per user.
         /// </summary>
@@ -848,44 +908,57 @@ namespace AdvanceClip.Classes
         public static async Task<List<(string Id, string Name, string Type, bool IsOnline, string LocalIp, string GlobalUrl)>> GetActiveDevices()
         {
             var devices = new List<(string Id, string Name, string Type, bool IsOnline, string LocalIp, string GlobalUrl)>();
-            try
+            for (int attempt = 0; attempt < 2; attempt++)
             {
-                string pairingKey = DevicePairingManager.EnsurePairingKey();
-                if (string.IsNullOrEmpty(pairingKey)) return devices;
-                string url = (await AuthUrl($"active_devices/{pairingKey}.json"));
-                var response = await _client.GetAsync(url);
-                if (response.IsSuccessStatusCode)
+                try
                 {
-                    var json = await response.Content.ReadAsStringAsync();
-                    if (!string.IsNullOrWhiteSpace(json) && json != "null")
+                    string pairingKey = DevicePairingManager.EnsurePairingKey();
+                    if (string.IsNullOrEmpty(pairingKey)) return devices;
+                    string url = (await AuthUrl($"active_devices/{pairingKey}.json"));
+                    var response = await _client.GetAsync(url);
+
+                    // Auto-retry on 401: invalidate token and try once more
+                    if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized && attempt == 0)
                     {
-                        using var doc = JsonDocument.Parse(json);
-                        string myId = SettingsManager.Current.DeviceId;
-                        foreach (var prop in doc.RootElement.EnumerateObject())
+                        FirebaseAuthManager.InvalidateToken();
+                        continue;
+                    }
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var json = await response.Content.ReadAsStringAsync();
+                        if (!string.IsNullOrWhiteSpace(json) && json != "null")
                         {
-                            if (prop.Name == myId) continue; // Skip self
-                            string name = prop.Value.TryGetProperty("DeviceName", out var n) ? n.GetString() ?? "" : "";
-                            string type = prop.Value.TryGetProperty("DeviceType", out var dt) ? dt.GetString() ?? "" : "";
-                            bool online = prop.Value.TryGetProperty("IsOnline", out var on) && on.GetBoolean();
-                            string localIp = prop.Value.TryGetProperty("LocalIp", out var lip) ? lip.GetString() ?? "" : "";
-                            string globalUrl = prop.Value.TryGetProperty("GlobalUrl", out var gurl) ? gurl.GetString() ?? "" : "";
-                            
-                            // TTL check: treat devices with heartbeat older than 2 minutes as offline
-                            if (online && prop.Value.TryGetProperty("Timestamp", out var ts))
+                            using var doc = JsonDocument.Parse(json);
+                            string myId = SettingsManager.Current.DeviceId;
+                            foreach (var prop in doc.RootElement.EnumerateObject())
                             {
-                                long deviceTs = ts.GetInt64();
-                                long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                                if (nowMs - deviceTs > 120_000) online = false; // Stale â€” hasn't heartbeated in 2 min
+                                if (prop.Name == myId) continue; // Skip self
+                                string name = prop.Value.TryGetProperty("DeviceName", out var n) ? n.GetString() ?? "" : "";
+                                string type = prop.Value.TryGetProperty("DeviceType", out var dt) ? dt.GetString() ?? "" : "";
+                                bool online = prop.Value.TryGetProperty("IsOnline", out var on) && on.GetBoolean();
+                                string localIp = prop.Value.TryGetProperty("LocalIp", out var lip) ? lip.GetString() ?? "" : "";
+                                string globalUrl = prop.Value.TryGetProperty("GlobalUrl", out var gurl) ? gurl.GetString() ?? "" : "";
+
+                                // TTL check: treat devices with heartbeat older than 2 minutes as offline
+                                if (online && prop.Value.TryGetProperty("Timestamp", out var ts))
+                                {
+                                    long deviceTs = ts.GetInt64();
+                                    long nowMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                                    if (nowMs - deviceTs > 120_000) online = false;
+                                }
+
+                                devices.Add((prop.Name, name, type, online, localIp, globalUrl));
                             }
-                            
-                            devices.Add((prop.Name, name, type, online, localIp, globalUrl));
                         }
                     }
+                    break; // Success or non-401 error
                 }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("FIREBASE", $"GetActiveDevices error: {ex.Message}");
+                catch (Exception ex)
+                {
+                    Logger.LogAction("FIREBASE", $"GetActiveDevices error: {ex.Message}");
+                    break;
+                }
             }
             return devices;
         }
@@ -949,30 +1022,45 @@ namespace AdvanceClip.Classes
         public static async Task<List<DeviceGroupInfo>> GetDeviceGroups()
         {
             var result = new List<DeviceGroupInfo>();
-            try
+            for (int attempt = 0; attempt < 2; attempt++)
             {
-                string url = (await AuthUrl("device_groups.json"));
-                var response = await _client.GetStringAsync(url);
-                if (!string.IsNullOrWhiteSpace(response) && response != "null")
+                try
                 {
-                    using var doc = JsonDocument.Parse(response);
-                    foreach (var prop in doc.RootElement.EnumerateObject())
+                    string url = (await AuthUrl("device_groups.json"));
+                    var httpResponse = await _client.GetAsync(url);
+
+                    // Auto-retry on 401: invalidate token and try once more
+                    if (httpResponse.StatusCode == System.Net.HttpStatusCode.Unauthorized && attempt == 0)
                     {
-                        var group = new DeviceGroupInfo { Id = prop.Name };
-                        if (prop.Value.TryGetProperty("name", out var nameProp))
-                            group.Name = nameProp.GetString() ?? "";
-                        if (prop.Value.TryGetProperty("deviceNames", out var devsProp) && devsProp.ValueKind == JsonValueKind.Array)
-                        {
-                            foreach (var dev in devsProp.EnumerateArray())
-                                group.DeviceNames.Add(dev.GetString() ?? "");
-                        }
-                        result.Add(group);
+                        FirebaseAuthManager.InvalidateToken();
+                        continue;
                     }
+                    if (!httpResponse.IsSuccessStatusCode) break;
+
+                    string response = await httpResponse.Content.ReadAsStringAsync();
+                    if (!string.IsNullOrWhiteSpace(response) && response != "null")
+                    {
+                        using var doc = JsonDocument.Parse(response);
+                        foreach (var prop in doc.RootElement.EnumerateObject())
+                        {
+                            var group = new DeviceGroupInfo { Id = prop.Name };
+                            if (prop.Value.TryGetProperty("name", out var nameProp))
+                                group.Name = nameProp.GetString() ?? "";
+                            if (prop.Value.TryGetProperty("deviceNames", out var devsProp) && devsProp.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var dev in devsProp.EnumerateArray())
+                                    group.DeviceNames.Add(dev.GetString() ?? "");
+                            }
+                            result.Add(group);
+                        }
+                    }
+                    break; // Success
                 }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("FIREBASE", $"GetDeviceGroups error: {ex.Message}");
+                catch (Exception ex)
+                {
+                    Logger.LogAction("FIREBASE", $"GetDeviceGroups error: {ex.Message}");
+                    break;
+                }
             }
             return result;
         }

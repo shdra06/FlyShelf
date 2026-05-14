@@ -1,46 +1,50 @@
 # ═══════════════════════════════════════════════════════════════
-#  AdvanceClip — Root .gitignore
+#  FlyShelf — Root .gitignore
 #  Structure:
-#    AdvanceClip_PC/       ← Windows desktop app (C# / WPF)
-#    AdvanceClip_Android/  ← Android companion (React Native + Kotlin)
-#    version.json          ← update manifest (COMMITTED)
+#    FlyShelf_PC/       ← Windows desktop app (C# / WPF)
+#    FlyShelf_Android/  ← Android companion (React Native + Kotlin)
+#    version.json       ← update manifest (COMMITTED)
 # ═══════════════════════════════════════════════════════════════
 
-# ─── Leftover old folder (node_modules still locked) ──────────
+# ─── Leftover old folders ─────────────────────────────────────
 AndroidCompanion/
+AdvanceClip_PC/
+AdvanceClip_Android/
 
 # ─── .NET / C# Build Artifacts ────────────────────────────────
-AdvanceClip_PC/bin/
-AdvanceClip_PC/obj/
-AdvanceClip_PC/*.zip
-AdvanceClip_PC/*_wpftmp.csproj*
-AdvanceClip_PC/.vs/
-AdvanceClip_PC/**/*.user
-AdvanceClip_PC/**/*.suo
-AdvanceClip_PC/publish/
-AdvanceClip_PC/publish2/
+FlyShelf_PC/bin/
+FlyShelf_PC/obj/
+FlyShelf_PC/*.zip
+FlyShelf_PC/*_wpftmp.csproj*
+FlyShelf_PC/.vs/
+FlyShelf_PC/**/*.user
+FlyShelf_PC/**/*.suo
+FlyShelf_PC/publish/
+FlyShelf_PC/publish2/
 
 # ─── Published / Release Binaries (uploaded to GitHub Releases) ─
-AdvanceClip_PC/FINAL/
+FlyShelf_PC/FINAL/
 FINAL/
 release_build/
 release_build_v4/
 v4_release/
 publish_out/
+publish/
+test/
 
 # ─── Android Build Artifacts ──────────────────────────────────
-AdvanceClip_Android/node_modules/
-AdvanceClip_Android/.expo/
-AdvanceClip_Android/android/build/
-AdvanceClip_Android/android/app/build/
-AdvanceClip_Android/android/.gradle/
-AdvanceClip_Android/android/.idea/
-AdvanceClip_Android/.idea/
-AdvanceClip_Android/dist/
+FlyShelf_Android/node_modules/
+FlyShelf_Android/.expo/
+FlyShelf_Android/android/build/
+FlyShelf_Android/android/app/build/
+FlyShelf_Android/android/.gradle/
+FlyShelf_Android/android/.idea/
+FlyShelf_Android/.idea/
+FlyShelf_Android/dist/
 
 # ─── Android Sensitive / Local-only Files ─────────────────────
-AdvanceClip_Android/android/local.properties
-AdvanceClip_Android/android/app/debug.keystore
+FlyShelf_Android/android/local.properties
+FlyShelf_Android/android/app/debug.keystore
 
 # ─── Python virtual env ───────────────────────────────────────
 .venv/
@@ -63,14 +67,15 @@ desktop.ini
 *.temp
 
 # ─── NuGet cache (auto-restored via dotnet restore) ───────────
-AdvanceClip_PC/.nuget/
+FlyShelf_PC/.nuget/
 
 # ─── Root-level binaries ──────────────────────────────────────
 AdvanceClip.exe
 AdvanceClip_Mobile.apk
+FlyShelf.exe
 FlyShelf_Mobile.apk
 
 # ─── Debug screenshots & temp files ──────────────────────────
 *.png
-!AdvanceClip_PC/Resources/**/*.png
-!AdvanceClip_Android/assets/**/*.png
+!FlyShelf_PC/Resources/**/*.png
+!FlyShelf_Android/assets/**/*.png

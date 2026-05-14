@@ -1,22 +1,22 @@
 <div align="center">
 
-# ⚡ AdvanceClip
+# ⚡ FlyShelf
 
 ### The Ultimate Cross-Device Clipboard Ecosystem
 
 *Copy on one device. Paste anywhere. Instantly.*
 
-[![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shdra06/AdvanceClip/releases/latest/download/AdvanceClip.exe)
-[![Android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/shdra06/AdvanceClip/releases/latest/download/AdvanceClip_Mobile.apk)
+[![Windows](https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/latest/download/FlyShelf.exe)
+[![Android](https://img.shields.io/badge/Android-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/latest/download/FlyShelf_Mobile.apk)
 
 
 ---
 
 </div>
 
-## 🎯 What is AdvanceClip?
+## 🎯 What is FlyShelf?
 
-AdvanceClip unifies your clipboard across **every device you own** — seamlessly, privately, and at network speed. Copy a paragraph on your office PC, paste it on your phone in the elevator, then paste a file on your home PC. No accounts, no cloud storage limits, no friction.
+FlyShelf unifies your clipboard across **every device you own** — seamlessly, privately, and at network speed. Copy a paragraph on your office PC, paste it on your phone in the elevator, then paste a file on your home PC. No accounts, no cloud storage limits, no friction.
 
 It's not just a clipboard manager — it's a **complete synchronization ecosystem** that connects your Windows PCs and Android devices into one unified workspace.
 
@@ -63,7 +63,7 @@ It's not just a clipboard manager — it's a **complete synchronization ecosyste
 ```
 ┌──────────────────┐                        ┌──────────────────┐
 │   Windows PC     │   ◄── Firebase ──►     │   Android Phone  │
-│  AdvanceClip.exe │       (signaling)      │  AdvanceClip.apk │
+│   FlyShelf.exe   │       (signaling)      │   FlyShelf.apk   │
 │                  │                        │                  │
 │  • Clipboard     │   ◄── Cloudflare ──►   │  • Floating Ball │
 │  • File Server   │      (file transfer)   │  • Background    │
@@ -83,8 +83,8 @@ It's not just a clipboard manager — it's a **complete synchronization ecosyste
 ## 📦 Project Structure
 
 ```
-AdvanceClip/
-├── AdvanceClip_PC/              # Windows desktop app (C# / WPF / .NET 10)
+FlyShelf/
+├── FlyShelf_PC/                 # Windows desktop app (C# / WPF / .NET 10)
 │   ├── Classes/                 # Core logic — sync, networking, update engine
 │   ├── Windows/                 # UI — HubWindow, Timer, Toast, QuickLook
 │   ├── ViewModels/              # MVVM — clipboard items, drag-drop shelf
@@ -92,7 +92,7 @@ AdvanceClip/
 │   ├── Scripts/                 # Automation scripts
 │   └── AdvanceClip.csproj       # Build configuration
 │
-├── AdvanceClip_Android/         # Android companion (React Native + Kotlin)
+├── FlyShelf_Android/            # Android companion (React Native + Kotlin)
 │   ├── app/(tabs)/              # RN screens — clipboard feed, settings
 │   ├── android/app/src/main/    # Native Kotlin — OverlayService, sync
 │   ├── context/                 # Settings persistence
@@ -116,25 +116,25 @@ AdvanceClip/
 
 **PC — Run from source:**
 ```powershell
-cd AdvanceClip_PC
+cd FlyShelf_PC
 dotnet run
 ```
 
 **PC — Build release EXE:**
 ```powershell
-cd AdvanceClip_PC
+cd FlyShelf_PC
 dotnet publish -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true -o FINAL\new_exe
 ```
 
 **Android — Build APK:**
 ```powershell
-cd AdvanceClip_Android/android
+cd FlyShelf_Android/android
 ./gradlew assembleRelease
 # Output: android/app/build/outputs/apk/release/app-release.apk
 ```
 
 ### First Launch
-1. Open `AdvanceClip.exe` → it starts a local server + Cloudflare tunnel automatically
+1. Open `FlyShelf.exe` → it starts a local server + Cloudflare tunnel automatically
 2. Install the APK on your phone → go to **Settings** → enter your PC's local IP
 3. Enable **Floating Ball** → enable **Global Sync**
 4. Copy something on your PC — it appears on your phone instantly ⚡
@@ -155,8 +155,8 @@ cd AdvanceClip_Android/android
 ## 📥 Releases & Updates
 
 Pre-built binaries are available on the [Releases](../../releases) page:
-- **`AdvanceClip.exe`** — Windows desktop app (single-file, self-contained)
-- **`AdvanceClip_Mobile.apk`** — Android companion app
+- **`FlyShelf.exe`** — Windows desktop app (single-file, self-contained)
+- **`FlyShelf_Mobile.apk`** — Android companion app
 
 Both apps have a built-in **"Check for Updates"** button in Settings that fetches the latest version from this repository.
 

@@ -664,6 +664,24 @@ namespace AdvanceClip.Classes
                         if (pathMatch.Success)
                             urlsToTry.Add($"{cloudItem.SenderUrl.TrimEnd('/')}/download?path={pathMatch.Groups[1].Value}");
                     }
+
+                    // LAST RESORT: Try sender's LAN URL — works if both PCs are on the same network
+                    // even when all Cloudflare tunnel URLs are dead (DNS errors)
+                    try
+                    {
+                        string lanUrl = await FirebaseSyncManager.FindSenderLanUrl(cloudItem.SourceDeviceName);
+                        if (!string.IsNullOrEmpty(lanUrl))
+                        {
+                            var lanPathMatch = System.Text.RegularExpressions.Regex.Match(cloudItem.Raw, @"(/download\?path=.+)$");
+                            if (lanPathMatch.Success)
+                            {
+                                string lanDownloadUrl = lanUrl.TrimEnd('/') + lanPathMatch.Groups[1].Value;
+                                urlsToTry.Add(lanDownloadUrl);
+                                Logger.LogAction("FIREBASE SSE", $"Added LAN fallback URL: {lanDownloadUrl}");
+                            }
+                        }
+                    }
+                    catch { /* Best effort — LAN fallback is optional */ }
                 }
 
                 string successUrl = null;

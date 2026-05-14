@@ -30,6 +30,12 @@ namespace AdvanceClip.Windows
             _viewModel.DroppedItems.CollectionChanged += DroppedItems_CollectionChanged;
             ApplyTheme();
 
+            // Auto-refresh device list when a new device pairs
+            DevicePairingManager.OnDevicePaired += (deviceName) =>
+            {
+                Dispatcher.InvokeAsync(() => RefreshDevices_Click(null, null));
+            };
+
             // Show real version from assembly
             string v = UpdateManager.CurrentVersion;
             VersionBadgeText.Text = $"v{v}";
@@ -352,6 +358,87 @@ namespace AdvanceClip.Windows
             catch (Exception ex)
             {
                 ToastWindow.ShowToast($"❌ Failed to copy: {ex.Message}");
+            }
+        }
+
+        private async void SendLogsToDashboard_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                SendLogsToDashboardBtn.IsEnabled = false;
+                var vm = DataContext as AdvanceClip.ViewModels.FlyShelfViewModel;
+
+                // Gather PC logs
+                string pcLogs = Logger.GetRecentNetworkLogs(500);
+                var logLines = string.IsNullOrWhiteSpace(pcLogs)
+                    ? new List<string>()
+                    : pcLogs.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                        .Select(line => $"[PC] {line.Trim()}")
+                        .ToList();
+
+                if (logLines.Count == 0)
+                {
+                    ToastWindow.ShowToast("⚠️ No network logs to send");
+                    SendLogsToDashboardBtn.IsEnabled = true;
+                    return;
+                }
+
+                // ── Always save a local diagnostic file ──
+                string logsDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
+                System.IO.Directory.CreateDirectory(logsDir);
+                string deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
+                string deviceTag = deviceName.Replace(" ", "_").Replace("/", "_");
+                string timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
+                string fileName = $"diagnostic_{deviceTag}_{timestamp}.log";
+                string filePath = System.IO.Path.Combine(logsDir, fileName);
+
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("═══════════════════════════════════════════════════════════════");
+                sb.AppendLine($"  FlyShelf Diagnostic Log — {deviceName}");
+                sb.AppendLine($"  Captured: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine($"  PC Host:  {Environment.MachineName}");
+                sb.AppendLine($"  OS:       {Environment.OSVersion}");
+                sb.AppendLine($"  Entries:  {logLines.Count}");
+                sb.AppendLine("═══════════════════════════════════════════════════════════════");
+                sb.AppendLine();
+                foreach (var line in logLines)
+                    sb.AppendLine(line);
+
+                await System.IO.File.WriteAllTextAsync(filePath, sb.ToString());
+
+                // ── Also POST to dashboard if server is running ──
+                bool dashboardSuccess = false;
+                if (vm?.LocalServer != null)
+                {
+                    try
+                    {
+                        string serverUrl = vm.LocalServer.ServerUrl?.TrimEnd('/') ?? "http://localhost:8999";
+                        using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                        var json = System.Text.Json.JsonSerializer.Serialize(logLines);
+                        var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
+                        content.Headers.Add("X-FlyShelf-Client", "DesktopApp");
+                        content.Headers.Add("X-Device-Name", deviceName);
+                        var res = await client.PostAsync($"{serverUrl}/api/logs", content);
+                        dashboardSuccess = res.IsSuccessStatusCode;
+                    }
+                    catch { /* Server POST failed — file is still saved */ }
+                }
+
+                string msg = $"✅ {logLines.Count} entries saved → {fileName}";
+                if (dashboardSuccess) msg += "\n📊 Also pushed to web dashboard";
+                msg += $"\n📁 {logsDir}";
+                ToastWindow.ShowToast(msg);
+
+                // Open the Logs folder so user can grab the file
+                try { System.Diagnostics.Process.Start("explorer.exe", logsDir); } catch { }
+            }
+            catch (Exception ex)
+            {
+                ToastWindow.ShowToast($"❌ Failed: {ex.Message}");
+            }
+            finally
+            {
+                SendLogsToDashboardBtn.IsEnabled = true;
             }
         }
 

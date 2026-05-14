@@ -63,8 +63,28 @@ namespace AdvanceClip.Classes
         private string _lastActivity = "—";
         public string LastActivity { get => _lastActivity; set { _lastActivity = value; OnPropertyChanged(); } }
 
+        // Categories that qualify for the live network monitor
+        private static readonly string[] NET_CATEGORIES = {
+            "CLOUDFLARE", "CF_", "FIREBASE", "FORCED SYNC", "BIND", "NETWORK",
+            "HTTP", "HEARTBEAT", "CLOUDFLARE HEALTH", "CLOUDFLARE_ERROR",
+            "FIREBASE SSE", "FIREBASE SYNC", "FIREBASE STORAGE", "FIREBASE CLEANUP",
+            "FIREBASE ERROR", "LISTENER", "SERVER", "DOWNLOAD", "DRAG IN",
+            "CLIPBOARD SEND", "PAIR", "AUTH", "TUNNEL", "STARTUP",
+            "DIAGNOSTICS"
+        };
+
+        private static bool IsNetworkCategory(string category)
+        {
+            foreach (var cat in NET_CATEGORIES)
+                if (category.Contains(cat)) return true;
+            return false;
+        }
+
         public void Log(string category, string message, string color = null)
         {
+            // Only show network-related categories in the live monitor
+            if (!IsNetworkCategory(category)) return;
+
             var entry = new NetworkLogEntry
             {
                 Timestamp = DateTime.Now,

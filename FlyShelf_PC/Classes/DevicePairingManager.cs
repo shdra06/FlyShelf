@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -48,6 +48,9 @@ namespace AdvanceClip.Classes
 
         private static List<PairedDevice> _pairedDevices = new();
         private static readonly object _lock = new();
+        
+        /// <summary>Fires whenever a device is successfully paired. UI can subscribe to auto-refresh.</summary>
+        public static event Action<string> OnDevicePaired;
         private static readonly HttpClient _httpClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
         private const string FIREBASE_BASE = "https://advance-sync-default-rtdb.firebaseio.com";
         
@@ -230,6 +233,7 @@ namespace AdvanceClip.Classes
             }
 
             Save();
+            OnDevicePaired?.Invoke(deviceName);
             return true;
         }
 

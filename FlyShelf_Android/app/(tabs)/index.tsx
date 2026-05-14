@@ -8,7 +8,7 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import { useSettings } from '../../context/SettingsContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { database, ensureFirebaseAuth, getFirebaseIdToken } from '../../firebaseConfig';
-import { syncLog } from '../../utils/debugLog';
+import { syncLog, getNetworkLogs } from '../../utils/debugLog';
 import { ref, push, set, get, onValue, query, limitToLast, orderByChild, update, remove } from 'firebase/database';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
@@ -1357,6 +1357,7 @@ export default function SyncScreen() {
     const heartbeat = setInterval(registerSelf, 300_000);
     return () => { clearInterval(heartbeat); if (!isFloatingBallEnabled) set(ref(database, `active_devices/${pk}/${myDeviceId}/IsOnline`), false).catch(() => {}); };
   }, [deviceName, isFloatingBallEnabled]);
+
 
   // ─── Periodic dedup cleanup (every 60s) ───
   useEffect(() => {
