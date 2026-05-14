@@ -122,7 +122,7 @@ namespace AdvanceClip.Classes
             string pairingKey = CreatePairingKeyIfNeeded();
             var payload = new
             {
-                app = "ClipFlow",
+                app = "FlyShelf",
                 v = 1,
                 key = pairingKey,
                 local = localUrl ?? "",

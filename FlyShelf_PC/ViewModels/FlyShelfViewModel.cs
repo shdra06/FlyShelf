@@ -592,9 +592,7 @@ namespace AdvanceClip.ViewModels
             lock (_cloudContentLock)
             {
                 _recentCloudContent[contentFingerprint] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                // Prune old entries (older than 30s)
-                var stale = _recentCloudContent.Where(kv => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - kv.Value > 30_000).Select(kv => kv.Key).ToList();
-                foreach (var k in stale) _recentCloudContent.Remove(k);
+                PruneCloudContent();
             }
         }
         
@@ -603,8 +601,23 @@ namespace AdvanceClip.ViewModels
         {
             lock (_cloudContentLock)
             {
+                PruneCloudContent();
                 return _recentCloudContent.ContainsKey(contentFingerprint) && 
                        (DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - _recentCloudContent[contentFingerprint]) < 30_000;
+            }
+        }
+
+        /// <summary>Evicts stale entries (>30s) and enforces a hard cap of 100.</summary>
+        private void PruneCloudContent()
+        {
+            long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            var stale = _recentCloudContent.Where(kv => now - kv.Value > 30_000).Select(kv => kv.Key).ToList();
+            foreach (var k in stale) _recentCloudContent.Remove(k);
+            // Hard cap — remove oldest if still too large
+            while (_recentCloudContent.Count > 100)
+            {
+                var oldest = _recentCloudContent.OrderBy(kv => kv.Value).First().Key;
+                _recentCloudContent.Remove(oldest);
             }
         }
 

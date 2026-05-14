@@ -100,6 +100,8 @@ namespace AdvanceClip.Classes
             return Path.Combine(dir, "config.json");
         }
 
+        private static System.Threading.Timer? _saveDebounce;
+
         public static void Load()
         {
             try
@@ -114,11 +116,20 @@ namespace AdvanceClip.Classes
             }
             catch { }
             
-            Current.PropertyChanged += (s, e) => Save();
+            Current.PropertyChanged += (s, e) => DebouncedSave();
             if (Current.CustomSnifferPaths != null)
             {
-                Current.CustomSnifferPaths.CollectionChanged += (s, e) => Save();
+                Current.CustomSnifferPaths.CollectionChanged += (s, e) => DebouncedSave();
             }
+        }
+
+        /// <summary>
+        /// Coalesces rapid property changes (e.g. window resize) into a single disk write.
+        /// </summary>
+        private static void DebouncedSave()
+        {
+            _saveDebounce?.Dispose();
+            _saveDebounce = new System.Threading.Timer(_ => Save(), null, 500, System.Threading.Timeout.Infinite);
         }
 
         public static void Save()

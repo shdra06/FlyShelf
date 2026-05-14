@@ -1,6 +1,6 @@
 @echo off
 
-cd ..\AdvanceClip_Android
+cd ..\FlyShelf_Android
 
 echo Clearing previous builds and generating native code...
 set "CI=true"
@@ -18,10 +18,10 @@ call gradlew assembleRelease
 echo.
 echo Re-packaging...
 cd ..
-if not exist "..\AdvanceClip_PC\FINAL" mkdir "..\AdvanceClip_PC\FINAL"
-copy /Y "android\app\build\outputs\apk\release\app-release.apk" "..\AdvanceClip_PC\FINAL\AdvanceClip_Mobile.apk" >nul
+if not exist "..\FlyShelf_PC\FINAL" mkdir "..\FlyShelf_PC\FINAL"
+copy /Y "android\app\build\outputs\apk\release\app-release.apk" "..\FlyShelf_PC\FINAL\FlyShelf_Mobile.apk" >nul
 
-cd ..\AdvanceClip_PC
+cd ..\FlyShelf_PC
 echo ==============================================
-echo DONE! The updated APK is in 'AdvanceClip_PC\FINAL'.
+echo DONE! The updated APK is in 'FlyShelf_PC\FINAL'.
 echo ==============================================

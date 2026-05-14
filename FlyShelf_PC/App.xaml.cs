@@ -88,7 +88,7 @@ public partial class App : Application
             using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
             {
                 // Environment.ProcessPath guarantees absolute pathing even for self-contained SingleFile bundles 
-                if (key != null) key.SetValue("FlyShelf", Environment.ProcessPath ?? System.Reflection.Assembly.GetExecutingAssembly().Location);
+                if (key != null) key.SetValue("FlyShelf", Environment.ProcessPath ?? System.IO.Path.Combine(AppContext.BaseDirectory, "FlyShelf.exe"));
             }
         }
         catch (Exception) { /* Swallow permission constraint exceptions gracefully */ }
@@ -101,7 +101,7 @@ public partial class App : Application
             // Catch UI thread exceptions silently without tearing down the program
             DispatcherUnhandledException += (s, args) =>
             {
-                try { System.IO.File.AppendAllText("advanceclip_debugger.log", $"[{DateTime.Now}] UI CAUGHT: {args.Exception.ToString()}\n"); } catch { }
+                try { System.IO.File.AppendAllText("flyshelf_debugger.log", $"[{DateTime.Now}] UI CAUGHT: {args.Exception.ToString()}\n"); } catch { }
                 try { AdvanceClip.Classes.Logger.LogAction("UI ERROR", args.Exception.Message); } catch { }
                 args.Handled = true; // Tell Windows not to crash the executable
             };
@@ -109,7 +109,7 @@ public partial class App : Application
             // Catch background thread crashes — log but DON'T let them kill the process
             AppDomain.CurrentDomain.UnhandledException += (s, args) =>
             {
-                try { System.IO.File.AppendAllText("advanceclip_debugger.log", $"[{DateTime.Now}] UNMANAGED FATAL: {args.ExceptionObject}\n"); } catch { }
+                try { System.IO.File.AppendAllText("flyshelf_debugger.log", $"[{DateTime.Now}] UNMANAGED FATAL: {args.ExceptionObject}\n"); } catch { }
                 // NOTE: IsTerminating=true means the CLR is shutting down. We can't prevent it here,
                 // but we CAN prevent it by ensuring all async calls are wrapped in try/catch upstream.
             };
@@ -119,7 +119,7 @@ public partial class App : Application
             {
                 // ALWAYS observe to prevent process termination
                 args.SetObserved();
-                try { System.IO.File.AppendAllText("advanceclip_debugger.log", $"[{DateTime.Now}] ASYNC SWALLOWED: {args.Exception.Message}\n"); } catch { }
+                try { System.IO.File.AppendAllText("flyshelf_debugger.log", $"[{DateTime.Now}] ASYNC SWALLOWED: {args.Exception.Message}\n"); } catch { }
             };
 
             if (string.IsNullOrWhiteSpace(AdvanceClip.Classes.SettingsManager.Current.DeviceName))

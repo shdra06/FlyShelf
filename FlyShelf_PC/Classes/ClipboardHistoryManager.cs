@@ -48,7 +48,7 @@ namespace AdvanceClip.Classes
         public static string GetPersistentImagePath()
         {
             Directory.CreateDirectory(_imagesDir);
-            return Path.Combine(_imagesDir, $"ClipFlow_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString().Substring(0, 4)}.png");
+            return Path.Combine(_imagesDir, $"FlyShelf_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString().Substring(0, 4)}.png");
         }
 
         /// <summary>

@@ -14,7 +14,6 @@
         WindowStyle="None" ResizeMode="NoResize" Background="Transparent" SystemBackdropType="Acrylic"
         ShowInTaskbar="False" Margin="0" Topmost="True" ShowActivated="False"
         AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver"
-        Deactivated="Window_Deactivated"
         TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal"
         Loaded="MicaWindow_Loaded">
 
@@ -71,12 +70,12 @@
             Icon="pack://application:,,,/Resources/ClipFlowLogo.ico"
             MenuOnRightClick="True"
             LeftClick="nIcon_LeftClick"
-            TooltipText="ClipFlow">
+            TooltipText="FlyShelf">
             <tray:NotifyIcon.Menu>
                 <ContextMenu>
-                    <MenuItem Header="Open Advance Hub" Click="OpenApp_Click" />
+                    <MenuItem Header="Open FlyShelf Hub" Click="OpenApp_Click" />
                     <Separator />
-                    <MenuItem Header="Quit ClipFlow" Click="NotifyIconQuit_Click" />
+                    <MenuItem Header="Quit FlyShelf" Click="NotifyIconQuit_Click" />
                 </ContextMenu>
             </tray:NotifyIcon.Menu>
         </tray:NotifyIcon>
@@ -90,14 +89,18 @@
             <!-- Search Bar — expands inline when toggled -->
             <Border x:Name="SearchBarContainer" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,6,0" Visibility="Collapsed"
                     Background="#18FFFFFF" CornerRadius="8" BorderBrush="#30FFFFFF" BorderThickness="1" Padding="6,2"
-                    Panel.ZIndex="10" PreviewMouseLeftButtonDown="SearchBar_PreviewMouseDown">
+                    Panel.ZIndex="10" PreviewMouseLeftButtonDown="SearchBar_PreviewMouseDown"
+                    RenderTransformOrigin="0.5,0">
+                <Border.RenderTransform>
+                    <TranslateTransform Y="0"/>
+                </Border.RenderTransform>
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Grid Grid.Column="0" Background="Transparent">
-                        <TextBlock x:Name="SearchPlaceholder" Text="Search" Foreground="#50FFFFFF" VerticalAlignment="Center" FontSize="12" IsHitTestVisible="False" Margin="4,0,0,0"/>
+                        <TextBlock x:Name="SearchPlaceholder" Text="Search (Ctrl+F)" Foreground="#50FFFFFF" VerticalAlignment="Center" FontSize="12" IsHitTestVisible="False" Margin="4,0,0,0"/>
                         <TextBox x:Name="SearchTextBox" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
                                  FontSize="12" VerticalAlignment="Center" CaretBrush="White" Padding="4,2" Margin="0"
                                  HorizontalContentAlignment="Left"
@@ -136,7 +139,7 @@
                     <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" /></ui:Button.Icon>
                 </ui:Button>
 
-                <ui:Button Name="ToggleExpandBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="OpenApp_Click" ToolTip="Open Full Advance Hub" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
+                <ui:Button Name="ToggleExpandBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="OpenApp_Click" ToolTip="Open FlyShelf Hub" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
                     <ui:Button.Icon><ui:SymbolIcon Symbol="Maximize24" /></ui:Button.Icon>
                 </ui:Button>
 
@@ -158,11 +161,11 @@
                     <ui:Button.Icon><ui:SymbolIcon Symbol="Cloud24" Filled="True"/></ui:Button.Icon>
                 </ui:Button>
 
-                <ui:Button Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="Clear_Click" ToolTip="Clear Universal Memory Stack" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
+                <ui:Button Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="Clear_Click" ToolTip="Clear Shelf (keeps pinned)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
                     <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" /></ui:Button.Icon>
                 </ui:Button>
                 
-                <ui:Button Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="CloseWindow_Click" ToolTip="Hide HUD" Padding="8,6" CornerRadius="8">
+                <ui:Button Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="CloseWindow_Click" ToolTip="Hide (Esc)" Padding="8,6" CornerRadius="8">
                     <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" Filled="True"/></ui:Button.Icon>
                 </ui:Button>
             </StackPanel>
@@ -893,8 +896,16 @@
                 </Border.Triggers>
                 <ui:SymbolIcon Symbol="ClipboardPaste24" FontSize="28" Foreground="#40FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
-            <TextBlock Text="Your clipboard will appear here" Opacity="0.45" FontWeight="SemiBold" FontSize="14" TextAlignment="Center"/>
-            <TextBlock Text="Copy anything to get started" Opacity="0.28" FontSize="12" Margin="0,6,0,0" TextAlignment="Center"/>
+            <TextBlock Text="Your shelf is empty" Opacity="0.45" FontWeight="SemiBold" FontSize="14" TextAlignment="Center"/>
+            <TextBlock Opacity="0.28" FontSize="11.5" Margin="0,10,0,0" TextAlignment="Center" LineHeight="20">
+                <Run Text="⌨️ Press"/><Run Text=" Alt+C " FontWeight="SemiBold"/><Run Text="anywhere to open"/>
+                <LineBreak/>
+                <Run Text="🖱️ Shake mouse to summon"/>
+                <LineBreak/>
+                <Run Text="📁 Drag files here to shelve"/>
+                <LineBreak/>
+                <Run Text="🔍 "/><Run Text="Ctrl+F" FontWeight="SemiBold"/><Run Text=" to search your clips"/>
+            </TextBlock>
         </StackPanel>
 
     </Grid>

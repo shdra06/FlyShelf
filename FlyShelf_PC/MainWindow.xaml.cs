@@ -861,10 +861,6 @@ namespace AdvanceClip
             // Leaving the physical window drag-space now does NOT force kill the app interface!
         }
 
-        private void Window_Deactivated(object sender, EventArgs e)
-        {
-            // Disabled explicit Opacity overrides: the OS natively handles Mica/Acrylic Transparency shaders correctly!
-        }
 
         private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
         {
@@ -949,6 +945,16 @@ namespace AdvanceClip
                 this.Activate();
                 SearchBarContainer.Visibility = Visibility.Visible;
                 SearchToggleBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x14, 0xB8, 0xA6));
+                
+                // Smooth slide-down + fade-in animation
+                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(-8, 0, new Duration(TimeSpan.FromMilliseconds(150)))
+                {
+                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+                };
+                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(150)));
+                SearchBarContainer.RenderTransform.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, slideAnim);
+                SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+                
                 // Delay focus — the TextBox needs to be visible and rendered first
                 Dispatcher.InvokeAsync(() =>
                 {
@@ -1527,28 +1533,7 @@ namespace AdvanceClip
                         {
                             DragDropEffects result = DragDrop.DoDragDrop(ShelfListView, dataObj, DragDropEffects.Copy | DragDropEffects.Move);
                             
-                            // Absolutely disabled automatic explicit deletion under any circumstance natively! User requires strictly persistent items!
-                            if (false)
-                            {
-                                var itemsToRemove = ShelfListView.SelectedItems.Cast<ClipboardItem>().ToList();
-                                foreach (var item in itemsToRemove) 
-                                {
-                                    var container = ShelfListView.ItemContainerGenerator.ContainerFromItem(item) as System.Windows.Controls.ListViewItem;
-                                    if (container != null)
-                                    {
-                                        var anim = new System.Windows.Media.Animation.DoubleAnimation(0, new System.Windows.Duration(TimeSpan.FromMilliseconds(200))) 
-                                        {
-                                            EasingFunction = new System.Windows.Media.Animation.QuarticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-                                        };
-                                        anim.Completed += (s, ev) => _viewModel.RemoveItem(item);
-                                        container.BeginAnimation(UIElement.OpacityProperty, anim);
-                                    }
-                                    else
-                                    {
-                                        _viewModel.RemoveItem(item);
-                                    }
-                                }
-                            }
+                            // Items remain persistent on the shelf after drag-out
                         }
                         catch (Exception ex)
                         {
@@ -1893,7 +1878,7 @@ $word.Quit()
             _hoverPreviewTimer?.Stop();
             if (_hoveredItem == null || string.IsNullOrEmpty(_hoveredItem.RawContent)) return;
 
-            GetCursorPos(out POINT pt);
+            Classes.NativeMethods.GetCursorPos(out var pt);
             var source = PresentationSource.FromVisual(this);
             double dpiScaleX = source?.CompositionTarget?.TransformFromDevice.M11 ?? 1.0;
             double dpiScaleY = source?.CompositionTarget?.TransformFromDevice.M22 ?? 1.0;
@@ -1903,11 +1888,5 @@ $word.Quit()
             _activePreviewPopup = new Windows.PreviewPopup(_hoveredItem.RawContent, x, y);
             _activePreviewPopup.Show();
         }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct POINT { public int X; public int Y; }
-
-        [DllImport("user32.dll")]
-        private static extern bool GetCursorPos(out POINT lpPoint);
     }
 }

@@ -15,7 +15,7 @@ namespace AdvanceClip.Classes
             string basePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FlyShelf", "RuntimeCore");
             ExecutionDir = basePath;
 
-            string trueExePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? Assembly.GetExecutingAssembly().Location;
+            string trueExePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? System.IO.Path.Combine(AppContext.BaseDirectory, "FlyShelf.exe");
             long currentVer = new FileInfo(trueExePath).LastWriteTimeUtc.Ticks;
 
             string verFile = Path.Combine(ExecutionDir, "version.txt");
