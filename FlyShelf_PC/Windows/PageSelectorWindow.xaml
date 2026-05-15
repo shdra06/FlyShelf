@@ -5,7 +5,7 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Select Pages" Height="620" Width="680"
         WindowStartupLocation="CenterOwner"
-        SystemBackdropType="Mica" Background="Transparent" Topmost="True">
+        SystemBackdropType="Mica" Background="Transparent">
     
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="32" ResizeBorderThickness="6" CornerRadius="8" GlassFrameThickness="-1" />

@@ -242,7 +242,7 @@ namespace AdvanceClip.Windows
             }
         }
 
-        private void SelectPages_Click(object sender, RoutedEventArgs e)
+        private void ReorderPages_Click(object sender, RoutedEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.Tag is PdfMergeItem item)
             {
@@ -252,12 +252,155 @@ namespace AdvanceClip.Windows
                     return;
                 }
 
-                var selector = new PageSelectorWindow(item);
-                selector.Owner = this;
-                selector.ShowDialog();
+                var reorderWin = new PageReorderWindow(item);
+                reorderWin.Owner = this;
+                reorderWin.ShowDialog();
 
-                PdfItemsList.Items.Refresh();
-                UpdateSummary();
+                if (reorderWin.WasConfirmed)
+                {
+                    item.SetCustomPageOrder(reorderWin.GetFinalPageOrder());
+                    PdfItemsList.Items.Refresh();
+                    UpdateSummary();
+                }
+            }
+        }
+
+        private void RangeInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            if (e.Key == System.Windows.Input.Key.Enter)
+            {
+                ApplyRangeFromTextBox(sender as System.Windows.Controls.TextBox);
+                e.Handled = true;
+                System.Windows.Input.Keyboard.ClearFocus();
+            }
+        }
+
+        private void RangeInput_LostFocus(object sender, RoutedEventArgs e)
+        {
+            ApplyRangeFromTextBox(sender as System.Windows.Controls.TextBox);
+        }
+
+        private void RangeInput_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            // Toggle placeholder visibility
+            if (sender is System.Windows.Controls.TextBox tb && tb.Parent is Grid g)
+            {
+                foreach (var child in g.Children)
+                {
+                    if (child is System.Windows.Controls.TextBlock placeholder && !placeholder.IsHitTestVisible)
+                    {
+                        placeholder.Visibility = string.IsNullOrEmpty(tb.Text)
+                            ? Visibility.Visible : Visibility.Collapsed;
+                        break;
+                    }
+                }
+            }
+        }
+
+        private void RangeInput_Loaded(object sender, RoutedEventArgs e)
+        {
+            // Set initial text from current range
+            if (sender is System.Windows.Controls.TextBox tb && tb.Tag is PdfMergeItem item)
+            {
+                string range = item.PageRangeText;
+                tb.Text = range;
+            }
+        }
+
+        private void ApplyRangeFromTextBox(System.Windows.Controls.TextBox textBox)
+        {
+            if (textBox == null) return;
+            if (textBox.Tag is not PdfMergeItem item) return;
+
+            string rangeText = textBox.Text?.Trim() ?? "";
+
+            item.ClearCustomPageOrder();
+
+            if (string.IsNullOrEmpty(rangeText))
+            {
+                item.SelectAll();
+            }
+            else
+            {
+                if (!item.SetPageRange(rangeText))
+                {
+                    textBox.Foreground = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(239, 68, 68));
+                    textBox.ToolTip = "Invalid range! Use: 1-5, 8, 10-12";
+                    return;
+                }
+            }
+
+            textBox.Foreground = (Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
+            textBox.ToolTip = "Page range (e.g. 1-5, 8, 10-12). Leave empty for all pages.";
+            PdfItemsList.Items.Refresh();
+            UpdateSummary();
+        }
+
+        private async void SaveSinglePdf_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not FrameworkElement fe || fe.Tag is not PdfMergeItem item) return;
+
+            if (!item.IsValid)
+            {
+                MessageBox.Show($"Cannot save this PDF:\n{item.Error}", "PDF Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            var pageIndices = item.GetSelectedPageIndices();
+            if (pageIndices.Count == 0)
+            {
+                ToastWindow.ShowToast("No pages selected to save.");
+                return;
+            }
+
+            // If all pages selected and no reorder, just open the original
+            if (pageIndices.Count == item.TotalPages && pageIndices.SequenceEqual(Enumerable.Range(0, item.TotalPages)))
+            {
+                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{item.FilePath}\"");
+                return;
+            }
+
+            string saveDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Downloads", "FlyShelf", "Extracted");
+            Directory.CreateDirectory(saveDir);
+            string outputName = Path.GetFileNameWithoutExtension(item.FileName) + $"_pages.pdf";
+            string outputPath = Path.Combine(saveDir, outputName);
+
+            bool success = await System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    using (PdfDocument outputDoc = new PdfDocument())
+                    {
+                        using (PdfDocument inputDoc = PdfReader.Open(item.FilePath, PdfDocumentOpenMode.Import))
+                        {
+                            foreach (int idx in pageIndices)
+                            {
+                                if (idx >= 0 && idx < inputDoc.PageCount)
+                                    outputDoc.AddPage(inputDoc.Pages[idx]);
+                            }
+                        }
+                        outputDoc.Save(outputPath);
+                    }
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    AdvanceClip.Classes.Logger.LogAction("PDF SAVE", $"Error saving: {ex.Message}");
+                    return false;
+                }
+            });
+
+            if (success && File.Exists(outputPath))
+            {
+                ToastWindow.ShowToast($"✅ Saved {pageIndices.Count} pages → {outputName}");
+                System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{outputPath}\"");
+            }
+            else
+            {
+                ToastWindow.ShowToast("❌ Failed to save PDF pages.");
             }
         }
 

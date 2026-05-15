@@ -1210,6 +1210,20 @@ namespace AdvanceClip
         }
 
 
+        private void ShelfListView_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            e.Handled = true;
+
+            var scrollViewer = FindVisualChild<ScrollViewer>(ShelfListView);
+            if (scrollViewer == null) return;
+
+            double scrollAmount = -e.Delta / 120.0 * 48.0;
+            double targetOffset = scrollViewer.VerticalOffset + scrollAmount;
+            targetOffset = Math.Max(0, Math.Min(targetOffset, scrollViewer.ScrollableHeight));
+            scrollViewer.ScrollToVerticalOffset(targetOffset);
+        }
+
+
         private void ShelfListView_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.Key == Key.Delete && ShelfListView.SelectedItems.Count > 0)
@@ -1776,6 +1790,18 @@ namespace AdvanceClip
                 {
                     UnpinSelectedBtn.Visibility = Visibility.Collapsed;
                 }
+
+                // Shift/Ctrl-select PDF/DOC merge: auto-check selected files for merge/convert
+                var selectedMergeable = ShelfListView.SelectedItems.Cast<ClipboardItem>()
+                    .Where(i => (i.IsPdfPreview || i.IsDocPreview) && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+                    .ToList();
+
+                if (selectedMergeable.Count >= 2 || (selectedMergeable.Count == 1 && selectedMergeable[0].IsDocPreview))
+                {
+                    foreach (var item in selectedMergeable)
+                        item.IsCheckedForMerge = true;
+                    UpdatePdfMergeToolbar();
+                }
             }
             else
             {
@@ -1801,22 +1827,124 @@ namespace AdvanceClip
             ShelfListView.SelectedItems.Clear();
         }
 
-        private void MergeSelectedPdfsBtn_Click(object sender, RoutedEventArgs e)
+        private async void MergeSelectedPdfsBtn_Click(object sender, RoutedEventArgs e)
         {
-            // Use checkbox-checked PDFs (IsCheckedForMerge binding)
-            var selectedPdfs = _viewModel.DroppedItems
+            var checkedPdfs = _viewModel.DroppedItems
                 .Where(i => i.IsCheckedForMerge && i.IsPdfPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
                 .ToList();
-            if (selectedPdfs.Count > 1)
+            var checkedDocs = _viewModel.DroppedItems
+                .Where(i => i.IsCheckedForMerge && i.IsDocPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+                .ToList();
+
+            // Convert DOC/DOCX files to PDF first
+            var convertedPdfPaths = new List<string>();
+            if (checkedDocs.Count > 0)
+            {
+                AdvanceClip.Windows.ToastWindow.ShowToast($"📄 Converting {checkedDocs.Count} DOC file(s) to PDF...");
+
+                foreach (var doc in checkedDocs)
+                {
+                    string pdfPath = await ConvertDocToPdfAsync(doc.FilePath);
+                    if (!string.IsNullOrEmpty(pdfPath) && System.IO.File.Exists(pdfPath))
+                    {
+                        convertedPdfPaths.Add(pdfPath);
+                    }
+                    else
+                    {
+                        AdvanceClip.Windows.ToastWindow.ShowToast($"❌ Failed to convert: {doc.FileName}");
+                    }
+                }
+
+                // If only DOCs selected (no merge needed), just convert and add to shelf
+                if (checkedPdfs.Count == 0 && convertedPdfPaths.Count > 0 && checkedDocs.Count == convertedPdfPaths.Count)
+                {
+                    foreach (string path in convertedPdfPaths)
+                    {
+                        var newItem = new ClipboardItem(path);
+                        _viewModel.DroppedItems.Insert(0, newItem);
+                    }
+                    _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
+                    DismissMergeState();
+                    AdvanceClip.Windows.ToastWindow.ShowToast($"✅ Converted {convertedPdfPaths.Count} file(s) to PDF");
+                    return;
+                }
+            }
+
+            // Build the final list of PDF items for the merge window
+            var allPdfs = new List<ClipboardItem>();
+            allPdfs.AddRange(checkedPdfs);
+
+            // Add converted docs as ClipboardItems
+            foreach (string path in convertedPdfPaths)
+            {
+                allPdfs.Add(new ClipboardItem(path));
+            }
+
+            if (allPdfs.Count > 1)
             {
                 DismissMergeState();
-                var win = new AdvanceClip.Windows.PdfMergeWindow(selectedPdfs, _viewModel);
-                win.ShowDialog();
+                var win = new AdvanceClip.Windows.PdfMergeWindow(allPdfs, _viewModel);
+                App.ActiveMergeWindow = win;
+                win.Closed += (_, __) => App.ActiveMergeWindow = null;
+                this.Hide();
+                win.Show();
+            }
+            else if (allPdfs.Count == 1)
+            {
+                // Single converted PDF — just add to shelf
+                DismissMergeState();
+                AdvanceClip.Windows.ToastWindow.ShowToast("✅ PDF added to clipboard");
             }
             else
             {
-                AdvanceClip.Windows.ToastWindow.ShowToast("Check 2+ PDFs to merge.");
+                AdvanceClip.Windows.ToastWindow.ShowToast("Select 2+ PDFs/DOCs to merge, or 1 DOC to convert.");
             }
+        }
+
+        /// <summary>Converts a DOC/DOCX file to PDF using Word COM via PowerShell. Returns the output path or null.</summary>
+        private async System.Threading.Tasks.Task<string> ConvertDocToPdfAsync(string docPath)
+        {
+            string outputDir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Downloads", "FlyShelf", "Converted");
+            System.IO.Directory.CreateDirectory(outputDir);
+
+            string pdfPath = System.IO.Path.Combine(outputDir,
+                System.IO.Path.GetFileNameWithoutExtension(docPath) + ".pdf");
+
+            bool success = await System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    // wdFormatPDF = 17
+                    string script = $@"
+$word = New-Object -ComObject Word.Application
+$word.Visible = $false
+$doc = $word.Documents.Open('{docPath.Replace("'", "''")}')
+$doc.SaveAs([ref]'{pdfPath.Replace("'", "''")}', [ref]17)
+$doc.Close()
+$word.Quit()
+[System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null
+";
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{script}\"",
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    };
+                    var proc = System.Diagnostics.Process.Start(psi);
+                    proc?.WaitForExit(120000); // 2 min timeout
+                    return proc?.ExitCode == 0;
+                }
+                catch (Exception ex)
+                {
+                    AdvanceClip.Classes.Logger.LogAction("DOC2PDF", $"Conversion error: {ex.Message}");
+                    return false;
+                }
+            });
+
+            return (success && System.IO.File.Exists(pdfPath)) ? pdfPath : null;
         }
 
         private void PdfMergeToggle_Click(object sender, RoutedEventArgs e)
@@ -1833,18 +1961,45 @@ namespace AdvanceClip
             var checkedPdfs = _viewModel.DroppedItems
                 .Where(i => i.IsCheckedForMerge && i.IsPdfPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
                 .ToList();
+            var checkedDocs = _viewModel.DroppedItems
+                .Where(i => i.IsCheckedForMerge && i.IsDocPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+                .ToList();
 
-            if (checkedPdfs.Count >= 2)
+            int totalChecked = checkedPdfs.Count + checkedDocs.Count;
+
+            if (totalChecked >= 2 || (checkedDocs.Count == 1 && checkedPdfs.Count == 0))
             {
-                MergeSelectedPdfsText.Text = $"Merge {checkedPdfs.Count} PDFs";
+                if (checkedDocs.Count > 0 && checkedPdfs.Count == 0 && checkedDocs.Count == 1)
+                {
+                    // Single DOC — show Convert to PDF
+                    MergeSelectedPdfsText.Text = "Convert to PDF";
+                    MergePdfToolbarBtn.ToolTip = "Convert DOC/DOCX to PDF";
+                }
+                else if (checkedDocs.Count > 0 && checkedPdfs.Count == 0)
+                {
+                    // Multiple DOCs — show Convert All
+                    MergeSelectedPdfsText.Text = $"Convert {checkedDocs.Count} to PDF";
+                    MergePdfToolbarBtn.ToolTip = $"Convert {checkedDocs.Count} DOC files to PDF";
+                }
+                else if (checkedDocs.Count > 0 && checkedPdfs.Count > 0)
+                {
+                    // Mixed — show Merge with auto-convert
+                    MergeSelectedPdfsText.Text = $"Merge {totalChecked} Files";
+                    MergePdfToolbarBtn.ToolTip = $"Convert DOC→PDF & merge all {totalChecked} files";
+                }
+                else
+                {
+                    // PDF-only
+                    MergeSelectedPdfsText.Text = $"Merge {checkedPdfs.Count} PDFs";
+                    MergePdfToolbarBtn.ToolTip = $"Merge {checkedPdfs.Count} PDFs";
+                }
+
                 MergeSelectedPdfsBtn.Visibility = Visibility.Visible;
                 EmojiBtn.Visibility = Visibility.Collapsed;
                 MergePdfToolbarBtn.Visibility = Visibility.Visible;
-                MergePdfToolbarBtn.ToolTip = $"Merge {checkedPdfs.Count} PDFs";
             }
             else
             {
-                // Just hide merge UI — do NOT uncheck PDFs so user can keep selecting
                 MergeSelectedPdfsBtn.Visibility = Visibility.Collapsed;
                 EmojiBtn.Visibility = Visibility.Visible;
                 MergePdfToolbarBtn.Visibility = Visibility.Collapsed;

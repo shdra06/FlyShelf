@@ -21,6 +21,9 @@ public partial class App : Application
     private static App _instance;
     private static MainWindow _mainWinInstance;
 
+    /// <summary>Reference to open PDF merge window; shake suppressed only when it's focused.</summary>
+    internal static Window? ActiveMergeWindow = null;
+
     // Shake Detection State
     private static int _shakeCount = 0;
     private static int _lastShakeDirX = 0; 
@@ -414,12 +417,10 @@ public partial class App : Application
 
                             _instance?.Dispatcher.InvokeAsync(async () => 
                             {
-                                // Selection Detection Guard: Wait for the user to finish highlighting
-                                // or dragging before spawning the FlyShelf to prevent mid-workflow interruption!
                                 await System.Threading.Tasks.Task.Delay(300);
 
-                                // Removed the active drag check because it blocked users from drag-and-dropping physical files into the FlyShelf via mouse shake!
-                                // The window spawns without stealing focus (stealFocus = false), safely preserving the OS drag payload.
+                                // Don't spawn clipboard while PDF merge window is in focus
+                                if (ActiveMergeWindow != null && ActiveMergeWindow.IsActive) return;
 
                                 _instance.LaunchClipboardManager(triggerX, triggerY, false, 0, false);
                             }, System.Windows.Threading.DispatcherPriority.Background);

@@ -22,13 +22,15 @@ namespace AdvanceClip.Windows
         
         // Which pages are selected (1-indexed). null = all pages
         private HashSet<int> _selectedPages;
+        // Custom page order from reorder window (0-indexed). null = default order
+        private List<int> _customPageOrder;
         
         public string PageRangeText
         {
             get
             {
                 if (_selectedPages == null || _selectedPages.Count == TotalPages)
-                    return "All";
+                    return "";
                 if (_selectedPages.Count == 0)
                     return "None";
                 return FormatPageRange(_selectedPages);
@@ -36,7 +38,9 @@ namespace AdvanceClip.Windows
         }
 
         public string PageInfo => IsValid 
-            ? $"{TotalPages} pages • {PageRangeText} selected" 
+            ? (_customPageOrder != null 
+                ? $"{TotalPages} pages • {_customPageOrder.Count} reordered" 
+                : $"{TotalPages} pages • {PageRangeText} selected") 
             : $"⚠ {Error}";
 
         // For the visual grid — which pages are toggled
@@ -82,16 +86,41 @@ namespace AdvanceClip.Windows
         }
 
         /// <summary>
-        /// Returns the 0-indexed page indices to include in the merge.
+        /// Returns the 0-indexed page indices to include in the merge, respecting custom order.
         /// </summary>
         public List<int> GetSelectedPageIndices()
         {
+            // Custom order takes priority (already 0-indexed)
+            if (_customPageOrder != null)
+                return new List<int>(_customPageOrder);
+
             if (_selectedPages == null)
             {
                 // All pages
                 return Enumerable.Range(0, TotalPages).ToList();
             }
             return _selectedPages.OrderBy(p => p).Select(p => p - 1).ToList(); // Convert 1-indexed to 0-indexed
+        }
+
+        /// <summary>
+        /// Set a custom page order from the reorder window (0-indexed page numbers).
+        /// </summary>
+        public void SetCustomPageOrder(List<int> order)
+        {
+            _customPageOrder = order;
+            // Also update the selection set to match
+            _selectedPages = new HashSet<int>(order.Select(i => i + 1));
+            for (int i = 0; i < TotalPages; i++)
+                _pageSelected[i] = order.Contains(i);
+            OnPropertyChanged(nameof(PageRangeText));
+            OnPropertyChanged(nameof(PageInfo));
+        }
+
+        /// <summary>Clears custom page order, reverting to standard selection mode.</summary>
+        public void ClearCustomPageOrder()
+        {
+            _customPageOrder = null;
+            OnPropertyChanged(nameof(PageInfo));
         }
 
         /// <summary>

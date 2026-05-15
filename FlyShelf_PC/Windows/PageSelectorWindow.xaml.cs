@@ -49,7 +49,7 @@ namespace AdvanceClip.Windows
                             var options = new WinPdf.PdfPageRenderOptions
                             {
                                 DestinationWidth = 120,
-                                BackgroundColor = global::Windows.UI.Color.FromArgb(255, 40, 40, 40)
+                                BackgroundColor = global::Windows.UI.Color.FromArgb(255, 255, 255, 255)
                             };
                             await page.RenderToStreamAsync(stream, options);
 

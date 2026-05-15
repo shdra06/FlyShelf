@@ -194,7 +194,8 @@
                   VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling"
                   VirtualizingPanel.CacheLengthUnit="Item" VirtualizingPanel.CacheLength="10,10"
                   AlternationCount="10"
-                  PreviewKeyDown="ShelfListView_KeyDown">
+                  PreviewKeyDown="ShelfListView_KeyDown"
+                  PreviewMouseWheel="ShelfListView_PreviewMouseWheel">
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
                     <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
@@ -352,6 +353,10 @@
                                     <Separator />
                                     <MenuItem Header="Force Send to Device" Click="ForceSendItem_Click" Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
                                     <Separator />
+                                    <MenuItem Header="Show in Explorer" 
+                                              Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                    <Separator />
                                     <MenuItem Header="Delete Drop" 
                                               Command="{Binding PlacementTarget.Tag.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                                               CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Foreground="#EF4444" />
@@ -377,23 +382,9 @@
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Opacity" Value="0" />
-                                        <Setter Property="Background" Value="Transparent" />
+                                        <Setter Property="Background" Value="#D0151515" />
                                         <Setter Property="IsHitTestVisible" Value="False" />
                                         <Style.Triggers>
-                                            <!-- Provide Glass Panel Background Behind Action Buttons specially for complex physical items avoiding graphic clashes -->
-                                            <DataTrigger Binding="{Binding ItemType}" Value="Document">
-                                                <Setter Property="Background" Value="#D0151515" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding ItemType}" Value="Archive">
-                                                <Setter Property="Background" Value="#D0151515" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding ItemType}" Value="Image">
-                                                <Setter Property="Background" Value="#D0151515" />
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding ItemType}" Value="QRCode">
-                                                <Setter Property="Background" Value="#D0151515" />
-                                            </DataTrigger>
-
                                             <!-- Physical Overlay Flyout Logic -->
                                             <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True">
                                                 <Setter Property="IsHitTestVisible" Value="True"/>
@@ -562,9 +553,6 @@
                                                 <DataTrigger Binding="{Binding ItemType}" Value="Archive">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
-                                                <DataTrigger Binding="{Binding ItemType}" Value="Image">
-                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                </DataTrigger>
                                                 <DataTrigger Binding="{Binding ItemType}" Value="Video">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
@@ -600,34 +588,6 @@
                                             </Style.Triggers>
                                         </Style>
                                     </ui:Button.Style>
-                                </ui:Button>
-
-
-                                <ui:Button Focusable="False" Appearance="Secondary" PreviewMouseLeftButtonDown="PinSpecific_Click" ToolTip="Pin Item" Margin="0,0,6,0">
-                                    <ui:Button.Icon>
-                                        <ui:SymbolIcon>
-                                            <ui:SymbolIcon.Style>
-                                                <Style TargetType="ui:SymbolIcon">
-                                                    <Setter Property="Symbol" Value="Pin24"/>
-                                                    <Setter Property="Filled" Value="True"/>
-                                                    <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsPinned}" Value="True">
-                                                            <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.SystemAccentColorLight1}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </ui:SymbolIcon.Style>
-                                        </ui:SymbolIcon>
-                                    </ui:Button.Icon>
-                                </ui:Button>
-
-                                <!-- Delete individual item button -->
-                                <ui:Button Focusable="False" Appearance="Secondary" Foreground="#EF4444" ToolTip="Delete Item" Margin="0,0,6,0"
-                                           PreviewMouseLeftButtonDown="DeleteSpecific_Click"
-                                           Command="{Binding DataContext.RemoveItemCommand, ElementName=ShelfListView}"
-                                           CommandParameter="{Binding}">
-                                    <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" Filled="True" /></ui:Button.Icon>
                                 </ui:Button>
 
                                 </StackPanel>
@@ -709,6 +669,9 @@
                                         </Setter>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsPdfPreview}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsDocPreview}" Value="True">
                                                 <Setter Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
                                         </Style.Triggers>

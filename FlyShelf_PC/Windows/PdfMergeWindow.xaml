@@ -5,7 +5,7 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="PDF Merge" Height="550" Width="700"
         WindowStartupLocation="CenterScreen"
-        SystemBackdropType="Mica" Background="Transparent" Topmost="True">
+        SystemBackdropType="Mica" Background="Transparent">
     
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="32" ResizeBorderThickness="6" CornerRadius="8" GlassFrameThickness="-1" />
@@ -26,7 +26,7 @@
             <TextBlock Text="Merge PDFs" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
         </StackPanel>
 
-        <TextBlock Grid.Row="1" Text="Drag to reorder. Use 'Pages' to pick specific pages from each file." FontSize="13" Opacity="0.7" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,8" TextWrapping="Wrap" />
+        <TextBlock Grid.Row="1" Text="Drag to reorder files. Use 'Reorder' for page-level ordering, 'Range' for page selection." FontSize="13" Opacity="0.7" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,8" TextWrapping="Wrap" />
 
         <!-- Summary bar -->
         <Border Grid.Row="2" Background="#10FFFFFF" CornerRadius="6" Padding="12,8" Margin="0,0,0,8">
@@ -97,6 +97,7 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             
                             <!-- PDF Icon with page count badge -->
@@ -122,17 +123,37 @@
                                 </StackPanel>
                             </StackPanel>
 
-                            <!-- Select Pages button -->
-                            <ui:Button Grid.Column="2" Appearance="Transparent" Tag="{Binding}" Click="SelectPages_Click" 
-                                       ToolTip="Select specific pages" Margin="0,0,8,0" Padding="8,4" FontSize="12">
+                            <!-- Reorder Pages button -->
+                            <ui:Button Grid.Column="2" Appearance="Transparent" Tag="{Binding}" Click="ReorderPages_Click" 
+                                       ToolTip="Visual drag-and-drop page reorder" Margin="0,0,4,0" Padding="8,4" FontSize="12">
                                 <StackPanel Orientation="Horizontal">
-                                    <ui:SymbolIcon Symbol="Grid24" FontSize="14" Margin="0,0,4,0"/>
-                                    <TextBlock Text="Pages" FontSize="12"/>
+                                    <ui:SymbolIcon Symbol="ArrowSort24" FontSize="14" Margin="0,0,4,0"/>
+                                    <TextBlock Text="Reorder" FontSize="12"/>
                                 </StackPanel>
                             </ui:Button>
 
-                            <!-- Drag handle + actions -->
-                            <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center">
+                            <!-- Inline page range text field -->
+                            <Border Grid.Column="3" CornerRadius="6" Background="#10FFFFFF" BorderBrush="#20FFFFFF" 
+                                    BorderThickness="1" Margin="0,0,8,0" Padding="0" VerticalAlignment="Center">
+                                <Grid>
+                                    <TextBlock x:Name="RangePlaceholder" Text="e.g. 1-5, 8" FontSize="11" Padding="7,5"
+                                               Foreground="#40FFFFFF" IsHitTestVisible="False" VerticalAlignment="Center"/>
+                                    <TextBox Tag="{Binding}" FontSize="11" MinWidth="90" MaxWidth="120" Padding="6,4"
+                                             ToolTip="Page range (e.g. 1-5, 8, 10-12). Leave empty for all pages."
+                                             Background="Transparent" BorderThickness="0"
+                                             Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
+                                             KeyDown="RangeInput_KeyDown"
+                                             LostFocus="RangeInput_LostFocus"
+                                             TextChanged="RangeInput_TextChanged"
+                                             Loaded="RangeInput_Loaded"/>
+                                </Grid>
+                            </Border>
+
+                            <!-- Actions: Save + Delete + Drag grip -->
+                            <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                                <ui:Button Appearance="Transparent" Tag="{Binding}" Click="SaveSinglePdf_Click" ToolTip="Save this PDF with selected pages" Foreground="#22C55E" Margin="0,0,4,0">
+                                    <ui:Button.Icon><ui:SymbolIcon Symbol="Save24" /></ui:Button.Icon>
+                                </ui:Button>
                                 <ui:Button Appearance="Transparent" Tag="{Binding}" Click="Remove_Click" ToolTip="Remove" Foreground="#EF4444" Margin="0,0,8,0">
                                     <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" /></ui:Button.Icon>
                                 </ui:Button>

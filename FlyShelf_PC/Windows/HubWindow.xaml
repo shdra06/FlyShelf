@@ -12,7 +12,8 @@
         MinWidth="300" MinHeight="400"
         WindowStartupLocation="CenterScreen"
         SystemBackdropType="Mica"
-        Background="Transparent">
+        Background="Transparent"
+        PreviewMouseWheel="HubWindow_PreviewMouseWheel">
     
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="44" ResizeBorderThickness="6" CornerRadius="8" GlassFrameThickness="-1" />
@@ -606,11 +607,11 @@
                     </StackPanel>
                     
                     <ListView x:Name="HubListView" Grid.Row="2" ItemsSource="{Binding DroppedItems}" Background="Transparent" BorderThickness="0"
-                              ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Hidden"
-                              ScrollViewer.CanContentScroll="True"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                              ScrollViewer.CanContentScroll="False"
                               HorizontalContentAlignment="Stretch" 
                               VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling"
-                              VirtualizingPanel.ScrollUnit="Pixel" VirtualizingPanel.CacheLength="5,5" VirtualizingPanel.CacheLengthUnit="Item"
+                              VirtualizingPanel.CacheLength="5,5" VirtualizingPanel.CacheLengthUnit="Item"
                               SelectionMode="Extended" SelectionChanged="HubListView_SelectionChanged">
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem">
