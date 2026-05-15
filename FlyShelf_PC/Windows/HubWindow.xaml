@@ -643,7 +643,7 @@
                                                 </Setter.Value>
                                             </Setter>
                                             <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                <DataTrigger Binding="{Binding IsCheckedForMerge}" Value="True">
                                                     <Setter Property="Background" Value="#156366F1" />
                                                     <Setter Property="BorderBrush" Value="#406366F1" />
                                                 </DataTrigger>
@@ -756,7 +756,7 @@
                                         </Border>
 
                                         <!-- CheckBox (after gap) -->
-                                        <CheckBox Grid.Column="2" IsChecked="{Binding IsSelected, Mode=TwoWay}" VerticalAlignment="Center" Margin="6,0,0,0" />
+                                        <CheckBox Grid.Column="2" IsChecked="{Binding IsCheckedForMerge, Mode=TwoWay}" VerticalAlignment="Center" Margin="6,0,0,0" Click="ItemCheckBox_Click" />
 
                                         <!-- File Type Icon Badge -->
                                         <Border Grid.Column="3" Width="44" Height="44" CornerRadius="10" ClipToBounds="True" Margin="12,10,12,10">
@@ -973,6 +973,33 @@
                             </DataTemplate>
                         </ListView.ItemTemplate>
                     </ListView>
+
+                    <!-- Floating Merge PDFs bar — appears when 2+ PDFs are checked -->
+                    <Border x:Name="MergePdfFloatingBar" Grid.Row="2" Visibility="Collapsed"
+                            VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,16"
+                            CornerRadius="12" Padding="16,10,16,10"
+                            IsHitTestVisible="True">
+                        <Border.Background>
+                            <SolidColorBrush Color="#1E1E2E" Opacity="0.95"/>
+                        </Border.Background>
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="20" ShadowDepth="4" Opacity="0.5" Color="Black"/>
+                        </Border.Effect>
+                        <Border.BorderBrush>
+                            <SolidColorBrush Color="#EF4444" Opacity="0.5"/>
+                        </Border.BorderBrush>
+                        <Border.BorderThickness>
+                            <Thickness>1</Thickness>
+                        </Border.BorderThickness>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="#EF4444" FontSize="18" Margin="0,0,8,0"/>
+                            <TextBlock x:Name="MergeBarText" Text="2 PDFs selected" FontSize="13" FontWeight="Medium"
+                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                            <ui:Button x:Name="MergeBarBtn" Content="Merge PDFs" Appearance="Danger" Padding="16,6" FontSize="12" Click="MergeSelectedPdfsBtn_Click">
+                                <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24"/></ui:Button.Icon>
+                            </ui:Button>
+                        </StackPanel>
+                    </Border>
 
                     <!-- Empty State -->
                     <Border Grid.Row="2" x:Name="EmptyStatePanel" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,40,0,0">

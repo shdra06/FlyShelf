@@ -263,7 +263,14 @@ namespace AdvanceClip.ViewModels
                 catch { }
             });
             MergeSelectedPdfsCommand = new RelayCommand(() => {
-                AdvanceClip.Windows.ToastWindow.ShowToast("PDF Merge removed in v4.0 for a lighter build.");
+                var pdfs = DroppedItems.Where(i => i.ItemType == ClipboardItemType.Pdf && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath)).ToList();
+                if (pdfs.Count < 2)
+                {
+                    AdvanceClip.Windows.ToastWindow.ShowToast("Select at least 2 PDFs to merge.");
+                    return;
+                }
+                var win = new AdvanceClip.Windows.PdfMergeWindow(pdfs, this);
+                win.ShowDialog();
             });
             OpenFileLocationCommand = new RelayCommand<ClipboardItem>(item => {
                 if (item == null || string.IsNullOrEmpty(item.FilePath)) return;

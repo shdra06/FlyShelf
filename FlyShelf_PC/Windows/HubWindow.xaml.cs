@@ -792,10 +792,10 @@ namespace AdvanceClip.Windows
 
         private void SelectAll_Click(object sender, RoutedEventArgs e)
         {
-            bool anyUnselected = _viewModel.DroppedItems.Any(i => !i.IsSelected);
+            bool anyUnselected = _viewModel.DroppedItems.Any(i => !i.IsCheckedForMerge);
             foreach (var item in _viewModel.DroppedItems)
             {
-                item.IsSelected = anyUnselected; // Toggle: if any unselected, select all; otherwise deselect all
+                item.IsCheckedForMerge = anyUnselected; // Toggle: if any unselected, select all; otherwise deselect all
             }
             UpdateMergeButton();
         }
@@ -805,14 +805,45 @@ namespace AdvanceClip.Windows
             UpdateMergeButton();
         }
 
+        private void ItemCheckBox_Click(object sender, RoutedEventArgs e)
+        {
+            // Defer so the two-way binding updates IsCheckedForMerge first
+            Dispatcher.InvokeAsync(() => UpdateMergeButton(), System.Windows.Threading.DispatcherPriority.Background);
+        }
+
         private void UpdateMergeButton()
         {
-            // Merge button removed in v4.1 for cleaner layout
+            if (_viewModel == null || MergePdfFloatingBar == null) return;
+            var checkedPdfs = _viewModel.DroppedItems
+                .Where(i => i.IsCheckedForMerge && i.ItemType == AdvanceClip.ViewModels.ClipboardItemType.Pdf
+                            && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+                .ToList();
+
+            if (checkedPdfs.Count >= 2)
+            {
+                MergePdfFloatingBar.Visibility = Visibility.Visible;
+                MergeBarText.Text = $"{checkedPdfs.Count} PDFs selected";
+            }
+            else
+            {
+                MergePdfFloatingBar.Visibility = Visibility.Collapsed;
+            }
         }
 
         private void MergeSelectedPdfsBtn_Click(object sender, RoutedEventArgs e)
         {
-            ToastWindow.ShowToast("PDF Merge removed in v4.0 for a lighter build.");
+            if (_viewModel == null) return;
+            var pdfs = _viewModel.DroppedItems
+                .Where(i => i.IsCheckedForMerge && i.ItemType == AdvanceClip.ViewModels.ClipboardItemType.Pdf
+                            && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+                .ToList();
+            if (pdfs.Count < 2)
+            {
+                ToastWindow.ShowToast("Check at least 2 PDFs to merge.");
+                return;
+            }
+            var win = new PdfMergeWindow(pdfs, _viewModel);
+            win.ShowDialog();
         }
 
         private void AddSnifferPath_Click(object sender, RoutedEventArgs e)

@@ -208,6 +208,21 @@ namespace AdvanceClip.ViewModels
             }
         }
 
+        private bool _isCheckedForMerge;
+        [JsonIgnore]
+        public bool IsCheckedForMerge
+        {
+            get => _isCheckedForMerge;
+            set
+            {
+                if (_isCheckedForMerge != value)
+                {
+                    _isCheckedForMerge = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsCheckedForMerge)));
+                }
+            }
+        }
+
         public bool IsQRCodePreview => ItemType == ClipboardItemType.QRCode;
         public bool IsVideoPreview => ItemType == ClipboardItemType.Video;
         public bool IsArchivePreview => ItemType == ClipboardItemType.Archive;

@@ -143,8 +143,20 @@
                     <ui:Button.Icon><ui:SymbolIcon Symbol="Maximize24" /></ui:Button.Icon>
                 </ui:Button>
 
-                <ui:Button Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                    <ui:Button.Icon><ui:SymbolIcon Symbol="Emoji24" /></ui:Button.Icon>
+                <!-- Emoji button — swaps to Merge PDF when 2+ PDFs selected -->
+                <ui:Button x:Name="EmojiBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
+                    <ui:Button.Icon><ui:SymbolIcon x:Name="EmojiBtnIcon" Symbol="Emoji24" /></ui:Button.Icon>
+                </ui:Button>
+                <!-- Merge PDF button — hidden by default, replaces emoji when PDFs selected -->
+                <ui:Button x:Name="MergePdfToolbarBtn" Focusable="False" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
+                    <ui:Button.Style>
+                        <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                            <Setter Property="Background" Value="#30EF4444"/>
+                            <Setter Property="Foreground" Value="#EF4444"/>
+                            <Setter Property="BorderBrush" Value="#50EF4444"/>
+                        </Style>
+                    </ui:Button.Style>
+                    <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24" Foreground="#EF4444"/></ui:Button.Icon>
                 </ui:Button>
                 
                 <ui:Button Focusable="False" Appearance="Secondary" Click="ToggleGlobalSync_Click" ToolTip="Toggle Global Web Sync" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
@@ -657,6 +669,53 @@
                                 </Grid>
                             </Border>
 
+                            <!-- PDF Merge Toggle — top-left of icon, PDF only. Uses Button to avoid ListView CheckBox conflicts -->
+                            <Button Grid.Row="0" Grid.Column="0" VerticalAlignment="Top" HorizontalAlignment="Left"
+                                    Margin="-4,-4,0,0" Panel.ZIndex="10" Focusable="False"
+                                    Tag="PdfMergeToggle" Click="PdfMergeToggle_Click">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Setter Property="Cursor" Value="Hand"/>
+                                        <Setter Property="OverridesDefaultStyle" Value="True"/>
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Grid Width="26" Height="26" Background="Transparent">
+                                                        <!-- Unchecked state: dark rounded square with red border -->
+                                                        <Border x:Name="UncheckedBg" Width="22" Height="22" CornerRadius="6"
+                                                                Background="#80181818" BorderBrush="#60EF4444" BorderThickness="1.5"/>
+                                                        <!-- Checked state: solid red with checkmark -->
+                                                        <Border x:Name="CheckedBg" Width="22" Height="22" CornerRadius="6"
+                                                                Background="#EF4444" BorderBrush="#EF4444" BorderThickness="1.5" Visibility="Collapsed"/>
+                                                        <TextBlock x:Name="CheckMark" Text="✓" FontSize="13" FontWeight="Bold"
+                                                                   Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                   Margin="0,-1,0,0" Visibility="Collapsed"/>
+                                                    </Grid>
+                                                    <ControlTemplate.Triggers>
+                                                        <DataTrigger Binding="{Binding IsCheckedForMerge}" Value="True">
+                                                            <Setter TargetName="UncheckedBg" Property="Visibility" Value="Collapsed"/>
+                                                            <Setter TargetName="CheckedBg" Property="Visibility" Value="Visible"/>
+                                                            <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter TargetName="UncheckedBg" Property="BorderBrush" Value="#EF4444"/>
+                                                            <Setter TargetName="UncheckedBg" Property="Background" Value="#40EF4444"/>
+                                                        </Trigger>
+                                                    </ControlTemplate.Triggers>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsPdfPreview}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
                             <!-- Semantic Icon Fallback -->
                             <Border Name="SemanticIconBorder" Grid.Row="0" Grid.Column="0" Width="40" Height="40" Margin="0,0,12,0" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="10" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                                 <Border.Style>
@@ -672,9 +731,7 @@
                                             <DataTrigger Binding="{Binding ItemType}" Value="Document">
                                                 <Setter Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
-                                            <DataTrigger Binding="{Binding ItemType}" Value="Pdf">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
+
                                             <DataTrigger Binding="{Binding ItemType}" Value="Presentation">
                                                 <Setter Property="Visibility" Value="Visible"/>
                                             </DataTrigger>

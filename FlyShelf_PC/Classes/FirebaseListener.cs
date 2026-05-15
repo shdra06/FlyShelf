@@ -663,15 +663,33 @@ namespace AdvanceClip.Classes
                 var peerManager = PeerManager.Instance;
                 if (peerManager == null) return;
 
+                // Detect urlRequest on sub-path: /DeviceId/urlRequest
+                if (path.Contains("/urlRequest") && data.ValueKind == JsonValueKind.Object)
+                {
+                    string requestingDevice = path.TrimStart('/').Split('/')[0];
+                    if (!string.IsNullOrEmpty(requestingDevice) && requestingDevice != myDeviceId)
+                    {
+                        _ = Task.Run(() => peerManager.HandlePeerUrlRequest(requestingDevice));
+                    }
+                    return;
+                }
+
                 bool anyNewPeer = false;
 
                 if (path == "/")
                 {
-                    // Full snapshot — scan all devices
+                    // Full snapshot — scan all devices, also check for urlRequest
                     if (data.ValueKind == JsonValueKind.Object)
                     {
                         foreach (var prop in data.EnumerateObject())
                         {
+                            // Check if any peer has a urlRequest for us
+                            if (prop.Name != myDeviceId && prop.Value.ValueKind == JsonValueKind.Object
+                                && prop.Value.TryGetProperty("urlRequest", out _))
+                            {
+                                _ = Task.Run(() => peerManager.HandlePeerUrlRequest(prop.Name));
+                            }
+
                             if (ProcessSingleDeviceUrl(prop.Name, prop.Value, myDeviceId, peerManager))
                                 anyNewPeer = true;
                         }
@@ -685,6 +703,12 @@ namespace AdvanceClip.Classes
                     {
                         if (data.ValueKind == JsonValueKind.Object)
                         {
+                            // Check if this is a urlRequest
+                            if (data.TryGetProperty("urlRequest", out _))
+                            {
+                                _ = Task.Run(() => peerManager.HandlePeerUrlRequest(deviceKey));
+                            }
+
                             if (ProcessSingleDeviceUrl(deviceKey, data, myDeviceId, peerManager))
                                 anyNewPeer = true;
                         }

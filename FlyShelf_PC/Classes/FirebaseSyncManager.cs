@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -520,18 +520,41 @@ namespace AdvanceClip.Classes
                     return; // URL hasn't changed ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â skip Firebase write
                 }
 
+                // Encrypt sensitive URLs before writing to Firebase (security: prevents unauthorized access)
+                string encryptedGlobalUrl = "";
+                string encryptedLocalIp = "";
+                string encryptedUrl = "";
+                try
+                {
+                    if (url.Contains("trycloudflare.com"))
+                        encryptedGlobalUrl = SyncCrypto.Encrypt(url) ?? "";
+                    if (!string.IsNullOrEmpty(localIp))
+                        encryptedLocalIp = SyncCrypto.Encrypt(localIp) ?? "";
+                    string plainUrl = localIp.Contains("http") ? localIp : url;
+                    if (!string.IsNullOrEmpty(plainUrl))
+                        encryptedUrl = SyncCrypto.Encrypt(plainUrl) ?? "";
+                }
+                catch
+                {
+                    // Fallback to plaintext if encryption fails (e.g., no pairing key yet)
+                    encryptedGlobalUrl = url.Contains("trycloudflare.com") ? url : "";
+                    encryptedLocalIp = localIp;
+                    encryptedUrl = localIp.Contains("http") ? localIp : url;
+                }
+
                 var payload = new
                 {
                     DeviceId = SettingsManager.Current.DeviceId,
                     DeviceName = SettingsManager.Current.DeviceName,
                     DeviceType = "PC",
-                    Url = localIp.Contains("http") ? localIp : url,
-                    LocalIp = localIp,
-                    GlobalUrl = url.Contains("trycloudflare.com") ? url : "",
+                    Url = encryptedUrl,
+                    LocalIp = encryptedLocalIp,
+                    GlobalUrl = encryptedGlobalUrl,
                     TlsUrl = NetworkSyncServer.Instance?.TlsUrl ?? "",
                     TlsThumbprint = NetworkSyncServer.Instance?.TlsThumbprint ?? "",
                     IsOnline = isOnline,
-                    Timestamp = NetworkClock.UtcNowMs
+                    Timestamp = NetworkClock.UtcNowMs,
+                    UrlsEncrypted = true   // Signal to peers that URLs need decryption
                 };
 
                 string json = JsonSerializer.Serialize(payload);

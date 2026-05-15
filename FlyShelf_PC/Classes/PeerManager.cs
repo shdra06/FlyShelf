@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -15,7 +16,7 @@ namespace AdvanceClip.Classes
     /// v5 PeerManager — Pure P2P engine.
     /// 
     /// Firebase = phone book ONLY. Stores device URLs, never file data.
-    /// Flow: Discover → Handshake → Confirm tick → Delete URL from Firebase → Talk direct.
+    /// Flow: Discover → Handshake → Confirm tick → Talk direct. URLs persist in Firebase as a "phone book".
     /// All text/files flow device-to-device via LAN or Cloudflare. 5s heartbeat.
     /// </summary>
     public class PeerManager
@@ -27,6 +28,7 @@ namespace AdvanceClip.Classes
         private string _myDeviceId = "";
         private string _myPairingKey = "";
         private bool _urlCleanedFromFirebase = false;
+        private bool _urlRequestSent = false;             // Have we asked peers for their URLs?
         private readonly HashSet<string> _prunedGhosts = new(StringComparer.OrdinalIgnoreCase);
 
         // ═══ Config ═══
@@ -71,12 +73,15 @@ namespace AdvanceClip.Classes
         public void Stop()
         {
             _cts.Cancel();
-            foreach (var p in _peers.Values) p.IsAlive = false;
+            foreach (var p in _peers.Values)
+            {
+                p.IsAlive = false;
+                try { p.WsCts?.Cancel(); } catch { }
+                try { p.LiveSocket?.Dispose(); } catch { }
+            }
             Logger.LogAction("PEER", "PeerManager stopped.");
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // DISCOVER → HANDSHAKE → CONFIRM → CLEANUP
         // ═══════════════════════════════════════════════════════════════
 
         private async Task DiscoverAndHandshake()
@@ -98,6 +103,7 @@ namespace AdvanceClip.Classes
 
                 using var doc = JsonDocument.Parse(json);
                 int totalPeers = 0;
+                bool anyEmptyUrls = false;
                 foreach (var prop in doc.RootElement.EnumerateObject())
                 {
                     var dev = prop.Value;
@@ -139,8 +145,19 @@ namespace AdvanceClip.Classes
                     string cf = dev.TryGetProperty("GlobalUrl", out var gu) ? gu.GetString() ?? "" : "";
                     string direct = dev.TryGetProperty("Url", out var du) ? du.GetString() ?? "" : "";
 
+                    // Decrypt URLs if they were encrypted by the peer
+                    lan = DecryptUrlSafe(lan);
+                    cf = DecryptUrlSafe(cf);
+                    direct = DecryptUrlSafe(direct);
+
                     if (string.IsNullOrEmpty(lan) && !string.IsNullOrEmpty(direct) && !direct.Contains("trycloudflare"))
                         lan = direct;
+
+                    // Track if any known peer has empty URLs (needs urlRequest)
+                    if (string.IsNullOrEmpty(lan) && string.IsNullOrEmpty(cf))
+                    {
+                        anyEmptyUrls = true;
+                    }
 
                     if (_peers.TryGetValue(devId, out var existing))
                     {
@@ -168,7 +185,14 @@ namespace AdvanceClip.Classes
                 var tasks = _peers.Values.Where(p => !p.IsAlive).Select(Handshake);
                 await Task.WhenAll(tasks);
 
-                // CONFIRM + CLEANUP: If all peers are alive, confirm and delete our URL
+                // If we found peers but their URLs were empty, write a urlRequest signal
+                // so online peers (watching SSE) can re-publish their URLs for us
+                if (anyEmptyUrls && AliveCount == 0 && totalPeers > 0 && !_urlRequestSent)
+                {
+                    await SendUrlRequest();
+                }
+
+                // CONFIRM + CLEANUP: If all peers are alive, confirm and delete URLs
                 if (AliveCount > 0 && AliveCount >= totalPeers && !_urlCleanedFromFirebase)
                 {
                     await ConfirmAndCleanup();
@@ -177,6 +201,69 @@ namespace AdvanceClip.Classes
             catch (Exception ex)
             {
                 Logger.LogAction("PEER", $"Discovery error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Safely decrypt a URL. Returns the original string if decryption fails
+        /// (meaning it wasn't encrypted, or it's already a plaintext URL).
+        /// </summary>
+        private static string DecryptUrlSafe(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return value;
+            // If it already looks like a URL, it's not encrypted
+            if (value.StartsWith("http://") || value.StartsWith("https://")) return value;
+            try
+            {
+                string? decrypted = SyncCrypto.Decrypt(value);
+                return !string.IsNullOrEmpty(decrypted) ? decrypted : value;
+            }
+            catch { return value; }
+        }
+
+        /// <summary>
+        /// Write a urlRequest signal to Firebase so that online peers re-publish their URLs.
+        /// This is the secure alternative to leaving URLs permanently in Firebase.
+        /// </summary>
+        private async Task SendUrlRequest()
+        {
+            try
+            {
+                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                string requestUrl = await FirebaseSyncManager.AuthUrlPublic(
+                    $"active_devices/{_myPairingKey}/{_myDeviceId}/urlRequest.json");
+                string body = JsonSerializer.Serialize(new
+                {
+                    requestedAt = NetworkClock.UtcNowMs,
+                    deviceId = _myDeviceId
+                });
+                await client.PutAsync(requestUrl, new StringContent(body, Encoding.UTF8, "application/json"));
+                _urlRequestSent = true;
+                Logger.LogAction("PEER", "📡 URL request signal sent — waiting for peers to respond...");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("PEER", $"URL request error: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Called by FirebaseListener SSE when a peer writes a urlRequest.
+        /// Re-publishes our encrypted URLs so the requesting peer can find us.
+        /// </summary>
+        public async Task HandlePeerUrlRequest(string requestingDeviceId)
+        {
+            if (requestingDeviceId == _myDeviceId) return;
+
+            Logger.LogAction("PEER", $"📡 {requestingDeviceId} is requesting URLs — re-publishing ours...");
+
+            string globalUrl = FirebaseSyncManager.CachedGlobalUrl;
+            string localUrl = FirebaseSyncManager.CachedLocalUrl;
+            if (!string.IsNullOrEmpty(globalUrl) || !string.IsNullOrEmpty(localUrl))
+            {
+                _urlCleanedFromFirebase = false;
+                await FirebaseSyncManager.PushTunnelUrl(globalUrl ?? "", true, localUrl, forceWrite: true);
+                Logger.LogAction("PEER", $"📡 Re-published encrypted URLs for {requestingDeviceId}");
             }
         }
 
@@ -213,6 +300,9 @@ namespace AdvanceClip.Classes
                     peer.ConsecutiveFailures = 0;
                     Logger.LogAction("PEER", $"✅ {peer.DeviceName} connected via {transport}: {testUrl}");
                     PeerConnected?.Invoke(peer.DeviceId, transport);
+
+                    // Establish persistent WebSocket for instant liveness detection
+                    _ = Task.Run(() => ConnectWebSocket(peer));
                     return true;
                 }
             }
@@ -224,8 +314,104 @@ namespace AdvanceClip.Classes
         }
 
         /// <summary>
-        /// All peers confirmed alive → write tick to Firebase, then delete our URL.
-        /// Firebase URL is only needed for initial discovery. Once peers are talking, delete it.
+        /// Opens a persistent WebSocket to the peer.
+        /// If it drops → peer is instantly dead (no 50s heartbeat delay).
+        /// Sends "ping" every 30s, expects "pong" back.
+        /// </summary>
+        private async Task ConnectWebSocket(PeerConnection peer)
+        {
+            // Close any existing WebSocket
+            try { peer.WsCts?.Cancel(); } catch { }
+            try { peer.LiveSocket?.Dispose(); } catch { }
+
+            try
+            {
+                var ws = new ClientWebSocket();
+                peer.WsCts = new CancellationTokenSource();
+                string pk = DevicePairingManager.EnsurePairingKey();
+
+                // Convert http(s):// to ws(s)://
+                string wsUrl = peer.ActiveUrl.TrimEnd('/')
+                    .Replace("https://", "wss://")
+                    .Replace("http://", "ws://");
+                wsUrl += $"/ws/peer?key={Uri.EscapeDataString(pk)}&deviceId={Uri.EscapeDataString(_myDeviceId)}";
+
+                ws.Options.SetRequestHeader("X-Pairing-Key", pk);
+                ws.Options.SetRequestHeader("X-Device-Id", _myDeviceId);
+
+                await ws.ConnectAsync(new Uri(wsUrl), peer.WsCts.Token);
+                peer.LiveSocket = ws;
+                Logger.LogAction("WS", $"🔗 WebSocket connected to {peer.DeviceName} via {peer.Transport}");
+
+                // Monitor the WebSocket — when it drops, peer is dead
+                await MonitorWebSocket(peer);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("WS", $"WebSocket to {peer.DeviceName} failed: {ex.Message}");
+                // WebSocket is optional — HTTP heartbeat still works as fallback
+            }
+        }
+
+        /// <summary>
+        /// Sends ping every 30s over the WebSocket. If the connection drops,
+        /// we detect it INSTANTLY and mark the peer as dead.
+        /// </summary>
+        private async Task MonitorWebSocket(PeerConnection peer)
+        {
+            var ws = peer.LiveSocket;
+            var cts = peer.WsCts;
+            if (ws == null || cts == null) return;
+
+            var buf = new byte[64];
+            try
+            {
+                while (ws.State == WebSocketState.Open && !cts.Token.IsCancellationRequested)
+                {
+                    // Send ping
+                    byte[] ping = Encoding.UTF8.GetBytes("ping");
+                    await ws.SendAsync(new ArraySegment<byte>(ping), WebSocketMessageType.Text, true, cts.Token);
+
+                    // Wait for pong (with 15s timeout)
+                    var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+                    timeoutCts.CancelAfter(15_000);
+                    try
+                    {
+                        var result = await ws.ReceiveAsync(new ArraySegment<byte>(buf), timeoutCts.Token);
+                        if (result.MessageType == WebSocketMessageType.Close) break;
+                        peer.LastSeen = DateTime.UtcNow;
+                        peer.ConsecutiveFailures = 0;
+                    }
+                    catch (OperationCanceledException) when (!cts.Token.IsCancellationRequested)
+                    {
+                        // Pong timeout — peer may be dead
+                        Logger.LogAction("WS", $"⚠️ {peer.DeviceName} WebSocket pong timeout");
+                        break;
+                    }
+
+                    // Wait 30s before next ping
+                    await Task.Delay(30_000, cts.Token);
+                }
+            }
+            catch (WebSocketException) { }
+            catch (OperationCanceledException) { return; } // Normal shutdown
+            catch (Exception ex)
+            {
+                Logger.LogAction("WS", $"{peer.DeviceName} WebSocket monitor error: {ex.Message}");
+            }
+
+            // WebSocket died → if peer was still marked alive, trigger death
+            if (peer.IsAlive)
+            {
+                Logger.LogAction("WS", $"💀 {peer.DeviceName} WebSocket dropped — instant death detection");
+                await HandlePeerDeath(peer);
+            }
+        }
+
+        /// <summary>
+        /// All peers confirmed alive → write tick, then delete URLs from Firebase.
+        /// URLs are deleted immediately for SECURITY — they expose clipboard data via Cloudflare.
+        /// When a peer restarts, it uses the urlRequest signal to ask online peers to re-publish.
         /// </summary>
         private async Task ConfirmAndCleanup()
         {
@@ -245,53 +431,28 @@ namespace AdvanceClip.Classes
                 await client.PutAsync(tickUrl, new StringContent(tickJson, Encoding.UTF8, "application/json"));
                 Logger.LogAction("PEER", $"✅ Confirmation tick written — {peerIds.Count} peer(s) confirmed");
 
-                // Check if ALL devices in the pairing group have confirmed
-                string allUrl = await FirebaseSyncManager.AuthUrlPublic($"active_devices/{_myPairingKey}.json");
-                var allResp = await client.GetAsync(allUrl);
-                if (!allResp.IsSuccessStatusCode) return;
-
-                string allJson = await allResp.Content.ReadAsStringAsync();
-                if (string.IsNullOrWhiteSpace(allJson) || allJson == "null") return;
-
-                using var allDoc = JsonDocument.Parse(allJson);
-                int totalDevices = 0, confirmedDevices = 0;
-                foreach (var prop in allDoc.RootElement.EnumerateObject())
+                // Delete our OWN sensitive URLs from Firebase (security: don't leave Cloudflare URLs exposed)
+                try
                 {
-                    totalDevices++;
-                    if (prop.Value.TryGetProperty("confirmedPeers", out _))
-                        confirmedDevices++;
+                    string gUrl = await FirebaseSyncManager.AuthUrlPublic(
+                        $"active_devices/{_myPairingKey}/{_myDeviceId}/GlobalUrl.json");
+                    await client.DeleteAsync(gUrl);
+                    string lUrl = await FirebaseSyncManager.AuthUrlPublic(
+                        $"active_devices/{_myPairingKey}/{_myDeviceId}/LocalIp.json");
+                    await client.DeleteAsync(lUrl);
+                    string uUrl = await FirebaseSyncManager.AuthUrlPublic(
+                        $"active_devices/{_myPairingKey}/{_myDeviceId}/Url.json");
+                    await client.DeleteAsync(uUrl);
+                    // Also clear any stale urlRequest
+                    string rUrl = await FirebaseSyncManager.AuthUrlPublic(
+                        $"active_devices/{_myPairingKey}/{_myDeviceId}/urlRequest.json");
+                    await client.DeleteAsync(rUrl);
                 }
+                catch { }
 
-                if (confirmedDevices >= totalDevices)
-                {
-                    // ALL devices confirmed — clean sensitive URLs from Firebase
-                    // Keep DeviceId/DeviceName/IsOnline but remove GlobalUrl and LocalIp
-                    foreach (var prop in allDoc.RootElement.EnumerateObject())
-                    {
-                        string devId = prop.Value.TryGetProperty("DeviceId", out var di) ? di.GetString() ?? prop.Name : prop.Name;
-                        try
-                        {
-                            // Delete only the URL fields, keep identity
-                            string gUrl = await FirebaseSyncManager.AuthUrlPublic(
-                                $"active_devices/{_myPairingKey}/{devId}/GlobalUrl.json");
-                            await client.DeleteAsync(gUrl);
-                            string lUrl = await FirebaseSyncManager.AuthUrlPublic(
-                                $"active_devices/{_myPairingKey}/{devId}/LocalIp.json");
-                            await client.DeleteAsync(lUrl);
-                            string uUrl = await FirebaseSyncManager.AuthUrlPublic(
-                                $"active_devices/{_myPairingKey}/{devId}/Url.json");
-                            await client.DeleteAsync(uUrl);
-                        }
-                        catch { }
-                    }
-
-                    _urlCleanedFromFirebase = true;
-                    Logger.LogAction("PEER", $"🧹 All {totalDevices} devices confirmed — URLs deleted from Firebase");
-                }
-                else
-                {
-                    Logger.LogAction("PEER", $"Waiting: {confirmedDevices}/{totalDevices} devices confirmed");
-                }
+                _urlCleanedFromFirebase = true;
+                _urlRequestSent = false;
+                Logger.LogAction("PEER", "🔒 URLs deleted from Firebase (security cleanup)");
             }
             catch (Exception ex)
             {
@@ -311,36 +472,61 @@ namespace AdvanceClip.Classes
 
             await Task.WhenAll(alive.Select(async peer =>
             {
-                try
+                bool sent = await TrySendText(peer, text, title, itemType);
+                if (!sent)
                 {
-                    using var c = new HttpClient { Timeout = TimeSpan.FromSeconds(30) }; // 30s — Cloudflare tunnels can be slow
-                    string pk = DevicePairingManager.EnsurePairingKey();
-                    if (!string.IsNullOrEmpty(pk)) c.DefaultRequestHeaders.Add("X-Pairing-Key", pk);
-
-                    var payload = JsonSerializer.Serialize(new
+                    // First attempt failed — peer's tunnel may have died. Reconnect + retry once.
+                    Logger.LogAction("PEER", $"⚡ Text delivery failed — reconnecting {peer.DeviceName}...");
+                    peer.IsAlive = false;
+                    peer.ConsecutiveFailures = 0;
+                    _urlCleanedFromFirebase = false;
+                    _urlRequestSent = false;
+                    await DiscoverAndHandshake();
+                    if (peer.IsAlive)
                     {
-                        type = itemType, title, data = text,
-                        sourceDeviceId = _myDeviceId,
-                        sourceDeviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
-                        timestamp = NetworkClock.UtcNowMs
-                    });
-                    var resp = await c.PostAsync($"{peer.ActiveUrl.TrimEnd('/')}/api/sync_text",
-                        new StringContent(payload, Encoding.UTF8, "application/json"));
-
-                    if (resp.IsSuccessStatusCode)
-                    {
-                        Interlocked.Increment(ref delivered);
-                        peer.LastSeen = DateTime.UtcNow;
-                        Logger.LogAction("PEER", $"→ Text to {peer.DeviceName} via {peer.Transport}");
+                        sent = await TrySendText(peer, text, title, itemType);
+                        if (sent) Logger.LogAction("PEER", $"✅ Text delivered on retry to {peer.DeviceName}");
                     }
                 }
-                catch (Exception ex)
-                {
-                    Logger.LogAction("PEER", $"Text to {peer.DeviceName} failed: {ex.Message}");
-                    HandlePeerFailure(peer, ex.Message);
-                }
+                if (sent) Interlocked.Increment(ref delivered);
             }));
             return delivered;
+        }
+
+        private async Task<bool> TrySendText(PeerConnection peer, string text, string title, string itemType)
+        {
+            try
+            {
+                using var c = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+                string pk = DevicePairingManager.EnsurePairingKey();
+                if (!string.IsNullOrEmpty(pk)) c.DefaultRequestHeaders.Add("X-Pairing-Key", pk);
+
+                var payload = JsonSerializer.Serialize(new
+                {
+                    type = itemType, title, data = text,
+                    sourceDeviceId = _myDeviceId,
+                    sourceDeviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
+                    timestamp = NetworkClock.UtcNowMs
+                });
+                var resp = await c.PostAsync($"{peer.ActiveUrl.TrimEnd('/')}/api/sync_text",
+                    new StringContent(payload, Encoding.UTF8, "application/json"));
+
+                if (resp.IsSuccessStatusCode)
+                {
+                    peer.LastSeen = DateTime.UtcNow;
+                    peer.ConsecutiveFailures = 0;
+                    Logger.LogAction("PEER", $"→ Text to {peer.DeviceName} via {peer.Transport}");
+                    return true;
+                }
+                Logger.LogAction("PEER", $"Text to {peer.DeviceName}: HTTP {(int)resp.StatusCode}");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("PEER", $"Text to {peer.DeviceName} failed: {ex.Message}");
+                HandlePeerFailure(peer, ex.Message);
+                return false;
+            }
         }
 
         public async Task<int> PushFileToAllPeers(string filePath, string title, string itemType = "Image")
@@ -351,51 +537,76 @@ namespace AdvanceClip.Classes
 
             await Task.WhenAll(alive.Select(async peer =>
             {
-                try
+                bool sent = await TrySendFile(peer, filePath, title, itemType);
+                if (!sent)
                 {
-                    // Mark peer as actively transferring — heartbeat will skip it
-                    Interlocked.Increment(ref peer.ActiveTransfers);
-                    
-                    using var c = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-                    string pk = DevicePairingManager.EnsurePairingKey();
-                    if (!string.IsNullOrEmpty(pk)) c.DefaultRequestHeaders.Add("X-Pairing-Key", pk);
-                    c.DefaultRequestHeaders.Add("X-Item-Type", itemType);
-                    c.DefaultRequestHeaders.Add("X-Source-Device", SettingsManager.Current.DeviceName ?? "");
-                    c.DefaultRequestHeaders.Add("X-Source-DeviceId", _myDeviceId);
-
-                    using var form = new MultipartFormDataContent();
-                    string actualFileName = Path.GetFileName(filePath);
-                    var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    form.Add(new StreamContent(fs), "file", actualFileName);
-                    form.Add(new StringContent(title), "title");
-                    form.Add(new StringContent(itemType), "type");
-
-                    // Ensure receiver always knows the correct filename (even for old receivers)
-                    c.DefaultRequestHeaders.Add("X-File-Name", Uri.EscapeDataString(actualFileName));
-
-                    var resp = await c.PostAsync($"{peer.ActiveUrl.TrimEnd('/')}/api/sync_file", form);
-                    if (resp.IsSuccessStatusCode)
+                    // First attempt failed — peer's tunnel may have died. Reconnect + retry once.
+                    Logger.LogAction("PEER", $"⚡ File delivery failed — reconnecting {peer.DeviceName}...");
+                    peer.IsAlive = false;
+                    peer.ConsecutiveFailures = 0;
+                    _urlCleanedFromFirebase = false;
+                    _urlRequestSent = false;
+                    await DiscoverAndHandshake();
+                    if (peer.IsAlive)
                     {
-                        Interlocked.Increment(ref delivered);
-                        peer.LastSeen = DateTime.UtcNow;
-                        Logger.LogAction("PEER", $"→ File '{title}' to {peer.DeviceName} via {peer.Transport}");
+                        sent = await TrySendFile(peer, filePath, title, itemType);
+                        if (sent) Logger.LogAction("PEER", $"✅ File delivered on retry to {peer.DeviceName}");
                     }
                 }
-                catch (Exception ex)
-                {
-                    Logger.LogAction("PEER", $"File to {peer.DeviceName} failed: {ex.Message}");
-                    HandlePeerFailure(peer, ex.Message);
-                }
-                finally
-                {
-                    Interlocked.Decrement(ref peer.ActiveTransfers);
-                }
+                if (sent) Interlocked.Increment(ref delivered);
             }));
             return delivered;
         }
 
+        private async Task<bool> TrySendFile(PeerConnection peer, string filePath, string title, string itemType)
+        {
+            try
+            {
+                Interlocked.Increment(ref peer.ActiveTransfers);
+
+                using var c = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+                string pk = DevicePairingManager.EnsurePairingKey();
+                if (!string.IsNullOrEmpty(pk)) c.DefaultRequestHeaders.Add("X-Pairing-Key", pk);
+                c.DefaultRequestHeaders.Add("X-Item-Type", itemType);
+                c.DefaultRequestHeaders.Add("X-Source-Device", SettingsManager.Current.DeviceName ?? "");
+                c.DefaultRequestHeaders.Add("X-Source-DeviceId", _myDeviceId);
+
+                using var form = new MultipartFormDataContent();
+                string actualFileName = Path.GetFileName(filePath);
+                var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                form.Add(new StreamContent(fs), "file", actualFileName);
+                form.Add(new StringContent(title), "title");
+                form.Add(new StringContent(itemType), "type");
+
+                // Ensure receiver always knows the correct filename (even for old receivers)
+                c.DefaultRequestHeaders.Add("X-File-Name", Uri.EscapeDataString(actualFileName));
+
+                var resp = await c.PostAsync($"{peer.ActiveUrl.TrimEnd('/')}/api/sync_file", form);
+                if (resp.IsSuccessStatusCode)
+                {
+                    peer.LastSeen = DateTime.UtcNow;
+                    peer.ConsecutiveFailures = 0;
+                    Logger.LogAction("PEER", $"→ File '{title}' to {peer.DeviceName} via {peer.Transport}");
+                    return true;
+                }
+                Logger.LogAction("PEER", $"File to {peer.DeviceName}: HTTP {(int)resp.StatusCode}");
+                return false;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("PEER", $"File to {peer.DeviceName} failed: {ex.Message}");
+                HandlePeerFailure(peer, ex.Message);
+                return false;
+            }
+            finally
+            {
+                Interlocked.Decrement(ref peer.ActiveTransfers);
+            }
+        }
+
         // ═══════════════════════════════════════════════════════════════
-        // HEARTBEAT — 5 second keep-alive
+        // HEARTBEAT — HTTP fallback when WebSocket is not available
+        // WebSocket provides instant death detection; HTTP heartbeat is backup only.
         // ═══════════════════════════════════════════════════════════════
 
         private async Task HeartbeatLoop(CancellationToken ct)
@@ -406,6 +617,13 @@ namespace AdvanceClip.Classes
 
                 foreach (var peer in _peers.Values.Where(p => p.IsAlive).ToList())
                 {
+                    // Skip if WebSocket is monitoring this peer (instant detection)
+                    if (peer.LiveSocket?.State == WebSocketState.Open)
+                    {
+                        peer.ConsecutiveFailures = 0;
+                        continue;
+                    }
+
                     // Skip heartbeat if peer has an active file transfer in progress
                     // The transfer itself proves the connection is alive
                     if (peer.ActiveTransfers > 0)
@@ -454,6 +672,7 @@ namespace AdvanceClip.Classes
                 if (hasDeadPeers || _peers.IsEmpty)
                 {
                     _urlCleanedFromFirebase = false; // Allow re-registration
+                    _urlRequestSent = false;         // Allow fresh URL requests
                     await DiscoverAndHandshake();
                 }
             }
@@ -468,7 +687,13 @@ namespace AdvanceClip.Classes
             string old = peer.Transport;
             peer.IsAlive = false;
             peer.ConsecutiveFailures = 0;
-            Logger.LogAction("PEER", $"💀 {peer.DeviceName} dead (was {old})");
+
+            // Close WebSocket
+            try { peer.WsCts?.Cancel(); } catch { }
+            try { peer.LiveSocket?.Dispose(); } catch { }
+            peer.LiveSocket = null;
+
+            Logger.LogAction("PEER", $"💀 {peer.DeviceName} dead (was {old})");;
 
             // Try other transport
             bool lanEnabled = SettingsManager.Current.EnableLocalLAN;
@@ -532,10 +757,14 @@ namespace AdvanceClip.Classes
             {
                 p.IsAlive = false;
                 p.ConsecutiveFailures = 0;
+                try { p.WsCts?.Cancel(); } catch { }
+                try { p.LiveSocket?.Dispose(); } catch { }
+                p.LiveSocket = null;
             }
 
             // 3. Clear cleanup flag so we can re-fetch URLs from Firebase
             _urlCleanedFromFirebase = false;
+            _urlRequestSent = false;
 
             // 4. Full discovery + handshake cycle
             await DiscoverAndHandshake();
@@ -563,6 +792,8 @@ namespace AdvanceClip.Classes
         public DateTime LastSeen { get; set; } = DateTime.MinValue;
         public int ConsecutiveFailures { get; set; } = 0;
         public int ActiveTransfers = 0; // Interlocked counter — heartbeat skips when > 0
+        public System.Net.WebSockets.ClientWebSocket? LiveSocket { get; set; }
+        public CancellationTokenSource? WsCts { get; set; }
     }
 
     public class PeerStatus

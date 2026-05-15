@@ -24,6 +24,7 @@ namespace AdvanceClip
         private bool _isEdgeLocked = false;
         private Windows.TaskbarWindow? _taskbarWidget;
         private System.Windows.Threading.DispatcherTimer? _clipboardDebounceTimer;
+        private DateTime _lastMergeToggleTime = DateTime.MinValue;
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
@@ -160,6 +161,23 @@ namespace AdvanceClip
             {
                 if (e.PropertyName == nameof(Classes.AdvanceSettings.ClipboardWallpaperPath))
                     Dispatcher.InvokeAsync(() => ApplyWallpaper());
+            };
+
+            // Auto-dismiss merge state when new items arrive on the shelf
+            _viewModel.DroppedItems.CollectionChanged += (s, e) =>
+            {
+                if (e.Action == NotifyCollectionChangedAction.Add ||
+                    e.Action == NotifyCollectionChangedAction.Reset ||
+                    e.Action == NotifyCollectionChangedAction.Remove)
+                {
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        if (MergePdfToolbarBtn.Visibility == Visibility.Visible)
+                        {
+                            DismissMergeState();
+                        }
+                    }, System.Windows.Threading.DispatcherPriority.Background);
+                }
             };
         }
 
@@ -1294,6 +1312,19 @@ namespace AdvanceClip
             else return FindVisualParent<T>(parentObject);
         }
 
+        /// <summary>Walks up the visual tree checking if any ancestor FrameworkElement has the given Tag.</summary>
+        private static bool HasAncestorTag(DependencyObject child, string tag)
+        {
+            DependencyObject current = child;
+            while (current != null)
+            {
+                if (current is FrameworkElement fe && fe.Tag as string == tag)
+                    return true;
+                current = VisualTreeHelper.GetParent(current);
+            }
+            return false;
+        }
+
 
         private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
         {
@@ -1312,7 +1343,6 @@ namespace AdvanceClip
 
         private async void ShelfListView_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
-            // If a drag-out just completed, skip paste-on-click entirely
             if (_didDragOut)
             {
                 _didDragOut = false;
@@ -1320,14 +1350,12 @@ namespace AdvanceClip
                 return;
             }
 
-            // Prevent accidental copy when window just spawned under cursor
             if ((DateTime.Now - _spawnTime).TotalMilliseconds < 300)
             {
                 e.Handled = true;
                 return;
             }
 
-            // Allow multiple selection mechanically when modifying keys are held!
             if (Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl) || Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift))
             {
                 return;
@@ -1335,8 +1363,16 @@ namespace AdvanceClip
 
             if (e.OriginalSource is DependencyObject sourceElement)
             {
-                var parentButton = FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(sourceElement);
-                if (parentButton != null)
+                // PDF merge toggle: already handled in PreviewMouseLeftButtonDown
+                if (HasAncestorTag(sourceElement, "PdfMergeToggle"))
+                {
+                    e.Handled = true;
+                    return;
+                }
+
+                // Other buttons (delete, pin, etc.)
+                if (sourceElement is System.Windows.Controls.Primitives.ButtonBase ||
+                    FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(sourceElement) != null)
                 {
                     return; 
                 }
@@ -1344,11 +1380,11 @@ namespace AdvanceClip
 
             var listView = sender as System.Windows.Controls.ListView;
             if (listView == null) return;
-            var itemContainer = System.Windows.Controls.ItemsControl.ContainerFromElement(listView, e.OriginalSource as DependencyObject) as System.Windows.Controls.ListViewItem;
+            var itemContainer2 = System.Windows.Controls.ItemsControl.ContainerFromElement(listView, e.OriginalSource as DependencyObject) as System.Windows.Controls.ListViewItem;
             
-            if (itemContainer != null)
+            if (itemContainer2 != null)
             {
-                var clipboardObj = itemContainer.DataContext as ClipboardItem;
+                var clipboardObj = itemContainer2.DataContext as ClipboardItem;
                 if (clipboardObj != null)
                 {
                     _ = CopyItemAndPaste(clipboardObj, hideWindow: true);
@@ -1458,13 +1494,30 @@ namespace AdvanceClip
             _dragStartPoint = e.GetPosition(null);
             _didDragOut = false;
 
-            // Pre-select the item under the cursor so it's available for drag-out in MouseMove.
-            // WPF's default ListView selection happens on MouseUp, which is too late for drag initiation.
             if (e.OriginalSource is DependencyObject sourceElement)
             {
-                // Don't interfere with button clicks
-                var parentButton = FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(sourceElement);
-                if (parentButton != null) return;
+                // PDF merge toggle: toggle state here and fully consume
+                if (HasAncestorTag(sourceElement, "PdfMergeToggle"))
+                {
+                    // Debounce: ignore rapid-fire from held mouse button
+                    if ((DateTime.Now - _lastMergeToggleTime).TotalMilliseconds > 300)
+                    {
+                        _lastMergeToggleTime = DateTime.Now;
+                        var toggleContainer = ItemsControl.ContainerFromElement(ShelfListView, sourceElement) as ListViewItem;
+                        if (toggleContainer?.DataContext is ClipboardItem item)
+                        {
+                            item.IsCheckedForMerge = !item.IsCheckedForMerge;
+                            UpdatePdfMergeToolbar();
+                        }
+                    }
+                    e.Handled = true;
+                    return;
+                }
+
+                // Don't interfere with other button clicks
+                if (sourceElement is System.Windows.Controls.Primitives.ButtonBase ||
+                    FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(sourceElement) != null)
+                    return;
 
                 var itemContainer = ItemsControl.ContainerFromElement(ShelfListView, sourceElement) as ListViewItem;
                 if (itemContainer != null && itemContainer.DataContext is ClipboardItem)
@@ -1704,32 +1757,16 @@ namespace AdvanceClip
 
         private void ShelfListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            // Only manage the Unpin button here. Merge bar is controlled by checkbox toggles.
             if (ShelfListView.SelectedItems.Count > 1)
             {
-                bool allPdfs = true;
                 int pinnedCount = 0;
                 foreach (var item in ShelfListView.SelectedItems)
                 {
-                    if (item is ClipboardItem clipItem)
-                    {
-                        if (clipItem.ItemType != ClipboardItemType.Pdf)
-                            allPdfs = false;
-                        if (clipItem.IsPinned)
-                            pinnedCount++;
-                    }
+                    if (item is ClipboardItem clipItem && clipItem.IsPinned)
+                        pinnedCount++;
                 }
 
-                if (allPdfs)
-                {
-                    MergeSelectedPdfsText.Text = $"Merge {ShelfListView.SelectedItems.Count} PDFs";
-                    MergeSelectedPdfsBtn.Visibility = Visibility.Visible;
-                }
-                else
-                {
-                    MergeSelectedPdfsBtn.Visibility = Visibility.Collapsed;
-                }
-
-                // Show Unpin button when any selected items are pinned
                 if (pinnedCount > 0)
                 {
                     UnpinSelectedText.Text = pinnedCount == 1 ? "Unpin 1 Item" : $"Unpin {pinnedCount} Items";
@@ -1742,7 +1779,6 @@ namespace AdvanceClip
             }
             else
             {
-                MergeSelectedPdfsBtn.Visibility = Visibility.Collapsed;
                 UnpinSelectedBtn.Visibility = Visibility.Collapsed;
             }
         }
@@ -1767,13 +1803,68 @@ namespace AdvanceClip
 
         private void MergeSelectedPdfsBtn_Click(object sender, RoutedEventArgs e)
         {
-            var selectedPdfs = ShelfListView.SelectedItems.Cast<ClipboardItem>().ToList();
+            // Use checkbox-checked PDFs (IsCheckedForMerge binding)
+            var selectedPdfs = _viewModel.DroppedItems
+                .Where(i => i.IsCheckedForMerge && i.IsPdfPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+                .ToList();
             if (selectedPdfs.Count > 1)
             {
-                AdvanceClip.Windows.ToastWindow.ShowToast("PDF Merge removed in v4.0 for a lighter build.");
-                ShelfListView.SelectedItems.Clear();
+                DismissMergeState();
+                var win = new AdvanceClip.Windows.PdfMergeWindow(selectedPdfs, _viewModel);
+                win.ShowDialog();
+            }
+            else
+            {
+                AdvanceClip.Windows.ToastWindow.ShowToast("Check 2+ PDFs to merge.");
             }
         }
+
+        private void PdfMergeToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
+            {
+                item.IsCheckedForMerge = !item.IsCheckedForMerge;
+                UpdatePdfMergeToolbar();
+            }
+        }
+
+        private void UpdatePdfMergeToolbar()
+        {
+            var checkedPdfs = _viewModel.DroppedItems
+                .Where(i => i.IsCheckedForMerge && i.IsPdfPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+                .ToList();
+
+            if (checkedPdfs.Count >= 2)
+            {
+                MergeSelectedPdfsText.Text = $"Merge {checkedPdfs.Count} PDFs";
+                MergeSelectedPdfsBtn.Visibility = Visibility.Visible;
+                EmojiBtn.Visibility = Visibility.Collapsed;
+                MergePdfToolbarBtn.Visibility = Visibility.Visible;
+                MergePdfToolbarBtn.ToolTip = $"Merge {checkedPdfs.Count} PDFs";
+            }
+            else
+            {
+                // Just hide merge UI — do NOT uncheck PDFs so user can keep selecting
+                MergeSelectedPdfsBtn.Visibility = Visibility.Collapsed;
+                EmojiBtn.Visibility = Visibility.Visible;
+                MergePdfToolbarBtn.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        /// <summary>Hides the merge floating bar, restores emoji btn, and unchecks all PDFs.</summary>
+        internal void DismissMergeState()
+        {
+            MergeSelectedPdfsBtn.Visibility = Visibility.Collapsed;
+            EmojiBtn.Visibility = Visibility.Visible;
+            MergePdfToolbarBtn.Visibility = Visibility.Collapsed;
+
+            // Uncheck all IsCheckedForMerge
+            foreach (var item in _viewModel.DroppedItems)
+            {
+                if (item.IsCheckedForMerge) item.IsCheckedForMerge = false;
+            }
+        }
+
         private async void ConvertPdfToWord_Click(object sender, RoutedEventArgs e)
         {
             try

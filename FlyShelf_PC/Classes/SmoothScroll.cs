@@ -17,25 +17,25 @@ namespace AdvanceClip.Classes
     /// </summary>
     public static class SmoothScroll
     {
-        // ═══ LIST profile (clipboard / flyshelf — moderate, responsive) ═══
-        private const double ListFriction        = 0.88;   // per-frame decay (lower = stops faster)
-        private const double ListMaxVelocity     = 60;     // px/frame cap
-        private const double ListTouchpadMul     = 0.35;   // touchpad impulse scale
-        private const double ListMouseMul        = 0.45;   // mouse wheel impulse scale
-        private const double ListMinImpulse      = 0.4;    // minimum impulse so slow scrolls still register
+        // ═══ LIST profile (clipboard / flyshelf — buttery smooth, responsive) ═══
+        private const double ListFriction        = 0.92;   // per-frame decay (higher = longer glide, more premium)
+        private const double ListMaxVelocity     = 90;     // px/frame cap (higher = faster swipes feel responsive)
+        private const double ListTouchpadMul     = 0.55;   // touchpad impulse scale (was 0.35 — too weak)
+        private const double ListMouseMul        = 0.65;   // mouse wheel impulse scale (was 0.45 — too weak)
+        private const double ListMinImpulse      = 0.3;    // minimum impulse so gentle scrolls register
 
-        // ═══ PAGE profile (settings, diagnostics — bigger sweeps) ═══
-        private const double PageFriction        = 0.90;
-        private const double PageMaxVelocity     = 80;
-        private const double PageTouchpadMul     = 0.45;
-        private const double PageMouseMul        = 0.55;
-        private const double PageMinImpulse      = 0.6;
+        // ═══ PAGE profile (settings, diagnostics — bigger sweeps, long glide) ═══
+        private const double PageFriction        = 0.93;   // slightly higher friction for longer momentum
+        private const double PageMaxVelocity     = 110;    // higher cap for big page scrolls
+        private const double PageTouchpadMul     = 0.60;   // touchpad impulse for pages
+        private const double PageMouseMul        = 0.70;   // mouse wheel impulse for pages
+        private const double PageMinImpulse      = 0.4;    // minimum impulse
 
         // ═══ Shared constants ═══
-        private const double MinVelocity         = 0.08;   // below this → stop
-        private const double DeltaCapTouchpad    = 60;     // clamp raw touchpad delta
-        private const double DeltaCapMouse       = 240;    // clamp raw mouse delta
-        private const double DirectionBreakMul   = 0.3;    // velocity retained on direction reversal
+        private const double MinVelocity         = 0.05;   // below this → stop (lower = smoother final stop)
+        private const double DeltaCapTouchpad    = 80;     // clamp raw touchpad delta (raised for precision trackpads)
+        private const double DeltaCapMouse       = 280;    // clamp raw mouse delta
+        private const double DirectionBreakMul   = 0.2;    // velocity retained on direction reversal (lower = snappier reversal)
         private const double TargetFrameMs       = 16.667; // 60 fps baseline
 
         private enum Profile { List, Page }

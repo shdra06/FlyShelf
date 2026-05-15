@@ -3,6 +3,7 @@ using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Net.Security;
+using System.Net.WebSockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
@@ -823,6 +824,22 @@ namespace AdvanceClip.Classes
                     res.StatusCode = 200;
                     res.Close();
                 }
+                else if (path == "/ws/peer" && req.IsWebSocketRequest)
+                {
+                    // WebSocket peer liveness — persistent connection for instant death detection
+                    string wsPairingKey = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"] ?? "";
+                    string expectedKey = DevicePairingManager.EnsurePairingKey();
+                    if (string.IsNullOrEmpty(wsPairingKey) || wsPairingKey != expectedKey)
+                    {
+                        res.StatusCode = 403;
+                        res.Close();
+                        return;
+                    }
+                    string peerDeviceId = req.Headers["X-Device-Id"] ?? req.QueryString["deviceId"] ?? "unknown";
+                    Logger.LogAction("WS", $"✅ Peer WebSocket accepted from {peerDeviceId}");
+                    var wsContext = await context.AcceptWebSocketAsync(null);
+                    _ = Task.Run(() => HandlePeerWebSocket(wsContext.WebSocket, peerDeviceId));
+                }
                 else if (path == "/download" && req.HttpMethod == "GET")
                 {
                     // SECURITY: /download requires authentication (pairing key or PIN)
@@ -1005,6 +1022,52 @@ namespace AdvanceClip.Classes
                 Logger.LogAction("SERVER REQUEST FAULT", ex.Message);
                 try { res.StatusCode = 500; } catch { }
                 try { res.Close(); } catch { }
+            }
+        }
+
+        /// <summary>
+        /// Holds a WebSocket connection with a peer for instant liveness detection.
+        /// Sends ping every 30s, receives pong. If the peer dies or tunnel drops,
+        /// the WebSocket closes instantly — no 50s heartbeat delay.
+        /// </summary>
+        private async Task HandlePeerWebSocket(WebSocket ws, string peerDeviceId)
+        {
+            var buf = new byte[256];
+            try
+            {
+                while (ws.State == WebSocketState.Open)
+                {
+                    // Wait for incoming messages (peer sends pings, we just read them)
+                    var result = await ws.ReceiveAsync(new ArraySegment<byte>(buf), CancellationToken.None);
+                    if (result.MessageType == WebSocketMessageType.Close)
+                    {
+                        Logger.LogAction("WS", $"Peer {peerDeviceId} closed WebSocket gracefully");
+                        await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None);
+                        break;
+                    }
+                    // If we receive a text "ping", reply "pong"
+                    if (result.MessageType == WebSocketMessageType.Text)
+                    {
+                        string msg = Encoding.UTF8.GetString(buf, 0, result.Count);
+                        if (msg == "ping")
+                        {
+                            byte[] pong = Encoding.UTF8.GetBytes("pong");
+                            await ws.SendAsync(new ArraySegment<byte>(pong), WebSocketMessageType.Text, true, CancellationToken.None);
+                        }
+                    }
+                }
+            }
+            catch (WebSocketException)
+            {
+                Logger.LogAction("WS", $"Peer {peerDeviceId} WebSocket dropped (connection lost)");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("WS", $"Peer {peerDeviceId} WebSocket error: {ex.Message}");
+            }
+            finally
+            {
+                ws.Dispose();
             }
         }
 
