@@ -118,7 +118,7 @@ namespace AdvanceClip.Classes
             if (cat.Contains("DOWNLOAD")) return "#34D399";
             if (cat.Contains("CLOUDFLARE") || cat.Contains("CF_")) return "#F59E0B";
             if (cat.Contains("FIREBASE")) return "#F97316";
-            if (cat.Contains("WEBRTC") || cat.Contains("P2P")) return "#06B6D4";
+            if (cat.Contains("P2P")) return "#06B6D4";
             if (cat.Contains("BIND") || cat.Contains("SERVER") || cat.Contains("LISTENER")) return "#8B5CF6";
             if (cat.Contains("HTML")) return "#A78BFA";
             return "#9CA3AF";

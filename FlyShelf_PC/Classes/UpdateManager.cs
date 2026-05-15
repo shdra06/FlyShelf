@@ -262,6 +262,115 @@ namespace AdvanceClip.Classes
         }
 
         /// <summary>
+        /// Finds the download URL for the currently running version (or latest release)
+        /// from GitHub, downloads it, and prepares it for apply+restart.
+        /// Used for repair/reinstall when files may be corrupted.
+        /// </summary>
+        public async Task<bool> RedownloadCurrentVersionAsync()
+        {
+            try
+            {
+                StatusChanged?.Invoke($"Finding v{CurrentVersion} on GitHub...");
+                Logger.LogAction("REDOWNLOAD", $"Looking for current version {CurrentVersion} release asset");
+
+                string foundUrl = "";
+
+                // Try to find the specific release by tag (v5.0.0, etc.)
+                try
+                {
+                    string tagUrl = $"https://api.github.com/repos/shdra06/FlyShelf/releases/tags/v{CurrentVersion}";
+                    var request = new HttpRequestMessage(HttpMethod.Get, tagUrl);
+                    request.Headers.Add("User-Agent", "FlyShelf-Redownloader");
+                    request.Headers.Add("Accept", "application/vnd.github+json");
+
+                    var response = await _client.SendAsync(request);
+                    if (response.IsSuccessStatusCode)
+                    {
+                        string json = await response.Content.ReadAsStringAsync();
+                        using var doc = JsonDocument.Parse(json);
+                        var root = doc.RootElement;
+
+                        if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var asset in assets.EnumerateArray())
+                            {
+                                string name = asset.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                                if (name.Equals("FlyShelf.exe", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    foundUrl = asset.TryGetProperty("browser_download_url", out var dl) ? dl.GetString() ?? "" : "";
+                                    break;
+                                }
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(foundUrl))
+                            Logger.LogAction("REDOWNLOAD", $"Found exact tag release: v{CurrentVersion}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("REDOWNLOAD", $"Tag lookup failed: {ex.Message}");
+                }
+
+                // Fallback: use latest release if exact tag not found
+                if (string.IsNullOrEmpty(foundUrl))
+                {
+                    try
+                    {
+                        var request = new HttpRequestMessage(HttpMethod.Get, RELEASES_API);
+                        request.Headers.Add("User-Agent", "FlyShelf-Redownloader");
+                        request.Headers.Add("Accept", "application/vnd.github+json");
+
+                        var response = await _client.SendAsync(request);
+                        if (response.IsSuccessStatusCode)
+                        {
+                            string json = await response.Content.ReadAsStringAsync();
+                            using var doc = JsonDocument.Parse(json);
+                            var root = doc.RootElement;
+
+                            if (root.TryGetProperty("assets", out var assets) && assets.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var asset in assets.EnumerateArray())
+                                {
+                                    string name = asset.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                                    if (name.Equals("FlyShelf.exe", StringComparison.OrdinalIgnoreCase))
+                                    {
+                                        foundUrl = asset.TryGetProperty("browser_download_url", out var dl) ? dl.GetString() ?? "" : "";
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+
+                        if (!string.IsNullOrEmpty(foundUrl))
+                            Logger.LogAction("REDOWNLOAD", $"Using latest release as fallback");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("REDOWNLOAD", $"Latest release lookup also failed: {ex.Message}");
+                    }
+                }
+
+                if (string.IsNullOrEmpty(foundUrl))
+                {
+                    StatusChanged?.Invoke("Could not find download URL on GitHub.");
+                    return false;
+                }
+
+                // Set the URL and download using the existing download logic
+                DownloadUrl = foundUrl;
+                LatestVersion = CurrentVersion; // Same version — repair
+                return await DownloadAndApplyUpdateAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("REDOWNLOAD_ERROR", $"Redownload failed: {ex.Message}");
+                StatusChanged?.Invoke($"Redownload failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Replaces the running EXE with the downloaded update and restarts.
         /// Uses a batch script to wait for the current process to exit, then swap.
         /// </summary>

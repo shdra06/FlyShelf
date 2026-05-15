@@ -1455,7 +1455,7 @@
                                                         </DataTemplate>
                                                     </ItemsControl.ItemTemplate>
                                                 </ItemsControl>
-                                                <TextBlock x:Name="LanEmptyText" Text="No LAN devices" FontSize="10" Foreground="#25FFFFFF" HorizontalAlignment="Center" Margin="0,4,0,0" Visibility="Collapsed"/>
+                                                <TextBlock x:Name="LanEmptyText" Text="No other LAN peers" FontSize="10" Foreground="#25FFFFFF" HorizontalAlignment="Center" Margin="0,4,0,0" Visibility="Collapsed"/>
                                             </StackPanel>
                                         </Border>
 
@@ -1957,14 +1957,22 @@
                                                         </StackPanel>
                                                     </StackPanel>
                                                 </StackPanel>
-                                                <ui:Button x:Name="UpdateBtn" Grid.Column="1" Appearance="Primary" Content="Check for Updates" Padding="10,5" CornerRadius="8" Click="UpdateBtn_Click" VerticalAlignment="Center">
-                                                    <ui:Button.Background>
-                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                            <GradientStop Color="#34D399" Offset="0"/>
-                                                            <GradientStop Color="#059669" Offset="1"/>
-                                                        </LinearGradientBrush>
-                                                    </ui:Button.Background>
-                                                </ui:Button>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <ui:Button x:Name="RedownloadBtn" Appearance="Secondary" Padding="8,5" CornerRadius="8" Click="RedownloadBtn_Click" Margin="0,0,6,0" ToolTip="Re-download current version from GitHub (repair install)">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <ui:SymbolIcon Symbol="ArrowSync24" FontSize="12" Margin="0,0,5,0"/>
+                                                            <TextBlock Text="Repair" FontSize="11" FontWeight="SemiBold"/>
+                                                        </StackPanel>
+                                                    </ui:Button>
+                                                    <ui:Button x:Name="UpdateBtn" Appearance="Primary" Content="Check for Updates" Padding="10,5" CornerRadius="8" Click="UpdateBtn_Click">
+                                                        <ui:Button.Background>
+                                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                                <GradientStop Color="#34D399" Offset="0"/>
+                                                                <GradientStop Color="#059669" Offset="1"/>
+                                                            </LinearGradientBrush>
+                                                        </ui:Button.Background>
+                                                    </ui:Button>
+                                                </StackPanel>
                                             </Grid>
                                             <Border x:Name="UpdateProgressPanel" Visibility="Collapsed" Background="#0AFFFFFF" CornerRadius="6" Padding="10,6" Margin="0,0,0,6">
                                                 <StackPanel>

@@ -27,7 +27,8 @@ namespace AdvanceClip.Classes
             "HTTP", "HEARTBEAT", "CLOUDFLARE HEALTH", "CLOUDFLARE_ERROR",
             "DRAG IN", "CLIPBOARD", "FIREBASE SSE", "FIREBASE SYNC",
             "FIREBASE STORAGE", "FIREBASE CLEANUP", "FIREBASE ERROR",
-            "LISTENER", "SERVER", "DOWNLOAD"
+            "LISTENER", "SERVER", "DOWNLOAD",
+            "PEER", "PAIR", "PUSH", "TUNNEL CHANGE"
         };
 
         static Logger()
@@ -68,7 +69,9 @@ namespace AdvanceClip.Classes
         {
             try
             {
-                string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                // Use NTP-corrected time if available, otherwise fall back to system time
+                string timestamp = (NetworkClock.IsSynced ? NetworkClock.Now.DateTime : DateTime.Now)
+                    .ToString("yyyy-MM-dd HH:mm:ss.fff");
                 string logEntry = $"[{timestamp}] [{actionType.ToUpper()}] {details}";
                 
                 // Enqueue to main log — zero-allocation on the hot path, never blocks

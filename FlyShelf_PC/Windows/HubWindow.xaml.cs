@@ -367,11 +367,106 @@ namespace AdvanceClip.Windows
         {
             try
             {
-                // Force refresh first
-                RefreshLogs_Click(null, null);
-                
-                string logText = LogsTextBox.Text;
-                if (string.IsNullOrWhiteSpace(logText) || logText == "No logs recorded yet.")
+                // Build a comprehensive diagnostic report from all log sources,
+                // filtering out redundant GET /api/health noise
+                var report = new System.Text.StringBuilder();
+                string logsDir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
+
+                // Helper: filter out standalone GET /api/health lines (noise from 60s health monitor)
+                // Keep lines that mention health in an ERROR context
+                Func<string, bool> isUsefulLine = (line) =>
+                {
+                    if (string.IsNullOrWhiteSpace(line)) return false;
+                    // Skip pure health-check spam: "[...] [HTTP] [...] GET /api/health"
+                    if (line.Contains("[HTTP]") && line.Contains("GET /api/health")) return false;
+                    return true;
+                };
+
+                // 1. Activity Log
+                string logFile = System.IO.Path.Combine(logsDir, "activity_log.txt");
+                if (System.IO.File.Exists(logFile))
+                {
+                    var rawLines = System.IO.File.ReadAllLines(logFile).Where(isUsefulLine).ToList();
+                    
+                    // Deduplicate consecutive repeated messages (e.g., "Iqoo unreachable" every 30s)
+                    var dedupedLines = new List<string>();
+                    string lastPattern = "";
+                    int repeatCount = 0;
+                    string firstRepeatLine = "";
+
+                    foreach (var line in rawLines)
+                    {
+                        // Extract the message portion (after timestamp) for pattern matching
+                        string pattern = line.Length > 28 ? line.Substring(28).Trim() : line;
+                        
+                        if (pattern == lastPattern)
+                        {
+                            repeatCount++;
+                        }
+                        else
+                        {
+                            // Flush previous repeat group
+                            if (repeatCount > 2)
+                            {
+                                dedupedLines.Add($"    ↑↑↑ repeated {repeatCount}× (collapsed)");
+                            }
+                            else if (repeatCount == 2)
+                            {
+                                dedupedLines.Add(firstRepeatLine); // just show the 2nd one
+                            }
+                            
+                            dedupedLines.Add(line);
+                            lastPattern = pattern;
+                            repeatCount = 1;
+                            firstRepeatLine = line;
+                        }
+                    }
+                    // Flush final group
+                    if (repeatCount > 2)
+                    {
+                        dedupedLines.Add($"    ↑↑↑ repeated {repeatCount}× (collapsed)");
+                    }
+
+                    if (dedupedLines.Any())
+                    {
+                        report.AppendLine("══════════════════════════════════════════════════════════");
+                        report.AppendLine("  ACTIVITY LOG");
+                        report.AppendLine("══════════════════════════════════════════════════════════");
+                        foreach (var line in dedupedLines) report.AppendLine(line);
+                    }
+                }
+
+                // 2. Network Diagnostics Log
+                string netLogFile = Logger.GetNetworkLogPath();
+                if (System.IO.File.Exists(netLogFile))
+                {
+                    var lines = System.IO.File.ReadAllLines(netLogFile).Where(isUsefulLine);
+                    if (lines.Any())
+                    {
+                        report.AppendLine();
+                        report.AppendLine("══════════════════════════════════════════════════════════");
+                        report.AppendLine("  NETWORK DIAGNOSTICS");
+                        report.AppendLine("══════════════════════════════════════════════════════════");
+                        foreach (var line in lines) report.AppendLine(line);
+                    }
+                }
+
+                // 3. Server Troubleshooting (already filtered by GetServerDiagnostics, but also strip health)
+                string serverDiag = GetServerDiagnostics();
+                if (!string.IsNullOrWhiteSpace(serverDiag) && !serverDiag.StartsWith("No"))
+                {
+                    var lines = serverDiag.Split('\n').Where(l => isUsefulLine(l));
+                    if (lines.Any())
+                    {
+                        report.AppendLine();
+                        report.AppendLine("══════════════════════════════════════════════════════════");
+                        report.AppendLine("  SERVER TROUBLESHOOTING");
+                        report.AppendLine("══════════════════════════════════════════════════════════");
+                        foreach (var line in lines) report.AppendLine(line.TrimEnd('\r'));
+                    }
+                }
+
+                if (report.Length == 0)
                 {
                     ToastWindow.ShowToast("⚠️ No logs to send");
                     return;
@@ -387,10 +482,10 @@ namespace AdvanceClip.Windows
                 header.AppendLine($"  Version: {UpdateManager.CurrentVersion}");
                 header.AppendLine("═══════════════════════════════════════════════════════════");
                 header.AppendLine();
-                header.Append(logText);
+                header.Append(report);
 
                 Clipboard.SetText(header.ToString());
-                ToastWindow.ShowToast("📋 All logs copied to clipboard — paste and send to developer!");
+                ToastWindow.ShowToast("📋 All logs copied to clipboard (health-check noise filtered) — paste and send!");
             }
             catch (Exception ex)
             {
@@ -764,19 +859,6 @@ namespace AdvanceClip.Windows
                 var devices = await FirebaseSyncManager.GetActiveDevices();
                 string myName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
 
-                // Get this PC's local IP for subnet comparison
-                string myLocalIp = "";
-                try
-                {
-                    using var socket = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork, System.Net.Sockets.SocketType.Dgram, 0);
-                    socket.Connect("8.8.8.8", 65530);
-                    myLocalIp = (socket.LocalEndPoint as System.Net.IPEndPoint)?.Address.ToString() ?? "";
-                }
-                catch { }
-                
-                string mySubnet = GetSubnet(myLocalIp); // e.g., "192.168.1"
-
-
                 var lanItems = new System.Collections.Generic.List<DeviceDisplayItem>();
                 var cloudItems = new System.Collections.Generic.List<DeviceDisplayItem>();
 
@@ -784,7 +866,7 @@ namespace AdvanceClip.Windows
                 string myLocalUrl = _viewModel.LocalServer?.ServerUrl ?? "";
                 string myGlobalUrl = _viewModel.LocalServer?.GlobalUrl ?? "";
 
-                // Always add self to LAN
+                // Always add self to LAN — this device IS a LAN device
                 lanItems.Add(new DeviceDisplayItem
                 {
                     DeviceName = myName + " (You)",
@@ -796,34 +878,120 @@ namespace AdvanceClip.Windows
                     GlobalUrl = myGlobalUrl
                 });
 
+                // ═══ Use PeerManager's CONFIRMED connection data ═══
+                // PeerManager has already handshaked with each peer and knows the exact transport.
+                // This is the ground truth — no guessing needed.
+                var peerStatuses = PeerManager.Instance?.GetPeerStatuses() 
+                    ?? new System.Collections.Generic.List<PeerStatus>();
+                var confirmedPeerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                foreach (var peer in peerStatuses)
+                {
+                    confirmedPeerIds.Add(peer.DeviceId);
+
+                    if (peer.IsAlive && peer.Transport == "LAN")
+                    {
+                        // Confirmed LAN connection via PeerManager handshake
+                        lanItems.Add(new DeviceDisplayItem
+                        {
+                            DeviceName = peer.DeviceName,
+                            DeviceType = "PC",
+                            IsOnline = true,
+                            ConnectionType = "Local",
+                            LastSeen = $"LAN active — {peer.ActiveUrl}",
+                            LocalIp = peer.LanUrl,
+                            GlobalUrl = peer.CloudflareUrl
+                        });
+                    }
+                    else if (peer.IsAlive && peer.Transport == "Cloudflare")
+                    {
+                        // Confirmed Cloudflare connection via PeerManager handshake
+                        cloudItems.Add(new DeviceDisplayItem
+                        {
+                            DeviceName = peer.DeviceName,
+                            DeviceType = "PC",
+                            IsOnline = true,
+                            ConnectionType = "Cloud",
+                            LastSeen = "Cloudflare tunnel active",
+                            LocalIp = peer.LanUrl,
+                            GlobalUrl = peer.CloudflareUrl
+                        });
+                    }
+                    else
+                    {
+                        // Peer known to PeerManager but currently dead
+                        cloudItems.Add(new DeviceDisplayItem
+                        {
+                            DeviceName = peer.DeviceName,
+                            DeviceType = "PC",
+                            IsOnline = false,
+                            ConnectionType = "Cloud",
+                            LastSeen = $"Last seen: {peer.LastSeen:HH:mm:ss}",
+                            LocalIp = peer.LanUrl,
+                            GlobalUrl = peer.CloudflareUrl
+                        });
+                    }
+                }
+
+                // ═══ Non-PeerManager devices (phones, other platforms from Firebase) ═══
+                // These are devices we don't have a direct P2P handshake with.
+                // Classify by checking if they share our LAN subnet AND respond to a health check.
                 foreach (var d in devices)
                 {
-                    // Check LAN: actually try to reach the device's local IP (subnet matching is unreliable)
+                    // Skip devices already handled by PeerManager
+                    if (confirmedPeerIds.Contains(d.Id)) continue;
+
                     bool isLan = false;
-                    if (!string.IsNullOrEmpty(d.LocalIp) && d.LocalIp.StartsWith("http"))
+                    if (!string.IsNullOrEmpty(d.LocalIp))
                     {
+                        // Build a proper URL for the health check
+                        string checkUrl = d.LocalIp;
+                        if (!checkUrl.StartsWith("http")) checkUrl = "http://" + checkUrl;
+                        if (!checkUrl.Contains(":")) checkUrl += ":8999";
+                        
                         try
                         {
-                            using var pingClient = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMilliseconds(800) };
-                            var resp = await pingClient.GetAsync(d.LocalIp + "/ping");
+                            using var pingClient = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMilliseconds(1000) };
+                            var resp = await pingClient.GetAsync(checkUrl.TrimEnd('/') + "/api/health");
                             isLan = resp.IsSuccessStatusCode;
                         }
                         catch { isLan = false; }
                     }
 
                     if (isLan)
-                        lanItems.Add(new DeviceDisplayItem { DeviceName = d.Name, DeviceType = d.Type, IsOnline = d.IsOnline, ConnectionType = "Local", LocalIp = d.LocalIp, GlobalUrl = d.GlobalUrl });
-
-                    // Cloud: ALL online devices are cloud-synced via Firebase
-                    if (d.IsOnline)
-                        cloudItems.Add(new DeviceDisplayItem { DeviceName = d.Name, DeviceType = d.Type, IsOnline = d.IsOnline, ConnectionType = "Cloud", LocalIp = d.LocalIp, GlobalUrl = d.GlobalUrl });
+                    {
+                        // Confirmed reachable on LAN — place in LAN column only
+                        lanItems.Add(new DeviceDisplayItem
+                        {
+                            DeviceName = d.Name,
+                            DeviceType = d.Type,
+                            IsOnline = d.IsOnline,
+                            ConnectionType = "Local",
+                            LocalIp = d.LocalIp,
+                            GlobalUrl = d.GlobalUrl
+                        });
+                    }
+                    else if (d.IsOnline)
+                    {
+                        // Online but NOT on LAN — Cloud only
+                        cloudItems.Add(new DeviceDisplayItem
+                        {
+                            DeviceName = d.Name,
+                            DeviceType = d.Type,
+                            IsOnline = d.IsOnline,
+                            ConnectionType = "Cloud",
+                            LocalIp = d.LocalIp,
+                            GlobalUrl = d.GlobalUrl
+                        });
+                    }
+                    // Offline and not on LAN → skip entirely (not shown in topology)
                 }
 
                 LanDevicesPanel.ItemsSource = lanItems;
                 CloudDevicesPanel.ItemsSource = cloudItems;
 
-                // Show/hide empty text for each column
-                LanEmptyText.Visibility = lanItems.Count <= 1 ? Visibility.Visible : Visibility.Collapsed; // 1 = just self
+                // Show/hide empty text — lanItems always has self, so "No LAN devices" means no OTHER LAN peers
+                LanEmptyText.Visibility = lanItems.Count <= 1 ? Visibility.Visible : Visibility.Collapsed;
                 CloudEmptyText.Visibility = cloudItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
                 NoDevicesPanel.Visibility = (lanItems.Count <= 1 && cloudItems.Count == 0) ? Visibility.Visible : Visibility.Collapsed;
@@ -868,18 +1036,7 @@ namespace AdvanceClip.Windows
         /// <summary>
         /// Extracts the subnet prefix from an IP address (first 3 octets): "192.168.1.106" → "192.168.1"
         /// </summary>
-        private static string GetSubnet(string ip)
-        {
-            if (string.IsNullOrEmpty(ip)) return "";
-            // Strip port and protocol
-            ip = ip.Replace("http://", "").Replace("https://", "");
-            int colonIdx = ip.IndexOf(':');
-            if (colonIdx > 0) ip = ip.Substring(0, colonIdx);
-            
-            var parts = ip.Split('.');
-            if (parts.Length >= 3) return $"{parts[0]}.{parts[1]}.{parts[2]}";
-            return "";
-        }
+
 
         // ═══ Device Groups (Firebase-synced) ═══
 
@@ -1089,8 +1246,35 @@ namespace AdvanceClip.Windows
             LatestVersionText.Text = "";
 
             await _updateManager.CheckForUpdateAsync();
-            // UpdateCheckCompleted event handler above will update the button
         }
+
+        private async void RedownloadBtn_Click(object sender, RoutedEventArgs e)
+        {
+            RedownloadBtn.IsEnabled = false;
+            UpdateBtn.IsEnabled = false;
+            UpdateProgressPanel.Visibility = Visibility.Visible;
+            UpdateStatusText.Text = $"Finding v{UpdateManager.CurrentVersion} on GitHub...";
+            UpdatePctText.Text = "";
+
+            bool success = await _updateManager.RedownloadCurrentVersionAsync();
+            if (success)
+            {
+                RedownloadBtn.IsEnabled = false;
+                UpdateBtn.Content = "Restarting...";
+                UpdateStatusText.Text = $"✅ v{UpdateManager.CurrentVersion} re-downloaded! Restarting now...";
+                UpdatePctText.Text = "100%";
+
+                await Task.Delay(1500);
+                _updateManager.ApplyUpdateAndRestart();
+            }
+            else
+            {
+                RedownloadBtn.IsEnabled = true;
+                UpdateBtn.IsEnabled = true;
+                UpdateStatusText.Text = "❌ Redownload failed — check your internet connection.";
+            }
+        }
+
     } // end HubWindow class
 
     public class DeviceDisplayItem

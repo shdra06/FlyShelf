@@ -13,9 +13,9 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <ApplicationIcon>Resources\ClipFlowLogo.ico</ApplicationIcon>
     <NoWarn>CS4014;CS0168;CS0162;CS0414;CS8632;CS0169</NoWarn>
-    <Version>5.0.0</Version>
-    <AssemblyVersion>5.0.0</AssemblyVersion>
-    <FileVersion>5.0.0</FileVersion>
+    <Version>5.0.1</Version>
+    <AssemblyVersion>5.0.1</AssemblyVersion>
+    <FileVersion>5.0.1</FileVersion>
     <AssemblyTitle>FlyShelf</AssemblyTitle>
     <Product>FlyShelf — Seamless Cross-Device Clipboard</Product>
     <Company>Shivendra</Company>
@@ -24,7 +24,7 @@
     <Description>FlyShelf syncs your clipboard, files, and screenshots across all your devices in real-time via secure peer-to-peer connections.</Description>
   </PropertyGroup>
 
-  <!-- Prevent process crash from unobserved async Task exceptions (WebRTC I/O aborts) -->
+  <!-- Prevent process crash from unobserved async Task exceptions -->
   <ItemGroup>
     <RuntimeHostConfigurationOption Include="System.Threading.Tasks.TaskScheduler.ThrowUnobservedTaskExceptions" Value="false" />
   </ItemGroup>
@@ -32,7 +32,7 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Emoji.Wpf" Version="0.3.4" />
-    <PackageReference Include="FirebaseStorage.net" Version="1.0.3" />
+
     <PackageReference Include="MicaWPF" Version="6.3.2" />
     <PackageReference Include="WPF-UI" Version="4.2.0" />
     <PackageReference Include="WPF-UI.Tray" Version="4.2.0" />

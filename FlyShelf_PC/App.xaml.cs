@@ -83,6 +83,10 @@ public partial class App : Application
 
         AdvanceClip.Classes.SettingsManager.Load();
         
+        // ═══ INTERNAL CLOCK: Sync with NTP before any Firebase/networking ═══
+        // Protects against wrong system clock causing auth failures and dead heartbeats
+        _ = AdvanceClip.Classes.NetworkClock.InitializeAsync();
+        
         try 
         {
             using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))

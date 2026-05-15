@@ -24,7 +24,7 @@ export const getSubnet = (ip: string): string => {
 };
 
 /** Determine connection type for a device relative to this phone */
-export const getConnectionType = (device: any, myLocalIp: string): 'Local' | 'Cloud' | 'P2P' => {
+export const getConnectionType = (device: any, myLocalIp: string): 'Local' | 'Cloud' => {
   const deviceIp = device.LocalIp || device.Url || '';
   const mySubnet = getSubnet(myLocalIp);
   const deviceSubnet = getSubnet(deviceIp);
@@ -36,7 +36,6 @@ export const getConnectionType = (device: any, myLocalIp: string): 'Local' | 'Cl
 export const connectionColors: Record<string, string> = {
   Local: '#10B981',
   Cloud: '#F59E0B',
-  P2P: '#06B6D4',
 };
 
 /**

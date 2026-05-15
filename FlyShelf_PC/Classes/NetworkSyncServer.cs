@@ -1335,9 +1335,21 @@ namespace AdvanceClip.Classes
                     var dataObj = new System.Windows.DataObject();
                     var dropList = new System.Collections.Specialized.StringCollection { finalPath };
                     dataObj.SetFileDropList(dropList);
-                    // skipFirebaseSync=true — file came FROM a mobile device, don't echo it back
-                    _viewModel.HandleDrop(dataObj, true, skipFirebaseSync: true);
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"Saved: {Path.GetFileName(finalPath)} ✅");
+                    // forceClipboardSync=false — DON'T write to OS clipboard, prevents echo loop
+                    // (clipboard write → WM_CLIPBOARDUPDATE → syncs back to sender = infinite loop)
+                    // skipFirebaseSync=true — file came FROM a peer device, don't echo it back
+                    _viewModel.HandleDrop(dataObj, false, skipFirebaseSync: true);
+                    
+                    // Tag the newly created item with transport + source device info
+                    if (_viewModel.DroppedItems.Count > 0)
+                    {
+                        var newest = _viewModel.DroppedItems[0];
+                        newest.SourceDeviceName = sourceDevice;
+                        newest.SourceDeviceType = sourceDevice.Contains("PC") || sourceDevice.Contains("LAPTOP") || sourceDevice.Contains("DESKTOP") ? "PC" : "Mobile";
+                        newest.TransferMethod = fileTransport.transport;
+                    }
+                    
+                    AdvanceClip.Windows.ToastWindow.ShowToast($"Saved: {Path.GetFileName(finalPath)} via {fileTransport.transport} ✅");
                 });
 
                 res.StatusCode = 200;

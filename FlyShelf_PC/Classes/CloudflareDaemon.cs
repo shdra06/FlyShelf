@@ -220,7 +220,7 @@ namespace AdvanceClip.Classes
                     if (verified)
                     {
                         bool dnsReady = false;
-                        for (int d = 0; d < 4; d++) // Up to 4 attempts (0s, 2s, 4s, 6s)
+                        for (int d = 0; d < 15; d++) // Up to 15 attempts × 3s = ~45s max wait
                         {
                             try
                             {
@@ -230,15 +230,15 @@ namespace AdvanceClip.Classes
                                 if (addresses.Length > 0)
                                 {
                                     dnsReady = true;
-                                    Logger.LogAction("CLOUDFLARE", $"✅ DNS resolved: {uri.Host} → {addresses[0]} ({d * 2}s wait)");
+                                    Logger.LogAction("CLOUDFLARE", $"✅ DNS resolved: {uri.Host} → {addresses[0]} ({d * 3}s wait)");
                                     break;
                                 }
                             }
                             catch (Exception dnsEx)
                             {
-                                Logger.LogAction("CLOUDFLARE", $"DNS not ready (attempt {d + 1}/4): {dnsEx.Message}");
+                                Logger.LogAction("CLOUDFLARE", $"DNS not ready (attempt {d + 1}/15): {dnsEx.Message}");
                             }
-                            if (d < 3) await Task.Delay(2000); // Wait 2s between DNS checks
+                            if (d < 14) await Task.Delay(3000); // Wait 3s between DNS checks
                         }
                         
                         if (!dnsReady)

@@ -27,13 +27,14 @@ namespace AdvanceClip.Classes
         private string _myDeviceId = "";
         private string _myPairingKey = "";
         private bool _urlCleanedFromFirebase = false;
+        private readonly HashSet<string> _prunedGhosts = new(StringComparer.OrdinalIgnoreCase);
 
         // ═══ Config ═══
-        private const int HEARTBEAT_MS = 5_000;          // 5s heartbeat
-        private const int HEARTBEAT_TIMEOUT_MS = 4_000;   // 4s timeout per ping
-        private const int MAX_FAILURES = 3;               // 3 misses = dead
+        private const int HEARTBEAT_MS = 10_000;          // 10s heartbeat (Cloudflare tunnels are slow)
+        private const int HEARTBEAT_TIMEOUT_MS = 8_000;   // 8s timeout per ping (Cloudflare latency)
+        private const int MAX_FAILURES = 5;               // 5 misses = dead (more tolerance for tunnel jitter)
         private const int DISCOVERY_MS = 30_000;          // Re-scan Firebase every 30s for reconnection
-        private const int HANDSHAKE_TIMEOUT_MS = 5_000;
+        private const int HANDSHAKE_TIMEOUT_MS = 8_000;   // 8s handshake timeout for Cloudflare
 
         // ═══ Events ═══
         public event Action<string, string>? PeerConnected;     // (deviceId, transport)
@@ -90,6 +91,11 @@ namespace AdvanceClip.Classes
                 string json = await resp.Content.ReadAsStringAsync();
                 if (string.IsNullOrWhiteSpace(json) || json == "null") return;
 
+                // Get locally paired devices to filter out stale/ghost entries in Firebase
+                var pairedDevices = DevicePairingManager.GetPairedDevices();
+                var pairedDeviceIds = new HashSet<string>(pairedDevices.Select(d => d.DeviceId), StringComparer.OrdinalIgnoreCase);
+                var pairedDeviceNames = new HashSet<string>(pairedDevices.Select(d => d.DeviceName), StringComparer.OrdinalIgnoreCase);
+
                 using var doc = JsonDocument.Parse(json);
                 int totalPeers = 0;
                 foreach (var prop in doc.RootElement.EnumerateObject())
@@ -98,8 +104,37 @@ namespace AdvanceClip.Classes
                     string devId = dev.TryGetProperty("DeviceId", out var di) ? di.GetString() ?? prop.Name : prop.Name;
                     if (devId == _myDeviceId) continue;
 
-                    totalPeers++;
                     string name = dev.TryGetProperty("DeviceName", out var dn) ? dn.GetString() ?? "" : "";
+
+                    // Skip devices that are NOT in the local paired devices list
+                    // This filters out stale/ghost entries (e.g., unpaired phones still lingering in Firebase)
+                    if (pairedDeviceIds.Count > 0 && !pairedDeviceIds.Contains(devId) && !pairedDeviceNames.Contains(name))
+                    {
+                        // Only log + delete once per unknown device to avoid spam
+                        if (_prunedGhosts.Add(devId))
+                        {
+                            Logger.LogAction("PEER", $"⏭️ Skipping unpaired device in Firebase: {name} ({devId}) — not in local paired list");
+
+                            // Actively delete the ghost entry from Firebase
+                            _ = Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    string deleteUrl = await FirebaseSyncManager.AuthUrlPublic($"active_devices/{_myPairingKey}/{prop.Name}.json");
+                                    using var delClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                                    await delClient.DeleteAsync(deleteUrl);
+                                    Logger.LogAction("PEER", $"🗑️ Deleted ghost device from Firebase: {name} ({prop.Name})");
+                                }
+                                catch (Exception ex)
+                                {
+                                    Logger.LogAction("PEER", $"Failed to delete ghost {name}: {ex.Message}");
+                                }
+                            });
+                        }
+                        continue;
+                    }
+
+                    totalPeers++;
                     string lan = dev.TryGetProperty("LocalIp", out var li) ? li.GetString() ?? "" : "";
                     string cf = dev.TryGetProperty("GlobalUrl", out var gu) ? gu.GetString() ?? "" : "";
                     string direct = dev.TryGetProperty("Url", out var du) ? du.GetString() ?? "" : "";
@@ -204,7 +239,7 @@ namespace AdvanceClip.Classes
                 var peerIds = _peers.Values.Where(p => p.IsAlive).Select(p => p.DeviceId).ToList();
                 string tickJson = JsonSerializer.Serialize(new
                 {
-                    confirmedAt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
+                    confirmedAt = NetworkClock.UtcNowMs,
                     peers = peerIds
                 });
                 await client.PutAsync(tickUrl, new StringContent(tickJson, Encoding.UTF8, "application/json"));
@@ -287,7 +322,7 @@ namespace AdvanceClip.Classes
                         type = itemType, title, data = text,
                         sourceDeviceId = _myDeviceId,
                         sourceDeviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
-                        timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                        timestamp = NetworkClock.UtcNowMs
                     });
                     var resp = await c.PostAsync($"{peer.ActiveUrl.TrimEnd('/')}/api/sync_text",
                         new StringContent(payload, Encoding.UTF8, "application/json"));
@@ -318,6 +353,9 @@ namespace AdvanceClip.Classes
             {
                 try
                 {
+                    // Mark peer as actively transferring — heartbeat will skip it
+                    Interlocked.Increment(ref peer.ActiveTransfers);
+                    
                     using var c = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
                     string pk = DevicePairingManager.EnsurePairingKey();
                     if (!string.IsNullOrEmpty(pk)) c.DefaultRequestHeaders.Add("X-Pairing-Key", pk);
@@ -348,6 +386,10 @@ namespace AdvanceClip.Classes
                     Logger.LogAction("PEER", $"File to {peer.DeviceName} failed: {ex.Message}");
                     HandlePeerFailure(peer, ex.Message);
                 }
+                finally
+                {
+                    Interlocked.Decrement(ref peer.ActiveTransfers);
+                }
             }));
             return delivered;
         }
@@ -364,6 +406,15 @@ namespace AdvanceClip.Classes
 
                 foreach (var peer in _peers.Values.Where(p => p.IsAlive).ToList())
                 {
+                    // Skip heartbeat if peer has an active file transfer in progress
+                    // The transfer itself proves the connection is alive
+                    if (peer.ActiveTransfers > 0)
+                    {
+                        peer.ConsecutiveFailures = 0;
+                        peer.LastSeen = DateTime.UtcNow;
+                        continue;
+                    }
+
                     try
                     {
                         using var c = new HttpClient { Timeout = TimeSpan.FromMilliseconds(HEARTBEAT_TIMEOUT_MS) };
@@ -383,7 +434,7 @@ namespace AdvanceClip.Classes
                         peer.ConsecutiveFailures++;
                     }
 
-                    if (peer.ConsecutiveFailures >= 2)
+                    if (peer.ConsecutiveFailures >= 3)
                         Logger.LogAction("PEER", $"Heartbeat {peer.DeviceName}: {peer.ConsecutiveFailures}/{MAX_FAILURES}");
 
                     if (peer.ConsecutiveFailures >= MAX_FAILURES)
@@ -511,6 +562,7 @@ namespace AdvanceClip.Classes
         public bool IsAlive { get; set; } = false;
         public DateTime LastSeen { get; set; } = DateTime.MinValue;
         public int ConsecutiveFailures { get; set; } = 0;
+        public int ActiveTransfers = 0; // Interlocked counter — heartbeat skips when > 0
     }
 
     public class PeerStatus

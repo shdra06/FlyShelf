@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
-import { getStorage } from "firebase/storage";
+
 import { initializeAuth, getAuth, getReactNativePersistence, signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -17,7 +17,7 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const database = getDatabase(app);
-export const storage = getStorage(app);
+
 
 // Use initializeAuth with AsyncStorage persistence for token survival across restarts.
 // Falls back to getAuth() during hot-reload when auth is already initialized.
