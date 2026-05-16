@@ -1,9 +1,8 @@
 {
-  "pc_version": "4.3.0",
-  "pc_changelog": "v4.3.0 — FlyShelf Optimization Sprint\n\n• Settings I/O debounced: 90% less disk writes during window resize\n• Search bar: smooth slide animation + Ctrl+F hint\n• Toast notifications: now stack vertically instead of overlapping\n• Empty state: actionable quick-start tips with keyboard shortcuts\n• All tooltips show keyboard shortcuts on hover\n• Cloud echo dict bounded at 100 entries (memory safety)\n• Fixed IL3000 warnings in single-file mode\n• Removed stale ClipFlow/Advance Hub branding\n• Dead code cleanup (25+ lines removed)",
-  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v4.3.0/FlyShelf.exe",
-  "pc_sha256": "0DCC009DF54B3D4B540B5AD9E96577CD6DA4BB2EFB73D61E99DC075655377DC8",
-  "android_version": "4.2.0",
-  "android_changelog": "v4.2.0 — FlyShelf Rebrand\n\n• Full rebrand from AdvanceClip to FlyShelf\n• QR pairing payload updated to FlyShelf identifier\n• Stability improvements",
-  "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v4.3.0/FlyShelf_Mobile.apk"
+  "pc_version": "5.5.0",
+  "pc_changelog": "v5.5.0 — Critical Connectivity Fix\n\n• Fixed: PeerManager dead reconnection loop after restart\n• Local URL caching for instant peer reconnection\n• URLs preserved in Firebase for reliability\n• Parallel chunked upload for CF files >256KB\n• Shared HttpClient with connection pooling\n• Verbose handshake diagnostics",
+  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v5.5.0/FlyShelf.exe",
+  "android_version": "5.3.0",
+  "android_changelog": "v5.3.0 — FlyShelf Android v4\n\n• P2P sync improvements\n• Compatible with FlyShelf PC v5.5.0\n• Cloudflare tunnel transport support\n• Debug log viewer for diagnostics",
+  "android_download": "https://github.com/shdra06/FlyShelf/releases/download/android-v4/app-debug.apk"
 }
