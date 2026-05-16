@@ -27,7 +27,7 @@ import { ClipItem, DOWNLOAD_BASE, SYNC_CACHE_BASE, CONVERTED_BASE, IMAGE_CACHE_B
 import { fetchWithTimeout, getConnectionType, connectionColors, resolveOptimalUrl, getDeviceUrls, getMediaUrl } from '../../utils/networkHelpers';
 import { encrypt as aesEncrypt, decrypt as aesDecrypt } from '../../utils/syncCrypto';
 import { styles } from '../../styles/syncStyles';
-import { colors, font } from '../../styles/theme';
+import { colors, font, radius } from '../../styles/theme';
 import AnimatedCard from '../../components/AnimatedCard';
 
 import CachedImage from '../../components/CachedImage';
