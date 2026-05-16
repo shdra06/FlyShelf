@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
@@ -42,6 +43,22 @@ namespace AdvanceClip.Classes
         public event Action<string, string>? PeerConnected;     // (deviceId, transport)
         public event Action<string>? PeerDisconnected;          // (deviceId)
         public event Action<string, string>? TransportSwitched; // (deviceId, newTransport)
+
+        // ═══ Shared HttpClient — connection pooling eliminates TLS re-handshake per request ═══
+        // Critical for Cloudflare: each new HttpClient = new TLS handshake (~800ms via tunnel).
+        // Reusing connections saves that on every subsequent request.
+        private static readonly SocketsHttpHandler _sharedHandler = new()
+        {
+            PooledConnectionLifetime = TimeSpan.FromMinutes(10),
+            PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
+            MaxConnectionsPerServer = 4,
+            EnableMultipleHttp2Connections = true,
+            AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate
+        };
+        private static readonly HttpClient _sharedClient = new(_sharedHandler, disposeHandler: false)
+        {
+            Timeout = TimeSpan.FromMinutes(10)
+        };
 
         public PeerManager() { Instance = this; }
 
@@ -553,10 +570,7 @@ namespace AdvanceClip.Classes
         {
             try
             {
-                using var c = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
                 string pk = DevicePairingManager.EnsurePairingKey();
-                if (!string.IsNullOrEmpty(pk)) c.DefaultRequestHeaders.Add("X-Pairing-Key", pk);
-
                 var payload = JsonSerializer.Serialize(new
                 {
                     type = itemType, title, data = text,
@@ -564,8 +578,13 @@ namespace AdvanceClip.Classes
                     sourceDeviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
                     timestamp = NetworkClock.UtcNowMs
                 });
-                var resp = await c.PostAsync($"{peer.ActiveUrl.TrimEnd('/')}/api/sync_text",
-                    new StringContent(payload, Encoding.UTF8, "application/json"));
+
+                using var req = new HttpRequestMessage(HttpMethod.Post, $"{peer.ActiveUrl.TrimEnd('/')}/api/sync_text");
+                req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+                if (!string.IsNullOrEmpty(pk)) req.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                var resp = await _sharedClient.SendAsync(req, cts.Token);
 
                 if (resp.IsSuccessStatusCode)
                 {
@@ -620,24 +639,38 @@ namespace AdvanceClip.Classes
             {
                 Interlocked.Increment(ref peer.ActiveTransfers);
 
-                using var c = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
                 string pk = DevicePairingManager.EnsurePairingKey();
-                if (!string.IsNullOrEmpty(pk)) c.DefaultRequestHeaders.Add("X-Pairing-Key", pk);
-                c.DefaultRequestHeaders.Add("X-Item-Type", itemType);
-                c.DefaultRequestHeaders.Add("X-Source-Device", SettingsManager.Current.DeviceName ?? "");
-                c.DefaultRequestHeaders.Add("X-Source-DeviceId", _myDeviceId);
-
-                using var form = new MultipartFormDataContent();
                 string actualFileName = Path.GetFileName(filePath);
-                var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                form.Add(new StreamContent(fs), "file", actualFileName);
-                form.Add(new StringContent(title), "title");
-                form.Add(new StringContent(itemType), "type");
+                bool isCf = peer.Transport == "Cloudflare";
 
-                // Ensure receiver always knows the correct filename (even for old receivers)
-                c.DefaultRequestHeaders.Add("X-File-Name", Uri.EscapeDataString(actualFileName));
+                using var req = new HttpRequestMessage(HttpMethod.Post, $"{peer.ActiveUrl.TrimEnd('/')}/api/sync_file");
+                if (!string.IsNullOrEmpty(pk)) req.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
+                req.Headers.TryAddWithoutValidation("X-Item-Type", itemType);
+                req.Headers.TryAddWithoutValidation("X-Source-Device", SettingsManager.Current.DeviceName ?? "");
+                req.Headers.TryAddWithoutValidation("X-Source-DeviceId", _myDeviceId);
+                req.Headers.TryAddWithoutValidation("X-File-Name", Uri.EscapeDataString(actualFileName));
 
-                var resp = await c.PostAsync($"{peer.ActiveUrl.TrimEnd('/')}/api/sync_file", form);
+                if (isCf)
+                {
+                    // ═══ CLOUDFLARE PATH — raw binary (skip multipart overhead) ═══
+                    var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    var content = new StreamContent(fs);
+                    content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+                    req.Content = content;
+                }
+                else
+                {
+                    // ═══ LAN PATH — multipart ═══
+                    var form = new MultipartFormDataContent();
+                    var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    form.Add(new StreamContent(fs), "file", actualFileName);
+                    form.Add(new StringContent(title), "title");
+                    form.Add(new StringContent(itemType), "type");
+                    req.Content = form;
+                }
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+                var resp = await _sharedClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
                 if (resp.IsSuccessStatusCode)
                 {
                     peer.LastSeen = DateTime.UtcNow;
