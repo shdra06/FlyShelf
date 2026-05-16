@@ -1349,7 +1349,47 @@ export default function SyncScreen() {
       }, getAdaptiveInterval());
     };
     schedulePoll();
-    return () => { if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; } };
+
+    // ─── Long-Poll for instant notifications ───
+    // /api/events blocks for up to 30s until clipboard changes on PC
+    // When it returns 200, immediately fetch the new data via pollFn()
+    let longPollActive = true;
+    let longPollBackoff = 0;
+    const runLongPoll = async () => {
+      while (longPollActive) {
+        const url = cachedPcUrlRef.current;
+        if (!url) { await new Promise(r => setTimeout(r, 5000)); continue; }
+        try {
+          const pairingKey = pairingKeyRef.current;
+          const lpHeaders: any = { 'X-FlyShelf-Client': 'MobileCompanion' };
+          if (pairingKey) lpHeaders['X-Pairing-Key'] = pairingKey;
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s timeout (server blocks 30s)
+          const res = await fetch(`${url}/api/events`, { headers: lpHeaders, signal: controller.signal });
+          clearTimeout(timeoutId);
+          longPollBackoff = 0; // Reset backoff on success
+          if (res.status === 200) {
+            // Clipboard changed! Fetch the new data immediately
+            lastActivityRef.current = Date.now();
+            syncLog('LONG-POLL', '⚡ Instant notification — fetching now');
+            await pollFn();
+          }
+          // 204 = timeout, no new events — loop again immediately
+        } catch (e: any) {
+          if (!longPollActive) break;
+          // Backoff on errors: 1s, 2s, 4s, 8s... max 30s
+          longPollBackoff = Math.min(longPollBackoff + 1, 5);
+          const delay = Math.min(1000 * Math.pow(2, longPollBackoff), 30000);
+          await new Promise(r => setTimeout(r, delay));
+        }
+      }
+    };
+    runLongPoll(); // Fire and forget — runs in background
+
+    return () => {
+      if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; }
+      longPollActive = false; // Stop long-poll loop
+    };
   }, [isGlobalSyncEnabled, activeDevices, pcLocalIp]);
 
   // ─── Device Self-Registration ───
@@ -1458,7 +1498,7 @@ export default function SyncScreen() {
             const upRes = await FileSystem.uploadAsync(
               `${targetUrl}/api/sync_file?name=${encodeURIComponent(fileName)}&type=Image&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`,
               uploadUri,
-              { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion' } }
+              { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion', ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}) } }
             );
             if (upRes.status === 200) {
               syncLog('SCREENSHOT', `Sent to PC via ${targetUrl.includes('trycloudflare') ? 'Cloud' : 'LAN'}: ${fileName}`);
@@ -1674,9 +1714,17 @@ export default function SyncScreen() {
       let localSuccess = false;
       try {
         const pairingKey = await AsyncStorage.getItem('pairingKey');
-        const hdrs: any = { 'Content-Type': 'text/plain', 'X-FlyShelf-Client': 'MobileCompanion', 'X-Source-Device': deviceName || 'Mobile' };
+        const hdrs: any = { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion', 'X-Source-Device': deviceName || 'Mobile' };
         if (pairingKey) hdrs['X-Pairing-Key'] = pairingKey;
-        const response = await fetchWithTimeout(`${targetUrl}/api/sync_text`, { method: 'POST', headers: hdrs, body: finalRaw }, 1500);
+        const jsonBody = JSON.stringify({
+          type: finalType,
+          title: payloadText.length > 40 ? payloadText.substring(0, 40) + '...' : payloadText,
+          data: finalRaw,
+          sourceDeviceName: deviceName || 'Mobile',
+          sourceDeviceId: `Mobile_${(deviceName || 'Phone').replace(/[^a-zA-Z0-9_]/g, '_')}`,
+          timestamp: Date.now(),
+        });
+        const response = await fetchWithTimeout(`${targetUrl}/api/sync_text`, { method: 'POST', headers: hdrs, body: jsonBody }, 1500);
         localSuccess = response.ok;
       } catch(e) { cachedPcUrlRef.current = null; }
       // Always add sent text to local clips so it appears in the feed
@@ -2058,8 +2106,8 @@ export default function SyncScreen() {
     let qr: any = null;
     try { qr = JSON.parse(data); } catch {}
 
-    if (qr && qr.app === 'ClipFlow') {
-      // FlyShelf QR — do proper pairing
+    if (qr && (qr.app === 'FlyShelf' || qr.app === 'ClipFlow')) {
+      // FlyShelf QR — do proper pairing (accept both new 'FlyShelf' and legacy 'ClipFlow' names)
       await executePairing({ key: qr.key, local: qr.local, global: qr.global, pin: qr.pin, name: qr.name, id: qr.id });
       return;
     }
@@ -2105,7 +2153,7 @@ export default function SyncScreen() {
         const resolved = await resolveOptimalUrl(pc);
         if (!resolved) { Alert.alert('PC Unreachable', 'Could not reach your PC. Make sure FlyShelf is running.'); setIsSending(false); setPendingUploadPayload(null); return; }
         const uploadUrl = `${resolved}/api/sync_file?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`;
-        await FileSystem.uploadAsync(uploadUrl, hydratedPath, { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion' } });
+        await FileSystem.uploadAsync(uploadUrl, hydratedPath, { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion', ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}) } });
       } else {
         // Direct device transfer (LAN or Cloudflare)
         const resolved = await resolveOptimalUrl(targetDeviceOrGlobal);
@@ -2146,6 +2194,7 @@ export default function SyncScreen() {
                     'X-FlyShelf-Client': 'MobileCompanion',
                     'X-Upload-Session': sessionId,
                     'X-Chunk-Index': i.toString(),
+                    ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}),
                   }
                 });
                 if (res.status === 200) done = true;
@@ -2169,13 +2218,14 @@ export default function SyncScreen() {
               'X-Original-Date': Date.now().toString(),
               'X-Total-Chunks': totalChunks.toString(),
               'X-Source-Device': encodeURIComponent(deviceName || 'Mobile'),
+              ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}),
             }
           });
           if (!finRes.ok) throw new Error(`Finalize failed: ${finRes.status}`);
         } else {
           // ── Direct single POST (LAN or small Cloudflare files) ──
           const uploadUrl = `${resolved}/api/sync_file?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`;
-          await FileSystem.uploadAsync(uploadUrl, hydratedPath, { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion' } });
+          await FileSystem.uploadAsync(uploadUrl, hydratedPath, { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion', ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}) } });
         }
       }
       if (Platform.OS === 'android') ToastAndroid.show(`✅ ${name} sent!`, ToastAndroid.SHORT);
