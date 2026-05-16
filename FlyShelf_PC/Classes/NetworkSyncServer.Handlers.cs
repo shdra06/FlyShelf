@@ -186,8 +186,9 @@ namespace AdvanceClip.Classes
                     TransferMethod = capturedTransport.transport
                 };
                 clip.EvaluateSmartActions();
+                bool wasEmpty = _viewModel.DroppedItems.Count == 0;
                 _viewModel.DroppedItems.Insert(0, clip);
-                _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
+                if (wasEmpty) _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                 
                 // ECHO PREVENTION: Mark this text as cloud-sourced so the clipboard monitor
                 // doesn't re-push it to Firebase when we set the Windows clipboard below.
@@ -493,8 +494,9 @@ namespace AdvanceClip.Classes
                                 TransferMethod = archiveTransport.transport
                             };
                             clip.EvaluateSmartActions();
+                            bool wasEmpty = _viewModel.DroppedItems.Count == 0;
                             _viewModel.DroppedItems.Insert(0, clip);
-                            _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
+                            if (wasEmpty) _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                         }
                         catch { }
                     });
