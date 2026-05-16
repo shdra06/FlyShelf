@@ -1301,6 +1301,19 @@
                                         <ui:Button Content="📡 Live Logs" Appearance="Secondary" Padding="8,3" CornerRadius="6"
                                                    Click="OpenNetworkLogs_Click" FontSize="10" Margin="4,0,0,0" VerticalAlignment="Center"
                                                    ToolTip="View live logs from this device and all paired devices"/>
+                                        <ui:Button Padding="8,3" CornerRadius="6" Margin="4,0,0,0" VerticalAlignment="Center"
+                                                   Click="SendAllLogs_Click" FontSize="10"
+                                                   ToolTip="Copy full diagnostic logs to clipboard (health-check noise filtered)">
+                                            <ui:Button.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#6366F1" Offset="0"/>
+                                                    <GradientStop Color="#8B5CF6" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </ui:Button.Background>
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="📋 Copy Logs" FontWeight="SemiBold" FontSize="10" Foreground="White"/>
+                                            </StackPanel>
+                                        </ui:Button>
                                     </StackPanel>
 
                                     <!-- Live P2P status from PeerManager (5s heartbeat) -->
