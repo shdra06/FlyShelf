@@ -1,4 +1,4 @@
-﻿// ---------------------------------------------------------------
+// ---------------------------------------------------------------
 // NetworkSyncServer � HTTP Request Handlers
 // ServeHtml, ClipboardData, TextUpload, FileUpload,
 // ArchiveUpload, RelayUpload
@@ -345,14 +345,13 @@ namespace AdvanceClip.Classes
                     } catch { }
                 }
 
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
                 {
                     var dataObj = new System.Windows.DataObject();
                     var dropList = new System.Collections.Specialized.StringCollection { finalPath };
                     dataObj.SetFileDropList(dropList);
-                    // forceClipboardSync=false — DON'T write to OS clipboard, prevents echo loop
-                    // (clipboard write → WM_CLIPBOARDUPDATE → syncs back to sender = infinite loop)
                     // skipFirebaseSync=true — file came FROM a peer device, don't echo it back
+                    // forceClipboardSync=false — we write to clipboard ourselves with echo prevention
                     _viewModel.HandleDrop(dataObj, false, skipFirebaseSync: true);
                     
                     // Tag the newly created item with transport + source device info
@@ -362,7 +361,23 @@ namespace AdvanceClip.Classes
                         newest.SourceDeviceName = sourceDevice;
                         newest.SourceDeviceType = sourceDevice.Contains("PC") || sourceDevice.Contains("LAPTOP") || sourceDevice.Contains("DESKTOP") ? "PC" : "Mobile";
                         newest.TransferMethod = fileTransport.transport;
+                        
+                        // ECHO PREVENTION: Mark file as cloud-sourced so clipboard monitor
+                        // doesn't re-push it to peers/Firebase when we write to clipboard
+                        string fileFp = $"IMG::{newest.FormattedSize}";
+                        _viewModel.MarkAsCloudSourced(fileFp);
                     }
+                    
+                    // Write received file to OS clipboard so user can paste it
+                    try
+                    {
+                        MainWindow.SetWritingClipboard(true);
+                        var clipList = new System.Collections.Specialized.StringCollection { finalPath };
+                        System.Windows.Clipboard.SetFileDropList(clipList);
+                        await System.Threading.Tasks.Task.Delay(500);
+                    }
+                    catch { }
+                    finally { MainWindow.SetWritingClipboard(false); }
                     
                     AdvanceClip.Windows.ToastWindow.ShowToast($"Saved: {Path.GetFileName(finalPath)} via {fileTransport.transport} ✅");
                     // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
