@@ -227,7 +227,7 @@ namespace AdvanceClip.Classes
                 var fileTransport = DetectTransport(req);
 
                 string dateString = DateTime.Now.ToString("dd-MM-yyyy");
-                string uploadDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FlyShelf", "Clipboard", sourceDevice, dateString);
+                string uploadDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", "Clipboard", sourceDevice, dateString);
                 Directory.CreateDirectory(uploadDir);
 
                 string encodedName = req.Headers["X-File-Name"] ?? req.QueryString["name"];
@@ -416,7 +416,7 @@ namespace AdvanceClip.Classes
                 try { archiveSource = Uri.UnescapeDataString(archiveSource); } catch { }
                 var archiveTransport = DetectTransport(req);
 
-                string archiveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FlyShelf", "Synced", batchName);
+                string archiveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", "Synced", batchName);
                 Directory.CreateDirectory(archiveDir);
 
                 string originalDateStr = req.Headers["X-Original-Date"];
@@ -527,9 +527,9 @@ namespace AdvanceClip.Classes
                 if (!string.IsNullOrEmpty(encodedName))
                     try { rawName = Uri.UnescapeDataString(encodedName); } catch { }
 
-                // Save to Downloads/Synced/Relay_{sender}/
-                string relayDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), 
-                    "Downloads", "FlyShelf", "Relay", senderDevice.Replace(" ", "_"));
+                // Save to AppData/FlyShelf/SyncedFiles/Relay_{sender}/
+                string relayDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), 
+                    "FlyShelf", "SyncedFiles", "Relay", senderDevice.Replace(" ", "_"));
                 Directory.CreateDirectory(relayDir);
 
                 int counter = 1;

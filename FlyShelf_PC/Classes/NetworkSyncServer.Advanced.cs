@@ -90,7 +90,7 @@ namespace AdvanceClip.Classes
                 }
 
                 // Merge all chunks in order
-                string archiveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads", "FlyShelf", "Synced", batchName);
+                string archiveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", "Synced", batchName);
                 Directory.CreateDirectory(archiveDir);
 
                 int counter = 1;
