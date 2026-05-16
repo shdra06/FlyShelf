@@ -1298,6 +1298,9 @@
                                         <ui:Button Content="🔄 Force Sync" Appearance="Secondary" Padding="8,3" CornerRadius="6" 
                                                    Click="ForcePeerSync_Click" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center"
                                                    ToolTip="Re-fetch all peer URLs from Firebase and reconnect"/>
+                                        <ui:Button Content="📡 Live Logs" Appearance="Secondary" Padding="8,3" CornerRadius="6"
+                                                   Click="OpenNetworkLogs_Click" FontSize="10" Margin="4,0,0,0" VerticalAlignment="Center"
+                                                   ToolTip="View live logs from this device and all paired devices"/>
                                     </StackPanel>
 
                                     <!-- Live P2P status from PeerManager (5s heartbeat) -->
@@ -2224,6 +2227,18 @@
                                 <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" /></ui:Button.Icon>
                             </ui:Button>
                             <ui:Button Content="📂 Open Logs Folder" Appearance="Secondary" Padding="14,7" CornerRadius="8" Click="OpenLogsFolder_Click" />
+                            <ui:Button Appearance="Info" Padding="14,7" CornerRadius="8" Margin="8,0,0,0" Click="OpenNetworkLogs_Click" ToolTip="Open live network log viewer — shows logs from this PC and all paired devices in real-time">
+                                <ui:Button.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#0EA5E9" Offset="0"/>
+                                        <GradientStop Color="#6366F1" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </ui:Button.Background>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="Globe24" FontSize="14" Margin="0,0,6,0"/>
+                                    <TextBlock Text="Live Network Logs" FontWeight="SemiBold" FontSize="12"/>
+                                </StackPanel>
+                            </ui:Button>
                         </StackPanel>
 
                         <!-- Server Troubleshooting (moved from Network tab) -->

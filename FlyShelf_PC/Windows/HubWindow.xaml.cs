@@ -617,6 +617,26 @@ namespace AdvanceClip.Windows
             catch { }
         }
 
+        private static NetworkLogsWindow? _networkLogsWindow;
+        private void OpenNetworkLogs_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_networkLogsWindow != null && _networkLogsWindow.IsLoaded)
+                {
+                    _networkLogsWindow.Activate();
+                    _networkLogsWindow.Focus();
+                    return;
+                }
+                _networkLogsWindow = new NetworkLogsWindow();
+                _networkLogsWindow.Show();
+            }
+            catch (Exception ex)
+            {
+                AdvanceClip.Classes.Logger.LogAction("UI", $"Failed to open Network Logs: {ex.Message}");
+            }
+        }
+
         private string _currentFilterTag = "All";
 
         private void RestartServer_Click(object sender, RoutedEventArgs e)
