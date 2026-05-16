@@ -1,5 +1,5 @@
-// ---------------------------------------------------------------
-// NetworkSyncServer � HTTP Request Handlers
+﻿// ---------------------------------------------------------------
+// NetworkSyncServer � HTTP Request Handlers
 // ServeHtml, ClipboardData, TextUpload, FileUpload,
 // ArchiveUpload, RelayUpload
 // Split from NetworkSyncServer.cs for modularity
@@ -205,6 +205,8 @@ namespace AdvanceClip.Classes
                 finally { MainWindow.SetWritingClipboard(false); }
                 
                 AdvanceClip.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport.transport}! 📱");
+                // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
+                NotifyClipboardChanged(clipType.ToString(), capturedText.Length > 40 ? capturedText.Substring(0, 40) : capturedText);
             });
         }
 
@@ -363,6 +365,8 @@ namespace AdvanceClip.Classes
                     }
                     
                     AdvanceClip.Windows.ToastWindow.ShowToast($"Saved: {Path.GetFileName(finalPath)} via {fileTransport.transport} ✅");
+                    // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
+                    NotifyClipboardChanged("File", rawName);
                 });
 
                 res.StatusCode = 200;
