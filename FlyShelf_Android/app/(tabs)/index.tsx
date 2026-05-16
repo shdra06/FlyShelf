@@ -76,6 +76,8 @@ export default function SyncScreen() {
   const generateEventId = () => `Mobile_${(deviceName || 'phone').replace(/[^a-zA-Z0-9]/g, '')}_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
   // Track items already pushed to native overlay DB
   const pushedToOverlayRef = useRef<Set<string>>(new Set());
+  // ─── Pairing Timestamp: Only sync items NEWER than when this device first paired ───
+  const pairingTimestampRef = useRef<number>(0);
 
   // ─── Clip Persistence: Survive app restarts ───
   const CLIPS_STORAGE_KEY = '@flyshelf_clips';
@@ -114,6 +116,10 @@ export default function SyncScreen() {
       syncLog('[Auth] Firebase anonymous auth ready');
     }).catch((err: any) => {
       syncLog('[Auth] Firebase anonymous auth failed: ' + err?.message);
+    });
+    // Load pairing timestamp — items older than this are from before we paired
+    AsyncStorage.getItem('pairingTimestamp').then(val => {
+      if (val) pairingTimestampRef.current = parseInt(val);
     });
   }, []);
 
@@ -659,8 +665,15 @@ export default function SyncScreen() {
           allParsed.push(item);
         }
         // Filter out items sent by THIS device to prevent echo loops
+        // Also filter pre-pairing items to prevent initial history dump
         const myName = deviceName || '';
+        const pairingTs = pairingTimestampRef.current;
         const parsed = allParsed.filter(c => {
+          // Skip items from before this device paired
+          if (pairingTs > 0 && c.Timestamp && c.Timestamp < pairingTs) {
+            syncLog('FIREBASE', `Skipped pre-pairing item: ${(c.Title || '').substring(0, 40)}`);
+            return false;
+          }
           if (c.SourceDeviceType === 'Mobile' && myName && c.SourceDeviceName === myName) {
             syncLog('FIREBASE', `Filtered own item: ${(c.Title || '').substring(0, 40)}`);
             return false;
@@ -1006,6 +1019,10 @@ export default function SyncScreen() {
           const data = await response.json();
           if (data && data.length > 0) {
             const latest = data[0];
+            // ═══ GUARD: Skip items from BEFORE this device paired ═══
+            if (pairingTimestampRef.current > 0 && latest.Timestamp && latest.Timestamp < pairingTimestampRef.current) {
+              return; // Pre-pairing item — don't sync to Android
+            }
             const contentKey = `${latest.Type}_${latest.Title}_${latest.Timestamp}`;
             if (contentKey !== lastSyncedContentRef.current) {
               lastSyncedContentRef.current = contentKey;
@@ -1935,12 +1952,14 @@ export default function SyncScreen() {
 
     // ═══ ALWAYS save pairing info — the key is what matters for cloud sync ═══
     // Even if we can't reach the PC right now, the shared key enables Firebase sync.
+    const pairingTs = Date.now().toString();
     await AsyncStorage.multiSet([
       ['pairingKey', key || ''], ['pairedPcName', pcName || ''], ['pairedPcId', pcId || ''],
       ['pairedLocalUrl', local || ''], ['pairedGlobalUrl', globalUrl || ''],
-      ['pairedPin', pin || ''],
+      ['pairedPin', pin || ''], ['pairingTimestamp', pairingTs],
     ]);
     pairingKeyRef.current = key || '';
+    pairingTimestampRef.current = parseInt(pairingTs);
     if (workingUrl) {
       cachedPcUrlRef.current = workingUrl;
       cachedPcUrlTimestampRef.current = Date.now();
