@@ -571,10 +571,49 @@ namespace AdvanceClip
                             var vm = (FlyShelfViewModel)DataContext;
                             if (bitmap != null && (files == null || files.Length == 0))
                             {
-                                Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as BITMAP ({bitmap.PixelWidth}x{bitmap.PixelHeight})");
-                                var dataObj = new System.Windows.DataObject(typeof(System.Windows.Media.Imaging.BitmapSource), bitmap);
-                                System.Threading.Tasks.Task.Run(() =>
-                                    Application.Current.Dispatcher.InvokeAsync(() => vm.HandleDrop(dataObj, false)));
+                                // ═══ FIX: Filter out fully transparent/ghost images ═══
+                                // Some apps and screenshot tools place transparent bitmaps on clipboard.
+                                // Check if >95% of pixels are fully transparent — if so, discard.
+                                bool isGhostImage = false;
+                                try
+                                {
+                                    var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap(bitmap, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+                                    int w = converted.PixelWidth;
+                                    int h = converted.PixelHeight;
+                                    // Sample a grid of pixels instead of reading all (performance)
+                                    int stride = w * 4;
+                                    int sampleRows = Math.Min(h, 20);
+                                    int sampleCols = Math.Min(w, 20);
+                                    int transparentCount = 0, totalSampled = 0;
+                                    byte[] rowPixels = new byte[stride];
+                                    for (int sy = 0; sy < sampleRows; sy++)
+                                    {
+                                        int y = sy * h / sampleRows;
+                                        converted.CopyPixels(new System.Windows.Int32Rect(0, y, w, 1), rowPixels, stride, 0);
+                                        for (int sx = 0; sx < sampleCols; sx++)
+                                        {
+                                            int x = sx * w / sampleCols;
+                                            int idx = x * 4 + 3; // Alpha channel
+                                            if (idx < rowPixels.Length && rowPixels[idx] < 10) transparentCount++;
+                                            totalSampled++;
+                                        }
+                                    }
+                                    double transparentRatio = totalSampled > 0 ? (double)transparentCount / totalSampled : 0;
+                                    if (transparentRatio > 0.95)
+                                    {
+                                        isGhostImage = true;
+                                        Classes.Logger.LogAction("CLIPBOARD", $"⛔ Rejected ghost image ({bitmap.PixelWidth}x{bitmap.PixelHeight}) — {transparentRatio:P0} transparent pixels");
+                                    }
+                                }
+                                catch { }
+
+                                if (!isGhostImage)
+                                {
+                                    Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as BITMAP ({bitmap.PixelWidth}x{bitmap.PixelHeight})");
+                                    var dataObj = new System.Windows.DataObject(typeof(System.Windows.Media.Imaging.BitmapSource), bitmap);
+                                    System.Threading.Tasks.Task.Run(() =>
+                                        Application.Current.Dispatcher.InvokeAsync(() => vm.HandleDrop(dataObj, false)));
+                                }
                             }
                             else if (files != null && files.Length > 0)
                             {
