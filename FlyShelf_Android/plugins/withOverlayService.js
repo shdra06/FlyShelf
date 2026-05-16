@@ -62,7 +62,7 @@ class OverlayService : Service() {
         var autoHideDelayMs: Long = 3000L
         var lastCopiedText: String = ""
         var instance: OverlayService? = null
-        const val CHANNEL_ID = "advanceclip_overlay"
+        const val CHANNEL_ID = "flyshelf_overlay"
         const val NOTIF_ID = 1001
     }
 

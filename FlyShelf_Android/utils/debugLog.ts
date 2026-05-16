@@ -13,6 +13,7 @@ const NET_TAGS = [
   'NETWORK', 'SERVER', 'HEARTBEAT', 'SCREENSHOT', 'MEDIA',
   'SYNC_CRYPTO', 'SYNC_CLEANUP', 'SYNC_TRACK', 'CLEANUP',
   'WEBSOCKET', 'WS', 'UPLOAD', 'CONNECT', 'DISCONNECT',
+  'LONG-POLL', 'FORCE-SYNC',
 ];
 
 let _networkLogListeners: Array<() => void> = [];

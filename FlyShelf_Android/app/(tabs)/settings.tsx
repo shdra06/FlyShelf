@@ -12,7 +12,7 @@ import { getDebugLogs, clearDebugLogs, getNetworkLogs, getNetworkLogsText, clear
 import * as Clipboard from 'expo-clipboard';
 
 const APP_VERSION = Constants.expoConfig?.version || '1.0.0';
-const VERSION_URL = 'https://raw.githubusercontent.com/shdra06/AdvanceClip/main/version.json';
+const VERSION_URL = 'https://raw.githubusercontent.com/shdra06/FlyShelf/main/version.json';
 
 // Custom pure-JS slider row
 const StepSlider = ({ value, min, max, step, onValueChange, trackColor, thumbColor, label }: { value: number; min: number; max: number; step: number; onValueChange: (v: number) => void; trackColor: string; thumbColor: string; label: string }) => {

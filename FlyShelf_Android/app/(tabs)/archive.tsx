@@ -458,7 +458,7 @@ export default function ConnectScreen() {
         useRelay = true;
         if (Platform.OS === 'android') ToastAndroid.show(`📡 Relaying via ${relayPC.DeviceName}`, ToastAndroid.SHORT);
       } else {
-        Alert.alert("No Route Available", "No PC with Cloudflare is online to relay files.\n\nEnsure at least one PC is running AdvanceClip with internet access.");
+        Alert.alert("No Route Available", "No PC with Cloudflare is online to relay files.\n\nEnsure at least one PC is running FlyShelf with internet access.");
         return;
       }
     }

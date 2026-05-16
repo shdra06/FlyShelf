@@ -51,7 +51,7 @@ if (Platform.OS !== 'web') {
        // if (snaps.exists()) {
        //     await Notifications.scheduleNotificationAsync({
        //        content: {
-       //           title: "AdvanceClip Payload Detected",
+       //           title: "FlyShelf Payload Detected",
        //           body: "A new payload hit the mesh. Tap to inject instantly!",
        //        },
        //        trigger: null,

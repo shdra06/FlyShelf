@@ -8,7 +8,7 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import { useSettings } from '../../context/SettingsContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { database, ensureFirebaseAuth, getFirebaseIdToken } from '../../firebaseConfig';
-import { syncLog, getNetworkLogs } from '../../utils/debugLog';
+import { syncLog } from '../../utils/debugLog';
 import { ref, push, set, get, onValue, query, limitToLast, orderByChild, update, remove } from 'firebase/database';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
@@ -23,8 +23,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
 // ═══ Extracted Modules ═══
-import { ClipItem, DOWNLOAD_BASE, SYNC_CACHE_BASE, CONVERTED_BASE, IMAGE_CACHE_BASE, getDownloadPath, getSyncCachePath, getConvertedPath } from '../../utils/clipTypes';
-import { fetchWithTimeout, getSubnet, getConnectionType, connectionColors, resolveOptimalUrl, getDeviceUrls, getMediaUrl } from '../../utils/networkHelpers';
+import { ClipItem, DOWNLOAD_BASE, SYNC_CACHE_BASE, CONVERTED_BASE, IMAGE_CACHE_BASE, getDownloadPath } from '../../utils/clipTypes';
+import { fetchWithTimeout, getConnectionType, connectionColors, resolveOptimalUrl, getDeviceUrls, getMediaUrl } from '../../utils/networkHelpers';
 import { encrypt as aesEncrypt, decrypt as aesDecrypt } from '../../utils/syncCrypto';
 import { styles } from '../../styles/syncStyles';
 import { colors, font } from '../../styles/theme';
@@ -588,31 +588,6 @@ export default function SyncScreen() {
   // Helper: wrap getMediaUrl with current state
   const getMediaUrlForItem = (item: any) => getMediaUrl(item, activeDevices, pcLocalIp);
 
-  // ─── Fetch Local Clips ───
-  // SIMPLE RULE: First connect → do nothing, just wait for new items.
-  // After that → only process items that are genuinely new since last poll.
-  const fetchLocalClips = async () => {
-    const targetUrl = await getCachedPcUrl();
-    try {
-      const response = await fetchWithTimeout(`${targetUrl}/api/sync`, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }, 2500);
-      if (response.ok) {
-        // First connect: do NOTHING. Just mark loaded and wait for new items.
-        if (!hasLoadedOnceRef.current) {
-          hasLoadedOnceRef.current = true;
-          // Set lastSyncedContentRef to the top item so we only detect CHANGES
-          const data: any[] = await response.json();
-          if (data && data.length > 0) {
-            const top = data[0];
-            lastSyncedContentRef.current = `${top.Type}_${top.Title}_${top.Timestamp}`;
-          }
-          syncLog('INIT', 'First connect — skipped existing items, waiting for new ones');
-          return;
-        }
-        // Not first connect — handled by the LAN poller (pollFn) below
-      }
-    } catch (error) { cachedPcUrlRef.current = null; }
-    hasLoadedOnceRef.current = true;
-  };
 
   // ─── Firebase Listeners (LAZY — Phase 1 Optimization) ───
   // The clipboard listener is now LAZY: it only activates after 30s of the PC
@@ -1041,7 +1016,6 @@ export default function SyncScreen() {
 
               const crossFp = `${latest.Type}::${(latest.Raw || '').substring(0, 150)}`;
               recentSyncFingerprintsRef.current.set(crossFp, Date.now());
-              const rawFingerprint = (latest.Raw || '').substring(0, 200);
               const isOwnEcho = (latest.SourceDeviceName && deviceName && latest.SourceDeviceName === deviceName) || (latest.SourceDeviceType === 'Mobile');
 
               if (!isOwnEcho) {
@@ -2106,8 +2080,8 @@ export default function SyncScreen() {
     let qr: any = null;
     try { qr = JSON.parse(data); } catch {}
 
-    if (qr && (qr.app === 'FlyShelf' || qr.app === 'ClipFlow')) {
-      // FlyShelf QR — do proper pairing (accept both new 'FlyShelf' and legacy 'ClipFlow' names)
+    if (qr && qr.app === 'FlyShelf') {
+      // FlyShelf QR — do proper pairing
       await executePairing({ key: qr.key, local: qr.local, global: qr.global, pin: qr.pin, name: qr.name, id: qr.id });
       return;
     }
