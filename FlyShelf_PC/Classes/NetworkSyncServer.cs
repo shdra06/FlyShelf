@@ -510,6 +510,18 @@ namespace AdvanceClip.Classes
                     {
                         Logger.LogAction("PEER", $"PeerManager startup error: {pmEx.Message}");
                     }
+
+                    // Start cross-device log streaming (bidirectional)
+                    try
+                    {
+                        StartLocalLogCapture();
+                        StartRemoteLogPush();
+                        Logger.LogAction("SERVER", "Remote log streaming activated — view at /logs");
+                    }
+                    catch (Exception logEx)
+                    {
+                        Logger.LogAction("SERVER", $"Remote log streaming startup error: {logEx.Message}");
+                    }
                 });
             }
             catch (Exception ex)

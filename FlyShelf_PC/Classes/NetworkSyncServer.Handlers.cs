@@ -861,14 +861,19 @@ namespace AdvanceClip.Classes
                         // Serve the live log dashboard page
                         ServeLogDashboard(res);
                     }
+                    else if (path == "/api/logs/stream" && req.HttpMethod == "GET")
+                    {
+                        // SSE live log stream — stays open, pushes new log lines in real-time
+                        await ServeLogStream(req, res);
+                    }
                     else if (path == "/api/logs" && req.HttpMethod == "GET")
                     {
                         // Return combined PC + mobile logs as JSON
-                        ServeLogsJson(res);
+                        ServeLogsJson(req, res);
                     }
                     else if (path == "/api/logs" && req.HttpMethod == "POST")
                     {
-                        // Accept logs from mobile devices
+                        // Accept logs from paired devices
                         await HandleRemoteLogPost(req, res);
                     }
                     else
