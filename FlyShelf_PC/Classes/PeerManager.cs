@@ -642,6 +642,15 @@ namespace AdvanceClip.Classes
                 string pk = DevicePairingManager.EnsurePairingKey();
                 string actualFileName = Path.GetFileName(filePath);
                 bool isCf = peer.Transport == "Cloudflare";
+                long fileSize = new FileInfo(filePath).Length;
+
+                // ═══ CLOUDFLARE + LARGE FILE → parallel chunked upload ═══
+                // Split into 512KB chunks, upload 4 in parallel. Each chunk goes through
+                // a separate CF connection, bypassing per-connection throughput limits.
+                if (isCf && fileSize > 256 * 1024)
+                {
+                    return await TrySendFileChunked(peer, filePath, actualFileName, title, itemType, pk);
+                }
 
                 using var req = new HttpRequestMessage(HttpMethod.Post, $"{peer.ActiveUrl.TrimEnd('/')}/api/sync_file");
                 if (!string.IsNullOrEmpty(pk)) req.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
@@ -652,7 +661,7 @@ namespace AdvanceClip.Classes
 
                 if (isCf)
                 {
-                    // ═══ CLOUDFLARE PATH — raw binary (skip multipart overhead) ═══
+                    // Small file via CF — raw binary (skip multipart overhead)
                     var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
                     var content = new StreamContent(fs);
                     content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
@@ -691,6 +700,92 @@ namespace AdvanceClip.Classes
             {
                 Interlocked.Decrement(ref peer.ActiveTransfers);
             }
+        }
+
+        /// <summary>
+        /// Parallel chunked upload for Cloudflare. Splits file into 512KB chunks and sends
+        /// up to 4 in parallel, then finalizes. This bypasses per-connection throughput limits.
+        /// </summary>
+        private const int CHUNK_SIZE = 512 * 1024; // 512KB per chunk
+        private const int MAX_PARALLEL_CHUNKS = 4;  // 4 concurrent uploads
+
+        private async Task<bool> TrySendFileChunked(PeerConnection peer, string filePath, string fileName, string title, string itemType, string pk)
+        {
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            string sessionId = Guid.NewGuid().ToString("N");
+            string baseUrl = peer.ActiveUrl.TrimEnd('/');
+
+            byte[] fileBytes = await File.ReadAllBytesAsync(filePath);
+            int totalChunks = (int)Math.Ceiling((double)fileBytes.Length / CHUNK_SIZE);
+
+            Logger.LogAction("PEER", $"⚡ CF chunked: {fileName} ({fileBytes.Length / 1024}KB) → {totalChunks} chunks × {CHUNK_SIZE / 1024}KB, {MAX_PARALLEL_CHUNKS} parallel");
+
+            // Upload chunks in parallel batches
+            var semaphore = new SemaphoreSlim(MAX_PARALLEL_CHUNKS);
+            var tasks = new List<Task<bool>>();
+
+            for (int i = 0; i < totalChunks; i++)
+            {
+                int chunkIndex = i;
+                int offset = chunkIndex * CHUNK_SIZE;
+                int length = Math.Min(CHUNK_SIZE, fileBytes.Length - offset);
+
+                tasks.Add(Task.Run(async () =>
+                {
+                    await semaphore.WaitAsync();
+                    try
+                    {
+                        using var req = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/upload_chunk");
+                        if (!string.IsNullOrEmpty(pk)) req.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
+                        req.Headers.TryAddWithoutValidation("X-Upload-Session", sessionId);
+                        req.Headers.TryAddWithoutValidation("X-Chunk-Index", chunkIndex.ToString());
+
+                        var chunkData = new byte[length];
+                        Buffer.BlockCopy(fileBytes, offset, chunkData, 0, length);
+                        req.Content = new ByteArrayContent(chunkData);
+                        req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                        var resp = await _sharedClient.SendAsync(req, cts.Token);
+                        return resp.IsSuccessStatusCode;
+                    }
+                    finally { semaphore.Release(); }
+                }));
+            }
+
+            var results = await Task.WhenAll(tasks);
+            int successCount = results.Count(r => r);
+
+            if (successCount != totalChunks)
+            {
+                Logger.LogAction("PEER", $"CF chunked: only {successCount}/{totalChunks} chunks uploaded — aborting");
+                return false;
+            }
+
+            // Finalize: tell receiver to reassemble
+            using var finReq = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/upload_finalize");
+            if (!string.IsNullOrEmpty(pk)) finReq.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
+            finReq.Headers.TryAddWithoutValidation("X-Upload-Session", sessionId);
+            finReq.Headers.TryAddWithoutValidation("X-File-Name", Uri.EscapeDataString(fileName));
+            finReq.Headers.TryAddWithoutValidation("X-Total-Chunks", totalChunks.ToString());
+            finReq.Headers.TryAddWithoutValidation("X-Source-Device", SettingsManager.Current.DeviceName ?? "");
+            finReq.Headers.TryAddWithoutValidation("X-Item-Type", itemType);
+            finReq.Content = new StringContent("", Encoding.UTF8, "application/json");
+
+            using var finCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var finResp = await _sharedClient.SendAsync(finReq, finCts.Token);
+
+            sw.Stop();
+            if (finResp.IsSuccessStatusCode)
+            {
+                peer.LastSeen = DateTime.UtcNow;
+                peer.ConsecutiveFailures = 0;
+                double speed = fileBytes.Length / 1024.0 / (sw.ElapsedMilliseconds / 1000.0);
+                Logger.LogAction("PEER", $"→ File '{title}' to {peer.DeviceName} via CF chunked ({sw.ElapsedMilliseconds}ms, {speed:F0} KB/s)");
+                return true;
+            }
+            Logger.LogAction("PEER", $"CF chunked finalize failed: HTTP {(int)finResp.StatusCode}");
+            return false;
         }
 
         // ═══════════════════════════════════════════════════════════════
