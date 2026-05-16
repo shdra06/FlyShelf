@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -421,6 +421,16 @@ namespace AdvanceClip.Windows
                 }
                 UpdateSummary();
             }
+        }
+
+        private void ReverseAll_Click(object sender, RoutedEventArgs e)
+        {
+            if (MergeItems.Count < 2) return;
+            var reversed = MergeItems.Reverse().ToList();
+            MergeItems.Clear();
+            foreach (var item in reversed)
+                MergeItems.Add(item);
+            UpdateSummary();
         }
 
         private void Cancel_Click(object sender, RoutedEventArgs e) => Close();
