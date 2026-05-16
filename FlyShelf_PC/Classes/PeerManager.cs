@@ -150,6 +150,11 @@ namespace AdvanceClip.Classes
                     cf = DecryptUrlSafe(cf);
                     direct = DecryptUrlSafe(direct);
 
+                    // Sanitize: reject non-URL values (e.g., "offline", failed decryption garbage)
+                    if (!string.IsNullOrEmpty(lan) && !lan.StartsWith("http")) lan = "";
+                    if (!string.IsNullOrEmpty(cf) && !cf.StartsWith("http")) cf = "";
+                    if (!string.IsNullOrEmpty(direct) && !direct.StartsWith("http")) direct = "";
+
                     if (string.IsNullOrEmpty(lan) && !string.IsNullOrEmpty(direct) && !direct.Contains("trycloudflare"))
                         lan = direct;
 
@@ -284,6 +289,8 @@ namespace AdvanceClip.Classes
         private async Task<bool> TryConnect(PeerConnection peer, string testUrl, string transport)
         {
             if (string.IsNullOrEmpty(testUrl)) return false;
+            // Reject non-URL values like "offline", corrupted decryptions, etc.
+            if (!testUrl.StartsWith("http://") && !testUrl.StartsWith("https://")) return false;
             try
             {
                 using var c = new HttpClient { Timeout = TimeSpan.FromMilliseconds(HANDSHAKE_TIMEOUT_MS) };
