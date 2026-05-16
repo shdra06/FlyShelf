@@ -68,22 +68,43 @@ namespace AdvanceClip.Windows
                 }
             };
 
+            // Defer startup activation to AFTER the constructor + Loaded events complete.
+            // Calling Show()+SetupWindow() during the constructor (while MainWindow's Loaded
+            // event is still running) causes the taskbar embedding to fail silently.
             if (SettingsManager.Current.EnableTaskbarWidget)
             {
-                Show();
-                _timer.Start();
-
-                // Fix: SetupWindow needs to run AFTER the window handle is created.
-                // Window_Loaded may fire too early. Delay to ensure taskbar is ready.
                 Dispatcher.BeginInvoke(async () =>
                 {
-                    await Task.Delay(800); // Give Windows time to create the HWND
-                    if (SettingsManager.Current.EnableTaskbarWidget)
-                        SetupWindow();
+                    // Wait for the full WPF layout pass + MainWindow initialization to finish
+                    await Task.Delay(1200);
+                    if (!SettingsManager.Current.EnableTaskbarWidget) return;
+
+                    Show();
+                    _timer.Start();
+
+                    // Retry SetupWindow up to 3 times — taskbar HWND may not be ready on first try
+                    for (int attempt = 1; attempt <= 3; attempt++)
+                    {
+                        try
+                        {
+                            SetupWindow();
+                            var interop = new System.Windows.Interop.WindowInteropHelper(this);
+                            if (interop.Handle != IntPtr.Zero && NativeMethods.GetParent(interop.Handle) != IntPtr.Zero)
+                            {
+                                Classes.Logger.LogAction("WIDGET", $"Startup embed succeeded on attempt {attempt}");
+                                break;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Classes.Logger.LogAction("WIDGET", $"Startup embed attempt {attempt} failed: {ex.Message}");
+                        }
+                        await Task.Delay(800);
+                    }
                 }, DispatcherPriority.Background);
             }
 
-            Classes.Logger.LogAction("WIDGET", "TaskbarWindow created and Show() called");
+            Classes.Logger.LogAction("WIDGET", "TaskbarWindow constructor completed");
         }
 
         protected override void OnActivated(EventArgs e)

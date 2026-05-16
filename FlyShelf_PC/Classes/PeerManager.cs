@@ -776,7 +776,8 @@ namespace AdvanceClip.Classes
         {
             DeviceId = p.DeviceId, DeviceName = p.DeviceName, Transport = p.Transport,
             IsAlive = p.IsAlive, LastSeen = p.LastSeen, ActiveUrl = p.ActiveUrl,
-            LanUrl = p.LanUrl, CloudflareUrl = p.CloudflareUrl
+            LanUrl = p.LanUrl, CloudflareUrl = p.CloudflareUrl,
+            IsWebSocketActive = p.LiveSocket?.State == System.Net.WebSockets.WebSocketState.Open
         }).ToList();
     }
 
@@ -802,6 +803,7 @@ namespace AdvanceClip.Classes
         public string DeviceName { get; set; } = "";
         public string Transport { get; set; } = "";
         public bool IsAlive { get; set; }
+        public bool IsWebSocketActive { get; set; }
         public DateTime LastSeen { get; set; }
         public string ActiveUrl { get; set; } = "";
         public string LanUrl { get; set; } = "";
@@ -817,6 +819,9 @@ namespace AdvanceClip.Classes
         public string Transport { get; set; } = "offline";
         public bool IsLanActive { get; set; }
         public bool IsCloudActive { get; set; }
+        public bool IsWebSocketActive { get; set; }
         public string StatusText { get; set; } = "Offline";
     }
 }
+
+

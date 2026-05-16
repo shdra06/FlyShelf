@@ -1,0 +1,575 @@
+// ---------------------------------------------------------------
+// MainWindow � Event Handlers
+// Drag/Drop, Search, Item Actions (Pin/Delete/Open/QuickLook),
+// Scroll, KeyDown, NotifyIcon, ContextMenu
+// Split from MainWindow.xaml.cs for modularity
+// ---------------------------------------------------------------
+using AdvanceClip.ViewModels;
+using System;
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+
+namespace AdvanceClip
+{
+    public partial class MainWindow
+    {
+        private static bool _isInternalDragSource = false;
+
+        private void Window_PreviewDrop(object sender, DragEventArgs e)
+        {
+            _isDragHovering = false;
+            _spawnToken++; 
+
+            if (_isInternalDragSource)
+            {
+                e.Effects = DragDropEffects.None;
+                e.Handled = true;
+                return;
+            }
+
+            _viewModel.HandleDrop(e.Data, true);
+            e.Handled = true;
+        }
+
+        private void Window_Drop(object sender, DragEventArgs e)
+        {
+            _isDragHovering = false;
+            _spawnToken++; 
+
+            if (_isInternalDragSource)
+            {
+                e.Effects = DragDropEffects.None;
+                e.Handled = true;
+                return;
+            }
+
+            _viewModel.HandleDrop(e.Data, true);
+            e.Handled = true;
+        }
+
+    
+
+        private void Window_DragEnter(object sender, DragEventArgs e)
+        {
+            _isDragHovering = true;
+            if (e.Data.GetDataPresent(DataFormats.FileDrop) || 
+                e.Data.GetDataPresent("FileNameW") ||
+                e.Data.GetDataPresent("FileName") ||
+                e.Data.GetDataPresent("text/uri-list") ||
+                e.Data.GetDataPresent("application/vnd.code.tree.workspaceFiles") ||
+                e.Data.GetDataPresent(DataFormats.Bitmap) || 
+                e.Data.GetDataPresent(DataFormats.Dib) ||
+                e.Data.GetDataPresent(DataFormats.UnicodeText) || 
+                e.Data.GetDataPresent(DataFormats.StringFormat) ||
+                e.Data.GetDataPresent(DataFormats.Text))
+            {
+                e.Effects = DragDropEffects.Copy;
+            }
+            else
+            {
+                e.Effects = DragDropEffects.None;
+            }
+        }
+
+        private void Window_PreviewDragOver(object sender, DragEventArgs e)
+        {
+            // Performance Fix: Do NOT query 'e.Data.GetDataPresent' across cross-process COM COM-wrappers 
+            // inside 'DragOver' because this fires hundreds of times a second and completely hangs the UI thread!
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+        }
+
+        private void Window_DragLeave(object sender, DragEventArgs e)
+        {
+            _isDragHovering = false;
+            // The user explicitly requested an impenetrable UI overlay without funky Hide bugs on child-element hovers.
+            // Leaving the physical window drag-space now does NOT force kill the app interface!
+        }
+
+
+        private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (e.NewSize.Width > 100 && e.NewSize.Height > 100)
+            {
+                // Only persist size changes for the CURRENT mode — prevents mode 1
+                // content-driven height from corrupting mode 0 stored dimensions
+                if (_viewModel.CurrentMode == 0)
+                {
+                    Classes.SettingsManager.Current.MiniFormWidth = (int)e.NewSize.Width;
+                    Classes.SettingsManager.Current.MiniFormHeight = (int)e.NewSize.Height;
+                }
+                else if (_viewModel.CurrentMode == 1)
+                {
+                    Classes.SettingsManager.Current.MediumFormWidth = (int)e.NewSize.Width;
+                    Classes.SettingsManager.Current.MediumFormHeight = (int)e.NewSize.Height;
+                }
+                // Mode 2 (Full) is always screen-relative, no persistence needed
+            }
+        }
+
+        private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.OriginalSource is DependencyObject source)
+            {
+                var parentBtn = FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(source);
+                if (parentBtn != null) return; // Ignore drag if the user explicitly clicked a child button!
+            }
+
+            if (e.ChangedButton == MouseButton.Left && e.ButtonState == MouseButtonState.Pressed)
+            {
+                if (e.ClickCount == 2)
+                {
+                    return; // Never maximize the FlyShelf
+                }
+
+                _isEdgeLocked = false;
+                try
+                {
+                    this.DragMove();
+                }
+                catch { } 
+            }
+        }
+
+        private void ToggleGlobalSync_Click(object sender, RoutedEventArgs e)
+        {
+            bool newState = !AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync;
+            AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync = newState;
+            // Also stop/start Cloudflare tunnel — no data should leave via cloud when sync is off
+            // The local server stays running for LAN peers
+            AdvanceClip.Classes.SettingsManager.Current.EnableGlobalCloudflare = newState;
+            AdvanceClip.Classes.SettingsManager.Save();
+        }
+
+        private void Clear_Click(object sender, RoutedEventArgs e)
+        {
+            _viewModel.ClearShelf();
+        }
+
+        private void EmojiPicker_Click(object sender, RoutedEventArgs e)
+        {
+            var picker = new AdvanceClip.Windows.EmojiPickerWindow();
+            picker.Left = this.Left + (this.Width - picker.Width) / 2;
+            picker.Top = this.Top - picker.Height - 8;
+            if (picker.Top < 0) picker.Top = this.Top + this.Height + 8;
+            picker.Show();
+        }
+
+        private void CloseWindow_Click(object sender, RoutedEventArgs e)
+        {
+            this.Hide();
+            _isDragHovering = false;
+        }
+
+        // ═══ SEARCH FEATURE ═══
+        private bool _isSearchActive = false;
+        private System.ComponentModel.ICollectionView _collectionView;
+
+        private void SearchToggle_Click(object sender, RoutedEventArgs e)
+        {
+            _isSearchActive = !_isSearchActive;
+            if (_isSearchActive)
+            {
+                // Activate the window so it receives keyboard input (normally it's a non-activating overlay)
+                this.Activate();
+                SearchBarContainer.Visibility = Visibility.Visible;
+                SearchToggleBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x14, 0xB8, 0xA6));
+                
+                // Smooth slide-down + fade-in animation
+                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(-8, 0, new Duration(TimeSpan.FromMilliseconds(150)))
+                {
+                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+                };
+                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(150)));
+                SearchBarContainer.RenderTransform.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, slideAnim);
+                SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+                
+                // Delay focus — the TextBox needs to be visible and rendered first
+                Dispatcher.InvokeAsync(() =>
+                {
+                    SearchTextBox.Focus();
+                    Keyboard.Focus(SearchTextBox);
+                    SearchTextBox.CaretIndex = 0;
+                }, System.Windows.Threading.DispatcherPriority.Input);
+            }
+            else
+            {
+                CloseSearch();
+            }
+        }
+
+        private void SearchTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            string query = SearchTextBox.Text;
+            SearchPlaceholder.Visibility = string.IsNullOrEmpty(query) ? Visibility.Visible : Visibility.Collapsed;
+            ApplySearchFilter(query);
+        }
+
+        private void SearchTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape)
+            {
+                CloseSearch();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Enter && ShelfListView.Items.Count > 0)
+            {
+                // Select first visible result and paste it
+                ShelfListView.SelectedIndex = 0;
+                if (ShelfListView.SelectedItem is ClipboardItem selected)
+                {
+                    CloseSearch();
+                    _ = CopyItemAndPaste(selected, hideWindow: true);
+                }
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Down && ShelfListView.Items.Count > 0)
+            {
+                // Move focus to the list so user can arrow-navigate results
+                ShelfListView.SelectedIndex = 0;
+                var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(0) as ListViewItem;
+                container?.Focus();
+                e.Handled = true;
+            }
+        }
+
+        private void SearchBar_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            // Activate window and focus the textbox when clicking anywhere on the search bar
+            this.Activate();
+            Dispatcher.InvokeAsync(() =>
+            {
+                SearchTextBox.Focus();
+                Keyboard.Focus(SearchTextBox);
+            }, System.Windows.Threading.DispatcherPriority.Input);
+        }
+
+        private void ClearSearch_Click(object sender, RoutedEventArgs e)
+        {
+            CloseSearch();
+        }
+
+        private void CloseSearch()
+        {
+            _isSearchActive = false;
+            SearchTextBox.Text = "";
+            SearchBarContainer.Visibility = Visibility.Collapsed;
+            SearchToggleBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
+            // Remove filter
+            if (_collectionView != null)
+            {
+                _collectionView.Filter = null;
+            }
+            // Move focus back to the list view
+            ShelfListView.Focus();
+        }
+
+        private void ApplySearchFilter(string query)
+        {
+            if (_collectionView == null)
+            {
+                _collectionView = System.Windows.Data.CollectionViewSource.GetDefaultView(ShelfListView.ItemsSource);
+            }
+            if (_collectionView == null) return;
+
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                _collectionView.Filter = null;
+                return;
+            }
+
+            string[] terms = query.ToLowerInvariant().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            _collectionView.Filter = obj =>
+            {
+                if (obj is not ClipboardItem item) return false;
+
+                // Build a searchable composite string from all relevant fields
+                string searchable = string.Join(" ",
+                    item.FileName ?? "",
+                    item.RawContent ?? "",
+                    System.IO.Path.GetFileName(item.FilePath ?? ""),
+                    item.Extension ?? "",
+                    item.ItemType.ToString(),
+                    item.SourceDeviceName ?? "",
+                    item.FormattedSize ?? ""
+                ).ToLowerInvariant();
+
+                // All terms must match (AND logic for multi-word queries)
+                foreach (var term in terms)
+                {
+                    if (!searchable.Contains(term)) return false;
+                }
+                return true;
+            };
+        }
+
+        private void PinSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            {
+                _viewModel.TogglePin(item);
+                e.Handled = true;
+            }
+        }
+
+        private void DeleteSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            {
+                // Set flag to suppress the subsequent MouseUp paste-and-close
+                _didDragOut = true;
+                
+                // Defer removal to prevent structural DOM shifts from triggering MouseUp events on unrelated ListBox items underneath
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
+                {
+                    _viewModel.RemoveItem(item);
+                }, System.Windows.Threading.DispatcherPriority.Background);
+                
+                e.Handled = true;
+            }
+        }
+
+        private void OpenSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            {
+                if (!string.IsNullOrEmpty(item.FilePath) && System.IO.File.Exists(item.FilePath))
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(item.FilePath) { UseShellExecute = true });
+                }
+                else if (item.ItemType == AdvanceClip.ViewModels.ClipboardItemType.Url && !string.IsNullOrEmpty(item.RawContent))
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(item.RawContent) { UseShellExecute = true });
+                }
+                e.Handled = true;
+            }
+        }
+
+        private void QuickLookSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            {
+                var qLook = new AdvanceClip.Windows.QuickLookWindow(item);
+                qLook.Show();
+                e.Handled = true;
+            }
+        }
+
+        private void RunTerminalSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            {
+                if (item.ItemType == AdvanceClip.ViewModels.ClipboardItemType.Code)
+                {
+                    item.RunInTerminal();
+                }
+                e.Handled = true;
+            }
+        }
+
+        private void SmartActionSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            {
+                e.Handled = true;
+                if (item.SmartActionType == "CompileAndRun")
+                {
+                    item.CompileAndRunNative();
+                }
+                else if (item.SmartActionType == "OpenPDF" || item.SmartActionType == "JoinMeeting" || item.SmartActionType == "OpenBrowser")
+                {
+                    string target = item.SmartActionType == "OpenPDF" ? item.FilePath : item.RawContent;
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { }
+                }
+                else if (item.SmartActionType == "OpenMap")
+                {
+                    string target = "https://www.google.com/maps/search/?api=1&query=" + Uri.EscapeDataString(item.RawContent);
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { }
+                }
+                else if (item.SmartActionType == "ConvertToPdf")
+                {
+                    System.Threading.Tasks.Task.Run(() => 
+                    {
+                        try 
+                        {
+                            string targetPdf = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(item.FilePath) ?? System.IO.Path.GetTempPath(), System.IO.Path.GetFileNameWithoutExtension(item.FilePath) + "_Converted.pdf");
+                            string script = $"$word = New-Object -ComObject Word.Application; $doc = $word.Documents.Open('{item.FilePath}'); $doc.SaveAs([ref]'{targetPdf}', [ref]17); $doc.Close(); $word.Quit();";
+                            var p = new System.Diagnostics.ProcessStartInfo { FileName = "powershell.exe", Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{script}\"", CreateNoWindow = true, UseShellExecute = false };
+                            System.Diagnostics.Process.Start(p)?.WaitForExit();
+                            
+                            if (System.IO.File.Exists(targetPdf))
+                            {
+                                Dispatcher.InvokeAsync(() => {
+                                    var dropList = new System.Collections.Specialized.StringCollection(); dropList.Add(targetPdf);
+                                    System.Windows.Clipboard.SetFileDropList(dropList);
+                                });
+                            }
+                        } catch { } // Sandbox fail softly if Microsoft Word isn't installed
+                    });
+                }
+                else if (item.SmartActionType == "SetTimer")
+                {
+                    var tw = new AdvanceClip.Windows.TimerWindow(item.RawContent);
+                    tw.Show();
+                }
+                else if (item.SmartActionType == "CopyQRText")
+                {
+                    try { System.Windows.Clipboard.SetText(item.RawContent); AdvanceClip.Windows.ToastWindow.ShowToast("QR Text Copied!"); } catch { }
+                }
+
+            }
+        }
+
+
+        private void ShelfListView_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            e.Handled = true;
+
+            var scrollViewer = FindVisualChild<ScrollViewer>(ShelfListView);
+            if (scrollViewer == null) return;
+
+            double scrollAmount = -e.Delta / 120.0 * 48.0;
+            double targetOffset = scrollViewer.VerticalOffset + scrollAmount;
+            targetOffset = Math.Max(0, Math.Min(targetOffset, scrollViewer.ScrollableHeight));
+            scrollViewer.ScrollToVerticalOffset(targetOffset);
+        }
+
+
+        private void ShelfListView_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Delete && ShelfListView.SelectedItems.Count > 0)
+            {
+                var itemsToRemove = ShelfListView.SelectedItems.Cast<ClipboardItem>().ToList();
+                foreach (var item in itemsToRemove)
+                {
+                    _viewModel.RemoveItem(item);
+                }
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Enter && ShelfListView.SelectedItem is ClipboardItem selected)
+            {
+                _ = CopyItemAndPaste(selected, hideWindow: true);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                if (_isSearchActive)
+                {
+                    CloseSearch();
+                }
+                else
+                {
+                    this.Hide();
+                }
+                e.Handled = true;
+            }
+            else if (e.Key == Key.F && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                // Ctrl+F opens search
+                if (!_isSearchActive)
+                {
+                    SearchToggle_Click(sender, e);
+                }
+                else
+                {
+                    SearchTextBox.Focus();
+                    SearchTextBox.SelectAll();
+                }
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Down || e.Key == Key.Up)
+            {
+                int currentIdx = ShelfListView.SelectedIndex;
+                int count = _viewModel.DroppedItems.Count;
+                if (count == 0) { e.Handled = true; return; }
+
+                int newIdx;
+                if (currentIdx < 0)
+                {
+                    newIdx = 0; // Nothing selected — start at first item
+                }
+                else
+                {
+                    newIdx = e.Key == Key.Down
+                        ? Math.Min(currentIdx + 1, count - 1)
+                        : Math.Max(currentIdx - 1, 0);
+                }
+
+                ShelfListView.SelectedIndex = newIdx;
+                // ScrollIntoView MUST come first — it forces the virtualizer to create the container
+                ShelfListView.ScrollIntoView(ShelfListView.Items[newIdx]);
+                // Dispatch focus to next frame so the container is fully realized
+                Dispatcher.InvokeAsync(() =>
+                {
+                    var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(newIdx) as ListViewItem;
+                    container?.Focus();
+                }, System.Windows.Threading.DispatcherPriority.Input);
+                e.Handled = true;
+            }
+        }
+
+
+
+        private void NotifyIconQuit_Click(object sender, RoutedEventArgs e)
+        {
+            _hubWindowInstance?.ForceShutdownRelease();
+            Application.Current.Shutdown();
+        }
+
+        private void nIcon_LeftClick(Wpf.Ui.Tray.Controls.NotifyIcon sender, RoutedEventArgs e)
+        {
+            if (this.IsVisible && _viewModel.IsFullMode)
+            {
+                this.Hide();
+            }
+            else
+            {
+                OpenApp_Click(sender, e);
+            }
+        }
+
+        private static T? FindVisualParent<T>(DependencyObject child) where T : DependencyObject
+        {
+            DependencyObject parentObject = VisualTreeHelper.GetParent(child);
+            if (parentObject == null) return null;
+            T? parent = parentObject as T;
+            if (parent != null) return parent;
+            else return FindVisualParent<T>(parentObject);
+        }
+
+        /// <summary>Walks up the visual tree checking if any ancestor FrameworkElement has the given Tag.</summary>
+        private static bool HasAncestorTag(DependencyObject child, string tag)
+        {
+            DependencyObject current = child;
+            while (current != null)
+            {
+                if (current is FrameworkElement fe && fe.Tag as string == tag)
+                    return true;
+                current = VisualTreeHelper.GetParent(current);
+            }
+            return false;
+        }
+
+
+        private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child != null && child is T tChild) return tChild;
+                else
+                {
+                    T? childOfChild = FindVisualChild<T>(child);
+                    if (childOfChild != null) return childOfChild;
+                }
+            }
+            return null;
+        }
+
+    }
+}
+
+

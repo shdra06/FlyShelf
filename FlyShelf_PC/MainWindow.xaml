@@ -15,7 +15,7 @@
         ShowInTaskbar="False" Margin="0" Topmost="True" ShowActivated="False"
         AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver"
         TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal"
-        Loaded="MicaWindow_Loaded">
+        Loaded="MicaWindow_Loaded" Deactivated="MicaWindow_Deactivated">
 
     <WindowChrome.WindowChrome>
         <WindowChrome GlassFrameThickness="-1" CornerRadius="14" CaptionHeight="0" UseAeroCaptionButtons="False" ResizeBorderThickness="0" />
@@ -930,3 +930,4 @@
 
     </Grid>
 </controls:MicaWindow>
+
