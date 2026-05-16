@@ -225,6 +225,18 @@ namespace AdvanceClip.Classes
                 DownloadProgressChanged?.Invoke(100);
                 Logger.LogAction("UPDATE", $"Download complete: {tempExePath}");
 
+                // SAFETY: Reject suspiciously small files (< 50MB = not a real self-contained build)
+                var downloadedFile = new FileInfo(tempExePath);
+                long minSizeBytes = 50 * 1024 * 1024; // 50 MB
+                if (downloadedFile.Length < minSizeBytes)
+                {
+                    Logger.LogAction("UPDATE", $"❌ REJECTED: Downloaded file is only {downloadedFile.Length / 1048576.0:F1} MB — expected ≥50 MB. This is not a valid self-contained build.");
+                    StatusChanged?.Invoke($"❌ Update rejected — file too small ({downloadedFile.Length / 1048576.0:F1} MB). Must be ≥50 MB.");
+                    try { File.Delete(tempExePath); } catch { }
+                    return false;
+                }
+                Logger.LogAction("UPDATE", $"✅ Size check passed: {downloadedFile.Length / 1048576.0:F1} MB");
+
                 // SECURITY: SHA-256 hash verification (file is now fully closed and unlocked)
                 if (!string.IsNullOrEmpty(ExpectedHash))
                 {
