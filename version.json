@@ -4,5 +4,5 @@
   "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v5.5.0/FlyShelf.exe",
   "android_version": "5.3.0",
   "android_changelog": "v5.3.0 — FlyShelf Android v4\n\n• P2P sync improvements\n• Compatible with FlyShelf PC v5.5.0\n• Cloudflare tunnel transport support\n• Debug log viewer for diagnostics",
-  "android_download": "https://github.com/shdra06/FlyShelf/releases/download/android-v4/app-debug.apk"
+  "android_download": "https://github.com/shdra06/FlyShelf/releases/download/android-v4/app-release.apk"
 }
