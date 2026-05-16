@@ -657,6 +657,8 @@ namespace AdvanceClip.Classes
                 res.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
                 res.AddHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Original-Date, X-FlyShelf-Client, X-Pairing-Key");
                 res.AddHeader("Access-Control-Expose-Headers", "X-Global-Url");
+                // Disable keep-alive: HttpListener's TCP reuse causes 400 errors on rapid-fire requests
+                res.KeepAlive = false;
                 if (!string.IsNullOrEmpty(GlobalUrl)) res.AddHeader("X-Global-Url", GlobalUrl);
 
                 if (req.HttpMethod == "OPTIONS")
