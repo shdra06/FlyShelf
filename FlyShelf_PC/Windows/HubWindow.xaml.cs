@@ -652,51 +652,174 @@ namespace AdvanceClip.Windows
 
             try
             {
-                string logText;
-
                 if (string.IsNullOrEmpty(activeUrl))
                 {
-                    // Device is offline — try to get whatever we have locally about it
-                    logText = $"⚠ Device '{deviceName}' has no active URL — cannot fetch remote logs.\n"
-                            + $"Device may be offline. Try Force Sync first.";
+                    Clipboard.SetText($"⚠ Device '{deviceName}' has no active URL — cannot fetch remote data.\nDevice may be offline. Try Force Sync first.");
+                    ToastWindow.ShowToast($"⚠ {deviceName} is offline");
+                    btn.Content = "❌ Offline";
+                    await Task.Delay(1500);
+                    return;
                 }
-                else
+
+                string baseUrl = activeUrl.TrimEnd('/');
+                string pairingKey = DevicePairingManager.EnsurePairingKey();
+                string pin = SettingsManager.Current?.WebClientPinToken;
+
+                var sb = new System.Text.StringBuilder();
+                sb.AppendLine("═══════════════════════════════════════════════════════════");
+                sb.AppendLine($"  FlyShelf Remote Diagnostic — {deviceName}");
+                sb.AppendLine($"  URL: {activeUrl}");
+                sb.AppendLine($"  Fetched: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                sb.AppendLine("═══════════════════════════════════════════════════════════");
+
+                // ── SECTION 1: Health ──
+                sb.AppendLine();
+                sb.AppendLine("┌─────────────────────────────────────────────────────────┐");
+                sb.AppendLine("│  DEVICE HEALTH                                          │");
+                sb.AppendLine("└─────────────────────────────────────────────────────────┘");
+                try
                 {
-                    // Fetch logs from the device's /api/logs endpoint
-                    using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-                    var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get,
-                        $"{activeUrl.TrimEnd('/')}/api/logs?lines=500");
-                    request.Headers.Add("X-FlyShelf-Client", "DesktopSync");
+                    using var hc = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(8) };
+                    var healthResp = await hc.GetStringAsync($"{baseUrl}/api/health");
+                    using var healthDoc = System.Text.Json.JsonDocument.Parse(healthResp);
+                    var h = healthDoc.RootElement;
 
-                    string pairingKey = DevicePairingManager.EnsurePairingKey();
-                    if (!string.IsNullOrEmpty(pairingKey))
-                        request.Headers.Add("X-Pairing-Key", pairingKey);
-                    string pin = SettingsManager.Current?.WebClientPinToken;
-                    if (!string.IsNullOrEmpty(pin))
-                        request.Headers.Add("Authorization", $"Bearer {pin}");
-
-                    var response = await client.SendAsync(request);
-                    string json = await response.Content.ReadAsStringAsync();
-
-                    if (!response.IsSuccessStatusCode)
+                    string version = h.TryGetProperty("version", out var vp) ? vp.GetString() ?? "?" : "?";
+                    string devId = h.TryGetProperty("deviceId", out var dp) ? dp.GetString() ?? "?" : "?";
+                    string devType = h.TryGetProperty("deviceType", out var dtp) ? dtp.GetString() ?? "?" : "?";
+                    int uptime = h.TryGetProperty("uptime", out var up) ? up.GetInt32() : 0;
+                    int peers = h.TryGetProperty("peers", out var pp) ? pp.GetInt32() : 0;
+                    string lanUrl = "", cfUrl = "";
+                    if (h.TryGetProperty("transport", out var tr))
                     {
-                        logText = $"❌ Failed to fetch logs from {deviceName} ({activeUrl})\n"
-                                + $"Status: {response.StatusCode}\nResponse: {json}";
+                        lanUrl = tr.TryGetProperty("lan", out var lp) ? lp.GetString() ?? "" : "";
+                        cfUrl = tr.TryGetProperty("cloudflare", out var cp) ? cp.GetString() ?? "" : "";
                     }
-                    else
-                    {
-                        // Parse and filter
-                        var doc = System.Text.Json.JsonDocument.Parse(json);
-                        var sb = new System.Text.StringBuilder();
-                        sb.AppendLine("═══════════════════════════════════════════════════════════");
-                        sb.AppendLine($"  Remote Logs — {deviceName}");
-                        sb.AppendLine($"  URL: {activeUrl}");
-                        sb.AppendLine($"  Fetched: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                        sb.AppendLine("═══════════════════════════════════════════════════════════");
-                        sb.AppendLine();
 
+                    string uptimeStr = uptime >= 3600 ? $"{uptime/3600}h {(uptime%3600)/60}m" : $"{uptime/60}m {uptime%60}s";
+                    sb.AppendLine($"  Version:    v{version}");
+                    sb.AppendLine($"  Device ID:  {devId}");
+                    sb.AppendLine($"  Type:       {devType}");
+                    sb.AppendLine($"  Uptime:     {uptimeStr}");
+                    sb.AppendLine($"  Peers:      {peers} connected");
+                    sb.AppendLine($"  LAN:        {(string.IsNullOrEmpty(lanUrl) ? "—" : lanUrl)}");
+                    sb.AppendLine($"  Cloudflare: {(string.IsNullOrEmpty(cfUrl) ? "—" : cfUrl)}");
+                }
+                catch (Exception ex)
+                {
+                    sb.AppendLine($"  ❌ Failed to fetch health: {ex.Message}");
+                }
+
+                // ── SECTION 2: Clipboard Contents ──
+                sb.AppendLine();
+                sb.AppendLine("┌─────────────────────────────────────────────────────────┐");
+                sb.AppendLine("│  CLIPBOARD CONTENTS                                     │");
+                sb.AppendLine("└─────────────────────────────────────────────────────────┘");
+                try
+                {
+                    using var sc = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                    if (!string.IsNullOrEmpty(pairingKey))
+                        sc.DefaultRequestHeaders.Add("X-Pairing-Key", pairingKey);
+                    if (!string.IsNullOrEmpty(pin))
+                        sc.DefaultRequestHeaders.Add("Authorization", $"Bearer {pin}");
+                    sc.DefaultRequestHeaders.Add("X-FlyShelf-Client", "DesktopSync");
+
+                    var syncResp = await sc.GetStringAsync($"{baseUrl}/api/sync");
+                    using var syncDoc = System.Text.Json.JsonDocument.Parse(syncResp);
+
+                    int idx = 0;
+                    foreach (var item in syncDoc.RootElement.EnumerateArray())
+                    {
+                        idx++;
+                        string type = item.TryGetProperty("Type", out var tp) ? tp.GetString() ?? "?" : "?";
+                        string title = item.TryGetProperty("Title", out var ttp) ? ttp.GetString() ?? "" : "";
+                        string raw = item.TryGetProperty("Raw", out var rp) ? rp.GetString() ?? "" : "";
+                        string fileName = item.TryGetProperty("FileName", out var fnp) ? fnp.GetString() ?? "" : "";
+                        string time = item.TryGetProperty("Time", out var tmp) ? tmp.GetString() ?? "" : "";
+                        string source = item.TryGetProperty("SourceDeviceName", out var sp) ? sp.GetString() ?? "" : "";
+                        string sourceType = item.TryGetProperty("SourceDeviceType", out var stp) ? stp.GetString() ?? "" : "";
+                        string previewUrl = item.TryGetProperty("PreviewUrl", out var pvp) ? pvp.GetString() ?? "" : "";
+                        string downloadUrl = item.TryGetProperty("DownloadUrl", out var dup) ? dup.GetString() ?? "" : "";
+
+                        // Type icon
+                        string icon = type switch
+                        {
+                            "Text" => "📝",
+                            "Url" => "🔗",
+                            "Image" => "🖼️",
+                            "QRCode" => "📱",
+                            "File" => "📎",
+                            "Pdf" => "📄",
+                            _ => "📋"
+                        };
+
+                        sb.AppendLine();
+                        sb.AppendLine($"  {icon} [{idx}] {type.ToUpper()} — {time}");
+                        if (!string.IsNullOrEmpty(title))
+                            sb.AppendLine($"     Title:  {title}");
+                        if (!string.IsNullOrEmpty(fileName) && fileName != title)
+                            sb.AppendLine($"     File:   {fileName}");
+                        if (!string.IsNullOrEmpty(source))
+                            sb.AppendLine($"     From:   {source} ({sourceType})");
+
+                        // Content preview (truncated for text, full URLs)
+                        if (type == "Text" || type == "Url")
+                        {
+                            string preview = raw.Length > 200 ? raw.Substring(0, 200) + "..." : raw;
+                            // Replace newlines for cleaner log
+                            preview = preview.Replace("\r\n", "\\n").Replace("\n", "\\n");
+                            sb.AppendLine($"     Content: {preview}");
+                        }
+                        else if (type == "Image" || type == "QRCode")
+                        {
+                            if (!string.IsNullOrEmpty(previewUrl))
+                                sb.AppendLine($"     Preview: {baseUrl}{previewUrl}");
+                            if (!string.IsNullOrEmpty(downloadUrl) && downloadUrl.StartsWith("/"))
+                                sb.AppendLine($"     Download: {baseUrl}{downloadUrl}");
+                        }
+                        else if (!string.IsNullOrEmpty(downloadUrl))
+                        {
+                            if (downloadUrl.StartsWith("/"))
+                                sb.AppendLine($"     Download: {baseUrl}{downloadUrl}");
+                            else if (downloadUrl.StartsWith("http"))
+                                sb.AppendLine($"     Path: {downloadUrl}");
+                        }
+                    }
+
+                    if (idx == 0)
+                        sb.AppendLine("  (clipboard is empty)");
+                    else
+                        sb.AppendLine($"\n  — {idx} items on clipboard");
+                }
+                catch (Exception ex)
+                {
+                    sb.AppendLine($"  ❌ Failed to fetch clipboard: {ex.Message}");
+                }
+
+                // ── SECTION 3: Logs ──
+                sb.AppendLine();
+                sb.AppendLine("┌─────────────────────────────────────────────────────────┐");
+                sb.AppendLine("│  NETWORK LOGS (last 200)                                │");
+                sb.AppendLine("└─────────────────────────────────────────────────────────┘");
+                try
+                {
+                    using var lc = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                    var logReq = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get,
+                        $"{baseUrl}/api/logs?lines=200");
+                    logReq.Headers.Add("X-FlyShelf-Client", "DesktopSync");
+                    if (!string.IsNullOrEmpty(pairingKey))
+                        logReq.Headers.Add("X-Pairing-Key", pairingKey);
+                    if (!string.IsNullOrEmpty(pin))
+                        logReq.Headers.Add("Authorization", $"Bearer {pin}");
+
+                    var logResp = await lc.SendAsync(logReq);
+                    string logJson = await logResp.Content.ReadAsStringAsync();
+
+                    if (logResp.IsSuccessStatusCode)
+                    {
+                        using var logDoc = System.Text.Json.JsonDocument.Parse(logJson);
                         int count = 0;
-                        if (doc.RootElement.TryGetProperty("logs", out var logsArr))
+                        if (logDoc.RootElement.TryGetProperty("logs", out var logsArr))
                         {
                             foreach (var logEl in logsArr.EnumerateArray())
                             {
@@ -715,27 +838,32 @@ namespace AdvanceClip.Windows
                                 count++;
                             }
                         }
-
-                        sb.AppendLine();
-                        sb.AppendLine($"— {count} entries (health-check noise filtered)");
-                        logText = sb.ToString();
+                        sb.AppendLine($"\n— {count} log entries (health noise filtered)");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"  ❌ HTTP {logResp.StatusCode}: {logJson}");
                     }
                 }
+                catch (Exception ex)
+                {
+                    sb.AppendLine($"  ❌ Failed to fetch logs: {ex.Message}");
+                }
 
-                Clipboard.SetText(logText);
-                ToastWindow.ShowToast($"📋 Logs from {deviceName} copied to clipboard");
+                Clipboard.SetText(sb.ToString());
+                ToastWindow.ShowToast($"📋 Full diagnostic from {deviceName} copied!");
                 btn.Content = "✅ Copied";
                 await Task.Delay(1500);
             }
             catch (TaskCanceledException)
             {
-                ToastWindow.ShowToast($"⏱ Timeout fetching logs from {deviceName} — device may be unreachable");
+                ToastWindow.ShowToast($"⏱ Timeout fetching from {deviceName}");
                 btn.Content = "❌ Timeout";
                 await Task.Delay(1500);
             }
             catch (Exception ex)
             {
-                ToastWindow.ShowToast($"❌ Failed to copy logs: {ex.Message}");
+                ToastWindow.ShowToast($"❌ Failed: {ex.Message}");
                 btn.Content = "❌ Error";
                 await Task.Delay(1500);
             }
