@@ -681,8 +681,36 @@ namespace AdvanceClip.Classes
                 }
                 else if (path == "/api/health" && req.HttpMethod == "GET")
                 {
-                    // Health check is PUBLIC — needed for Cloudflare tunnel self-verification
-                    res.StatusCode = 200;
+                    // Rich health endpoint — returns device state for smart peer management
+                    try
+                    {
+                        var healthData = new
+                        {
+                            status = "online",
+                            version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0",
+                            deviceId = SettingsManager.Current.DeviceId,
+                            deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
+                            deviceType = "PC",
+                            uptime = (int)(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds,
+                            transport = new
+                            {
+                                lan = FirebaseSyncManager.CachedLocalUrl ?? "",
+                                cloudflare = FirebaseSyncManager.CachedGlobalUrl ?? "",
+                            },
+                            peers = PeerManager.Instance?.AliveCount ?? 0,
+                            timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                        };
+                        string json = System.Text.Json.JsonSerializer.Serialize(healthData);
+                        byte[] data = Encoding.UTF8.GetBytes(json);
+                        res.StatusCode = 200;
+                        res.ContentType = "application/json";
+                        res.OutputStream.Write(data, 0, data.Length);
+                    }
+                    catch
+                    {
+                        // Fallback: still return 200 even if serialization fails
+                        res.StatusCode = 200;
+                    }
                     res.Close();
                 }
                 else if (path == "/ws/peer" && req.IsWebSocketRequest)
@@ -783,7 +811,31 @@ namespace AdvanceClip.Classes
 
                     if (path == "/api/health" && req.HttpMethod == "GET")
                     {
-                        res.StatusCode = 200;
+                        try
+                        {
+                            var healthData = new
+                            {
+                                status = "online",
+                                version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0",
+                                deviceId = SettingsManager.Current.DeviceId,
+                                deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
+                                deviceType = "PC",
+                                uptime = (int)(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds,
+                                transport = new
+                                {
+                                    lan = FirebaseSyncManager.CachedLocalUrl ?? "",
+                                    cloudflare = FirebaseSyncManager.CachedGlobalUrl ?? "",
+                                },
+                                peers = PeerManager.Instance?.AliveCount ?? 0,
+                                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                            };
+                            string json = System.Text.Json.JsonSerializer.Serialize(healthData);
+                            byte[] data = Encoding.UTF8.GetBytes(json);
+                            res.StatusCode = 200;
+                            res.ContentType = "application/json";
+                            res.OutputStream.Write(data, 0, data.Length);
+                        }
+                        catch { res.StatusCode = 200; }
                         res.Close();
                     }
                     else if (path == "/api/sync" && req.HttpMethod == "GET")

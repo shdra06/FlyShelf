@@ -305,7 +305,56 @@ namespace AdvanceClip.Classes
                     peer.IsAlive = true;
                     peer.LastSeen = DateTime.UtcNow;
                     peer.ConsecutiveFailures = 0;
-                    Logger.LogAction("PEER", $"✅ {peer.DeviceName} connected via {transport}: {testUrl}");
+
+                    // Parse rich health response for smart transport + version info
+                    try
+                    {
+                        string healthJson = await r.Content.ReadAsStringAsync();
+                        if (!string.IsNullOrEmpty(healthJson) && healthJson.StartsWith("{"))
+                        {
+                            using var doc = JsonDocument.Parse(healthJson);
+                            var root = doc.RootElement;
+
+                            // Extract version for mismatch detection
+                            if (root.TryGetProperty("version", out var ver))
+                                peer.Version = ver.GetString() ?? "";
+
+                            // Extract LAN URL from peer's health response (smart discovery)
+                            // If we connected via Cloudflare but peer reports a LAN URL, save it for future LAN fallback
+                            if (root.TryGetProperty("transport", out var tr))
+                            {
+                                if (tr.TryGetProperty("lan", out var lanProp))
+                                {
+                                    string peerLan = lanProp.GetString() ?? "";
+                                    if (!string.IsNullOrEmpty(peerLan) && peerLan.StartsWith("http") && peerLan != peer.LanUrl)
+                                    {
+                                        peer.LanUrl = peerLan;
+                                        Logger.LogAction("PEER", $"🔍 Discovered {peer.DeviceName} LAN URL from health: {peerLan}");
+                                    }
+                                }
+                                if (tr.TryGetProperty("cloudflare", out var cfProp))
+                                {
+                                    string peerCf = cfProp.GetString() ?? "";
+                                    if (!string.IsNullOrEmpty(peerCf) && peerCf.Contains("trycloudflare") && peerCf != peer.CloudflareUrl)
+                                    {
+                                        peer.CloudflareUrl = peerCf;
+                                        Logger.LogAction("PEER", $"🔍 Discovered {peer.DeviceName} CF URL from health: {peerCf}");
+                                    }
+                                }
+                            }
+
+                            // Log version mismatch warning
+                            string myVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "";
+                            if (!string.IsNullOrEmpty(peer.Version) && peer.Version != myVersion)
+                            {
+                                Logger.LogAction("PEER", $"⚠️ Version mismatch: {peer.DeviceName} is on v{peer.Version}, we are on v{myVersion}");
+                            }
+                        }
+                    }
+                    catch { /* Health parsing is optional — connection is already confirmed */ }
+
+                    Logger.LogAction("PEER", $"✅ {peer.DeviceName} connected via {transport}: {testUrl}" +
+                        (!string.IsNullOrEmpty(peer.Version) ? $" (v{peer.Version})" : ""));
                     PeerConnected?.Invoke(peer.DeviceId, transport);
 
                     // Establish persistent WebSocket for instant liveness detection
@@ -796,6 +845,7 @@ namespace AdvanceClip.Classes
         public string CloudflareUrl { get; set; } = "";
         public string ActiveUrl { get; set; } = "";
         public string Transport { get; set; } = "unknown";
+        public string Version { get; set; } = "";   // Peer's app version from /api/health
         public bool IsAlive { get; set; } = false;
         public DateTime LastSeen { get; set; } = DateTime.MinValue;
         public int ConsecutiveFailures { get; set; } = 0;
