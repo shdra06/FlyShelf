@@ -1330,31 +1330,46 @@ export default function SyncScreen() {
     let longPollActive = true;
     let longPollBackoff = 0;
     const runLongPoll = async () => {
+      // Wait for first successful poll to establish cachedPcUrlRef
+      await new Promise(r => setTimeout(r, 3000));
+      syncLog('LONG-POLL', 'Starting long-poll loop');
       while (longPollActive) {
-        const url = cachedPcUrlRef.current;
-        if (!url) { await new Promise(r => setTimeout(r, 5000)); continue; }
         try {
-          const pairingKey = pairingKeyRef.current;
-          const lpHeaders: any = { 'X-FlyShelf-Client': 'MobileCompanion' };
-          if (pairingKey) lpHeaders['X-Pairing-Key'] = pairingKey;
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s timeout (server blocks 30s)
-          const res = await fetch(`${url}/api/events`, { headers: lpHeaders, signal: controller.signal });
-          clearTimeout(timeoutId);
-          longPollBackoff = 0; // Reset backoff on success
-          if (res.status === 200) {
-            // Clipboard changed! Fetch the new data immediately
-            lastActivityRef.current = Date.now();
-            syncLog('LONG-POLL', '⚡ Instant notification — fetching now');
-            await pollFn();
+          // Always resolve fresh URL (don't rely on potentially stale ref)
+          const url = cachedPcUrlRef.current || (await getCachedPcUrl());
+          if (!url) {
+            syncLog('LONG-POLL', 'No PC URL — waiting 5s');
+            await new Promise(r => setTimeout(r, 5000));
+            continue;
           }
-          // 204 = timeout, no new events — loop again immediately
-        } catch (e: any) {
-          if (!longPollActive) break;
-          // Backoff on errors: 1s, 2s, 4s, 8s... max 30s
-          longPollBackoff = Math.min(longPollBackoff + 1, 5);
-          const delay = Math.min(1000 * Math.pow(2, longPollBackoff), 30000);
-          await new Promise(r => setTimeout(r, delay));
+          try {
+            const pairingKey = pairingKeyRef.current;
+            const lpHeaders: any = { 'X-FlyShelf-Client': 'MobileCompanion' };
+            if (pairingKey) lpHeaders['X-Pairing-Key'] = pairingKey;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s timeout (server blocks 30s)
+            const res = await fetch(`${url}/api/events`, { headers: lpHeaders, signal: controller.signal });
+            clearTimeout(timeoutId);
+            longPollBackoff = 0; // Reset backoff on success
+            if (res.status === 200) {
+              // Clipboard changed! Fetch the new data immediately
+              lastActivityRef.current = Date.now();
+              syncLog('LONG-POLL', '⚡ Instant notification — fetching now');
+              await pollFn();
+            }
+            // 204 = timeout, no new events — loop again immediately
+          } catch (innerErr: any) {
+            if (!longPollActive) break;
+            // Backoff on errors: 1s, 2s, 4s... max 10s (reduced from 30s)
+            longPollBackoff = Math.min(longPollBackoff + 1, 4);
+            const delay = Math.min(1000 * Math.pow(2, longPollBackoff), 10000);
+            syncLog('LONG-POLL', `Error: ${innerErr?.message || innerErr} — retry in ${delay}ms`);
+            await new Promise(r => setTimeout(r, delay));
+          }
+        } catch (outerErr: any) {
+          // Top-level catch — NEVER let the loop die
+          syncLog('LONG-POLL', `Loop crash prevented: ${outerErr?.message || outerErr}`);
+          await new Promise(r => setTimeout(r, 5000));
         }
       }
     };
