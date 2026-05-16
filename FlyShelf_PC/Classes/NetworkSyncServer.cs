@@ -44,11 +44,19 @@ namespace AdvanceClip.Classes
         /// </summary>
         private static (string transport, string label) DetectTransport(HttpListenerRequest req)
         {
+            // Cloudflare tunnel (cloudflared) proxies to localhost, so Host header
+            // is always the local address. Detect CF by checking proxy-injected headers:
+            //   Cf-Connecting-Ip — real client IP added by cloudflared
+            //   Cf-Ray — Cloudflare ray ID for request tracing
+            //   X-Forwarded-For — standard proxy header added by CF
+            //   X-Forwarded-Proto — "https" when coming through CF tunnel
             string host = req.Headers["Host"] ?? req.Url?.Host ?? "";
-            if (host.Contains(".trycloudflare.com"))
-                return ("Cloudflare", "☁ Cloud");
-            else
-                return ("LAN", "📡 LAN");
+            bool isCf = host.Contains(".trycloudflare.com")
+                      || !string.IsNullOrEmpty(req.Headers["Cf-Connecting-Ip"])
+                      || !string.IsNullOrEmpty(req.Headers["Cf-Ray"])
+                      || !string.IsNullOrEmpty(req.Headers["X-Forwarded-For"])
+                      || req.Headers["X-Forwarded-Proto"] == "https";
+            return isCf ? ("Cloudflare", "☁ Cloud") : ("LAN", "📡 LAN");
         }
 
         /// <summary>
