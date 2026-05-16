@@ -292,6 +292,7 @@ namespace AdvanceClip.Classes
         private async Task Handshake(PeerConnection peer)
         {
             bool lanEnabled = SettingsManager.Current.EnableLocalLAN;
+            Logger.LogAction("PEER", $"🔌 Handshake {peer.DeviceName}: LAN={peer.LanUrl ?? "(empty)"} CF={peer.CloudflareUrl ?? "(empty)"} lanEnabled={lanEnabled}");
             
             // Priority 1: LAN (only if enabled)
             if (lanEnabled && await TryConnect(peer, peer.LanUrl, "LAN")) return;
@@ -300,7 +301,7 @@ namespace AdvanceClip.Classes
 
             peer.IsAlive = false;
             peer.Transport = "offline";
-            Logger.LogAction("PEER", $"⚠️ {peer.DeviceName} unreachable (LAN:{(lanEnabled ? "on" : "off")})");
+            Logger.LogAction("PEER", $"⚠️ {peer.DeviceName} unreachable (LAN:{(lanEnabled ? "on" : "off")}) tried LAN={peer.LanUrl ?? "null"} CF={peer.CloudflareUrl ?? "null"}");
         }
 
         private async Task<bool> TryConnect(PeerConnection peer, string testUrl, string transport)
