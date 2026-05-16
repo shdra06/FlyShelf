@@ -637,6 +637,115 @@ namespace AdvanceClip.Windows
             }
         }
 
+        private async void CopyDeviceLogs_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not System.Windows.Controls.Button btn) return;
+            string activeUrl = btn.Tag?.ToString() ?? "";
+            // Get device name from DataContext
+            string deviceName = "Unknown";
+            if (btn.DataContext is PeerStatusItem psi)
+                deviceName = psi.DeviceName;
+
+            btn.IsEnabled = false;
+            var origContent = btn.Content;
+            btn.Content = "⏳...";
+
+            try
+            {
+                string logText;
+
+                if (string.IsNullOrEmpty(activeUrl))
+                {
+                    // Device is offline — try to get whatever we have locally about it
+                    logText = $"⚠ Device '{deviceName}' has no active URL — cannot fetch remote logs.\n"
+                            + $"Device may be offline. Try Force Sync first.";
+                }
+                else
+                {
+                    // Fetch logs from the device's /api/logs endpoint
+                    using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                    var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get,
+                        $"{activeUrl.TrimEnd('/')}/api/logs?lines=500");
+                    request.Headers.Add("X-FlyShelf-Client", "DesktopSync");
+
+                    string pairingKey = DevicePairingManager.EnsurePairingKey();
+                    if (!string.IsNullOrEmpty(pairingKey))
+                        request.Headers.Add("X-Pairing-Key", pairingKey);
+                    string pin = SettingsManager.Current?.WebClientPinToken;
+                    if (!string.IsNullOrEmpty(pin))
+                        request.Headers.Add("Authorization", $"Bearer {pin}");
+
+                    var response = await client.SendAsync(request);
+                    string json = await response.Content.ReadAsStringAsync();
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        logText = $"❌ Failed to fetch logs from {deviceName} ({activeUrl})\n"
+                                + $"Status: {response.StatusCode}\nResponse: {json}";
+                    }
+                    else
+                    {
+                        // Parse and filter
+                        var doc = System.Text.Json.JsonDocument.Parse(json);
+                        var sb = new System.Text.StringBuilder();
+                        sb.AppendLine("═══════════════════════════════════════════════════════════");
+                        sb.AppendLine($"  Remote Logs — {deviceName}");
+                        sb.AppendLine($"  URL: {activeUrl}");
+                        sb.AppendLine($"  Fetched: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+                        sb.AppendLine("═══════════════════════════════════════════════════════════");
+                        sb.AppendLine();
+
+                        int count = 0;
+                        if (doc.RootElement.TryGetProperty("logs", out var logsArr))
+                        {
+                            foreach (var logEl in logsArr.EnumerateArray())
+                            {
+                                string line = "";
+                                if (logEl.ValueKind == System.Text.Json.JsonValueKind.Object)
+                                    line = logEl.TryGetProperty("log", out var lp) ? lp.GetString() ?? "" : "";
+                                else if (logEl.ValueKind == System.Text.Json.JsonValueKind.String)
+                                    line = logEl.GetString() ?? "";
+
+                                if (string.IsNullOrWhiteSpace(line)) continue;
+                                // Filter health-check noise
+                                if (line.Contains("[HTTP]") && line.Contains("GET /api/health")) continue;
+                                if (line.Contains("[HTTP]") && line.Contains("GET /health")) continue;
+
+                                sb.AppendLine(line);
+                                count++;
+                            }
+                        }
+
+                        sb.AppendLine();
+                        sb.AppendLine($"— {count} entries (health-check noise filtered)");
+                        logText = sb.ToString();
+                    }
+                }
+
+                Clipboard.SetText(logText);
+                ToastWindow.ShowToast($"📋 Logs from {deviceName} copied to clipboard");
+                btn.Content = "✅ Copied";
+                await Task.Delay(1500);
+            }
+            catch (TaskCanceledException)
+            {
+                ToastWindow.ShowToast($"⏱ Timeout fetching logs from {deviceName} — device may be unreachable");
+                btn.Content = "❌ Timeout";
+                await Task.Delay(1500);
+            }
+            catch (Exception ex)
+            {
+                ToastWindow.ShowToast($"❌ Failed to copy logs: {ex.Message}");
+                btn.Content = "❌ Error";
+                await Task.Delay(1500);
+            }
+            finally
+            {
+                btn.IsEnabled = true;
+                btn.Content = origContent;
+            }
+        }
+
         private string _currentFilterTag = "All";
 
         private void RestartServer_Click(object sender, RoutedEventArgs e)

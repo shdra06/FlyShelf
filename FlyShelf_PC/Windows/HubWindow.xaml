@@ -1301,19 +1301,6 @@
                                         <ui:Button Content="📡 Live Logs" Appearance="Secondary" Padding="8,3" CornerRadius="6"
                                                    Click="OpenNetworkLogs_Click" FontSize="10" Margin="4,0,0,0" VerticalAlignment="Center"
                                                    ToolTip="View live logs from this device and all paired devices"/>
-                                        <ui:Button Padding="8,3" CornerRadius="6" Margin="4,0,0,0" VerticalAlignment="Center"
-                                                   Click="SendAllLogs_Click" FontSize="10"
-                                                   ToolTip="Copy full diagnostic logs to clipboard (health-check noise filtered)">
-                                            <ui:Button.Background>
-                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                    <GradientStop Color="#6366F1" Offset="0"/>
-                                                    <GradientStop Color="#8B5CF6" Offset="1"/>
-                                                </LinearGradientBrush>
-                                            </ui:Button.Background>
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="📋 Copy Logs" FontWeight="SemiBold" FontSize="10" Foreground="White"/>
-                                            </StackPanel>
-                                        </ui:Button>
                                     </StackPanel>
 
                                     <!-- Live P2P status from PeerManager (5s heartbeat) -->
@@ -1338,6 +1325,7 @@
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="Auto"/>
                                                             <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
                                                             <ColumnDefinition Width="Auto"/>
                                                             <ColumnDefinition Width="Auto"/>
                                                             <ColumnDefinition Width="Auto"/>
@@ -1419,8 +1407,19 @@
                                                             </TextBlock>
                                                         </StackPanel>
 
+                                                        <!-- Copy Logs button -->
+                                                        <Button Grid.Column="4" Tag="{Binding ActiveUrl}" Click="CopyDeviceLogs_Click"
+                                                                Padding="6,3" FontSize="9" FontWeight="SemiBold" Cursor="Hand"
+                                                                Background="#206366F1" Foreground="#A5B4FC" BorderThickness="0"
+                                                                ToolTip="Copy this device's logs to clipboard" VerticalAlignment="Center" Margin="6,0,0,0">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <TextBlock Text="📋" FontSize="10" Margin="0,0,3,0"/>
+                                                                <TextBlock Text="Copy Logs" FontSize="9"/>
+                                                            </StackPanel>
+                                                        </Button>
+
                                                         <!-- Remove button -->
-                                                        <Button Grid.Column="4" Content="✕" Tag="{Binding DeviceId}" Click="RemovePairedDevice_Click" 
+                                                        <Button Grid.Column="5" Content="✕" Tag="{Binding DeviceId}" Click="RemovePairedDevice_Click" 
                                                                 Padding="4,2" FontSize="10" Background="Transparent" BorderThickness="0" 
                                                                 Foreground="#EF4444" Cursor="Hand" ToolTip="Remove device" VerticalAlignment="Center" Margin="6,0,0,0"/>
                                                     </Grid>

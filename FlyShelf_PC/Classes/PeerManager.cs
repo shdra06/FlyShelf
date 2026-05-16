@@ -821,6 +821,7 @@ namespace AdvanceClip.Classes
         public bool IsCloudActive { get; set; }
         public bool IsWebSocketActive { get; set; }
         public string StatusText { get; set; } = "Offline";
+        public string ActiveUrl { get; set; } = "";
     }
 }
 
