@@ -8,6 +8,7 @@ using System.Net.Http.Headers;
 using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -30,7 +31,12 @@ namespace AdvanceClip.Classes
         private string _myPairingKey = "";
         private bool _urlCleanedFromFirebase = false;
         private bool _urlRequestSent = false;             // Have we asked peers for their URLs?
+        private DateTime _lastUrlRequestTime = DateTime.MinValue; // Throttle urlRequest to max once per 60s
         private readonly HashSet<string> _prunedGhosts = new(StringComparer.OrdinalIgnoreCase);
+
+        // ═══ Local URL cache — survives app restart ═══
+        private static readonly string _urlCacheFile = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "peer_urls.json");
 
         // ═══ Config ═══
         private const int HEARTBEAT_MS = 10_000;          // 10s heartbeat (Cloudflare tunnels are slow)
@@ -79,12 +85,103 @@ namespace AdvanceClip.Classes
             Logger.LogAction("PEER", $"v5 PeerManager starting [device={_myDeviceId}]");
             _cts = new CancellationTokenSource();
 
+            // ═══ FIX 1: Re-publish our own URLs to Firebase on startup ═══
+            // Ensures peers can always find us, even if ConfirmAndCleanup deleted them last session.
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(3000); // Wait for tunnel to start
+                    string globalUrl = FirebaseSyncManager.CachedGlobalUrl;
+                    string localUrl = FirebaseSyncManager.CachedLocalUrl;
+                    if (!string.IsNullOrEmpty(globalUrl) || !string.IsNullOrEmpty(localUrl))
+                    {
+                        await FirebaseSyncManager.PushTunnelUrl(globalUrl ?? "", true, localUrl, forceWrite: true);
+                        Logger.LogAction("PEER", $"📡 Startup: re-published URLs to Firebase (LAN={localUrl} CF={globalUrl})");
+                    }
+                }
+                catch (Exception ex) { Logger.LogAction("PEER", $"Startup URL publish error: {ex.Message}"); }
+            });
+
+            // ═══ FIX 2: Try cached URLs first before Firebase ═══
+            // If we have locally cached URLs from last session, try them directly.
+            // This provides instant reconnection even if Firebase URLs were cleaned.
+            await TryCachedUrlsFirst();
+
             await DiscoverAndHandshake();
 
             _ = Task.Run(() => HeartbeatLoop(_cts.Token));
             _ = Task.Run(() => DiscoveryLoop(_cts.Token));
 
             Logger.LogAction("PEER", $"PeerManager running — {AliveCount}/{_peers.Count} peer(s) alive");
+        }
+
+        /// <summary>
+        /// Try connecting to peers using locally cached URLs from last session.
+        /// This provides instant reconnection when Firebase URLs have been cleaned.
+        /// </summary>
+        private async Task TryCachedUrlsFirst()
+        {
+            try
+            {
+                if (!File.Exists(_urlCacheFile)) return;
+
+                string json = await File.ReadAllTextAsync(_urlCacheFile);
+                var cache = JsonSerializer.Deserialize<Dictionary<string, CachedPeerUrls>>(json);
+                if (cache == null || cache.Count == 0) return;
+
+                Logger.LogAction("PEER", $"📋 Loaded {cache.Count} cached peer URL(s) from last session");
+
+                foreach (var (devId, urls) in cache)
+                {
+                    if (devId == _myDeviceId) continue;
+
+                    var peer = _peers.GetOrAdd(devId, _ => new PeerConnection
+                    {
+                        DeviceId = devId,
+                        DeviceName = urls.DeviceName ?? devId
+                    });
+
+                    if (!string.IsNullOrEmpty(urls.LanUrl)) peer.LanUrl = urls.LanUrl;
+                    if (!string.IsNullOrEmpty(urls.CloudflareUrl)) peer.CloudflareUrl = urls.CloudflareUrl;
+
+                    if (!peer.IsAlive)
+                    {
+                        Logger.LogAction("PEER", $"📋 Trying cached URLs for {peer.DeviceName}: LAN={peer.LanUrl} CF={peer.CloudflareUrl}");
+                        await Handshake(peer);
+                    }
+                }
+            }
+            catch (Exception ex) { Logger.LogAction("PEER", $"Cache load error: {ex.Message}"); }
+        }
+
+        /// <summary>Save all known peer URLs to local cache file.</summary>
+        private void SaveUrlCache()
+        {
+            try
+            {
+                var cache = new Dictionary<string, CachedPeerUrls>();
+                foreach (var (devId, peer) in _peers)
+                {
+                    if (!string.IsNullOrEmpty(peer.LanUrl) || !string.IsNullOrEmpty(peer.CloudflareUrl))
+                    {
+                        cache[devId] = new CachedPeerUrls
+                        {
+                            DeviceName = peer.DeviceName,
+                            LanUrl = peer.LanUrl,
+                            CloudflareUrl = peer.CloudflareUrl,
+                            LastSeen = peer.LastSeen
+                        };
+                    }
+                }
+                if (cache.Count > 0)
+                {
+                    string dir = Path.GetDirectoryName(_urlCacheFile)!;
+                    Directory.CreateDirectory(dir);
+                    File.WriteAllText(_urlCacheFile, JsonSerializer.Serialize(cache));
+                }
+            }
+            catch { }
         }
 
         public void Stop()
@@ -207,9 +304,12 @@ namespace AdvanceClip.Classes
                 var tasks = _peers.Values.Where(p => !p.IsAlive).Select(Handshake);
                 await Task.WhenAll(tasks);
 
-                // If we found peers but their URLs were empty, write a urlRequest signal
-                // so online peers (watching SSE) can re-publish their URLs for us
-                if (anyEmptyUrls && AliveCount == 0 && totalPeers > 0 && !_urlRequestSent)
+                // ═══ FIX 3: Send urlRequest whenever we have dead peers ═══
+                // Don't gate on _urlRequestSent — re-send every 60s if peers are still dead.
+                // This ensures recovery even if the first request was missed.
+                bool hasDeadPeers2 = _peers.Values.Any(p => !p.IsAlive);
+                if (hasDeadPeers2 && AliveCount == 0 && totalPeers > 0
+                    && (DateTime.UtcNow - _lastUrlRequestTime).TotalSeconds > 60)
                 {
                     await SendUrlRequest();
                 }
@@ -252,16 +352,38 @@ namespace AdvanceClip.Classes
             try
             {
                 using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-                string requestUrl = await FirebaseSyncManager.AuthUrlPublic(
-                    $"active_devices/{_myPairingKey}/{_myDeviceId}/urlRequest.json");
-                string body = JsonSerializer.Serialize(new
+
+                // ═══ FIX 4: Write urlRequest under EACH dead peer's path ═══
+                // Previously wrote under our OWN device path — the other PC's SSE watcher
+                // was watching for changes to their OWN path, not ours. This fixes the signal.
+                foreach (var peer in _peers.Values.Where(p => !p.IsAlive))
                 {
-                    requestedAt = NetworkClock.UtcNowMs,
-                    deviceId = _myDeviceId
-                });
-                await client.PutAsync(requestUrl, new StringContent(body, Encoding.UTF8, "application/json"));
+                    try
+                    {
+                        string requestUrl = await FirebaseSyncManager.AuthUrlPublic(
+                            $"active_devices/{_myPairingKey}/{peer.DeviceId}/urlRequest.json");
+                        string body = JsonSerializer.Serialize(new
+                        {
+                            requestedAt = NetworkClock.UtcNowMs,
+                            requestedBy = _myDeviceId
+                        });
+                        await client.PutAsync(requestUrl, new StringContent(body, Encoding.UTF8, "application/json"));
+                    }
+                    catch { }
+                }
+
+                // Also re-publish OUR OWN URLs so the other peer can find us
+                string globalUrl = FirebaseSyncManager.CachedGlobalUrl;
+                string localUrl = FirebaseSyncManager.CachedLocalUrl;
+                if (!string.IsNullOrEmpty(globalUrl) || !string.IsNullOrEmpty(localUrl))
+                {
+                    _urlCleanedFromFirebase = false;
+                    await FirebaseSyncManager.PushTunnelUrl(globalUrl ?? "", true, localUrl, forceWrite: true);
+                }
+
                 _urlRequestSent = true;
-                Logger.LogAction("PEER", "📡 URL request signal sent — waiting for peers to respond...");
+                _lastUrlRequestTime = DateTime.UtcNow;
+                Logger.LogAction("PEER", "📡 URL request signal sent + our URLs re-published");
             }
             catch (Exception ex)
             {
@@ -374,6 +496,9 @@ namespace AdvanceClip.Classes
                     Logger.LogAction("PEER", $"✅ {peer.DeviceName} connected via {transport}: {testUrl}" +
                         (!string.IsNullOrEmpty(peer.Version) ? $" (v{peer.Version})" : ""));
                     PeerConnected?.Invoke(peer.DeviceId, transport);
+
+                    // ═══ FIX 5: Cache URLs locally on successful connection ═══
+                    SaveUrlCache();
 
                     // Establish persistent WebSocket for instant liveness detection
                     _ = Task.Run(() => ConnectWebSocket(peer));
@@ -505,19 +630,13 @@ namespace AdvanceClip.Classes
                 await client.PutAsync(tickUrl, new StringContent(tickJson, Encoding.UTF8, "application/json"));
                 Logger.LogAction("PEER", $"✅ Confirmation tick written — {peerIds.Count} peer(s) confirmed");
 
-                // Delete our OWN sensitive URLs from Firebase (security: don't leave Cloudflare URLs exposed)
+                // ═══ FIX 6: DON'T delete URLs from Firebase ═══
+                // The old code deleted GlobalUrl/LocalIp/Url from Firebase for "security".
+                // But this caused a critical bug: after app restart, Firebase had no URLs
+                // and PeerManager couldn't reconnect. The URLs are already encrypted,
+                // so leaving them is safe. Only clear stale urlRequest signals.
                 try
                 {
-                    string gUrl = await FirebaseSyncManager.AuthUrlPublic(
-                        $"active_devices/{_myPairingKey}/{_myDeviceId}/GlobalUrl.json");
-                    await client.DeleteAsync(gUrl);
-                    string lUrl = await FirebaseSyncManager.AuthUrlPublic(
-                        $"active_devices/{_myPairingKey}/{_myDeviceId}/LocalIp.json");
-                    await client.DeleteAsync(lUrl);
-                    string uUrl = await FirebaseSyncManager.AuthUrlPublic(
-                        $"active_devices/{_myPairingKey}/{_myDeviceId}/Url.json");
-                    await client.DeleteAsync(uUrl);
-                    // Also clear any stale urlRequest
                     string rUrl = await FirebaseSyncManager.AuthUrlPublic(
                         $"active_devices/{_myPairingKey}/{_myDeviceId}/urlRequest.json");
                     await client.DeleteAsync(rUrl);
@@ -526,7 +645,7 @@ namespace AdvanceClip.Classes
 
                 _urlCleanedFromFirebase = true;
                 _urlRequestSent = false;
-                Logger.LogAction("PEER", "🔒 URLs deleted from Firebase (security cleanup)");
+                Logger.LogAction("PEER", "✅ Peer confirmation written (URLs preserved in Firebase for reconnection)");
             }
             catch (Exception ex)
             {
@@ -1008,6 +1127,14 @@ namespace AdvanceClip.Classes
         public bool IsWebSocketActive { get; set; }
         public string StatusText { get; set; } = "Offline";
         public string ActiveUrl { get; set; } = "";
+    }
+    /// <summary>Cached peer URLs for local persistence across restarts.</summary>
+    public class CachedPeerUrls
+    {
+        public string? DeviceName { get; set; }
+        public string? LanUrl { get; set; }
+        public string? CloudflareUrl { get; set; }
+        public DateTime LastSeen { get; set; }
     }
 }
 
