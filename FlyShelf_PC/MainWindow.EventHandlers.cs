@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------
-// MainWindow — Event Handlers
+// MainWindow ï¿½ Event Handlers
 // Drag/Drop, Search, Item Actions (Pin/Delete/Open/QuickLook),
 // Scroll, KeyDown, NotifyIcon, ContextMenu
 // Split from MainWindow.xaml.cs for modularity
@@ -358,7 +358,112 @@ namespace AdvanceClip
             }
         }
 
-        private void RunTerminalSpecific_Click(object sender, MouseButtonEventArgs e)
+        private async void RotateImageSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            {
+                e.Handled = true;
+                if (string.IsNullOrEmpty(item.FilePath) || !System.IO.File.Exists(item.FilePath)) return;
+
+                try
+                {
+                    string filePath = item.FilePath;
+
+                    // Find the Image element in the visual tree for animation
+                    var listViewItem = ShelfListView.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement;
+                    Image targetImage = null;
+                    if (listViewItem != null)
+                    {
+                        targetImage = FindVisualChild<Image>(listViewItem, "ItemIcon");
+                    }
+
+                    // Animate the image rotating 90Â° with smooth easing
+                    if (targetImage != null)
+                    {
+                        var rotateTransform = new System.Windows.Media.RotateTransform(0, targetImage.ActualWidth / 2, targetImage.ActualHeight / 2);
+                        targetImage.RenderTransform = rotateTransform;
+                        var rotateAnim = new System.Windows.Media.Animation.DoubleAnimation
+                        {
+                            From = 0,
+                            To = 90,
+                            Duration = TimeSpan.FromMilliseconds(300),
+                            EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseInOut }
+                        };
+                        rotateTransform.BeginAnimation(System.Windows.Media.RotateTransform.AngleProperty, rotateAnim);
+                    }
+
+                    // Rotate the file on a background thread to keep UI responsive
+                    await System.Threading.Tasks.Task.Run(() =>
+                    {
+                        byte[] fileBytes = System.IO.File.ReadAllBytes(filePath);
+                        System.Windows.Media.Imaging.BitmapImage original = null;
+                        Dispatcher.Invoke(() =>
+                        {
+                            original = new System.Windows.Media.Imaging.BitmapImage();
+                            using (var ms = new System.IO.MemoryStream(fileBytes))
+                            {
+                                original.BeginInit();
+                                original.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                                original.StreamSource = ms;
+                                original.EndInit();
+                                original.Freeze();
+                            }
+                        });
+
+                        var rotated = new System.Windows.Media.Imaging.TransformedBitmap(original, new System.Windows.Media.RotateTransform(90));
+                        rotated.Freeze();
+
+                        string ext = System.IO.Path.GetExtension(filePath).ToLower();
+                        System.Windows.Media.Imaging.BitmapEncoder encoder;
+                        if (ext == ".png") encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                        else if (ext == ".bmp") encoder = new System.Windows.Media.Imaging.BmpBitmapEncoder();
+                        else encoder = new System.Windows.Media.Imaging.JpegBitmapEncoder { QualityLevel = 95 };
+
+                        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(rotated));
+
+                        using (var fs = new System.IO.FileStream(filePath, System.IO.FileMode.Create, System.IO.FileAccess.Write))
+                        {
+                            encoder.Save(fs);
+                        }
+                    });
+
+                    // Wait for animation to finish
+                    await System.Threading.Tasks.Task.Delay(320);
+
+                    // Reload the icon from the freshly rotated file
+                    byte[] freshBytes = System.IO.File.ReadAllBytes(filePath);
+                    var freshBitmap = new System.Windows.Media.Imaging.BitmapImage();
+                    using (var ms = new System.IO.MemoryStream(freshBytes))
+                    {
+                        freshBitmap.BeginInit();
+                        freshBitmap.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                        freshBitmap.StreamSource = ms;
+                        freshBitmap.EndInit();
+                        freshBitmap.Freeze();
+                    }
+
+                    // Reset the rotation transform on the image
+                    if (targetImage != null)
+                    {
+                        targetImage.RenderTransform = null;
+                    }
+
+                    // Update the item's icon with the rotated image
+                    item.Icon = freshBitmap;
+
+                    // Move to top without triggering clipboard copy or sync
+                    _viewModel.MoveItemToTop(item);
+
+                    AdvanceClip.Classes.Logger.LogAction("ROTATE", "Rotated 90u00B0 in-place: " + System.IO.Path.GetFileName(filePath));
+                }
+                catch (Exception ex)
+                {
+                    AdvanceClip.Classes.Logger.LogAction("ROTATE", "Failed: " + ex.Message);
+                }
+            }
+        }
+
+                private void RunTerminalSpecific_Click(object sender, MouseButtonEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
             {
@@ -565,6 +670,18 @@ namespace AdvanceClip
                     T? childOfChild = FindVisualChild<T>(child);
                     if (childOfChild != null) return childOfChild;
                 }
+            }
+            return null;
+        }
+
+        private static T? FindVisualChild<T>(DependencyObject parent, string name) where T : FrameworkElement
+        {
+            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is T tChild && tChild.Name == name) return tChild;
+                T? deeper = FindVisualChild<T>(child, name);
+                if (deeper != null) return deeper;
             }
             return null;
         }

@@ -591,6 +591,58 @@
                                 </Grid>
                             </Border>
 
+                            <!-- u2550u2550u2550 Rotate Image u2014 round floating button, bottom-right of icon u2550u2550u2550 -->
+                            <Button Grid.Row="0" Grid.Column="0" VerticalAlignment="Bottom" HorizontalAlignment="Right"
+                                    Margin="0,0,-6,10" Panel.ZIndex="8" Focusable="False"
+                                    Tag="RotateImage" PreviewMouseLeftButtonDown="RotateImageSpecific_Click">
+                                <Button.Style>
+                                    <Style TargetType="Button">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Setter Property="Cursor" Value="Hand"/>
+                                        <Setter Property="OverridesDefaultStyle" Value="True"/>
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="Opacity" Value="0"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Width="26" Height="26" CornerRadius="13"
+                                                            Background="#D0181818" BorderBrush="#40FFFFFF" BorderThickness="1"
+                                                            ToolTip="Rotate 90u00B0">
+                                                        <ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="13" Foreground="#A78BFA"
+                                                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding ItemType}" Value="Image">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True">
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.2">
+                                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                                            </DoubleAnimation>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
+                                                <DataTrigger.ExitActions>
+                                                    <BeginStoryboard>
+                                                        <Storyboard>
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15">
+                                                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseIn"/></DoubleAnimation.EasingFunction>
+                                                            </DoubleAnimation>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.ExitActions>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                            </Button>
+
                             <!-- PDF Merge Toggle — top-left of icon, PDF only. Uses Button to avoid ListView CheckBox conflicts -->
                             <Button Grid.Row="0" Grid.Column="0" VerticalAlignment="Top" HorizontalAlignment="Left"
                                     Margin="-4,-4,0,0" Panel.ZIndex="10" Focusable="False"

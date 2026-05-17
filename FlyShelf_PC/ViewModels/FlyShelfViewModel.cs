@@ -402,6 +402,24 @@ namespace AdvanceClip.ViewModels
 
     
 
+        /// <summary>Moves an item to the top of the list without triggering clipboard copy or sync.</summary>
+        public void MoveItemToTop(ClipboardItem item)
+        {
+            if (item == null || !DroppedItems.Contains(item)) return;
+            
+            int oldIndex = DroppedItems.IndexOf(item);
+            if (oldIndex == 0) return; // Already at top
+            
+            // Update timestamp so it sorts as newest
+            item.DateCopied = DateTime.Now;
+            
+            // Move without triggering add/sync logic
+            DroppedItems.Move(oldIndex, 0);
+            
+            // Save silently
+            try { Classes.ClipboardHistoryManager.SaveHistoryDebounced(DroppedItems); } catch { }
+        }
+
         public void RemoveItem(ClipboardItem item)
         {
             if (item != null && DroppedItems.Contains(item))
