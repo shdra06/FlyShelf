@@ -270,7 +270,12 @@ namespace AdvanceClip.ViewModels
                     return;
                 }
                 var win = new AdvanceClip.Windows.PdfMergeWindow(pdfs, this);
-                win.ShowDialog();
+                win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
+                win.Topmost = true;
+                win.Show();
+                win.Activate();
+                win.Focus();
+                win.Topmost = false;
             });
             OpenFileLocationCommand = new RelayCommand<ClipboardItem>(item => {
                 if (item == null || string.IsNullOrEmpty(item.FilePath)) return;

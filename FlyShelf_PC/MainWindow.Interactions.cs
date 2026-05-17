@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------
-// MainWindow — Mouse Interactions & Advanced Features
+// MainWindow ï¿½ Mouse Interactions & Advanced Features
 // MouseClick, DragDrop, ForceSend, OpenApp, Selection,
 // PDF Merge, Card Hover Preview
 // Split from MainWindow.xaml.cs for modularity
@@ -550,9 +550,14 @@ namespace AdvanceClip
                 DismissMergeState();
                 var win = new AdvanceClip.Windows.PdfMergeWindow(allPdfs, _viewModel);
                 App.ActiveMergeWindow = win;
-                win.Closed += (_, __) => App.ActiveMergeWindow = null;
-                this.Hide();
+                win.Closed += (_, __) => { App.ActiveMergeWindow = null; this.Show(); this.Activate(); };
+                win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
+                win.Topmost = true;
                 win.Show();
+                win.Activate();
+                win.Focus();
+                win.Topmost = false;
+                this.Hide();
             }
             else if (allPdfs.Count == 1)
             {

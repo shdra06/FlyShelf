@@ -1102,7 +1102,12 @@ namespace AdvanceClip.Windows
             var win = new PdfMergeWindow(pdfs, _viewModel);
             App.ActiveMergeWindow = win;
             win.Closed += (_, __) => App.ActiveMergeWindow = null;
+            win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
+            win.Topmost = true;
             win.Show();
+            win.Activate();
+            win.Focus();
+            win.Topmost = false;
         }
 
     }
