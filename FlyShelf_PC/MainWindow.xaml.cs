@@ -119,6 +119,8 @@ namespace AdvanceClip
             // Restore keyboard focus to ListView after window is moved/repositioned
             this.Activated += (s, e) =>
             {
+                // Skip re-focus if a topmost child window (QuickLook) is active — prevents infinite activation loop
+                if (System.Windows.Application.Current.Windows.OfType<Window>().Any(w => w.Topmost && w != this && w.IsActive)) return;
                 // Debounce: only re-focus if the ListView isn't already keyboard-focused
                 if (!ShelfListView.IsKeyboardFocusWithin && _viewModel.DroppedItems.Count > 0)
                 {

@@ -42,14 +42,7 @@
 
                 <Grid Grid.Row="1" Background="#20000000">
                     <!-- Image Mode -->
-                    <Image x:Name="PreviewImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" CacheMode="BitmapCache">
-                        <Image.RenderTransform>
-                            <RotateTransform x:Name="ImageRotation" Angle="0" />
-                        </Image.RenderTransform>
-                        <Image.RenderTransformOrigin>
-                            <Point X="0.5" Y="0.5"/>
-                        </Image.RenderTransformOrigin>
-                    </Image>
+                    <Image x:Name="PreviewImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" CacheMode="BitmapCache"/>
                     
                     <!-- Dynamic Document Mode (PDF/HTML) -->
                     <WebBrowser x:Name="WebPreview" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
