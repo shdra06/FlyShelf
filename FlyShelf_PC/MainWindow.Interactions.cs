@@ -134,7 +134,7 @@ namespace AdvanceClip
 
             if (hideWindow)
             {
-                AnimateAndHide();
+                this.Hide();
                 _isDragHovering = false;
             }
 
@@ -421,7 +421,7 @@ namespace AdvanceClip
                 }
                 _hubWindowInstance.Activate();
                 _hubWindowInstance.Focus();
-                AnimateAndHide();
+                this.Hide();
             }
             catch (Exception ex)
             {
@@ -557,7 +557,7 @@ namespace AdvanceClip
                 win.Activate();
                 win.Focus();
                 win.Topmost = false;
-                AnimateAndHide();
+                this.Hide();
             }
             else if (allPdfs.Count == 1)
             {

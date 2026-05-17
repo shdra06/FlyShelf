@@ -388,7 +388,7 @@ namespace AdvanceClip
                     // Toggle: if already visible, just hide and return
                     if (this.IsVisible)
                     {
-                        AnimateAndHide();
+                        this.Hide();
                         handled = true;
                         return IntPtr.Zero;
                     }
@@ -669,88 +669,11 @@ namespace AdvanceClip
             // Auto-hide when user clicks away
             if (this.IsVisible)
             {
-                AnimateAndHide();
+                this.Hide();
             }
         }
         private bool _isPersistentMode = false;
-        private bool _isAnimatingHide = false;
-
-        /// <summary>Plays a fast, premium appear animation (scale + fade + slide-up).</summary>
-        /// <summary>Sets initial invisible state BEFORE Show() to prevent white border flash.</summary>
-        private void PrepareShowAnimation()
-        {
-            // Cancel any in-progress hide animation to prevent corruption on rapid toggle
-            if (_isAnimatingHide)
-            {
-                RootContent.BeginAnimation(OpacityProperty, null);
-                if (RootContent.RenderTransform is TransformGroup tg && tg.Children.Count >= 2)
-                {
-                    tg.Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, null);
-                    tg.Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, null);
-                    tg.Children[1].BeginAnimation(TranslateTransform.YProperty, null);
-                }
-                _isAnimatingHide = false;
-            }
-            RootContent.Opacity = 0;
-            RootContent.RenderTransformOrigin = new Point(0.5, 1);
-            RootContent.RenderTransform = new TransformGroup
-            {
-                Children = { new ScaleTransform(0.96, 0.96), new TranslateTransform(0, 8) }
-            };
-        }
-
-        private void PlayShowAnimation()
-        {
-
-            var duration = TimeSpan.FromMilliseconds(220);
-            var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
-
-            var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, duration) { EasingFunction = ease };
-            var scaleX = new System.Windows.Media.Animation.DoubleAnimation(0.96, 1, duration) { EasingFunction = ease };
-            var scaleY = new System.Windows.Media.Animation.DoubleAnimation(0.96, 1, duration) { EasingFunction = ease };
-            var slideUp = new System.Windows.Media.Animation.DoubleAnimation(8, 0, duration) { EasingFunction = ease };
-
-            RootContent.BeginAnimation(OpacityProperty, fadeIn);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, scaleX);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, scaleY);
-            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, slideUp);
-        }
-
-        /// <summary>Plays a fast dismiss animation, then hides. Returns immediately if already animating.</summary>
-        private void AnimateAndHide()
-        {
-            if (_isAnimatingHide || !this.IsVisible) return;
-            _isAnimatingHide = true;
-
-            RootContent.RenderTransformOrigin = new Point(0.5, 1);
-            RootContent.RenderTransform = new TransformGroup
-            {
-                Children = { new ScaleTransform(1, 1), new TranslateTransform(0, 0) }
-            };
-
-            var duration = TimeSpan.FromMilliseconds(150);
-            var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn };
-
-            var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, duration) { EasingFunction = ease };
-            fadeOut.Completed += (s, e) =>
-            {
-                this.Hide();
-                RootContent.Opacity = 1;
-                RootContent.RenderTransform = null;
-                _isAnimatingHide = false;
-            };
-
-            var scaleX = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, duration) { EasingFunction = ease };
-            var scaleY = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, duration) { EasingFunction = ease };
-            var slideDown = new System.Windows.Media.Animation.DoubleAnimation(0, 6, duration) { EasingFunction = ease };
-
-            RootContent.BeginAnimation(OpacityProperty, fadeOut);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, scaleX);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, scaleY);
-            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, slideDown);
-        }
-
-                private DateTime _spawnTime = DateTime.MinValue;
+        private DateTime _spawnTime = DateTime.MinValue;
         private IntPtr _previousForegroundWindow = IntPtr.Zero;
         internal static bool _isWritingClipboard = false;
         private static System.Threading.Timer _clipboardWriteResetTimer;
@@ -888,17 +811,13 @@ namespace AdvanceClip
             if (stealFocus)
             {
                 this.ShowActivated = true;
-                PrepareShowAnimation();
                 this.Show();
                 this.Activate();
-                PlayShowAnimation();
             }
             else
             {
                 this.ShowActivated = false;
-                PrepareShowAnimation();
                 this.Show();
-                PlayShowAnimation();
             }
 
             this.UpdateLayout();
