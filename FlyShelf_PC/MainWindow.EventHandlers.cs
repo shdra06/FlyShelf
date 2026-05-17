@@ -348,11 +348,19 @@ namespace AdvanceClip
             }
         }
 
+        private AdvanceClip.Windows.QuickLookWindow _activeQuickLook;
+
         private void QuickLookSpecific_Click(object sender, MouseButtonEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
             {
+                // Close existing Quick Look window first
+                try { _activeQuickLook?.Close(); } catch { }
+                _activeQuickLook = null;
+
                 var qLook = new AdvanceClip.Windows.QuickLookWindow(item);
+                qLook.Closed += (s, args) => { if (_activeQuickLook == s) _activeQuickLook = null; };
+                _activeQuickLook = qLook;
                 qLook.Show();
                 e.Handled = true;
             }
