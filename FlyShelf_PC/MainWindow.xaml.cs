@@ -44,6 +44,7 @@ namespace AdvanceClip
         [DllImport("user32.dll")]
         public static extern IntPtr SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
+
         [DllImport("user32.dll")]
         public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
 
@@ -865,6 +866,7 @@ namespace AdvanceClip
                 RootContent.Opacity = 0;
                 this.Show();
                 this.Activate();
+                { int cn = DWMWA_COLOR_NONE; DwmSetWindowAttribute(new System.Windows.Interop.WindowInteropHelper(this).Handle, DWMWA_BORDER_COLOR, ref cn, sizeof(int)); }
                 PlayShowAnimation();
             }
             else
@@ -872,6 +874,7 @@ namespace AdvanceClip
                 this.ShowActivated = false;
                 RootContent.Opacity = 0;
                 this.Show();
+                { int cn = DWMWA_COLOR_NONE; DwmSetWindowAttribute(new System.Windows.Interop.WindowInteropHelper(this).Handle, DWMWA_BORDER_COLOR, ref cn, sizeof(int)); }
                 PlayShowAnimation();
             }
 
