@@ -389,10 +389,11 @@
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True">
                                                 <Setter Property="IsHitTestVisible" Value="True"/>
+                                                <Setter Property="Opacity" Value="1"/>
                                                 <DataTrigger.EnterActions>
                                                     <BeginStoryboard>
                                                         <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18">
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.18" FillBehavior="Stop">
                                                                 <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
                                                             </DoubleAnimation>
                                                         </Storyboard>
@@ -401,7 +402,7 @@
                                                 <DataTrigger.ExitActions>
                                                     <BeginStoryboard>
                                                         <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.12">
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.12" FillBehavior="Stop">
                                                                 <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseIn" /></DoubleAnimation.EasingFunction>
                                                             </DoubleAnimation>
                                                         </Storyboard>
@@ -619,10 +620,11 @@
                                                 <Setter Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True">
+                                                <Setter Property="Opacity" Value="1"/>
                                                 <DataTrigger.EnterActions>
                                                     <BeginStoryboard>
                                                         <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.2">
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.2" FillBehavior="Stop">
                                                                 <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                                             </DoubleAnimation>
                                                         </Storyboard>
@@ -631,7 +633,7 @@
                                                 <DataTrigger.ExitActions>
                                                     <BeginStoryboard>
                                                         <Storyboard>
-                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15">
+                                                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.15" FillBehavior="Stop">
                                                                 <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseIn"/></DoubleAnimation.EasingFunction>
                                                             </DoubleAnimation>
                                                         </Storyboard>
