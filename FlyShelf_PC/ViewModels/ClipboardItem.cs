@@ -189,9 +189,12 @@ namespace AdvanceClip.ViewModels
                 {
                     _isPinned = value;
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPinned)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(PinLabel)));
                 }
             }
         }
+        /// <summary>Dynamic label for the context menu pin toggle.</summary>
+        public string PinLabel => _isPinned ? "Unpin Drop" : "Pin Drop";
         
         private bool _isSelected;
         [JsonIgnore]
