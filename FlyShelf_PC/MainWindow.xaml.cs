@@ -394,7 +394,7 @@ namespace AdvanceClip
                         return IntPtr.Zero;
                     }
                     var workArea = SystemParameters.WorkArea;
-                    ShowNearPosition(workArea.Left + workArea.Width - 380, workArea.Top + workArea.Height, 1, true, true);
+                    ShowNearPosition(workArea.Left + 16, workArea.Top + workArea.Height, 1, true, true);
                     handled = true;
                 }
                 else if (hotkeyId >= HOTKEY_QUICKPASTE_BASE + 1 && hotkeyId <= HOTKEY_QUICKPASTE_BASE + 10)
