@@ -678,32 +678,26 @@ namespace AdvanceClip
         /// <summary>Plays a fast, premium appear animation (scale + fade + slide-up).</summary>
         private void PlayShowAnimation()
         {
-            // Set initial state for animation
-            this.Opacity = 0;
-            this.RenderTransformOrigin = new Point(0.5, 1); // scale from bottom
-            this.RenderTransform = new TransformGroup
+            // Animate the root content, NOT the window (MicaWindow doesn't support window-level opacity)
+            RootContent.Opacity = 0;
+            RootContent.RenderTransformOrigin = new Point(0.5, 1);
+            RootContent.RenderTransform = new TransformGroup
             {
                 Children = { new ScaleTransform(0.96, 0.96), new TranslateTransform(0, 8) }
             };
 
-            var duration = TimeSpan.FromMilliseconds(200);
+            var duration = TimeSpan.FromMilliseconds(220);
             var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
 
-            // Opacity: 0 → 1
             var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, duration) { EasingFunction = ease };
-
-            // ScaleX: 0.96 → 1
             var scaleX = new System.Windows.Media.Animation.DoubleAnimation(0.96, 1, duration) { EasingFunction = ease };
-            // ScaleY: 0.96 → 1
             var scaleY = new System.Windows.Media.Animation.DoubleAnimation(0.96, 1, duration) { EasingFunction = ease };
-
-            // TranslateY: 8 → 0 (slide up from below)
             var slideUp = new System.Windows.Media.Animation.DoubleAnimation(8, 0, duration) { EasingFunction = ease };
 
-            this.BeginAnimation(OpacityProperty, fadeIn);
-            ((TransformGroup)this.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, scaleX);
-            ((TransformGroup)this.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, scaleY);
-            ((TransformGroup)this.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, slideUp);
+            RootContent.BeginAnimation(OpacityProperty, fadeIn);
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, scaleX);
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, scaleY);
+            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, slideUp);
         }
 
         /// <summary>Plays a fast dismiss animation, then hides. Returns immediately if already animating.</summary>
@@ -712,8 +706,8 @@ namespace AdvanceClip
             if (_isAnimatingHide || !this.IsVisible) return;
             _isAnimatingHide = true;
 
-            this.RenderTransformOrigin = new Point(0.5, 1);
-            this.RenderTransform = new TransformGroup
+            RootContent.RenderTransformOrigin = new Point(0.5, 1);
+            RootContent.RenderTransform = new TransformGroup
             {
                 Children = { new ScaleTransform(1, 1), new TranslateTransform(0, 0) }
             };
@@ -721,29 +715,26 @@ namespace AdvanceClip
             var duration = TimeSpan.FromMilliseconds(150);
             var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn };
 
-            // Opacity: 1 → 0
             var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, duration) { EasingFunction = ease };
             fadeOut.Completed += (s, e) =>
             {
                 this.Hide();
-                this.Opacity = 1;
-                this.RenderTransform = null;
+                RootContent.Opacity = 1;
+                RootContent.RenderTransform = null;
                 _isAnimatingHide = false;
             };
 
-            // ScaleX/Y: 1 → 0.96
             var scaleX = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, duration) { EasingFunction = ease };
             var scaleY = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, duration) { EasingFunction = ease };
-
-            // TranslateY: 0 → 6 (slide down slightly)
             var slideDown = new System.Windows.Media.Animation.DoubleAnimation(0, 6, duration) { EasingFunction = ease };
 
-            this.BeginAnimation(OpacityProperty, fadeOut);
-            ((TransformGroup)this.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, scaleX);
-            ((TransformGroup)this.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, scaleY);
-            ((TransformGroup)this.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, slideDown);
+            RootContent.BeginAnimation(OpacityProperty, fadeOut);
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, scaleX);
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, scaleY);
+            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, slideDown);
         }
-        private DateTime _spawnTime = DateTime.MinValue;
+
+                private DateTime _spawnTime = DateTime.MinValue;
         private IntPtr _previousForegroundWindow = IntPtr.Zero;
         internal static bool _isWritingClipboard = false;
         private static System.Threading.Timer _clipboardWriteResetTimer;
