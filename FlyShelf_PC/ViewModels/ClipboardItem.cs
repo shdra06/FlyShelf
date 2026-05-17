@@ -231,6 +231,11 @@ namespace AdvanceClip.ViewModels
         public bool IsArchivePreview => ItemType == ClipboardItemType.Archive;
         public bool IsFolderPreview => ItemType == ClipboardItemType.Folder;
         public bool IsTextPreview => ItemType == ClipboardItemType.Text;
+        public bool IsAudioPreview => ItemType == ClipboardItemType.Audio;
+        public bool IsPresentationPreview => ItemType == ClipboardItemType.Presentation;
+        public bool IsFilePreview => ItemType == ClipboardItemType.File;
+        /// <summary>True for any item backed by a file on disk (images, docs, archives, etc.)</summary>
+        public bool HasFilePath => !string.IsNullOrEmpty(FilePath);
 
         private bool _isSuggestedContext;
         [JsonIgnore]

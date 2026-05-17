@@ -286,51 +286,86 @@
                         <Grid Name="ItemGrid" HorizontalAlignment="Stretch" Background="Transparent" Tag="{Binding DataContext, ElementName=ShelfListView}">
                             <Grid.ContextMenu>
                                 <ContextMenu>
+                                    <ContextMenu.Resources>
+                                        <Style TargetType="Separator">
+                                            <Setter Property="Margin" Value="8,4"/>
+                                            <Setter Property="Background" Value="#18FFFFFF"/>
+                                        </Style>
+                                        <Style TargetType="MenuItem">
+                                            <Setter Property="Padding" Value="10,6"/>
+                                            <Setter Property="FontSize" Value="12.5"/>
+                                        </Style>
+                                    </ContextMenu.Resources>
+
+                                    <!-- ═══ Universal: Pin / Unpin ═══ -->
                                     <MenuItem Header="{Binding PinLabel}" 
                                               Command="{Binding PlacementTarget.Tag.TogglePinCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                    <MenuItem Header="Open Link / Launch Editor" 
-                                              Command="{Binding PlacementTarget.Tag.OpenItemCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                    <MenuItem Header="Run Code in VS Code Sandbox" 
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+
+                                    <!-- ═══ Universal: Copy Content ═══ -->
+                                    <MenuItem Header="Copy to Clipboard" 
+                                              Command="{Binding PlacementTarget.Tag.CopyRawContentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+
+                                    <Separator />
+
+                                    <!-- ═══ TEXT: No special actions ═══ -->
+
+                                    <!-- ═══ CODE: VS Code + Terminal ═══ -->
+                                    <MenuItem Header="Open in VS Code" 
                                               Command="{Binding PlacementTarget.Tag.LaunchSandboxCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                                               CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Visibility="{Binding PlacementTarget.DataContext.IsCodePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                    <MenuItem Header="Run directly in CMD Terminal" 
+                                              Visibility="{Binding PlacementTarget.DataContext.IsCodePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                    <MenuItem Header="Run in Terminal" 
                                               Command="{Binding PlacementTarget.Tag.LaunchTerminalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                                               CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Visibility="{Binding PlacementTarget.DataContext.IsCodePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                    <Separator />
-                                    <!-- Semantic Bound Additions -->
-                                    <MenuItem Header="Open PDF in Default Browser" 
-                                              Command="{Binding PlacementTarget.Tag.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Visibility="{Binding PlacementTarget.DataContext.IsPdfPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                    <MenuItem Header="Convert Word to PDF File" 
-                                              Command="{Binding PlacementTarget.Tag.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Visibility="{Binding PlacementTarget.DataContext.IsDocPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                    <MenuItem Header="Convert PDF to Word File" Click="ConvertPdfToWord_Click" 
-                                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                              Visibility="{Binding PlacementTarget.DataContext.IsPdfPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                    <MenuItem Header="Open URL in Microsoft Edge" 
-                                              Command="{Binding PlacementTarget.Tag.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Visibility="{Binding PlacementTarget.DataContext.IsUrlPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                    <MenuItem Header="Extract Native Windows OCR Text" 
+                                              Visibility="{Binding PlacementTarget.DataContext.IsCodePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                                    <!-- ═══ IMAGE: OCR Extract ═══ -->
+                                    <MenuItem Header="Extract Text (OCR)" 
                                               Command="{Binding PlacementTarget.Tag.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                                               CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                              Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                    <MenuItem Header="Convert Image to PDF" 
+                                              Command="{Binding PlacementTarget.Tag.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                                              Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                                    <!-- ═══ PDF: Open + Convert ═══ -->
+                                    <MenuItem Header="Open PDF in Browser" 
+                                              Command="{Binding PlacementTarget.Tag.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                                              Visibility="{Binding PlacementTarget.DataContext.IsPdfPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                    <MenuItem Header="Convert PDF to Word" Click="ConvertPdfToWord_Click" 
+                                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              Visibility="{Binding PlacementTarget.DataContext.IsPdfPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                                    <!-- ═══ DOCUMENT: Convert to PDF ═══ -->
+                                    <MenuItem Header="Convert to PDF" 
+                                              Command="{Binding PlacementTarget.Tag.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                                              Visibility="{Binding PlacementTarget.DataContext.IsDocPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                                    <!-- ═══ URL: Open in Browser ═══ -->
+                                    <MenuItem Header="Open in Browser" 
+                                              Command="{Binding PlacementTarget.Tag.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                                              Visibility="{Binding PlacementTarget.DataContext.IsUrlPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
                                     <Separator />
-                                    <MenuItem Header="Force Send to Device" Click="ForceSendItem_Click" Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
-                                    <Separator />
+
+                                    <!-- ═══ FILE-BACKED: Show in Explorer ═══ -->
                                     <MenuItem Header="Show in Explorer" 
                                               Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              Visibility="{Binding PlacementTarget.DataContext.HasFilePath, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
                                     <Separator />
-                                    <MenuItem Header="Delete Drop" 
+
+                                    <!-- ═══ Universal: Delete ═══ -->
+                                    <MenuItem Header="Delete" 
                                               Command="{Binding PlacementTarget.Tag.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Foreground="#EF4444" />
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Foreground="#EF4444"/>
                                 </ContextMenu>
                             </Grid.ContextMenu>
                             <Grid.RowDefinitions>
