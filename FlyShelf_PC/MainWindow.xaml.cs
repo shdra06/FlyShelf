@@ -676,15 +676,19 @@ namespace AdvanceClip
         private bool _isAnimatingHide = false;
 
         /// <summary>Plays a fast, premium appear animation (scale + fade + slide-up).</summary>
-        private void PlayShowAnimation()
+        /// <summary>Sets initial invisible state BEFORE Show() to prevent white border flash.</summary>
+        private void PrepareShowAnimation()
         {
-            // Animate the root content, NOT the window (MicaWindow doesn't support window-level opacity)
             RootContent.Opacity = 0;
             RootContent.RenderTransformOrigin = new Point(0.5, 1);
             RootContent.RenderTransform = new TransformGroup
             {
                 Children = { new ScaleTransform(0.96, 0.96), new TranslateTransform(0, 8) }
             };
+        }
+
+        private void PlayShowAnimation()
+        {
 
             var duration = TimeSpan.FromMilliseconds(220);
             var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
@@ -872,6 +876,7 @@ namespace AdvanceClip
             if (stealFocus)
             {
                 this.ShowActivated = true;
+                PrepareShowAnimation();
                 this.Show();
                 this.Activate();
                 PlayShowAnimation();
@@ -879,6 +884,7 @@ namespace AdvanceClip
             else
             {
                 this.ShowActivated = false;
+                PrepareShowAnimation();
                 this.Show();
                 PlayShowAnimation();
             }
