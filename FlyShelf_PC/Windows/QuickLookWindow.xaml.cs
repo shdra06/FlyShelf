@@ -11,6 +11,7 @@ namespace AdvanceClip.Windows
         private AdvanceClip.ViewModels.ClipboardItem _item;
         private Point _startPoint;
         private bool _isImageLoaded = false;
+        private double _currentRotation = 0;
 
         public QuickLookWindow(AdvanceClip.ViewModels.ClipboardItem item)
         {
@@ -111,6 +112,66 @@ namespace AdvanceClip.Windows
 
                 this.Width = 400;
                 this.Height = 350;
+            }
+        }
+
+        private void RotateButton_Click(object sender, RoutedEventArgs e)
+        {
+            _currentRotation = (_currentRotation + 90) % 360;
+            
+            // Animate the rotation smoothly
+            var animation = new System.Windows.Media.Animation.DoubleAnimation
+            {
+                To = _currentRotation,
+                Duration = TimeSpan.FromMilliseconds(200),
+                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+            };
+            ImageRotation.BeginAnimation(System.Windows.Media.RotateTransform.AngleProperty, animation);
+
+            // Save the rotated image back to disk
+            try
+            {
+                if (!string.IsNullOrEmpty(_item.FilePath) && File.Exists(_item.FilePath))
+                {
+                    var source = PreviewImage.Source as BitmapSource;
+                    if (source != null)
+                    {
+                        var rotated = new TransformedBitmap(source, new System.Windows.Media.RotateTransform(90));
+                        
+                        string ext = Path.GetExtension(_item.FilePath).ToLower();
+                        BitmapEncoder encoder;
+                        if (ext == ".png") encoder = new PngBitmapEncoder();
+                        else if (ext == ".bmp") encoder = new BmpBitmapEncoder();
+                        else encoder = new JpegBitmapEncoder { QualityLevel = 95 };
+                        
+                        encoder.Frames.Add(BitmapFrame.Create(rotated));
+                        
+                        string tempPath = _item.FilePath + ".tmp";
+                        using (var fs = new FileStream(tempPath, FileMode.Create))
+                        {
+                            encoder.Save(fs);
+                        }
+                        File.Delete(_item.FilePath);
+                        File.Move(tempPath, _item.FilePath);
+                        
+                        // Reload the freshly rotated image as the new source
+                        var fresh = new BitmapImage();
+                        fresh.BeginInit();
+                        fresh.CacheOption = BitmapCacheOption.OnLoad;
+                        fresh.UriSource = new Uri(_item.FilePath);
+                        fresh.EndInit();
+                        PreviewImage.Source = fresh;
+                        
+                        // Reset visual rotation since the file itself is now rotated
+                        _currentRotation = 0;
+                        ImageRotation.BeginAnimation(System.Windows.Media.RotateTransform.AngleProperty, null);
+                        ImageRotation.Angle = 0;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                AdvanceClip.Classes.Logger.LogAction("ROTATE", "Failed: " + ex.Message);
             }
         }
 

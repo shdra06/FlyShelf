@@ -17,21 +17,39 @@
         <Border CornerRadius="12" Background="#801C1C1C" BorderBrush="#30FFFFFF" BorderThickness="1" ClipToBounds="True">
             <Grid>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="45" />
+                    <RowDefinition Height="40" />
                     <RowDefinition Height="*" />
                 </Grid.RowDefinitions>
                 
-                <!-- Native UI Header (Avoids Airspace Issues with Win32 WebBrowser) -->
+                <!-- Header Bar -->
                 <Grid Grid.Row="0" Background="#90111111" MouseLeftButtonDown="Window_MouseLeftButtonDown">
-                    <TextBlock Text="Quick Look Engine - FlyShelf" Foreground="#AAAAAA" VerticalAlignment="Center" Margin="15,0,0,0" FontWeight="SemiBold" FontSize="12" IsHitTestVisible="False"/>
-                    <ui:Button Click="CloseButton_Click" Appearance="Transparent" Foreground="White" HorizontalAlignment="Right" Margin="10,0,10,0" VerticalAlignment="Center">
-                        <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24"/></ui:Button.Icon>
-                    </ui:Button>
+                    <TextBlock Text="Quick Look" Foreground="#888888" VerticalAlignment="Center" Margin="14,0,0,0" FontWeight="Medium" FontSize="11.5" IsHitTestVisible="False"/>
+                    
+                    <!-- Action Buttons (right side) -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,6,0">
+                        <!-- Rotate Button (image only) -->
+                        <ui:Button x:Name="RotateBtn" Click="RotateButton_Click" Appearance="Transparent" 
+                                   Foreground="#888888" Padding="5,3" Margin="0,0,2,0" ToolTip="Rotate 90° clockwise"
+                                   Visibility="Collapsed">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
+                        <!-- Close -->
+                        <ui:Button Click="CloseButton_Click" Appearance="Transparent" Foreground="#888888" Padding="5,3">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
+                    </StackPanel>
                 </Grid>
 
                 <Grid Grid.Row="1" Background="#20000000">
                     <!-- Image Mode -->
-                    <Image x:Name="PreviewImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" CacheMode="BitmapCache"/>
+                    <Image x:Name="PreviewImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" CacheMode="BitmapCache">
+                        <Image.RenderTransform>
+                            <RotateTransform x:Name="ImageRotation" Angle="0" />
+                        </Image.RenderTransform>
+                        <Image.RenderTransformOrigin>
+                            <Point X="0.5" Y="0.5"/>
+                        </Image.RenderTransformOrigin>
+                    </Image>
                     
                     <!-- Dynamic Document Mode (PDF/HTML) -->
                     <WebBrowser x:Name="WebPreview" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
