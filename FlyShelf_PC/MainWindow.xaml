@@ -18,9 +18,9 @@
         Loaded="MicaWindow_Loaded" Deactivated="MicaWindow_Deactivated">
 
     <WindowChrome.WindowChrome>
-        <WindowChrome GlassFrameThickness="0,0,0,1" CornerRadius="14" CaptionHeight="0" UseAeroCaptionButtons="False" ResizeBorderThickness="0" NonClientFrameEdges="None" />
+        <WindowChrome GlassFrameThickness="-1" CornerRadius="14" CaptionHeight="0" UseAeroCaptionButtons="False" ResizeBorderThickness="0" />
     </WindowChrome.WindowChrome>
-    <Grid x:Name="RootContent" Margin="0" MouseLeftButtonDown="Header_MouseLeftButtonDown" Background="#01000000">
+    <Grid Margin="0" MouseLeftButtonDown="Header_MouseLeftButtonDown" Background="#01000000">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
