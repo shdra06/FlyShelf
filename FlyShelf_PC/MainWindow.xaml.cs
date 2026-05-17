@@ -675,26 +675,8 @@ namespace AdvanceClip
         private bool _isPersistentMode = false;
         private bool _isAnimatingHide = false;
 
-        /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
-        private void PlayShowAnimation()
-        {
-            RootContent.RenderTransformOrigin = new Point(0.5, 1);
-            RootContent.RenderTransform = new TransformGroup
-            {
-                Children = { new ScaleTransform(0.97, 0.97), new TranslateTransform(0, 6) }
-            };
-            RootContent.Opacity = 0;
 
-            var dur = TimeSpan.FromMilliseconds(200);
-            var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
-
-            RootContent.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, dur) { EasingFunction = ease });
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, new System.Windows.Media.Animation.DoubleAnimation(0.97, 1, dur) { EasingFunction = ease });
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, new System.Windows.Media.Animation.DoubleAnimation(0.97, 1, dur) { EasingFunction = ease });
-            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(6, 0, dur) { EasingFunction = ease });
-        }
-
-        /// <summary>Fast dismiss animation on inner content, then hides window.</summary>
+                /// <summary>Fast dismiss animation on inner content, then hides window.</summary>
         private void AnimateAndHide()
         {
             if (_isAnimatingHide || !this.IsVisible) return;
@@ -862,17 +844,13 @@ namespace AdvanceClip
             if (stealFocus)
             {
                 this.ShowActivated = true;
-                RootContent.Opacity = 0;
                 this.Show();
                 this.Activate();
-                PlayShowAnimation();
             }
             else
             {
                 this.ShowActivated = false;
-                RootContent.Opacity = 0;
                 this.Show();
-                PlayShowAnimation();
             }
 
             this.UpdateLayout();
