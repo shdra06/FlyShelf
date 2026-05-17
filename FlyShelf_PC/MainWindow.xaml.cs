@@ -862,6 +862,7 @@ namespace AdvanceClip
             if (stealFocus)
             {
                 this.ShowActivated = true;
+                RootContent.Opacity = 0;
                 this.Show();
                 this.Activate();
                 PlayShowAnimation();
@@ -869,6 +870,7 @@ namespace AdvanceClip
             else
             {
                 this.ShowActivated = false;
+                RootContent.Opacity = 0;
                 this.Show();
                 PlayShowAnimation();
             }
