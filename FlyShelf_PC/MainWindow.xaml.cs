@@ -580,29 +580,24 @@ namespace AdvanceClip
                                     var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap(bitmap, System.Windows.Media.PixelFormats.Bgra32, null, 0);
                                     int w = converted.PixelWidth;
                                     int h = converted.PixelHeight;
-                                    // Sample a grid of pixels instead of reading all (performance)
-                                    int stride = w * 4;
-                                    int sampleRows = Math.Min(h, 20);
-                                    int sampleCols = Math.Min(w, 20);
-                                    int transparentCount = 0, totalSampled = 0;
-                                    byte[] rowPixels = new byte[stride];
-                                    for (int sy = 0; sy < sampleRows; sy++)
+                                    // Ultra-light ghost check: read 16 single pixels from a 4×4 grid (64 bytes total)
+                                    byte[] pixel = new byte[4];
+                                    int transparentCount = 0;
+                                    const int gridSize = 4;
+                                    for (int gy = 0; gy < gridSize; gy++)
                                     {
-                                        int y = sy * h / sampleRows;
-                                        converted.CopyPixels(new System.Windows.Int32Rect(0, y, w, 1), rowPixels, stride, 0);
-                                        for (int sx = 0; sx < sampleCols; sx++)
+                                        int y = (gy * 2 + 1) * h / (gridSize * 2); // Centered samples
+                                        for (int gx = 0; gx < gridSize; gx++)
                                         {
-                                            int x = sx * w / sampleCols;
-                                            int idx = x * 4 + 3; // Alpha channel
-                                            if (idx < rowPixels.Length && rowPixels[idx] < 10) transparentCount++;
-                                            totalSampled++;
+                                            int x = (gx * 2 + 1) * w / (gridSize * 2);
+                                            converted.CopyPixels(new System.Windows.Int32Rect(x, y, 1, 1), pixel, 4, 0);
+                                            if (pixel[3] < 10) transparentCount++;
                                         }
                                     }
-                                    double transparentRatio = totalSampled > 0 ? (double)transparentCount / totalSampled : 0;
-                                    if (transparentRatio > 0.95)
+                                    if (transparentCount >= 15) // 15/16 = 93.75% transparent
                                     {
                                         isGhostImage = true;
-                                        Classes.Logger.LogAction("CLIPBOARD", $"⛔ Rejected ghost image ({bitmap.PixelWidth}x{bitmap.PixelHeight}) — {transparentRatio:P0} transparent pixels");
+                                        Classes.Logger.LogAction("CLIPBOARD", $"⛔ Rejected ghost image ({w}x{h}) — {transparentCount}/16 samples transparent");
                                     }
                                 }
                                 catch { }
