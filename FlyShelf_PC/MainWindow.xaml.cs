@@ -679,6 +679,18 @@ namespace AdvanceClip
         /// <summary>Sets initial invisible state BEFORE Show() to prevent white border flash.</summary>
         private void PrepareShowAnimation()
         {
+            // Cancel any in-progress hide animation to prevent corruption on rapid toggle
+            if (_isAnimatingHide)
+            {
+                RootContent.BeginAnimation(OpacityProperty, null);
+                if (RootContent.RenderTransform is TransformGroup tg && tg.Children.Count >= 2)
+                {
+                    tg.Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, null);
+                    tg.Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, null);
+                    tg.Children[1].BeginAnimation(TranslateTransform.YProperty, null);
+                }
+                _isAnimatingHide = false;
+            }
             RootContent.Opacity = 0;
             RootContent.RenderTransformOrigin = new Point(0.5, 1);
             RootContent.RenderTransform = new TransformGroup
