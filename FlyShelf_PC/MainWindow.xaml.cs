@@ -388,7 +388,7 @@ namespace AdvanceClip
                     // Toggle: if already visible, just hide and return
                     if (this.IsVisible)
                     {
-                        this.Hide();
+                        AnimateAndHide();
                         handled = true;
                         return IntPtr.Zero;
                     }
@@ -669,10 +669,61 @@ namespace AdvanceClip
             // Auto-hide when user clicks away
             if (this.IsVisible)
             {
-                this.Hide();
+                AnimateAndHide();
             }
         }
         private bool _isPersistentMode = false;
+        private bool _isAnimatingHide = false;
+
+        /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
+        private void PlayShowAnimation()
+        {
+            RootContent.RenderTransformOrigin = new Point(0.5, 1);
+            RootContent.RenderTransform = new TransformGroup
+            {
+                Children = { new ScaleTransform(0.97, 0.97), new TranslateTransform(0, 6) }
+            };
+            RootContent.Opacity = 0;
+
+            var dur = TimeSpan.FromMilliseconds(200);
+            var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
+
+            RootContent.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, dur) { EasingFunction = ease });
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, new System.Windows.Media.Animation.DoubleAnimation(0.97, 1, dur) { EasingFunction = ease });
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, new System.Windows.Media.Animation.DoubleAnimation(0.97, 1, dur) { EasingFunction = ease });
+            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(6, 0, dur) { EasingFunction = ease });
+        }
+
+        /// <summary>Fast dismiss animation on inner content, then hides window.</summary>
+        private void AnimateAndHide()
+        {
+            if (_isAnimatingHide || !this.IsVisible) return;
+            _isAnimatingHide = true;
+
+            RootContent.RenderTransformOrigin = new Point(0.5, 1);
+            RootContent.RenderTransform = new TransformGroup
+            {
+                Children = { new ScaleTransform(1, 1), new TranslateTransform(0, 0) }
+            };
+
+            var dur = TimeSpan.FromMilliseconds(140);
+            var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn };
+
+            var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, dur) { EasingFunction = ease };
+            fadeOut.Completed += (s, e) =>
+            {
+                this.Hide();
+                RootContent.BeginAnimation(OpacityProperty, null);
+                RootContent.Opacity = 1;
+                RootContent.RenderTransform = null;
+                _isAnimatingHide = false;
+            };
+
+            RootContent.BeginAnimation(OpacityProperty, fadeOut);
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, dur) { EasingFunction = ease });
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, dur) { EasingFunction = ease });
+            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 5, dur) { EasingFunction = ease });
+        }
         private DateTime _spawnTime = DateTime.MinValue;
         private IntPtr _previousForegroundWindow = IntPtr.Zero;
         internal static bool _isWritingClipboard = false;
@@ -813,11 +864,13 @@ namespace AdvanceClip
                 this.ShowActivated = true;
                 this.Show();
                 this.Activate();
+                PlayShowAnimation();
             }
             else
             {
                 this.ShowActivated = false;
                 this.Show();
+                PlayShowAnimation();
             }
 
             this.UpdateLayout();
