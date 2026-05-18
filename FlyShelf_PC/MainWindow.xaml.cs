@@ -646,6 +646,10 @@ namespace AdvanceClip
         protected override void OnActivated(EventArgs e)
         {
             base.OnActivated(e);
+            // Guard: don't fight QuickLook for focus
+            if (System.Windows.Application.Current.Windows.OfType<Window>()
+                .Any(w => w is AdvanceClip.Windows.QuickLookWindow && w.IsActive)) return;
+            if (_isAnimatingHide) return;
             this.Opacity = 1.0;
             int colorNone = DWMWA_COLOR_NONE;
             DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, DWMWA_BORDER_COLOR, ref colorNone, Marshal.SizeOf<int>());
@@ -666,6 +670,10 @@ namespace AdvanceClip
 
             // Don't dismiss while user is mid-drag
             if (_isDragHovering) return;
+
+            // Don't dismiss if focus went to our own QuickLook window
+            if (System.Windows.Application.Current.Windows.OfType<Window>()
+                .Any(w => w is AdvanceClip.Windows.QuickLookWindow && w.IsActive)) return;
 
             // Auto-hide when user clicks away
             if (this.IsVisible)
@@ -713,10 +721,14 @@ namespace AdvanceClip
             var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, dur) { EasingFunction = ease };
             fadeOut.Completed += (s, e) =>
             {
-                this.Hide();
-                RootContent.BeginAnimation(OpacityProperty, null);
-                RootContent.Opacity = 1;
-                RootContent.RenderTransform = null;
+                try
+                {
+                    this.Hide();
+                    RootContent.BeginAnimation(OpacityProperty, null);
+                    RootContent.Opacity = 1;
+                    RootContent.RenderTransform = null;
+                }
+                catch { }
                 _isAnimatingHide = false;
             };
 
