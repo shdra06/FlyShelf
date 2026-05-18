@@ -1,7 +1,7 @@
 {
-  "pc_version": "5.5.0",
-  "pc_changelog": "v5.5.0 — Critical Connectivity Fix\n\n• Fixed: PeerManager dead reconnection loop after restart\n• Local URL caching for instant peer reconnection\n• URLs preserved in Firebase for reliability\n• Parallel chunked upload for CF files >256KB\n• Shared HttpClient with connection pooling\n• Verbose handshake diagnostics",
-  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v5.5.0/FlyShelf.exe",
+  "pc_version": "5.6.0",
+  "pc_changelog": "v5.6.0 — Stability & Quick Look Overhaul\n\n• Fixed: QuickLook window no longer opens multiple instances\n• Fixed: QuickLook content clears and re-renders correctly on every preview\n• Fixed: DWM border white-line artifact suppressed on window init\n• Fixed: Shake animation crash when Topmost focus fights occur\n• Improved: Acrylic/Mica glass effect integrity preserved on all previews\n• Improved: Overall animation smoothness and UI responsiveness",
+  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v5.6.0/FlyShelf.exe",
   "android_version": "5.3.0",
   "android_changelog": "v5.3.0 — FlyShelf Android v4\n\n• P2P sync improvements\n• Compatible with FlyShelf PC v5.5.0\n• Cloudflare tunnel transport support\n• Debug log viewer for diagnostics",
   "android_download": "https://github.com/shdra06/FlyShelf/releases/download/android-v4/app-release.apk"

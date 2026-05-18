@@ -13,9 +13,9 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <ApplicationIcon>Resources\ClipFlowLogo.ico</ApplicationIcon>
     <NoWarn>CS4014;CS0168;CS0162;CS0414;CS8632;CS0169</NoWarn>
-    <Version>5.5.0</Version>
-    <AssemblyVersion>5.5.0</AssemblyVersion>
-    <FileVersion>5.5.0</FileVersion>
+    <Version>5.6.0</Version>
+    <AssemblyVersion>5.6.0</AssemblyVersion>
+    <FileVersion>5.6.0</FileVersion>
     <AssemblyTitle>FlyShelf</AssemblyTitle>
     <Product>FlyShelf — Seamless Cross-Device Clipboard</Product>
     <Company>Shivendra</Company>
