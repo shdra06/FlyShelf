@@ -1,4 +1,4 @@
-﻿using AdvanceClip.ViewModels;
+﻿﻿﻿﻿using AdvanceClip.ViewModels;
 using MicaWPF.Controls;
 using System;
 using System.Collections.Specialized;
@@ -264,23 +264,30 @@ namespace AdvanceClip
             // Apply wallpaper if configured
             ApplyWallpaper();
 
-            // Blur-off: solid dark background + DWM caption color
+            // Blur-off: premium dark mode with subtle gradient
             if (!Classes.SettingsManager.Current.EnableBlurBehind)
             {
                 this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
-                var darkBg = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(18, 18, 26));
-                this.Background = darkBg;
-                if (RootContent != null) RootContent.Background = darkBg;
-                try
+                System.Threading.Tasks.Task.Delay(150).ContinueWith(_ =>
                 {
-                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                    if (hwnd != IntPtr.Zero)
+                    Dispatcher.Invoke(() =>
                     {
-                        int darkColor = (26 << 16) | (18 << 8) | 18; // BGR: #12121A
-                        DwmSetWindowAttribute(hwnd, 35, ref darkColor, sizeof(int)); // DWMWA_CAPTION_COLOR
-                    }
-                } catch { }
+                        // Rich gradient background: dark indigo to near-black
+                        var gradient = new System.Windows.Media.LinearGradientBrush();
+                        gradient.StartPoint = new System.Windows.Point(0.5, 0);
+                        gradient.EndPoint = new System.Windows.Point(0.5, 1);
+                        gradient.GradientStops.Add(new System.Windows.Media.GradientStop(
+                            System.Windows.Media.Color.FromRgb(32, 32, 48), 0));    // #202030 soft indigo
+                        gradient.GradientStops.Add(new System.Windows.Media.GradientStop(
+                            System.Windows.Media.Color.FromRgb(28, 28, 42), 0.5));  // #1C1C2A mid tone
+                        gradient.GradientStops.Add(new System.Windows.Media.GradientStop(
+                            System.Windows.Media.Color.FromRgb(24, 24, 38), 1));    // #181826 base
+                        gradient.Freeze();
+
+                        this.Background = gradient;
+                        if (RootContent != null) RootContent.Background = gradient;
+                    });
+                });
             }
         }
 
