@@ -8,18 +8,10 @@ namespace AdvanceClip;
 
 public partial class App : Application
 {
-    private const int WH_KEYBOARD_LL = 13;
-    private const int WH_MOUSE_LL = 14;
-    private const int WM_KEYDOWN = 0x0100;
-    private const int WM_SYSKEYDOWN = 0x0104;
-    private const int WM_MOUSEMOVE = 0x0200;
     private const int VK_LBUTTON = 0x01;
-    private const int VK_RBUTTON = 0x02;
-
-    private static LowLevelMouseProc _mouseProc = MouseHookCallback;
-    private static IntPtr _mouseHookID = IntPtr.Zero;
     private static App _instance;
     private static MainWindow _mainWinInstance;
+    private static System.Threading.Timer? _shakeTimer;
 
     /// <summary>Reference to open PDF merge window; shake suppressed only when it's focused.</summary>
     internal static Window? ActiveMergeWindow = null;
@@ -78,6 +70,14 @@ public partial class App : Application
 
         base.OnStartup(e);
         this.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+
+        // Force-load assemblies in Single-File deployment so WPF has access to all control styles and types
+        try
+        {
+            _ = typeof(Wpf.Ui.Controls.SymbolIcon).FullName;
+            _ = typeof(MicaWPF.Controls.MicaWindow).FullName;
+        }
+        catch { }
         
         // ------------------------------------------------------------------
         // Single File Deployment: Synthesize the physical scripts locally FIRST!
@@ -101,7 +101,7 @@ public partial class App : Application
         catch (Exception) { /* Swallow permission constraint exceptions gracefully */ }
         
         _instance = this;
-        _mouseHookID = SetMouseHook(_mouseProc);
+        StartShakePolling();
 
         try
         {
@@ -271,29 +271,37 @@ public partial class App : Application
             // This drops AdvanceClip's actual active startup boot time from ~2000ms straight to < 10ms!
             Application.Current.Dispatcher.InvokeAsync(async () => 
             {
-                _mainWinInstance = new MainWindow();
-                MainWindow = _mainWinInstance;
-                
-                // Load persisted clipboard history (text + images survive restarts)
-                (_mainWinInstance.DataContext as ViewModels.FlyShelfViewModel)?.LoadPersistedHistory();
-                
-                MainWindow.Show();
-                
-                // One-time cleanup: purge old GUID-based device entries from Firebase
-                _ = AdvanceClip.Classes.FirebaseSyncManager.CleanupStaleDevices();
-                
-                // Dump full network diagnostics at startup for remote debugging
-                _ = System.Threading.Tasks.Task.Run(() =>
+                try
                 {
-                    System.Threading.Thread.Sleep(8000); // Wait for Cloudflare to initialize
-                    AdvanceClip.Classes.Logger.DumpNetworkDiagnostics();
-                });
-                
-                // CRITICAL: Give the NotifyIcon (system tray) and TaskbarWindow (widget)
-                // enough time to register before hiding. The WPF-UI tray:NotifyIcon
-                // registers in the Loaded event — hiding immediately kills the registration.
-                await System.Threading.Tasks.Task.Delay(500);
-                MainWindow.Hide();
+                    _mainWinInstance = new MainWindow();
+                    MainWindow = _mainWinInstance;
+                    
+                    // Load persisted clipboard history (text + images survive restarts)
+                    (_mainWinInstance.DataContext as ViewModels.FlyShelfViewModel)?.LoadPersistedHistory();
+                    
+                    MainWindow.Show();
+                    
+                    // One-time cleanup: purge old GUID-based device entries from Firebase
+                    _ = AdvanceClip.Classes.FirebaseSyncManager.CleanupStaleDevices();
+                    
+                    // Dump full network diagnostics at startup for remote debugging
+                    _ = System.Threading.Tasks.Task.Run(() =>
+                    {
+                        System.Threading.Thread.Sleep(8000); // Wait for Cloudflare to initialize
+                        AdvanceClip.Classes.Logger.DumpNetworkDiagnostics();
+                    });
+                    
+                    // CRITICAL: Give the NotifyIcon (system tray) and TaskbarWindow (widget)
+                    // enough time to register before hiding. The WPF-UI tray:NotifyIcon
+                    // registers in the Loaded event — hiding immediately kills the registration.
+                    await System.Threading.Tasks.Task.Delay(500);
+                    MainWindow.Hide();
+                }
+                catch (Exception ex)
+                {
+                    try { System.IO.File.AppendAllText("startup_error.txt", $"[MainWindow Startup Failed] {ex}\n"); } catch { }
+                    LaunchSafeMode(ex);
+                }
             }, System.Windows.Threading.DispatcherPriority.Background);
         }
         catch (Exception ex)
@@ -304,7 +312,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        UnhookWindowsHookEx(_mouseHookID);
+        _shakeTimer?.Dispose();
         
         try
         {
@@ -316,123 +324,106 @@ public partial class App : Application
         base.OnExit(e);
     }
 
-    private static IntPtr SetMouseHook(LowLevelMouseProc proc)
+    // Store-compliant Shake-to-Open Background Polling (No low-level system hooks!)
+    private static void StartShakePolling()
     {
-        using (Process curProcess = Process.GetCurrentProcess())
-        using (ProcessModule curModule = curProcess.MainModule)
+        _shakeTimer = new System.Threading.Timer(state =>
         {
-            return SetWindowsHookEx(WH_MOUSE_LL, proc,
-                GetModuleHandle(curModule.ModuleName), 0);
-        }
-    }
-
-    private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
-
-    private static IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
-    {
-        if (nCode >= 0 && wParam == (IntPtr)WM_MOUSEMOVE)
-        {
-        if ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0 && AdvanceClip.Classes.SettingsManager.Current.EnableShakeToOpen)
+            try
             {
-                MSLLHOOKSTRUCT hookStruct = Marshal.PtrToStructure<MSLLHOOKSTRUCT>(lParam);
-                
-                // Intelligent Hub Verification: Don't trigger if the user is explicitly dragging our own UI!
-                // We do not evaluate WindowFromPoint here! Calling COM / UI thread operations 
-                // inside a LowLevelMouseProc will freeze the entire Windows OS mouse!
-
-                // Global Debounce: Prevent repeated triggering if it recently opened (5 seconds rule)
-                if (Environment.TickCount64 - _lastClipboardLaunchTime < 5000)
+                if (!AdvanceClip.Classes.SettingsManager.Current.EnableShakeToOpen)
                 {
                     _shakeCount = 0;
-                    return CallNextHookEx(_mouseHookID, nCode, wParam, lParam);
+                    return;
                 }
 
-                int currentX = hookStruct.pt.x;
-                long currentTime = Environment.TickCount64;
-
-                // Track the very beginning of a possible gesture chain to calculate net downward drift
-                if (_shakeCount == 0)
+                // Check if Left Mouse Button is held down
+                if ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0)
                 {
-                    _shakeStartY = hookStruct.pt.y;
-                }
-
-                // Restrict the evaluation completely to tight shakes (between 15ms and 500ms consecutive loops)
-                if (currentTime - _lastShakeTime > 500)
-                {
-                    _shakeCount = 0;
-                    _lastShakeDirX = 0;
-                    _lastShakeDirY = 0;
-                    _lastShakeX = currentX;
-                    _lastShakeY = hookStruct.pt.y;
-                    _lastShakeTime = currentTime;
-                }
-                else
-                {
-                    int deltaX = currentX - _lastShakeX;
-                    int deltaY = hookStruct.pt.y - _lastShakeY;
-                    
-                    bool reversed = false;
-                    int currentDirX = deltaX > 0 ? 1 : (deltaX < 0 ? -1 : 0);
-                    int currentDirY = deltaY > 0 ? 1 : (deltaY < 0 ? -1 : 0);
-
-                    // Required amplitude 18 guarantees proper tracking of human back-and-forth physics with less strain
-                    if (Math.Abs(deltaX) > 18)
+                    POINT pt;
+                    if (GetCursorPos(out pt))
                     {
-                        if (_lastShakeDirX != 0 && currentDirX != _lastShakeDirX) reversed = true;
-                        _lastShakeDirX = currentDirX;
-                        _lastShakeX = currentX;
-                        _lastShakeTime = currentTime;
-                    }
-                    else if (Math.Abs(deltaY) > 18)
-                    {
-                        if (_lastShakeDirY != 0 && currentDirY != _lastShakeDirY) reversed = true;
-                        _lastShakeDirY = currentDirY;
-                        _lastShakeY = hookStruct.pt.y;
-                        _lastShakeTime = currentTime;
-                    }
-
-                    if (reversed)
-                    {
-                        _shakeCount++;
-
-                        // Requires 3 distinct rapid reversals (highly responsive yet extremely safe from twitch)
-                        if (_shakeCount >= 3)
+                        if (Environment.TickCount64 - _lastClipboardLaunchTime < 5000)
                         {
-                            _shakeCount = 0; 
-                            
-                            int triggerX = hookStruct.pt.x;
-                            int triggerY = hookStruct.pt.y;
+                            _shakeCount = 0;
+                            return;
+                        }
 
-                            // Algorithm Upgrade: Drag-Scroll Safety Filter
-                            int netDriftY = triggerY - _shakeStartY;
-                            if (netDriftY > 150)
+                        int currentX = pt.x;
+                        int currentY = pt.y;
+                        long currentTime = Environment.TickCount64;
+
+                        if (_shakeCount == 0)
+                        {
+                            _shakeStartY = currentY;
+                        }
+
+                        if (currentTime - _lastShakeTime > 500)
+                        {
+                            _shakeCount = 0;
+                            _lastShakeDirX = 0;
+                            _lastShakeDirY = 0;
+                            _lastShakeX = currentX;
+                            _lastShakeY = currentY;
+                            _lastShakeTime = currentTime;
+                        }
+                        else
+                        {
+                            int deltaX = currentX - _lastShakeX;
+                            int deltaY = currentY - _lastShakeY;
+                            
+                            bool reversed = false;
+                            int currentDirX = deltaX > 0 ? 1 : (deltaX < 0 ? -1 : 0);
+                            int currentDirY = deltaY > 0 ? 1 : (deltaY < 0 ? -1 : 0);
+
+                            if (Math.Abs(deltaX) > 18)
                             {
-                                return CallNextHookEx(_mouseHookID, nCode, wParam, lParam);
+                                if (_lastShakeDirX != 0 && currentDirX != _lastShakeDirX) reversed = true;
+                                _lastShakeDirX = currentDirX;
+                                _lastShakeX = currentX;
+                                _lastShakeTime = currentTime;
+                            }
+                            else if (Math.Abs(deltaY) > 18)
+                            {
+                                if (_lastShakeDirY != 0 && currentDirY != _lastShakeDirY) reversed = true;
+                                _lastShakeDirY = currentDirY;
+                                _lastShakeY = currentY;
+                                _lastShakeTime = currentTime;
                             }
 
-                            // SYNCHRONOUS LOCK: Lock in the 5 second global debounce immediately on the Hook Thread!
-                            // Prevents multiple queued Dispatcher events from bypassing the timer lock!
-                            _lastClipboardLaunchTime = Environment.TickCount64;
-
-                            _instance?.Dispatcher.InvokeAsync(async () => 
+                            if (reversed)
                             {
-                                await System.Threading.Tasks.Task.Delay(300);
+                                _shakeCount++;
 
-                                // Don't spawn clipboard while PDF merge window is in focus
-                                if (ActiveMergeWindow != null && ActiveMergeWindow.IsActive) return;
+                                if (_shakeCount >= 3)
+                                {
+                                    _shakeCount = 0; 
+                                    int triggerX = currentX;
+                                    int triggerY = currentY;
 
-                                _instance.LaunchClipboardManager(triggerX, triggerY, false, 0, false);
-                            }, System.Windows.Threading.DispatcherPriority.Background);
+                                    int netDriftY = triggerY - _shakeStartY;
+                                    if (netDriftY > 150) return;
+
+                                    _lastClipboardLaunchTime = Environment.TickCount64;
+
+                                    _instance?.Dispatcher.InvokeAsync(async () => 
+                                    {
+                                        await System.Threading.Tasks.Task.Delay(300);
+                                        if (ActiveMergeWindow != null && ActiveMergeWindow.IsActive) return;
+                                        _instance.LaunchClipboardManager(triggerX, triggerY, false, 0, false);
+                                    }, System.Windows.Threading.DispatcherPriority.Background);
+                                }
+                            }
                         }
                     }
                 }
+                else
+                {
+                    _shakeCount = 0;
+                }
             }
-            else
-            {
-                _shakeCount = 0;
-            }
-        }
-        return CallNextHookEx(_mouseHookID, nCode, wParam, lParam);
+            catch { }
+        }, null, 0, 40); // Poll every 40ms (highly responsive 25fps poll rate!)
     }
 
     private void LaunchClipboardManager(double x, double y, bool isPersistent, int mode, bool stealFocus = true)
@@ -446,20 +437,146 @@ public partial class App : Application
         _mainWinInstance.ShowNearPosition(x, y, mode, isPersistent, stealFocus);
     }
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr SetWindowsHookEx(int idHook,
-        Delegate lpfn, IntPtr hMod, uint dwThreadId);
+    [DllImport("user32.dll")]
+    private static extern bool GetCursorPos(out POINT lpPoint);
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+    [DllImport("user32.dll")]
+    private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
-    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode,
-        IntPtr wParam, IntPtr lParam);
+    [DllImport("user32.dll")]
+    private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
-    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
-    private static extern IntPtr GetModuleHandle(string lpModuleName);
+    private void LaunchSafeMode(Exception originalException)
+    {
+        try
+        {
+            AdvanceClip.Classes.Logger.LogAction("SAFEMODE", $"Launching FlyShelf in Safe Mode due to startup failure: {originalException.Message}");
+            
+            // Create an ultra-safe fallback window
+            Window safeWindow = new Window
+            {
+                Title = "FlyShelf Safe Mode",
+                Width = 460,
+                Height = 320,
+                WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                ResizeMode = ResizeMode.NoResize,
+                WindowStyle = WindowStyle.None,
+                AllowsTransparency = true,
+                Background = System.Windows.Media.Brushes.Transparent,
+                Topmost = true,
+                ShowInTaskbar = true
+            };
+
+            var outerBorder = new System.Windows.Controls.Border {
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 20, 20)),
+                BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 38, 38)), // Crimson border
+                BorderThickness = new Thickness(1.5),
+                CornerRadius = new CornerRadius(12)
+            };
+
+            var stack = new System.Windows.Controls.StackPanel { Margin = new Thickness(24), VerticalAlignment = VerticalAlignment.Center };
+            
+            stack.Children.Add(new System.Windows.Controls.TextBlock { 
+                Text = "FlyShelf (Safe Mode)", 
+                FontSize = 18, 
+                FontWeight = FontWeights.Bold, 
+                Foreground = System.Windows.Media.Brushes.White,
+                Margin = new Thickness(0, 0, 0, 8)
+            });
+            
+            stack.Children.Add(new System.Windows.Controls.TextBlock { 
+                Text = "A critical layout or resource exception prevented FlyShelf from starting normally. FlyShelf is running in background diagnostic safe mode.", 
+                FontSize = 12, 
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(200, 180, 180)),
+                Margin = new Thickness(0, 0, 0, 14),
+                TextWrapping = TextWrapping.Wrap
+            });
+
+            // Show exception details
+            var detailText = new System.Windows.Controls.TextBox {
+                Text = originalException.ToString(),
+                Height = 100,
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(15, 15, 15)),
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(180, 180, 180)),
+                BorderThickness = new Thickness(0),
+                TextWrapping = TextWrapping.Wrap,
+                VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
+                IsReadOnly = true,
+                Margin = new Thickness(0, 0, 0, 16),
+                Padding = new Thickness(8),
+                FontSize = 11
+            };
+            stack.Children.Add(detailText);
+
+            var buttonPanel = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+
+            // "Reset settings" button
+            var btnReset = new System.Windows.Controls.Border {
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(59, 130, 246)),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(14, 8, 14, 8),
+                Margin = new Thickness(0, 0, 12, 0),
+                Cursor = Cursors.Hand
+            };
+            var txtReset = new System.Windows.Controls.TextBlock { Text = "Reset Settings", Foreground = System.Windows.Media.Brushes.White, FontWeight = FontWeights.Bold, FontSize = 12 };
+            btnReset.Child = txtReset;
+            btnReset.MouseLeftButtonDown += (s, ev) => {
+                try
+                {
+                    AdvanceClip.Classes.SettingsManager.ResetToDefaults();
+                    MessageBox.Show("Settings reset to default. Please restart FlyShelf.", "Reset Complete", MessageBoxButton.OK, MessageBoxImage.Information);
+                    Application.Current.Shutdown();
+                }
+                catch (Exception ex) { MessageBox.Show($"Failed to reset settings: {ex.Message}"); }
+            };
+            buttonPanel.Children.Add(btnReset);
+
+            // "Exit" button
+            var btnExit = new System.Windows.Controls.Border {
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 38, 38)),
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(14, 8, 14, 8),
+                Cursor = Cursors.Hand
+            };
+            var txtExit = new System.Windows.Controls.TextBlock { Text = "Close App", Foreground = System.Windows.Media.Brushes.White, FontWeight = FontWeights.Bold, FontSize = 12 };
+            btnExit.Child = txtExit;
+            btnExit.MouseLeftButtonDown += (s, ev) => {
+                Application.Current.Shutdown();
+            };
+            buttonPanel.Children.Add(btnExit);
+
+            stack.Children.Add(buttonPanel);
+            outerBorder.Child = stack;
+            safeWindow.Content = outerBorder;
+
+            // Register native Alt+C hotkey on the safe window to display a safe mode notification!
+            safeWindow.SourceInitialized += (s, ev) =>
+            {
+                var helper = new System.Windows.Interop.WindowInteropHelper(safeWindow);
+                var hwnd = helper.Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    RegisterHotKey(hwnd, 9000, 0x0001 | 0x4000, 0x43); // Alt+C
+                    System.Windows.Interop.HwndSource.FromHwnd(hwnd)?.AddHook((IntPtr h, int msg, IntPtr wp, IntPtr lp, ref bool handled) =>
+                    {
+                        if (msg == 0x0312 && wp.ToInt32() == 9000)
+                        {
+                            MessageBox.Show("FlyShelf is running in Safe Mode due to a startup crash:\n\n" + originalException.Message, "FlyShelf Safe Mode", MessageBoxButton.OK, MessageBoxImage.Warning);
+                            handled = true;
+                        }
+                        return IntPtr.Zero;
+                    });
+                }
+            };
+
+            safeWindow.Show();
+        }
+        catch (Exception fatalEx)
+        {
+            MessageBox.Show($"FlyShelf encountered a fatal initialization error:\n\n{originalException.Message}\n\nFallback UI failed:\n{fatalEx.Message}", "Fatal Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            Application.Current.Shutdown();
+        }
+    }
 }
 
 

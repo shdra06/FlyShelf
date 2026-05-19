@@ -17,6 +17,26 @@
         TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal"
         Loaded="MicaWindow_Loaded" Deactivated="MicaWindow_Deactivated">
 
+    <controls:MicaWindow.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/Wpf.Ui;component/Resources/Theme/Dark.xaml"/>
+                <ResourceDictionary Source="pack://application:,,,/Wpf.Ui;component/Resources/Wpf.Ui.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+            <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
+
+            <!-- Named style for Sync Circular Arrows button evaluated at Window level -->
+            <Style x:Key="ToolbarSyncButtonStyle" TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                <Style.Triggers>
+                    <DataTrigger Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalFirebaseSync}" Value="True">
+                        <Setter Property="Foreground" Value="#10B981"/>
+                    </DataTrigger>
+                </Style.Triggers>
+            </Style>
+        </ResourceDictionary>
+    </controls:MicaWindow.Resources>
+
     <WindowChrome.WindowChrome>
         <WindowChrome GlassFrameThickness="-1" CornerRadius="14" CaptionHeight="0" UseAeroCaptionButtons="False" ResizeBorderThickness="0" />
     </WindowChrome.WindowChrome>
@@ -145,87 +165,71 @@
 
                 <!-- Emoji button — swaps to Merge PDF when 2+ PDFs selected -->
                 <ui:Button x:Name="EmojiBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                    <Grid Width="20" Height="20">
-                        <!-- Standard emoji icon -->
-                        <ui:SymbolIcon x:Name="EmojiBtnIcon" Symbol="Emoji24" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <ui:SymbolIcon.Style>
-                                <Style TargetType="ui:SymbolIcon" BasedOn="{StaticResource {x:Type ui:SymbolIcon}}">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </ui:SymbolIcon.Style>
-                        </ui:SymbolIcon>
-
-                        <!-- Drop animation icon (arrow moving down) -->
-                        <Grid x:Name="DropArrowContainer" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-                            <Grid.Style>
-                                <Style TargetType="Grid">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Grid.Style>
-                            <ui:SymbolIcon Symbol="ArrowDown24" Foreground="#10B981" RenderTransformOrigin="0.5,0.5">
-                                <ui:SymbolIcon.RenderTransform>
-                                    <TranslateTransform x:Name="ArrowTranslate" Y="0"/>
-                                </ui:SymbolIcon.RenderTransform>
+                    <ui:Button.Icon>
+                        <Grid Width="20" Height="20">
+                            <!-- Standard emoji icon -->
+                            <ui:SymbolIcon x:Name="EmojiBtnIcon" Symbol="Emoji24" HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <ui:SymbolIcon.Style>
-                                    <Style TargetType="ui:SymbolIcon" BasedOn="{StaticResource {x:Type ui:SymbolIcon}}">
+                                    <Style TargetType="ui:SymbolIcon">
+                                        <Setter Property="Visibility" Value="Visible"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                                <DataTrigger.EnterActions>
-                                                    <BeginStoryboard x:Name="BounceArrowStory">
-                                                        <Storyboard RepeatBehavior="Forever">
-                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                                                             From="-4" To="4" Duration="0:0:0.6" AutoReverse="True">
-                                                                <DoubleAnimation.EasingFunction>
-                                                                    <SineEase EasingMode="EaseInOut"/>
-                                                                </DoubleAnimation.EasingFunction>
-                                                            </DoubleAnimation>
-                                                        </Storyboard>
-                                                    </BeginStoryboard>
-                                                </DataTrigger.EnterActions>
-                                                <DataTrigger.ExitActions>
-                                                    <StopStoryboard BeginStoryboardName="BounceArrowStory"/>
-                                                </DataTrigger.ExitActions>
+                                                <Setter Property="Visibility" Value="Collapsed"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </ui:SymbolIcon.Style>
                             </ui:SymbolIcon>
+
+                            <Grid x:Name="DropArrowContainer" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                                <Grid.Style>
+                                    <Style TargetType="Grid">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Grid.Style>
+                                <ui:SymbolIcon Symbol="ArrowDown24" Foreground="#10B981" RenderTransformOrigin="0.5,0.5">
+                                    <ui:SymbolIcon.RenderTransform>
+                                        <TranslateTransform x:Name="ArrowTranslate" Y="0"/>
+                                    </ui:SymbolIcon.RenderTransform>
+                                    <ui:SymbolIcon.Style>
+                                        <Style TargetType="ui:SymbolIcon">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                    <DataTrigger.EnterActions>
+                                                        <BeginStoryboard x:Name="BounceArrowStory">
+                                                            <Storyboard RepeatBehavior="Forever">
+                                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                                                 From="-4" To="4" Duration="0:0:0.6" AutoReverse="True">
+                                                                    <DoubleAnimation.EasingFunction>
+                                                                        <SineEase EasingMode="EaseInOut"/>
+                                                                    </DoubleAnimation.EasingFunction>
+                                                                </DoubleAnimation>
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </DataTrigger.EnterActions>
+                                                    <DataTrigger.ExitActions>
+                                                        <StopStoryboard BeginStoryboardName="BounceArrowStory"/>
+                                                    </DataTrigger.ExitActions>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ui:SymbolIcon.Style>
+                                </ui:SymbolIcon>
+                            </Grid>
                         </Grid>
-                    </Grid>
+                    </ui:Button.Icon>
                 </ui:Button>
                 <!-- Merge PDF button — hidden by default, replaces emoji when PDFs selected -->
-                <ui:Button x:Name="MergePdfToolbarBtn" Focusable="False" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                    <ui:Button.Style>
-                        <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                            <Setter Property="Background" Value="#30EF4444"/>
-                            <Setter Property="Foreground" Value="#EF4444"/>
-                            <Setter Property="BorderBrush" Value="#50EF4444"/>
-                        </Style>
-                    </ui:Button.Style>
+                <ui:Button x:Name="MergePdfToolbarBtn" Focusable="False" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,6,0" Padding="8,6" CornerRadius="8" Background="#30EF4444" Foreground="#EF4444" BorderBrush="#50EF4444">
                     <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24" Foreground="#EF4444"/></ui:Button.Icon>
                 </ui:Button>
                 
-                <ui:Button Focusable="False" Appearance="Secondary" Click="ToggleGlobalSync_Click" ToolTip="Toggle All Sync (LAN + Cloud)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                    <ui:Button.Style>
-                        <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                            <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalFirebaseSync}" Value="True">
-                                    <Setter Property="Foreground" Value="#10B981"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </ui:Button.Style>
+                <ui:Button Focusable="False" Appearance="Secondary" Style="{StaticResource ToolbarSyncButtonStyle}" Click="ToggleGlobalSync_Click" ToolTip="Toggle All Sync (LAN + Cloud)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
                     <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowSync24" Filled="True"/></ui:Button.Icon>
                 </ui:Button>
 
@@ -361,9 +365,19 @@
                                               Command="{Binding PlacementTarget.Tag.CopyRawContentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                                               CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
 
+                                    <!-- ═══ Universal: Force Send ═══ -->
+                                    <MenuItem Header="⚡ Force Send to Device..." Click="ForceSendItem_Click"
+                                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+
                                     <Separator />
 
-                                    <!-- ═══ TEXT: No special actions ═══ -->
+                                    <!-- ═══ TEXT / CODE Actions ═══ -->
+                                    <MenuItem Header="🔍 Search on Google" Click="GoogleSearch_Click" 
+                                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              Visibility="{Binding PlacementTarget.DataContext.IsTextPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                    <MenuItem Header="📄 Convert Text to PDF" Click="ConvertTextToPdf_Click" 
+                                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              Visibility="{Binding PlacementTarget.DataContext.IsTextPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
                                     <!-- ═══ CODE: VS Code + Terminal ═══ -->
                                     <MenuItem Header="Open in VS Code" 
@@ -374,11 +388,20 @@
                                               Command="{Binding PlacementTarget.Tag.LaunchTerminalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                                               CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                                               Visibility="{Binding PlacementTarget.DataContext.IsCodePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                    <MenuItem Header="Compile C++ &amp; Run" 
+                                              Command="{Binding PlacementTarget.Tag.CompileNativeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                                              Visibility="{Binding PlacementTarget.DataContext.IsCPlusPlusPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
-                                    <!-- ═══ IMAGE: OCR Extract ═══ -->
+                                    <!-- ═══ IMAGE: OCR Extract + Gemini Table ═══ -->
                                     <MenuItem Header="Extract Text (OCR)" 
                                               Command="{Binding PlacementTarget.Tag.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                                               CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                                              Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                    <MenuItem Header="📊 Extract Table Data (Gemini AI)" 
+                                              Command="{Binding PlacementTarget.Tag.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                                              Foreground="#A855F7"
                                               Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                     <MenuItem Header="Convert Image to PDF" 
                                               Command="{Binding PlacementTarget.Tag.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 

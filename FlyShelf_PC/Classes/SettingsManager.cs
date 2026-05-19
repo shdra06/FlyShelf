@@ -135,6 +135,17 @@ namespace AdvanceClip.Classes
             _saveDebounce = new System.Threading.Timer(_ => Save(), null, 500, System.Threading.Timeout.Infinite);
         }
 
+        public static void ResetToDefaults()
+        {
+            Current = new AdvanceSettings();
+            Current.PropertyChanged += (s, e) => DebouncedSave();
+            if (Current.CustomSnifferPaths != null)
+            {
+                Current.CustomSnifferPaths.CollectionChanged += (s, e) => DebouncedSave();
+            }
+            Save();
+        }
+
         public static void Save()
         {
             try

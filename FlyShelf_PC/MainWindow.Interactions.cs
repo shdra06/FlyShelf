@@ -457,9 +457,9 @@ namespace AdvanceClip
                     UnpinSelectedBtn.Visibility = Visibility.Collapsed;
                 }
 
-                // Shift/Ctrl-select PDF/DOC merge: auto-check selected files for merge/convert
+                // Shift/Ctrl-select PDF/DOC/Image merge: auto-check selected files for merge/convert
                 var selectedMergeable = ShelfListView.SelectedItems.Cast<ClipboardItem>()
-                    .Where(i => (i.IsPdfPreview || i.IsDocPreview) && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+                    .Where(i => (i.IsPdfPreview || i.IsDocPreview || i.ItemType == ClipboardItemType.Image) && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
                     .ToList();
 
                 if (selectedMergeable.Count >= 2 || (selectedMergeable.Count == 1 && selectedMergeable[0].IsDocPreview))
@@ -501,9 +501,13 @@ namespace AdvanceClip
             var checkedDocs = _viewModel.DroppedItems
                 .Where(i => i.IsCheckedForMerge && i.IsDocPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
                 .ToList();
+            var checkedImages = _viewModel.DroppedItems
+                .Where(i => i.IsCheckedForMerge && i.ItemType == ClipboardItemType.Image && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+                .ToList();
+
+            var convertedPdfPaths = new List<string>();
 
             // Convert DOC/DOCX files to PDF first
-            var convertedPdfPaths = new List<string>();
             if (checkedDocs.Count > 0)
             {
                 AdvanceClip.Windows.ToastWindow.ShowToast($"📄 Converting {checkedDocs.Count} DOC file(s) to PDF...");
@@ -520,27 +524,47 @@ namespace AdvanceClip
                         AdvanceClip.Windows.ToastWindow.ShowToast($"❌ Failed to convert: {doc.FileName}");
                     }
                 }
+            }
 
-                // If only DOCs selected (no merge needed), just convert and add to shelf
-                if (checkedPdfs.Count == 0 && convertedPdfPaths.Count > 0 && checkedDocs.Count == convertedPdfPaths.Count)
+            // Convert Images to PDF next
+            if (checkedImages.Count > 0)
+            {
+                AdvanceClip.Windows.ToastWindow.ShowToast($"🖼️ Formatting {checkedImages.Count} image(s) to PDF...");
+
+                foreach (var img in checkedImages)
                 {
-                    foreach (string path in convertedPdfPaths)
+                    try
                     {
-                        var newItem = new ClipboardItem(path);
-                        _viewModel.DroppedItems.Insert(0, newItem);
+                        string pdfPath = await System.Threading.Tasks.Task.Run(() => ConvertImageToPdf(img.FilePath));
+                        if (!string.IsNullOrEmpty(pdfPath) && System.IO.File.Exists(pdfPath))
+                        {
+                            convertedPdfPaths.Add(pdfPath);
+                        }
                     }
-                    _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
-                    DismissMergeState();
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"✅ Converted {convertedPdfPaths.Count} file(s) to PDF");
-                    return;
+                    catch (Exception ex)
+                    {
+                        AdvanceClip.Windows.ToastWindow.ShowToast($"❌ Failed to format: {img.FileName}");
+                        AdvanceClip.Classes.Logger.LogAction("IMAGE2PDF_ERR", ex.ToString());
+                    }
                 }
+            }
+
+            // If only DOCs/Images selected and no merge needed (only 1 output item)
+            if (checkedPdfs.Count == 0 && checkedDocs.Count + checkedImages.Count == convertedPdfPaths.Count && convertedPdfPaths.Count == 1)
+            {
+                DismissMergeState();
+                var newItem = new ClipboardItem(convertedPdfPaths[0]);
+                _viewModel.DroppedItems.Insert(0, newItem);
+                _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
+                AdvanceClip.Windows.ToastWindow.ShowToast("✅ Converted to PDF");
+                return;
             }
 
             // Build the final list of PDF items for the merge window
             var allPdfs = new List<ClipboardItem>();
             allPdfs.AddRange(checkedPdfs);
 
-            // Add converted docs as ClipboardItems
+            // Add converted items as ClipboardItems
             foreach (string path in convertedPdfPaths)
             {
                 allPdfs.Add(new ClipboardItem(path));
@@ -564,11 +588,14 @@ namespace AdvanceClip
             {
                 // Single converted PDF — just add to shelf
                 DismissMergeState();
+                var newItem = new ClipboardItem(allPdfs[0].FilePath);
+                _viewModel.DroppedItems.Insert(0, newItem);
+                _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                 AdvanceClip.Windows.ToastWindow.ShowToast("✅ PDF added to clipboard");
             }
             else
             {
-                AdvanceClip.Windows.ToastWindow.ShowToast("Select 2+ PDFs/DOCs to merge, or 1 DOC to convert.");
+                AdvanceClip.Windows.ToastWindow.ShowToast("Select 2+ files to merge, or 1 image/doc to convert.");
             }
         }
 
@@ -618,6 +645,34 @@ $word.Quit()
             return (success && System.IO.File.Exists(pdfPath)) ? pdfPath : null;
         }
 
+        /// <summary>Converts an image to PDF using PDFsharp natively.</summary>
+        private string ConvertImageToPdf(string imagePath)
+        {
+            string outputDir = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "Downloads", "FlyShelf", "Converted");
+            System.IO.Directory.CreateDirectory(outputDir);
+
+            string pdfPath = System.IO.Path.Combine(outputDir,
+                System.IO.Path.GetFileNameWithoutExtension(imagePath) + "_" + Guid.NewGuid().ToString().Substring(0, 4) + ".pdf");
+
+            using (var doc = new PdfSharp.Pdf.PdfDocument())
+            {
+                var page = doc.AddPage();
+                using (var img = PdfSharp.Drawing.XImage.FromFile(imagePath))
+                {
+                    page.Width = PdfSharp.Drawing.XUnit.FromPoint(img.PointWidth);
+                    page.Height = PdfSharp.Drawing.XUnit.FromPoint(img.PointHeight);
+                    using (var gfx = PdfSharp.Drawing.XGraphics.FromPdfPage(page))
+                    {
+                        gfx.DrawImage(img, 0, 0, page.Width.Point, page.Height.Point);
+                    }
+                }
+                doc.Save(pdfPath);
+            }
+            return pdfPath;
+        }
+
         private void PdfMergeToggle_Click(object sender, RoutedEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
@@ -635,12 +690,20 @@ $word.Quit()
             var checkedDocs = _viewModel.DroppedItems
                 .Where(i => i.IsCheckedForMerge && i.IsDocPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
                 .ToList();
+            var checkedImages = _viewModel.DroppedItems
+                .Where(i => i.IsCheckedForMerge && i.ItemType == ClipboardItemType.Image && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+                .ToList();
 
-            int totalChecked = checkedPdfs.Count + checkedDocs.Count;
+            int totalChecked = checkedPdfs.Count + checkedDocs.Count + checkedImages.Count;
 
-            if (totalChecked >= 2 || (checkedDocs.Count == 1 && checkedPdfs.Count == 0))
+            if (totalChecked >= 2 || (checkedDocs.Count == 1 && checkedPdfs.Count == 0 && checkedImages.Count == 0))
             {
-                if (checkedDocs.Count > 0 && checkedPdfs.Count == 0 && checkedDocs.Count == 1)
+                if (checkedImages.Count > 0 && checkedPdfs.Count == 0 && checkedDocs.Count == 0)
+                {
+                    MergeSelectedPdfsText.Text = $"Merge {checkedImages.Count} Images";
+                    MergePdfToolbarBtn.ToolTip = $"Merge {checkedImages.Count} images into a single PDF";
+                }
+                else if (checkedDocs.Count > 0 && checkedPdfs.Count == 0 && checkedImages.Count == 0 && checkedDocs.Count == 1)
                 {
                     // Single DOC — show Convert to PDF
                     MergeSelectedPdfsText.Text = "Convert to PDF";
@@ -652,17 +715,11 @@ $word.Quit()
                     MergeSelectedPdfsText.Text = $"Convert {checkedDocs.Count} to PDF";
                     MergePdfToolbarBtn.ToolTip = $"Convert {checkedDocs.Count} DOC files to PDF";
                 }
-                else if (checkedDocs.Count > 0 && checkedPdfs.Count > 0)
-                {
-                    // Mixed — show Merge with auto-convert
-                    MergeSelectedPdfsText.Text = $"Merge {totalChecked} Files";
-                    MergePdfToolbarBtn.ToolTip = $"Convert DOC→PDF & merge all {totalChecked} files";
-                }
                 else
                 {
-                    // PDF-only
-                    MergeSelectedPdfsText.Text = $"Merge {checkedPdfs.Count} PDFs";
-                    MergePdfToolbarBtn.ToolTip = $"Merge {checkedPdfs.Count} PDFs";
+                    // Mixed
+                    MergeSelectedPdfsText.Text = $"Merge {totalChecked} Files";
+                    MergePdfToolbarBtn.ToolTip = $"Convert & merge all {totalChecked} files";
                 }
 
                 MergeSelectedPdfsBtn.Visibility = Visibility.Visible;
@@ -688,6 +745,77 @@ $word.Quit()
             foreach (var item in _viewModel.DroppedItems)
             {
                 if (item.IsCheckedForMerge) item.IsCheckedForMerge = false;
+            }
+        }
+
+        private void GoogleSearch_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var menuItem = sender as System.Windows.Controls.MenuItem;
+                var clipItem = menuItem?.Tag as ClipboardItem;
+                if (clipItem == null || string.IsNullOrEmpty(clipItem.RawContent)) return;
+
+                string query = Uri.EscapeDataString(clipItem.RawContent);
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = $"https://www.google.com/search?q={query}",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                AdvanceClip.Windows.ToastWindow.ShowToast($"Search Error: {ex.Message}");
+            }
+        }
+
+        private void ConvertTextToPdf_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var menuItem = sender as System.Windows.Controls.MenuItem;
+                var clipItem = menuItem?.Tag as ClipboardItem;
+                if (clipItem == null || string.IsNullOrEmpty(clipItem.RawContent)) return;
+
+                AdvanceClip.Windows.ToastWindow.ShowToast("📄 Converting text to PDF...");
+
+                string outputDir = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    "Downloads", "FlyShelf", "Converted");
+                System.IO.Directory.CreateDirectory(outputDir);
+
+                string pdfPath = System.IO.Path.Combine(outputDir,
+                    $"FlyShelf_Text_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
+
+                using (var doc = new PdfSharp.Pdf.PdfDocument())
+                {
+                    var page = doc.AddPage();
+                    using (var gfx = PdfSharp.Drawing.XGraphics.FromPdfPage(page))
+                    {
+                        var font = new PdfSharp.Drawing.XFont("Consolas", 10);
+                        string[] lines = clipItem.RawContent.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+                        double y = 40;
+                        foreach (var line in lines.Take(50))
+                        {
+                            gfx.DrawString(line, font, PdfSharp.Drawing.XBrushes.Black, 40, y);
+                            y += 14;
+                            if (y > page.Height.Point - 40) break;
+                        }
+                    }
+                    doc.Save(pdfPath);
+                }
+
+                if (System.IO.File.Exists(pdfPath))
+                {
+                    var newItem = new ClipboardItem(pdfPath);
+                    _viewModel.DroppedItems.Insert(0, newItem);
+                    _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
+                    AdvanceClip.Windows.ToastWindow.ShowToast($"✅ Text converted: {System.IO.Path.GetFileName(pdfPath)}");
+                }
+            }
+            catch (Exception ex)
+            {
+                AdvanceClip.Windows.ToastWindow.ShowToast($"❌ Failed to convert text: {ex.Message}");
             }
         }
 
