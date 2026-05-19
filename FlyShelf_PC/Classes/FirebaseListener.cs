@@ -610,7 +610,7 @@ namespace AdvanceClip.Classes
                     string currentEvent = "";
                     string currentData = "";
 
-                    while (!reader.EndOfStream && !ct.IsCancellationRequested)
+                    while (!ct.IsCancellationRequested)
                     {
                         string? line = await reader.ReadLineAsync();
                         if (line == null) break;
@@ -674,24 +674,29 @@ namespace AdvanceClip.Classes
                     return;
                 }
 
-                bool anyNewPeer = false;
-
                 if (path == "/")
                 {
-                    // Full snapshot — scan all devices, also check for urlRequest
+                    // Full snapshot — scan all devices
                     if (data.ValueKind == JsonValueKind.Object)
                     {
                         foreach (var prop in data.EnumerateObject())
                         {
+                            if (prop.Name == myDeviceId) continue;
+
                             // Check if any peer has a urlRequest for us
-                            if (prop.Name != myDeviceId && prop.Value.ValueKind == JsonValueKind.Object
-                                && prop.Value.TryGetProperty("urlRequest", out _))
+                            if (prop.Value.ValueKind == JsonValueKind.Object && prop.Value.TryGetProperty("urlRequest", out _))
                             {
                                 _ = Task.Run(() => peerManager.HandlePeerUrlRequest(prop.Name));
                             }
 
-                            if (ProcessSingleDeviceUrl(prop.Name, prop.Value, myDeviceId, peerManager))
-                                anyNewPeer = true;
+                            string globalUrl = prop.Value.TryGetProperty("GlobalUrl", out var gu) ? gu.GetString() ?? "" : "";
+                            string localUrl = prop.Value.TryGetProperty("LocalIp", out var li) ? li.GetString() ?? "" : "";
+                            string deviceName = prop.Value.TryGetProperty("DeviceName", out var dn) ? dn.GetString() ?? prop.Name : prop.Name;
+
+                            if (!string.IsNullOrEmpty(globalUrl) || !string.IsNullOrEmpty(localUrl))
+                            {
+                                _ = Task.Run(() => peerManager.HandlePeerUrlUpdate(prop.Name, deviceName, localUrl, globalUrl));
+                            }
                         }
                     }
                 }
@@ -709,68 +714,21 @@ namespace AdvanceClip.Classes
                                 _ = Task.Run(() => peerManager.HandlePeerUrlRequest(deviceKey));
                             }
 
-                            if (ProcessSingleDeviceUrl(deviceKey, data, myDeviceId, peerManager))
-                                anyNewPeer = true;
+                            string globalUrl = data.TryGetProperty("GlobalUrl", out var gu) ? gu.GetString() ?? "" : "";
+                            string localUrl = data.TryGetProperty("LocalIp", out var li) ? li.GetString() ?? "" : "";
+                            string deviceName = data.TryGetProperty("DeviceName", out var dn) ? dn.GetString() ?? deviceKey : deviceKey;
+
+                            if (!string.IsNullOrEmpty(globalUrl) || !string.IsNullOrEmpty(localUrl))
+                            {
+                                _ = Task.Run(() => peerManager.HandlePeerUrlUpdate(deviceKey, deviceName, localUrl, globalUrl));
+                            }
                         }
                     }
-                }
-
-                // If we detected new/updated peer URLs, trigger handshake immediately
-                if (anyNewPeer)
-                {
-                    Logger.LogAction("PEER SSE", "New peer URL detected — handshaking now...");
-                    // Small delay to let the other device's server be ready
-                    await Task.Delay(1000, ct);
-                    await peerManager.ForceResync();
-
-                    // Auto-delete: wait 5 seconds then clean the URL from Firebase
-                    _ = Task.Run(async () =>
-                    {
-                        await Task.Delay(5000, ct);
-                        await CleanupPeerUrlFromFirebase(myDeviceId, ct);
-                    });
                 }
             }
             catch (Exception ex)
             {
                 Logger.LogAction("PEER SSE", $"ProcessPeerUrlChange error: {ex.Message}");
-            }
-        }
-
-        private bool ProcessSingleDeviceUrl(string deviceKey, JsonElement data, string myDeviceId, PeerManager peerManager)
-        {
-            if (deviceKey == myDeviceId) return false;
-
-            string globalUrl = data.TryGetProperty("GlobalUrl", out var gu) ? gu.GetString() ?? "" : "";
-            string localUrl = data.TryGetProperty("LocalIp", out var li) ? li.GetString() ?? "" : "";
-            string deviceName = data.TryGetProperty("DeviceName", out var dn) ? dn.GetString() ?? deviceKey : deviceKey;
-
-            if (string.IsNullOrEmpty(globalUrl) && string.IsNullOrEmpty(localUrl))
-                return false;
-
-            Logger.LogAction("PEER SSE", $"⚡ URL arrived for {deviceName}: CF={globalUrl} LAN={localUrl}");
-            return true;
-        }
-
-        private async Task CleanupPeerUrlFromFirebase(string myDeviceId, CancellationToken ct)
-        {
-            try
-            {
-                string pairingKey = DevicePairingManager.EnsurePairingKey();
-                if (string.IsNullOrEmpty(pairingKey)) return;
-
-                // Only delete OUR OWN URL (each device cleans up after itself)
-                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-                string gUrl = await AuthUrl($"active_devices/{pairingKey}/{myDeviceId}/GlobalUrl.json");
-                await client.DeleteAsync(gUrl);
-                string lUrl = await AuthUrl($"active_devices/{pairingKey}/{myDeviceId}/LocalIp.json");
-                await client.DeleteAsync(lUrl);
-
-                Logger.LogAction("PEER SSE", $"🧹 Auto-cleaned our URLs from Firebase (5s TTL)");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("PEER SSE", $"Cleanup error: {ex.Message}");
             }
         }
 

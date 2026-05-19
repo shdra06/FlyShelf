@@ -579,7 +579,7 @@ namespace AdvanceClip.Windows
                 }
 
                 // Blur + dark fallback when Mica is off
-                if (SettingsManager.Current.EnableBlurBehind)
+                if (SettingsManager.Current.EnableBlurBehind && NativeMethods.ShouldUseBlur())
                 {
                     this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
                     this.Background = System.Windows.Media.Brushes.Transparent;

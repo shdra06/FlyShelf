@@ -1,7 +1,7 @@
 {
-  "pc_version": "5.6.0",
-  "pc_changelog": "v5.6.0 — Stability & Quick Look Overhaul\n\n• Fixed: QuickLook window no longer opens multiple instances\n• Fixed: QuickLook content clears and re-renders correctly on every preview\n• Fixed: DWM border white-line artifact suppressed on window init\n• Fixed: Shake animation crash when Topmost focus fights occur\n• Improved: Acrylic/Mica glass effect integrity preserved on all previews\n• Improved: Overall animation smoothness and UI responsiveness",
-  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v5.6.0/FlyShelf.exe",
+  "pc_version": "5.7.0",
+  "pc_changelog": "v5.7.0 — Flawless UI, Animations & Bulk Copy Engine\n\n• Added: Gorgeous Glassmorphic Drag-Over zone with a pulsing indicator and custom glowing border\n• Added: Bulk Copy Grouping engine to handle 1000+ files with zero lag, instant UI speed, and unmanaged Win32 explorer multi-select\n• Improved: Smoother scale, fade-in, and translation animations for window toggle and search expansions\n• Improved: Fully audited all WPF interaction pipelines for zero glitches and absolute stability\n• Fixed: Compiled as a robust, fully self-contained win-x64 executable",
+  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v5.7.0/FlyShelf.exe",
   "android_version": "5.3.0",
   "android_changelog": "v5.3.0 — FlyShelf Android v4\n\n• P2P sync improvements\n• Compatible with FlyShelf PC v5.5.0\n• Cloudflare tunnel transport support\n• Debug log viewer for diagnostics",
   "android_download": "https://github.com/shdra06/FlyShelf/releases/download/android-v4/app-release.apk"

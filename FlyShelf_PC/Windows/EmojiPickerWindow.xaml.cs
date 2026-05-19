@@ -18,6 +18,7 @@ namespace AdvanceClip.Windows
         public EmojiPickerWindow()
         {
             InitializeComponent();
+            AdvanceClip.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             LoadEmojis();
             BuildCategoryTabs();
             FilterEmojis();

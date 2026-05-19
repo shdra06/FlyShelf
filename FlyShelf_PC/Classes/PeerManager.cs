@@ -218,7 +218,6 @@ namespace AdvanceClip.Classes
 
                 using var doc = JsonDocument.Parse(json);
                 int totalPeers = 0;
-                bool anyEmptyUrls = false;
                 foreach (var prop in doc.RootElement.EnumerateObject())
                 {
                     var dev = prop.Value;
@@ -274,10 +273,6 @@ namespace AdvanceClip.Classes
                         lan = direct;
 
                     // Track if any known peer has empty URLs (needs urlRequest)
-                    if (string.IsNullOrEmpty(lan) && string.IsNullOrEmpty(cf))
-                    {
-                        anyEmptyUrls = true;
-                    }
 
                     if (_peers.TryGetValue(devId, out var existing))
                     {
@@ -412,6 +407,93 @@ namespace AdvanceClip.Classes
             }
         }
 
+        /// <summary>
+        /// Called by FirebaseListener SSE when a peer's URL changes in real-time.
+        /// Performs targeted update and handshake for ONLY this peer, preserving other active connections.
+        /// </summary>
+        public async Task HandlePeerUrlUpdate(string deviceId, string deviceName, string localUrl, string globalUrl)
+        {
+            if (deviceId == _myDeviceId) return;
+
+            // 1. Decrypt URLs safely (supports multi-key decryption)
+            string lan = DecryptUrlSafe(localUrl);
+            string cf = DecryptUrlSafe(globalUrl);
+
+            // 2. Sanitize and validate URLs
+            if (!string.IsNullOrEmpty(lan) && !lan.StartsWith("http")) lan = "";
+            if (!string.IsNullOrEmpty(cf) && !cf.StartsWith("http")) cf = "";
+
+            if (string.IsNullOrEmpty(lan) && string.IsNullOrEmpty(cf))
+            {
+                return; // Nothing to update
+            }
+
+            // 3. Filter out unpaired devices (ghosts)
+            var pairedDevices = DevicePairingManager.GetPairedDevices();
+            var pairedDeviceIds = new HashSet<string>(pairedDevices.Select(d => d.DeviceId), StringComparer.OrdinalIgnoreCase);
+            var pairedDeviceNames = new HashSet<string>(pairedDevices.Select(d => d.DeviceName), StringComparer.OrdinalIgnoreCase);
+
+            if (pairedDeviceIds.Count > 0 && !pairedDeviceIds.Contains(deviceId) && !pairedDeviceNames.Contains(deviceName))
+            {
+                lock (_prunedGhosts)
+                {
+                    if (!_prunedGhosts.Add(deviceId))
+                        return;
+                }
+
+                Logger.LogAction("PEER", $"⏭️ Skipping unpaired device URL update: {deviceName} ({deviceId})");
+                // Actively delete the ghost entry from Firebase
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        string deleteUrl = await FirebaseSyncManager.AuthUrlPublic($"active_devices/{_myPairingKey}/{deviceId}.json");
+                        using var delClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                        await delClient.DeleteAsync(deleteUrl);
+                        Logger.LogAction("PEER", $"🗑️ Deleted ghost device from Firebase: {deviceName} ({deviceId})");
+                    }
+                    catch { }
+                });
+                return;
+            }
+
+            Logger.LogAction("PEER", $"📡 Target URL update for {deviceName}: LAN={lan} CF={cf}");
+
+            PeerConnection peer;
+            if (_peers.TryGetValue(deviceId, out var existing))
+            {
+                peer = existing;
+                // If URLs didn't change and peer is already alive and connected, skip
+                if (peer.LanUrl == lan && peer.CloudflareUrl == cf && peer.IsAlive && peer.LiveSocket?.State == System.Net.WebSockets.WebSocketState.Open)
+                {
+                    return;
+                }
+                
+                peer.LanUrl = lan;
+                peer.CloudflareUrl = cf;
+            }
+            else
+            {
+                peer = new PeerConnection
+                {
+                    DeviceId = deviceId,
+                    DeviceName = deviceName,
+                    LanUrl = lan,
+                    CloudflareUrl = cf
+                };
+                _peers[deviceId] = peer;
+            }
+
+            // Reset liveness and attempt targeted handshake
+            peer.IsAlive = false;
+            peer.ConsecutiveFailures = 0;
+            try { peer.WsCts?.Cancel(); } catch { }
+            try { peer.LiveSocket?.Dispose(); } catch { }
+            peer.LiveSocket = null;
+
+            await Handshake(peer);
+        }
+
         private async Task Handshake(PeerConnection peer)
         {
             bool lanEnabled = SettingsManager.Current.EnableLocalLAN;
@@ -436,7 +518,8 @@ namespace AdvanceClip.Classes
             {
                 int timeout = (transport == "LAN") ? HANDSHAKE_TIMEOUT_LAN_MS : HANDSHAKE_TIMEOUT_CF_MS;
                 using var c = new HttpClient { Timeout = TimeSpan.FromMilliseconds(timeout) };
-                string pk = DevicePairingManager.EnsurePairingKey();
+                string pk = DevicePairingManager.GetPairingKeyForDevice(peer.DeviceId);
+                if (string.IsNullOrEmpty(pk)) pk = DevicePairingManager.EnsurePairingKey();
                 if (!string.IsNullOrEmpty(pk)) c.DefaultRequestHeaders.Add("X-Pairing-Key", pk);
 
                 var r = await c.GetAsync($"{testUrl.TrimEnd('/')}/api/health");
@@ -529,7 +612,8 @@ namespace AdvanceClip.Classes
             {
                 var ws = new ClientWebSocket();
                 peer.WsCts = new CancellationTokenSource();
-                string pk = DevicePairingManager.EnsurePairingKey();
+                string pk = DevicePairingManager.GetPairingKeyForDevice(peer.DeviceId);
+                if (string.IsNullOrEmpty(pk)) pk = DevicePairingManager.EnsurePairingKey();
 
                 // Convert http(s):// to ws(s)://
                 string wsUrl = peer.ActiveUrl.TrimEnd('/')
@@ -692,7 +776,8 @@ namespace AdvanceClip.Classes
         {
             try
             {
-                string pk = DevicePairingManager.EnsurePairingKey();
+                string pk = DevicePairingManager.GetPairingKeyForDevice(peer.DeviceId);
+                if (string.IsNullOrEmpty(pk)) pk = DevicePairingManager.EnsurePairingKey();
                 var payload = JsonSerializer.Serialize(new
                 {
                     type = itemType, title, data = text,
@@ -761,7 +846,8 @@ namespace AdvanceClip.Classes
             {
                 Interlocked.Increment(ref peer.ActiveTransfers);
 
-                string pk = DevicePairingManager.EnsurePairingKey();
+                string pk = DevicePairingManager.GetPairingKeyForDevice(peer.DeviceId);
+                if (string.IsNullOrEmpty(pk)) pk = DevicePairingManager.EnsurePairingKey();
                 string actualFileName = Path.GetFileName(filePath);
                 bool isCf = peer.Transport == "Cloudflare";
                 long fileSize = new FileInfo(filePath).Length;

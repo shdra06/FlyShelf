@@ -80,16 +80,62 @@ namespace AdvanceClip.Classes
         /// </summary>
         public static string? Decrypt(string base64Ciphertext)
         {
+            return Decrypt(base64Ciphertext, null);
+        }
+
+        /// <summary>
+        /// Decrypts AES-256-GCM ciphertext (Base64 encoded) with support for fallback keys.
+        /// </summary>
+        public static string? Decrypt(string base64Ciphertext, string? specificPairingKey)
+        {
             if (string.IsNullOrEmpty(base64Ciphertext))
                 return base64Ciphertext;
 
+            // 1. Try specific key or default key first
+            var result = TryDecryptWithKey(base64Ciphertext, specificPairingKey);
+            if (result != null) return result;
+
+            // 2. Fallback: If no specific key was requested and the default decryption failed,
+            // try other paired devices' keys to handle key drift/mismatches.
+            if (string.IsNullOrEmpty(specificPairingKey))
+            {
+                var pairedDevices = DevicePairingManager.GetPairedDevices();
+                foreach (var dev in pairedDevices)
+                {
+                    if (!string.IsNullOrEmpty(dev.PairingKey))
+                    {
+                        result = TryDecryptWithKey(base64Ciphertext, dev.PairingKey);
+                        if (result != null) return result;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static string? TryDecryptWithKey(string base64Ciphertext, string? pairingKey)
+        {
             try
             {
-                var key = GetKey();
-                var packed = Convert.FromBase64String(base64Ciphertext);
+                byte[] key;
+                if (!string.IsNullOrEmpty(pairingKey))
+                {
+                    // Derive temporary key for this specific pairing key
+                    key = Rfc2898DeriveBytes.Pbkdf2(
+                        pairingKey,
+                        SALT,
+                        PBKDF2_ITERATIONS,
+                        HashAlgorithmName.SHA256,
+                        KEY_SIZE_BYTES);
+                }
+                else
+                {
+                    key = GetKey();
+                }
 
+                var packed = Convert.FromBase64String(base64Ciphertext);
                 if (packed.Length < NONCE_SIZE + TAG_SIZE)
-                    return null; // Too short to be valid
+                    return null;
 
                 var nonce = new byte[NONCE_SIZE];
                 var tag = new byte[TAG_SIZE];
@@ -106,14 +152,8 @@ namespace AdvanceClip.Classes
 
                 return Encoding.UTF8.GetString(plaintext);
             }
-            catch (CryptographicException)
+            catch
             {
-                // Wrong key or tampered data — expected for items from unencrypted versions
-                return null;
-            }
-            catch (FormatException)
-            {
-                // Not valid Base64 — likely unencrypted plaintext (backward compatible)
                 return null;
             }
         }

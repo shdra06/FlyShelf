@@ -33,6 +33,11 @@
                                    Visibility="Collapsed">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
+                        <!-- Pin Button (toggle always on top) -->
+                        <ui:Button x:Name="PinBtn" Click="PinButton_Click" Appearance="Transparent" 
+                                   Foreground="#F59E0B" Padding="5,3" Margin="0,0,2,0" ToolTip="Pin on top">
+                            <ui:Button.Icon><ui:SymbolIcon x:Name="PinIcon" Symbol="Pin24" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
                         <!-- Close -->
                         <ui:Button Click="CloseButton_Click" Appearance="Transparent" Foreground="#888888" Padding="5,3">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" FontSize="14"/></ui:Button.Icon>

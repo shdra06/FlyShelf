@@ -75,13 +75,32 @@ namespace AdvanceClip.Classes
 
         /// <summary>
         /// Returns the current pairing key, or empty string if not yet paired.
-        /// Does NOT auto-generate Ã¢â‚¬â€ pairing key is only created when:
+        /// Does NOT auto-generate pairing key is only created when:
         /// 1) User generates a QR code / pairing code (first device creates the room)
         /// 2) User scans/enters a code from another device (joins existing room)
         /// </summary>
         public static string EnsurePairingKey()
         {
-            return SettingsManager.Current.PairingKey ?? "";
+            string configKey = SettingsManager.Current.PairingKey ?? "";
+            
+            // Self-healing alignment: If we have paired devices, but the config key is different or empty,
+            // we should adopt the paired devices' key so we stay in the same room!
+            lock (_lock)
+            {
+                if (_pairedDevices != null && _pairedDevices.Count > 0)
+                {
+                    var firstDevice = _pairedDevices.FirstOrDefault(d => !string.IsNullOrEmpty(d.PairingKey));
+                    if (firstDevice != null && configKey != firstDevice.PairingKey)
+                    {
+                        Logger.LogAction("PAIR", $"⚠️ Config key ({configKey}) mismatched with paired devices. Aligning to: {firstDevice.PairingKey}");
+                        SettingsManager.Current.PairingKey = firstDevice.PairingKey;
+                        SettingsManager.Save();
+                        return firstDevice.PairingKey;
+                    }
+                }
+            }
+            
+            return configKey;
         }
 
         /// <summary>
@@ -261,7 +280,25 @@ namespace AdvanceClip.Classes
         {
             if (string.IsNullOrEmpty(pairingKey)) return false;
             string expectedKey = EnsurePairingKey();
-            return pairingKey == expectedKey;
+            if (pairingKey == expectedKey) return true;
+            lock (_lock)
+            {
+                return _pairedDevices != null && _pairedDevices.Any(d => d.PairingKey == pairingKey);
+            }
+        }
+
+        /// <summary>
+        /// Gets the pairing key for a given deviceId from the paired devices list.
+        /// </summary>
+        public static string GetPairingKeyForDevice(string deviceId)
+        {
+            if (string.IsNullOrEmpty(deviceId)) return "";
+            lock (_lock)
+            {
+                if (_pairedDevices == null) return "";
+                var dev = _pairedDevices.FirstOrDefault(d => d.DeviceId == deviceId);
+                return dev?.PairingKey ?? "";
+            }
         }
 
         /// <summary>

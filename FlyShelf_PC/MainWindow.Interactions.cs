@@ -136,6 +136,7 @@ namespace AdvanceClip
             {
                 AnimateAndHide();
                 _isDragHovering = false;
+                IsDragHovering = false;
             }
 
             // Minimal delay — just enough for the target window to receive focus

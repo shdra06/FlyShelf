@@ -721,8 +721,7 @@ namespace AdvanceClip.Classes
                 {
                     // WebSocket peer liveness — persistent connection for instant death detection
                     string wsPairingKey = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"] ?? "";
-                    string expectedKey = DevicePairingManager.EnsurePairingKey();
-                    if (string.IsNullOrEmpty(wsPairingKey) || wsPairingKey != expectedKey)
+                    if (string.IsNullOrEmpty(wsPairingKey) || !DevicePairingManager.IsDevicePaired(wsPairingKey))
                     {
                         res.StatusCode = 403;
                         res.Close();

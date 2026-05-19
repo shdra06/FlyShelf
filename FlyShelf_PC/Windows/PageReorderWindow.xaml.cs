@@ -52,6 +52,7 @@ namespace AdvanceClip.Windows
         public PageReorderWindow(PdfMergeItem item)
         {
             InitializeComponent();
+            AdvanceClip.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             _item = item;
 
             _pageOrder = item.GetSelectedPageIndices().Select(i => i + 1).ToList();
@@ -657,13 +658,19 @@ namespace AdvanceClip.Windows
         // ═══════════════════════════════════════════════════════════════
         // FOOTER
         // ═══════════════════════════════════════════════════════════════
-
+ 
         private void Cancel_Click(object sender, RoutedEventArgs e) => Close();
-
+ 
         private void Confirm_Click(object sender, RoutedEventArgs e)
         {
             WasConfirmed = true;
             Close();
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            _scrollTimer?.Stop();
+            base.OnClosed(e);
         }
     }
 }

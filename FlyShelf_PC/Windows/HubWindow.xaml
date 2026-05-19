@@ -1,4 +1,4 @@
-<controls:MicaWindow x:Class="AdvanceClip.Windows.HubWindow"
+﻿<controls:MicaWindow x:Class="AdvanceClip.Windows.HubWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
@@ -751,6 +751,9 @@
                                                         <DataTrigger Binding="{Binding IsTextPreview}" Value="True">
                                                             <Setter Property="Background" Value="#8B5CF6"/>
                                                         </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsGroupPreview}" Value="True">
+                                                            <Setter Property="Background" Value="#A78BFA"/>
+                                                        </DataTrigger>
                                                     </Style.Triggers>
                                                 </Style>
                                             </Border.Style>
@@ -832,6 +835,17 @@
                                                     <ui:SymbolIcon Symbol="Document24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
 
+                                                <!-- Group icon -->
+                                                <Border Visibility="{Binding IsGroupPreview, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                            <GradientStop Color="#7C3AED" Offset="0"/>
+                                                            <GradientStop Color="#C084FC" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                    <ui:SymbolIcon Symbol="FolderMultiple24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+
                                                 <!-- Video icon -->
                                                 <Border Visibility="{Binding IsVideoPreview, Converter={StaticResource BooleanToVisibilityConverter}}">
                                                     <Border.Background>
@@ -870,6 +884,9 @@
                                                                 <DataTrigger Binding="{Binding IsUrlPreview}" Value="True">
                                                                     <Setter Property="Background" Value="#1A0EA5E9" />
                                                                 </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsGroupPreview}" Value="True">
+                                                                    <Setter Property="Background" Value="#1AA78BFA" />
+                                                                </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Border.Style>
@@ -889,6 +906,9 @@
                                                                     </DataTrigger>
                                                                     <DataTrigger Binding="{Binding IsUrlPreview}" Value="True">
                                                                         <Setter Property="Foreground" Value="#0EA5E9" />
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding IsGroupPreview}" Value="True">
+                                                                        <Setter Property="Foreground" Value="#A78BFA" />
                                                                     </DataTrigger>
                                                                 </Style.Triggers>
                                                             </Style>

@@ -31,6 +31,7 @@ namespace AdvanceClip.Windows
         public TimerWindow(string contextString)
         {
             InitializeComponent();
+            AdvanceClip.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             
             // Cache brushes NOW — avoids FindResource calls during tick which crash
             // when another window disrupts the visual tree
@@ -348,6 +349,12 @@ namespace AdvanceClip.Windows
         {
             _timer.Stop();
             this.Close();
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            _timer?.Stop();
+            base.OnClosed(e);
         }
     }
 }

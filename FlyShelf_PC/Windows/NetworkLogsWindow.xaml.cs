@@ -72,6 +72,7 @@ namespace AdvanceClip.Windows
         public NetworkLogsWindow()
         {
             InitializeComponent();
+            Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             LogItems.ItemsSource = _filteredLogs;
 
             // Initial load

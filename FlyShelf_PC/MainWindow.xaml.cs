@@ -1,4 +1,4 @@
-﻿﻿﻿﻿using AdvanceClip.ViewModels;
+using AdvanceClip.ViewModels;
 using MicaWPF.Controls;
 using System;
 using System.Collections.Specialized;
@@ -19,6 +19,16 @@ namespace AdvanceClip
         private readonly FlyShelfViewModel _viewModel;
         private int _spawnToken = 0;
         private bool _isDragHovering = false;
+
+        public static readonly DependencyProperty IsDragHoveringProperty =
+            DependencyProperty.Register("IsDragHovering", typeof(bool), typeof(MainWindow), new PropertyMetadata(false));
+
+        public bool IsDragHovering
+        {
+            get => (bool)GetValue(IsDragHoveringProperty);
+            set => SetValue(IsDragHoveringProperty, value);
+        }
+
         private bool _didDragOut = false;
         private double _lockedBottomEdge = 0;
         private bool _isEdgeLocked = false;
@@ -262,10 +272,13 @@ namespace AdvanceClip
             Classes.SmoothScroll.AttachList(ShelfListView);
 
             // Apply wallpaper if configured
-            ApplyWallpaper();
+            // Apply wallpaper deferred (100ms) to not block UI init
+            System.Threading.Tasks.Task.Delay(100).ContinueWith(_ => {
+                Dispatcher.InvokeAsync(() => { try { ApplyWallpaper(); } catch { } });
+            });
 
-            // Blur-off: premium dark mode with subtle gradient
-            if (!Classes.SettingsManager.Current.EnableBlurBehind)
+            // Blur-off or system transparency disabled: premium dark mode with subtle gradient
+            if (!Classes.SettingsManager.Current.EnableBlurBehind || !Classes.NativeMethods.ShouldUseBlur())
             {
                 this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
                 System.Threading.Tasks.Task.Delay(150).ContinueWith(_ =>
@@ -294,13 +307,36 @@ namespace AdvanceClip
         /// <summary>
         /// Applies the user's wallpaper with frosted glass header + theme color gradient.
         /// </summary>
+        /// <summary>Gets current Windows desktop wallpaper path from registry.</summary>
+        private static string GetDesktopWallpaperPath()
+        {
+            try
+            {
+                using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop");
+                return key?.GetValue("Wallpaper") as string ?? "";
+            }
+            catch { return ""; }
+        }
+
         private void ApplyWallpaper()
         {
             string path = Classes.SettingsManager.Current.ClipboardWallpaperPath;
 
+            // If no custom wallpaper set, use the current Windows desktop wallpaper
             if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
             {
-                // No wallpaper — hide all layers
+                try
+                {
+                    string desktopWp = GetDesktopWallpaperPath();
+                    if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
+                        path = desktopWp;
+                }
+                catch { }
+            }
+
+            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
+            {
+                // No wallpaper at all — hide all layers
                 WallpaperBg.Visibility = Visibility.Collapsed;
                 WallpaperThemeOverlay.Visibility = Visibility.Collapsed;
                 WallpaperFrostHeader.Visibility = Visibility.Collapsed;
@@ -480,6 +516,10 @@ namespace AdvanceClip
                     }
                     handled = true;
                 }
+            }
+            else if (msg == Classes.NativeMethods.WM_SETTINGCHANGE)
+            {
+                Dispatcher.InvokeAsync(() => { try { ApplyWallpaper(); } catch { } });
             }
             else if (msg == WM_CLIPBOARDUPDATE)
             {
@@ -734,6 +774,9 @@ namespace AdvanceClip
         {
             if (_isAnimatingHide || !this.IsVisible) return;
             _isAnimatingHide = true;
+
+            // Clear PDF merge selections so they don't persist on reopen
+            DismissMergeState();
 
             RootContent.RenderTransformOrigin = new Point(0.5, 1);
             RootContent.RenderTransform = new TransformGroup

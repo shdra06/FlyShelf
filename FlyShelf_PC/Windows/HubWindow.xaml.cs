@@ -110,6 +110,26 @@ namespace AdvanceClip.Windows
                 // PAGE profile for everything else (settings, diagnostics — normal speed)
                 Classes.SmoothScroll.AttachToWindow(this);
             };
+            Unloaded += (s, ev) =>
+            {
+                // Unregister SmoothScroll hooks to prevent memory leaks
+                Classes.SmoothScroll.Detach(HubListView);
+                Classes.SmoothScroll.DetachFromWindow(this);
+
+                // Clean up static rendering hook for kinetic scrolling to prevent memory leak
+                if (_isKineticScrolling)
+                {
+                    _isKineticScrolling = false;
+                    CompositionTarget.Rendering -= KineticScroll_Rendering;
+                }
+
+                // Stop auto-refresh device timer
+                if (_deviceRefreshTimer != null)
+                {
+                    _deviceRefreshTimer.Stop();
+                    _deviceRefreshTimer = null;
+                }
+            };
         }
 
         private void DroppedItems_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)

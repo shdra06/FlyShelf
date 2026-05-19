@@ -21,6 +21,7 @@ namespace AdvanceClip
         private void Window_PreviewDrop(object sender, DragEventArgs e)
         {
             _isDragHovering = false;
+            IsDragHovering = false;
             _spawnToken++; 
 
             if (_isInternalDragSource)
@@ -37,6 +38,7 @@ namespace AdvanceClip
         private void Window_Drop(object sender, DragEventArgs e)
         {
             _isDragHovering = false;
+            IsDragHovering = false;
             _spawnToken++; 
 
             if (_isInternalDragSource)
@@ -55,6 +57,7 @@ namespace AdvanceClip
         private void Window_DragEnter(object sender, DragEventArgs e)
         {
             _isDragHovering = true;
+            IsDragHovering = true;
             if (e.Data.GetDataPresent(DataFormats.FileDrop) || 
                 e.Data.GetDataPresent("FileNameW") ||
                 e.Data.GetDataPresent("FileName") ||
@@ -85,6 +88,7 @@ namespace AdvanceClip
         private void Window_DragLeave(object sender, DragEventArgs e)
         {
             _isDragHovering = false;
+            IsDragHovering = false;
             // The user explicitly requested an impenetrable UI overlay without funky Hide bugs on child-element hovers.
             // Leaving the physical window drag-space now does NOT force kill the app interface!
         }
@@ -163,6 +167,7 @@ namespace AdvanceClip
         {
             this.Hide();
             _isDragHovering = false;
+            IsDragHovering = false;
         }
 
         // ═══ SEARCH FEATURE ═══

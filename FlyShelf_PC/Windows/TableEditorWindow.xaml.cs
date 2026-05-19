@@ -25,6 +25,7 @@ namespace AdvanceClip.Windows
         public TableEditorWindow(string input)
         {
             InitializeComponent();
+            NativeMethods.ApplyWindowBackdropAndBackground(this);
 
             if (IsJsonMatrix(input))
                 ParseJsonMatrix(input);

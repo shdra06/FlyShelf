@@ -177,7 +177,20 @@ namespace AdvanceClip.Windows
                 AdvanceClip.Windows.ToastWindow.ShowToast("Rotate failed: " + ex.Message);
             }
         }
-                private void CloseButton_Click(object sender, RoutedEventArgs e)
+
+        private void PinButton_Click(object sender, RoutedEventArgs e)
+        {
+            this.Topmost = !this.Topmost;
+            PinIcon.Symbol = this.Topmost
+                ? Wpf.Ui.Controls.SymbolRegular.Pin24
+                : Wpf.Ui.Controls.SymbolRegular.PinOff24;
+            PinBtn.Foreground = this.Topmost
+                ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11))  // #F59E0B
+                : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(136, 136, 136)); // #888
+            PinBtn.ToolTip = this.Topmost ? "Pinned on top" : "Unpinned";
+        }
+
+        private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
             this.Close();
         }
@@ -253,6 +266,11 @@ namespace AdvanceClip.Windows
                 AdvanceClip.Classes.SettingsManager.Current.QuickLookHeight = this.Height;
                 AdvanceClip.Classes.SettingsManager.Save();
             }
+            try
+            {
+                WebPreview.Dispose();
+            }
+            catch { }
             base.OnClosed(e);
         }
     }

@@ -393,4 +393,62 @@ public static partial class NativeMethods
     internal class VirtualDesktopManager { }
 
     #endregion
+
+    #region Backdrop and Blur Utilities
+
+    public static bool ShouldUseBlur()
+    {
+        try
+        {
+            // Must be Windows 11 (Build 22000) or higher
+            if (Environment.OSVersion.Version.Major < 10 || 
+                (Environment.OSVersion.Version.Major == 10 && Environment.OSVersion.Version.Build < 22000))
+            {
+                return false;
+            }
+
+            // Check if transparency is enabled in registry
+            using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
+            {
+                if (key != null)
+                {
+                    var val = key.GetValue("EnableTransparency");
+                    if (val is int intVal)
+                    {
+                        return intVal == 1;
+                    }
+                }
+            }
+        }
+        catch { }
+        return true; // Default to true if anything fails
+    }
+
+    public static void ApplyWindowBackdropAndBackground(System.Windows.Window window, System.Windows.Controls.Grid? rootGrid = null)
+    {
+        if (window == null) return;
+
+        bool enableBlur = SettingsManager.Current.EnableBlurBehind && ShouldUseBlur();
+
+        if (window is MicaWPF.Controls.MicaWindow micaWin)
+        {
+            if (enableBlur)
+            {
+                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
+                micaWin.Background = System.Windows.Media.Brushes.Transparent;
+                if (rootGrid != null) rootGrid.Background = null;
+            }
+            else
+            {
+                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+                var darkBg = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(18, 18, 26)); // Premium solid dark background
+                micaWin.Background = darkBg;
+                if (rootGrid != null) rootGrid.Background = darkBg;
+            }
+        }
+    }
+
+    #endregion
 }
+

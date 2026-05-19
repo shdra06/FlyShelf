@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -68,6 +68,7 @@ namespace AdvanceClip.Windows
         public PdfMergeWindow(List<ClipboardItem> pdfsToMerge, FlyShelfViewModel vm)
         {
             InitializeComponent();
+            AdvanceClip.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             _viewModel = vm;
             MergeItems = new ObservableCollection<PdfMergeItem>(
                 pdfsToMerge.Select(p => new PdfMergeItem(p.FilePath))

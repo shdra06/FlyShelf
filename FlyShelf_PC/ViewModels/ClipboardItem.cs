@@ -24,7 +24,8 @@ namespace AdvanceClip.ViewModels
         Presentation,
         QRCode,
         Pdf,
-        Folder
+        Folder,
+        Group
     }
 
     public partial class ClipboardItem : INotifyPropertyChanged
@@ -161,6 +162,7 @@ namespace AdvanceClip.ViewModels
         public bool IsPdfPreview => ItemType == ClipboardItemType.Pdf;
         public bool IsUrlPreview => ItemType == ClipboardItemType.Url;
         public bool IsCodePreview => ItemType == ClipboardItemType.Code;
+        public bool IsGroupPreview => ItemType == ClipboardItemType.Group;
         public bool IsShareablePreview => true;
         
         // Context Menu Discriminators
@@ -175,6 +177,7 @@ namespace AdvanceClip.ViewModels
                 if (ItemType == ClipboardItemType.Code) return "Code Snippet";
                 if (ItemType == ClipboardItemType.Folder) return "Folder";
                 if (ItemType == ClipboardItemType.Archive) return "Archive";
+                if (ItemType == ClipboardItemType.Group) return "Grouped Items";
                 return string.IsNullOrEmpty(Extension) ? "Unknown File" : Extension + " Object";
             }
         }
@@ -236,6 +239,7 @@ namespace AdvanceClip.ViewModels
         public bool IsFilePreview => ItemType == ClipboardItemType.File;
         /// <summary>True for any item backed by a file on disk (images, docs, archives, etc.)</summary>
         public bool HasFilePath => !string.IsNullOrEmpty(FilePath);
+        public bool CanShowInExplorer => HasFilePath || ItemType == ClipboardItemType.Group;
 
         private bool _isSuggestedContext;
         [JsonIgnore]
@@ -399,6 +403,53 @@ namespace AdvanceClip.ViewModels
         
         // Default constructor for standard objects
         public ClipboardItem() { }
+
+        public ClipboardItem(string[] files)
+        {
+            ItemType = ClipboardItemType.Group;
+            FileName = $"{files.Length} Files Grouped";
+            Extension = "GROUP";
+            RawContent = string.Join("\n", files);
+            FormattedSize = "Calculating size...";
+
+            // Dynamically calculate total size in background thread to prevent UI freezing
+            string[] capturedFiles = files;
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                long totalSize = 0;
+                int fileCount = 0;
+                int folderCount = 0;
+
+                foreach (var path in capturedFiles)
+                {
+                    try
+                    {
+                        if (File.Exists(path))
+                        {
+                            totalSize += new FileInfo(path).Length;
+                            fileCount++;
+                        }
+                        else if (Directory.Exists(path))
+                        {
+                            var dirInfo = new DirectoryInfo(path);
+                            var allFiles = dirInfo.GetFiles("*", SearchOption.AllDirectories);
+                            totalSize += allFiles.Sum(f => f.Length);
+                            folderCount++;
+                        }
+                    }
+                    catch { }
+                }
+
+                string filesLabel = fileCount > 1 ? $"{fileCount} files" : (fileCount == 1 ? "1 file" : "");
+                string foldersLabel = folderCount > 1 ? $"{folderCount} folders" : (folderCount == 1 ? "1 folder" : "");
+                string separator = (fileCount > 0 && folderCount > 0) ? ", " : "";
+                
+                FormattedSize = $"{FormatBytes(totalSize)} • {filesLabel}{separator}{foldersLabel}";
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedSize)));
+            });
+
+            EvaluateSmartActions();
+        }
 
         public ClipboardItem(string path)
         {
@@ -567,6 +618,13 @@ namespace AdvanceClip.ViewModels
         {
             try
             {
+                if (ItemType == ClipboardItemType.Group)
+                {
+                    string[] paths = RawContent.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                    AdvanceClip.Classes.ShellExplorerHelper.OpenFilesAndSelect(paths);
+                    return;
+                }
+
                 string target = string.Empty;
                 if (!string.IsNullOrEmpty(FilePath))
                     target = FilePath;

@@ -71,6 +71,52 @@ namespace AdvanceClip.Classes
         public static void Detach(FrameworkElement element)
         {
             element.PreviewMouseWheel -= OnListPreviewMouseWheel;
+            
+            ScrollViewer? sv = null;
+            if (element is ScrollViewer s)
+                sv = s;
+            else if (element is ItemsControl ic)
+                sv = FindVisualChild<ScrollViewer>(ic);
+
+            if (sv != null)
+            {
+                _states.Remove(sv);
+                _listScrollViewers.Remove(sv);
+            }
+        }
+
+        /// <summary>
+        /// Detach PAGE profile and clear references to all ScrollViewers inside the Window.
+        /// </summary>
+        public static void DetachFromWindow(Window window)
+        {
+            window.PreviewMouseWheel -= OnWindowPreviewMouseWheel;
+            
+            var toRemove = new List<ScrollViewer>();
+            foreach (var sv in _states.Keys)
+            {
+                if (IsDescendantOf(sv, window))
+                {
+                    toRemove.Add(sv);
+                }
+            }
+
+            foreach (var sv in toRemove)
+            {
+                _states.Remove(sv);
+                _listScrollViewers.Remove(sv);
+            }
+        }
+
+        private static bool IsDescendantOf(DependencyObject child, DependencyObject parent)
+        {
+            var current = child;
+            while (current != null)
+            {
+                if (current == parent) return true;
+                current = VisualTreeHelper.GetParent(current);
+            }
+            return false;
         }
 
         // ═══ LIST handler ═══
@@ -209,6 +255,21 @@ namespace AdvanceClip.Classes
                 {
                     anyActive = true;
                 }
+            }
+
+            // Purge non-animating ScrollViewers from states to prevent static reference leaks
+            var toRemove = new List<ScrollViewer>();
+            foreach (var kvp in _states)
+            {
+                if (!kvp.Value.IsAnimating)
+                {
+                    toRemove.Add(kvp.Key);
+                }
+            }
+            foreach (var sv in toRemove)
+            {
+                _states.Remove(sv);
+                _listScrollViewers.Remove(sv);
             }
 
             if (!anyActive)

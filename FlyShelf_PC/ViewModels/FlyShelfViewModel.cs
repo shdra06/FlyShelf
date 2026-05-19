@@ -151,8 +151,8 @@ namespace AdvanceClip.ViewModels
         }
 
         // Pre-compiled regex patterns for text classification — avoids recompilation on every clipboard event
-        private static readonly Regex _rxTerminal = new Regex(@"(PS C:\\|~\$|root@|npm run|npm install|git clone|git commit|sudo |apt-get|docker run)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
-        private static readonly Regex _rxCode = new Regex(@"(#include\s|<iostream>|<stdio\.h>|std::|printf\(|public class |private void |int main\(\)|using namespace |def\s+\w+\(|import\s+(os|sys|java|React)|class\s+[A-Z]\w*|Console\.WriteLine|=>\s*\{|\{""|\[\{""|<\/?(html|div|span|script|style|body|head)|function\s+\w+\(|console\.log\(|require\()", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex _rxTerminal = new Regex(@"(PS [A-Z]:\\|PS>|~\$|root@|\$\s*(npm|pip|git|docker|cd|ls|cat|mkdir|chmod|chown|curl|wget|ssh|scp|tar|make|cmake|gcc|javac|python|node)|C:\\.*>|npm (run|install|start|test|init)|git (clone|commit|push|pull|merge|checkout|branch|stash|log|status|diff|add|reset|rebase)|sudo |apt-get|apt |yum |brew |choco |winget |pip install|pip3 install|docker (run|build|pull|push|compose|exec|ps|logs|stop)|dotnet (run|build|publish|new|restore)|ipconfig|netstat|ping |tracert|nslookup|systeminfo|tasklist|taskkill|sfc |dism |powershell|cmd /|wmic |reg query|Get-Process|Get-Service|Get-ChildItem|Set-Location|New-Item|Remove-Item|Invoke-WebRequest|Select-String|Write-Host|ForEach-Object|Where-Object)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex _rxCode = new Regex(@"(#include\s*[<""]|<iostream>|<stdio\.h>|<stdlib\.h>|<string\.h>|<cstdlib>|<vector>|<map>|<algorithm>|std::|printf\s*\(|scanf\s*\(|malloc\s*\(|free\s*\(|sizeof\s*\(|typedef\s|struct\s+\w+|enum\s+\w+|public\s+class\s|private\s+(void|int|string|static)|protected\s|int\s+main\s*\(|void\s+main\s*\(|using\s+namespace\s|#define\s|#ifdef|#ifndef|#pragma|template\s*<|namespace\s+\w+|def\s+\w+\s*\(|class\s+\w+\s*[(:]\s|import\s+(os|sys|json|re|math|numpy|pandas|flask|django|requests|typing|collections|pathlib|subprocess|asyncio|datetime)|from\s+\w+\s+import|if\s+__name__\s*==|print\s*\(|lambda\s|self\.|__init__|@(staticmethod|classmethod|property|override|Deprecated)|public\s+static\s+(void|int)|System\.(out|in|err)\.|new\s+\w+\s*[(<\[]|throws\s|implements\s|extends\s|interface\s+\w+|abstract\s+class|Console\.\w+|=>\s*\{|=>\s*[^;]+;|\{""|var\s+\w+\s*=|let\s+\w+\s*=|const\s+\w+\s*=|<\/?(html|div|span|script|style|body|head|table|form)|function\s+\w+\s*\(|console\.(log|error|warn)\(|require\s*\(|module\.exports|export\s+(default|const|function|class)|async\s+function|await\s|try\s*\{|catch\s*\(|switch\s*\(|for\s*\(.*;\s*.*;\s*|while\s*\(|SELECT\s+.*\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|CREATE\s+TABLE)", RegexOptions.Compiled);
         private static readonly Regex _rxUtmClean = new Regex(@"(?<=&|\?)(utm_source|utm_medium|utm_campaign|utm_term|utm_content|gclid|fbclid|_gl|msclkid|mc_eid|ig_shid)=[^&]*&?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private int _currentMode = 0; // 0=Mini, 1=Medium, 2=Full
@@ -278,7 +278,14 @@ namespace AdvanceClip.ViewModels
                 win.Topmost = false;
             });
             OpenFileLocationCommand = new RelayCommand<ClipboardItem>(item => {
-                if (item == null || string.IsNullOrEmpty(item.FilePath)) return;
+                if (item == null) return;
+                if (item.ItemType == ClipboardItemType.Group)
+                {
+                    string[] paths = item.RawContent.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                    AdvanceClip.Classes.ShellExplorerHelper.OpenFilesAndSelect(paths);
+                    return;
+                }
+                if (string.IsNullOrEmpty(item.FilePath)) return;
                 
                 bool exists = System.IO.File.Exists(item.FilePath) || System.IO.Directory.Exists(item.FilePath);
                 if (exists)

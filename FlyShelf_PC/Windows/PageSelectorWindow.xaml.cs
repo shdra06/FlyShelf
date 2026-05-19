@@ -25,6 +25,7 @@ namespace AdvanceClip.Windows
         public PageSelectorWindow(PdfMergeItem item)
         {
             InitializeComponent();
+            AdvanceClip.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             _item = item;
             HeaderText.Text = $"Select Pages \u2014 {item.FileName}";
             LoadThumbnailsAsync();

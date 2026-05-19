@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------
-// FlyShelfViewModel � Drop Handler & Utilities
+// FlyShelfViewModel � Drop Handler & Utilities
 // HandleDrop (file/text/image processing), SHFILEINFO interop,
 // SaveGlobalSettings, RelayCommand
 // Split from FlyShelfViewModel.cs for modularity
@@ -58,6 +58,25 @@ namespace AdvanceClip.ViewModels
 
             if (files != null && files.Length > 0)
             {
+                if (files.Length > 10)
+                {
+                    // Group files together!
+                    var groupItem = new ClipboardItem(files);
+                    DroppedItems.Insert(0, groupItem);
+                    PruneOldItems();
+                    OnPropertyChanged(nameof(ShelfVisibility));
+
+                    AdvanceClip.Classes.Logger.LogAction("DRAG IN", $"Grouped {files.Length} files into a single Group item.");
+
+                    // Instantly push SSE event to connected mobile clients
+                    AdvanceClip.Classes.NetworkSyncServer.Instance?.NotifyClipboardChanged(
+                        groupItem.ItemType.ToString(), 
+                        groupItem.FileName);
+
+                    // Skip the regular individual batch file processing entirely!
+                    return;
+                }
+
                 // ═══ BATCH FILE PROCESSING ═══
                 // Cap at 100 files per clipboard event to prevent UI freeze.
                 // Files beyond the cap are silently dropped — users rarely need 100+ items at once.
@@ -518,39 +537,47 @@ namespace AdvanceClip.ViewModels
                                 item.ItemType = ClipboardItemType.Code;
                                 item.RawContent = isTerminal ? capturedText : AutoFormatCode(capturedText);
                                 
-                                if (isTerminal) 
+                                if (isTerminal)
                                 {
                                     item.Extension = "TERM";
                                 }
-                                else if (capturedText.Contains("std::") || capturedText.Contains("<iostream>")) 
+                                else if (capturedText.Contains("std::") || capturedText.Contains("<iostream>") || capturedText.Contains("<cstdlib>") || capturedText.Contains("<vector>") || capturedText.Contains("using namespace") || Regex.IsMatch(capturedText, @"(cout|cin|endl|cerr)\s*<<"))
                                 {
                                     item.Extension = "C++";
                                 }
-                                else if (capturedText.Contains("<stdio.h>") || Regex.IsMatch(capturedText, @"\bprintf\(")) 
+                                else if (capturedText.Contains("<stdio.h>") || capturedText.Contains("<stdlib.h>") || capturedText.Contains("<string.h>") || Regex.IsMatch(capturedText, @"\b(printf|scanf|malloc|free|sizeof|typedef|struct\s+\w+)\s*[\(;]"))
                                 {
                                     item.Extension = "C";
                                 }
-                                else if (Regex.IsMatch(capturedText, @"\b(def\s+\w+\(|import\s+os|import\s+sys|print\()\b")) 
+                                else if (Regex.IsMatch(capturedText, @"(def\s+\w+\s*\(|import\s+(os|sys|json|re|math|numpy|pandas|flask|django|requests|typing|pathlib)|from\s+\w+\s+import|if\s+__name__\s*==|self\.|__init__|lambda\s|print\s*\(|class\s+\w+\s*[\(:]|@(staticmethod|classmethod|property)|except\s|elif\s|raise\s)"))
                                 {
                                     item.Extension = "PYTHON";
                                 }
-                                else if (Regex.IsMatch(capturedText, @"(function\s+\w+\(|console\.log\(|require\(|export\s+default|module\.exports)\b")) 
+                                else if (Regex.IsMatch(capturedText, @"(public\s+static\s+void\s+main|System\.(out|in|err)\.|import\s+java\.|throws\s|implements\s|extends\s|interface\s+\w+|abstract\s+class|@Override|@Deprecated|\.println\()"))
+                                {
+                                    item.Extension = "JAVA";
+                                }
+                                else if (Regex.IsMatch(capturedText, @"(function\s+\w+\s*\(|console\.(log|error|warn)\(|require\s*\(|module\.exports|export\s+(default|const|function|class)|async\s+function|await\s|const\s+\w+\s*=\s*(require|\(|async|\{)|=>\s*\{)"))
                                 {
                                     item.Extension = "JS";
                                 }
-                                else if (capturedText.Contains("public class") || capturedText.Contains("private void") || capturedText.Contains("Console.WriteLine")) 
+                                else if (capturedText.Contains("public class") || capturedText.Contains("private void") || capturedText.Contains("Console.") || capturedText.Contains("namespace ") || Regex.IsMatch(capturedText, @"(using\s+System|var\s+\w+\s*=\s*new|async\s+Task)"))
                                 {
                                     item.Extension = "C#";
                                 }
-                                else if (capturedText.TrimStart().StartsWith("{\"") || capturedText.TrimStart().StartsWith("[{\"")) 
+                                else if (Regex.IsMatch(capturedText, @"(SELECT\s+.*\s+FROM|INSERT\s+INTO|CREATE\s+(TABLE|DATABASE)|ALTER\s+TABLE|WHERE\s+\w+)", RegexOptions.IgnoreCase))
+                                {
+                                    item.Extension = "SQL";
+                                }
+                                else if (capturedText.TrimStart().StartsWith("{\"") || capturedText.TrimStart().StartsWith("[{\""))
                                 {
                                     item.Extension = "JSON";
                                 }
-                                else if (Regex.IsMatch(capturedText, @"<\/?(html|div|span|body)>", RegexOptions.IgnoreCase)) 
+                                else if (Regex.IsMatch(capturedText, @"<\/?(html|div|span|body|script|style|form|table)[\s>]", RegexOptions.IgnoreCase))
                                 {
                                     item.Extension = "HTML";
                                 }
-                                else 
+                                else
                                 {
                                     item.Extension = "CODE";
                                 }
@@ -670,9 +697,12 @@ namespace AdvanceClip.ViewModels
             {
                 const uint SHGFI_ICON = 0x100;
                 const uint SHGFI_LARGEICON = 0x0;
+                const uint SHGFI_USEFILEATTRIBUTES = 0x10;
+                const uint FILE_ATTRIBUTE_NORMAL = 0x80;
 
                 SHFILEINFO shinfo = new SHFILEINFO();
-                IntPtr res = SHGetFileInfo(filePath, 0, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON);
+                // SHGFI_USEFILEATTRIBUTES: icon from extension even if file is missing
+                IntPtr res = SHGetFileInfo(filePath, FILE_ATTRIBUTE_NORMAL, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
 
                 if (res != IntPtr.Zero && shinfo.hIcon != IntPtr.Zero)
                 {
