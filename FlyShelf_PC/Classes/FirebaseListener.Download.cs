@@ -42,12 +42,24 @@ namespace AdvanceClip.Classes
 
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
+                    ClipboardItemType incomingType = ClipboardItemType.File;
+                    string typeLower = (cloudItem.Type ?? "File").ToLowerInvariant();
+                    if (typeLower == "pdf") incomingType = ClipboardItemType.Pdf;
+                    else if (typeLower == "archive" || typeLower == "zip") incomingType = ClipboardItemType.Archive;
+                    else if (typeLower == "video" || typeLower == "mp4") incomingType = ClipboardItemType.Video;
+                    else if (typeLower == "audio" || typeLower == "mp3") incomingType = ClipboardItemType.Audio;
+                    else if (typeLower == "document" || typeLower == "text") incomingType = ClipboardItemType.Document;
+                    else if (typeLower == "presentation") incomingType = ClipboardItemType.Presentation;
+                    else if (typeLower == "image" || typeLower == "png" || typeLower == "jpg" || typeLower == "jpeg") incomingType = ClipboardItemType.Image;
+
                     progressClip = new ClipboardItem
                     {
                         RawContent = $"⏳ Downloading from {cloudItem.SourceDeviceName}...",
                         FileName = cloudItem.Title,
                         Extension = "DOWNLOADING",
-                        ItemType = ClipboardItemType.Text
+                        ItemType = incomingType,
+                        TransferProgress = 0.1,
+                        TransferStatusText = $"Connecting to {cloudItem.SourceDeviceName}..."
                     };
                     _viewModel.DroppedItems.Insert(0, progressClip);
                     _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
@@ -145,7 +157,10 @@ namespace AdvanceClip.Classes
                                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                                 {
                                     if (progressClip != null)
+                                    {
                                         progressClip.RawContent = $"🔄 Retry {attempt + 1}/{maxRetries} — {cloudItem.Title}";
+                                        progressClip.TransferStatusText = $"Retry {attempt + 1}/{maxRetries} — connecting...";
+                                    }
                                 });
                                 await Task.Delay(retryDelays[attempt - 1]);
                             }
@@ -188,7 +203,10 @@ namespace AdvanceClip.Classes
                         System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         {
                             if (progressClip != null)
+                            {
                                 progressClip.RawContent = $"🔄 Trying alternate download source — {cloudItem.Title}";
+                                progressClip.TransferStatusText = "Trying alternate source...";
+                            }
                         });
                     }
                 }
@@ -218,17 +236,20 @@ namespace AdvanceClip.Classes
                         await fileStream.WriteAsync(buffer, 0, bytesRead);
                         totalRead += bytesRead;
 
-                        if ((DateTime.Now - lastProgressUpdate).TotalMilliseconds > 400 && progressClip != null)
+                        if ((DateTime.Now - lastProgressUpdate).TotalMilliseconds > 300 && progressClip != null)
                         {
                             lastProgressUpdate = DateTime.Now;
-                            string readStr = totalRead > 1_073_741_824 ? $"{totalRead / 1_073_741_824.0:F1}GB" : $"{totalRead / 1_048_576.0:F1}MB";
+                            string readStr = totalRead > 1_073_741_824 ? $"{totalRead / 1_073_741_824.0:F1} GB" : $"{totalRead / 1_048_576.0:F1} MB";
                             int pct = totalBytes > 0 ? (int)(totalRead * 100 / totalBytes) : -1;
                             string statusText = pct >= 0
                                 ? $"⬇️ {pct}% — {readStr}/{totalSizeStr} — {cloudItem.Title}"
                                 : $"⬇️ {readStr} — {cloudItem.Title}";
 
                             progressClip.RawContent = statusText;
-                            progressClip.FileName = $"{cloudItem.Title} ({pct}%)";
+                            progressClip.TransferProgress = pct >= 0 ? pct : 0.1;
+                            progressClip.TransferStatusText = pct >= 0
+                                ? $"{readStr} of {totalSizeStr} ({pct}%)"
+                                : $"{readStr} downloaded";
                         }
                     }
                 }
@@ -382,7 +403,11 @@ namespace AdvanceClip.Classes
             System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 if (progressClip != null)
+                {
                     progressClip.RawContent = $"🔄 Re-downloading (integrity check failed) — {cloudItem.Title}";
+                    progressClip.TransferStatusText = "Re-downloading (integrity retry)...";
+                    progressClip.TransferProgress = 0.1;
+                }
             });
 
             try

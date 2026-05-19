@@ -154,7 +154,7 @@ namespace AdvanceClip.ViewModels
                 }
             }
         }
-        public bool IsImagePreview => ItemType == ClipboardItemType.Image || ItemType == ClipboardItemType.QRCode;
+        public bool IsImagePreview => (ItemType == ClipboardItemType.Image || ItemType == ClipboardItemType.QRCode) && Extension != "DOWNLOADING";
         public bool IsGifPreview => IsImagePreview && !string.IsNullOrEmpty(FilePath) && FilePath.EndsWith(".gif", StringComparison.OrdinalIgnoreCase);
         public bool IsStaticImagePreview => IsImagePreview && !IsGifPreview;
         public string GifFilePath => IsGifPreview ? FilePath : "";
