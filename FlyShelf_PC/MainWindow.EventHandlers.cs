@@ -16,7 +16,7 @@ namespace AdvanceClip
 {
     public partial class MainWindow
     {
-        private static bool _isInternalDragSource = false;
+        internal static bool _isInternalDragSource = false;
 
         private void Window_PreviewDrop(object sender, DragEventArgs e)
         {
@@ -138,9 +138,10 @@ namespace AdvanceClip
         {
             bool newState = !AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync;
             AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync = newState;
-            // Also stop/start Cloudflare tunnel — no data should leave via cloud when sync is off
-            // The local server stays running for LAN peers
+            // Toggle ALL sync: Cloudflare + LAN
+            // When OFF, no data enters or leaves the device
             AdvanceClip.Classes.SettingsManager.Current.EnableGlobalCloudflare = newState;
+            AdvanceClip.Classes.SettingsManager.Current.EnableLocalLAN = newState;
             AdvanceClip.Classes.SettingsManager.Save();
         }
 

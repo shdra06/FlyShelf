@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------
-// HubWindow — Advanced Features
+// HubWindow ï¿½ Advanced Features
 // SnifferPaths, Device Management, Device Groups, Updates,
 // Kinetic Scroll, Theming, Wallpaper, QR Pairing, Color Tools
 // Split from HubWindow.xaml.cs for modularity
@@ -578,11 +578,41 @@ namespace AdvanceClip.Windows
                     NoWallpaperText.Visibility = Visibility.Visible;
                 }
 
-                // Blur
+                // Blur + dark fallback when Mica is off
                 if (SettingsManager.Current.EnableBlurBehind)
+                {
                     this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
+                    this.Background = System.Windows.Media.Brushes.Transparent;
+                    if (RootGrid != null) RootGrid.Background = null;
+                    // Reset caption to default (transparent for Mica)
+                    try
+                    {
+                        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                        if (hwnd != IntPtr.Zero)
+                        {
+                            int colorDefault = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE = transparent for Mica
+                            NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref colorDefault, sizeof(int));
+                        }
+                    } catch { }
+                }
                 else
+                {
                     this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+                    var darkBg = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromRgb(18, 18, 26));
+                    this.Background = darkBg;
+                    if (RootGrid != null) RootGrid.Background = darkBg;
+                    // Force title bar to dark color via DWM (DWMWA_CAPTION_COLOR = 35)
+                    try
+                    {
+                        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                        if (hwnd != IntPtr.Zero)
+                        {
+                            int darkColor = (26 << 16) | (18 << 8) | 18; // BGR: #12121A
+                            NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref darkColor, sizeof(int));
+                        }
+                    } catch { }
+                }
 
                 // Color scheme â€” swap theme dictionaries at runtime
                 string targetTheme = SettingsManager.Current.ColorScheme == 1 ? "Light" : "Dark";

@@ -39,11 +39,12 @@ namespace AdvanceClip.Classes
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "peer_urls.json");
 
         // ═══ Config ═══
-        private const int HEARTBEAT_MS = 10_000;          // 10s heartbeat (Cloudflare tunnels are slow)
-        private const int HEARTBEAT_TIMEOUT_MS = 8_000;   // 8s timeout per ping (Cloudflare latency)
-        private const int MAX_FAILURES = 5;               // 5 misses = dead (more tolerance for tunnel jitter)
-        private const int DISCOVERY_MS = 30_000;          // Re-scan Firebase every 30s for reconnection
-        private const int HANDSHAKE_TIMEOUT_MS = 8_000;   // 8s handshake timeout for Cloudflare
+        private const int HEARTBEAT_MS = 5_000;            // 5s heartbeat (fast LAN detection)
+        private const int HEARTBEAT_TIMEOUT_MS = 4_000;    // 4s timeout per ping
+        private const int MAX_FAILURES = 3;                // 3 misses = dead (quick failover)
+        private const int DISCOVERY_MS = 15_000;           // Re-scan Firebase every 15s for reconnection
+        private const int HANDSHAKE_TIMEOUT_LAN_MS = 2_000;   // 2s for LAN
+        private const int HANDSHAKE_TIMEOUT_CF_MS = 8_000;    // 8s for Cloudflare tunnels
 
         // ═══ Events ═══
         public event Action<string, string>? PeerConnected;     // (deviceId, transport)
@@ -57,7 +58,7 @@ namespace AdvanceClip.Classes
         {
             PooledConnectionLifetime = TimeSpan.FromMinutes(10),
             PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
-            MaxConnectionsPerServer = 4,
+            MaxConnectionsPerServer = 8,
             EnableMultipleHttp2Connections = true,
             AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate
         };
@@ -433,7 +434,8 @@ namespace AdvanceClip.Classes
             if (!testUrl.StartsWith("http://") && !testUrl.StartsWith("https://")) return false;
             try
             {
-                using var c = new HttpClient { Timeout = TimeSpan.FromMilliseconds(HANDSHAKE_TIMEOUT_MS) };
+                int timeout = (transport == "LAN") ? HANDSHAKE_TIMEOUT_LAN_MS : HANDSHAKE_TIMEOUT_CF_MS;
+                using var c = new HttpClient { Timeout = TimeSpan.FromMilliseconds(timeout) };
                 string pk = DevicePairingManager.EnsurePairingKey();
                 if (!string.IsNullOrEmpty(pk)) c.DefaultRequestHeaders.Add("X-Pairing-Key", pk);
 
