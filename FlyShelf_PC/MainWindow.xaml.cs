@@ -133,23 +133,9 @@ namespace AdvanceClip
                 // Skip re-focus if a topmost child window (QuickLook) is active — prevents infinite activation loop
                 if (System.Windows.Application.Current.Windows.OfType<Window>().Any(w => w.Topmost && w != this && w.IsActive)) return;
                 // Debounce: only re-focus if the ListView isn't already keyboard-focused
-                if (!ShelfListView.IsKeyboardFocusWithin && _viewModel.DroppedItems.Count > 0)
+                if (!ShelfListView.IsKeyboardFocusWithin)
                 {
-                    Dispatcher.InvokeAsync(() =>
-                    {
-                        if (ShelfListView.SelectedIndex < 0)
-                            ShelfListView.SelectedIndex = 0;
-                        var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(ShelfListView.SelectedIndex) as ListViewItem;
-                        if (container != null)
-                        {
-                            container.Focus();
-                            Keyboard.Focus(container);
-                        }
-                        else
-                        {
-                            ShelfListView.Focus();
-                        }
-                    }, System.Windows.Threading.DispatcherPriority.Input);
+                    FocusFirstItemContainer();
                 }
             };
 
@@ -193,6 +179,20 @@ namespace AdvanceClip
                 }
             };
         }
+
+        private delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+
+        [DllImport("user32.dll")]
+        private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
+
+        private const uint WINEVENT_OUTOFCONTEXT = 0;
+        private const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+
+        private IntPtr _foregroundHook = IntPtr.Zero;
+        private WinEventDelegate _foregroundDelegate = null!;
 
         [DllImport("user32.dll", SetLastError = true)]
         [return: MarshalAs(UnmanagedType.Bool)]
@@ -241,6 +241,17 @@ namespace AdvanceClip
 
         private void MicaWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            // Setup global foreground window change listener to dismiss when clicking elsewhere (handles non-activated summons)
+            try
+            {
+                _foregroundDelegate = new WinEventDelegate(ForegroundChangedCallback);
+                _foregroundHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero, _foregroundDelegate, 0, 0, WINEVENT_OUTOFCONTEXT);
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("HOOK_FAIL", $"Failed to setup foreground win event hook: {ex.Message}");
+            }
+
             // DWM border styling — must happen after window is shown
             var handle = new WindowInteropHelper(this).Handle;
             if (handle != IntPtr.Zero)
@@ -426,6 +437,12 @@ namespace AdvanceClip
         {
             try
             {
+                if (_foregroundHook != IntPtr.Zero)
+                {
+                    UnhookWinEvent(_foregroundHook);
+                    _foregroundHook = IntPtr.Zero;
+                }
+
                 var handle = new WindowInteropHelper(this).Handle;
                 if (handle != IntPtr.Zero)
                 {
@@ -732,7 +749,7 @@ namespace AdvanceClip
             if (_isPersistentMode) return;
 
             // Guard: Don't dismiss if the window JUST appeared (prevents flicker from focus races)
-            if ((DateTime.Now - _spawnTime).TotalMilliseconds < 400) return;
+            if ((DateTime.Now - _spawnTime).TotalMilliseconds < 100) return;
 
             // Don't dismiss while user is mid-drag
             if (_isDragHovering) return;
@@ -746,6 +763,36 @@ namespace AdvanceClip
             {
                 AnimateAndHide();
             }
+        }
+
+        /// <summary>
+        /// Native Win32 callback triggered when the active foreground window changes globally.
+        /// Handles auto-dismissing FlyShelf when shown in a non-activated / non-focus-stealing state.
+        /// </summary>
+        private void ForegroundChangedCallback(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
+        {
+            if (_isPersistentMode) return;
+
+            // Don't auto-dismiss during first 250ms of spawn to avoid startup focus race transitions
+            if ((DateTime.Now - _spawnTime).TotalMilliseconds < 250) return;
+
+            if (_isDragHovering) return;
+
+            // Get thread/process ID of the new foreground window
+            GetWindowThreadProcessId(hwnd, out uint focusedProcessId);
+            uint currentProcessId = (uint)System.Environment.ProcessId;
+
+            // If the focused window belongs to our own app (e.g. MainWindow, HubWindow, QuickLook), do not dismiss
+            if (focusedProcessId == currentProcessId) return;
+
+            // Foreground changed to another app (browser, editor, desktop, etc.)! Auto-dismiss FlyShelf!
+            Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                if (this.IsVisible && !_isAnimatingHide)
+                {
+                    AnimateAndHide();
+                }
+            });
         }
         private bool _isPersistentMode = false;
         private bool _isAnimatingHide = false;
@@ -777,6 +824,7 @@ namespace AdvanceClip
 
             // Clear PDF merge selections so they don't persist on reopen
             DismissMergeState();
+            CloseSearch();
 
             RootContent.RenderTransformOrigin = new Point(0.5, 1);
             RootContent.RenderTransform = new TransformGroup
@@ -875,6 +923,7 @@ namespace AdvanceClip
 
         public void ShowNearPosition(double targetX, double targetY, int mode = 0, bool isPersistent = false, bool stealFocus = true)
         {
+            CloseSearch();
             _previousForegroundWindow = GetTargetForegroundWindow();
             
             // AdvanceClip Phase 2: Live AI Memory Association
@@ -974,32 +1023,54 @@ namespace AdvanceClip
             int currentToken = ++_spawnToken;
 
             // Give keyboard focus to the ListView so arrow keys + Enter work immediately
-            if (stealFocus && _viewModel.DroppedItems.Count > 0)
+            if (stealFocus)
             {
-                Dispatcher.InvokeAsync(async () =>
+                FocusFirstItemContainer();
+            }
+        }
+
+        private void FocusFirstItemContainer()
+        {
+            if (_viewModel.DroppedItems.Count == 0) return;
+
+            if (ShelfListView.SelectedIndex < 0)
+                ShelfListView.SelectedIndex = 0;
+
+            int index = ShelfListView.SelectedIndex;
+            
+            // If the containers are already generated, focus immediately:
+            var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(index) as ListViewItem;
+            if (container != null)
+            {
+                container.Focus();
+                Keyboard.Focus(container);
+            }
+            else
+            {
+                // Otherwise, register event handler to focus as soon as they are ready:
+                EventHandler? statusHandler = null;
+                statusHandler = (s, ev) =>
                 {
-                    await System.Threading.Tasks.Task.Delay(100); // wait for SortForContext to finish
-                    if (_viewModel.DroppedItems.Count > 0)
+                    if (ShelfListView.ItemContainerGenerator.Status == System.Windows.Controls.Primitives.GeneratorStatus.ContainersGenerated)
                     {
-                        ShelfListView.SelectedIndex = 0;
-                        ShelfListView.ScrollIntoView(ShelfListView.Items[0]);
-                        ShelfListView.Focus();
-                        // Dispatch container focus to next frame — container must be realized first
+                        ShelfListView.ItemContainerGenerator.StatusChanged -= statusHandler;
                         Dispatcher.InvokeAsync(() =>
                         {
-                            var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(0) as ListViewItem;
-                            if (container != null)
+                            var lazyContainer = ShelfListView.ItemContainerGenerator.ContainerFromIndex(index) as ListViewItem;
+                            if (lazyContainer != null)
                             {
-                                container.Focus();
-                                Keyboard.Focus(container);
+                                lazyContainer.Focus();
+                                Keyboard.Focus(lazyContainer);
                             }
                             else
                             {
-                                Keyboard.Focus(ShelfListView);
+                                ShelfListView.Focus();
                             }
                         }, System.Windows.Threading.DispatcherPriority.Input);
                     }
-                }, System.Windows.Threading.DispatcherPriority.Input);
+                };
+                ShelfListView.ItemContainerGenerator.StatusChanged += statusHandler;
+                ShelfListView.Focus();
             }
         }
 

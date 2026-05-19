@@ -42,19 +42,49 @@ namespace AdvanceClip.Windows
                     bitmap.Freeze();
                     PreviewImage.Source = bitmap;
                     
-                    // Pre-scale intelligently based on original image aspect ratio
-                    if (AdvanceClip.Classes.SettingsManager.Current.QuickLookWidth > 50 && AdvanceClip.Classes.SettingsManager.Current.QuickLookHeight > 50)
+                    // Pre-scale intelligently based on original image aspect ratio and dpi to eliminate black spaces
+                    double dpiX = bitmap.DpiX > 0 ? bitmap.DpiX / 96.0 : 1.0;
+                    double dpiY = bitmap.DpiY > 0 ? bitmap.DpiY / 96.0 : 1.0;
+                    double imgW = bitmap.PixelWidth / dpiX;
+                    double imgH = bitmap.PixelHeight / dpiY;
+                    double aspect = imgW / imgH;
+
+                    double maxW = SystemParameters.WorkArea.Width * 0.7;
+                    double maxH = SystemParameters.WorkArea.Height * 0.7 - 40; // Subtract header height
+
+                    double targetW = imgW;
+                    double targetH = imgH;
+
+                    if (targetW > maxW)
                     {
-                        this.Width = AdvanceClip.Classes.SettingsManager.Current.QuickLookWidth;
-                        this.Height = AdvanceClip.Classes.SettingsManager.Current.QuickLookHeight;
+                        targetW = maxW;
+                        targetH = targetW / aspect;
                     }
-                    else
+                    if (targetH > maxH)
                     {
-                        double dpiX = bitmap.DpiX > 0 ? bitmap.DpiX / 96.0 : 1.0;
-                        double dpiY = bitmap.DpiY > 0 ? bitmap.DpiY / 96.0 : 1.0;
-                        this.Width = Math.Min(bitmap.PixelWidth / dpiX, SystemParameters.WorkArea.Width * 0.7);
-                        this.Height = Math.Min(bitmap.PixelHeight / dpiY, SystemParameters.WorkArea.Height * 0.7);
+                        targetH = maxH;
+                        targetW = targetH * aspect;
                     }
+
+                    // Minimum size to keep controls visible
+                    double minW = 320;
+                    double minH = 240;
+                    if (targetW < minW || targetH < minH)
+                    {
+                        if (aspect >= 1.0)
+                        {
+                            targetW = minW;
+                            targetH = targetW / aspect;
+                        }
+                        else
+                        {
+                            targetH = minH;
+                            targetW = targetH * aspect;
+                        }
+                    }
+
+                    this.Width = targetW;
+                    this.Height = targetH + 40; // Add header height back
                     
                     _isImageLoaded = true;
                     RotateBtn.Visibility = Visibility.Visible;
@@ -220,14 +250,7 @@ namespace AdvanceClip.Windows
 
         private void Window_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
-            // Do not maximize Document Cards, only floating raw media images!
-            if (!_isImageLoaded) return; 
-
-            if (this.WindowState == WindowState.Normal)
-                this.WindowState = WindowState.Maximized;
-            else
-                this.WindowState = WindowState.Normal;
-            
+            // Removed: "remove double tap to full screen from quick look/ preview"
             e.Handled = true;
         }
 

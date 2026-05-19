@@ -140,12 +140,68 @@
                 </ui:Button>
 
                 <ui:Button Name="ToggleExpandBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="OpenApp_Click" ToolTip="Open FlyShelf Hub" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                    <ui:Button.Icon><ui:SymbolIcon Symbol="Maximize24" /></ui:Button.Icon>
+                    <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowMaximize24" /></ui:Button.Icon>
                 </ui:Button>
 
                 <!-- Emoji button — swaps to Merge PDF when 2+ PDFs selected -->
                 <ui:Button x:Name="EmojiBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                    <ui:Button.Icon><ui:SymbolIcon x:Name="EmojiBtnIcon" Symbol="Emoji24" /></ui:Button.Icon>
+                    <Grid Width="20" Height="20">
+                        <!-- Standard emoji icon -->
+                        <ui:SymbolIcon x:Name="EmojiBtnIcon" Symbol="Emoji24" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <ui:SymbolIcon.Style>
+                                <Style TargetType="ui:SymbolIcon" BasedOn="{StaticResource {x:Type ui:SymbolIcon}}">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ui:SymbolIcon.Style>
+                        </ui:SymbolIcon>
+
+                        <!-- Drop animation icon (arrow moving down) -->
+                        <Grid x:Name="DropArrowContainer" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <ui:SymbolIcon Symbol="ArrowDown24" Foreground="#10B981" RenderTransformOrigin="0.5,0.5">
+                                <ui:SymbolIcon.RenderTransform>
+                                    <TranslateTransform x:Name="ArrowTranslate" Y="0"/>
+                                </ui:SymbolIcon.RenderTransform>
+                                <ui:SymbolIcon.Style>
+                                    <Style TargetType="ui:SymbolIcon" BasedOn="{StaticResource {x:Type ui:SymbolIcon}}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                <DataTrigger.EnterActions>
+                                                    <BeginStoryboard x:Name="BounceArrowStory">
+                                                        <Storyboard RepeatBehavior="Forever">
+                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                                             From="-4" To="4" Duration="0:0:0.6" AutoReverse="True">
+                                                                <DoubleAnimation.EasingFunction>
+                                                                    <SineEase EasingMode="EaseInOut"/>
+                                                                </DoubleAnimation.EasingFunction>
+                                                            </DoubleAnimation>
+                                                        </Storyboard>
+                                                    </BeginStoryboard>
+                                                </DataTrigger.EnterActions>
+                                                <DataTrigger.ExitActions>
+                                                    <StopStoryboard BeginStoryboardName="BounceArrowStory"/>
+                                                </DataTrigger.ExitActions>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </ui:SymbolIcon.Style>
+                            </ui:SymbolIcon>
+                        </Grid>
+                    </Grid>
                 </ui:Button>
                 <!-- Merge PDF button — hidden by default, replaces emoji when PDFs selected -->
                 <ui:Button x:Name="MergePdfToolbarBtn" Focusable="False" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
@@ -186,13 +242,11 @@
         <ListView Name="ShelfListView" Grid.Row="1" ItemsSource="{Binding DroppedItems}" Background="#01000000" BorderThickness="0" Margin="12,0,12,12"
                   Focusable="True" KeyboardNavigation.DirectionalNavigation="Contained"
                   ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Hidden"
-                  ScrollViewer.CanContentScroll="True" VirtualizingPanel.ScrollUnit="Pixel"
+                  ScrollViewer.CanContentScroll="False"
                   SelectionMode="Extended" MouseMove="ShelfListView_MouseMove" PreviewMouseLeftButtonDown="ShelfListView_PreviewMouseLeftButtonDown"
                   PreviewMouseLeftButtonUp="ShelfListView_PreviewMouseLeftButtonUp"
                   MouseDoubleClick="ShelfListView_MouseDoubleClick" SelectionChanged="ShelfListView_SelectionChanged"
                   HorizontalContentAlignment="Stretch"
-                  VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling"
-                  VirtualizingPanel.CacheLengthUnit="Item" VirtualizingPanel.CacheLength="10,10"
                   AlternationCount="10"
                   PreviewKeyDown="ShelfListView_KeyDown"
                   PreviewMouseWheel="ShelfListView_PreviewMouseWheel">
@@ -282,7 +336,7 @@
                         </Border.RenderTransform>
 
                         <!-- Inner highlight border for frosted glass effect -->
-                        <Border BorderThickness="0,1,0,0" BorderBrush="#0CFFFFFF" CornerRadius="14" Padding="12">
+                        <Border Name="InnerHighlightBorder" BorderThickness="0,1,0,0" BorderBrush="#0CFFFFFF" CornerRadius="14" Padding="12">
                         <Grid Name="ItemGrid" HorizontalAlignment="Stretch" Background="Transparent" Tag="{Binding DataContext, ElementName=ShelfListView}">
                             <Grid.ContextMenu>
                                 <ContextMenu>
@@ -522,7 +576,7 @@
                                         </Style>
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#F472B6" PreviewMouseLeftButtonDown="QuickLookSpecific_Click" ToolTip="Quick Look">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Maximize24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -858,23 +912,25 @@
                     <DataTemplate.Triggers>
                         <!-- Dynamic sizing for Large Images vs Standard Files -->
                         <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
-                             <Setter TargetName="ItemIcon" Property="Stretch" Value="Uniform" />
-                             <Setter TargetName="ItemIcon" Property="Height" Value="60" />
+                             <Setter TargetName="InnerHighlightBorder" Property="Padding" Value="3" />
+                             <Setter TargetName="ItemIcon" Property="Stretch" Value="UniformToFill" />
+                             <Setter TargetName="ItemIcon" Property="Height" Value="100" />
                              <Setter TargetName="ItemIcon" Property="Width" Value="NaN" />
                              <Setter TargetName="ItemIcon" Property="Grid.ColumnSpan" Value="2" />
                              <Setter TargetName="ItemIcon" Property="HorizontalAlignment" Value="Center" />
-                             <Setter TargetName="ItemIcon" Property="Margin" Value="0,0,0,4" />
-                             <Setter TargetName="GifItemIcon" Property="Stretch" Value="Uniform" />
-                             <Setter TargetName="GifItemIcon" Property="Height" Value="60" />
+                             <Setter TargetName="ItemIcon" Property="Margin" Value="0" />
+                             <Setter TargetName="GifItemIcon" Property="Stretch" Value="UniformToFill" />
+                             <Setter TargetName="GifItemIcon" Property="Height" Value="100" />
                              <Setter TargetName="GifItemIcon" Property="Width" Value="NaN" />
                              <Setter TargetName="GifItemIcon" Property="Grid.ColumnSpan" Value="2" />
                              <Setter TargetName="GifItemIcon" Property="HorizontalAlignment" Value="Center" />
-                             <Setter TargetName="GifItemIcon" Property="Margin" Value="0,0,0,4" />
-                             <Setter TargetName="IconBorder" Property="Margin" Value="0,0,0,4" />
+                             <Setter TargetName="GifItemIcon" Property="Margin" Value="0" />
+                             <Setter TargetName="IconBorder" Property="Margin" Value="0" />
                              <Setter TargetName="IconBorder" Property="Grid.ColumnSpan" Value="2" />
                              <Setter TargetName="IconBorder" Property="HorizontalAlignment" Value="Center" />
                              <Setter TargetName="IconBorder" Property="Background" Value="Transparent" />
                              <Setter TargetName="IconBorder" Property="Padding" Value="0" />
+                             <Setter TargetName="IconBorder" Property="CornerRadius" Value="11" />
                              <Setter TargetName="TitleText" Property="Visibility" Value="Collapsed" />
                         </DataTrigger>
                         <!-- Apply Font Modifiers for Code Types -->
@@ -882,16 +938,6 @@
                              <Setter TargetName="TitleText" Property="FontFamily" Value="Cascadia Mono, Consolas, monospace" />
                              <Setter TargetName="TitleText" Property="Foreground" Value="#6EE7B7" />
                              <Setter TargetName="TitleText" Property="FontSize" Value="11.5" />
-                             <Setter TargetName="CardBorder" Property="Background">
-                                 <Setter.Value>
-                                     <SolidColorBrush Color="#301A1B26" />
-                                 </Setter.Value>
-                             </Setter>
-                             <Setter TargetName="CardBorder" Property="BorderBrush">
-                                 <Setter.Value>
-                                     <SolidColorBrush Color="#402A2E3E" />
-                                 </Setter.Value>
-                             </Setter>
                         </DataTrigger>
                         
                         <!-- Hover Effect on the Container -->
@@ -972,77 +1018,7 @@
             </TextBlock>
         </StackPanel>
 
-        <!-- ═══ Drag-Over Overlay Zone ═══ -->
-        <Border Grid.RowSpan="2" Panel.ZIndex="1000" CornerRadius="14" IsHitTestVisible="False">
-            <Border.Background>
-                <SolidColorBrush Color="#F00A0A14"/>
-            </Border.Background>
-            <Border.Style>
-                <Style TargetType="Border">
-                    <Setter Property="Opacity" Value="0"/>
-                    <Setter Property="Visibility" Value="Collapsed"/>
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                            <Setter Property="Visibility" Value="Visible"/>
-                            <DataTrigger.EnterActions>
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0.94" Duration="0:0:0.22">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseOut"/>
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </DataTrigger.EnterActions>
-                            <DataTrigger.ExitActions>
-                                <BeginStoryboard>
-                                    <Storyboard>
-                                        <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.18">
-                                            <DoubleAnimation.EasingFunction>
-                                                <CubicEase EasingMode="EaseIn"/>
-                                            </DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </DataTrigger.ExitActions>
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </Border.Style>
-
-            <Grid Margin="12">
-                <!-- Glowing Dash Border -->
-                <Rectangle Stroke="#A78BFA" StrokeDashArray="4 3" StrokeThickness="1.5" RadiusX="12" RadiusY="12"/>
-                
-                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <!-- Icon pulsing micro-animation -->
-                    <Border x:Name="PulsingIconBorder" Width="52" Height="52" CornerRadius="26" Background="#1D7C3AED" HorizontalAlignment="Center" Margin="0,0,0,12">
-                        <Border.Triggers>
-                            <EventTrigger RoutedEvent="Loaded">
-                                <BeginStoryboard>
-                                    <Storyboard RepeatBehavior="Forever">
-                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)" From="1" To="1.12" Duration="0:0:0.85" AutoReverse="True">
-                                            <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)" From="1" To="1.12" Duration="0:0:0.85" AutoReverse="True">
-                                            <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
-                        </Border.Triggers>
-                        <Border.RenderTransform>
-                            <ScaleTransform ScaleX="1" ScaleY="1" CenterX="26" CenterY="26"/>
-                        </Border.RenderTransform>
-                        <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="24" Foreground="#C084FC" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    
-                    <TextBlock Text="Drop items here to shelve" Foreground="White" FontSize="13" FontWeight="SemiBold" TextAlignment="Center" Margin="0,0,0,4"/>
-                    <TextBlock Text="Supports files, images, code snippets or URLs" Foreground="#80FFFFFF" FontSize="10.5" TextAlignment="Center"/>
-                </StackPanel>
-            </Grid>
-        </Border>
+        <!-- Drag-Over Overlay Zone removed - replaced with elegant mini arrow animation in button header -->
 
     </Grid>
 </controls:MicaWindow>

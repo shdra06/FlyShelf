@@ -356,8 +356,8 @@ public partial class App : Application
                     _shakeStartY = hookStruct.pt.y;
                 }
 
-                // Restrict the evaluation completely to tight shakes (between 15ms and 600ms consecutive loops)
-                if (currentTime - _lastShakeTime > 600)
+                // Restrict the evaluation completely to tight shakes (between 15ms and 500ms consecutive loops)
+                if (currentTime - _lastShakeTime > 500)
                 {
                     _shakeCount = 0;
                     _lastShakeDirX = 0;
@@ -375,16 +375,15 @@ public partial class App : Application
                     int currentDirX = deltaX > 0 ? 1 : (deltaX < 0 ? -1 : 0);
                     int currentDirY = deltaY > 0 ? 1 : (deltaY < 0 ? -1 : 0);
 
-                    // Required amplitude 25 guarantees proper tracking of human back-and-forth physics
-                    if (Math.Abs(deltaX) > 25)
+                    // Required amplitude 18 guarantees proper tracking of human back-and-forth physics with less strain
+                    if (Math.Abs(deltaX) > 18)
                     {
                         if (_lastShakeDirX != 0 && currentDirX != _lastShakeDirX) reversed = true;
                         _lastShakeDirX = currentDirX;
                         _lastShakeX = currentX;
                         _lastShakeTime = currentTime;
                     }
-
-                    if (Math.Abs(deltaY) > 25)
+                    else if (Math.Abs(deltaY) > 18)
                     {
                         if (_lastShakeDirY != 0 && currentDirY != _lastShakeDirY) reversed = true;
                         _lastShakeDirY = currentDirY;
@@ -396,8 +395,8 @@ public partial class App : Application
                     {
                         _shakeCount++;
 
-                        // Requires 4 distinct rapid reversals (much more explicit shake vs accidental twitch)
-                        if (_shakeCount >= 4)
+                        // Requires 3 distinct rapid reversals (highly responsive yet extremely safe from twitch)
+                        if (_shakeCount >= 3)
                         {
                             _shakeCount = 0; 
                             

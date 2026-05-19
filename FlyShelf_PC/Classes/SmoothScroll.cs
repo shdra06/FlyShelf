@@ -130,6 +130,18 @@ namespace AdvanceClip.Classes
 
             if (sv == null) return;
 
+            // Touchpad / Precision scroll bypass: Touchpads send high-resolution deltas
+            // that are not multiples of 120. Let WPF handle these natively with hardware inertia.
+            if (e.Delta % 120 != 0)
+            {
+                if (_states.TryGetValue(sv, out var activeState))
+                {
+                    activeState.Velocity = 0;
+                    activeState.IsAnimating = false;
+                }
+                return;
+            }
+
             _listScrollViewers.Add(sv);
             ApplyImpulse(sv, e, Profile.List);
         }
@@ -143,6 +155,17 @@ namespace AdvanceClip.Classes
             if (sv == null) return;
             if (sv.ScrollableHeight <= 0) return;
             if (_listScrollViewers.Contains(sv)) return;
+
+            // Touchpad / Precision scroll bypass: Let WPF handle these natively
+            if (e.Delta % 120 != 0)
+            {
+                if (_states.TryGetValue(sv, out var activeState))
+                {
+                    activeState.Velocity = 0;
+                    activeState.IsAnimating = false;
+                }
+                return;
+            }
 
             ApplyImpulse(sv, e, Profile.Page);
         }
