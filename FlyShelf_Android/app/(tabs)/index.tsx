@@ -24,7 +24,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ═══ Extracted Modules ═══
 import { ClipItem, DOWNLOAD_BASE, SYNC_CACHE_BASE, CONVERTED_BASE, IMAGE_CACHE_BASE, getDownloadPath } from '../../utils/clipTypes';
-import { fetchWithTimeout, getConnectionType, connectionColors, resolveOptimalUrl, getDeviceUrls, getMediaUrl } from '../../utils/networkHelpers';
+import { fetchWithTimeout, getConnectionType, connectionColors, resolveOptimalUrl, getDeviceUrls, getMediaUrl, decryptDevice, decryptDeviceList } from '../../utils/networkHelpers';
 import { encrypt as aesEncrypt, decrypt as aesDecrypt } from '../../utils/syncCrypto';
 import { styles } from '../../styles/syncStyles';
 import { colors, font, radius } from '../../styles/theme';
@@ -803,7 +803,8 @@ export default function SyncScreen() {
         if (snapshot.exists()) {
           const data = snapshot.val();
           const now = Date.now();
-          rawDevices = Object.keys(data).map(k => ({ ...data[k], _key: k })).filter(d => d.IsOnline && d.Timestamp && (now - d.Timestamp) < 600_000);
+          const filtered = Object.keys(data).map(k => ({ ...data[k], _key: k })).filter(d => d.IsOnline && d.Timestamp && (now - d.Timestamp) < 600_000);
+          rawDevices = await decryptDeviceList(filtered);
         }
         // Probe LAN reachability for each PC device
         for (let i = 0; i < rawDevices.length; i++) {
@@ -1122,7 +1123,7 @@ export default function SyncScreen() {
                               if (devSnap.exists()) {
                                 const devs = devSnap.val();
                                 for (const dk of Object.keys(devs)) {
-                                  const d = devs[dk];
+                                  const d = await decryptDevice(devs[dk]);
                                   if (d.GlobalUrl?.includes('trycloudflare.com') && d.DeviceType === 'PC') {
                                     fileUrl = `${d.GlobalUrl.replace(/\/$/, '')}/download${pathPart}`;
                                     break;
@@ -1255,7 +1256,7 @@ export default function SyncScreen() {
                       if (devSnap.exists()) {
                         const devs = devSnap.val();
                         for (const dk of Object.keys(devs)) {
-                          const d = devs[dk];
+                          const d = await decryptDevice(devs[dk]);
                           if (d.GlobalUrl?.includes('trycloudflare.com') && d.DeviceType === 'PC') {
                             fileUrl = `${d.GlobalUrl.replace(/\/$/, '')}/download${pathPart}`;
                             break;
@@ -1846,7 +1847,9 @@ export default function SyncScreen() {
         const snapshot = await firebaseGet(ref(database, `active_devices/${pk}`));
         if (snapshot.exists()) {
           const data = snapshot.val();
-          setForceSyncDevices(Object.keys(data).map(k => ({ key: k, ...data[k] })).filter(d => d.DeviceName !== deviceName));
+          const rawDevs = Object.keys(data).map(k => ({ key: k, ...data[k], DeviceId: k }));
+          const decryptedDevs = await decryptDeviceList(rawDevs);
+          setForceSyncDevices(decryptedDevs.filter(d => d.DeviceName !== deviceName));
         } else setForceSyncDevices([]);
       }
     } catch (e) { setForceSyncDevices([]); }

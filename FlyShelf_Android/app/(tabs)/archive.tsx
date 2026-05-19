@@ -15,6 +15,7 @@ import { ref as dbRef, push, set, onValue, query } from 'firebase/database';
 import { colors, font, radius, shadows, space } from '../../styles/theme';
 import AnimatedCard from '../../components/AnimatedCard';
 import AnimatedPressable from '../../components/AnimatedPressable';
+import { decryptDeviceList } from '../../utils/networkHelpers';
 
 type DeviceGroup = { id: string; name: string; deviceNames: string[] };
 
@@ -162,7 +163,8 @@ export default function ConnectScreen() {
       let allDevs: any[] = [];
       if (snapshot.exists()) {
         const data = snapshot.val();
-        allDevs = Object.keys(data).map(k => ({ ...data[k], firebaseKey: k })).filter(d => d.IsOnline);
+        const filtered = Object.keys(data).map(k => ({ ...data[k], firebaseKey: k })).filter(d => d.IsOnline);
+        allDevs = await decryptDeviceList(filtered);
         setAllFirebaseDevices(allDevs);
       } else {
         setAllFirebaseDevices([]);

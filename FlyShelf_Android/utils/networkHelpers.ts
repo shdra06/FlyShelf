@@ -1,5 +1,41 @@
 // Network utility helpers for FlyShelf Android
 // Simplified: Trust Firebase data, try-then-fallback pattern, no redundant health checks
+import { decrypt as aesDecrypt } from './syncCrypto';
+
+/** Decrypt device URLs if they were encrypted by the PC */
+export const decryptDevice = async (device: any): Promise<any> => {
+  if (!device) return device;
+  if (device.DeviceType === 'PC' && device.UrlsEncrypted) {
+    const decrypted = { ...device };
+    try {
+      if (decrypted.LocalIp) {
+        const dec = await aesDecrypt(decrypted.LocalIp);
+        if (dec) decrypted.LocalIp = dec;
+      }
+      if (decrypted.GlobalUrl) {
+        const dec = await aesDecrypt(decrypted.GlobalUrl);
+        if (dec) decrypted.GlobalUrl = dec;
+      }
+      if (decrypted.Url) {
+        const dec = await aesDecrypt(decrypted.Url);
+        if (dec) decrypted.Url = dec;
+      }
+      decrypted.UrlsEncrypted = false; // Decrypted successfully
+    } catch {}
+    return decrypted;
+  }
+  return device;
+};
+
+/** Decrypt a list/array of devices */
+export const decryptDeviceList = async (devices: any[]): Promise<any[]> => {
+  if (!devices || !Array.isArray(devices)) return devices || [];
+  const decryptedList: any[] = [];
+  for (const d of devices) {
+    decryptedList.push(await decryptDevice(d));
+  }
+  return decryptedList;
+};
 
 /** Fetch with configurable timeout */
 export const fetchWithTimeout = async (url: string, options: any = {}, timeoutMs = 2500) => {
