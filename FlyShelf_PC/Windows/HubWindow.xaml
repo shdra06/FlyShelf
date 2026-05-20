@@ -886,6 +886,51 @@
                                                 <!-- Animated GIF thumbnail -->
                                                 <Image gif:AnimationBehavior.SourceUri="{Binding GifFilePath}" gif:AnimationBehavior.RepeatBehavior="Forever" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="Fant" CacheMode="BitmapCache" Visibility="{Binding IsGifPreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
 
+                                                <!-- System file-association icon (e.g. PDF reader, Word, etc.) — shown when Icon is available for file types -->
+                                                <Image Source="{Binding Icon}" Stretch="Uniform" RenderOptions.BitmapScalingMode="Fant" CacheMode="BitmapCache"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" Width="36" Height="36">
+                                                    <Image.Style>
+                                                        <Style TargetType="Image">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <!-- Show for file types that have a system icon (PDF, Doc, Video, Group, etc.) -->
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsPdfPreview}" Value="True"/>
+                                                                        <Condition Binding="{Binding IsImagePreview}" Value="False"/>
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </MultiDataTrigger>
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsDocPreview}" Value="True"/>
+                                                                        <Condition Binding="{Binding IsImagePreview}" Value="False"/>
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </MultiDataTrigger>
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsVideoPreview}" Value="True"/>
+                                                                        <Condition Binding="{Binding IsImagePreview}" Value="False"/>
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </MultiDataTrigger>
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsGroupPreview}" Value="True"/>
+                                                                        <Condition Binding="{Binding IsImagePreview}" Value="False"/>
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </MultiDataTrigger>
+                                                                <!-- Hide when Icon is null (will fall through to gradient fallbacks below) -->
+                                                                <DataTrigger Binding="{Binding Icon}" Value="{x:Null}">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Image.Style>
+                                                </Image>
+
                                                 <!-- Text icon -->
                                                 <Border Visibility="{Binding IsTextPreview, Converter={StaticResource BooleanToVisibilityConverter}}">
                                                     <Border.Background>
@@ -919,8 +964,22 @@
                                                     <ui:SymbolIcon Symbol="Globe24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
 
-                                                <!-- PDF icon -->
-                                                <Border Visibility="{Binding IsPdfPreview, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <!-- PDF icon FALLBACK (only when no system Icon available) -->
+                                                <Border>
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsPdfPreview}" Value="True"/>
+                                                                        <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </MultiDataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                             <GradientStop Color="#DC2626" Offset="0"/>
@@ -930,8 +989,22 @@
                                                     <TextBlock Text="PDF" FontSize="13" FontWeight="ExtraBold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
 
-                                                <!-- Document icon -->
-                                                <Border Visibility="{Binding IsDocPreview, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <!-- Document icon FALLBACK (only when no system Icon available) -->
+                                                <Border>
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsDocPreview}" Value="True"/>
+                                                                        <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </MultiDataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                             <GradientStop Color="#1D4ED8" Offset="0"/>
@@ -941,8 +1014,22 @@
                                                     <ui:SymbolIcon Symbol="Document24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
 
-                                                <!-- Group icon -->
-                                                <Border Visibility="{Binding IsGroupPreview, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <!-- Group icon (no system icon overlap issue) -->
+                                                <Border>
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsGroupPreview}" Value="True"/>
+                                                                        <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </MultiDataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                             <GradientStop Color="#7C3AED" Offset="0"/>
@@ -952,8 +1039,22 @@
                                                     <ui:SymbolIcon Symbol="FolderMultiple24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
 
-                                                <!-- Video icon -->
-                                                <Border Visibility="{Binding IsVideoPreview, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <!-- Video icon FALLBACK (only when no system Icon available) -->
+                                                <Border>
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsVideoPreview}" Value="True"/>
+                                                                        <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </MultiDataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                             <GradientStop Color="#D97706" Offset="0"/>
@@ -1045,33 +1146,46 @@
                                             </StackPanel>
                                             <TextBlock Text="{Binding RawContent}" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" MaxHeight="{Binding CollapsedMaxHeight}" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" Margin="0,4,0,0"/>
                                             
-                                            <Button Content="{Binding ExpandToggleText}" 
-                                                    Command="{Binding ToggleExpandCommand}" 
-                                                    Visibility="{Binding IsLongText, Converter={StaticResource BooleanToVisibilityConverter}}" 
+                                            <!-- Circular Expand/Collapse Chevron Toggle Button for Long Text / Code cards -->
+                                            <Button PreviewMouseLeftButtonDown="ExpandToggleSpecific_Click"
                                                     HorizontalAlignment="Left"
-                                                    Margin="0,2,0,0"
-                                                    Cursor="Hand"
-                                                    Foreground="#64748B"
-                                                    FontSize="16"
-                                                    FontWeight="Bold"
-                                                    Background="Transparent"
-                                                    BorderThickness="0"
-                                                    Padding="4,0">
-                                                <Button.Template>
-                                                    <ControlTemplate TargetType="Button">
-                                                        <Border Background="Transparent">
-                                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                        </Border>
-                                                    </ControlTemplate>
-                                                </Button.Template>
+                                                    Margin="0,4,0,0"
+                                                    Focusable="False">
                                                 <Button.Style>
                                                     <Style TargetType="Button">
-                                                        <Setter Property="Opacity" Value="0.6"/>
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Setter Property="Cursor" Value="Hand"/>
+                                                        <Setter Property="OverridesDefaultStyle" Value="True"/>
+                                                        <Setter Property="Template">
+                                                            <Setter.Value>
+                                                                <ControlTemplate TargetType="Button">
+                                                                    <Grid Width="26" Height="26" Background="Transparent">
+                                                                        <Border x:Name="CircleBorder" Width="22" Height="22" CornerRadius="11"
+                                                                                Background="#CC202024" BorderBrush="#33FFFFFF" BorderThickness="1.5">
+                                                                            <Border.Effect>
+                                                                                <DropShadowEffect BlurRadius="6" Color="#000000" Opacity="0.45" ShadowDepth="1.2" Direction="270" />
+                                                                            </Border.Effect>
+                                                                            <ui:SymbolIcon x:Name="ChevronIcon" Symbol="ChevronDown24" FontSize="13" Foreground="#3B82F6"
+                                                                                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0.5,0,0"/>
+                                                                        </Border>
+                                                                    </Grid>
+                                                                    <ControlTemplate.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                                            <Setter TargetName="ChevronIcon" Property="Symbol" Value="ChevronUp24"/>
+                                                                            <Setter TargetName="ChevronIcon" Property="Foreground" Value="#EF4444"/>
+                                                                        </DataTrigger>
+                                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                                            <Setter TargetName="CircleBorder" Property="Background" Value="#E62C2C32"/>
+                                                                            <Setter TargetName="CircleBorder" Property="BorderBrush" Value="#66FFFFFF"/>
+                                                                        </Trigger>
+                                                                    </ControlTemplate.Triggers>
+                                                                </ControlTemplate>
+                                                            </Setter.Value>
+                                                        </Setter>
                                                         <Style.Triggers>
-                                                            <Trigger Property="IsMouseOver" Value="True">
-                                                                <Setter Property="Opacity" Value="1.0"/>
-                                                                <Setter Property="Foreground" Value="#3B82F6"/>
-                                                            </Trigger>
+                                                            <DataTrigger Binding="{Binding IsLongText}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </Button.Style>

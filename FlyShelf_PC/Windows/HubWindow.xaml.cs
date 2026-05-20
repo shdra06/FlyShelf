@@ -1093,6 +1093,15 @@ namespace AdvanceClip.Windows
             }
         }
 
+        private void ExpandToggleSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
+            {
+                item.IsExpanded = !item.IsExpanded;
+            }
+            e.Handled = true;
+        }
+
         private void SelectAll_Click(object sender, RoutedEventArgs e)
         {
             bool anyUnselected = _viewModel.DroppedItems.Any(i => !i.IsCheckedForMerge);

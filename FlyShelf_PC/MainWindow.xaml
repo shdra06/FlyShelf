@@ -298,8 +298,7 @@
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate>
-                    <Border Name="CardBorder" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1,0.5,1,1" CornerRadius="14" Margin="4,1,4,2" Padding="0" RenderTransformOrigin="0.5,0.5"
-                            MouseEnter="CardBorder_MouseEnter" MouseLeave="CardBorder_MouseLeave">
+                    <Border Name="CardBorder" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1,0.5,1,1" CornerRadius="14" Margin="4,1,4,2" Padding="0" RenderTransformOrigin="0.5,0.5">
                         <Border.Background>
                             <SolidColorBrush Color="{DynamicResource MicaWPF.Colors.SubtleFillColorSecondary}" />
                         </Border.Background>
@@ -884,40 +883,76 @@
                                 </Button.Style>
                             </Button>
 
-                            <!-- Semantic Icon Fallback -->
+                            <!-- Semantic Icon Fallback — only shown when system Icon is NOT available -->
                             <Border Name="SemanticIconBorder" Grid.Row="0" Grid.Column="0" Width="40" Height="40" Margin="0,0,12,0" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="10" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding ItemType}" Value="Code">
+                                            <!-- Only show the generic semantic icon when no system icon is available -->
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                    <Condition Binding="{Binding ItemType}" Value="Code"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding ItemType}" Value="Archive">
+                                            </MultiDataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                    <Condition Binding="{Binding ItemType}" Value="Archive"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding ItemType}" Value="Document">
+                                            </MultiDataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                    <Condition Binding="{Binding ItemType}" Value="Document"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding ItemType}" Value="Group">
+                                            </MultiDataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                    <Condition Binding="{Binding ItemType}" Value="Group"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-
-                                            <DataTrigger Binding="{Binding ItemType}" Value="Presentation">
+                                            </MultiDataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                    <Condition Binding="{Binding ItemType}" Value="Presentation"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding ItemType}" Value="Video">
+                                            </MultiDataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                    <Condition Binding="{Binding ItemType}" Value="Video"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding ItemType}" Value="Audio">
+                                            </MultiDataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                    <Condition Binding="{Binding ItemType}" Value="Audio"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding ItemType}" Value="Pdf">
+                                            </MultiDataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                    <Condition Binding="{Binding ItemType}" Value="Pdf"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding ItemType}" Value="File">
+                                            </MultiDataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                    <Condition Binding="{Binding ItemType}" Value="File"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
+                                            </MultiDataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Border.Style>

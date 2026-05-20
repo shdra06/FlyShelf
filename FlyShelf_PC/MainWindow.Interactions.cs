@@ -788,54 +788,21 @@ $word.Quit()
             }
         }
 
-        // ═══ Feature 4: Hover Preview Popup ═══
+        // ═══ Feature 4: Hover Preview Popup (DISABLED — replaced by expand/collapse chevron button) ═══
 
         internal void CardBorder_MouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
         {
-            _activePreviewPopup?.ClosePreview();
-            _activePreviewPopup = null;
-
-            var border = sender as System.Windows.FrameworkElement;
-            var item = border?.DataContext as ClipboardItem;
-            if (item == null) return;
-
-            // Only show preview for long text items (>100 chars)
-            bool isLongText = !string.IsNullOrEmpty(item.RawContent) && item.RawContent.Length > 100 
-                              && (item.ItemType == ClipboardItemType.Text || item.ItemType == ClipboardItemType.Code);
-            if (!isLongText) return;
-
-            _hoveredItem = item;
-            if (_hoverPreviewTimer == null)
-            {
-                _hoverPreviewTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1000) };
-                _hoverPreviewTimer.Tick += HoverPreviewTimer_Tick;
-            }
-            _hoverPreviewTimer.Stop();
-            _hoverPreviewTimer.Start();
+            // No-op: hover preview removed in favor of expand/collapse chevron button
         }
 
         internal void CardBorder_MouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
         {
-            _hoverPreviewTimer?.Stop();
-            _hoveredItem = null;
-            _activePreviewPopup?.ClosePreview();
-            _activePreviewPopup = null;
+            // No-op: hover preview removed in favor of expand/collapse chevron button
         }
 
         private void HoverPreviewTimer_Tick(object? sender, EventArgs e)
         {
             _hoverPreviewTimer?.Stop();
-            if (_hoveredItem == null || string.IsNullOrEmpty(_hoveredItem.RawContent)) return;
-
-            Classes.NativeMethods.GetCursorPos(out var pt);
-            var source = PresentationSource.FromVisual(this);
-            double dpiScaleX = source?.CompositionTarget?.TransformFromDevice.M11 ?? 1.0;
-            double dpiScaleY = source?.CompositionTarget?.TransformFromDevice.M22 ?? 1.0;
-            double x = pt.X * dpiScaleX + 20;
-            double y = pt.Y * dpiScaleY - 40;
-
-            _activePreviewPopup = new Windows.PreviewPopup(_hoveredItem.RawContent, x, y);
-            _activePreviewPopup.Show();
         }
     }
 }

@@ -71,10 +71,12 @@ namespace AdvanceClip
         private const uint MOD_NOREPEAT = 0x4000;
         private const int WM_HOTKEY = 0x0312;
 
-        // Hover preview popup state
+        // Hover preview popup state (DISABLED — replaced by expand/collapse chevron button)
+#pragma warning disable CS0649
         private System.Windows.Threading.DispatcherTimer? _hoverPreviewTimer;
         private ClipboardItem? _hoveredItem;
         private Windows.PreviewPopup? _activePreviewPopup;
+#pragma warning restore CS0649
 
         protected override void OnSourceInitialized(EventArgs e)
         {
