@@ -108,7 +108,7 @@
             
             <!-- Search Bar — expands inline when toggled -->
             <Border x:Name="SearchBarContainer" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,6,0" Visibility="Collapsed"
-                    Background="#18FFFFFF" CornerRadius="8" BorderBrush="#30FFFFFF" BorderThickness="1" Padding="6,2"
+                    Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="8" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" Padding="6,2"
                     Panel.ZIndex="10" PreviewMouseLeftButtonDown="SearchBar_PreviewMouseDown"
                     RenderTransformOrigin="0.5,0">
                 <Border.RenderTransform>
@@ -120,9 +120,9 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Grid Grid.Column="0" Background="Transparent">
-                        <TextBlock x:Name="SearchPlaceholder" Text="Search (Ctrl+F)" Foreground="#50FFFFFF" VerticalAlignment="Center" FontSize="12" IsHitTestVisible="False" Margin="4,0,0,0"/>
+                        <TextBlock x:Name="SearchPlaceholder" Text="Search (Ctrl+F)" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" FontSize="12" IsHitTestVisible="False" Margin="4,0,0,0"/>
                         <TextBox x:Name="SearchTextBox" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
-                                 FontSize="12" VerticalAlignment="Center" CaretBrush="White" Padding="4,2" Margin="0"
+                                 FontSize="12" VerticalAlignment="Center" CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Padding="4,2" Margin="0"
                                  HorizontalContentAlignment="Left"
                                  TextChanged="SearchTextBox_TextChanged" PreviewKeyDown="SearchTextBox_PreviewKeyDown">
                             <TextBox.Style>
@@ -339,14 +339,14 @@
                         </Border.RenderTransform>
 
                         <!-- Inner highlight border for frosted glass effect -->
-                        <Border Name="InnerHighlightBorder" BorderThickness="0,1,0,0" BorderBrush="#0CFFFFFF" CornerRadius="14" Padding="12">
+                        <Border Name="InnerHighlightBorder" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" CornerRadius="14" Padding="12">
                         <Grid Name="ItemGrid" HorizontalAlignment="Stretch" Background="Transparent" Tag="{Binding DataContext, ElementName=ShelfListView}">
                             <Grid.ContextMenu>
                                 <ContextMenu>
                                     <ContextMenu.Resources>
                                         <Style TargetType="Separator">
                                             <Setter Property="Margin" Value="8,4"/>
-                                            <Setter Property="Background" Value="#18FFFFFF"/>
+                                            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
                                         </Style>
                                         <Style TargetType="MenuItem">
                                             <Setter Property="Padding" Value="10,6"/>
@@ -487,7 +487,7 @@
                                 </StackPanel.Style>
 
                                 <!-- ═══ Smart Action ═══ -->
-                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
+                                <Border CornerRadius="6" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" Margin="0,0,2,0" Padding="0">
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Setter Property="Visibility" Value="Collapsed"/>
@@ -529,7 +529,7 @@
                                 </Border>
 
                                 <!-- ═══ Run Script ═══ -->
-                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
+                                <Border CornerRadius="6" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" Margin="0,0,2,0" Padding="0">
                                     <Border.Style>
                                         <Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/>
                                             <Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
@@ -541,7 +541,7 @@
                                 </Border>
 
                                 <!-- ═══ Open File ═══ -->
-                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
+                                <Border CornerRadius="6" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" Margin="0,0,2,0" Padding="0">
                                     <Border.Style>
                                         <Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/>
                                             <Style.Triggers>
@@ -562,7 +562,7 @@
                                 </Border>
 
                                 <!-- ═══ Show in Explorer ═══ -->
-                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
+                                <Border CornerRadius="6" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" Margin="0,0,2,0" Padding="0">
                                     <Border.Style>
                                         <Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/>
                                             <Style.Triggers>
@@ -585,7 +585,7 @@
                                 </Border>
 
                                 <!-- ═══ Convert Image to PDF ═══ -->
-                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
+                                <Border CornerRadius="6" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" Margin="0,0,2,0" Padding="0">
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Setter Property="Visibility" Value="Collapsed"/>
@@ -603,7 +603,7 @@
                                 </Border>
 
                                 <!-- ═══ Quick Look ═══ -->
-                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
+                                <Border CornerRadius="6" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" Margin="0,0,2,0" Padding="0">
                                     <Border.Style>
                                         <Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/>
                                             <Style.Triggers>
@@ -618,7 +618,7 @@
                                 </Border>
 
                                 <!-- ═══ Search Google ═══ -->
-                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
+                                <Border CornerRadius="6" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" Margin="0,0,2,0" Padding="0">
                                     <Border.Style>
                                         <Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/>
                                             <Style.Triggers>
@@ -633,7 +633,7 @@
                                 </Border>
 
                                 <!-- ═══ Pin/Unpin ═══ -->
-                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
+                                <Border CornerRadius="6" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" Margin="0,0,2,0" Padding="0">
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" PreviewMouseLeftButtonDown="PinSpecific_Click" ToolTip="{Binding PinLabel}">
                                         <ui:Button.Icon>
                                             <ui:SymbolIcon FontSize="14">
@@ -655,7 +655,7 @@
                                 </Border>
 
                                 <!-- ═══ Delete ═══ -->
-                                <Border CornerRadius="6" Background="#E0181818" Padding="0">
+                                <Border CornerRadius="6" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" Padding="0">
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#EF4444" PreviewMouseLeftButtonDown="DeleteSpecific_Click" ToolTip="Delete">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -957,7 +957,7 @@
                             <StackPanel Grid.Row="0" Grid.Column="1" VerticalAlignment="Center" Margin="0,4,0,4">
                                 <TextBlock Name="TitleText" 
                                            Text="{Binding FileName}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" FontWeight="SemiBold" FontSize="13" LineHeight="19" TextWrapping="Wrap" 
-                                           TextTrimming="CharacterEllipsis" MaxHeight="130" />
+                                           TextTrimming="CharacterEllipsis" MaxHeight="57" />
                                 
                                 <!-- File Transfer / Download Progress Panel -->
                                 <StackPanel Margin="0,4,0,0" Visibility="{Binding IsTransferring, Converter={StaticResource BooleanToVisibilityConverter}}">

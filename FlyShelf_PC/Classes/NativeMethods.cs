@@ -40,6 +40,7 @@ public static partial class NativeMethods
     internal const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
     internal const int DWMWA_BORDER_COLOR = 34;
     internal const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
+    internal const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 
     // Keyboard Hook
     internal const int WH_KEYBOARD_LL = 13;
@@ -430,22 +431,56 @@ public static partial class NativeMethods
 
         bool enableBlur = SettingsManager.Current.EnableBlurBehind && ShouldUseBlur();
 
+        // Apply DWM Immersive Dark Mode attribute — always dark
+        try
+        {
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                int darkValue = 1;
+                DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkValue, sizeof(int));
+
+                if (!enableBlur)
+                {
+                    // Solid dark title bar when blur is off
+                    int dwmColor = (26 << 16) | (18 << 8) | 18;
+                    DwmSetWindowAttribute(hwnd, 35, ref dwmColor, sizeof(int)); // DWMWA_CAPTION_COLOR
+                }
+                else
+                {
+                    int colorDefault = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE = transparent for Mica
+                    DwmSetWindowAttribute(hwnd, 35, ref colorDefault, sizeof(int));
+                }
+            }
+        }
+        catch { }
+
         if (window is MicaWPF.Controls.MicaWindow micaWin)
         {
             if (enableBlur)
             {
+                // Dark Mode + Blur: Mica looks great
                 micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
                 micaWin.Background = System.Windows.Media.Brushes.Transparent;
                 if (rootGrid != null) rootGrid.Background = null;
             }
             else
             {
+                // Dark Mode + No Blur: solid dark background
                 micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
                 var darkBg = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(18, 18, 26)); // Premium solid dark background
+                    System.Windows.Media.Color.FromRgb(18, 18, 26));
                 micaWin.Background = darkBg;
                 if (rootGrid != null) rootGrid.Background = darkBg;
             }
+        }
+        else
+        {
+            // Standard WPF window — solid dark
+            var bgBrush = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(18, 18, 26));
+            window.Background = bgBrush;
+            if (rootGrid != null) rootGrid.Background = bgBrush;
         }
     }
 

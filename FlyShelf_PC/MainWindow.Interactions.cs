@@ -408,7 +408,7 @@ namespace AdvanceClip
                     }
                 }
 
-                if (_hubWindowInstance == null || !_hubWindowInstance.IsLoaded)
+                if (_hubWindowInstance == null)
                 {
                     _hubWindowInstance = new Windows.HubWindow(_viewModel);
                     _hubWindowInstance.Closed += (s, args) => _hubWindowInstance = null;

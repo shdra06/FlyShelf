@@ -12,6 +12,7 @@
                 <ui:ControlsDictionary />
                 <mica:ThemeDictionary Theme="Dark"/>
                 <mica:ControlsDictionary />
+                <ResourceDictionary Source="pack://application:,,,/Resources/Styles/CustomSlider.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <!-- Premium UI Gradients — Muted, sophisticated darks -->
@@ -93,7 +94,7 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Thumb">
-                            <Border Background="#30FFFFFF" CornerRadius="2" Margin="0,2" />
+                            <Border Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" CornerRadius="2" Margin="0,2" />
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>

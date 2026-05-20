@@ -570,14 +570,40 @@ namespace AdvanceClip.Windows
         {
             try
             {
+                // Apply DWM Immersive Dark Mode attribute so the title bar and Mica backdrop respect our theme choice
+                try
+                {
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        bool isLight = SettingsManager.Current.ColorScheme == 1;
+                        int darkValue = isLight ? 0 : 1;
+                        NativeMethods.DwmSetWindowAttribute(hwnd, NativeMethods.DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkValue, sizeof(int));
+                    }
+                }
+                catch { }
+
                 // Wallpaper preview (asynchronously decoded to prevent UI thread blocking)
                 string wallpaperPath = SettingsManager.Current.ClipboardWallpaperPath;
-                if (!string.IsNullOrEmpty(wallpaperPath) && System.IO.File.Exists(wallpaperPath))
+                if (!string.IsNullOrEmpty(wallpaperPath))
                 {
                     System.Threading.Tasks.Task.Run(() =>
                     {
                         try
                         {
+                            if (!System.IO.File.Exists(wallpaperPath))
+                            {
+                                Dispatcher.InvokeAsync(() =>
+                                {
+                                    if (SettingsManager.Current.ClipboardWallpaperPath == wallpaperPath)
+                                    {
+                                        WallpaperPreviewImg.Source = null;
+                                        NoWallpaperText.Visibility = Visibility.Visible;
+                                    }
+                                });
+                                return;
+                            }
+
                             var bmp = new System.Windows.Media.Imaging.BitmapImage();
                             bmp.BeginInit();
                             bmp.UriSource = new Uri(wallpaperPath, UriKind.Absolute);
@@ -631,42 +657,60 @@ namespace AdvanceClip.Windows
                 else
                 {
                     this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
-                    var darkBg = new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(18, 18, 26));
-                    this.Background = darkBg;
-                    if (RootGrid != null) RootGrid.Background = darkBg;
-                    // Force title bar to dark color via DWM (DWMWA_CAPTION_COLOR = 35)
+                    bool isLight = SettingsManager.Current.ColorScheme == 1;
+                    var bgColor = isLight ? System.Windows.Media.Color.FromRgb(245, 246, 248) : System.Windows.Media.Color.FromRgb(18, 18, 26);
+                    var bgBrush = new System.Windows.Media.SolidColorBrush(bgColor);
+                    this.Background = bgBrush;
+                    if (RootGrid != null) RootGrid.Background = bgBrush;
+                    // Force title bar to match the fallback color via DWM (DWMWA_CAPTION_COLOR = 35)
                     try
                     {
                         var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                         if (hwnd != IntPtr.Zero)
                         {
-                            int darkColor = (26 << 16) | (18 << 8) | 18; // BGR: #12121A
-                            NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref darkColor, sizeof(int));
+                            int dwmColor = isLight ? ((248 << 16) | (246 << 8) | 245) : ((26 << 16) | (18 << 8) | 18);
+                            NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref dwmColor, sizeof(int));
                         }
                     } catch { }
                 }
 
-                // Color scheme — swap theme dictionaries at runtime
-                string targetTheme = SettingsManager.Current.ColorScheme == 1 ? "Light" : "Dark";
+                // Color scheme — always dark mode (Light mode removed)
+                // Force ColorScheme to 0 (dark) in case old settings had 1 (light)
+                if (SettingsManager.Current.ColorScheme != 0)
+                    SettingsManager.Current.ColorScheme = 0;
+
                 try
                 {
                     var mergedDicts = Application.Current.Resources.MergedDictionaries;
-                    // Find and replace the WPF-UI ThemeDictionary
-                    for (int i = 0; i < mergedDicts.Count; i++)
+
+                    // Remove any previous theme override dictionaries
+                    for (int i = mergedDicts.Count - 1; i >= 0; i--)
                     {
-                        var dict = mergedDicts[i];
-                        if (dict is Wpf.Ui.Markup.ThemesDictionary td)
-                        {
-                            td.Theme = targetTheme == "Light" ? Wpf.Ui.Appearance.ApplicationTheme.Light : Wpf.Ui.Appearance.ApplicationTheme.Dark;
-                        }
-                        else if (dict is MicaWPF.Styles.ThemeDictionary md)
-                        {
-                            md.Theme = targetTheme == "Light" ? MicaWPF.Core.Enums.WindowsTheme.Light : MicaWPF.Core.Enums.WindowsTheme.Dark;
-                        }
+                        var d = mergedDicts[i];
+                        if (d.Source == null && d.Contains("FlyShelf.ThemeOverride"))
+                            mergedDicts.RemoveAt(i);
                     }
+
+                    // Ensure MicaWPF is set to Dark
+                    foreach (var dict in mergedDicts)
+                    {
+                        if (dict is MicaWPF.Styles.ThemeDictionary md)
+                            md.Theme = MicaWPF.Core.Enums.WindowsTheme.Dark;
+                    }
+
+                    // Dark mode accent override — prevent system accent color bleeding
+                    var overrides = new ResourceDictionary();
+                    overrides["FlyShelf.ThemeOverride"] = true;
+                    overrides["MicaWPF.Brushes.SystemAccentColor"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(99, 102, 241));
+                    overrides["MicaWPF.Brushes.SystemAccentColorLight1"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(129, 132, 255));
+                    overrides["MicaWPF.Brushes.SystemAccentColorLight2"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(159, 162, 255));
+                    overrides["MicaWPF.Brushes.SystemAccentColorDark1"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(79, 82, 221));
+                    mergedDicts.Add(overrides);
                 }
                 catch { /* Theme switching may not be supported on all versions */ }
+
+                // Re-apply window backdrop and background (Mica dark or solid dark fallback)
+                NativeMethods.ApplyWindowBackdropAndBackground(this, RootGrid);
             }
             catch (Exception ex)
             {

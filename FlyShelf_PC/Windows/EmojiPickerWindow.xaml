@@ -46,12 +46,12 @@
         <Border Grid.Row="1" Margin="14,4,14,8" CornerRadius="10" Padding="0">
             <Border.Style>
                 <Style TargetType="Border">
-                    <Setter Property="Background" Value="#08FFFFFF"/>
-                    <Setter Property="BorderBrush" Value="#15FFFFFF"/>
+                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
                     <Setter Property="BorderThickness" Value="1"/>
                     <Style.Triggers>
                         <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                            <Setter Property="Background" Value="#0CFFFFFF"/>
+                            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
                             <Setter Property="BorderBrush" Value="#306366F1"/>
                         </Trigger>
                     </Style.Triggers>
@@ -59,8 +59,8 @@
             </Border.Style>
             <Grid>
                 <StackPanel x:Name="EmojiSearchPlaceholder" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0" IsHitTestVisible="False">
-                    <ui:SymbolIcon Symbol="Search24" FontSize="13" Foreground="#35FFFFFF" Margin="0,0,6,0"/>
-                    <TextBlock Text="Search emojis..." Foreground="#35FFFFFF" FontSize="12"/>
+                    <ui:SymbolIcon Symbol="Search24" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,0,6,0"/>
+                    <TextBlock Text="Search emojis..." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12"/>
                 </StackPanel>
                 <TextBox x:Name="EmojiSearchBox" Background="Transparent" BorderThickness="0" 
                          Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
@@ -97,10 +97,10 @@
                                                 </Border>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="EBorder" Property="Background" Value="#15FFFFFF"/>
+                                                        <Setter TargetName="EBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
                                                     </Trigger>
                                                     <Trigger Property="IsPressed" Value="True">
-                                                        <Setter TargetName="EBorder" Property="Background" Value="#25FFFFFF"/>
+                                                        <Setter TargetName="EBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>

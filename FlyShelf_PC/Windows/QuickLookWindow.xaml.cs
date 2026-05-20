@@ -21,190 +21,315 @@ namespace AdvanceClip.Windows
             WebPreview.Visibility = Visibility.Collapsed;
             TextPreviewScroll.Visibility = Visibility.Collapsed;
             DocumentPanel.Visibility = Visibility.Collapsed;
+        }
 
-            string ext = Path.GetExtension(item.FilePath ?? "").ToLower();
+        private async void Window_Loaded(object sender, RoutedEventArgs e)
+        {
+            ApplyTheme();
+            await LoadContentAsync();
+        }
 
-            if (item.ItemType == AdvanceClip.ViewModels.ClipboardItemType.Image)
+        private void ApplyTheme()
+        {
+            try
             {
-                PreviewImage.Visibility = Visibility.Visible;
-                // Dynamic High-Fidelity Rendering
+                bool isLight = AdvanceClip.Classes.SettingsManager.Current.ColorScheme == 1;
+
+                // Toggle DWM Immersive Dark Mode attribute on QuickLook so native shadow borders adapt to light/dark
                 try
                 {
-                    byte[] imgBytes = File.ReadAllBytes(item.FilePath);
-                    BitmapImage bitmap = new BitmapImage();
-                    using (var imgStream = new System.IO.MemoryStream(imgBytes))
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
                     {
-                        bitmap.BeginInit();
-                        bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                        bitmap.StreamSource = imgStream;
-                        bitmap.EndInit();
+                        int darkValue = isLight ? 0 : 1;
+                        AdvanceClip.Classes.NativeMethods.DwmSetWindowAttribute(hwnd, 20, ref darkValue, sizeof(int));
                     }
-                    bitmap.Freeze();
-                    PreviewImage.Source = bitmap;
+                }
+                catch { }
+
+                if (isLight)
+                {
+                    OuterBorder.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xE5, 0xF5, 0xF6, 0xF8));
+                    OuterBorder.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x30, 0x00, 0x00, 0x00));
+                    HeaderGrid.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xE5, 0xE5, 0xE6, 0xE8));
+                    HeaderTitle.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x33, 0x33, 0x33));
+                    TextPreviewScroll.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF5, 0xF6, 0xF8));
+                    TextPreview.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x11, 0x11, 0x11));
+                    DocTitle.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x11, 0x11, 0x11));
+                    DocSize.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x66, 0x66, 0x66));
+                    RotateBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x55, 0x55, 0x55));
+                    CloseBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x55, 0x55, 0x55));
+                    PinBtn.Foreground = this.Topmost 
+                        ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11))
+                        : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x55, 0x55, 0x55));
+                    HelperText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x80, 0x11, 0x11, 0x11));
+                }
+            }
+            catch { }
+        }
+
+        private async System.Threading.Tasks.Task LoadContentAsync()
+        {
+            if (_item == null || string.IsNullOrEmpty(_item.FilePath)) return;
+
+            LoadingProgress.Visibility = Visibility.Visible;
+
+            string ext = Path.GetExtension(_item.FilePath ?? "").ToLower();
+
+            try
+            {
+                if (_item.ItemType == AdvanceClip.ViewModels.ClipboardItemType.Image)
+                {
+                    PreviewImage.Visibility = Visibility.Visible;
                     
-                    // Pre-scale intelligently based on original image aspect ratio and dpi to eliminate black spaces
-                    double dpiX = bitmap.DpiX > 0 ? bitmap.DpiX / 96.0 : 1.0;
-                    double dpiY = bitmap.DpiY > 0 ? bitmap.DpiY / 96.0 : 1.0;
-                    double imgW = bitmap.PixelWidth / dpiX;
-                    double imgH = bitmap.PixelHeight / dpiY;
-                    double aspect = imgW / imgH;
-
-                    double maxW = SystemParameters.WorkArea.Width * 0.7;
-                    double maxH = SystemParameters.WorkArea.Height * 0.7 - 40; // Subtract header height
-
-                    double targetW = imgW;
-                    double targetH = imgH;
-
-                    if (targetW > maxW)
+                    var bitmap = await System.Threading.Tasks.Task.Run(() =>
                     {
-                        targetW = maxW;
-                        targetH = targetW / aspect;
-                    }
-                    if (targetH > maxH)
-                    {
-                        targetH = maxH;
-                        targetW = targetH * aspect;
-                    }
-
-                    // Minimum size to keep controls visible
-                    double minW = 320;
-                    double minH = 240;
-                    if (targetW < minW || targetH < minH)
-                    {
-                        if (aspect >= 1.0)
+                        try
                         {
-                            targetW = minW;
+                            byte[] imgBytes = File.ReadAllBytes(_item.FilePath);
+                            BitmapImage bmp = new BitmapImage();
+                            using (var imgStream = new System.IO.MemoryStream(imgBytes))
+                            {
+                                bmp.BeginInit();
+                                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                                bmp.StreamSource = imgStream;
+                                bmp.EndInit();
+                            }
+                            bmp.Freeze();
+                            return bmp;
+                        }
+                        catch
+                        {
+                            return null;
+                        }
+                    });
+
+                    if (bitmap != null)
+                    {
+                        PreviewImage.Source = bitmap;
+                        
+                        // Pre-scale intelligently based on original image aspect ratio and dpi to eliminate black spaces
+                        double dpiX = bitmap.DpiX > 0 ? bitmap.DpiX / 96.0 : 1.0;
+                        double dpiY = bitmap.DpiY > 0 ? bitmap.DpiY / 96.0 : 1.0;
+                        double imgW = bitmap.PixelWidth / dpiX;
+                        double imgH = bitmap.PixelHeight / dpiY;
+                        double aspect = imgW / imgH;
+
+                        double maxW = SystemParameters.WorkArea.Width * 0.7;
+                        double maxH = SystemParameters.WorkArea.Height * 0.7 - 40; // Subtract header height
+
+                        double targetW = imgW;
+                        double targetH = imgH;
+
+                        if (targetW > maxW)
+                        {
+                            targetW = maxW;
                             targetH = targetW / aspect;
                         }
-                        else
+                        if (targetH > maxH)
                         {
-                            targetH = minH;
+                            targetH = maxH;
                             targetW = targetH * aspect;
                         }
-                    }
 
-                    this.Width = targetW;
-                    this.Height = targetH + 40; // Add header height back
-                    
-                    _isImageLoaded = true;
-                    RotateBtn.Visibility = Visibility.Visible;
-                }
-                catch { } // Image is corrupt or locked natively
-            }
-            else if (ext == ".pdf" || ext == ".html" || ext == ".htm" || ext == ".xml")
-            {
-                WebPreview.Visibility = Visibility.Visible;
-                try { WebPreview.Navigate(new Uri(item.FilePath)); } catch { }
-                
-                this.Width = 600;
-                this.Height = SystemParameters.WorkArea.Height * 0.8;
-                _isImageLoaded = true; // allow dragging natively
-            }
-            else if (ext == ".docx" || ext == ".txt" || ext == ".log" || ext == ".md" || ext == ".cs" || ext == ".cpp" || ext == ".js" || ext == ".json")
-            {
-                TextPreviewScroll.Visibility = Visibility.Visible;
-                
-                try 
-                {
-                    if (ext == ".docx") 
-                    {
-                        using (var archive = System.IO.Compression.ZipFile.OpenRead(item.FilePath))
+                        // Minimum size to keep controls visible
+                        double minW = 320;
+                        double minH = 240;
+                        if (targetW < minW || targetH < minH)
                         {
-                            var entry = archive.GetEntry("word/document.xml");
-                            if (entry != null)
+                            if (aspect >= 1.0)
                             {
-                                using (var stream = entry.Open())
-                                using (var reader = new System.IO.StreamReader(stream))
-                                {
-                                    string xml = reader.ReadToEnd();
-                                    string text = System.Text.RegularExpressions.Regex.Replace(xml, @"<[^>]+>", " ");
-                                    TextPreview.Text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
-                                }
+                                targetW = minW;
+                                targetH = targetW / aspect;
+                            }
+                            else
+                            {
+                                targetH = minH;
+                                targetW = targetH * aspect;
                             }
                         }
+
+                        this.Width = targetW;
+                        this.Height = targetH + 40; // Add header height back
+                        
+                        _isImageLoaded = true;
+                        RotateBtn.Visibility = Visibility.Visible;
                     }
-                    else 
+                }
+                else if (ext == ".pdf" || ext == ".html" || ext == ".htm" || ext == ".xml")
+                {
+                    WebPreview.Visibility = Visibility.Visible;
+                    try { WebPreview.Navigate(new Uri(_item.FilePath)); } catch { }
+                    
+                    this.Width = 600;
+                    this.Height = SystemParameters.WorkArea.Height * 0.8;
+                    _isImageLoaded = true; // allow dragging natively
+                }
+                else if (ext == ".docx" || ext == ".txt" || ext == ".log" || ext == ".md" || ext == ".cs" || ext == ".cpp" || ext == ".js" || ext == ".json")
+                {
+                    TextPreviewScroll.Visibility = Visibility.Visible;
+                    
+                    string textResult = await System.Threading.Tasks.Task.Run(() =>
                     {
-                        TextPreview.Text = File.ReadAllText(item.FilePath);
+                        try 
+                        {
+                            if (ext == ".docx") 
+                            {
+                                using (var archive = System.IO.Compression.ZipFile.OpenRead(_item.FilePath))
+                                {
+                                    var entry = archive.GetEntry("word/document.xml");
+                                    if (entry != null)
+                                    {
+                                        using (var stream = entry.Open())
+                                        using (var reader = new System.IO.StreamReader(stream))
+                                        {
+                                            string xml = reader.ReadToEnd();
+                                            string rawText = System.Text.RegularExpressions.Regex.Replace(xml, @"<[^>]+>", " ");
+                                            return System.Text.RegularExpressions.Regex.Replace(rawText, @"\s+", " ").Trim();
+                                        }
+                                    }
+                                }
+                            }
+                            else 
+                            {
+                                return File.ReadAllText(_item.FilePath);
+                            }
+                        } 
+                        catch { }
+                        return null;
+                    });
+
+                    if (textResult != null)
+                    {
+                        TextPreview.Text = textResult;
                     }
-                } 
-                catch { TextPreview.Text = "[AdvanceClip Codec Error: Cannot extract raw string payload from this artifact natively]"; }
+                    else
+                    {
+                        TextPreview.Text = "[AdvanceClip Codec Error: Cannot extract raw string payload from this artifact natively]";
+                    }
 
-                this.Width = 550;
-                this.Height = 650;
-                _isImageLoaded = true; // allow native dragging for textual representations
+                    this.Width = 550;
+                    this.Height = 650;
+                    _isImageLoaded = true; // allow native dragging for textual representations
+                }
+                else
+                {
+                    // Default Document Fallback Mode
+                    DocumentPanel.Visibility = Visibility.Visible;
+                    DocTitle.Text = Path.GetFileName(_item.FilePath);
+                    
+                    long length = await System.Threading.Tasks.Task.Run(() =>
+                    {
+                        try
+                        {
+                            return new FileInfo(_item.FilePath).Length;
+                        }
+                        catch { return -1L; }
+                    });
+
+                    if (length >= 0)
+                    {
+                        DocSize.Text = $"{_item.ItemType.ToString()} Document • {(length / 1024.0 / 1024.0):0.00} MB";
+                    }
+                    else
+                    {
+                        DocSize.Text = "Unknown Size";
+                    }
+
+                    this.Width = 400;
+                    this.Height = 350;
+                }
             }
-            else
+            catch { }
+            finally
             {
-                // Default Document Fallback Mode
-                DocumentPanel.Visibility = Visibility.Visible;
-                DocTitle.Text = Path.GetFileName(item.FilePath);
-                
-                try {
-                    long length = new FileInfo(item.FilePath).Length;
-                    DocSize.Text = $"{item.ItemType.ToString()} Document • {(length / 1024.0 / 1024.0):0.00} MB";
-                } catch { DocSize.Text = "Unknown Size"; }
-
-                this.Width = 400;
-                this.Height = 350;
+                LoadingProgress.Visibility = Visibility.Collapsed;
             }
         }
 
-        private void RotateButton_Click(object sender, RoutedEventArgs e)
+        private async void RotateButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
                 if (string.IsNullOrEmpty(_item.FilePath) || !File.Exists(_item.FilePath)) return;
                 
-                // Load the original file as bytes to avoid any file locking
-                byte[] fileBytes = File.ReadAllBytes(_item.FilePath);
-                BitmapImage original = new BitmapImage();
-                using (var ms = new System.IO.MemoryStream(fileBytes))
+                LoadingProgress.Visibility = Visibility.Visible;
+                RotateBtn.IsEnabled = false;
+
+                string filePath = _item.FilePath;
+
+                var fresh = await System.Threading.Tasks.Task.Run(() =>
                 {
-                    original.BeginInit();
-                    original.CacheOption = BitmapCacheOption.OnLoad;
-                    original.StreamSource = ms;
-                    original.EndInit();
-                    original.Freeze();
-                }
-                
-                // Create rotated bitmap
-                var rotated = new TransformedBitmap(original, new System.Windows.Media.RotateTransform(90));
-                rotated.Freeze();
-                
-                // Encode and save back
-                string ext = Path.GetExtension(_item.FilePath).ToLower();
-                BitmapEncoder encoder;
-                if (ext == ".png") encoder = new PngBitmapEncoder();
-                else if (ext == ".bmp") encoder = new BmpBitmapEncoder();
-                else encoder = new JpegBitmapEncoder { QualityLevel = 95 };
-                
-                encoder.Frames.Add(BitmapFrame.Create(rotated));
-                
-                using (var fs = new FileStream(_item.FilePath, FileMode.Create, FileAccess.Write))
+                    try
+                    {
+                        // Load the original file as bytes to avoid any file locking
+                        byte[] fileBytes = File.ReadAllBytes(filePath);
+                        BitmapImage original = new BitmapImage();
+                        using (var ms = new System.IO.MemoryStream(fileBytes))
+                        {
+                            original.BeginInit();
+                            original.CacheOption = BitmapCacheOption.OnLoad;
+                            original.StreamSource = ms;
+                            original.EndInit();
+                        }
+                        original.Freeze();
+                        
+                        // Create rotated bitmap
+                        var rotated = new TransformedBitmap(original, new System.Windows.Media.RotateTransform(90));
+                        rotated.Freeze();
+                        
+                        // Encode and save back
+                        string ext = Path.GetExtension(filePath).ToLower();
+                        BitmapEncoder encoder;
+                        if (ext == ".png") encoder = new PngBitmapEncoder();
+                        else if (ext == ".bmp") encoder = new BmpBitmapEncoder();
+                        else encoder = new JpegBitmapEncoder { QualityLevel = 95 };
+                        
+                        encoder.Frames.Add(BitmapFrame.Create(rotated));
+                        
+                        using (var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write))
+                        {
+                            encoder.Save(fs);
+                        }
+                        
+                        // Reload fresh from bytes
+                        byte[] freshBytes = File.ReadAllBytes(filePath);
+                        BitmapImage freshBmp = new BitmapImage();
+                        using (var ms2 = new System.IO.MemoryStream(freshBytes))
+                        {
+                            freshBmp.BeginInit();
+                            freshBmp.CacheOption = BitmapCacheOption.OnLoad;
+                            freshBmp.StreamSource = ms2;
+                            freshBmp.EndInit();
+                        }
+                        freshBmp.Freeze();
+                        return freshBmp;
+                    }
+                    catch
+                    {
+                        return null;
+                    }
+                });
+
+                if (fresh != null)
                 {
-                    encoder.Save(fs);
+                    PreviewImage.Source = fresh;
+                    AdvanceClip.Classes.Logger.LogAction("ROTATE", "Rotated 90°: " + Path.GetFileName(_item.FilePath));
                 }
-                
-                // Reload fresh into the preview
-                byte[] freshBytes = File.ReadAllBytes(_item.FilePath);
-                BitmapImage fresh = new BitmapImage();
-                using (var ms2 = new System.IO.MemoryStream(freshBytes))
+                else
                 {
-                    fresh.BeginInit();
-                    fresh.CacheOption = BitmapCacheOption.OnLoad;
-                    fresh.StreamSource = ms2;
-                    fresh.EndInit();
-                    fresh.Freeze();
+                    AdvanceClip.Windows.ToastWindow.ShowToast("Rotate failed: File could not be written or read");
                 }
-                PreviewImage.Source = fresh;
-                
-                AdvanceClip.Classes.Logger.LogAction("ROTATE", "Rotated 90u00B0: " + Path.GetFileName(_item.FilePath));
             }
             catch (Exception ex)
             {
                 AdvanceClip.Classes.Logger.LogAction("ROTATE", "Failed: " + ex.Message);
                 AdvanceClip.Windows.ToastWindow.ShowToast("Rotate failed: " + ex.Message);
+            }
+            finally
+            {
+                LoadingProgress.Visibility = Visibility.Collapsed;
+                RotateBtn.IsEnabled = true;
             }
         }
 

@@ -24,6 +24,23 @@ namespace AdvanceClip.Windows
             FilterEmojis();
         }
 
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+            // Suppress red DWM window border and re-apply theme with valid hwnd
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    int colorNone = AdvanceClip.Classes.NativeMethods.DWMWA_COLOR_NONE;
+                    AdvanceClip.Classes.NativeMethods.DwmSetWindowAttribute(hwnd, AdvanceClip.Classes.NativeMethods.DWMWA_BORDER_COLOR, ref colorNone, sizeof(int));
+                }
+            }
+            catch { }
+            AdvanceClip.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
+        }
+
         private void LoadEmojis()
         {
             var cats = new Dictionary<string, (string label, string[] emojis)>
@@ -170,6 +187,6 @@ namespace AdvanceClip.Windows
         private void EmojiSearchBox_TextChanged(object sender, TextChangedEventArgs e) => FilterEmojis();
         private void Header_MouseDown(object sender, MouseButtonEventArgs e) { if (e.LeftButton == MouseButtonState.Pressed) try { DragMove(); } catch { } }
         private void Close_Click(object sender, RoutedEventArgs e) => Close();
-        private void Window_Deactivated(object sender, EventArgs e) => Close();
+        private void Window_Deactivated(object sender, EventArgs e) { try { if (IsLoaded) Close(); } catch { } }
     }
 }

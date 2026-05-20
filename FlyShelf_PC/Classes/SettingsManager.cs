@@ -151,7 +151,15 @@ namespace AdvanceClip.Classes
             try
             {
                 var json = JsonSerializer.Serialize(Current, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(GetConfigPath(), json);
+                string path = GetConfigPath();
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    try
+                    {
+                        File.WriteAllText(path, json);
+                    }
+                    catch { }
+                });
             }
             catch { }
         }

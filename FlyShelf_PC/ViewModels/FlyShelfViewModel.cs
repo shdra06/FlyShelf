@@ -28,6 +28,8 @@ namespace AdvanceClip.ViewModels
         /// </summary>
         public async Task LoadPersistedHistoryAsync()
         {
+            await LoadPinnedItemsAsync();
+            
             var items = await System.Threading.Tasks.Task.Run(() => Classes.ClipboardHistoryManager.LoadHistory());
             
             // Build lookup of items already loaded (e.g. pinned items from LoadPinnedItems)
@@ -379,33 +381,28 @@ namespace AdvanceClip.ViewModels
                 }
             };
             
-            LoadPinnedItems();
-
             // Background Boot Optimization: Shift heavy DNS polling, port binding, and I/O sniffing completely off 
             // the main UI Constructor thread so AdvanceClip can bootstrap in under 50ms natively!
             System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
             {
-                System.Threading.Tasks.Task.Run(() =>
+                // Auto-reconcile: server should be up if either transport is on
+                bool lanOn = AdvanceClip.Classes.SettingsManager.Current.EnableLocalLAN;
+                bool cfOn = AdvanceClip.Classes.SettingsManager.Current.EnableGlobalCloudflare;
+                if ((lanOn || cfOn) && !AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync)
                 {
-                    // Auto-reconcile: server should be up if either transport is on
-                    bool lanOn = AdvanceClip.Classes.SettingsManager.Current.EnableLocalLAN;
-                    bool cfOn = AdvanceClip.Classes.SettingsManager.Current.EnableGlobalCloudflare;
-                    if ((lanOn || cfOn) && !AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync)
-                    {
-                        AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync = true;
-                    }
-                    
-                    if (AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync) 
-                    {
-                        LocalServer.Start();
-                    }
-                    AdvanceClip.Classes.SyncQueue.Start(); // Guaranteed-delivery sync queue
-                    Sniffer.StartSniffing();
-                    if (AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync)
-                    {
-                        CloudListener.StartPolling();
-                    }
-                });
+                    AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync = true;
+                }
+                
+                if (AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync) 
+                {
+                    LocalServer.Start();
+                }
+                AdvanceClip.Classes.SyncQueue.Start(); // Guaranteed-delivery sync queue
+                Sniffer.StartSniffing();
+                if (AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync)
+                {
+                    CloudListener.StartPolling();
+                }
             }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
@@ -442,9 +439,18 @@ namespace AdvanceClip.ViewModels
                 DroppedItems.Remove(item);
                 OnPropertyChanged(nameof(ShelfVisibility));
 
-                // Cleanup: delete backing file (temp or persistent image)
-                CleanupTempFile(item.FilePath);
-                Classes.ClipboardHistoryManager.DeletePersistentImage(item);
+                // Cleanup backing file asynchronously in background to prevent UI blocking
+                string filePath = item.FilePath;
+                ClipboardItemType itemType = item.ItemType;
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    try
+                    {
+                        CleanupTempFile(filePath);
+                        Classes.ClipboardHistoryManager.DeletePersistentImage(filePath, itemType);
+                    }
+                    catch { }
+                });
             }
         }
 
@@ -545,44 +551,65 @@ namespace AdvanceClip.ViewModels
             try
             {
                 var pinned = DroppedItems.Where(i => i.IsPinned).ToList();
-                File.WriteAllText(GetDbPath(), JsonSerializer.Serialize(pinned));
+                string path = GetDbPath();
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    try
+                    {
+                        var json = JsonSerializer.Serialize(pinned);
+                        File.WriteAllText(path, json);
+                    }
+                    catch { }
+                });
             }
             catch { }
         }
 
-        public void LoadPinnedItems()
+        public async Task LoadPinnedItemsAsync()
         {
             try
             {
                 string path = GetDbPath();
-                if (File.Exists(path))
+                var docs = await System.Threading.Tasks.Task.Run(() =>
                 {
-                    var json = File.ReadAllText(path);
-                    var docs = JsonSerializer.Deserialize<List<ClipboardItem>>(json);
-                    if (docs != null)
+                    try
                     {
-                        var seenKeys = new HashSet<string>();
-                        foreach (var d in docs)
+                        if (File.Exists(path))
                         {
-                            // Skip duplicates within the pinned file itself
-                            string key = GetDeduplicationKey(d);
-                            if (!string.IsNullOrEmpty(key) && !seenKeys.Add(key))
-                                continue;
-                            
-                            d.IsPinned = true;
-                            if (d.ItemType == ClipboardItemType.File && !string.IsNullOrEmpty(d.FilePath))
-                            {
-                                System.Threading.Tasks.Task.Run(() => {
-                                    var icon = GetIcon(d.FilePath);
-                                    if (icon != null) Application.Current.Dispatcher.Invoke(() => d.Icon = icon);
-                                });
-                            }
-                            else if (d.ItemType == ClipboardItemType.Image && !string.IsNullOrEmpty(d.FilePath) && File.Exists(d.FilePath))
-                            {
-                                string imagePath = d.FilePath;
-                                var capturedD = d;
-                                System.Threading.Tasks.Task.Run(() => {
-                                    try 
+                            var json = File.ReadAllText(path);
+                            return JsonSerializer.Deserialize<List<ClipboardItem>>(json);
+                        }
+                    }
+                    catch { }
+                    return null;
+                });
+
+                if (docs != null)
+                {
+                    var seenKeys = new HashSet<string>();
+                    foreach (var d in docs)
+                    {
+                        // Skip duplicates within the pinned file itself
+                        string key = GetDeduplicationKey(d);
+                        if (!string.IsNullOrEmpty(key) && !seenKeys.Add(key))
+                            continue;
+                        
+                        d.IsPinned = true;
+                        if (d.ItemType == ClipboardItemType.File && !string.IsNullOrEmpty(d.FilePath))
+                        {
+                            System.Threading.Tasks.Task.Run(() => {
+                                var icon = GetIcon(d.FilePath);
+                                if (icon != null) Application.Current.Dispatcher.Invoke(() => d.Icon = icon);
+                            });
+                        }
+                        else if (d.ItemType == ClipboardItemType.Image && !string.IsNullOrEmpty(d.FilePath))
+                        {
+                            string imagePath = d.FilePath;
+                            var capturedD = d;
+                            System.Threading.Tasks.Task.Run(() => {
+                                try 
+                                {
+                                    if (File.Exists(imagePath))
                                     {
                                         var bmp = new BitmapImage();
                                         bmp.BeginInit();
@@ -592,11 +619,11 @@ namespace AdvanceClip.ViewModels
                                         bmp.EndInit();
                                         bmp.Freeze();
                                         Application.Current.Dispatcher.InvokeAsync(() => capturedD.Icon = bmp);
-                                    } catch { }
-                                });
-                            }
-                            DroppedItems.Add(d);
+                                    }
+                                } catch { }
+                            });
                         }
+                        DroppedItems.Add(d);
                     }
                 }
             }

@@ -8,13 +8,14 @@
         WindowStartupLocation="CenterScreen" 
         MouseLeftButtonDown="Window_MouseLeftButtonDown"
         MouseDoubleClick="Window_MouseDoubleClick"
-        MouseMove="Window_MouseMove" Deactivated="Window_Deactivated">
+        MouseMove="Window_MouseMove" Deactivated="Window_Deactivated"
+        Loaded="Window_Loaded">
     <Window.Effect>
         <DropShadowEffect Color="Black" BlurRadius="25" Opacity="0.5" Direction="270" ShadowDepth="10" />
     </Window.Effect>
     <Grid>
         <!-- Dynamic Frame -->
-        <Border CornerRadius="12" Background="#801C1C1C" BorderBrush="#30FFFFFF" BorderThickness="1" ClipToBounds="True">
+        <Border x:Name="OuterBorder" CornerRadius="12" Background="#801C1C1C" BorderBrush="#30FFFFFF" BorderThickness="1" ClipToBounds="True">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="40" />
@@ -22,8 +23,8 @@
                 </Grid.RowDefinitions>
                 
                 <!-- Header Bar -->
-                <Grid Grid.Row="0" Background="#90111111" MouseLeftButtonDown="Window_MouseLeftButtonDown">
-                    <TextBlock Text="Quick Look" Foreground="#888888" VerticalAlignment="Center" Margin="14,0,0,0" FontWeight="Medium" FontSize="11.5" IsHitTestVisible="False"/>
+                <Grid x:Name="HeaderGrid" Grid.Row="0" Background="#90111111" MouseLeftButtonDown="Window_MouseLeftButtonDown">
+                    <TextBlock x:Name="HeaderTitle" Text="Quick Look" Foreground="#888888" VerticalAlignment="Center" Margin="14,0,0,0" FontWeight="Medium" FontSize="11.5" IsHitTestVisible="False"/>
                     
                     <!-- Action Buttons (right side) -->
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,6,0">
@@ -39,13 +40,14 @@
                             <ui:Button.Icon><ui:SymbolIcon x:Name="PinIcon" Symbol="Pin24" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                         <!-- Close -->
-                        <ui:Button Click="CloseButton_Click" Appearance="Transparent" Foreground="#888888" Padding="5,3">
+                        <ui:Button x:Name="CloseBtn" Click="CloseButton_Click" Appearance="Transparent" Foreground="#888888" Padding="5,3">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                     </StackPanel>
                 </Grid>
 
                 <Grid Grid.Row="1" Background="#20000000">
+                    <ProgressBar IsIndeterminate="True" x:Name="LoadingProgress" VerticalAlignment="Top" Height="3" Background="Transparent" Foreground="#60A5FA" BorderThickness="0" Visibility="Collapsed" Panel.ZIndex="10" />
                     <!-- Image Mode -->
                     <Image x:Name="PreviewImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality" CacheMode="BitmapCache"/>
                     

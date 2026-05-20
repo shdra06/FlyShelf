@@ -200,11 +200,21 @@ namespace AdvanceClip.Classes
             {
                 Directory.CreateDirectory(_appDataDir);
 
-                // Take a snapshot to avoid collection-modified exceptions
-                List<ViewModels.ClipboardItem> snapshot;
+                // Take a snapshot on the UI thread to avoid cross-thread or collection-modified exceptions
+                List<ViewModels.ClipboardItem> snapshot = null;
                 try
                 {
-                    snapshot = items.ToList();
+                    if (System.Windows.Application.Current != null)
+                    {
+                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                        {
+                            snapshot = items.ToList();
+                        });
+                    }
+                    else
+                    {
+                        snapshot = items.ToList();
+                    }
                 }
                 catch
                 {
@@ -341,16 +351,27 @@ namespace AdvanceClip.Classes
         /// </summary>
         public static void DeletePersistentImage(ViewModels.ClipboardItem item)
         {
+            if (item != null)
+            {
+                DeletePersistentImage(item.FilePath, item.ItemType);
+            }
+        }
+
+        /// <summary>
+        /// Deletes the persistent image file for a clipboard item in a thread-safe way.
+        /// </summary>
+        public static void DeletePersistentImage(string filePath, ViewModels.ClipboardItemType itemType)
+        {
             try
             {
-                if (item.ItemType == ViewModels.ClipboardItemType.Image ||
-                    item.ItemType == ViewModels.ClipboardItemType.QRCode)
+                if (itemType == ViewModels.ClipboardItemType.Image ||
+                    itemType == ViewModels.ClipboardItemType.QRCode)
                 {
-                    if (!string.IsNullOrEmpty(item.FilePath) && 
-                        item.FilePath.Contains(_imagesDir) && 
-                        File.Exists(item.FilePath))
+                    if (!string.IsNullOrEmpty(filePath) && 
+                        filePath.Contains(_imagesDir) && 
+                        File.Exists(filePath))
                     {
-                        File.Delete(item.FilePath);
+                        File.Delete(filePath);
                     }
                 }
             }

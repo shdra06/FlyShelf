@@ -22,6 +22,7 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
 
+        <!-- Premium Theme-Aware Setting Card Style -->
         <Style x:Key="PremiumSettingStyle" TargetType="Border">
             <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
             <Setter Property="RenderTransform">
@@ -29,16 +30,16 @@
                     <TranslateTransform Y="0" />
                 </Setter.Value>
             </Setter>
-            <Setter Property="Background" Value="#08FFFFFF" />
-            <Setter Property="BorderBrush" Value="#12FFFFFF" />
+            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" />
             <Setter Property="BorderThickness" Value="1" />
             <Setter Property="CornerRadius" Value="16" />
             <Setter Property="Padding" Value="24" />
             <Setter Property="Margin" Value="0,0,0,20" />
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#0EFFFFFF" />
-                    <Setter Property="BorderBrush" Value="#20FFFFFF" />
+                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" />
+                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorSecondary}" />
                     <Trigger.EnterActions>
                         <BeginStoryboard>
                             <Storyboard>
@@ -69,6 +70,136 @@
             <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
         </Style>
 
+        <!-- Premium Apple-like Primary Button Style -->
+        <Style x:Key="ApplePrimaryButtonStyle" TargetType="{x:Type ui:Button}">
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#0066FF" Offset="0"/>
+                        <GradientStop Color="#004DF0" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#15000000"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background">
+                        <Setter.Value>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#1A7BFF" Offset="0"/>
+                                <GradientStop Color="#005CFF" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Setter.Value>
+                    </Setter>
+                    <Setter Property="Effect">
+                        <Setter.Value>
+                            <DropShadowEffect BlurRadius="8" Color="#005CFF" Opacity="0.3" ShadowDepth="1" Direction="270"/>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background">
+                        <Setter.Value>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#0044DD" Offset="0"/>
+                                <GradientStop Color="#0033BB" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Setter.Value>
+                    </Setter>
+                    <Setter Property="Effect" Value="{x:Null}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorDisabled}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
+                    <Setter Property="Effect" Value="{x:Null}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Premium Apple-like Destructive Button Style -->
+        <Style x:Key="AppleDestructiveButtonStyle" TargetType="{x:Type ui:Button}">
+            <Setter Property="Background">
+                <Setter.Value>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#FF453A" Offset="0"/>
+                        <GradientStop Color="#D7261E" Offset="1"/>
+                    </LinearGradientBrush>
+                </Setter.Value>
+            </Setter>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="BorderBrush" Value="#15000000"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background">
+                        <Setter.Value>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#FF6961" Offset="0"/>
+                                <GradientStop Color="#E03229" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Setter.Value>
+                    </Setter>
+                    <Setter Property="Effect">
+                        <Setter.Value>
+                            <DropShadowEffect BlurRadius="8" Color="#FF453A" Opacity="0.3" ShadowDepth="1" Direction="270"/>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background">
+                        <Setter.Value>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#C92C25" Offset="0"/>
+                                <GradientStop Color="#B32019" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Setter.Value>
+                    </Setter>
+                    <Setter Property="Effect" Value="{x:Null}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorDisabled}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
+                    <Setter Property="Effect" Value="{x:Null}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Premium Apple-like Secondary Button Style -->
+        <Style x:Key="AppleSecondaryButtonStyle" TargetType="{x:Type ui:Button}">
+            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}"/>
+            <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorSecondary}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorSecondary}"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorTertiary}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorDisabled}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
     </Window.Resources>
 
     <Grid x:Name="RootGrid">
@@ -89,12 +220,12 @@
                 <TextBlock Text="Desktop Hub" FontSize="15" FontWeight="Normal" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center" Margin="6,0,0,0" Opacity="0.6"/>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" WindowChrome.IsHitTestVisibleInChrome="True">
-                <Border Background="#0AFFFFFF" CornerRadius="6" Padding="8,3" Margin="0,0,4,0">
+                <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="6" Padding="8,3" Margin="0,0,4,0">
                     <TextBlock x:Name="VersionBadgeText" Text="v1.0.0" FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Opacity="0.7"/>
                 </Border>
             </StackPanel>
         </Grid>
-        <Border Grid.Row="0" VerticalAlignment="Bottom" Height="1" Background="#0AFFFFFF" Margin="16,0"/>
+        <Border Grid.Row="0" VerticalAlignment="Bottom" Height="1" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="16,0"/>
 
         <!-- Core Split Layout -->
         <Grid Grid.Row="1">
@@ -146,7 +277,7 @@
                                 </Grid.ColumnDefinitions>
 
                                 <!-- Clipboard Items Stat -->
-                                <Border Grid.Column="0" Style="{StaticResource DashboardCardStyle}" Background="#0AFFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1" CornerRadius="14" Padding="20,18" Cursor="Hand" Tag="History" MouseLeftButtonDown="DashboardCard_Click">
+                                <Border Grid.Column="0" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="20,18" Cursor="Hand" Tag="History" MouseLeftButtonDown="DashboardCard_Click">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
@@ -171,7 +302,7 @@
                                 </Border>
 
                                 <!-- Folders Watched Stat -->
-                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" Background="#0AFFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1" CornerRadius="14" Padding="20,18" Cursor="Hand" Tag="Automation" MouseLeftButtonDown="DashboardCard_Click">
+                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="20,18" Cursor="Hand" Tag="Automation" MouseLeftButtonDown="DashboardCard_Click">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
@@ -196,7 +327,7 @@
                                 </Border>
 
                                 <!-- Network Status Stat -->
-                                <Border Grid.Column="4" Style="{StaticResource DashboardCardStyle}" Background="#0AFFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1" CornerRadius="14" Padding="20,18" Cursor="Hand" Tag="Network" MouseLeftButtonDown="DashboardCard_Click">
+                                <Border Grid.Column="4" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="20,18" Cursor="Hand" Tag="Network" MouseLeftButtonDown="DashboardCard_Click">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
@@ -230,20 +361,7 @@
                                 </Grid.ColumnDefinitions>
 
                                 <!-- Smart Suggestions Card -->
-                                <Border Grid.Column="0" Style="{StaticResource DashboardCardStyle}" CornerRadius="14" Padding="0" Cursor="Hand" Tag="History" MouseLeftButtonDown="DashboardCard_Click" ClipToBounds="True">
-                                    <Border.Background>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#0AFFFFFF" Offset="0"/>
-                                            <GradientStop Color="#06FFFFFF" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Border.Background>
-                                    <Border.BorderBrush>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#208B5CF6" Offset="0"/>
-                                            <GradientStop Color="#08FFFFFF" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Border.BorderBrush>
-                                    <Border.BorderThickness>1.5</Border.BorderThickness>
+                                <Border Grid.Column="0" Style="{StaticResource DashboardCardStyle}" CornerRadius="14" Padding="0" Cursor="Hand" Tag="History" MouseLeftButtonDown="DashboardCard_Click" ClipToBounds="True" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#408B5CF6" BorderThickness="1">
                                     <Grid>
                                         <!-- Subtle gradient glow in background -->
                                         <Border CornerRadius="14" Opacity="0.15" HorizontalAlignment="Right" VerticalAlignment="Top" Width="120" Height="120" Margin="-20,-20,0,0">
@@ -276,20 +394,7 @@
                                 </Border>
 
                                 <!-- Quick Actions Card -->
-                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" CornerRadius="14" Padding="0" Cursor="Hand" Tag="Settings" MouseLeftButtonDown="DashboardCard_Click" ClipToBounds="True">
-                                    <Border.Background>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#0AFFFFFF" Offset="0"/>
-                                            <GradientStop Color="#06FFFFFF" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Border.Background>
-                                    <Border.BorderBrush>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                            <GradientStop Color="#20F59E0B" Offset="0"/>
-                                            <GradientStop Color="#08FFFFFF" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Border.BorderBrush>
-                                    <Border.BorderThickness>1.5</Border.BorderThickness>
+                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" CornerRadius="14" Padding="0" Cursor="Hand" Tag="Settings" MouseLeftButtonDown="DashboardCard_Click" ClipToBounds="True" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#40F59E0B" BorderThickness="1">
                                     <Grid>
                                         <Border CornerRadius="14" Opacity="0.12" HorizontalAlignment="Right" VerticalAlignment="Top" Width="120" Height="120" Margin="-20,-20,0,0">
                                             <Border.Background>
@@ -344,13 +449,13 @@
                             <Border Grid.Column="0" CornerRadius="12" Padding="0">
                                 <Border.Style>
                                     <Style TargetType="Border">
-                                        <Setter Property="Background" Value="#08FFFFFF"/>
-                                        <Setter Property="BorderBrush" Value="#15FFFFFF"/>
+                                        <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
                                         <Setter Property="BorderThickness" Value="1"/>
                                         <Style.Triggers>
                                             <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                                                <Setter Property="Background" Value="#0CFFFFFF"/>
-                                                <Setter Property="BorderBrush" Value="#306366F1"/>
+                                                <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
+                                                <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.SystemAccentColor}"/>
                                             </Trigger>
                                         </Style.Triggers>
                                     </Style>
@@ -358,8 +463,8 @@
                                 <Grid>
                                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="14,0,0,0" IsHitTestVisible="False"
                                                 x:Name="SearchPlaceholderPanel">
-                                        <ui:SymbolIcon Symbol="Search24" FontSize="14" Foreground="#35FFFFFF" Margin="0,0,8,0"/>
-                                        <TextBlock Text="Search clips..." Foreground="#35FFFFFF" FontSize="12.5"/>
+                                        <ui:SymbolIcon Symbol="Search24" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,0,8,0"/>
+                                        <TextBlock Text="Search clips..." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12.5"/>
                                     </StackPanel>
                                     <TextBox x:Name="SearchBox" Background="Transparent" BorderThickness="0" 
                                              Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
@@ -410,17 +515,17 @@
                                     <Setter Property="Template">
                                         <Setter.Value>
                                             <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="#0AFFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1">
+                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                                                     <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
                                                 </Border>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#206366F1"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#156366F1"/>
                                                         <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#406366F1"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#A78BFA"/>
+                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#6366F1"/>
                                                     </Trigger>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#12FFFFFF"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
@@ -435,17 +540,17 @@
                                     <Setter Property="Template">
                                         <Setter.Value>
                                             <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="#0AFFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1">
+                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                                                     <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
                                                 </Border>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#208B5CF6"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#158B5CF6"/>
                                                         <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#408B5CF6"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#A78BFA"/>
+                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#8B5CF6"/>
                                                     </Trigger>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#12FFFFFF"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
@@ -460,17 +565,17 @@
                                     <Setter Property="Template">
                                         <Setter.Value>
                                             <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="#0AFFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1">
+                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                                                     <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
                                                 </Border>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#2010B981"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#1510B981"/>
                                                         <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#4010B981"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#34D399"/>
+                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#10B981"/>
                                                     </Trigger>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#12FFFFFF"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
@@ -485,17 +590,17 @@
                                     <Setter Property="Template">
                                         <Setter.Value>
                                             <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="#0AFFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1">
+                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                                                     <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
                                                 </Border>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#20F472B6"/>
-                                                        <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#40F472B6"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#F472B6"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#15EC4899"/>
+                                                        <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#40EC4899"/>
+                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#EC4899"/>
                                                     </Trigger>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#12FFFFFF"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
@@ -510,17 +615,17 @@
                                     <Setter Property="Template">
                                         <Setter.Value>
                                             <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="#0AFFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1">
+                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                                                     <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
                                                 </Border>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#20EF4444"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#15EF4444"/>
                                                         <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#40EF4444"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#F87171"/>
+                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#EF4444"/>
                                                     </Trigger>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#12FFFFFF"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
@@ -535,17 +640,17 @@
                                     <Setter Property="Template">
                                         <Setter.Value>
                                             <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="#0AFFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1">
+                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                                                     <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
                                                 </Border>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#203B82F6"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#153B82F6"/>
                                                         <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#403B82F6"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#60A5FA"/>
+                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#3B82F6"/>
                                                     </Trigger>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#12FFFFFF"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
@@ -560,17 +665,17 @@
                                     <Setter Property="Template">
                                         <Setter.Value>
                                             <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="#0AFFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1">
+                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                                                     <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
                                                 </Border>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#200EA5E9"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#150EA5E9"/>
                                                         <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#400EA5E9"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#38BDF8"/>
+                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#0EA5E9"/>
                                                     </Trigger>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#12FFFFFF"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
@@ -585,17 +690,17 @@
                                     <Setter Property="Template">
                                         <Setter.Value>
                                             <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="#0AFFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1">
+                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                                                     <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
                                                 </Border>
                                                 <ControlTemplate.Triggers>
                                                     <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#20FBBF24"/>
-                                                        <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#40FBBF24"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#FBBF24"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#15D97706"/>
+                                                        <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#40D97706"/>
+                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#D97706"/>
                                                     </Trigger>
                                                     <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#12FFFFFF"/>
+                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
                                                     </Trigger>
                                                 </ControlTemplate.Triggers>
                                             </ControlTemplate>
@@ -634,8 +739,8 @@
                                 <Border Margin="0,0,0,6" Padding="0" ClipToBounds="True" CornerRadius="12" Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
                                     <Border.Style>
                                         <Style TargetType="Border">
-                                            <Setter Property="Background" Value="#08FFFFFF" />
-                                            <Setter Property="BorderBrush" Value="Transparent" />
+                                            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" />
+                                            <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" />
                                             <Setter Property="BorderThickness" Value="1" />
                                             <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
                                             <Setter Property="RenderTransform">
@@ -649,8 +754,8 @@
                                                     <Setter Property="BorderBrush" Value="#406366F1" />
                                                 </DataTrigger>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Background" Value="#0EFFFFFF" />
-                                                    <Setter Property="BorderBrush" Value="#15FFFFFF" />
+                                                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" />
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorSecondary}" />
                                                     <Trigger.EnterActions>
                                                         <BeginStoryboard>
                                                             <Storyboard>
@@ -766,7 +871,7 @@
                                         <Border Grid.Column="3" Width="44" Height="44" CornerRadius="10" ClipToBounds="True" Margin="12,10,12,10">
                                             <Border.Style>
                                                 <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="#12FFFFFF"/>
+                                                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
                                                     <Style.Triggers>
                                                         <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
                                                             <Setter Property="Background" Value="Transparent"/>
@@ -870,7 +975,7 @@
                                                 <Border CornerRadius="4" Padding="6,2" Margin="0,0,6,0">
                                                     <Border.Style>
                                                         <Style TargetType="Border">
-                                                            <Setter Property="Background" Value="#15FFFFFF" />
+                                                            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" />
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding IsCodePreview}" Value="True">
                                                                     <Setter Property="Background" Value="#1A10B981" />
@@ -915,7 +1020,7 @@
                                                         </TextBlock.Style>
                                                     </TextBlock>
                                                 </Border>
-                                                <Border Background="#0CFFFFFF" CornerRadius="4" Padding="6,2" Margin="0,0,6,0" Visibility="{Binding FormattedSize, Converter={StaticResource StringToVisibilityConverter}}">
+                                                <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="4" Padding="6,2" Margin="0,0,6,0" Visibility="{Binding FormattedSize, Converter={StaticResource StringToVisibilityConverter}}">
                                                     <TextBlock Text="{Binding FormattedSize}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" />
                                                 </Border>
                                                 <TextBlock Text="{Binding DateCopied, StringFormat='{}{0:HH:mm}'}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" Opacity="0.6"/>
@@ -931,7 +1036,7 @@
                                             
                                             <!-- P2P Transfer Progress Bar -->
                                             <StackPanel Margin="0,4,0,0" Visibility="{Binding IsTransferring, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                                <ProgressBar Value="{Binding TransferProgress}" Minimum="0" Maximum="100" Height="3" Foreground="#7C7CFF" Background="#1AFFFFFF"/>
+                                                <ProgressBar Value="{Binding TransferProgress}" Minimum="0" Maximum="100" Height="3" Foreground="#7C7CFF" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}"/>
                                                 <TextBlock Text="{Binding TransferStatusText}" FontSize="10" Foreground="#9C9CFF" Margin="0,2,0,0" Opacity="0.9"/>
                                             </StackPanel>
 
@@ -1107,7 +1212,7 @@
                             <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="#EF4444" FontSize="18" Margin="0,0,8,0"/>
                             <TextBlock x:Name="MergeBarText" Text="2 PDFs selected" FontSize="13" FontWeight="Medium"
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" Margin="0,0,16,0"/>
-                            <ui:Button x:Name="MergeBarBtn" Content="Merge PDFs" Appearance="Danger" Padding="16,6" FontSize="12" Click="MergeSelectedPdfsBtn_Click">
+                            <ui:Button x:Name="MergeBarBtn" Content="Merge PDFs" Style="{StaticResource AppleDestructiveButtonStyle}" Padding="16,6" FontSize="12" Click="MergeSelectedPdfsBtn_Click">
                                 <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24"/></ui:Button.Icon>
                             </ui:Button>
                         </StackPanel>
@@ -1175,7 +1280,7 @@
                                         </StackPanel>
                                     </Grid>
                                     
-                                    <Border Background="#08FFFFFF" BorderThickness="1" BorderBrush="#0CFFFFFF" CornerRadius="12" Padding="6" Margin="0,0,0,16" MinHeight="80">
+                                    <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderThickness="1" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" CornerRadius="12" Padding="6" Margin="0,0,0,16" MinHeight="80">
                                         <Grid>
                                             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                                 <StackPanel.Style>
@@ -1188,19 +1293,19 @@
                                                         </Style.Triggers>
                                                     </Style>
                                                 </StackPanel.Style>
-                                                <ui:SymbolIcon Symbol="FolderAdd24" FontSize="28" Foreground="#30FFFFFF" Margin="0,8,0,8"/>
-                                                <TextBlock Text="No custom folders added yet" Foreground="#35FFFFFF" FontSize="12" HorizontalAlignment="Center"/>
+                                                <ui:SymbolIcon Symbol="FolderAdd24" FontSize="28" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,8,0,8"/>
+                                                <TextBlock Text="No custom folders added yet" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" HorizontalAlignment="Center"/>
                                             </StackPanel>
                                             <ListBox ItemsSource="{Binding Source={x:Static settings:SettingsManager.Current}, Path=CustomSnifferPaths}" Margin="0" BorderThickness="0" Background="Transparent" ScrollViewer.VerticalScrollBarVisibility="Auto">
                                                 <ListBox.ItemTemplate>
                                                     <DataTemplate>
-                                                        <Border Background="#0AFFFFFF" BorderBrush="#0CFFFFFF" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,3">
+                                                        <Border Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,3">
                                                             <Grid>
                                                                 <Grid.ColumnDefinitions>
                                                                     <ColumnDefinition Width="Auto"/>
                                                                     <ColumnDefinition Width="*"/>
                                                                 </Grid.ColumnDefinitions>
-                                                                <Border Grid.Column="0" Width="32" Height="32" CornerRadius="8" Background="#15FFFFFF" Margin="0,0,12,0">
+                                                                <Border Grid.Column="0" Width="32" Height="32" CornerRadius="8" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" Margin="0,0,12,0">
                                                                     <ui:SymbolIcon Symbol="Folder24" Foreground="#F59E0B" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                                 </Border>
                                                                 <TextBlock Grid.Column="1" Text="{Binding}" VerticalAlignment="Center" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" FontWeight="Medium" FontSize="13"/>
@@ -1213,10 +1318,10 @@
                                     </Border>
 
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                        <ui:Button Appearance="Primary" Padding="16,8" Margin="0,0,10,0" CornerRadius="10" Click="AddSnifferPath_Click">
+                                        <ui:Button Style="{StaticResource ApplePrimaryButtonStyle}" Padding="16,8" Margin="0,0,10,0" Click="AddSnifferPath_Click">
                                             <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Add24" Margin="0,0,8,0" FontSize="14"/><TextBlock Text="Add Folder" FontWeight="SemiBold" FontSize="13"/></StackPanel>
                                         </ui:Button>
-                                        <ui:Button Appearance="Secondary" Padding="16,8" CornerRadius="10" Click="ClearSnifferPaths_Click">
+                                        <ui:Button Style="{StaticResource AppleSecondaryButtonStyle}" Padding="16,8" Click="ClearSnifferPaths_Click">
                                             <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Delete24" Foreground="#EF4444" Margin="0,0,8,0" FontSize="14"/><TextBlock Text="Clear All" Foreground="#EF4444" FontSize="13"/></StackPanel>
                                         </ui:Button>
                                     </StackPanel>
@@ -1268,7 +1373,7 @@
                                         <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableLocalLAN, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                     </Grid>
                                     
-                                    <Border BorderThickness="0,1,0,0" BorderBrush="#11FFFFFF" Margin="0,16" />
+                                    <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,16" />
                                     
                                     <!-- Cloudflare Toggle -->
                                     <Grid>
@@ -1322,7 +1427,7 @@
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" Text="Wi-Fi:" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="13" VerticalAlignment="Center"/>
                                         <TextBlock Grid.Column="1" Text="{Binding LocalServer.DisplayUrl}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
-                                        <Button Grid.Column="2" Content="Copy" Margin="12,0,0,0" Padding="8,2" FontSize="11" Background="#1AFFFFFF" BorderBrush="#2AFFFFFF" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Cursor="Hand" Click="CopyUrl_Click" Tag="{Binding LocalServer.DisplayUrl}" MinWidth="55" />
+                                        <Button Grid.Column="2" Content="Copy" Margin="12,0,0,0" Padding="8,2" FontSize="11" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Cursor="Hand" Click="CopyUrl_Click" Tag="{Binding LocalServer.DisplayUrl}" MinWidth="55" />
                                     </Grid>
                                     
                                     <Grid HorizontalAlignment="Center" Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalCloudflare, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -1333,7 +1438,7 @@
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" Text="Global:" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="13" VerticalAlignment="Center"/>
                                         <TextBlock Grid.Column="1" Text="{Binding LocalServer.GlobalUrl}" FontSize="15" FontWeight="Bold" Foreground="#10B981" VerticalAlignment="Center"/>
-                                        <Button Grid.Column="2" Content="Copy" Margin="12,0,0,0" Padding="8,2" FontSize="11" Background="#1AFFFFFF" BorderBrush="#2AFFFFFF" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Cursor="Hand" Click="CopyUrl_Click" Tag="{Binding LocalServer.GlobalUrl}" MinWidth="55"/>
+                                        <Button Grid.Column="2" Content="Copy" Margin="12,0,0,0" Padding="8,2" FontSize="11" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Cursor="Hand" Click="CopyUrl_Click" Tag="{Binding LocalServer.GlobalUrl}" MinWidth="55"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>
@@ -1365,8 +1470,8 @@
 
                                     <!-- Action Buttons -->
                                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,16">
-                                        <ui:Button Content="🔄 Regenerate QR" Appearance="Secondary" Padding="14,8" CornerRadius="10" Click="RegenerateQR_Click" Margin="0,0,8,0" FontSize="11"/>
-                                        <ui:Button Content="📋 Copy Pairing Info" Appearance="Secondary" Padding="14,8" CornerRadius="10" Click="CopyPairingInfo_Click" FontSize="11"/>
+                                        <ui:Button Content="🔄 Regenerate QR" Style="{StaticResource AppleSecondaryButtonStyle}" Padding="14,8" Click="RegenerateQR_Click" Margin="0,0,8,0" FontSize="11"/>
+                                        <ui:Button Content="📋 Copy Pairing Info" Style="{StaticResource AppleSecondaryButtonStyle}" Padding="14,8" Click="CopyPairingInfo_Click" FontSize="11"/>
                                     </StackPanel>
 
                                     <!-- PAIRING CODE DISPLAY -->
@@ -1375,8 +1480,8 @@
                                             <TextBlock Text="Your Pairing Code" FontSize="11" FontWeight="SemiBold" Foreground="#A78BFA" HorizontalAlignment="Center" Margin="0,0,0,6"/>
                                             <TextBlock x:Name="PairingCodeDisplay" Text="------" FontSize="32" FontWeight="Black"
                                                        FontFamily="Consolas" Foreground="#A78BFA" HorizontalAlignment="Center"/>
-                                            <TextBlock Text="Share this code with any device to connect" FontSize="10" Foreground="#60FFFFFF" HorizontalAlignment="Center" Margin="0,4,0,6"/>
-                                            <ui:Button Content="🔑 Generate New Code" Appearance="Secondary" Padding="12,6" CornerRadius="8" 
+                                            <TextBlock Text="Share this code with any device to connect" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,6"/>
+                                            <ui:Button Content="🔑 Generate New Code" Style="{StaticResource AppleSecondaryButtonStyle}" Padding="12,6" 
                                                        Click="GeneratePairingCode_Click" FontSize="11" HorizontalAlignment="Center"/>
                                         </StackPanel>
                                     </Border>
@@ -1390,15 +1495,15 @@
                                                 <ui:TextBox x:Name="RemoteCodeInput" PlaceholderText="Enter 6-char code" Width="180" FontSize="16"
                                                             FontFamily="Consolas" HorizontalContentAlignment="Center" MaxLength="6"
                                                             VerticalAlignment="Center"/>
-                                                <ui:Button Content="Connect" Appearance="Primary" Margin="8,0,0,0" Padding="14,8" CornerRadius="8"
+                                                <ui:Button Content="Connect" Style="{StaticResource ApplePrimaryButtonStyle}" Margin="8,0,0,0" Padding="14,8"
                                                            Click="ConnectByCode_Click" FontSize="12" VerticalAlignment="Center"/>
                                             </StackPanel>
-                                            <TextBlock Text="Enter the code shown on the other PC or phone" FontSize="10" Foreground="#40FFFFFF" HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                                            <TextBlock Text="Enter the code shown on the other PC or phone" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,6,0,0"/>
                                         </StackPanel>
                                     </Border>
 
                                     <!-- ═══ LIVE P2P PEER STATUS ═══ -->
-                                    <Border BorderThickness="0,1,0,0" BorderBrush="#11FFFFFF" Margin="0,4,0,14" />
+                                    <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,4,0,14" />
 
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                         <Border Width="8" Height="8" CornerRadius="4" Background="#10B981" Margin="0,0,8,0" VerticalAlignment="Center"/>
@@ -1406,10 +1511,10 @@
                                         <Border Background="#1510B981" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
                                             <TextBlock x:Name="PeerCountBadge" Text="0 online" FontSize="10" FontWeight="Bold" Foreground="#10B981"/>
                                         </Border>
-                                        <ui:Button Content="🔄 Force Sync" Appearance="Secondary" Padding="8,3" CornerRadius="6" 
+                                        <ui:Button Content="🔄 Force Sync" Style="{StaticResource AppleSecondaryButtonStyle}" Padding="8,3" 
                                                    Click="ForcePeerSync_Click" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center"
                                                    ToolTip="Re-fetch all peer URLs from Firebase and reconnect"/>
-                                        <ui:Button Content="📡 Live Logs" Appearance="Secondary" Padding="8,3" CornerRadius="6"
+                                        <ui:Button Content="📡 Live Logs" Style="{StaticResource AppleSecondaryButtonStyle}" Padding="8,3"
                                                    Click="OpenNetworkLogs_Click" FontSize="10" Margin="4,0,0,0" VerticalAlignment="Center"
                                                    ToolTip="View live logs from this device and all paired devices"/>
                                     </StackPanel>
@@ -1421,8 +1526,8 @@
                                                 <Border CornerRadius="10" Padding="12,10" Margin="0,0,0,5">
                                                     <Border.Style>
                                                         <Style TargetType="Border">
-                                                            <Setter Property="Background" Value="#08FFFFFF"/>
-                                                            <Setter Property="BorderBrush" Value="#10FFFFFF"/>
+                                                            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
                                                             <Setter Property="BorderThickness" Value="1"/>
                                                             <Style.Triggers>
                                                                 <DataTrigger Binding="{Binding IsAlive}" Value="True">
@@ -1446,7 +1551,7 @@
                                                         <ui:SymbolIcon Grid.Column="0" Symbol="Desktop24" FontSize="18" Margin="0,0,10,0" VerticalAlignment="Center">
                                                             <ui:SymbolIcon.Style>
                                                                 <Style TargetType="ui:SymbolIcon">
-                                                                    <Setter Property="Foreground" Value="#50FFFFFF"/>
+                                                                    <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
                                                                     <Style.Triggers>
                                                                         <DataTrigger Binding="{Binding IsAlive}" Value="True">
                                                                             <Setter Property="Foreground" Value="#A78BFA"/>
@@ -1459,7 +1564,7 @@
                                                         <!-- Name + transport info -->
                                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                                                             <TextBlock Text="{Binding DeviceName}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                                                            <TextBlock Text="{Binding StatusText}" FontSize="9" Foreground="#60FFFFFF" Margin="0,1,0,0"/>
+                                                            <TextBlock Text="{Binding StatusText}" FontSize="9" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,1,0,0"/>
                                                         </StackPanel>
 
                                                         <!-- LAN status dot -->
@@ -1467,7 +1572,7 @@
                                                             <Border Width="7" Height="7" CornerRadius="4" Margin="0,0,4,0" VerticalAlignment="Center">
                                                                 <Border.Style>
                                                                     <Style TargetType="Border">
-                                                                        <Setter Property="Background" Value="#30FFFFFF"/>
+                                                                        <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
                                                                         <Style.Triggers>
                                                                             <DataTrigger Binding="{Binding IsLanActive}" Value="True">
                                                                                 <Setter Property="Background" Value="#10B981"/>
@@ -1479,7 +1584,7 @@
                                                             <TextBlock Text="LAN" FontSize="9" FontWeight="SemiBold" VerticalAlignment="Center">
                                                                 <TextBlock.Style>
                                                                     <Style TargetType="TextBlock">
-                                                                        <Setter Property="Foreground" Value="#30FFFFFF"/>
+                                                                        <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
                                                                         <Style.Triggers>
                                                                             <DataTrigger Binding="{Binding IsLanActive}" Value="True">
                                                                                 <Setter Property="Foreground" Value="#10B981"/>
@@ -1495,7 +1600,7 @@
                                                             <Border Width="7" Height="7" CornerRadius="4" Margin="0,0,4,0" VerticalAlignment="Center">
                                                                 <Border.Style>
                                                                     <Style TargetType="Border">
-                                                                        <Setter Property="Background" Value="#30FFFFFF"/>
+                                                                        <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
                                                                         <Style.Triggers>
                                                                             <DataTrigger Binding="{Binding IsCloudActive}" Value="True">
                                                                                 <Setter Property="Background" Value="#F59E0B"/>
@@ -1507,7 +1612,7 @@
                                                             <TextBlock Text="Cloud" FontSize="9" FontWeight="SemiBold" VerticalAlignment="Center">
                                                                 <TextBlock.Style>
                                                                     <Style TargetType="TextBlock">
-                                                                        <Setter Property="Foreground" Value="#30FFFFFF"/>
+                                                                        <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
                                                                         <Style.Triggers>
                                                                             <DataTrigger Binding="{Binding IsCloudActive}" Value="True">
                                                                                 <Setter Property="Foreground" Value="#F59E0B"/>
@@ -1538,7 +1643,7 @@
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
-                                    <TextBlock x:Name="NoPairedDevicesText" Text="No devices paired yet — scan the QR code above" FontSize="10" Foreground="#20FFFFFF" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                    <TextBlock x:Name="NoPairedDevicesText" Text="No devices paired yet — scan the QR code above" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                                 </StackPanel>
                             </Border>
 
@@ -1559,7 +1664,7 @@
                                             <TextBlock Text="Live Mesh Topology" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
                                             <TextBlock Text="All devices registered in the Firebase active_devices node." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" LineHeight="18"/>
                                         </StackPanel>
-                                        <ui:Button Grid.Column="1" Appearance="Primary" Padding="12,8" CornerRadius="10" Click="RefreshDevices_Click" VerticalAlignment="Center">
+                                        <ui:Button Grid.Column="1" Style="{StaticResource ApplePrimaryButtonStyle}" Padding="12,8" Click="RefreshDevices_Click" VerticalAlignment="Center">
                                             <StackPanel Orientation="Horizontal">
                                                 <ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" Margin="0,0,6,0"/>
                                                 <TextBlock Text="Refresh" FontWeight="SemiBold" FontSize="12"/>
@@ -1576,7 +1681,7 @@
                                         </Grid.ColumnDefinitions>
 
                                         <!-- LAN Column -->
-                                        <Border Grid.Column="0" Background="#0AFFFFFF" BorderBrush="#0CFFFFFF" BorderThickness="1" CornerRadius="12" Padding="10,10">
+                                        <Border Grid.Column="0" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="10,10">
                                             <StackPanel>
                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                                     <Border Width="8" Height="8" CornerRadius="4" Background="#10B981" Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -1586,7 +1691,7 @@
                                                 <ItemsControl x:Name="LanDevicesPanel">
                                                     <ItemsControl.ItemTemplate>
                                                         <DataTemplate>
-                                                            <Border Background="#08FFFFFF" CornerRadius="8" Padding="8,6" Margin="0,0,0,4" Cursor="Hand" MouseRightButtonDown="DeviceInfo_RightClick" ToolTip="Right-click for connection info">
+                                                            <Border Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="8" Padding="8,6" Margin="0,0,0,4" Cursor="Hand" MouseRightButtonDown="DeviceInfo_RightClick" ToolTip="Right-click for connection info">
                                                                 <StackPanel>
                                                                     <StackPanel Orientation="Horizontal">
                                                                         <ui:SymbolIcon FontSize="14" Foreground="#10B981" Margin="0,0,8,0">
@@ -1609,12 +1714,12 @@
                                                         </DataTemplate>
                                                     </ItemsControl.ItemTemplate>
                                                 </ItemsControl>
-                                                <TextBlock x:Name="LanEmptyText" Text="No other LAN peers" FontSize="10" Foreground="#25FFFFFF" HorizontalAlignment="Center" Margin="0,4,0,0" Visibility="Collapsed"/>
+                                                <TextBlock x:Name="LanEmptyText" Text="No other LAN peers" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,0" Visibility="Collapsed"/>
                                             </StackPanel>
                                         </Border>
 
                                         <!-- Cloud Column -->
-                                        <Border Grid.Column="2" Background="#0AFFFFFF" BorderBrush="#0CFFFFFF" BorderThickness="1" CornerRadius="12" Padding="10,10">
+                                        <Border Grid.Column="2" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="10,10">
                                             <StackPanel>
                                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
                                                     <Border Width="8" Height="8" CornerRadius="4" Background="#F59E0B" Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -1624,7 +1729,7 @@
                                                 <ItemsControl x:Name="CloudDevicesPanel">
                                                     <ItemsControl.ItemTemplate>
                                                         <DataTemplate>
-                                                            <Border Background="#08FFFFFF" CornerRadius="8" Padding="8,6" Margin="0,0,0,4" Cursor="Hand" MouseRightButtonDown="DeviceInfo_RightClick" ToolTip="Right-click for connection info">
+                                                            <Border Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="8" Padding="8,6" Margin="0,0,0,4" Cursor="Hand" MouseRightButtonDown="DeviceInfo_RightClick" ToolTip="Right-click for connection info">
                                                                 <StackPanel>
                                                                     <StackPanel Orientation="Horizontal">
                                                                         <ui:SymbolIcon FontSize="14" Foreground="#F59E0B" Margin="0,0,8,0">
@@ -1647,7 +1752,7 @@
                                                         </DataTemplate>
                                                     </ItemsControl.ItemTemplate>
                                                 </ItemsControl>
-                                                <TextBlock x:Name="CloudEmptyText" Text="No cloud devices" FontSize="10" Foreground="#25FFFFFF" HorizontalAlignment="Center" Margin="0,4,0,0" Visibility="Collapsed"/>
+                                                <TextBlock x:Name="CloudEmptyText" Text="No cloud devices" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,0" Visibility="Collapsed"/>
                                             </StackPanel>
                                         </Border>
                                     </Grid>
@@ -1655,8 +1760,8 @@
 
                                     <!-- Empty State -->
                                     <StackPanel x:Name="NoDevicesPanel" HorizontalAlignment="Center" Margin="0,12,0,12" Visibility="Collapsed">
-                                        <ui:SymbolIcon Symbol="PeopleSearch24" FontSize="32" Foreground="#25FFFFFF" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                                        <TextBlock Text="No devices found - hit Refresh" Foreground="#35FFFFFF" FontSize="12" HorizontalAlignment="Center"/>
+                                        <ui:SymbolIcon Symbol="PeopleSearch24" FontSize="32" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                                        <TextBlock Text="No devices found - hit Refresh" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </StackPanel>
                             </Border>
@@ -1679,7 +1784,7 @@
                             <ItemsControl x:Name="GroupsPanel">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border Background="#0AFFFFFF" BorderBrush="#15F59E0B" BorderThickness="1" CornerRadius="12" Padding="14,10" Margin="0,0,0,6">
+                                        <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#40F59E0B" BorderThickness="1" CornerRadius="12" Padding="14,10" Margin="0,0,0,6">
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="*"/>
@@ -1687,7 +1792,7 @@
                                                 </Grid.ColumnDefinitions>
                                                 <StackPanel Grid.Column="0">
                                                     <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                                                    <TextBlock Text="{Binding DeviceList}" FontSize="10" Foreground="#60FFFFFF" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding DeviceList}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                                                     <Button Content="Edit" Tag="{Binding Id}" Click="EditGroupBtn_Click" Padding="6,4" Margin="0,0,4,0" Cursor="Hand" Background="Transparent" Foreground="#F59E0B" BorderThickness="0" FontSize="12"/>
@@ -1698,7 +1803,7 @@
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
-                            <TextBlock x:Name="NoGroupsText" Text="No groups - create one to sync across devices" FontSize="10" Foreground="#25FFFFFF" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                            <TextBlock x:Name="NoGroupsText" Text="No groups - create one to sync across devices" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
 
                             <!-- LIVE NETWORK MONITOR -->
                             <StackPanel Orientation="Horizontal" Margin="0,24,0,14">
@@ -1754,7 +1859,7 @@
                                     </Grid>
 
                                     <!-- Last Activity -->
-                                    <Border Background="#08FFFFFF" CornerRadius="8" Padding="12,8" Margin="0,0,0,12">
+                                    <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,0,12">
                                         <StackPanel Orientation="Horizontal">
                                             <ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" Foreground="#10B981" Margin="0,0,8,0"/>
                                             <TextBlock Text="{Binding Source={x:Static settings:NetworkActivityLog.Instance}, Path=LastActivity}" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
@@ -1763,19 +1868,13 @@
 
                                     <!-- Action Buttons: Send & Copy -->
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                        <ui:Button x:Name="SendLogsToDashboardBtn" Appearance="Primary" Padding="14,8" CornerRadius="10" Click="SendLogsToDashboard_Click" Margin="0,0,8,0">
-                                            <ui:Button.Background>
-                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                    <GradientStop Color="#3B82F6" Offset="0"/>
-                                                    <GradientStop Color="#60A5FA" Offset="1"/>
-                                                </LinearGradientBrush>
-                                            </ui:Button.Background>
+                                        <ui:Button x:Name="SendLogsToDashboardBtn" Style="{StaticResource ApplePrimaryButtonStyle}" Padding="14,8" Click="SendLogsToDashboard_Click" Margin="0,0,8,0">
                                             <StackPanel Orientation="Horizontal">
                                                 <ui:SymbolIcon Symbol="ArrowUpload24" FontSize="14" Margin="0,0,6,0"/>
                                                 <TextBlock Text="Send Logs to Dashboard" FontWeight="SemiBold" FontSize="12"/>
                                             </StackPanel>
                                         </ui:Button>
-                                        <ui:Button Appearance="Secondary" Padding="14,8" CornerRadius="10" Click="CopyNetworkLogs_Click">
+                                        <ui:Button Style="{StaticResource AppleSecondaryButtonStyle}" Padding="14,8" Click="CopyNetworkLogs_Click">
                                             <StackPanel Orientation="Horizontal">
                                                 <ui:SymbolIcon Symbol="Copy24" FontSize="14" Margin="0,0,6,0"/>
                                                 <TextBlock Text="Copy Logs" FontWeight="SemiBold" FontSize="12"/>
@@ -1785,7 +1884,7 @@
 
                                     <!-- Live Event Feed -->
                                     <TextBlock Text="Event Feed" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,0,0,8"/>
-                                    <Border Background="#06000000" BorderBrush="#0CFFFFFF" BorderThickness="1" CornerRadius="10" Height="280" ClipToBounds="True">
+                                    <Border Background="#06000000" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="10" Height="280" ClipToBounds="True">
                                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False">
                                             <ItemsControl ItemsSource="{Binding Source={x:Static settings:NetworkActivityLog.Instance}, Path=Entries}">
                                                 <ItemsControl.ItemTemplate>
@@ -1874,7 +1973,7 @@
                                             <TextBlock Text="AI Extraction Key" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                                         </StackPanel>
                                         <TextBlock Text="Required for Smart Text Extraction from images." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="11" Margin="0,0,0,10" TextWrapping="Wrap" LineHeight="16"/>
-                                        <ui:PasswordBox PasswordChar="*" HorizontalAlignment="Stretch" Password="{Binding Source={x:Static settings:SettingsManager.Current}, Path=GeminiApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="AIzaSyA..." Background="#11FFFFFF" BorderThickness="1"/>
+                                        <ui:PasswordBox PasswordChar="*" HorizontalAlignment="Stretch" Password="{Binding Source={x:Static settings:SettingsManager.Current}, Path=GeminiApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="AIzaSyA..." BorderThickness="1"/>
                                     </StackPanel>
                                 </Border>
 
@@ -1970,7 +2069,7 @@
                                                 <Grid Margin="0,0,0,4">
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                     <TextBlock Text="Width" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="11" VerticalAlignment="Center"/>
-                                                    <Border Grid.Column="1" Background="#15FFFFFF" CornerRadius="4" Padding="6,1">
+                                                    <Border Grid.Column="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="4" Padding="6,1">
                                                         <TextBlock Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormWidth, StringFormat='{}{0}px'}" Foreground="#60A5FA" FontSize="11" FontWeight="SemiBold"/>
                                                     </Border>
                                                 </Grid>
@@ -1985,7 +2084,7 @@
                                                 <Grid Margin="0,0,0,4">
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                     <TextBlock Text="Height" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="11" VerticalAlignment="Center"/>
-                                                    <Border Grid.Column="1" Background="#15FFFFFF" CornerRadius="4" Padding="6,1">
+                                                    <Border Grid.Column="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="4" Padding="6,1">
                                                         <TextBlock Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormHeight, StringFormat='{}{0}px'}" Foreground="#60A5FA" FontSize="11" FontWeight="SemiBold"/>
                                                     </Border>
                                                 </Grid>
@@ -2042,7 +2141,7 @@
                                                 <Grid Margin="0,0,0,4">
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                     <TextBlock Text="Width" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="11" VerticalAlignment="Center"/>
-                                                    <Border Grid.Column="1" Background="#15FFFFFF" CornerRadius="4" Padding="6,1">
+                                                    <Border Grid.Column="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="4" Padding="6,1">
                                                         <TextBlock Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormWidth, StringFormat='{}{0}px'}" Foreground="#A78BFA" FontSize="11" FontWeight="SemiBold"/>
                                                     </Border>
                                                 </Grid>
@@ -2057,7 +2156,7 @@
                                                 <Grid Margin="0,0,0,4">
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                     <TextBlock Text="Height" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="11" VerticalAlignment="Center"/>
-                                                    <Border Grid.Column="1" Background="#15FFFFFF" CornerRadius="4" Padding="6,1">
+                                                    <Border Grid.Column="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="4" Padding="6,1">
                                                         <TextBlock Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormHeight, StringFormat='{}{0}px'}" Foreground="#A78BFA" FontSize="11" FontWeight="SemiBold"/>
                                                     </Border>
                                                 </Grid>
@@ -2082,7 +2181,7 @@
                                         </Grid.ColumnDefinitions>
                                         <!-- Save Config -->
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                            <ui:Button Appearance="Primary" Click="SaveSettings_Click" HorizontalAlignment="Stretch" Content="Save Configuration" Padding="10,8" CornerRadius="10"/>
+                                            <ui:Button Appearance="Primary" Click="SaveSettings_Click" HorizontalAlignment="Stretch" Content="Save Configuration" Padding="10,8" CornerRadius="8" FontWeight="SemiBold"/>
                                         </StackPanel>
                                         <!-- Update Section -->
                                         <StackPanel Grid.Column="2">
@@ -2118,24 +2217,17 @@
                                                             <TextBlock Text="Repair" FontSize="11" FontWeight="SemiBold"/>
                                                         </StackPanel>
                                                     </ui:Button>
-                                                    <ui:Button x:Name="UpdateBtn" Appearance="Primary" Content="Check for Updates" Padding="10,5" CornerRadius="8" Click="UpdateBtn_Click">
-                                                        <ui:Button.Background>
-                                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                                <GradientStop Color="#34D399" Offset="0"/>
-                                                                <GradientStop Color="#059669" Offset="1"/>
-                                                            </LinearGradientBrush>
-                                                        </ui:Button.Background>
-                                                    </ui:Button>
+                                                    <ui:Button x:Name="UpdateBtn" Appearance="Primary" Content="Check for Updates" Padding="10,5" CornerRadius="8" FontWeight="SemiBold" Click="UpdateBtn_Click"/>
                                                 </StackPanel>
                                             </Grid>
-                                            <Border x:Name="UpdateProgressPanel" Visibility="Collapsed" Background="#0AFFFFFF" CornerRadius="6" Padding="10,6" Margin="0,0,0,6">
+                                            <Border x:Name="UpdateProgressPanel" Visibility="Collapsed" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,0,6">
                                                 <StackPanel>
                                                     <Grid Margin="0,0,0,4">
                                                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                         <TextBlock x:Name="UpdateStatusText" Text="Checking..." FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
                                                         <TextBlock x:Name="UpdatePctText" Text="" Grid.Column="1" FontSize="11" Foreground="#34D399" FontWeight="SemiBold"/>
                                                     </Grid>
-                                                    <Border Background="#15FFFFFF" CornerRadius="2" Height="4">
+                                                    <Border Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" CornerRadius="2" Height="4">
                                                         <Border x:Name="UpdateProgressBar" CornerRadius="2" HorizontalAlignment="Left" Width="0">
                                                             <Border.Background>
                                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
@@ -2147,7 +2239,7 @@
                                                     </Border>
                                                 </StackPanel>
                                             </Border>
-                                            <Border x:Name="ChangelogPanel" Visibility="Collapsed" Background="#08FFFFFF" CornerRadius="6" Padding="10" Margin="0,0,0,0">
+                                            <Border x:Name="ChangelogPanel" Visibility="Collapsed" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,0">
                                                 <StackPanel>
                                                     <TextBlock Text="What's new" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,4"/>
                                                     <TextBlock x:Name="ChangelogText" Text="" FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap" LineHeight="16"/>
@@ -2243,13 +2335,13 @@
                                         </Grid.ColumnDefinitions>
 
                                         <!-- Wallpaper -->
-                                        <Border Grid.Column="0" Background="#08FFFFFF" BorderBrush="#0CFFFFFF" BorderThickness="1" CornerRadius="12" Padding="14">
+                                        <Border Grid.Column="0" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="14">
                                             <StackPanel>
                                                 <TextBlock Text="Wallpaper" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,10"/>
-                                                <Border x:Name="WallpaperPreview" Height="60" CornerRadius="8" ClipToBounds="True" Background="#10FFFFFF" Margin="0,0,0,10">
+                                                <Border x:Name="WallpaperPreview" Height="60" CornerRadius="8" ClipToBounds="True" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" Margin="0,0,0,10">
                                                     <Grid>
                                                         <Image x:Name="WallpaperPreviewImg" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/>
-                                                        <TextBlock Text="No wallpaper" FontSize="10" Foreground="#30FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                        <TextBlock Text="No wallpaper" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"
                                                                    x:Name="NoWallpaperText"/>
                                                     </Grid>
                                                 </Border>
@@ -2261,10 +2353,10 @@
                                         </Border>
 
                                         <!-- Blur / Transparency -->
-                                        <Border Grid.Column="2" Background="#08FFFFFF" BorderBrush="#0CFFFFFF" BorderThickness="1" CornerRadius="12" Padding="14">
+                                        <Border Grid.Column="2" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="14">
                                             <StackPanel>
                                                 <TextBlock Text="Blur Effect" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,10"/>
-                                                <Border Height="60" CornerRadius="8" Background="#10FFFFFF" Margin="0,0,0,10">
+                                                <Border Height="60" CornerRadius="8" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" Margin="0,0,0,10">
                                                     <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
                                                         <ui:SymbolIcon Symbol="Drop24" FontSize="22" Foreground="#60A5FA" HorizontalAlignment="Center"/>
                                                         <TextBlock Text="Mica Blur" FontSize="10" Foreground="#60A5FA" HorizontalAlignment="Center" Margin="0,4,0,0"/>
@@ -2282,7 +2374,7 @@
                                         </Border>
 
                                         <!-- Color Scheme -->
-                                        <Border Grid.Column="4" Background="#08FFFFFF" BorderBrush="#0CFFFFFF" BorderThickness="1" CornerRadius="12" Padding="14">
+                                        <Border Grid.Column="4" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="14">
                                             <StackPanel>
                                                 <TextBlock Text="Color Scheme" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,10"/>
                                                 <Border Height="60" CornerRadius="8" Margin="0,0,0,10">
@@ -2297,9 +2389,8 @@
                                                         <TextBlock Text="Theme" FontSize="10" Foreground="White" HorizontalAlignment="Center" Margin="0,4,0,0"/>
                                                     </StackPanel>
                                                 </Border>
-                                                <ComboBox HorizontalAlignment="Stretch" SelectedIndex="{Binding Source={x:Static settings:SettingsManager.Current}, Path=ColorScheme, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" SelectionChanged="ColorScheme_Changed">
+                                                <ComboBox HorizontalAlignment="Stretch" SelectedIndex="0" IsEnabled="False">
                                                     <ComboBoxItem Content="Dark Mode" />
-                                                    <ComboBoxItem Content="Light Mode" />
                                                 </ComboBox>
                                             </StackPanel>
                                         </Border>
@@ -2334,29 +2425,17 @@
                             </Border.Background>
                         </Border>
                         <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                            <ui:Button x:Name="SendAllLogsBtn" Appearance="Primary" Padding="14,7" CornerRadius="8" Margin="0,0,8,0" Click="SendAllLogs_Click" ToolTip="Copy all system, network, and server logs to clipboard as text">
-                                <ui:Button.Background>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                        <GradientStop Color="#6366F1" Offset="0"/>
-                                        <GradientStop Color="#8B5CF6" Offset="1"/>
-                                    </LinearGradientBrush>
-                                </ui:Button.Background>
+                            <ui:Button x:Name="SendAllLogsBtn" Style="{StaticResource ApplePrimaryButtonStyle}" Padding="14,7" Margin="0,0,8,0" Click="SendAllLogs_Click" ToolTip="Copy all system, network, and server logs to clipboard as text">
                                 <StackPanel Orientation="Horizontal">
                                     <ui:SymbolIcon Symbol="Send24" FontSize="14" Margin="0,0,6,0"/>
                                     <TextBlock Text="Send All Logs" FontWeight="SemiBold" FontSize="12"/>
                                 </StackPanel>
                             </ui:Button>
-                            <ui:Button Content="Refresh" Appearance="Secondary" Padding="14,7" CornerRadius="8" Margin="0,0,8,0" Click="RefreshLogs_Click">
+                            <ui:Button Content="Refresh" Style="{StaticResource AppleSecondaryButtonStyle}" Padding="14,7" Margin="0,0,8,0" Click="RefreshLogs_Click">
                                 <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" /></ui:Button.Icon>
                             </ui:Button>
-                            <ui:Button Content="📂 Open Logs Folder" Appearance="Secondary" Padding="14,7" CornerRadius="8" Click="OpenLogsFolder_Click" />
-                            <ui:Button Appearance="Info" Padding="14,7" CornerRadius="8" Margin="8,0,0,0" Click="OpenNetworkLogs_Click" ToolTip="Open live network log viewer — shows logs from this PC and all paired devices in real-time">
-                                <ui:Button.Background>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                        <GradientStop Color="#0EA5E9" Offset="0"/>
-                                        <GradientStop Color="#6366F1" Offset="1"/>
-                                    </LinearGradientBrush>
-                                </ui:Button.Background>
+                            <ui:Button Content="📂 Open Logs Folder" Style="{StaticResource AppleSecondaryButtonStyle}" Padding="14,7" Click="OpenLogsFolder_Click" />
+                            <ui:Button Style="{StaticResource ApplePrimaryButtonStyle}" Padding="14,7" Margin="8,0,0,0" Click="OpenNetworkLogs_Click" ToolTip="Open live network log viewer — shows logs from this PC and all paired devices in real-time">
                                 <StackPanel Orientation="Horizontal">
                                     <ui:SymbolIcon Symbol="Globe24" FontSize="14" Margin="0,0,6,0"/>
                                     <TextBlock Text="Live Network Logs" FontWeight="SemiBold" FontSize="12"/>
@@ -2365,7 +2444,7 @@
                         </StackPanel>
 
                         <!-- Server Troubleshooting (moved from Network tab) -->
-                        <Border Background="#08FFFFFF" BorderBrush="#15EF4444" BorderThickness="1" CornerRadius="12" Padding="16,12" Margin="0,6,0,10">
+                        <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#15EF4444" BorderThickness="1" CornerRadius="12" Padding="16,12" Margin="0,6,0,10">
                             <StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                     <Border Width="24" Height="24" CornerRadius="6" Background="#1AEF4444" Margin="0,0,8,0">
@@ -2374,10 +2453,10 @@
                                     <TextBlock Text="Server Troubleshooting" FontWeight="Bold" FontSize="13" Foreground="#EF4444" VerticalAlignment="Center"/>
                                 </StackPanel>
                                 <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <ui:Button Content="🔄 Restart Server" Appearance="Danger" Padding="10,5" CornerRadius="8" Click="RestartServer_Click" Margin="0,0,6,0" FontSize="11"/>
-                                    <ui:Button Content="📋 Copy Diagnostics" Appearance="Secondary" Padding="10,5" CornerRadius="8" Click="CopyServerDiagnostics_Click" FontSize="11"/>
+                                    <ui:Button Content="🔄 Restart Server" Style="{StaticResource AppleDestructiveButtonStyle}" Padding="10,5" Click="RestartServer_Click" Margin="0,0,6,0" FontSize="11"/>
+                                    <ui:Button Content="📋 Copy Diagnostics" Style="{StaticResource AppleSecondaryButtonStyle}" Padding="10,5" Click="CopyServerDiagnostics_Click" FontSize="11"/>
                                 </StackPanel>
-                                <Border Background="#06FFFFFF" CornerRadius="8" Padding="10" MaxHeight="150">
+                                <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="8" Padding="10" MaxHeight="150">
                                     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
                                         <TextBlock Name="ServerDiagnosticsLog" FontFamily="Consolas" FontSize="10" Foreground="#10B981" TextWrapping="Wrap" Text="Click 'Restart Server' to see diagnostics..." />
                                     </ScrollViewer>
@@ -2386,13 +2465,13 @@
                         </Border>
                     </StackPanel>
                     <!-- Unified log viewer -->
-                    <Border Grid.Row="1" Background="#08FFFFFF" BorderBrush="#10FFFFFF" BorderThickness="1" CornerRadius="14" Padding="0" Margin="0,0,0,8" ClipToBounds="True">
+                    <Border Grid.Row="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="0" Margin="0,0,0,8" ClipToBounds="True">
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
-                            <Border Grid.Row="0" Background="#0AFFFFFF" Padding="16,8">
+                            <Border Grid.Row="0" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" Padding="16,8">
                                 <StackPanel Orientation="Horizontal">
                                     <Ellipse Width="10" Height="10" Fill="#EF4444" Margin="0,0,6,0"/>
                                     <Ellipse Width="10" Height="10" Fill="#F59E0B" Margin="0,0,6,0"/>

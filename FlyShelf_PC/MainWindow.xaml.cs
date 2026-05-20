@@ -293,7 +293,7 @@ namespace AdvanceClip
                 Dispatcher.InvokeAsync(() => { try { ApplyWallpaper(); } catch { } });
             });
 
-            // Blur-off or system transparency disabled: premium dark mode with subtle gradient
+            // Blur-off or system transparency disabled: solid dark gradient fallback
             if (!Classes.SettingsManager.Current.EnableBlurBehind || !Classes.NativeMethods.ShouldUseBlur())
             {
                 this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
@@ -301,23 +301,46 @@ namespace AdvanceClip
                 {
                     Dispatcher.Invoke(() =>
                     {
-                        // Rich gradient background: dark indigo to near-black
-                        var gradient = new System.Windows.Media.LinearGradientBrush();
-                        gradient.StartPoint = new System.Windows.Point(0.5, 0);
-                        gradient.EndPoint = new System.Windows.Point(0.5, 1);
-                        gradient.GradientStops.Add(new System.Windows.Media.GradientStop(
-                            System.Windows.Media.Color.FromRgb(32, 32, 48), 0));    // #202030 soft indigo
-                        gradient.GradientStops.Add(new System.Windows.Media.GradientStop(
-                            System.Windows.Media.Color.FromRgb(28, 28, 42), 0.5));  // #1C1C2A mid tone
-                        gradient.GradientStops.Add(new System.Windows.Media.GradientStop(
-                            System.Windows.Media.Color.FromRgb(24, 24, 38), 1));    // #181826 base
-                        gradient.Freeze();
-
-                        this.Background = gradient;
-                        if (RootContent != null) RootContent.Background = gradient;
+                        ApplyPopupBackground();
                     });
                 });
             }
+
+            // Pre-initialize the heavy Hub Window in the background when the app is idle
+            Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    if (_hubWindowInstance == null)
+                    {
+                        _hubWindowInstance = new Windows.HubWindow(_viewModel);
+                        _hubWindowInstance.Closed += (s, args) => _hubWindowInstance = null;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Classes.Logger.LogAction("PRE_INIT_HUB_FAIL", ex.ToString());
+                }
+            }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        }
+
+        /// <summary>
+        /// Applies the dark gradient background for the popup clipboard (solid fallback for no-blur).
+        /// </summary>
+        private void ApplyPopupBackground()
+        {
+            var gradient = new System.Windows.Media.LinearGradientBrush();
+            gradient.StartPoint = new System.Windows.Point(0.5, 0);
+            gradient.EndPoint = new System.Windows.Point(0.5, 1);
+            gradient.GradientStops.Add(new System.Windows.Media.GradientStop(
+                System.Windows.Media.Color.FromRgb(32, 32, 48), 0));    // #202030 soft indigo
+            gradient.GradientStops.Add(new System.Windows.Media.GradientStop(
+                System.Windows.Media.Color.FromRgb(28, 28, 42), 0.5));  // #1C1C2A mid tone
+            gradient.GradientStops.Add(new System.Windows.Media.GradientStop(
+                System.Windows.Media.Color.FromRgb(24, 24, 38), 1));    // #181826 base
+            gradient.Freeze();
+            this.Background = gradient;
+            if (RootContent != null) RootContent.Background = gradient;
         }
 
         /// <summary>

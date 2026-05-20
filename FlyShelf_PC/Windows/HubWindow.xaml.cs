@@ -188,6 +188,7 @@ namespace AdvanceClip.Windows
         {
             base.OnSourceInitialized(e);
             SuppressWindowBorder();
+            ApplyTheme();
         }
 
         protected override void OnActivated(EventArgs e)
