@@ -514,7 +514,7 @@ namespace AdvanceClip
 
                 foreach (var doc in checkedDocs)
                 {
-                    string pdfPath = await ConvertDocToPdfAsync(doc.FilePath);
+                    string pdfPath = await ConversionUtils.ConvertDocToPdfAsync(doc.FilePath);
                     if (!string.IsNullOrEmpty(pdfPath) && System.IO.File.Exists(pdfPath))
                     {
                         convertedPdfPaths.Add(pdfPath);
@@ -535,7 +535,7 @@ namespace AdvanceClip
                 {
                     try
                     {
-                        string pdfPath = await System.Threading.Tasks.Task.Run(() => ConvertImageToPdf(img.FilePath));
+                        string pdfPath = await System.Threading.Tasks.Task.Run(() => ConversionUtils.ConvertImageToPdf(img.FilePath));
                         if (!string.IsNullOrEmpty(pdfPath) && System.IO.File.Exists(pdfPath))
                         {
                             convertedPdfPaths.Add(pdfPath);
@@ -597,80 +597,6 @@ namespace AdvanceClip
             {
                 AdvanceClip.Windows.ToastWindow.ShowToast("Select 2+ files to merge, or 1 image/doc to convert.");
             }
-        }
-
-        /// <summary>Converts a DOC/DOCX file to PDF using Word COM via PowerShell. Returns the output path or null.</summary>
-        private async System.Threading.Tasks.Task<string> ConvertDocToPdfAsync(string docPath)
-        {
-            string outputDir = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                "Downloads", "FlyShelf", "Converted");
-            System.IO.Directory.CreateDirectory(outputDir);
-
-            string pdfPath = System.IO.Path.Combine(outputDir,
-                System.IO.Path.GetFileNameWithoutExtension(docPath) + ".pdf");
-
-            bool success = await System.Threading.Tasks.Task.Run(() =>
-            {
-                try
-                {
-                    // wdFormatPDF = 17
-                    string script = $@"
-$word = New-Object -ComObject Word.Application
-$word.Visible = $false
-$doc = $word.Documents.Open('{docPath.Replace("'", "''")}')
-$doc.SaveAs([ref]'{pdfPath.Replace("'", "''")}', [ref]17)
-$doc.Close()
-$word.Quit()
-[System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null
-";
-                    var psi = new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = "powershell.exe",
-                        Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{script}\"",
-                        CreateNoWindow = true,
-                        UseShellExecute = false
-                    };
-                    var proc = System.Diagnostics.Process.Start(psi);
-                    proc?.WaitForExit(120000); // 2 min timeout
-                    return proc?.ExitCode == 0;
-                }
-                catch (Exception ex)
-                {
-                    AdvanceClip.Classes.Logger.LogAction("DOC2PDF", $"Conversion error: {ex.Message}");
-                    return false;
-                }
-            });
-
-            return (success && System.IO.File.Exists(pdfPath)) ? pdfPath : null;
-        }
-
-        /// <summary>Converts an image to PDF using PDFsharp natively.</summary>
-        private string ConvertImageToPdf(string imagePath)
-        {
-            string outputDir = System.IO.Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                "Downloads", "FlyShelf", "Converted");
-            System.IO.Directory.CreateDirectory(outputDir);
-
-            string pdfPath = System.IO.Path.Combine(outputDir,
-                System.IO.Path.GetFileNameWithoutExtension(imagePath) + "_" + Guid.NewGuid().ToString().Substring(0, 4) + ".pdf");
-
-            using (var doc = new PdfSharp.Pdf.PdfDocument())
-            {
-                var page = doc.AddPage();
-                using (var img = PdfSharp.Drawing.XImage.FromFile(imagePath))
-                {
-                    page.Width = PdfSharp.Drawing.XUnit.FromPoint(img.PointWidth);
-                    page.Height = PdfSharp.Drawing.XUnit.FromPoint(img.PointHeight);
-                    using (var gfx = PdfSharp.Drawing.XGraphics.FromPdfPage(page))
-                    {
-                        gfx.DrawImage(img, 0, 0, page.Width.Point, page.Height.Point);
-                    }
-                }
-                doc.Save(pdfPath);
-            }
-            return pdfPath;
         }
 
         private void PdfMergeToggle_Click(object sender, RoutedEventArgs e)

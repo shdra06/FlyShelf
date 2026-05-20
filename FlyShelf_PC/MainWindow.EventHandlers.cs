@@ -17,6 +17,7 @@ namespace AdvanceClip
     public partial class MainWindow
     {
         internal static bool _isInternalDragSource = false;
+        private System.Windows.Threading.DispatcherTimer? _searchDebounceTimer;
 
         private void Window_PreviewDrop(object sender, DragEventArgs e)
         {
@@ -217,7 +218,25 @@ namespace AdvanceClip
         {
             string query = SearchTextBox.Text;
             SearchPlaceholder.Visibility = string.IsNullOrEmpty(query) ? Visibility.Visible : Visibility.Collapsed;
-            ApplySearchFilter(query);
+
+            if (_searchDebounceTimer == null)
+            {
+                _searchDebounceTimer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(150)
+                };
+                _searchDebounceTimer.Tick += (s, args) =>
+                {
+                    _searchDebounceTimer.Stop();
+                    ApplySearchFilter(SearchTextBox.Text);
+                };
+            }
+            else
+            {
+                _searchDebounceTimer.Stop();
+            }
+
+            _searchDebounceTimer.Start();
         }
 
         private void SearchTextBox_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -267,6 +286,7 @@ namespace AdvanceClip
         private void CloseSearch()
         {
             _isSearchActive = false;
+            _searchDebounceTimer?.Stop();
             SearchTextBox.Text = "";
             SearchBarContainer.Visibility = Visibility.Collapsed;
             SearchToggleBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
@@ -291,7 +311,7 @@ namespace AdvanceClip
             }
             if (_collectionView == null) return;
 
-            string queryClean = (query ?? "").Trim().ToLowerInvariant();
+            string queryClean = (query ?? "").Trim();
             if (string.IsNullOrWhiteSpace(queryClean))
             {
                 _collectionView.Filter = null;
@@ -302,169 +322,35 @@ namespace AdvanceClip
                 return;
             }
 
-            var comparer = new ClipboardItemComparer(queryClean);
             _collectionView.Filter = obj =>
             {
                 if (obj is not ClipboardItem item) return false;
-                return comparer.CalculateScore(item) > 0;
-            };
 
-            if (_collectionView is System.Windows.Data.ListCollectionView listCol)
-            {
-                listCol.CustomSort = comparer;
-            }
-        }
-
-        private class ClipboardItemComparer : System.Collections.IComparer
-        {
-            private readonly string _query;
-            private readonly string[] _terms;
-
-            public ClipboardItemComparer(string query)
-            {
-                _query = query.ToLowerInvariant().Trim();
-                _terms = _query.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            }
-
-            public int Compare(object? x, object? y)
-            {
-                if (x is not ClipboardItem itemX || y is not ClipboardItem itemY) return 0;
-
-                double scoreX = CalculateScore(itemX);
-                double scoreY = CalculateScore(itemY);
-
-                // Sort descending by score (highest relevance first)
-                int comp = scoreY.CompareTo(scoreX);
-                if (comp != 0) return comp;
-
-                // Fallback to original creation order or ID to keep stable sort
-                return 0;
-            }
-
-            public double CalculateScore(ClipboardItem item)
-            {
-                if (string.IsNullOrWhiteSpace(_query)) return 0;
-
-                double score = 0;
-
-                string fileName = (item.FileName ?? "").ToLowerInvariant();
-                string rawText = (item.RawContent ?? "").ToLowerInvariant();
-                string ext = (item.Extension ?? "").ToLowerInvariant();
-                string device = (item.SourceDeviceName ?? "").ToLowerInvariant();
-
-                // Special Keyword Type matching: e.g. type:image, :code, is:pinned
-                foreach (var term in _terms)
+                // Don't search images or QR codes
+                if (item.ItemType == AdvanceClip.ViewModels.ClipboardItemType.Image ||
+                    item.ItemType == AdvanceClip.ViewModels.ClipboardItemType.QRCode)
                 {
-                    if (term == "is:pinned" || term == ":pinned" || term == "pinned:true")
-                    {
-                        if (item.IsPinned) score += 1000;
-                    }
-                    else if (term == "is:image" || term == "type:image" || term == ":image" || term == ":img")
-                    {
-                        if (item.ItemType == AdvanceClip.ViewModels.ClipboardItemType.Image) score += 1000;
-                    }
-                    else if (term == "is:pdf" || term == "type:pdf" || term == ":pdf")
-                    {
-                        if (ext == ".pdf") score += 1000;
-                    }
-                    else if (term == "is:code" || term == "type:code" || term == ":code")
-                    {
-                        if (item.IsCodePreview) score += 1000;
-                    }
-                    else if (term == "is:text" || term == "type:text" || term == ":text")
-                    {
-                        if (item.ItemType != AdvanceClip.ViewModels.ClipboardItemType.File) score += 500;
-                    }
-                    else if (term == "is:file" || term == "type:file" || term == ":file")
-                    {
-                        if (item.ItemType == AdvanceClip.ViewModels.ClipboardItemType.File) score += 1000;
-                    }
+                    return false;
                 }
 
-                // Exact full-query matches (highest priority)
-                if (fileName == _query) score += 2000;
-                else if (fileName.StartsWith(_query)) score += 1200;
-                else if (fileName.Contains(_query)) score += 800;
-
-                if (rawText == _query) score += 1500;
-                else if (rawText.StartsWith(_query)) score += 900;
-                else if (rawText.Contains(_query)) score += 600;
-
-                // Word term matching
-                foreach (var term in _terms)
+                // Simple substring checks on FileName and RawContent
+                if (item.FileName != null && item.FileName.IndexOf(queryClean, StringComparison.OrdinalIgnoreCase) >= 0)
                 {
-                    // Skip type filter terms in text matching
-                    if (term.Contains(':')) continue;
-
-                    // Match filename
-                    if (fileName.Contains(term))
-                    {
-                        score += 300;
-                        if (fileName.StartsWith(term)) score += 150;
-                    }
-                    
-                    // Match content
-                    if (rawText.Contains(term))
-                    {
-                        score += 150;
-                        if (rawText.StartsWith(term)) score += 50;
-                    }
-
-                    // Match extension
-                    if (ext.Contains(term)) score += 100;
-
-                    // Match device
-                    if (device.Contains(term)) score += 80;
-
-                    // Fuzzy / Subsequence matches
-                    double subScore;
-                    if (IsSubsequenceMatch(fileName, term, out subScore))
-                    {
-                        score += 50 * subScore;
-                    }
-                    else if (IsSubsequenceMatch(rawText, term, out subScore))
-                    {
-                        score += 25 * subScore;
-                    }
+                    return true;
                 }
 
-                return score;
-            }
-
-            private bool IsSubsequenceMatch(string text, string pattern, out double score)
-            {
-                score = 0;
-                if (string.IsNullOrEmpty(pattern)) return true;
-                if (string.IsNullOrEmpty(text)) return false;
-
-                int textLen = text.Length;
-                int patternLen = pattern.Length;
-                
-                int textIdx = 0;
-                int patternIdx = 0;
-                
-                int firstMatchIdx = -1;
-                int lastMatchIdx = -1;
-
-                while (textIdx < textLen && patternIdx < patternLen)
+                if (item.RawContent != null && item.RawContent.IndexOf(queryClean, StringComparison.OrdinalIgnoreCase) >= 0)
                 {
-                    if (char.ToLowerInvariant(text[textIdx]) == char.ToLowerInvariant(pattern[patternIdx]))
-                    {
-                        if (firstMatchIdx == -1) firstMatchIdx = textIdx;
-                        lastMatchIdx = textIdx;
-                        patternIdx++;
-                    }
-                    textIdx++;
-                }
-
-                if (patternIdx == patternLen)
-                {
-                    int gap = (lastMatchIdx - firstMatchIdx) + 1;
-                    score = (double)patternLen / gap;
                     return true;
                 }
 
                 return false;
+            };
+
+            // Remove custom sorting completely to keep original fast chronological order
+            if (_collectionView is System.Windows.Data.ListCollectionView listCol)
+            {
+                listCol.CustomSort = null;
             }
         }
 

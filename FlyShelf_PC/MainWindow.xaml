@@ -584,6 +584,24 @@
                                     </ui:Button>
                                 </Border>
 
+                                <!-- ═══ Convert Image to PDF ═══ -->
+                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#EF4444" 
+                                               Command="{Binding DataContext.ConvertImageToPdfCommand, ElementName=ShelfListView}" CommandParameter="{Binding}" ToolTip="Convert Image to PDF">
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                    </ui:Button>
+                                </Border>
+
                                 <!-- ═══ Quick Look ═══ -->
                                 <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
                                     <Border.Style>
@@ -780,6 +798,9 @@
                                                 <Setter Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding IsDocPreview}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
                                                 <Setter Property="Visibility" Value="Visible"/>
                                             </DataTrigger>
                                         </Style.Triggers>

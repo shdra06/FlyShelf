@@ -1003,10 +1003,10 @@ export default function ConnectScreen() {
 
       {/* Search bar */}
       <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#1C1F26', borderRadius: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: '#2A2F3A' }}>
-          <IconSymbol name="magnifyingglass" size={16} color="#6B7280" />
-          <TextInput value={fileSearchText} onChangeText={setFileSearchText} placeholder="Search files..." placeholderTextColor="#4A5568" style={{ flex: 1, color: '#FFF', fontSize: 14, paddingVertical: 12, marginLeft: 10 }} />
-          {fileSearchText ? <TouchableOpacity onPress={() => setFileSearchText('')}><IconSymbol name="xmark.circle.fill" size={18} color="#4A5568" /></TouchableOpacity> : null}
+        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg.input, borderRadius: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: colors.border.subtle }}>
+          <IconSymbol name="magnifyingglass" size={16} color={colors.text.tertiary} />
+          <TextInput value={fileSearchText} onChangeText={setFileSearchText} placeholder="Search files..." placeholderTextColor={colors.text.tertiary} style={{ flex: 1, color: colors.text.primary, fontSize: 14, paddingVertical: 12, marginLeft: 10 }} />
+          {fileSearchText ? <TouchableOpacity onPress={() => setFileSearchText('')}><IconSymbol name="xmark.circle.fill" size={18} color={colors.text.tertiary} /></TouchableOpacity> : null}
         </View>
       </View>
 
@@ -1019,21 +1019,21 @@ export default function ConnectScreen() {
             </Text>
           </TouchableOpacity>
         ))}
-        <TouchableOpacity style={[s.sourceChip, { backgroundColor: '#4A62EB33', borderColor: '#4A62EB' }]} onPress={browseFiles}>
-          <Text style={[s.sourceChipText, { color: '#4A62EB', fontWeight: '700' }]}>📁 Browse</Text>
+        <TouchableOpacity style={[s.sourceChip, { backgroundColor: colors.accent.primaryDim, borderColor: colors.accent.primary }]} onPress={browseFiles}>
+          <Text style={[s.sourceChipText, { color: colors.accent.primary, fontFamily: font.bold }]}>📁 Browse</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[s.sourceChip, { backgroundColor: '#10B98133', borderColor: '#10B981' }]} onPress={scanMedia}>
-          <Text style={[s.sourceChipText, { color: '#10B981', fontWeight: '700' }]}>🔄 Refresh</Text>
+        <TouchableOpacity style={[s.sourceChip, { backgroundColor: colors.accent.successDim, borderColor: colors.accent.success }]} onPress={scanMedia}>
+          <Text style={[s.sourceChipText, { color: colors.accent.success, fontFamily: font.bold }]}>🔄 Refresh</Text>
         </TouchableOpacity>
       </ScrollView>
 
       {/* Count + Actions */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 6, marginBottom: 4 }}>
-        <Text style={{ color: '#8A8F98', fontSize: 12, fontWeight: '600' }}>
+        <Text style={{ color: colors.text.secondary, fontSize: 12, fontFamily: font.semibold }}>
           {[...getFilteredAssets(), ...browserFiles].filter(a => !fileSearchText || (a.filename || '').toLowerCase().includes(fileSearchText.toLowerCase())).length} files · {selectedIds.size} selected
         </Text>
-        <TouchableOpacity style={{ backgroundColor: '#2A2F3A', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }} onPress={() => toggleSelectAll([...getFilteredAssets(), ...browserFiles])}>
-          <Text style={{ color: '#FFF', fontSize: 10, fontWeight: 'bold' }}>Select All</Text>
+        <TouchableOpacity style={{ backgroundColor: colors.bg.cardHover, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: colors.border.subtle }} onPress={() => toggleSelectAll([...getFilteredAssets(), ...browserFiles])}>
+          <Text style={{ color: colors.text.primary, fontSize: 10, fontFamily: font.bold }}>Select All</Text>
         </TouchableOpacity>
       </View>
 
@@ -1058,76 +1058,76 @@ export default function ConnectScreen() {
             const isDoc = asset.mediaType === 'doc';
             const isVideo = asset.mediaType === 'video';
             const isImage = asset.mediaType === 'photo';
-            const iconColor = isPdf ? '#EF4444' : isDoc ? '#3B82F6' : isVideo ? '#8B5CF6' : '#10B981';
+            const iconColor = isPdf ? colors.type.pdf : isDoc ? colors.type.doc : isVideo ? colors.type.video : colors.accent.success;
             return (
               <TouchableOpacity
-                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#141824', borderRadius: 14, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: isSelected ? '#10B981' : '#1E293B' }}
+                style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg.card, borderRadius: 14, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: isSelected ? colors.accent.success : colors.border.subtle }}
                 onPress={() => toggleSelection(asset.id)}
                 onLongPress={() => isImage || isVideo ? setEnlargedPreview(asset) : openFile(asset)}
               >
                 {isImage ? (
-                  <Image source={{ uri: asset.uri }} style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: '#2A2F3A' }} />
+                  <Image source={{ uri: asset.uri }} style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: colors.bg.cardHover }} />
                 ) : (
                   <View style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: `${iconColor}15`, alignItems: 'center', justifyContent: 'center' }}>
                     <IconSymbol name={isPdf ? 'doc.fill' : isDoc ? 'doc.text.fill' : isVideo ? 'play.rectangle.fill' : 'photo.fill'} size={22} color={iconColor} />
                   </View>
                 )}
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '600' }} numberOfLines={1}>{asset.filename || 'Unnamed'}</Text>
+                  <Text style={{ color: colors.text.primary, fontSize: 13, fontWeight: '600' }} numberOfLines={1}>{asset.filename || 'Unnamed'}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 }}>
                     <View style={[s.badge, { backgroundColor: `${iconColor}22` }]}>
                       <Text style={[s.badgeText, { color: iconColor }]}>{isPdf ? 'PDF' : isDoc ? 'DOC' : isVideo ? 'VIDEO' : 'IMAGE'}</Text>
                     </View>
-                    {asset.fileSize ? <Text style={{ color: '#4A5568', fontSize: 10 }}>{asset.fileSize > 1048576 ? `${(asset.fileSize / 1048576).toFixed(1)} MB` : `${Math.round(asset.fileSize / 1024)} KB`}</Text> : null}
+                    {asset.fileSize ? <Text style={{ color: colors.text.tertiary, fontSize: 10 }}>{asset.fileSize > 1048576 ? `${(asset.fileSize / 1048576).toFixed(1)} MB` : `${Math.round(asset.fileSize / 1024)} KB`}</Text> : null}
                   </View>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 4 }}>
-                  {(isPdf || isDoc) && <TouchableOpacity onPress={() => openFile(asset)} style={{ padding: 8, backgroundColor: '#3B82F615', borderRadius: 8 }}><IconSymbol name="arrow.up.right" size={14} color="#3B82F6" /></TouchableOpacity>}
-                  <TouchableOpacity onPress={() => shareFile(asset)} style={{ padding: 8, backgroundColor: '#10B98115', borderRadius: 8 }}><IconSymbol name="square.and.arrow.up" size={14} color="#10B981" /></TouchableOpacity>
-                  <View style={[{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: isSelected ? '#10B981' : '#4A5568', alignItems: 'center', justifyContent: 'center' }, isSelected && { backgroundColor: '#10B981' }]}>
+                  {(isPdf || isDoc) && <TouchableOpacity onPress={() => openFile(asset)} style={{ padding: 8, backgroundColor: colors.accent.infoDim, borderRadius: 8 }}><IconSymbol name="arrow.up.right" size={14} color={colors.accent.info} /></TouchableOpacity>}
+                  <TouchableOpacity onPress={() => shareFile(asset)} style={{ padding: 8, backgroundColor: colors.accent.successDim, borderRadius: 8 }}><IconSymbol name="square.and.arrow.up" size={14} color={colors.accent.success} /></TouchableOpacity>
+                  <View style={[{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: isSelected ? colors.accent.success : colors.text.tertiary, alignItems: 'center', justifyContent: 'center' }, isSelected && { backgroundColor: colors.accent.success }]}>
                     {isSelected && <IconSymbol name="checkmark" size={12} color="#FFF" />}
                   </View>
                 </View>
               </TouchableOpacity>
             );
           }}
-          ListEmptyComponent={<View style={{ alignItems: 'center', marginTop: 60 }}><IconSymbol name="folder" size={48} color="#4A5568" /><Text style={{ color: '#6B7280', marginTop: 12 }}>No files found</Text></View>}
+          ListEmptyComponent={<View style={{ alignItems: 'center', marginTop: 60 }}><IconSymbol name="folder" size={48} color={colors.text.tertiary} /><Text style={{ color: colors.text.secondary, marginTop: 12 }}>No files found</Text></View>}
         />
       )}
 
       {/* Bottom Action Bar */}
       {selectedIds.size > 0 && (
-        <View style={{ position: 'absolute', bottom: 60, left: 0, right: 0, backgroundColor: '#0F1115EE', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: '#2A2F3A' }}>
-          <Text style={{ color: '#8A8F98', fontSize: 11, marginBottom: 8, textAlign: 'center' }}>{selectedIds.size} file(s) selected</Text>
+        <View style={{ position: 'absolute', bottom: 60, left: 0, right: 0, backgroundColor: colors.bg.base + 'EE', paddingHorizontal: 16, paddingVertical: 12, borderTopWidth: 1, borderTopColor: colors.border.subtle }}>
+          <Text style={{ color: colors.text.secondary, fontSize: 11, marginBottom: 8, textAlign: 'center', fontFamily: font.medium }}>{selectedIds.size} file(s) selected</Text>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <TouchableOpacity style={{ flex: 1, backgroundColor: '#3B82F6', paddingVertical: 14, borderRadius: 14, alignItems: 'center' }} onPress={() => {
+            <TouchableOpacity style={{ flex: 1, backgroundColor: colors.accent.info, paddingVertical: 14, borderRadius: 14, alignItems: 'center' }} onPress={() => {
               const sel = [...getFilteredAssets(), ...browserFiles].filter(a => selectedIds.has(a.id));
               if (sel.length === 1) shareFile(sel[0]);
               else Alert.alert('Share', 'Select a single file to share via Android.');
             }}>
-              <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700' }}>📤 Share</Text>
+              <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📤 Share</Text>
             </TouchableOpacity>
             {(() => {
               const selPdfs = [...getFilteredAssets(), ...browserFiles].filter(a => selectedIds.has(a.id) && (a.mediaType === 'pdf' || a.mediaType === 'doc'));
               return selPdfs.length >= 2 ? (
-                <TouchableOpacity style={{ flex: 1, backgroundColor: '#F59E0B', paddingVertical: 14, borderRadius: 14, alignItems: 'center' }} onPress={() => {
+                <TouchableOpacity style={{ flex: 1, backgroundColor: colors.accent.warning, paddingVertical: 14, borderRadius: 14, alignItems: 'center' }} onPress={() => {
                   const allDevs = [...localDevices, ...globalDevices];
                   const pc = allDevs.find((d: any) => d.DeviceType === 'PC' && d.resolvedUrl);
                   if (!pc) { Alert.alert('No PC', 'Connect to a PC to merge files.'); return; }
                   setSelectedTarget(pc);
                   executeTransfer(pc);
                 }}>
-                  <Text style={{ color: '#000', fontSize: 13, fontWeight: '700' }}>📑 Merge on PC</Text>
+                  <Text style={{ color: colors.bg.base, fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📑 Merge on PC</Text>
                 </TouchableOpacity>
               ) : null;
             })()}
-            <TouchableOpacity style={{ flex: 1, backgroundColor: '#10B981', paddingVertical: 14, borderRadius: 14, alignItems: 'center' }} onPress={() => {
+            <TouchableOpacity style={{ flex: 1, backgroundColor: colors.accent.success, paddingVertical: 14, borderRadius: 14, alignItems: 'center' }} onPress={() => {
               const allDevs = [...localDevices, ...globalDevices];
               if (allDevs.length === 0) { Alert.alert('No Devices', 'Expand Connect section below.'); return; }
               if (allDevs.length === 1) { setSelectedTarget(allDevs[0]); executeTransfer(allDevs[0]); return; }
               Alert.alert('Send to:', '', allDevs.map((d: any) => ({ text: `${d.DeviceName} (${d.connectionType === 'local' ? 'LAN' : 'Cloud'})`, onPress: () => { setSelectedTarget(d); executeTransfer(d); } })).concat([{ text: 'Cancel' } as any]));
             }}>
-              <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700' }}>📡 Send</Text>
+              <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📡 Send</Text>
             </TouchableOpacity>
           </View>
         </View>

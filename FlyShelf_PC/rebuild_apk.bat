@@ -12,8 +12,15 @@ cd android
 echo sdk.dir=C\:\\Users\\Shivendra\\AppData\\Local\\Android\\Sdk>local.properties
 
 echo.
-echo Compiling Android APK natively...
-call gradlew assembleRelease
+echo Appending performance configs to gradle.properties...
+echo org.gradle.jvmargs=-Xmx16g -XX:MaxMetaspaceSize=2g -XX:+UseParallelGC >> gradle.properties
+echo org.gradle.parallel=true >> gradle.properties
+echo org.gradle.configureondemand=true >> gradle.properties
+echo org.gradle.caching=true >> gradle.properties
+
+echo.
+echo Compiling Android APK natively (Maximum Speed: Uncapped Workers, 16GB JVM Heap, arm64-v8a only)...
+call gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
 
 echo.
 echo Re-packaging...
@@ -25,3 +32,4 @@ cd ..\FlyShelf_PC
 echo ==============================================
 echo DONE! The updated APK is in 'FlyShelf_PC\FINAL'.
 echo ==============================================
+

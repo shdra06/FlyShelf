@@ -1037,9 +1037,9 @@ namespace AdvanceClip.Windows
                     bool passesSearch = true;
                     if (!string.IsNullOrWhiteSpace(query))
                     {
-                        passesSearch = (clip.FileName?.ToLowerInvariant().Contains(query) == true) ||
-                                       (clip.RawContent?.ToLowerInvariant().Contains(query) == true) ||
-                                       (clip.FormatIdentifier?.ToLowerInvariant().Contains(query) == true);
+                        passesSearch = (clip.FileName != null && clip.FileName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                                       (clip.RawContent != null && clip.RawContent.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) ||
+                                       (clip.FormatIdentifier != null && clip.FormatIdentifier.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0);
                     }
 
                     return passesType && passesSearch;
@@ -1092,14 +1092,44 @@ namespace AdvanceClip.Windows
         {
             if (_viewModel == null || MergePdfFloatingBar == null) return;
             var checkedPdfs = _viewModel.DroppedItems
-                .Where(i => i.IsCheckedForMerge && i.ItemType == AdvanceClip.ViewModels.ClipboardItemType.Pdf
-                            && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+                .Where(i => i.IsCheckedForMerge && i.IsPdfPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+                .ToList();
+            var checkedDocs = _viewModel.DroppedItems
+                .Where(i => i.IsCheckedForMerge && i.IsDocPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+                .ToList();
+            var checkedImages = _viewModel.DroppedItems
+                .Where(i => i.IsCheckedForMerge && i.ItemType == ClipboardItemType.Image && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
                 .ToList();
 
-            if (checkedPdfs.Count >= 2)
+            int totalChecked = checkedPdfs.Count + checkedDocs.Count + checkedImages.Count;
+
+            if (totalChecked >= 2 || (checkedDocs.Count == 1 && checkedPdfs.Count == 0 && checkedImages.Count == 0))
             {
                 MergePdfFloatingBar.Visibility = Visibility.Visible;
-                MergeBarText.Text = $"{checkedPdfs.Count} PDFs selected";
+                if (checkedImages.Count > 0 && checkedPdfs.Count == 0 && checkedDocs.Count == 0)
+                {
+                    MergeBarText.Text = $"{checkedImages.Count} Images selected";
+                    MergeBarBtn.Content = "Merge Images";
+                    MergeBarBtn.ToolTip = $"Merge {checkedImages.Count} images into a single PDF";
+                }
+                else if (checkedDocs.Count > 0 && checkedPdfs.Count == 0 && checkedImages.Count == 0 && checkedDocs.Count == 1)
+                {
+                    MergeBarText.Text = "1 DOC selected";
+                    MergeBarBtn.Content = "Convert to PDF";
+                    MergeBarBtn.ToolTip = "Convert DOC/DOCX to PDF";
+                }
+                else if (checkedDocs.Count > 0 && checkedPdfs.Count == 0 && checkedImages.Count == 0)
+                {
+                    MergeBarText.Text = $"{checkedDocs.Count} DOCs selected";
+                    MergeBarBtn.Content = "Convert DOCs";
+                    MergeBarBtn.ToolTip = $"Convert {checkedDocs.Count} DOC files to PDF";
+                }
+                else
+                {
+                    MergeBarText.Text = $"{totalChecked} Files selected";
+                    MergeBarBtn.Content = "Merge Files";
+                    MergeBarBtn.ToolTip = $"Convert & merge all {totalChecked} files";
+                }
             }
             else
             {
@@ -1107,27 +1137,124 @@ namespace AdvanceClip.Windows
             }
         }
 
-        private void MergeSelectedPdfsBtn_Click(object sender, RoutedEventArgs e)
+        private async void MergeSelectedPdfsBtn_Click(object sender, RoutedEventArgs e)
         {
             if (_viewModel == null) return;
-            var pdfs = _viewModel.DroppedItems
-                .Where(i => i.IsCheckedForMerge && i.ItemType == AdvanceClip.ViewModels.ClipboardItemType.Pdf
-                            && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+            var checkedPdfs = _viewModel.DroppedItems
+                .Where(i => i.IsCheckedForMerge && i.IsPdfPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
                 .ToList();
-            if (pdfs.Count < 2)
+            var checkedDocs = _viewModel.DroppedItems
+                .Where(i => i.IsCheckedForMerge && i.IsDocPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+                .ToList();
+            var checkedImages = _viewModel.DroppedItems
+                .Where(i => i.IsCheckedForMerge && i.ItemType == ClipboardItemType.Image && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
+                .ToList();
+
+            var convertedPdfPaths = new List<string>();
+
+            // Convert DOC/DOCX files to PDF first
+            if (checkedDocs.Count > 0)
             {
-                ToastWindow.ShowToast("Check at least 2 PDFs to merge.");
+                ToastWindow.ShowToast($"📄 Converting {checkedDocs.Count} DOC file(s) to PDF...");
+
+                foreach (var doc in checkedDocs)
+                {
+                    string pdfPath = await ConversionUtils.ConvertDocToPdfAsync(doc.FilePath);
+                    if (!string.IsNullOrEmpty(pdfPath) && System.IO.File.Exists(pdfPath))
+                    {
+                        convertedPdfPaths.Add(pdfPath);
+                    }
+                    else
+                    {
+                        ToastWindow.ShowToast($"❌ Failed to convert: {doc.FileName}");
+                    }
+                }
+            }
+
+            // Convert Images to PDF next
+            if (checkedImages.Count > 0)
+            {
+                ToastWindow.ShowToast($"🖼️ Formatting {checkedImages.Count} image(s) to PDF...");
+
+                foreach (var img in checkedImages)
+                {
+                    try
+                    {
+                        string pdfPath = await System.Threading.Tasks.Task.Run(() => ConversionUtils.ConvertImageToPdf(img.FilePath));
+                        if (!string.IsNullOrEmpty(pdfPath) && System.IO.File.Exists(pdfPath))
+                        {
+                            convertedPdfPaths.Add(pdfPath);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        ToastWindow.ShowToast($"❌ Failed to format: {img.FileName}");
+                        Logger.LogAction("IMAGE2PDF_ERR", ex.ToString());
+                    }
+                }
+            }
+
+            // If only DOCs/Images selected and no merge needed (only 1 output item)
+            if (checkedPdfs.Count == 0 && checkedDocs.Count + checkedImages.Count == convertedPdfPaths.Count && convertedPdfPaths.Count == 1)
+            {
+                foreach (var item in _viewModel.DroppedItems)
+                {
+                    item.IsCheckedForMerge = false;
+                }
+                UpdateMergeButton();
+
+                var newItem = new ClipboardItem(convertedPdfPaths[0]);
+                _viewModel.DroppedItems.Insert(0, newItem);
+                _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
+                ToastWindow.ShowToast("✅ Converted to PDF");
                 return;
             }
-            var win = new PdfMergeWindow(pdfs, _viewModel);
-            App.ActiveMergeWindow = win;
-            win.Closed += (_, __) => App.ActiveMergeWindow = null;
-            win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
-            win.Topmost = true;
-            win.Show();
-            win.Activate();
-            win.Focus();
-            win.Topmost = false;
+
+            // Build the final list of PDF items for the merge window
+            var allPdfs = new List<ClipboardItem>();
+            allPdfs.AddRange(checkedPdfs);
+
+            // Add converted items as ClipboardItems
+            foreach (string path in convertedPdfPaths)
+            {
+                allPdfs.Add(new ClipboardItem(path));
+            }
+
+            if (allPdfs.Count > 1)
+            {
+                foreach (var item in _viewModel.DroppedItems)
+                {
+                    item.IsCheckedForMerge = false;
+                }
+                UpdateMergeButton();
+
+                var win = new PdfMergeWindow(allPdfs, _viewModel);
+                App.ActiveMergeWindow = win;
+                win.Closed += (_, __) => App.ActiveMergeWindow = null;
+                win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
+                win.Topmost = true;
+                win.Show();
+                win.Activate();
+                win.Focus();
+                win.Topmost = false;
+            }
+            else if (allPdfs.Count == 1)
+            {
+                foreach (var item in _viewModel.DroppedItems)
+                {
+                    item.IsCheckedForMerge = false;
+                }
+                UpdateMergeButton();
+
+                var newItem = new ClipboardItem(allPdfs[0].FilePath);
+                _viewModel.DroppedItems.Insert(0, newItem);
+                _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
+                ToastWindow.ShowToast("✅ PDF added to clipboard");
+            }
+            else
+            {
+                ToastWindow.ShowToast("Select 2+ files to merge, or 1 image/doc to convert.");
+            }
         }
 
     }

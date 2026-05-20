@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, Image as RNImage } from 'react-native';
 import { Image } from 'expo-image';
 import * as FileSystem from 'expo-file-system/legacy';
 import { IMAGE_CACHE_BASE } from '../utils/clipTypes';
@@ -20,6 +20,7 @@ const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: 
   const [localUri, setLocalUri] = React.useState<string | null>(null);
   const [failed, setFailed] = React.useState(false);
   const [retryCount, setRetryCount] = React.useState(0);
+  const [aspectRatio, setAspectRatio] = React.useState<number | null>(null);
 
   React.useEffect(() => {
     if (!imgUri) { setFailed(true); return; }
@@ -27,6 +28,7 @@ const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: 
     let cancelled = false;
     setFailed(false);
     setLocalUri(null);
+    setAspectRatio(null);
 
     const loadImage = async () => {
       try {
@@ -136,6 +138,21 @@ const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: 
     return () => { cancelled = true; };
   }, [imgUri, retryCount]);
 
+  React.useEffect(() => {
+    if (!localUri) return;
+    let cancelled = false;
+    RNImage.getSize(
+      localUri,
+      (w, h) => {
+        if (!cancelled && w && h) {
+          setAspectRatio(w / h);
+        }
+      },
+      () => {}
+    );
+    return () => { cancelled = true; };
+  }, [localUri]);
+
   // Show a retry button instead of hiding broken images
   if (failed) return (
     <TouchableOpacity 
@@ -155,11 +172,15 @@ const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: 
     </View>
   );
 
+  const imageStyle = aspectRatio 
+    ? { width: '100%', aspectRatio, borderRadius: 12, backgroundColor: '#1C202B' }
+    : { width: '100%', minHeight: 160, maxHeight: 320, borderRadius: 12, backgroundColor: '#1C202B' };
+
   return (
     <TouchableOpacity style={{ marginBottom: 8 }} onPress={onPress} activeOpacity={0.85}>
       <Image
         source={{ uri: localUri }}
-        style={{ width: '100%', minHeight: 160, maxHeight: 320, borderRadius: 12, backgroundColor: '#1C202B' }}
+        style={imageStyle}
         contentFit="contain"
         onError={() => {
           // If direct URL render fails, show retry instead of hiding

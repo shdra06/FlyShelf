@@ -143,6 +143,13 @@ namespace AdvanceClip.Windows
 
         private void PdfList_DragOver(object sender, DragEventArgs e)
         {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                e.Effects = DragDropEffects.Copy;
+                e.Handled = true;
+                return;
+            }
+
             if (!e.Data.GetDataPresent("PdfMergeItem"))
             {
                 e.Effects = DragDropEffects.None;
@@ -172,8 +179,19 @@ namespace AdvanceClip.Windows
             }
         }
 
-        private void PdfList_Drop(object sender, DragEventArgs e)
+        private async void PdfList_Drop(object sender, DragEventArgs e)
         {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                string[] files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                if (files != null && files.Length > 0)
+                {
+                    await HandleAddFilesAsync(files);
+                }
+                e.Handled = true;
+                return;
+            }
+
             // Drop is already handled by live reorder in DragOver
             e.Handled = true;
             CleanupDrag();
@@ -405,22 +423,78 @@ namespace AdvanceClip.Windows
             }
         }
 
-        private void AddPdf_Click(object sender, RoutedEventArgs e)
+        private async System.Threading.Tasks.Task HandleAddFilesAsync(IEnumerable<string> files)
+        {
+            if (files == null) return;
+
+            if (AddFilesBtn != null) AddFilesBtn.IsEnabled = false;
+            MergeBtn.IsEnabled = false;
+            SaveAsBtn.IsEnabled = false;
+
+            try
+            {
+                foreach (string file in files)
+                {
+                    if (string.IsNullOrEmpty(file) || !File.Exists(file)) continue;
+
+                    string ext = Path.GetExtension(file).ToLower();
+                    if (ext == ".pdf")
+                    {
+                        MergeItems.Add(new PdfMergeItem(file));
+                    }
+                    else if (ext == ".doc" || ext == ".docx")
+                    {
+                        ToastWindow.ShowToast($"📄 Converting {Path.GetFileName(file)} to PDF...");
+                        string pdfPath = await AdvanceClip.Classes.ConversionUtils.ConvertDocToPdfAsync(file);
+                        if (!string.IsNullOrEmpty(pdfPath) && File.Exists(pdfPath))
+                        {
+                            MergeItems.Add(new PdfMergeItem(pdfPath));
+                        }
+                        else
+                        {
+                            ToastWindow.ShowToast($"❌ Failed to convert doc: {Path.GetFileName(file)}");
+                        }
+                    }
+                    else if (ext == ".jpg" || ext == ".jpeg" || ext == ".png")
+                    {
+                        ToastWindow.ShowToast($"🖼️ Converting {Path.GetFileName(file)} to PDF...");
+                        try
+                        {
+                            string pdfPath = await System.Threading.Tasks.Task.Run(() => AdvanceClip.Classes.ConversionUtils.ConvertImageToPdf(file));
+                            if (!string.IsNullOrEmpty(pdfPath) && File.Exists(pdfPath))
+                            {
+                                MergeItems.Add(new PdfMergeItem(pdfPath));
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            ToastWindow.ShowToast($"❌ Failed to convert image: {Path.GetFileName(file)}");
+                            AdvanceClip.Classes.Logger.LogAction("MERGE_ADD_IMAGE_ERR", ex.ToString());
+                        }
+                    }
+                }
+            }
+            finally
+            {
+                if (AddFilesBtn != null) AddFilesBtn.IsEnabled = true;
+                MergeBtn.IsEnabled = true;
+                SaveAsBtn.IsEnabled = true;
+                UpdateSummary();
+            }
+        }
+
+        private async void AddPdf_Click(object sender, RoutedEventArgs e)
         {
             var dlg = new OpenFileDialog
             {
-                Filter = "PDF Files|*.pdf",
+                Filter = "All Supported Files|*.pdf;*.doc;*.docx;*.jpg;*.jpeg;*.png|PDF Files (*.pdf)|*.pdf|Word Documents (*.doc;*.docx)|*.doc;*.docx|Images (*.jpg;*.jpeg;*.png)|*.jpg;*.jpeg;*.png",
                 Multiselect = true,
-                Title = "Add PDFs to Merge"
+                Title = "Add Files to Merge"
             };
 
             if (dlg.ShowDialog() == true)
             {
-                foreach (string file in dlg.FileNames)
-                {
-                    MergeItems.Add(new PdfMergeItem(file));
-                }
-                UpdateSummary();
+                await HandleAddFilesAsync(dlg.FileNames);
             }
         }
 

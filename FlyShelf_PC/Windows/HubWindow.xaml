@@ -996,6 +996,21 @@
                                                 </ui:Button.Style>
                                             </ui:Button>
 
+                                            <!-- Convert Image to PDF -->
+                                            <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Convert Image to PDF" Command="{Binding DataContext.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" FontSize="14" Foreground="#EF4444" /></ui:Button.Icon>
+                                                <ui:Button.Style>
+                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ui:Button.Style>
+                                            </ui:Button>
+
                                             <!-- Convert PDF to Word -->
                                             <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Convert PDF to Word" Command="{Binding DataContext.ConvertPdfToWordCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
                                                 <ui:Button.Icon><ui:SymbolIcon Symbol="Document24" FontSize="14" Foreground="#3B82F6" /></ui:Button.Icon>

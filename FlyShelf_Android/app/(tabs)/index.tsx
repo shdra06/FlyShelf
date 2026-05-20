@@ -32,7 +32,7 @@ import AnimatedCard from '../../components/AnimatedCard';
 
 import CachedImage from '../../components/CachedImage';
 import PdfPageEditor from '../../components/PdfPageEditor';
-import { mergePdfs as localMergePdfs } from '../../utils/pdfUtils';
+import { mergePdfs as localMergePdfs, convertImageToPdf as localConvertImageToPdf } from '../../utils/pdfUtils';
 
 const { AdvanceOverlay } = NativeModules;
 
@@ -1790,14 +1790,47 @@ export default function SyncScreen() {
   const getSelectedClips = () => clips.filter(c => (c.IsPinned || (c.Timestamp || 0) >= localWipeTimestamp) && (!c.id || !localDeletedIds.has(c.id)) && (c.Raw || c.Title)).filter(c => selectedItemIds.has(c.id || ''));
 
   // ─── PDF Merge ───
-  const openMergeModal = () => { const selected = getSelectedClips().filter(c => c.Type === 'Pdf' || (c.Title || '').toLowerCase().endsWith('.pdf')); if (selected.length < 2) { Alert.alert('Need 2+ PDFs'); return; } setMergeQueue([...selected]); setIsMergeModalVisible(true); };
+  const openMergeModal = () => {
+    const selected = getSelectedClips();
+    
+    // Check if any Word document is selected (.doc, .docx)
+    const hasWordDoc = selected.some(c => {
+      const title = (c.Title || '').toLowerCase();
+      const type = c.Type || '';
+      return title.endsWith('.docx') || title.endsWith('.doc') || type === 'Document';
+    });
+
+    if (hasWordDoc) {
+      Alert.alert(
+        'Word Documents Protected',
+        'Word documents (.docx) cannot be converted natively on mobile. Please use your paired PC companion app to merge/convert Word documents.'
+      );
+      return;
+    }
+
+    // Filter selection to PDFs and Images
+    const mergeableSelected = selected.filter(c => {
+      const title = (c.Title || '').toLowerCase();
+      const type = c.Type || '';
+      return type === 'Pdf' || type === 'Image' || type === 'ImageLink' || 
+             title.endsWith('.pdf') || title.endsWith('.png') || title.endsWith('.jpg') || title.endsWith('.jpeg');
+    });
+
+    if (mergeableSelected.length < 2) {
+      Alert.alert('Merge Requirements', 'Please select at least 2 files (PDFs or Images) to merge.');
+      return;
+    }
+
+    setMergeQueue([...mergeableSelected]);
+    setIsMergeModalVisible(true);
+  };
   const moveMergeItem = (fromIdx: number, toIdx: number) => { if (toIdx < 0 || toIdx >= mergeQueue.length) return; setMergeQueue(prev => { const arr = [...prev]; const [moved] = arr.splice(fromIdx, 1); arr.splice(toIdx, 0, moved); return arr; }); };
   const executePdfMerge = async () => {
     try {
       setIsMergeModalVisible(false);
-      if (Platform.OS === 'android') ToastAndroid.show('Merging PDFs on device...', ToastAndroid.LONG);
+      if (Platform.OS === 'android') ToastAndroid.show('Merging files on device...', ToastAndroid.LONG);
 
-      // Resolve PDF URIs (local cached or remote URLs)
+      // Resolve file URIs (local cached or remote URLs)
       const pdfUris = mergeQueue.map(item => {
         const mUrl = getMediaUrlForItem(item);
         // Prefer local cached version
@@ -1807,14 +1840,14 @@ export default function SyncScreen() {
         return mUrl || localPath;
       }).filter(u => u && u.length > 0);
 
-      if (pdfUris.length < 2) { Alert.alert('Error', 'Could not resolve PDF files.'); return; }
+      if (pdfUris.length < 2) { Alert.alert('Error', 'Could not resolve mergeable files.'); return; }
 
       const outputPath = CONVERTED_BASE + `merged_${Date.now()}.pdf`;
 
       try {
         // Try local merge first (on-device, no PC needed)
         await localMergePdfs(pdfUris, outputPath);
-        if (Platform.OS === 'android') ToastAndroid.show('✅ PDFs merged on device!', ToastAndroid.SHORT);
+        if (Platform.OS === 'android') ToastAndroid.show('✅ Files merged on device!', ToastAndroid.SHORT);
         await Sharing.shareAsync(outputPath, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Merged PDF' });
       } catch (localErr: any) {
         // Fallback: try PC merge
@@ -1829,6 +1862,58 @@ export default function SyncScreen() {
       }
     } catch (e) { Alert.alert('Merge Error'); }
     exitMultiSelect();
+  };
+
+  const handleConvertImageToPdf = async (item: ClipItem) => {
+    try {
+      if (Platform.OS === 'android') ToastAndroid.show('Converting Image to PDF...', ToastAndroid.SHORT);
+      
+      const mediaUrl = getMediaUrlForItem(item);
+      const imgUri = item.CachedUri || mediaUrl || item.Raw || '';
+      if (!imgUri) {
+        Alert.alert('Error', 'Image source not found.');
+        return;
+      }
+      
+      const safeName = (item.Title || `image_${Date.now()}.png`).replace(/[^a-zA-Z0-9.-]/g, '_');
+      let safeTitleWithoutExt = safeName;
+      const lastDotIndex = safeName.lastIndexOf('.');
+      if (lastDotIndex > 0) {
+        safeTitleWithoutExt = safeName.substring(0, lastDotIndex);
+      }
+      const pdfFileName = `${safeTitleWithoutExt}_converted_${Date.now().toString().slice(-4)}.pdf`;
+      const pdfPath = DOWNLOAD_BASE + 'PDFs/' + pdfFileName;
+
+      await localConvertImageToPdf(imgUri, pdfPath);
+      
+      if (Platform.OS === 'android') ToastAndroid.show('✅ Image converted to PDF!', ToastAndroid.SHORT);
+      
+      // Construct a new PDF ClipItem and insert it at the top of the clips feed
+      const newPdfItem: ClipItem = {
+        id: `local_pdf_${Date.now()}`,
+        Title: pdfFileName,
+        Type: 'Pdf',
+        Raw: pdfPath,
+        CachedUri: pdfPath,
+        Time: new Date().toLocaleTimeString(),
+        Timestamp: Date.now(),
+        SourceDeviceName: deviceName || 'Mobile',
+        SourceDeviceType: 'Mobile',
+        _receivedVia: 'Local',
+      };
+      
+      setClips(prev => {
+        scrollToTop();
+        return [newPdfItem, ...prev];
+      });
+
+      // Show share or open panel
+      await Sharing.shareAsync(pdfPath, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Converted PDF' });
+
+    } catch (err: any) {
+      console.warn(`Conversion error: ${err.message}`);
+      Alert.alert('Conversion Failed', err.message || 'Unknown error occurred.');
+    }
   };
 
   // ─── Force Sync ───
@@ -2547,6 +2632,7 @@ export default function SyncScreen() {
               showsVerticalScrollIndicator={false}
               drawDistance={300}
               estimatedItemSize={120}
+              contentContainerStyle={{ paddingBottom: 110 }}
 
               renderItem={({ item, index: itemIndex }) => {
                 let iconName = 'doc.text', iconColor = '#8A8F98';
@@ -2574,57 +2660,82 @@ export default function SyncScreen() {
                   <View style={{ position: 'relative' }}>
                   <AnimatedCard
                     index={itemIndex}
-                    style={[styles.clipCard, isMultiSelectMode && selectedItemIds.has(item.id || '') && { borderColor: colors.accent.primary, borderWidth: 1.5 }]}
+                    style={[styles.clipCard, { flexDirection: 'column', alignItems: 'stretch' }, isMultiSelectMode && selectedItemIds.has(item.id || '') && { borderColor: colors.accent.primary, borderWidth: 1.5 }]}
                     onPress={() => { const itemKey = item.id || `idx_${itemIndex}`; if (isMultiSelectMode) toggleSelectItem(item.id || ''); else if (activeOptionsId === itemKey) setActiveOptionsId(null); else setActiveOptionsId(itemKey); }}
                     onLongPress={() => { if (!isMultiSelectMode) { setIsMultiSelectMode(true); setSelectedItemIds(new Set([item.id || ''])); setActiveOptionsId(null); } }}
                     skipEntrance={itemIndex > 12}
                   >
-                    {isMultiSelectMode && (
-                      <View style={{position: 'absolute', left: 8, top: 8, width: 24, height: 24, borderRadius: 12, backgroundColor: selectedItemIds.has(item.id || '') ? '#4A62EB' : 'rgba(255,255,255,0.1)', borderWidth: 2, borderColor: selectedItemIds.has(item.id || '') ? '#4A62EB' : '#4C5361', alignItems: 'center', justifyContent: 'center', zIndex: 10}}>
-                        {selectedItemIds.has(item.id || '') && <IconSymbol name="checkmark" size={12} color="#FFF" />}
-                      </View>
-                    )}
-                    {/* Transfer method badge */}
-                    {(() => {
-                      const via = item._receivedVia || '';
-                      let iconName = 'paperplane';
-                      let label = '';
-                      let badgeColor = '#4C5361';
-                      let badgeBg = 'rgba(15,17,21,0.85)';
-                      if (via === 'LAN') {
-                        iconName = 'wifi'; label = 'LAN'; badgeColor = '#10B981'; badgeBg = 'rgba(16,185,129,0.15)';
-                      } else if (via === 'Cloud') {
-                        iconName = 'cloud.fill'; label = 'Cloud'; badgeColor = '#3B82F6'; badgeBg = 'rgba(59,130,246,0.15)';
-                      } else if (via === 'Local') {
-                        iconName = 'doc.on.clipboard'; label = 'Local'; badgeColor = '#8B5CF6'; badgeBg = 'rgba(139,92,246,0.15)';
-                      } else {
-                        // Legacy items without _receivedVia — infer from content
-                        const rawUrl = item.Raw || '';
-                        if (rawUrl.includes('trycloudflare.com') || rawUrl.includes('firebase')) {
-                          iconName = 'cloud.fill'; label = 'Cloud'; badgeColor = '#3B82F6'; badgeBg = 'rgba(59,130,246,0.15)';
-                        } else if (rawUrl.startsWith('http://192.') || rawUrl.startsWith('http://10.') || rawUrl.startsWith('http://172.')) {
-                          iconName = 'wifi'; label = 'LAN'; badgeColor = '#10B981'; badgeBg = 'rgba(16,185,129,0.15)';
-                        }
-                      }
-                      if (!label) return null;
-                      return (
-                        <View style={{position: 'absolute', right: 6, top: 4, flexDirection: 'row', alignItems: 'center', backgroundColor: badgeBg, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3, zIndex: 5, gap: 4}}>
-                          <IconSymbol name={iconName} size={11} color={badgeColor} />
-                          <Text style={{color: badgeColor, fontSize: 9, fontWeight: '800', letterSpacing: 0.5}}>{label}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: (item.Type === 'Image' || item.Type === 'ImageLink') ? space.sm : 0 }}>
+                      {isMultiSelectMode && (
+                        <View style={{ marginRight: 8, width: 22, height: 22, borderRadius: 11, backgroundColor: selectedItemIds.has(item.id || '') ? '#4A62EB' : 'rgba(255,255,255,0.1)', borderWidth: 2, borderColor: selectedItemIds.has(item.id || '') ? '#4A62EB' : '#4C5361', alignItems: 'center', justifyContent: 'center' }}>
+                          {selectedItemIds.has(item.id || '') && <IconSymbol name="checkmark" size={10} color="#FFF" />}
                         </View>
-                      );
-                    })()}
-                    <View style={{ flex: 1, padding: 4, paddingLeft: isMultiSelectMode ? 32 : 4 }}>
+                      )}
+                      
+                      {/* Left-aligned type icon */}
+                      <View style={[styles.clipIconContainer, { backgroundColor: iconColor + '15', borderColor: iconColor + '30', marginRight: space.md }]}>
+                        <IconSymbol name={iconName} size={20} color={iconColor} />
+                      </View>
+
+                      {/* Header Info */}
+                      <View style={styles.clipContentContainer}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <Text style={styles.clipType}>{item.Type}</Text>
+                          <Text style={styles.clipTime}>{item.Time || ''}</Text>
+                        </View>
+                        
+                        {/* Device / Transfer Source indicator */}
+                        <Text style={{ color: colors.text.tertiary, fontSize: 10, fontFamily: font.semibold, marginTop: 2 }}>
+                          {item.SourceDeviceName ? `From ${item.SourceDeviceName}` : 'Local Companion'}
+                        </Text>
+                      </View>
+                      
+                      {/* Transfer method badge (LAN/Cloud) */}
+                      {(() => {
+                        const via = item._receivedVia || '';
+                        let viaIcon = 'paperplane';
+                        let label = '';
+                        let badgeColor = '#4C5361';
+                        let badgeBg = 'rgba(15,17,21,0.85)';
+                        if (via === 'LAN') {
+                          viaIcon = 'wifi'; label = 'LAN'; badgeColor = '#10B981'; badgeBg = 'rgba(16,185,129,0.15)';
+                        } else if (via === 'Cloud') {
+                          viaIcon = 'cloud.fill'; label = 'Cloud'; badgeColor = '#3B82F6'; badgeBg = 'rgba(59,130,246,0.15)';
+                        } else if (via === 'Local') {
+                          viaIcon = 'doc.on.clipboard'; label = 'Local'; badgeColor = '#8B5CF6'; badgeBg = 'rgba(139,92,246,0.15)';
+                        } else {
+                          // Legacy items without _receivedVia — infer from content
+                          const rawUrl = item.Raw || '';
+                          if (rawUrl.includes('trycloudflare.com') || rawUrl.includes('firebase')) {
+                            viaIcon = 'cloud.fill'; label = 'Cloud'; badgeColor = '#3B82F6'; badgeBg = 'rgba(59,130,246,0.15)';
+                          } else if (rawUrl.startsWith('http://192.') || rawUrl.startsWith('http://10.') || rawUrl.startsWith('http://172.')) {
+                            viaIcon = 'wifi'; label = 'LAN'; badgeColor = '#10B981'; badgeBg = 'rgba(16,185,129,0.15)';
+                          }
+                        }
+                        if (!label) return null;
+                        return (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: badgeBg, borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3, gap: 4, marginLeft: 8 }}>
+                            <IconSymbol name={viaIcon} size={11} color={badgeColor} />
+                            <Text style={{color: badgeColor, fontSize: 9, fontWeight: '800', letterSpacing: 0.5}}>{label}</Text>
+                          </View>
+                        );
+                      })()}
+                    </View>
+
+                    {/* Card Content body */}
+                    <View style={{ flex: 1, paddingLeft: isMultiSelectMode ? 30 : 0 }}>
                       {(item.Type === 'Image' || item.Type === 'ImageLink') ? (() => {
                         const imgUri = mediaUrl || item.CachedUri || item.Raw || '';
                         if (!imgUri) return <View style={{ marginBottom: 8, height: 100, borderRadius: 12, backgroundColor: '#1C202B', justifyContent: 'center', alignItems: 'center' }}><IconSymbol name="photo.fill" size={32} color="#4C5361" /><Text style={{color: '#8A8F98', fontSize: 12, marginTop: 8}}>No image URL</Text></View>;
                         return <CachedImage imgUri={imgUri} onPress={() => setExpandedImage(imgUri)} />;
                       })() : null}
+                      
                       {(item.Type !== 'Image' && item.Type !== 'ImageLink') && (
-                        <Text style={styles.clipTitle}>{item.Raw || item.Title || `${item.Type || 'Clip'} from ${item.SourceDeviceName || 'Unknown'}`}</Text>
+                        <Text style={[styles.clipTitle, { marginTop: space.sm }]} numberOfLines={6}>{item.Raw || item.Title || `${item.Type || 'Clip'} from ${item.SourceDeviceName || 'Unknown'}`}</Text>
                       )}
+                      
                       {isIncomingTransfer && isHeavyFile && (
-                        <View style={{position: 'absolute', bottom: 0, left: 0, right: 0, borderBottomLeftRadius: 16, borderBottomRightRadius: 16, overflow: 'hidden', zIndex: 20}}>
+                        <View style={{ marginTop: space.sm, borderRadius: 12, overflow: 'hidden', zIndex: 20 }}>
                           <View style={{height: 28, backgroundColor: 'rgba(15,17,21,0.92)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12}}>
                             <ActivityIndicator size="small" color="#4A62EB" style={{marginRight: 8}} /><Text style={{color: '#8A8F98', fontSize: 11, fontWeight: '600', flex: 1}}>Receiving file...</Text>
                             <Text style={{color: '#4A62EB', fontSize: 12, fontWeight: '800'}}>{Math.round((incomingProgress || 0) * 100)}%</Text>
@@ -2636,6 +2747,22 @@ export default function SyncScreen() {
                   </AnimatedCard>
                     {activeOptionsId === (item.id || `idx_${itemIndex}`) && !(isIncomingTransfer && isHeavyFile) && (
                       <View style={{ position: 'absolute', right: 10, top: 10, flexDirection: 'row', backgroundColor: 'rgba(20,24,36,0.95)', borderRadius: 12, padding: 8, gap: 8, zIndex: 50 }}>
+                        {['Image', 'ImageLink'].includes(item.Type) && (
+                          <TouchableOpacity onPress={() => { handleConvertImageToPdf(item); setActiveOptionsId(null); }} style={[styles.actionBtnIcon, {backgroundColor: '#EF444433'}]}>
+                            <IconSymbol name="doc.richtext" size={18} color="#EF4444" />
+                          </TouchableOpacity>
+                        )}
+                        {['Text', 'Code', 'Url'].includes(item.Type) && (
+                          <TouchableOpacity onPress={() => {
+                            const query = item.Raw || item.Title || '';
+                            if (query) {
+                              Linking.openURL(`https://www.google.com/search?q=${encodeURIComponent(query)}`).catch(() => {});
+                            }
+                            setActiveOptionsId(null);
+                          }} style={[styles.actionBtnIcon, {backgroundColor: '#10B98133'}]}>
+                            <IconSymbol name="magnifyingglass" size={18} color="#10B981" />
+                          </TouchableOpacity>
+                        )}
                         <TouchableOpacity onPress={async () => {
                           try {
                             if (!item.id) { ToastAndroid.show("Pinning is restricted to Global Cloud payloads.", ToastAndroid.SHORT); return; }

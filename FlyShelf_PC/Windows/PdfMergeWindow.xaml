@@ -33,7 +33,7 @@
                     <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="#EF4444" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
                 <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="Merge PDFs" FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                    <TextBlock Text="Merge Files" FontSize="17" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
                     <TextBlock Text="Drag to reorder • Range for page selection" FontSize="11" Opacity="0.5" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,1,0,0"/>
                 </StackPanel>
             </StackPanel>
@@ -199,7 +199,7 @@
         <Border Grid.Row="4" Margin="0,12,0,0" CornerRadius="14" Background="#0AFFFFFF" Padding="6,5">
             <Grid>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
-                    <ui:Button Content="Add PDF" Appearance="Transparent" Padding="10,6" Click="AddPdf_Click" FontSize="12">
+                    <ui:Button x:Name="AddFilesBtn" Content="Add Files" Appearance="Transparent" Padding="10,6" Click="AddPdf_Click" FontSize="12">
                         <ui:Button.Icon><ui:SymbolIcon Symbol="Add24" FontSize="14"/></ui:Button.Icon>
                     </ui:Button>
                     <ui:Button Content="Reverse All" Appearance="Transparent" Padding="10,6" Click="ReverseAll_Click" ToolTip="Reverse order" FontSize="12">
@@ -211,7 +211,7 @@
                     <ui:Button x:Name="SaveAsBtn" Content="Save As" Appearance="Secondary" Margin="0,0,6,0" Padding="12,6" Click="SaveAs_Click" FontSize="12">
                         <ui:Button.Icon><ui:SymbolIcon Symbol="Save24" FontSize="14"/></ui:Button.Icon>
                     </ui:Button>
-                    <ui:Button x:Name="MergeBtn" Content="Merge PDFs" Appearance="Primary" Padding="16,6" Click="Merge_Click" FontSize="12">
+                    <ui:Button x:Name="MergeBtn" Content="Merge Files" Appearance="Primary" Padding="16,6" Click="Merge_Click" FontSize="12">
                         <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24" FontSize="14"/></ui:Button.Icon>
                     </ui:Button>
                 </StackPanel>

@@ -27,6 +27,7 @@ LogBox.ignoreLogs([
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { SettingsProvider } from '../context/SettingsContext';
+import ErrorBoundary from '../components/ErrorBoundary';
 
 export const unstable_settings = {
   anchor: '(tabs)',
@@ -37,7 +38,7 @@ export const unstable_settings = {
 //     shouldShowAlert: true,
 //     shouldPlaySound: true,
 //     shouldSetBadge: false,
-//   }),
+//     }),
 // });
 
 import { Platform } from 'react-native';
@@ -94,15 +95,18 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <SettingsProvider>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          </Stack>
-          <StatusBar style="auto" />
-        </SettingsProvider>
-      </ThemeProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }} onLayout={onLayoutRootView}>
+        <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+          <SettingsProvider>
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            </Stack>
+            <StatusBar style="auto" />
+          </SettingsProvider>
+        </ThemeProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
+
