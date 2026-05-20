@@ -374,9 +374,6 @@
                                     <MenuItem Header="🔍 Search on Google" Click="GoogleSearch_Click" 
                                               Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                                               Visibility="{Binding PlacementTarget.DataContext.IsTextPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                    <MenuItem Header="📄 Convert Text to PDF" Click="ConvertTextToPdf_Click" 
-                                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                              Visibility="{Binding PlacementTarget.DataContext.IsTextPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
                                     <!-- ═══ CODE: VS Code + Terminal ═══ -->
                                     <MenuItem Header="Open in VS Code" 
@@ -599,6 +596,21 @@
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#F472B6" PreviewMouseLeftButtonDown="QuickLookSpecific_Click" ToolTip="Quick Look">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="14"/></ui:Button.Icon>
+                                    </ui:Button>
+                                </Border>
+
+                                <!-- ═══ Search Google ═══ -->
+                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
+                                    <Border.Style>
+                                        <Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#10B981" ToolTip="Search on Google"
+                                               PreviewMouseLeftButtonDown="GoogleSearchSpecific_Click">
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 

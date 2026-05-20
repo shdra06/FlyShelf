@@ -778,54 +778,6 @@ $word.Quit()
             }
         }
 
-        private void ConvertTextToPdf_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var clipItem = GetClipItemFromSender(sender);
-                if (clipItem == null || string.IsNullOrEmpty(clipItem.RawContent)) return;
-
-                AdvanceClip.Windows.ToastWindow.ShowToast("📄 Converting text to PDF...");
-
-                string outputDir = System.IO.Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                    "Downloads", "FlyShelf", "Converted");
-                System.IO.Directory.CreateDirectory(outputDir);
-
-                string pdfPath = System.IO.Path.Combine(outputDir,
-                    $"FlyShelf_Text_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
-
-                using (var doc = new PdfSharp.Pdf.PdfDocument())
-                {
-                    var page = doc.AddPage();
-                    using (var gfx = PdfSharp.Drawing.XGraphics.FromPdfPage(page))
-                    {
-                        var font = new PdfSharp.Drawing.XFont("Consolas", 10);
-                        string[] lines = clipItem.RawContent.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
-                        double y = 40;
-                        foreach (var line in lines.Take(50))
-                        {
-                            gfx.DrawString(line, font, PdfSharp.Drawing.XBrushes.Black, 40, y);
-                            y += 14;
-                            if (y > page.Height.Point - 40) break;
-                        }
-                    }
-                    doc.Save(pdfPath);
-                }
-
-                if (System.IO.File.Exists(pdfPath))
-                {
-                    var newItem = new ClipboardItem(pdfPath);
-                    _viewModel.DroppedItems.Insert(0, newItem);
-                    _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"✅ Text converted: {System.IO.Path.GetFileName(pdfPath)}");
-                }
-            }
-            catch (Exception ex)
-            {
-                AdvanceClip.Windows.ToastWindow.ShowToast($"❌ Failed to convert text: {ex.Message}");
-            }
-        }
 
         private async void ConvertPdfToWord_Click(object sender, RoutedEventArgs e)
         {

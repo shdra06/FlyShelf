@@ -24,11 +24,11 @@ namespace AdvanceClip.ViewModels
 
         /// <summary>
         /// Loads persisted clipboard history from disk and rebuilds Icon previews.
-        /// Called once at app startup.
+        /// Called once at app startup asynchronously.
         /// </summary>
-        public void LoadPersistedHistory()
+        public async Task LoadPersistedHistoryAsync()
         {
-            var items = Classes.ClipboardHistoryManager.LoadHistory();
+            var items = await System.Threading.Tasks.Task.Run(() => Classes.ClipboardHistoryManager.LoadHistory());
             
             // Build lookup of items already loaded (e.g. pinned items from LoadPinnedItems)
             // to prevent duplicates on restart
@@ -89,13 +89,13 @@ namespace AdvanceClip.ViewModels
                             {
                                 var icon = LoadImageThumbnail(item.FilePath);
                                 if (icon != null)
-                                    Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
+                                    await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
                             }
                             else if (!string.IsNullOrEmpty(item.FilePath))
                             {
                                 var icon = GetIcon(item.FilePath);
                                 if (icon != null)
-                                    Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
+                                    await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
                             }
                         }
                         catch { }

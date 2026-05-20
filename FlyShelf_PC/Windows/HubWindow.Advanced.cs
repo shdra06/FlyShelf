@@ -59,149 +59,161 @@ namespace AdvanceClip.Windows
             }
         }
 
-        private async void RefreshDevices_Click(object sender, RoutedEventArgs e)
+        private async void RefreshDevices_Click(object? sender, RoutedEventArgs? e)
         {
             try
             {
-                var devices = await FirebaseSyncManager.GetActiveDevices();
-                string myName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
-
-                var lanItems = new System.Collections.Generic.List<DeviceDisplayItem>();
-                var cloudItems = new System.Collections.Generic.List<DeviceDisplayItem>();
-
-                // Get this PC's own URLs for the self entry
-                string myLocalUrl = _viewModel.LocalServer?.ServerUrl ?? "";
-                string myGlobalUrl = _viewModel.LocalServer?.GlobalUrl ?? "";
-
-                // Always add self to LAN — this device IS a LAN device
-                lanItems.Add(new DeviceDisplayItem
+                // Run the device list fetching and network classification on a background ThreadPool thread
+                var result = await System.Threading.Tasks.Task.Run(async () =>
                 {
-                    DeviceName = myName + " (You)",
-                    DeviceType = "PC",
-                    IsOnline = true,
-                    ConnectionType = "Local",
-                    LastSeen = "Online now",
-                    LocalIp = myLocalUrl,
-                    GlobalUrl = myGlobalUrl
+                    var devices = await FirebaseSyncManager.GetActiveDevices();
+                    string myName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
+
+                    var lanItems = new System.Collections.Generic.List<DeviceDisplayItem>();
+                    var cloudItems = new System.Collections.Generic.List<DeviceDisplayItem>();
+
+                    // Get this PC's own URLs for the self entry
+                    string myLocalUrl = _viewModel.LocalServer?.ServerUrl ?? "";
+                    string myGlobalUrl = _viewModel.LocalServer?.GlobalUrl ?? "";
+
+                    // Always add self to LAN — this device IS a LAN device
+                    lanItems.Add(new DeviceDisplayItem
+                    {
+                        DeviceName = myName + " (You)",
+                        DeviceType = "PC",
+                        IsOnline = true,
+                        ConnectionType = "Local",
+                        LastSeen = "Online now",
+                        LocalIp = myLocalUrl,
+                        GlobalUrl = myGlobalUrl
+                    });
+
+                    // ═══ Use PeerManager's CONFIRMED connection data ═══
+                    // PeerManager has already handshaked with each peer and knows the exact transport.
+                    // This is the ground truth — no guessing needed.
+                    var peerStatuses = PeerManager.Instance?.GetPeerStatuses() 
+                        ?? new System.Collections.Generic.List<PeerStatus>();
+                    var confirmedPeerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    foreach (var peer in peerStatuses)
+                    {
+                        confirmedPeerIds.Add(peer.DeviceId);
+
+                        if (peer.IsAlive && peer.Transport == "LAN")
+                        {
+                            // Confirmed LAN connection via PeerManager handshake
+                            lanItems.Add(new DeviceDisplayItem
+                            {
+                                DeviceName = peer.DeviceName,
+                                DeviceType = "PC",
+                                IsOnline = true,
+                                ConnectionType = "Local",
+                                LastSeen = $"LAN active — {peer.ActiveUrl}",
+                                LocalIp = peer.LanUrl,
+                                GlobalUrl = peer.CloudflareUrl
+                            });
+                        }
+                        else if (peer.IsAlive && peer.Transport == "Cloudflare")
+                        {
+                            // Confirmed Cloudflare connection via PeerManager handshake
+                            cloudItems.Add(new DeviceDisplayItem
+                            {
+                                DeviceName = peer.DeviceName,
+                                DeviceType = "PC",
+                                IsOnline = true,
+                                ConnectionType = "Cloud",
+                                LastSeen = "Cloudflare tunnel active",
+                                LocalIp = peer.LanUrl,
+                                GlobalUrl = peer.CloudflareUrl
+                            });
+                        }
+                        else
+                        {
+                            // Peer known to PeerManager but currently dead
+                            cloudItems.Add(new DeviceDisplayItem
+                            {
+                                DeviceName = peer.DeviceName,
+                                DeviceType = "PC",
+                                IsOnline = false,
+                                ConnectionType = "Cloud",
+                                LastSeen = $"Last seen: {peer.LastSeen:HH:mm:ss}",
+                                LocalIp = peer.LanUrl,
+                                GlobalUrl = peer.CloudflareUrl
+                            });
+                        }
+                    }
+
+                    // ═══ Non-PeerManager devices (phones, other platforms from Firebase) ═══
+                    // These are devices we don't have a direct P2P handshake with.
+                    // Classify by checking if they share our LAN subnet AND respond to a health check.
+                    var pingTasks = devices
+                        .Where(d => !confirmedPeerIds.Contains(d.Id))
+                        .Select(async d =>
+                        {
+                            bool isLan = false;
+                            if (!string.IsNullOrEmpty(d.LocalIp))
+                            {
+                                // Build a proper URL for the health check
+                                string checkUrl = d.LocalIp;
+                                if (!checkUrl.StartsWith("http")) checkUrl = "http://" + checkUrl;
+                                if (!checkUrl.Contains(":")) checkUrl += ":8999";
+                                
+                                try
+                                {
+                                    using var pingClient = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMilliseconds(1000) };
+                                    var resp = await pingClient.GetAsync(checkUrl.TrimEnd('/') + "/api/health");
+                                    isLan = resp.IsSuccessStatusCode;
+                                }
+                                catch { isLan = false; }
+                            }
+                            return (Device: d, IsLan: isLan);
+                        });
+
+                    var classified = await System.Threading.Tasks.Task.WhenAll(pingTasks);
+
+                    foreach (var c in classified)
+                    {
+                        var d = c.Device;
+                        if (c.IsLan)
+                        {
+                            // Confirmed reachable on LAN — place in LAN column only
+                            lanItems.Add(new DeviceDisplayItem
+                            {
+                                DeviceName = d.Name,
+                                DeviceType = d.Type,
+                                IsOnline = d.IsOnline,
+                                ConnectionType = "Local",
+                                LocalIp = d.LocalIp,
+                                GlobalUrl = d.GlobalUrl
+                            });
+                        }
+                        else if (d.IsOnline)
+                        {
+                            // Online but NOT on LAN — Cloud only
+                            cloudItems.Add(new DeviceDisplayItem
+                            {
+                                DeviceName = d.Name,
+                                DeviceType = d.Type,
+                                IsOnline = d.IsOnline,
+                                ConnectionType = "Cloud",
+                                LocalIp = d.LocalIp,
+                                GlobalUrl = d.GlobalUrl
+                            });
+                        }
+                    }
+
+                    return (LanItems: lanItems, CloudItems: cloudItems);
                 });
 
-                // ═══ Use PeerManager's CONFIRMED connection data ═══
-                // PeerManager has already handshaked with each peer and knows the exact transport.
-                // This is the ground truth — no guessing needed.
-                var peerStatuses = PeerManager.Instance?.GetPeerStatuses() 
-                    ?? new System.Collections.Generic.List<PeerStatus>();
-                var confirmedPeerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-                foreach (var peer in peerStatuses)
-                {
-                    confirmedPeerIds.Add(peer.DeviceId);
-
-                    if (peer.IsAlive && peer.Transport == "LAN")
-                    {
-                        // Confirmed LAN connection via PeerManager handshake
-                        lanItems.Add(new DeviceDisplayItem
-                        {
-                            DeviceName = peer.DeviceName,
-                            DeviceType = "PC",
-                            IsOnline = true,
-                            ConnectionType = "Local",
-                            LastSeen = $"LAN active — {peer.ActiveUrl}",
-                            LocalIp = peer.LanUrl,
-                            GlobalUrl = peer.CloudflareUrl
-                        });
-                    }
-                    else if (peer.IsAlive && peer.Transport == "Cloudflare")
-                    {
-                        // Confirmed Cloudflare connection via PeerManager handshake
-                        cloudItems.Add(new DeviceDisplayItem
-                        {
-                            DeviceName = peer.DeviceName,
-                            DeviceType = "PC",
-                            IsOnline = true,
-                            ConnectionType = "Cloud",
-                            LastSeen = "Cloudflare tunnel active",
-                            LocalIp = peer.LanUrl,
-                            GlobalUrl = peer.CloudflareUrl
-                        });
-                    }
-                    else
-                    {
-                        // Peer known to PeerManager but currently dead
-                        cloudItems.Add(new DeviceDisplayItem
-                        {
-                            DeviceName = peer.DeviceName,
-                            DeviceType = "PC",
-                            IsOnline = false,
-                            ConnectionType = "Cloud",
-                            LastSeen = $"Last seen: {peer.LastSeen:HH:mm:ss}",
-                            LocalIp = peer.LanUrl,
-                            GlobalUrl = peer.CloudflareUrl
-                        });
-                    }
-                }
-
-                // ═══ Non-PeerManager devices (phones, other platforms from Firebase) ═══
-                // These are devices we don't have a direct P2P handshake with.
-                // Classify by checking if they share our LAN subnet AND respond to a health check.
-                foreach (var d in devices)
-                {
-                    // Skip devices already handled by PeerManager
-                    if (confirmedPeerIds.Contains(d.Id)) continue;
-
-                    bool isLan = false;
-                    if (!string.IsNullOrEmpty(d.LocalIp))
-                    {
-                        // Build a proper URL for the health check
-                        string checkUrl = d.LocalIp;
-                        if (!checkUrl.StartsWith("http")) checkUrl = "http://" + checkUrl;
-                        if (!checkUrl.Contains(":")) checkUrl += ":8999";
-                        
-                        try
-                        {
-                            using var pingClient = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromMilliseconds(1000) };
-                            var resp = await pingClient.GetAsync(checkUrl.TrimEnd('/') + "/api/health");
-                            isLan = resp.IsSuccessStatusCode;
-                        }
-                        catch { isLan = false; }
-                    }
-
-                    if (isLan)
-                    {
-                        // Confirmed reachable on LAN — place in LAN column only
-                        lanItems.Add(new DeviceDisplayItem
-                        {
-                            DeviceName = d.Name,
-                            DeviceType = d.Type,
-                            IsOnline = d.IsOnline,
-                            ConnectionType = "Local",
-                            LocalIp = d.LocalIp,
-                            GlobalUrl = d.GlobalUrl
-                        });
-                    }
-                    else if (d.IsOnline)
-                    {
-                        // Online but NOT on LAN — Cloud only
-                        cloudItems.Add(new DeviceDisplayItem
-                        {
-                            DeviceName = d.Name,
-                            DeviceType = d.Type,
-                            IsOnline = d.IsOnline,
-                            ConnectionType = "Cloud",
-                            LocalIp = d.LocalIp,
-                            GlobalUrl = d.GlobalUrl
-                        });
-                    }
-                    // Offline and not on LAN → skip entirely (not shown in topology)
-                }
-
-                LanDevicesPanel.ItemsSource = lanItems;
-                CloudDevicesPanel.ItemsSource = cloudItems;
+                // Update UI on dispatcher
+                LanDevicesPanel.ItemsSource = result.LanItems;
+                CloudDevicesPanel.ItemsSource = result.CloudItems;
 
                 // Show/hide empty text — lanItems always has self, so "No LAN devices" means no OTHER LAN peers
-                LanEmptyText.Visibility = lanItems.Count <= 1 ? Visibility.Visible : Visibility.Collapsed;
-                CloudEmptyText.Visibility = cloudItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
+                LanEmptyText.Visibility = result.LanItems.Count <= 1 ? Visibility.Visible : Visibility.Collapsed;
+                CloudEmptyText.Visibility = result.CloudItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
-                NoDevicesPanel.Visibility = (lanItems.Count <= 1 && cloudItems.Count == 0) ? Visibility.Visible : Visibility.Collapsed;
+                NoDevicesPanel.Visibility = (result.LanItems.Count <= 1 && result.CloudItems.Count == 0) ? Visibility.Visible : Visibility.Collapsed;
 
                 // Also refresh groups
                 RefreshGroups();
@@ -558,19 +570,40 @@ namespace AdvanceClip.Windows
         {
             try
             {
-                // Wallpaper preview
+                // Wallpaper preview (asynchronously decoded to prevent UI thread blocking)
                 string wallpaperPath = SettingsManager.Current.ClipboardWallpaperPath;
                 if (!string.IsNullOrEmpty(wallpaperPath) && System.IO.File.Exists(wallpaperPath))
                 {
-                    var bmp = new System.Windows.Media.Imaging.BitmapImage();
-                    bmp.BeginInit();
-                    bmp.UriSource = new Uri(wallpaperPath, UriKind.Absolute);
-                    bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                    bmp.DecodePixelWidth = 400;
-                    bmp.EndInit();
-                    bmp.Freeze();
-                    WallpaperPreviewImg.Source = bmp;
-                    NoWallpaperText.Visibility = Visibility.Collapsed;
+                    System.Threading.Tasks.Task.Run(() =>
+                    {
+                        try
+                        {
+                            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                            bmp.BeginInit();
+                            bmp.UriSource = new Uri(wallpaperPath, UriKind.Absolute);
+                            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                            bmp.DecodePixelWidth = 400;
+                            bmp.EndInit();
+                            bmp.Freeze();
+
+                            Dispatcher.InvokeAsync(() =>
+                            {
+                                if (SettingsManager.Current.ClipboardWallpaperPath == wallpaperPath)
+                                {
+                                    WallpaperPreviewImg.Source = bmp;
+                                    NoWallpaperText.Visibility = Visibility.Collapsed;
+                                }
+                            });
+                        }
+                        catch
+                        {
+                            Dispatcher.InvokeAsync(() =>
+                            {
+                                WallpaperPreviewImg.Source = null;
+                                NoWallpaperText.Visibility = Visibility.Visible;
+                            });
+                        }
+                    });
                 }
                 else
                 {

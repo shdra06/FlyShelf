@@ -301,8 +301,8 @@ public partial class App : Application
                     _mainWinInstance = new MainWindow();
                     MainWindow = _mainWinInstance;
                     
-                    // Load persisted clipboard history (text + images survive restarts)
-                    (_mainWinInstance.DataContext as ViewModels.FlyShelfViewModel)?.LoadPersistedHistory();
+                    // Load persisted clipboard history asynchronously (text + images survive restarts)
+                    _ = (_mainWinInstance.DataContext as ViewModels.FlyShelfViewModel)?.LoadPersistedHistoryAsync();
                     
                     MainWindow.Show();
                     
