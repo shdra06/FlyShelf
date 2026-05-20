@@ -19,58 +19,64 @@ namespace AdvanceClip.Windows
             InitializeComponent();
             MessageText.Text = message;
             
-            // Premium contextual dynamic coloring & branding based on status type
+            // Premium glassmorphic background & subtle border
+            ToastBorder.Background = new SolidColorBrush(Color.FromArgb(238, 18, 18, 24)); // Very dark sleek charcoal
+            ToastBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(24, 255, 255, 255)); // Delicate frosted border
+            
             string msgLower = message.ToLowerInvariant();
+            Color accentColor;
+            Color gradientEnd;
+            Wpf.Ui.Controls.SymbolRegular symbol;
+
             if (msgLower.Contains("failed") || msgLower.Contains("error") || msgLower.Contains("❌") || msgLower.Contains("busy") || msgLower.Contains("timeout") || msgLower.Contains("offline") || msgLower.Contains("unreachable"))
             {
-                // Error (Red theme)
-                ToastIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.ErrorCircle24;
-                ToastIcon.Foreground = new SolidColorBrush(Color.FromRgb(239, 68, 68)); // #EF4444
-                ToastBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(120, 239, 68, 68));
-                ToastBorder.Background = new SolidColorBrush(Color.FromArgb(240, 26, 12, 12));
-                ToastShadow.Color = Color.FromRgb(239, 68, 68);
-                ToastShadow.Opacity = 0.15;
+                // Error (Rose theme)
+                symbol = Wpf.Ui.Controls.SymbolRegular.ErrorCircle24;
+                accentColor = Color.FromRgb(244, 63, 94); // Rose #F43F5E
+                gradientEnd = Color.FromRgb(190, 18, 60);  // Dark Red #BE123C
             }
             else if (msgLower.Contains("warning") || msgLower.Contains("⚠️") || msgLower.Contains("limit") || msgLower.Contains("retry"))
             {
                 // Warning (Amber theme)
-                ToastIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Warning24;
-                ToastIcon.Foreground = new SolidColorBrush(Color.FromRgb(245, 158, 11)); // #F59E0B
-                ToastBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(120, 245, 158, 11));
-                ToastBorder.Background = new SolidColorBrush(Color.FromArgb(240, 26, 20, 10));
-                ToastShadow.Color = Color.FromRgb(245, 158, 11);
-                ToastShadow.Opacity = 0.15;
+                symbol = Wpf.Ui.Controls.SymbolRegular.Warning24;
+                accentColor = Color.FromRgb(245, 158, 11); // Amber #F59E0B
+                gradientEnd = Color.FromRgb(217, 119, 6);  // Orange #D97706
             }
             else if (msgLower.Contains("copy") || msgLower.Contains("copied") || msgLower.Contains("clipboard") || msgLower.Contains("📋"))
             {
                 // Copy/Clipboard (Violet theme)
-                ToastIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Clipboard24;
-                ToastIcon.Foreground = new SolidColorBrush(Color.FromRgb(167, 139, 250)); // #A78BFA
-                ToastBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(120, 167, 139, 250));
-                ToastBorder.Background = new SolidColorBrush(Color.FromArgb(240, 18, 14, 28));
-                ToastShadow.Color = Color.FromRgb(167, 139, 250);
-                ToastShadow.Opacity = 0.15;
+                symbol = Wpf.Ui.Controls.SymbolRegular.Clipboard24;
+                accentColor = Color.FromRgb(167, 139, 250); // Violet #A78BFA
+                gradientEnd = Color.FromRgb(192, 132, 252); // Purple #C084FC
             }
             else if (msgLower.Contains("sync") || msgLower.Contains("pairing") || msgLower.Contains("paired") || msgLower.Contains("device") || msgLower.Contains("lan") || msgLower.Contains("cloudflare"))
             {
-                // Network/Sync (Blue theme)
-                ToastIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Router24;
-                ToastIcon.Foreground = new SolidColorBrush(Color.FromRgb(59, 130, 246)); // #3B82F6
-                ToastBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(120, 59, 130, 246));
-                ToastBorder.Background = new SolidColorBrush(Color.FromArgb(240, 12, 18, 28));
-                ToastShadow.Color = Color.FromRgb(59, 130, 246);
-                ToastShadow.Opacity = 0.15;
+                // Network/Sync (Sky Blue theme)
+                symbol = Wpf.Ui.Controls.SymbolRegular.Router24;
+                accentColor = Color.FromRgb(56, 189, 248); // Sky Blue #38BDF8
+                gradientEnd = Color.FromRgb(29, 78, 216);  // Royal Blue #1D4ED8
             }
             else
             {
-                // Success / Default (Emerald theme)
-                ToastIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Checkmark24;
-                ToastIcon.Foreground = new SolidColorBrush(Color.FromRgb(16, 185, 129)); // #10B981
-                ToastBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(120, 16, 185, 129));
-                ToastBorder.Background = new SolidColorBrush(Color.FromArgb(240, 12, 24, 18));
-                ToastShadow.Color = Color.FromRgb(16, 185, 129);
-                ToastShadow.Opacity = 0.15;
+                // Success / Default (Premium Indigo to Violet - no green tint!)
+                symbol = Wpf.Ui.Controls.SymbolRegular.CheckmarkCircle24;
+                accentColor = Color.FromRgb(129, 140, 248); // Indigo #818CF8
+                gradientEnd = Color.FromRgb(192, 132, 252); // Purple #C084FC
             }
+
+            // Apply configuration
+            ToastIcon.Symbol = symbol;
+            ToastIcon.Foreground = new SolidColorBrush(accentColor);
+            
+            // Build vertical gradient for left accent strip
+            var accentGradient = new LinearGradientBrush(accentColor, gradientEnd, new Point(0, 0), new Point(0, 1));
+            accentGradient.Freeze();
+            AccentStrip.Background = accentGradient;
+
+            // Soft glow matching the notification type
+            ToastShadow.Color = accentColor;
+            ToastShadow.Opacity = 0.20;
+            ToastShadow.BlurRadius = 20;
         }
         
         private void PositionAndShow()
