@@ -304,6 +304,9 @@ public partial class App : Application
                     // Load persisted clipboard history asynchronously (text + images survive restarts)
                     _ = (_mainWinInstance.DataContext as ViewModels.FlyShelfViewModel)?.LoadPersistedHistoryAsync();
                     
+                    _mainWinInstance.WindowStartupLocation = WindowStartupLocation.Manual;
+                    _mainWinInstance.Left = -20000;
+                    _mainWinInstance.Top = -20000;
                     MainWindow.Show();
                     
                     // One-time cleanup: purge old GUID-based device entries from Firebase

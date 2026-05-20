@@ -581,6 +581,7 @@ namespace AdvanceClip.Classes
 
                     var clientStream = client.GetStream();
                     var targetStream = target.GetStream();
+                    using var bufferedClient = new System.IO.BufferedStream(clientStream, 8192);
 
                     // === HTTP-AWARE PROXY: Rewrite the Host header ===
                     // HttpListener validates Host header against its prefix.
@@ -596,7 +597,7 @@ namespace AdvanceClip.Classes
                     // Read byte-by-byte until we find \r\n\r\n (end of HTTP headers)
                     while (headerBytes.Count < 16384) // 16KB max header size
                     {
-                        int read = await clientStream.ReadAsync(buf, 0, 1, cts.Token);
+                        int read = await bufferedClient.ReadAsync(buf, 0, 1, cts.Token);
                         if (read == 0) return; // Client disconnected
                         headerBytes.Add(buf[0]);
 
@@ -626,7 +627,7 @@ namespace AdvanceClip.Classes
                     await targetStream.WriteAsync(rewrittenBytes, 0, rewrittenBytes.Length, cts.Token);
 
                     // Now relay the rest bi-directionally (body + response)
-                    var t1 = clientStream.CopyToAsync(targetStream, cts.Token);
+                    var t1 = bufferedClient.CopyToAsync(targetStream, cts.Token);
                     var t2 = targetStream.CopyToAsync(clientStream, cts.Token);
                     await Task.WhenAny(t1, t2);
                 }
@@ -671,6 +672,7 @@ namespace AdvanceClip.Classes
                     // Wrap in SslStream — this terminates TLS
                     using var sslStream = new SslStream(networkStream, false);
                     await sslStream.AuthenticateAsServerAsync(_tlsCert!, false, System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13, false);
+                    using var bufferedSsl = new System.IO.BufferedStream(sslStream, 8192);
 
                     // Connect to the local HTTP server
                     using var target = new System.Net.Sockets.TcpClient();
@@ -689,7 +691,7 @@ namespace AdvanceClip.Classes
 
                     while (headerBytes.Count < 16384)
                     {
-                        int read = await sslStream.ReadAsync(buf, 0, 1, cts.Token);
+                        int read = await bufferedSsl.ReadAsync(buf, 0, 1, cts.Token);
                         if (read == 0) return;
                         headerBytes.Add(buf[0]);
 
@@ -718,7 +720,7 @@ namespace AdvanceClip.Classes
                     await targetStream.WriteAsync(rewrittenBytes, 0, rewrittenBytes.Length, cts.Token);
 
                     // Bi-directional relay: sslStream ↔ targetStream
-                    var t1 = sslStream.CopyToAsync(targetStream, cts.Token);
+                    var t1 = bufferedSsl.CopyToAsync(targetStream, cts.Token);
                     var t2 = targetStream.CopyToAsync(sslStream, cts.Token);
                     await Task.WhenAny(t1, t2);
                 }

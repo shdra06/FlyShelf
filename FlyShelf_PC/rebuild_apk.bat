@@ -1,6 +1,6 @@
 @echo off
 
-cd ..\FlyShelf_Android
+cd /d "%~dp0..\FlyShelf_Android"
 
 echo Clearing previous builds and generating native code...
 set "CI=true"
@@ -25,10 +25,10 @@ call gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,x86_64
 echo.
 echo Re-packaging...
 cd ..
-if not exist "..\FlyShelf_PC\FINAL" mkdir "..\FlyShelf_PC\FINAL"
-copy /Y "android\app\build\outputs\apk\release\app-release.apk" "..\FlyShelf_PC\FINAL\FlyShelf_Mobile.apk" >nul
+if not exist "%~dp0FINAL" mkdir "%~dp0FINAL"
+copy /Y "android\app\build\outputs\apk\release\app-release.apk" "%~dp0FINAL\FlyShelf_Mobile.apk" >nul
 
-cd ..\FlyShelf_PC
+cd /d "%~dp0"
 echo ==============================================
 echo DONE! The updated APK is in 'FlyShelf_PC\FINAL'.
 echo ==============================================

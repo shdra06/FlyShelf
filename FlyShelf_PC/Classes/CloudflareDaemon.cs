@@ -488,12 +488,31 @@ namespace AdvanceClip.Classes
             {
                 if (_cfProcess != null && !_cfProcess.HasExited)
                 {
-                    _cfProcess.Kill();
+                    try { _cfProcess.Kill(); } catch { }
                     _cfProcess.Dispose();
+                    _cfProcess = null;
                 }
+
+                string appDataAgentPath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), 
+                    "FlyShelf", "agent", "cloudflared.exe"
+                );
+
                 foreach (var p in Process.GetProcessesByName("cloudflared"))
                 {
-                    p.Kill();
+                    try
+                    {
+                        string processPath = p.MainModule?.FileName ?? "";
+                        if (string.Equals(processPath, appDataAgentPath, StringComparison.OrdinalIgnoreCase))
+                        {
+                            p.Kill();
+                        }
+                    }
+                    catch
+                    {
+                        // MainModule might throw if process is 64-bit and we are 32-bit (or access denied)
+                        // In that case, do not kill it because it's not ours (ours is always accessible to us).
+                    }
                 }
             }
             catch { }

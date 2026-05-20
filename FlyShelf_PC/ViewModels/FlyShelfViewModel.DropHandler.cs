@@ -691,7 +691,7 @@ namespace AdvanceClip.ViewModels
             return bmp;
         }
 
-        private BitmapImage? GetIcon(string filePath)
+        public BitmapImage? GetIcon(string filePath)
         {
             try
             {

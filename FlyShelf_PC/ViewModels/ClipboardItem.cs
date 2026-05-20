@@ -138,8 +138,22 @@ namespace AdvanceClip.ViewModels
             } 
         }
         
-        // Universal Support enhancements
-        public ClipboardItemType ItemType { get; set; } = ClipboardItemType.File;
+        private ClipboardItemType _itemType = ClipboardItemType.File;
+        public ClipboardItemType ItemType
+        {
+            get => _itemType;
+            set
+            {
+                if (_itemType != value)
+                {
+                    _itemType = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ItemType)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLongText)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExpandToggleText)));
+                }
+            }
+        }
 
         private string _rawContent = string.Empty;
         public string RawContent
@@ -151,7 +165,73 @@ namespace AdvanceClip.ViewModels
                 {
                     _rawContent = value;
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContent)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLongText)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExpandToggleText)));
                 }
+            }
+        }
+
+        private bool _isExpanded;
+        [JsonIgnore]
+        public bool IsExpanded
+        {
+            get => _isExpanded;
+            set
+            {
+                if (_isExpanded != value)
+                {
+                    _isExpanded = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsExpanded)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExpandToggleText)));
+                }
+            }
+        }
+
+        [JsonIgnore]
+        public bool IsLongText
+        {
+            get
+            {
+                if (ItemType != ClipboardItemType.Text && ItemType != ClipboardItemType.Code && ItemType != ClipboardItemType.Url)
+                    return false;
+                if (string.IsNullOrEmpty(RawContent))
+                    return false;
+                
+                if (RawContent.Length > 260)
+                    return true;
+                
+                int lineCount = 0;
+                int index = 0;
+                while ((index = RawContent.IndexOf('\n', index)) != -1)
+                {
+                    lineCount++;
+                    index++;
+                    if (lineCount > 4)
+                        return true;
+                }
+                return false;
+            }
+        }
+
+        [JsonIgnore]
+        public double CollapsedMaxHeight => IsLongText ? (IsExpanded ? double.PositiveInfinity : 100.0) : 57.0;
+
+        [JsonIgnore]
+        public string ExpandToggleText => IsExpanded ? "▴" : "▾";
+
+        private System.Windows.Input.ICommand? _toggleExpandCommand;
+        [JsonIgnore]
+        public System.Windows.Input.ICommand ToggleExpandCommand
+        {
+            get
+            {
+                if (_toggleExpandCommand == null)
+                {
+                    _toggleExpandCommand = new RelayCommand(() => IsExpanded = !IsExpanded);
+                }
+                return _toggleExpandCommand;
             }
         }
         public bool IsImagePreview => (ItemType == ClipboardItemType.Image || ItemType == ClipboardItemType.QRCode) && Extension != "DOWNLOADING";
@@ -453,22 +533,59 @@ namespace AdvanceClip.ViewModels
 
         public ClipboardItem(string path)
         {
-            FilePath = path;
-            FileName = Path.GetFileName(path);
-            Extension = Path.GetExtension(path)?.ToUpperInvariant() ?? "FILE";
+            if (!string.IsNullOrEmpty(path))
+            {
+                try
+                {
+                    if (path.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var uri = new Uri(path);
+                        path = uri.LocalPath;
+                    }
+                }
+                catch { }
+            }
+
+            FilePath = path ?? string.Empty;
+            try
+            {
+                FileName = Path.GetFileName(path) ?? string.Empty;
+                Extension = Path.GetExtension(path)?.ToUpperInvariant() ?? "FILE";
+            }
+            catch
+            {
+                FileName = path ?? string.Empty;
+                Extension = "FILE";
+            }
             
             try
             {
-                var fileInfo = new FileInfo(path);
-                if (fileInfo.Exists)
+                bool exists = false;
+                bool isDir = false;
+                long length = 0;
+
+                try
                 {
-                    FormattedSize = FormatBytes(fileInfo.Length);
+                    if (!string.IsNullOrEmpty(path))
+                    {
+                        var fileInfo = new FileInfo(path);
+                        exists = fileInfo.Exists;
+                        if (exists) length = fileInfo.Length;
+                        isDir = Directory.Exists(path);
+                    }
+                }
+                catch { }
+
+                if (exists)
+                {
+                    FormattedSize = FormatBytes(length);
                     // Classify obvious extensions
                     string ext = Extension.ToLowerInvariant();
                     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".bmp" || ext == ".webp")
                     {
                         ItemType = ClipboardItemType.Image;
                         ScanForQRCodeAsync(path);
+                        ScanForOcrTextAsync(path);
                     }
                     else if (ext == ".pdf")
                     {
@@ -530,12 +647,12 @@ namespace AdvanceClip.ViewModels
                         ItemType = ClipboardItemType.Document;
                     }
                 }
-                else if (Directory.Exists(path))
+                else if (isDir)
                 {
                     // Folder copied — set lightweight properties immediately, defer heavy I/O
                     ItemType = ClipboardItemType.Folder;
                     Extension = "FOLDER";
-                    FileName = Path.GetFileName(path);
+                    FileName = Path.GetFileName(path) ?? "Folder";
                     FormattedSize = "Scanning...";
                     
                     // Heavy enumeration + zip runs on background thread
@@ -559,9 +676,9 @@ namespace AdvanceClip.ViewModels
                             var topItems = Directory.GetFileSystemEntries(capturedPath).Take(30).ToArray();
                             foreach (var entry in topItems)
                             {
-                                bool isDir = Directory.Exists(entry);
+                                bool entryIsDir = Directory.Exists(entry);
                                 string name = Path.GetFileName(entry);
-                                if (isDir)
+                                if (entryIsDir)
                                 {
                                     int subCount = 0;
                                     try { subCount = Directory.GetFileSystemEntries(entry).Length; } catch { }
@@ -597,12 +714,61 @@ namespace AdvanceClip.ViewModels
                         }
                     });
                 }
+                else
+                {
+                    // Fallback for non-existent / remote / offline files/directories
+                    FormattedSize = "Offline / Remote";
+                    string ext = Extension.ToLowerInvariant();
+                    if (path != null && (path.EndsWith("\\") || path.EndsWith("/")))
+                    {
+                        ItemType = ClipboardItemType.Folder;
+                        Extension = "FOLDER";
+                    }
+                    else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".bmp" || ext == ".webp")
+                    {
+                        // To prevent layout breaking on offline images where a thumbnail is unavailable,
+                        // classify them as ClipboardItemType.File.
+                        ItemType = ClipboardItemType.File;
+                    }
+                    else if (ext == ".pdf")
+                    {
+                        ItemType = ClipboardItemType.Pdf;
+                    }
+                    else if (ext == ".doc" || ext == ".docx" || ext == ".txt")
+                    {
+                        ItemType = ClipboardItemType.Document;
+                    }
+                    else if (ext == ".cpp" || ext == ".c" || ext == ".bat" || ext == ".cmd" || ext == ".ps1" || ext == ".js" || ext == ".py" || ext == ".cs")
+                    {
+                        ItemType = ClipboardItemType.Code;
+                    }
+                    else if (ext == ".ppt" || ext == ".pptx")
+                    {
+                        ItemType = ClipboardItemType.Presentation;
+                    }
+                    else if (ext == ".zip" || ext == ".rar" || ext == ".7z" || ext == ".tar" || ext == ".gz" || ext == ".apk")
+                    {
+                        ItemType = ClipboardItemType.Archive;
+                    }
+                    else if (ext == ".mp4" || ext == ".mkv" || ext == ".avi" || ext == ".mov")
+                    {
+                        ItemType = ClipboardItemType.Video;
+                    }
+                    else if (ext == ".mp3" || ext == ".wav" || ext == ".flac" || ext == ".ogg")
+                    {
+                        ItemType = ClipboardItemType.Audio;
+                    }
+                    else
+                    {
+                        ItemType = ClipboardItemType.File;
+                    }
+                }
 
                 // Explicitly bind the Raw Content buffer natively securely mapping the File Execution Constraints!
                 string xExt = Extension.ToLowerInvariant();
                 bool isPlainText = xExt == ".txt" || xExt == ".json" || xExt == ".md" || xExt == ".csv" || xExt == ".xml" || ItemType == ClipboardItemType.Code;
                 
-                if (isPlainText && fileInfo != null && fileInfo.Exists && fileInfo.Length < 1000000)
+                if (isPlainText && exists && length < 1000000)
                 {
                     try { RawContent = File.ReadAllText(path); } catch { }
                 }

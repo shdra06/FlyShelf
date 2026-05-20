@@ -168,23 +168,72 @@ namespace AdvanceClip.Classes
             var capturedTransport = DetectTransport(req);
             System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
             {
-                // Determine item type from payload or text content
-                ClipboardItemType clipType;
-                if (!string.IsNullOrEmpty(capturedType) && Enum.TryParse<ClipboardItemType>(capturedType, true, out var parsed))
-                    clipType = parsed;
-                else
-                    clipType = capturedText.StartsWith("http") ? ClipboardItemType.Url : ClipboardItemType.Text;
-
-                var clip = new ClipboardItem
+                // Detect if capturedText is a path or file:// URI
+                string possiblePath = capturedText;
+                if (possiblePath.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
                 {
-                    RawContent = capturedText,
-                    FileName = capturedText.Length > 40 ? capturedText.Substring(0, 40) + "..." : capturedText,
-                    Extension = capturedTransport.label,
-                    ItemType = clipType,
-                    SourceDeviceName = capturedSource,
-                    SourceDeviceType = capturedSource.Contains("PC") || capturedSource.Contains("LAPTOP") || capturedSource.Contains("DESKTOP") ? "PC" : "Mobile",
-                    TransferMethod = capturedTransport.transport
-                };
+                    try
+                    {
+                        possiblePath = new Uri(possiblePath).LocalPath;
+                    }
+                    catch { }
+                }
+
+                bool isPath = false;
+                try
+                {
+                    if (System.Text.RegularExpressions.Regex.IsMatch(possiblePath, @"^[a-zA-Z]:[\\/]") || possiblePath.StartsWith("\\\\"))
+                    {
+                        isPath = true;
+                    }
+                }
+                catch { }
+
+                ClipboardItem clip;
+                if (isPath)
+                {
+                    // Construct as physical file (using our new offline fallback constructor)
+                    clip = new ClipboardItem(possiblePath)
+                    {
+                        SourceDeviceName = capturedSource,
+                        SourceDeviceType = capturedSource.Contains("PC") || capturedSource.Contains("LAPTOP") || capturedSource.Contains("DESKTOP") ? "PC" : "Mobile",
+                        TransferMethod = capturedTransport.transport
+                    };
+                    // Load its shell icon in the background thread via _viewModel.GetIcon
+                    _ = System.Threading.Tasks.Task.Run(() =>
+                    {
+                        try
+                        {
+                            var icon = _viewModel.GetIcon(possiblePath);
+                            if (icon != null)
+                            {
+                                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => clip.Icon = icon);
+                            }
+                        }
+                        catch { }
+                    });
+                }
+                else
+                {
+                    // Determine item type from payload or text content
+                    ClipboardItemType clipType;
+                    if (!string.IsNullOrEmpty(capturedType) && Enum.TryParse<ClipboardItemType>(capturedType, true, out var parsed))
+                        clipType = parsed;
+                    else
+                        clipType = capturedText.StartsWith("http") ? ClipboardItemType.Url : ClipboardItemType.Text;
+
+                    clip = new ClipboardItem
+                    {
+                        RawContent = capturedText,
+                        FileName = capturedText.Length > 40 ? capturedText.Substring(0, 40) + "..." : capturedText,
+                        Extension = capturedTransport.label,
+                        ItemType = clipType,
+                        SourceDeviceName = capturedSource,
+                        SourceDeviceType = capturedSource.Contains("PC") || capturedSource.Contains("LAPTOP") || capturedSource.Contains("DESKTOP") ? "PC" : "Mobile",
+                        TransferMethod = capturedTransport.transport
+                    };
+                }
+
                 clip.EvaluateSmartActions();
                 bool wasEmpty = _viewModel.DroppedItems.Count == 0;
                 _viewModel.DroppedItems.Insert(0, clip);
@@ -207,7 +256,7 @@ namespace AdvanceClip.Classes
                 
                 AdvanceClip.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport.transport}! 📱");
                 // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
-                NotifyClipboardChanged(clipType.ToString(), capturedText.Length > 40 ? capturedText.Substring(0, 40) : capturedText);
+                NotifyClipboardChanged(clip.ItemType.ToString(), capturedText.Length > 40 ? capturedText.Substring(0, 40) : capturedText);
             });
         }
 

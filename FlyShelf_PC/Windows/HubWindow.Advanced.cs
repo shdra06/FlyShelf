@@ -949,12 +949,6 @@ namespace AdvanceClip.Windows
                 catch { Windows.ToastWindow.ShowToast("Clipboard busy — try again"); }
             }
         }
-
-        protected override void OnClosed(EventArgs e)
-        {
-            _deviceRefreshTimer?.Stop();
-            base.OnClosed(e);
-        }
     }
 
     public class GroupDisplayItem

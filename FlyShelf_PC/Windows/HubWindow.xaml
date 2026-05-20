@@ -790,6 +790,7 @@
                                             <ui:MenuItem Header="Extract Text from Image (OCR)" Icon="{ui:SymbolIcon TextDescription24}" Foreground="#A855F7" Command="{Binding PlacementTarget.Tag.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             <ui:MenuItem Header="Extract Table Data (Gemini AI)" Icon="{ui:SymbolIcon Table24}" Foreground="#A855F7" Command="{Binding PlacementTarget.Tag.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             <ui:MenuItem Header="Convert Image to PDF" Icon="{ui:SymbolIcon Document24}" Foreground="#F59E0B" Command="{Binding PlacementTarget.Tag.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                            <ui:MenuItem Header="Scan QR Code" Icon="{ui:SymbolIcon QrCode24}" Foreground="#A855F7" Command="{Binding PlacementTarget.Tag.ManualScanQRCodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             
                                             <!-- QR Code Actions -->
                                             <ui:MenuItem Header="Extract QR Text &amp; Copy" Icon="{ui:SymbolIcon QrCode24}" Foreground="#8B5CF6" Command="{Binding PlacementTarget.Tag.CopyRawContentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsQRCodePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
@@ -969,7 +970,17 @@
                                             <StackPanel Orientation="Horizontal">
                                                 <!-- Color detection dot -->
                                                 <Border Width="12" Height="12" CornerRadius="6" Margin="0,0,6,0" VerticalAlignment="Center" Background="{Binding DetectedColorBrush}" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}" BorderBrush="{Binding DetectedColorBrush}" BorderThickness="1.5"/>
-                                                <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextTrimming="CharacterEllipsis">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsLongText}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
                                             </StackPanel>
                                             <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
                                                 <Border CornerRadius="4" Padding="6,2" Margin="0,0,6,0">
@@ -1032,7 +1043,39 @@
                                                     </Border.Effect>
                                                 </Border>
                                             </StackPanel>
-                                            <TextBlock Text="{Binding RawContent}" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" MaxHeight="34" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                            <TextBlock Text="{Binding RawContent}" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" MaxHeight="{Binding CollapsedMaxHeight}" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                            
+                                            <Button Content="{Binding ExpandToggleText}" 
+                                                    Command="{Binding ToggleExpandCommand}" 
+                                                    Visibility="{Binding IsLongText, Converter={StaticResource BooleanToVisibilityConverter}}" 
+                                                    HorizontalAlignment="Left"
+                                                    Margin="0,2,0,0"
+                                                    Cursor="Hand"
+                                                    Foreground="#64748B"
+                                                    FontSize="16"
+                                                    FontWeight="Bold"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Padding="4,0">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border Background="Transparent">
+                                                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                                <Button.Style>
+                                                    <Style TargetType="Button">
+                                                        <Setter Property="Opacity" Value="0.6"/>
+                                                        <Style.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter Property="Opacity" Value="1.0"/>
+                                                                <Setter Property="Foreground" Value="#3B82F6"/>
+                                                            </Trigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Button.Style>
+                                            </Button>
                                             
                                             <!-- P2P Transfer Progress Bar -->
                                             <StackPanel Margin="0,4,0,0" Visibility="{Binding IsTransferring, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -1115,6 +1158,7 @@
                                                     </Style>
                                                 </ui:Button.Style>
                                             </ui:Button>
+
 
                                             <!-- Convert PDF to Word -->
                                             <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Convert PDF to Word" Command="{Binding DataContext.ConvertPdfToWordCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">

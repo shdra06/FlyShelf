@@ -106,7 +106,9 @@ namespace AdvanceClip
                             bmp.BeginInit();
                             bmp.UriSource = new Uri(clipboardObj.FilePath);
                             bmp.CacheOption = BitmapCacheOption.OnLoad;
+                            bmp.DecodePixelWidth = 1024; // Cap decode size to reduce UI thread stall
                             bmp.EndInit();
+                            bmp.Freeze();
                             dataObj.SetImage(bmp);
                         }
                         catch { }
@@ -239,11 +241,14 @@ namespace AdvanceClip
                             {
                                 try
                                 {
+                                    // Load a tiny thumbnail instead of full image — avoids 1-2s freeze on large files
                                     var bmp = new BitmapImage();
                                     bmp.BeginInit();
                                     bmp.UriSource = new Uri(firstItem.FilePath);
                                     bmp.CacheOption = BitmapCacheOption.OnLoad;
+                                    bmp.DecodePixelWidth = 128; // Lightweight thumbnail for drag preview
                                     bmp.EndInit();
+                                    bmp.Freeze();
                                     dataObj.SetImage(bmp);
                                 }
                                 catch { }

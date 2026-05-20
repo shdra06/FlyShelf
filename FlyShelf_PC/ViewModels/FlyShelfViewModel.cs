@@ -17,7 +17,7 @@ namespace AdvanceClip.ViewModels
     public partial class FlyShelfViewModel : INotifyPropertyChanged
     {
         public ObservableCollection<ClipboardItem> DroppedItems { get; } = new ObservableCollection<ClipboardItem>();
-        private Stack<System.Collections.Generic.List<ClipboardItem>> _deletedItemsHistory = new Stack<System.Collections.Generic.List<ClipboardItem>>();
+        private readonly System.Collections.Generic.LinkedList<System.Collections.Generic.List<ClipboardItem>> _deletedItemsHistory = new System.Collections.Generic.LinkedList<System.Collections.Generic.List<ClipboardItem>>();
         // Limit parallel image/icon decodes to prevent memory spikes on bulk file copies
         private static readonly System.Threading.SemaphoreSlim _iconDecodeSemaphore = new System.Threading.SemaphoreSlim(2, 2);
 
@@ -70,10 +70,13 @@ namespace AdvanceClip.ViewModels
             }
             OnPropertyChanged(nameof(ShelfVisibility));
 
-            // Wire up auto-save on any collection change
+            // Wire up auto-save on any collection change (except Remove — handled by journal append in RemoveItem)
             DroppedItems.CollectionChanged += (s, e) =>
             {
-                Classes.ClipboardHistoryManager.SaveHistoryDebounced(DroppedItems);
+                if (e.Action != System.Collections.Specialized.NotifyCollectionChangedAction.Remove)
+                {
+                    Classes.ClipboardHistoryManager.SaveHistoryDebounced(DroppedItems);
+                }
             };
 
             // Phase 2: Load icons in background — batched to limit memory pressure
@@ -223,6 +226,7 @@ namespace AdvanceClip.ViewModels
         public ICommand ConvertImageToPdfCommand { get; }
         public ICommand GoogleSearchCommand { get; }
         public ICommand ConvertPdfToWordCommand { get; }
+        public ICommand ManualScanQRCodeCommand { get; }
         
         public AdvanceClip.Classes.NetworkSyncServer LocalServer { get; private set; }
         public AdvanceClip.Classes.DocumentSniffer Sniffer { get; private set; }
@@ -250,6 +254,7 @@ namespace AdvanceClip.ViewModels
             ConvertImageToPdfCommand = new RelayCommand<ClipboardItem>(item => item?.ConvertImageToPdf());
             GoogleSearchCommand = new RelayCommand<ClipboardItem>(item => item?.GoogleSearch());
             ConvertPdfToWordCommand = new RelayCommand<ClipboardItem>(item => item?.ConvertPdfToWordTask());
+            ManualScanQRCodeCommand = new RelayCommand<ClipboardItem>(item => item?.ManualScanQRCode());
 
             ExtractTextCommand = new RelayCommand<ClipboardItem>(item => item?.ExtractText());
             ExtractTableCommand = new RelayCommand<ClipboardItem>(item => item?.ExtractTable());
@@ -435,17 +440,27 @@ namespace AdvanceClip.ViewModels
                 // Structural Lock: Pinned items cannot be deleted unless physically unpinned first!
                 if (item.IsPinned) return; 
 
-                _deletedItemsHistory.Push(new System.Collections.Generic.List<ClipboardItem> { item });
+                _deletedItemsHistory.AddLast(new System.Collections.Generic.List<ClipboardItem> { item });
+                if (_deletedItemsHistory.Count > 50)
+                {
+                    _deletedItemsHistory.RemoveFirst();
+                }
+
+                // Persist the delete to journal BEFORE removing from collection.
+                // This uses a fast single-line append instead of full JSON compaction.
+                var itemCopy = item;
                 DroppedItems.Remove(item);
                 OnPropertyChanged(nameof(ShelfVisibility));
 
-                // Cleanup backing file asynchronously in background to prevent UI blocking
+                // Cleanup backing file + journal append asynchronously in background
                 string filePath = item.FilePath;
                 ClipboardItemType itemType = item.ItemType;
                 System.Threading.Tasks.Task.Run(() =>
                 {
                     try
                     {
+                        // Fast journal append — avoids full 2000-item JSON compaction
+                        Classes.ClipboardHistoryManager.AppendDeleteToJournal(itemCopy);
                         CleanupTempFile(filePath);
                         Classes.ClipboardHistoryManager.DeletePersistentImage(filePath, itemType);
                     }
@@ -455,7 +470,7 @@ namespace AdvanceClip.ViewModels
         }
 
         /// <summary>
-        /// Deletes the backing file only if it resides inside the system temp directory.
+        /// Deletes the backing file only if it resides inside the system temp directory or the app's synced files directory.
         /// User's real files (dragged from Explorer) are never touched.
         /// </summary>
         private void CleanupTempFile(string filePath)
@@ -463,9 +478,15 @@ namespace AdvanceClip.ViewModels
             try
             {
                 if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) return;
+                
                 string tempDir = Path.GetTempPath().TrimEnd(Path.DirectorySeparatorChar);
+                string appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf").TrimEnd(Path.DirectorySeparatorChar);
+                string syncedFilesDir = Path.Combine(appDataDir, "SyncedFiles").TrimEnd(Path.DirectorySeparatorChar);
+                
                 string fileDir = Path.GetDirectoryName(filePath)?.TrimEnd(Path.DirectorySeparatorChar) ?? "";
-                if (fileDir.StartsWith(tempDir, StringComparison.OrdinalIgnoreCase))
+                
+                if (fileDir.StartsWith(tempDir, StringComparison.OrdinalIgnoreCase) ||
+                    fileDir.StartsWith(syncedFilesDir, StringComparison.OrdinalIgnoreCase))
                 {
                     File.Delete(filePath);
                 }
@@ -497,10 +518,29 @@ namespace AdvanceClip.ViewModels
             var volatileItems = DroppedItems.Where(i => !i.IsPinned).ToList();
             if (volatileItems.Count > 0)
             {
-                _deletedItemsHistory.Push(volatileItems);
+                _deletedItemsHistory.AddLast(volatileItems);
+                if (_deletedItemsHistory.Count > 50)
+                {
+                    _deletedItemsHistory.RemoveFirst();
+                }
                 foreach(var vi in volatileItems) DroppedItems.Remove(vi);
                 OnPropertyChanged(nameof(ShelfVisibility));
                 SavePinnedItems();
+                
+                // Append deletes and clean up files asynchronously in a background thread to prevent UI blocks
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    foreach (var item in volatileItems)
+                    {
+                        try
+                        {
+                            Classes.ClipboardHistoryManager.AppendDeleteToJournal(item);
+                            CleanupTempFile(item.FilePath);
+                            Classes.ClipboardHistoryManager.DeletePersistentImage(item.FilePath, item.ItemType);
+                        }
+                        catch { }
+                    }
+                });
             }
         }
         
@@ -633,7 +673,8 @@ namespace AdvanceClip.ViewModels
         {
             if (_deletedItemsHistory.Count > 0)
             {
-                var restoredItems = _deletedItemsHistory.Pop();
+                var restoredItems = _deletedItemsHistory.Last.Value;
+                _deletedItemsHistory.RemoveLast();
                 foreach (var item in restoredItems)
                 {
                     if (!DroppedItems.Contains(item))
@@ -746,11 +787,58 @@ namespace AdvanceClip.ViewModels
                     return;
                 }
 
-                // No Cloudflare tunnel available — file cannot be synced remotely
-                // Firebase Storage is NEVER used for content transfer
-                AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"'{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) — no Cloudflare tunnel, file not synced");
-                Application.Current.Dispatcher.Invoke(() =>
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"\u26a0\ufe0f {Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) — needs Cloudflare tunnel"));
+                else
+                {
+                    // TESTING NEW NETOWRKING LOGIC
+                    // Fallback: Direct high-speed local LAN transfer when Cloudflare tunnel is not running
+                    bool hasLanPeers = AdvanceClip.Classes.PeerManager.Instance != null && AdvanceClip.Classes.PeerManager.Instance.AliveCount > 0;
+                    bool hasMobilePollers = srv != null && srv.GetDirectlyConnectedDeviceCount() > 0;
+
+                    if (hasLanPeers || hasMobilePollers)
+                    {
+                        if (hasLanPeers)
+                        {
+                            AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"[TESTING NEW NETOWRKING LOGIC] Syncing '{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) directly via high-speed LAN");
+                            
+                            _ = System.Threading.Tasks.Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    int delivered = await AdvanceClip.Classes.PeerManager.Instance.PushFileToAllPeers(
+                                        filePath, item.FileName ?? Path.GetFileName(filePath), item.ItemType.ToString());
+                                    
+                                    Application.Current.Dispatcher.Invoke(() =>
+                                    {
+                                        if (delivered > 0)
+                                        {
+                                            AdvanceClip.Windows.ToastWindow.ShowToast($"{label} ({FormatFileSize(fSize)}) synced directly via LAN! \ud83d\udce1");
+                                        }
+                                        else
+                                        {
+                                            AdvanceClip.Windows.ToastWindow.ShowToast($"\u26a0\ufe0f LAN direct sync failed \u2014 no active peers accepted the file");
+                                        }
+                                    });
+                                }
+                                catch (Exception ex)
+                                {
+                                    AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"[TESTING NEW NETOWRKING LOGIC] Direct LAN transfer error: {ex.Message}");
+                                }
+                            });
+                        }
+                        else
+                        {
+                            AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"[TESTING NEW NETOWRKING LOGIC] '{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) placed on local server for companion app pulling");
+                            Application.Current.Dispatcher.Invoke(() =>
+                                AdvanceClip.Windows.ToastWindow.ShowToast($"Synced via LAN! \u26a1 (Available for companion app pulling)"));
+                        }
+                        return;
+                    }
+
+                    // No Cloudflare tunnel or active LAN peers available — file cannot be synced
+                    AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"'{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) \u2014 no Cloudflare tunnel or LAN peers, file not synced");
+                    Application.Current.Dispatcher.Invoke(() =>
+                        AdvanceClip.Windows.ToastWindow.ShowToast($"\u26a0\ufe0f {Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) \u2014 no active LAN peers or Cloudflare tunnel"));
+                }
             }
             catch (Exception ex)
             {
@@ -765,6 +853,7 @@ namespace AdvanceClip.ViewModels
         /// </summary>
         private void PruneOldItems()
         {
+            var prunedList = new List<ClipboardItem>();
             while (DroppedItems.Count > MAX_UNPINNED_ITEMS)
             {
                 // Find the last unpinned item
@@ -773,8 +862,30 @@ namespace AdvanceClip.ViewModels
                 {
                     if (!DroppedItems[i].IsPinned) { oldest = DroppedItems[i]; break; }
                 }
-                if (oldest != null) DroppedItems.Remove(oldest);
+                if (oldest != null)
+                {
+                    prunedList.Add(oldest);
+                    DroppedItems.Remove(oldest);
+                }
                 else break; // all items are pinned
+            }
+
+            if (prunedList.Count > 0)
+            {
+                // Write deletes to journal and clean up physical backing files asynchronously
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    foreach (var item in prunedList)
+                    {
+                        try
+                        {
+                            Classes.ClipboardHistoryManager.AppendDeleteToJournal(item);
+                            CleanupTempFile(item.FilePath);
+                            Classes.ClipboardHistoryManager.DeletePersistentImage(item.FilePath, item.ItemType);
+                        }
+                        catch { }
+                    }
+                });
             }
         }
 

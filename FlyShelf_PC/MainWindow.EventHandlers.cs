@@ -34,9 +34,6 @@ namespace AdvanceClip
 
             _viewModel.HandleDrop(e.Data, true);
             e.Handled = true;
-
-            // Immediately disappear on drop!
-            AnimateAndHide();
         }
 
         private void Window_Drop(object sender, DragEventArgs e)
@@ -54,9 +51,6 @@ namespace AdvanceClip
 
             _viewModel.HandleDrop(e.Data, true);
             e.Handled = true;
-
-            // Immediately disappear on drop!
-            AnimateAndHide();
         }
 
     
@@ -370,11 +364,7 @@ namespace AdvanceClip
                 // Set flag to suppress the subsequent MouseUp paste-and-close
                 _didDragOut = true;
                 
-                // Defer removal to prevent structural DOM shifts from triggering MouseUp events on unrelated ListBox items underneath
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
-                {
-                    _viewModel.RemoveItem(item);
-                }, System.Windows.Threading.DispatcherPriority.Background);
+                _viewModel.RemoveItem(item);
                 
                 e.Handled = true;
             }

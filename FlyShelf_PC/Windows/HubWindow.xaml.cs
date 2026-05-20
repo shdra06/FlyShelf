@@ -21,6 +21,7 @@ namespace AdvanceClip.Windows
         private UpdateManager _updateManager = new UpdateManager();
         private bool _updateDownloaded = false;
         private System.Windows.Threading.DispatcherTimer? _deviceRefreshTimer;
+        private Action<string>? _devicePairedHandler;
 
         public HubWindow(FlyShelfViewModel viewModel)
         {
@@ -31,10 +32,11 @@ namespace AdvanceClip.Windows
             ApplyTheme();
 
             // Auto-refresh device list when a new device pairs
-            DevicePairingManager.OnDevicePaired += (deviceName) =>
+            _devicePairedHandler = (deviceName) =>
             {
                 Dispatcher.InvokeAsync(() => RefreshDevices_Click(null, null));
             };
+            DevicePairingManager.OnDevicePaired += _devicePairedHandler;
 
             // Show real version from assembly
             string v = UpdateManager.CurrentVersion;
@@ -132,13 +134,27 @@ namespace AdvanceClip.Windows
             };
         }
 
+        private System.Windows.Threading.DispatcherTimer? _collectionChangedDebounce;
+
         private void DroppedItems_CollectionChanged(object? sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
         {
-            Dispatcher.Invoke(() =>
+            // PERF: Debounce filter refresh to avoid re-evaluating 2000+ items on every rapid collection change.
+            // Uses InvokeAsync at Background priority so the UI thread finishes layout first.
+            if (_collectionChangedDebounce == null)
             {
-                ApplyFilters();
-                UpdateEmptyState();
-            });
+                _collectionChangedDebounce = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background)
+                {
+                    Interval = TimeSpan.FromMilliseconds(150)
+                };
+                _collectionChangedDebounce.Tick += (s, args) =>
+                {
+                    _collectionChangedDebounce.Stop();
+                    ApplyFilters();
+                    UpdateEmptyState();
+                };
+            }
+            _collectionChangedDebounce.Stop();
+            _collectionChangedDebounce.Start();
         }
 
         private void UpdateEmptyState()
@@ -1264,6 +1280,31 @@ namespace AdvanceClip.Windows
             else
             {
                 ToastWindow.ShowToast("Select 2+ files to merge, or 1 image/doc to convert.");
+            }
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            base.OnClosed(e);
+
+            // Unsubscribe from global pairing events to prevent static reference memory leaks
+            if (_devicePairedHandler != null)
+            {
+                DevicePairingManager.OnDevicePaired -= _devicePairedHandler;
+                _devicePairedHandler = null;
+            }
+
+            // Unsubscribe from ViewModel CollectionChanged to prevent memory leak of this window
+            if (_viewModel?.DroppedItems != null)
+            {
+                _viewModel.DroppedItems.CollectionChanged -= DroppedItems_CollectionChanged;
+            }
+
+            // Clean up any timers
+            if (_deviceRefreshTimer != null)
+            {
+                _deviceRefreshTimer.Stop();
+                _deviceRefreshTimer = null;
             }
         }
 

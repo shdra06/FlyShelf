@@ -1497,8 +1497,15 @@ export default function SyncScreen() {
         sentContentFingerprintsRef.current.add(`screenshot::${fileName}`);
         lastSyncedScreenshotRef.current = screenshotPath;
         syncLog('SCREENSHOT', `Native detected: ${fileName}`);
-        const activePc = activeDevicesRef.current.find((d: any) => d.DeviceType === 'PC');
         let targetUrl = activePc ? ((activePc._lanVerified && activePc._lanUrl) ? activePc._lanUrl : (await resolveOptimalUrl(activePc))) : await getCachedPcUrl();
+        if (!targetUrl) {
+          if (lastWorkingPcUrlRef.current) {
+            targetUrl = lastWorkingPcUrlRef.current;
+          } else if (pcLocalIp?.trim()) {
+            const raw = pcLocalIp.trim();
+            targetUrl = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+          }
+        }
         if (targetUrl) {
           const uploadUri = screenshotPath.startsWith('file://') ? screenshotPath : `file://${screenshotPath}`;
           try {
@@ -1589,6 +1596,14 @@ export default function SyncScreen() {
               // When native is available, pollAndSyncScreenshot handles the upload
               if (!AdvanceOverlay) {
                 let targetUrl = await getCachedPcUrl();
+                if (!targetUrl) {
+                  if (lastWorkingPcUrlRef.current) {
+                    targetUrl = lastWorkingPcUrlRef.current;
+                  } else if (pcLocalIp?.trim()) {
+                    const raw = pcLocalIp.trim();
+                    targetUrl = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+                  }
+                }
                 let localSuccess = false;
                 if (targetUrl) {
                   try {
@@ -1714,7 +1729,15 @@ export default function SyncScreen() {
       let finalRaw = payloadText, finalType = 'Text';
       if (payloadText.startsWith('http')) finalType = 'Url';
       else if (payloadText.includes('meet.google.com') || payloadText.includes('zoom.us') || payloadText.startsWith('www.')) { finalType = 'Url'; finalRaw = `https://${payloadText}`; }
-      const targetUrl = await getCachedPcUrl();
+      let targetUrl = await getCachedPcUrl();
+      if (!targetUrl) {
+        if (lastWorkingPcUrlRef.current) {
+          targetUrl = lastWorkingPcUrlRef.current;
+        } else if (pcLocalIp?.trim()) {
+          const raw = pcLocalIp.trim();
+          targetUrl = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+        }
+      }
       sentContentFingerprintsRef.current.add(finalRaw.substring(0, 200));
       const txEventId = generateEventId();
       processedEventsRef.current.set(txEventId, Date.now());
@@ -1852,9 +1875,20 @@ export default function SyncScreen() {
       } catch (localErr: any) {
         // Fallback: try PC merge
         if (Platform.OS === 'android') ToastAndroid.show('Local merge failed, trying PC...', ToastAndroid.SHORT);
-        let targetUrl = `http://${pcLocalIp}`;
+        let targetUrl = '';
+        if (pcLocalIp?.trim()) {
+          const raw = pcLocalIp.trim();
+          targetUrl = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+        }
         const activePc = activeDevices.find((d: any) => d.DeviceType === 'PC');
-        if (activePc) { const opt = await resolveOptimalUrl(activePc); if (opt) targetUrl = opt; }
+        if (activePc) {
+          const opt = await resolveOptimalUrl(activePc);
+          if (opt) {
+            targetUrl = opt;
+          } else if (lastWorkingPcUrlRef.current) {
+            targetUrl = lastWorkingPcUrlRef.current;
+          }
+        }
         const pdfUrls = mergeQueue.map(item => getMediaUrlForItem(item)).filter(u => u.startsWith('http'));
         if (pdfUrls.length < 2) { Alert.alert('Error', `Local: ${localErr.message}\nPC: No HTTP URLs available.`); return; }
         const res = await fetchWithTimeout(`${targetUrl}/api/merge_pdfs`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion' }, body: JSON.stringify({ urls: pdfUrls, sourceDevice: deviceName || 'Mobile' }) }, 30000);
@@ -1952,7 +1986,20 @@ export default function SyncScreen() {
       for (const item of selected) { if (!item.id && pairingKeyRef.current) { const clipRef = push(ref(database, clipboardPath())); await set(clipRef, { ...item, Timestamp: Date.now() }); } }
       for (const deviceKey of targetDeviceKeys) {
         const dev = forceSyncDevices.find(d => d.key === deviceKey);
-        if (dev?.LocalIp) { try { const url = await resolveOptimalUrl(dev); if (url) { for (const item of selected) { await fetchWithTimeout(`${url}/api/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion' }, body: JSON.stringify({ title: item.Title, content: item.Raw, type: item.Type, sourceDevice: deviceName }) }, 5000).catch(() => {}); } } } catch (e) {} }
+        if (dev?.LocalIp) {
+          try {
+            let url = await resolveOptimalUrl(dev);
+            if (!url) {
+              const raw = dev.LocalIp.trim();
+              url = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+            }
+            if (url) {
+              for (const item of selected) {
+                await fetchWithTimeout(`${url}/api/sync`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion' }, body: JSON.stringify({ title: item.Title, content: item.Raw, type: item.Type, sourceDevice: deviceName }) }, 5000).catch(() => {});
+              }
+            }
+          } catch (e) {}
+        }
       }
       if (Platform.OS === 'android') ToastAndroid.show('Force sync complete ✅', ToastAndroid.SHORT);
     } catch (e: any) { syncLog('FORCE-SYNC', `ERROR: ${e?.message}`); Alert.alert('Sync Error', e?.message || 'Unknown error'); }
@@ -2246,13 +2293,29 @@ export default function SyncScreen() {
         // Send to PC via LAN/Cloudflare (no Firebase Storage)
         const pc = activeDevices.find((d: any) => d.DeviceType === 'PC');
         if (!pc) { Alert.alert('No PC Found', 'No paired PC is online. Connect a PC first.'); setIsSending(false); setPendingUploadPayload(null); return; }
-        const resolved = await resolveOptimalUrl(pc);
+        let resolved = await resolveOptimalUrl(pc);
+        if (!resolved) {
+          if (lastWorkingPcUrlRef.current) {
+            resolved = lastWorkingPcUrlRef.current;
+          } else if (pcLocalIp?.trim()) {
+            const raw = pcLocalIp.trim();
+            resolved = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+          }
+        }
         if (!resolved) { Alert.alert('PC Unreachable', 'Could not reach your PC. Make sure FlyShelf is running.'); setIsSending(false); setPendingUploadPayload(null); return; }
         const uploadUrl = `${resolved}/api/sync_file?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`;
         await FileSystem.uploadAsync(uploadUrl, hydratedPath, { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion', ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}) } });
       } else {
         // Direct device transfer (LAN or Cloudflare)
-        const resolved = await resolveOptimalUrl(targetDeviceOrGlobal);
+        let resolved = await resolveOptimalUrl(targetDeviceOrGlobal);
+        if (!resolved) {
+          if (lastWorkingPcUrlRef.current) {
+            resolved = lastWorkingPcUrlRef.current;
+          } else if (pcLocalIp?.trim()) {
+            const raw = pcLocalIp.trim();
+            resolved = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+          }
+        }
         if (!resolved) { Alert.alert('Device Unreachable', 'Could not connect to this device. Make sure it is online.'); setIsSending(false); setPendingUploadPayload(null); return; }
 
         const isCloudflare = resolved.includes('trycloudflare.com');

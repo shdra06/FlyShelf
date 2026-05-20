@@ -1041,6 +1041,12 @@ namespace AdvanceClip
                 ShelfListView.SelectedIndex = 0;
             }
 
+            // Always scroll to the very top so the shelf never opens at a previous scroll offset
+            {
+                var sv = FindVisualChild<ScrollViewer>(ShelfListView);
+                sv?.ScrollToTop();
+            }
+
             // Force a deterministic height so the window doesn't bounce around with SizeToContent
             if (mode == 0)
             {

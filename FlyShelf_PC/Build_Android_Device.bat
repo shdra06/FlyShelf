@@ -4,7 +4,7 @@ echo ==============================================
 echo FlyShelf - Android Compiler Pipeline (Real Device - arm64-v8a Only)
 echo ==============================================
 
-cd ..\FlyShelf_Android
+cd /d "%~dp0..\FlyShelf_Android"
 
 echo Clearing previous builds and generating native code...
 set "CI=true"
@@ -29,10 +29,10 @@ call gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
 echo.
 echo Re-packaging...
 cd ..
-if not exist "..\FlyShelf_PC\FINAL" mkdir "..\FlyShelf_PC\FINAL"
-copy /Y "android\app\build\outputs\apk\release\app-release.apk" "..\FlyShelf_PC\FINAL\FlyShelf_Mobile_Device.apk" >nul
+if not exist "%~dp0FINAL" mkdir "%~dp0FINAL"
+copy /Y "android\app\build\outputs\apk\release\app-release.apk" "%~dp0FINAL\FlyShelf_Mobile_Device.apk" >nul
 
-cd ..\FlyShelf_PC
+cd /d "%~dp0"
 echo ==============================================
 echo [SUCCESS] Real Device APK Compilation Complete!
 echo You can find "FlyShelf_Mobile_Device.apk"
