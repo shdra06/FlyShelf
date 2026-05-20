@@ -748,12 +748,21 @@ $word.Quit()
             }
         }
 
+        private ClipboardItem GetClipItemFromSender(object sender)
+        {
+            if (sender is System.Windows.FrameworkElement fe)
+            {
+                if (fe.Tag is ClipboardItem tagItem) return tagItem;
+                if (fe.DataContext is ClipboardItem dcItem) return dcItem;
+            }
+            return null;
+        }
+
         private void GoogleSearch_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                var menuItem = sender as System.Windows.Controls.MenuItem;
-                var clipItem = menuItem?.Tag as ClipboardItem;
+                var clipItem = GetClipItemFromSender(sender);
                 if (clipItem == null || string.IsNullOrEmpty(clipItem.RawContent)) return;
 
                 string query = Uri.EscapeDataString(clipItem.RawContent);
@@ -773,8 +782,7 @@ $word.Quit()
         {
             try
             {
-                var menuItem = sender as System.Windows.Controls.MenuItem;
-                var clipItem = menuItem?.Tag as ClipboardItem;
+                var clipItem = GetClipItemFromSender(sender);
                 if (clipItem == null || string.IsNullOrEmpty(clipItem.RawContent)) return;
 
                 AdvanceClip.Windows.ToastWindow.ShowToast("📄 Converting text to PDF...");
@@ -823,8 +831,7 @@ $word.Quit()
         {
             try
             {
-                var menuItem = sender as System.Windows.Controls.MenuItem;
-                var clipItem = menuItem?.Tag as ClipboardItem;
+                var clipItem = GetClipItemFromSender(sender);
                 if (clipItem == null || string.IsNullOrEmpty(clipItem.FilePath)) return;
 
                 AdvanceClip.Windows.ToastWindow.ShowToast("📄 Converting PDF to Word...");

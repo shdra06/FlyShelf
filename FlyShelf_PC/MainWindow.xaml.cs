@@ -954,6 +954,12 @@ namespace AdvanceClip
             this.MaxHeight = _viewModel.CurrentFlyShelfMaxHeight;
             this.Width = _viewModel.CurrentFlyShelfWidth;
 
+            // Always reset selection to the first item when showing/opening the shelf
+            if (_viewModel.DroppedItems.Count > 0)
+            {
+                ShelfListView.SelectedIndex = 0;
+            }
+
             // Force a deterministic height so the window doesn't bounce around with SizeToContent
             if (mode == 0)
             {
@@ -1044,6 +1050,7 @@ namespace AdvanceClip
             {
                 container.Focus();
                 Keyboard.Focus(container);
+                ShelfListView.ScrollIntoView(container);
             }
             else
             {
@@ -1061,6 +1068,7 @@ namespace AdvanceClip
                             {
                                 lazyContainer.Focus();
                                 Keyboard.Focus(lazyContainer);
+                                ShelfListView.ScrollIntoView(lazyContainer);
                             }
                             else
                             {
