@@ -1,0 +1,6 @@
+### Desktop (PC) v6.0.1
+* **Added**: Premium Circular Expand/Collapse Chevron Toggle Button positioned symmetrically at the top-left of long text/code cards.
+* **Fixed**: Small low-visibility 'Read More' arrow text button at the bottom of the card is now removed.
+
+### Android v6.0.1
+* Bumped version to sync with Desktop client release.

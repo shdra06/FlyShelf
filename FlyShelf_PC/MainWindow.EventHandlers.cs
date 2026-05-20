@@ -579,6 +579,15 @@ namespace AdvanceClip
             e.Handled = true;
             GoogleSearch_Click(sender, new RoutedEventArgs());
         }
+
+        private void ExpandToggleSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            {
+                item.IsExpanded = !item.IsExpanded;
+            }
+            e.Handled = true;
+        }
         
         private void ShelfListView_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {

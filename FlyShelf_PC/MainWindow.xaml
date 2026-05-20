@@ -841,7 +841,7 @@
                             <!-- Circular Expand/Collapse Chevron Toggle Button for Long Text / Code cards -->
                             <Button Grid.Row="0" Grid.Column="0" VerticalAlignment="Top" HorizontalAlignment="Left"
                                     Margin="-4,-4,0,0" Panel.ZIndex="10" Focusable="False"
-                                    Command="{Binding ToggleExpandCommand}">
+                                    PreviewMouseLeftButtonDown="ExpandToggleSpecific_Click">
                                 <Button.Style>
                                     <Style TargetType="Button">
                                         <Setter Property="Visibility" Value="Collapsed"/>

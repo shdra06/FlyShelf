@@ -288,6 +288,20 @@ namespace AdvanceClip
 
         private void ShelfListView_MouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
+            // Guard: If the double-click originated inside any Button (action pills,
+            // expand chevron, PDF merge toggle, etc.), do NOT execute the item.
+            // Without this, clicking buttons rapidly triggers item.Execute() which
+            // opens files/PDFs unexpectedly.
+            if (e.OriginalSource is DependencyObject sourceElement)
+            {
+                if (sourceElement is System.Windows.Controls.Primitives.ButtonBase ||
+                    FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(sourceElement) != null)
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+
             if (ShelfListView.SelectedItem is ClipboardItem item)
             {
                 item.Execute();
