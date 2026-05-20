@@ -164,62 +164,64 @@
                 </ui:Button>
 
                 <ui:Button x:Name="EmojiBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                    <Grid Width="16" Height="16">
-                        <!-- Standard emoji icon -->
-                        <ui:SymbolIcon x:Name="EmojiBtnIcon" Symbol="Emoji24" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <ui:SymbolIcon.Style>
-                                <Style TargetType="ui:SymbolIcon">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </ui:SymbolIcon.Style>
-                        </ui:SymbolIcon>
-
-                        <Grid x:Name="DropArrowContainer" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
-                            <Grid.Style>
-                                <Style TargetType="Grid">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Grid.Style>
-                            <ui:SymbolIcon Symbol="ArrowDown24" Foreground="#10B981" RenderTransformOrigin="0.5,0.5">
-                                <ui:SymbolIcon.RenderTransform>
-                                    <TranslateTransform x:Name="ArrowTranslate" Y="0"/>
-                                </ui:SymbolIcon.RenderTransform>
+                    <ui:Button.Content>
+                        <Grid Width="16" Height="16">
+                            <!-- Standard emoji icon -->
+                            <ui:SymbolIcon x:Name="EmojiBtnIcon" Symbol="Emoji24" HorizontalAlignment="Center" VerticalAlignment="Center">
                                 <ui:SymbolIcon.Style>
                                     <Style TargetType="ui:SymbolIcon">
+                                        <Setter Property="Visibility" Value="Visible"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                                <DataTrigger.EnterActions>
-                                                    <BeginStoryboard x:Name="BounceArrowStory">
-                                                        <Storyboard RepeatBehavior="Forever">
-                                                            <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                                                             From="-4" To="4" Duration="0:0:0.6" AutoReverse="True">
-                                                                <DoubleAnimation.EasingFunction>
-                                                                    <SineEase EasingMode="EaseInOut"/>
-                                                                </DoubleAnimation.EasingFunction>
-                                                            </DoubleAnimation>
-                                                        </Storyboard>
-                                                    </BeginStoryboard>
-                                                </DataTrigger.EnterActions>
-                                                <DataTrigger.ExitActions>
-                                                    <StopStoryboard BeginStoryboardName="BounceArrowStory"/>
-                                                </DataTrigger.ExitActions>
+                                                <Setter Property="Visibility" Value="Collapsed"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </ui:SymbolIcon.Style>
                             </ui:SymbolIcon>
+
+                            <Grid x:Name="DropArrowContainer" HorizontalAlignment="Center" VerticalAlignment="Center" Visibility="Collapsed">
+                                <Grid.Style>
+                                    <Style TargetType="Grid">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Grid.Style>
+                                <ui:SymbolIcon Symbol="ArrowDown24" Foreground="#10B981" RenderTransformOrigin="0.5,0.5">
+                                    <ui:SymbolIcon.RenderTransform>
+                                        <TranslateTransform x:Name="ArrowTranslate" Y="0"/>
+                                    </ui:SymbolIcon.RenderTransform>
+                                    <ui:SymbolIcon.Style>
+                                        <Style TargetType="ui:SymbolIcon">
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                    <DataTrigger.EnterActions>
+                                                        <BeginStoryboard x:Name="BounceArrowStory">
+                                                            <Storyboard RepeatBehavior="Forever">
+                                                                <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                                                 From="-4" To="4" Duration="0:0:0.6" AutoReverse="True">
+                                                                    <DoubleAnimation.EasingFunction>
+                                                                        <SineEase EasingMode="EaseInOut"/>
+                                                                    </DoubleAnimation.EasingFunction>
+                                                                </DoubleAnimation>
+                                                            </Storyboard>
+                                                        </BeginStoryboard>
+                                                    </DataTrigger.EnterActions>
+                                                    <DataTrigger.ExitActions>
+                                                        <StopStoryboard BeginStoryboardName="BounceArrowStory"/>
+                                                    </DataTrigger.ExitActions>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </ui:SymbolIcon.Style>
+                                </ui:SymbolIcon>
+                            </Grid>
                         </Grid>
-                    </Grid>
+                    </ui:Button.Content>
                 </ui:Button>
                 <!-- Merge PDF button — hidden by default, replaces emoji when PDFs selected -->
                 <ui:Button x:Name="MergePdfToolbarBtn" Focusable="False" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,6,0" Padding="8,6" CornerRadius="8" Background="#30EF4444" Foreground="#EF4444" BorderBrush="#50EF4444">
@@ -597,96 +599,6 @@
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#F472B6" PreviewMouseLeftButtonDown="QuickLookSpecific_Click" ToolTip="Quick Look">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="14"/></ui:Button.Icon>
-                                    </ui:Button>
-                                </Border>
-
-                                <!-- ═══ Image OCR ═══ -->
-                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
-                                    <Border.Style>
-                                        <Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#A855F7" ToolTip="Extract Text (OCR)"
-                                               Command="{Binding DataContext.ExtractTextCommand, ElementName=ShelfListView}" CommandParameter="{Binding}">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="TextDescription24" Filled="True" FontSize="14"/></ui:Button.Icon>
-                                    </ui:Button>
-                                </Border>
-
-                                <!-- ═══ Image Table (Gemini AI) ═══ -->
-                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
-                                    <Border.Style>
-                                        <Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#8B5CF6" ToolTip="Extract Table Data (Gemini)"
-                                               Command="{Binding DataContext.ExtractTableCommand, ElementName=ShelfListView}" CommandParameter="{Binding}">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Table24" Filled="True" FontSize="14"/></ui:Button.Icon>
-                                    </ui:Button>
-                                </Border>
-
-                                <!-- ═══ PDF to Word ═══ -->
-                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
-                                    <Border.Style>
-                                        <Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#3B82F6" ToolTip="Convert PDF to Word"
-                                               PreviewMouseLeftButtonDown="ConvertPdfToWordSpecific_Click">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Document24" Filled="True" FontSize="14"/></ui:Button.Icon>
-                                    </ui:Button>
-                                </Border>
-
-                                <!-- ═══ Document to PDF ═══ -->
-                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
-                                    <Border.Style>
-                                        <Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ItemType}" Value="Document"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#EF4444" ToolTip="Convert Word to PDF"
-                                               Command="{Binding DataContext.ConvertDocumentCommand, ElementName=ShelfListView}" CommandParameter="{Binding}">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" Filled="True" FontSize="14"/></ui:Button.Icon>
-                                    </ui:Button>
-                                </Border>
-
-                                <!-- ═══ Text to PDF ═══ -->
-                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
-                                    <Border.Style>
-                                        <Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#EF4444" ToolTip="Convert Text to PDF"
-                                               PreviewMouseLeftButtonDown="ConvertTextToPdfSpecific_Click">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" Filled="True" FontSize="14"/></ui:Button.Icon>
-                                    </ui:Button>
-                                </Border>
-
-                                <!-- ═══ Search Google ═══ -->
-                                <Border CornerRadius="6" Background="#E0181818" Margin="0,0,2,0" Padding="0">
-                                    <Border.Style>
-                                        <Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#10B981" ToolTip="Search on Google"
-                                               PreviewMouseLeftButtonDown="GoogleSearchSpecific_Click">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 

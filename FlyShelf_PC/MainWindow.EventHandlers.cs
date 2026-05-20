@@ -697,26 +697,7 @@ namespace AdvanceClip
 
             }
         }
-
-        private void ConvertPdfToWordSpecific_Click(object sender, MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-            ConvertPdfToWord_Click(sender, new RoutedEventArgs());
-        }
-
-        private void ConvertTextToPdfSpecific_Click(object sender, MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-            ConvertTextToPdf_Click(sender, new RoutedEventArgs());
-        }
-
-        private void GoogleSearchSpecific_Click(object sender, MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-            GoogleSearch_Click(sender, new RoutedEventArgs());
-        }
-
-
+        
         private void ShelfListView_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
             e.Handled = true;

@@ -614,6 +614,94 @@ namespace AdvanceClip.ViewModels
                 } catch (Exception ex) { Classes.Logger.LogAction("QR_SCAN", $"Scan failed: {ex.Message}"); }
             });
         }
+
+        public void GoogleSearch()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(RawContent)) return;
+
+                string query = Uri.EscapeDataString(RawContent);
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = $"https://www.google.com/search?q={query}",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    AdvanceClip.Windows.ToastWindow.ShowToast($"Search Error: {ex.Message}")
+                );
+            }
+        }
+
+        public void ConvertPdfToWordTask()
+        {
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    if (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath)) return;
+
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                        AdvanceClip.Windows.ToastWindow.ShowToast("📄 Converting PDF to Word...")
+                    );
+
+                    string outputPath = Path.Combine(
+                        Path.GetDirectoryName(FilePath) ?? Path.GetTempPath(),
+                        Path.GetFileNameWithoutExtension(FilePath) + "_Converted.docx");
+
+                    // Use Word COM to open PDF and save as DOCX (Word 2013+ supports this natively)
+                    string script = $@"
+$word = New-Object -ComObject Word.Application
+$word.Visible = $false
+$doc = $word.Documents.Open('{FilePath.Replace("'", "''")}')
+$doc.SaveAs([ref]'{outputPath.Replace("'", "''")}', [ref]16)
+$doc.Close()
+$word.Quit();
+";
+                    var psi = new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "powershell.exe",
+                        Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{script}\"",
+                        CreateNoWindow = true,
+                        UseShellExecute = false
+                    };
+
+                    using (var process = Process.Start(psi))
+                    {
+                        process?.WaitForExit(60000);
+                    }
+
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        if (File.Exists(outputPath))
+                        {
+                            var dataObj = new System.Windows.DataObject();
+                            dataObj.SetData(System.Windows.DataFormats.FileDrop, new string[] { outputPath });
+                            var mainWin = System.Windows.Application.Current.MainWindow as AdvanceClip.MainWindow;
+                            var vm = mainWin?.DataContext as AdvanceClip.ViewModels.FlyShelfViewModel;
+                            vm?.HandleDrop(dataObj, true);
+
+                            // Open containing folder with the file selected
+                            System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{outputPath}\"");
+                            AdvanceClip.Windows.ToastWindow.ShowToast($"✅ Converted: {Path.GetFileName(outputPath)}");
+                        }
+                        else
+                        {
+                            AdvanceClip.Windows.ToastWindow.ShowToast("❌ Conversion failed — Microsoft Word required");
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                        AdvanceClip.Windows.ToastWindow.ShowToast($"❌ PDF to Word error: {ex.Message}")
+                    );
+                }
+            });
+        }
     }
 }
 

@@ -56,9 +56,20 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // 1. Check command line arguments for Safe Mode
+        bool startInSafeMode = false;
+        for (int i = 0; i < e.Args.Length; i++)
+        {
+            if (e.Args[i].Equals("--safemode", StringComparison.OrdinalIgnoreCase))
+            {
+                startInSafeMode = true;
+                break;
+            }
+        }
+
+        // 2. Mutex Check for single instance
         const string appName = "FlyShelf_SingleInstance_Mutex_Global";
         bool createdNew;
-
         _mutex = new System.Threading.Mutex(true, appName, out createdNew);
 
         if (!createdNew)
@@ -69,6 +80,24 @@ public partial class App : Application
         }
 
         base.OnStartup(e);
+
+        if (startInSafeMode)
+        {
+            string safeModeError = "Manual trigger or unspecified crash.";
+            try
+            {
+                if (System.IO.File.Exists("crash_error.txt"))
+                {
+                    safeModeError = System.IO.File.ReadAllText("crash_error.txt");
+                }
+            }
+            catch { }
+
+            this.ShutdownMode = ShutdownMode.OnLastWindowClose;
+            LaunchSafeMode(new Exception(safeModeError));
+            return;
+        }
+
         this.ShutdownMode = ShutdownMode.OnExplicitShutdown;
 
         // Force-load assemblies in Single-File deployment so WPF has access to all control styles and types
@@ -105,26 +134,22 @@ public partial class App : Application
 
         try
         {
-            // Catch UI thread exceptions silently without tearing down the program
+            // Catch UI thread exceptions and restart in Safe Mode
             DispatcherUnhandledException += (s, args) =>
             {
-                try { System.IO.File.AppendAllText("flyshelf_debugger.log", $"[{DateTime.Now}] UI CAUGHT: {args.Exception.ToString()}\n"); } catch { }
-                try { AdvanceClip.Classes.Logger.LogAction("UI ERROR", args.Exception.Message); } catch { }
-                args.Handled = true; // Tell Windows not to crash the executable
+                args.Handled = true; // Prevents the default Windows crash dialog
+                TriggerSafeModeAndRestart($"[UI Thread Exception]\n{args.Exception}");
             };
 
-            // Catch background thread crashes — log but DON'T let them kill the process
+            // Catch background thread crashes and restart in Safe Mode
             AppDomain.CurrentDomain.UnhandledException += (s, args) =>
             {
-                try { System.IO.File.AppendAllText("flyshelf_debugger.log", $"[{DateTime.Now}] UNMANAGED FATAL: {args.ExceptionObject}\n"); } catch { }
-                // NOTE: IsTerminating=true means the CLR is shutting down. We can't prevent it here,
-                // but we CAN prevent it by ensuring all async calls are wrapped in try/catch upstream.
+                TriggerSafeModeAndRestart($"[AppDomain Unhandled Exception]\n{args.ExceptionObject}");
             };
 
-            // Catch async Task thread exceptions — THIS is the critical one
+            // Catch async Task thread exceptions — log them, but don't force restart unless they are fatal
             System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (s, args) =>
             {
-                // ALWAYS observe to prevent process termination
                 args.SetObserved();
                 try { System.IO.File.AppendAllText("flyshelf_debugger.log", $"[{DateTime.Now}] ASYNC SWALLOWED: {args.Exception.Message}\n"); } catch { }
             };
@@ -307,6 +332,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             System.IO.File.WriteAllText("startup_error.txt", ex.ToString());
+            TriggerSafeModeAndRestart($"[Startup Fatal Exception]\n{ex}");
         }
     }
 
@@ -456,8 +482,8 @@ public partial class App : Application
             Window safeWindow = new Window
             {
                 Title = "FlyShelf Safe Mode",
-                Width = 460,
-                Height = 320,
+                Width = 520,
+                Height = 330,
                 WindowStartupLocation = WindowStartupLocation.CenterScreen,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStyle = WindowStyle.None,
@@ -466,6 +492,8 @@ public partial class App : Application
                 Topmost = true,
                 ShowInTaskbar = true
             };
+
+            safeWindow.Closed += (s, ev) => Application.Current.Shutdown();
 
             var outerBorder = new System.Windows.Controls.Border {
                 Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 20, 20)),
@@ -485,7 +513,7 @@ public partial class App : Application
             });
             
             stack.Children.Add(new System.Windows.Controls.TextBlock { 
-                Text = "A critical layout or resource exception prevented FlyShelf from starting normally. FlyShelf is running in background diagnostic safe mode.", 
+                Text = "A critical layout or resource exception prevented FlyShelf from starting normally. FlyShelf is running in diagnostic safe mode.", 
                 FontSize = 12, 
                 Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(200, 180, 180)),
                 Margin = new Thickness(0, 0, 0, 14),
@@ -495,7 +523,7 @@ public partial class App : Application
             // Show exception details
             var detailText = new System.Windows.Controls.TextBox {
                 Text = originalException.ToString(),
-                Height = 100,
+                Height = 110,
                 Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(15, 15, 15)),
                 Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(180, 180, 180)),
                 BorderThickness = new Thickness(0),
@@ -509,6 +537,39 @@ public partial class App : Application
             stack.Children.Add(detailText);
 
             var buttonPanel = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+
+            // "Restart Normally" button
+            var btnRestart = new System.Windows.Controls.Border {
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(16, 185, 129)), // Emerald-500
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(14, 8, 14, 8),
+                Margin = new Thickness(0, 0, 12, 0),
+                Cursor = Cursors.Hand
+            };
+            var txtRestart = new System.Windows.Controls.TextBlock { Text = "Restart Normally", Foreground = System.Windows.Media.Brushes.White, FontWeight = FontWeights.Bold, FontSize = 12 };
+            btnRestart.Child = txtRestart;
+            btnRestart.MouseLeftButtonDown += (s, ev) => {
+                try
+                {
+                    if (System.IO.File.Exists("crash_error.txt"))
+                    {
+                        System.IO.File.Delete("crash_error.txt");
+                    }
+                }
+                catch {}
+                try
+                {
+                    _mutex?.Dispose();
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = Environment.ProcessPath ?? System.IO.Path.Combine(AppContext.BaseDirectory, "FlyShelf.exe"),
+                        UseShellExecute = true
+                    });
+                    Application.Current.Shutdown();
+                }
+                catch (Exception ex) { MessageBox.Show($"Failed to restart: {ex.Message}"); }
+            };
+            buttonPanel.Children.Add(btnRestart);
 
             // "Reset settings" button
             var btnReset = new System.Windows.Controls.Border {
@@ -576,6 +637,51 @@ public partial class App : Application
             MessageBox.Show($"FlyShelf encountered a fatal initialization error:\n\n{originalException.Message}\n\nFallback UI failed:\n{fatalEx.Message}", "Fatal Error", MessageBoxButton.OK, MessageBoxImage.Error);
             Application.Current.Shutdown();
         }
+    }
+
+    private static bool _safeModeRestartTriggered = false;
+
+    private static void TriggerSafeModeAndRestart(string errorDetails)
+    {
+        if (_safeModeRestartTriggered) return;
+        _safeModeRestartTriggered = true;
+
+        try
+        {
+            System.IO.File.WriteAllText("crash_error.txt", errorDetails);
+        }
+        catch { }
+
+        try
+        {
+            AdvanceClip.Classes.Logger.LogAction("FATAL_CRASH", "App crashed, restarting in Safe Mode...");
+            AdvanceClip.Classes.Logger.Shutdown();
+        }
+        catch { }
+
+        try
+        {
+            _mutex?.Dispose();
+        }
+        catch { }
+
+        try
+        {
+            string exePath = Environment.ProcessPath ?? System.IO.Path.Combine(AppContext.BaseDirectory, "FlyShelf.exe");
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = exePath,
+                Arguments = "--safemode",
+                UseShellExecute = true
+            });
+        }
+        catch { }
+
+        try
+        {
+            Environment.Exit(1);
+        }
+        catch { }
     }
 }
 

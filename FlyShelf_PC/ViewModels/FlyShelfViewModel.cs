@@ -219,6 +219,8 @@ namespace AdvanceClip.ViewModels
         public ICommand MergeSelectedPdfsCommand { get; }
         public ICommand OpenFileLocationCommand { get; }
         public ICommand ConvertImageToPdfCommand { get; }
+        public ICommand GoogleSearchCommand { get; }
+        public ICommand ConvertPdfToWordCommand { get; }
         
         public AdvanceClip.Classes.NetworkSyncServer LocalServer { get; private set; }
         public AdvanceClip.Classes.DocumentSniffer Sniffer { get; private set; }
@@ -244,6 +246,8 @@ namespace AdvanceClip.ViewModels
             CompileNativeCommand = new RelayCommand<ClipboardItem>(item => item?.CompileAndRunNative());
             ConvertDocumentCommand = new RelayCommand<ClipboardItem>(item => item?.ConvertDocumentTask());
             ConvertImageToPdfCommand = new RelayCommand<ClipboardItem>(item => item?.ConvertImageToPdf());
+            GoogleSearchCommand = new RelayCommand<ClipboardItem>(item => item?.GoogleSearch());
+            ConvertPdfToWordCommand = new RelayCommand<ClipboardItem>(item => item?.ConvertPdfToWordTask());
 
             ExtractTextCommand = new RelayCommand<ClipboardItem>(item => item?.ExtractText());
             ExtractTableCommand = new RelayCommand<ClipboardItem>(item => item?.ExtractTable());
