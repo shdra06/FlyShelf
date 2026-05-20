@@ -587,7 +587,7 @@ namespace AdvanceClip.ViewModels
                                         var bmp = new BitmapImage();
                                         bmp.BeginInit();
                                         bmp.CacheOption = BitmapCacheOption.OnLoad;
-                                        bmp.DecodePixelWidth = 800;
+                                        bmp.DecodePixelWidth = 250;
                                         bmp.UriSource = new Uri(imagePath);
                                         bmp.EndInit();
                                         bmp.Freeze();

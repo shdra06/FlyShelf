@@ -154,7 +154,7 @@ namespace AdvanceClip.ViewModels
                                         var bmp = new BitmapImage();
                                         bmp.BeginInit();
                                         bmp.UriSource = new Uri(filePath);
-                                        bmp.DecodePixelWidth = 800;
+                                        bmp.DecodePixelWidth = 250;
                                         bmp.CacheOption = BitmapCacheOption.OnLoad;
                                         bmp.EndInit();
                                         bmp.Freeze();
@@ -303,7 +303,7 @@ namespace AdvanceClip.ViewModels
                             ms.Position = 0;
                             immediateThumbnail.BeginInit();
                             immediateThumbnail.CacheOption = BitmapCacheOption.OnLoad;
-                            immediateThumbnail.DecodePixelWidth = 800;
+                            immediateThumbnail.DecodePixelWidth = 250;
                             immediateThumbnail.StreamSource = ms;
                             immediateThumbnail.EndInit();
                         }
@@ -683,7 +683,7 @@ namespace AdvanceClip.ViewModels
             {
                 bmp.BeginInit();
                 bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.DecodePixelWidth = 800;
+                bmp.DecodePixelWidth = 250;
                 bmp.StreamSource = fs;
                 bmp.EndInit();
             }

@@ -1,8 +1,8 @@
 {
   "pc_version": "6.0.0",
-  "pc_changelog": "v6.0.0 — Ultimate Commercial Release & Power Features\n\n• Added: Bulk Image Merging directly into PDF from the toolbar with auto-conversion\n• Added: Google Search and Text-to-PDF formatting directly in the context menu\n• Added: Gemini AI-powered Table Extraction integration to the main shelf\n• Added: Store-compliant passive shake background polling (0% overhead, spyware-free)\n• Fixed: Perfect toolbar layout alignment for Emoji and Merge buttons",
+  "pc_changelog": "v6.0.0 — Ultimate Commercial Release & Power Features (Lag & Performance Fixes)\n\n• Fixed: Global C# startup, launch, and UI lag when summoning (Alt+C)\n• Fixed: 10x image memory footprint reduction (optimizing decoded thumbnails to 250px)\n• Fixed: Non-blocking diagnostic capturing and background theme color extraction\n• Added: Bulk Image Merging directly into PDF from the toolbar with auto-conversion\n• Added: Google Search and Text-to-PDF formatting directly in the context menu\n• Added: Gemini AI-powered Table Extraction integration to the main shelf\n• Added: Store-compliant passive shake background polling (0% overhead, spyware-free)\n• Fixed: Perfect toolbar layout alignment for Emoji and Merge buttons",
   "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v6.0.0/FlyShelf.exe",
-  "android_version": "5.3.0",
-  "android_changelog": "v5.3.0 — FlyShelf Android v4\n\n• P2P sync improvements\n• Compatible with FlyShelf PC v5.5.0\n• Cloudflare tunnel transport support\n• Debug log viewer for diagnostics",
-  "android_download": "https://github.com/shdra06/FlyShelf/releases/download/android-v4/app-release.apk"
+  "android_version": "6.0.0",
+  "android_changelog": "v6.0.0 — Mixed Merger, Safe Mode & Emulator Support\n\n• Added: Dual-architecture support (arm64-v8a + x86_64 emulators)\n• Added: On-device image-to-PDF conversion and mixed PDF/image merging via pure JS\n• Added: Robust JS Error Boundary and premium Safe Mode diagnostic recovery UI\n• Added: Left-aligned card type icons and Google Search shortcut for text cards\n• Added: Dynamic image aspect-ratio scaling and safe scrollbar spacing",
+  "android_download": "https://github.com/shdra06/FlyShelf/releases/download/android-v6/FlyShelf_Mobile.apk"
 }

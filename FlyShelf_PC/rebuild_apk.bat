@@ -19,8 +19,8 @@ echo org.gradle.configureondemand=true >> gradle.properties
 echo org.gradle.caching=true >> gradle.properties
 
 echo.
-echo Compiling Android APK natively (Maximum Speed: Uncapped Workers, 16GB JVM Heap, arm64-v8a only)...
-call gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a
+echo Compiling Android APK natively (Maximum Speed: Uncapped Workers, 16GB JVM Heap, arm64-v8a + x86_64 emulators)...
+call gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,x86_64
 
 echo.
 echo Re-packaging...

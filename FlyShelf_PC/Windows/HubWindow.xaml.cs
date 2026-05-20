@@ -611,13 +611,22 @@ namespace AdvanceClip.Windows
         {
             try
             {
-                Logger.DumpNetworkDiagnostics();
-                ToastWindow.ShowToast("🔍 Network diagnostics captured!");
-                // Refresh the log view after a brief delay to let the buffer flush
-                _ = Task.Run(async () =>
+                ToastWindow.ShowToast("🔍 Network diagnostics started...");
+                System.Threading.Tasks.Task.Run(() =>
                 {
-                    await Task.Delay(3000);
-                    Dispatcher.Invoke(() => RefreshLogs_Click(null, null));
+                    try
+                    {
+                        Logger.DumpNetworkDiagnostics();
+                        Dispatcher.Invoke(() =>
+                        {
+                            ToastWindow.ShowToast("🔍 Network diagnostics captured!");
+                            RefreshLogs_Click(null, null);
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        Dispatcher.Invoke(() => ToastWindow.ShowToast($"❌ Diagnostics failed: {ex.Message}"));
+                    }
                 });
             }
             catch (Exception ex)

@@ -35,6 +35,7 @@ namespace AdvanceClip
         private Windows.TaskbarWindow? _taskbarWidget;
         private System.Windows.Threading.DispatcherTimer? _clipboardDebounceTimer;
         private DateTime _lastMergeToggleTime = DateTime.MinValue;
+        private IntPtr _lastActiveExternalWindow = IntPtr.Zero;
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
@@ -225,6 +226,10 @@ namespace AdvanceClip
 
         [DllImport("user32.dll")]
         [return: MarshalAs(UnmanagedType.Bool)]
+        internal static extern bool IsWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
         internal static extern bool IsWindowVisible(IntPtr hWnd);
 
         [DllImport("user32.dll")]
@@ -372,18 +377,41 @@ namespace AdvanceClip
                 WallpaperFrostImg.Source = bmp;
                 WallpaperFrostHeader.Visibility = Visibility.Visible;
 
-                // Extract dominant color for theme gradient
-                var dominantColor = ExtractDominantColor(bmp);
-                var centerColor = System.Windows.Media.Color.FromArgb(40, dominantColor.R, dominantColor.G, dominantColor.B);
-                var edgeColor = System.Windows.Media.Color.FromArgb(140, (byte)(dominantColor.R / 4), (byte)(dominantColor.G / 4), (byte)(dominantColor.B / 4));
+                // Extract dominant color for theme gradient asynchronously to prevent UI stutter
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    try
+                    {
+                        return ExtractDominantColor(bmp);
+                    }
+                    catch
+                    {
+                        return System.Windows.Media.Color.FromRgb(99, 102, 241); // Fallback indigo
+                    }
+                }).ContinueWith(t =>
+                {
+                    if (t.Status == System.Threading.Tasks.TaskStatus.RanToCompletion)
+                    {
+                        var dominantColor = t.Result;
+                        Dispatcher.InvokeAsync(() =>
+                        {
+                            try
+                            {
+                                var centerColor = System.Windows.Media.Color.FromArgb(40, dominantColor.R, dominantColor.G, dominantColor.B);
+                                var edgeColor = System.Windows.Media.Color.FromArgb(140, (byte)(dominantColor.R / 4), (byte)(dominantColor.G / 4), (byte)(dominantColor.B / 4));
 
-                WallpaperRadialBrush.GradientStops[0].Color = centerColor;
-                WallpaperRadialBrush.GradientStops[1].Color = edgeColor;
-                WallpaperThemeOverlay.Visibility = Visibility.Visible;
+                                WallpaperRadialBrush.GradientStops[0].Color = centerColor;
+                                WallpaperRadialBrush.GradientStops[1].Color = edgeColor;
+                                WallpaperThemeOverlay.Visibility = Visibility.Visible;
 
-                // Tint the frost header with the theme color
-                WallpaperFrostTint.Background = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromArgb(90, dominantColor.R, dominantColor.G, dominantColor.B));
+                                // Tint the frost header with the theme color
+                                WallpaperFrostTint.Background = new System.Windows.Media.SolidColorBrush(
+                                    System.Windows.Media.Color.FromArgb(90, dominantColor.R, dominantColor.G, dominantColor.B));
+                            }
+                            catch { }
+                        });
+                    }
+                });
             }
             catch
             {
@@ -771,6 +799,30 @@ namespace AdvanceClip
         /// </summary>
         private void ForegroundChangedCallback(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
         {
+            if (hwnd != IntPtr.Zero)
+            {
+                // Get thread/process ID of the new foreground window
+                GetWindowThreadProcessId(hwnd, out uint focusedProcId);
+                uint currProcId = (uint)System.Environment.ProcessId;
+
+                // Cache the last active external window, filtering out our own app, taskbar, desktop, and standard system Windows Core UI
+                if (focusedProcId != currProcId)
+                {
+                    var sbClass = new System.Text.StringBuilder(256);
+                    GetClassName(hwnd, sbClass, 256);
+                    string clsName = sbClass.ToString();
+                    if (clsName != "Shell_TrayWnd" && 
+                        clsName != "Shell_SecondaryTrayWnd" && 
+                        clsName != "WorkerW" && 
+                        clsName != "Progman" && 
+                        clsName != "Windows.UI.Core.CoreWindow" &&
+                        clsName != "MultitaskingViewFrame")
+                    {
+                        _lastActiveExternalWindow = hwnd;
+                    }
+                }
+            }
+
             if (_isPersistentMode) return;
 
             // Don't auto-dismiss during first 250ms of spawn to avoid startup focus race transitions
@@ -890,6 +942,12 @@ namespace AdvanceClip
 
             if (className == "Shell_TrayWnd" || className == "Shell_SecondaryTrayWnd" || className == "WorkerW" || className == "Progman")
             {
+                // Quick bypass: If we have a cached valid/visible external window, return it instantly!
+                if (_lastActiveExternalWindow != IntPtr.Zero && IsWindow(_lastActiveExternalWindow) && IsWindowVisible(_lastActiveExternalWindow))
+                {
+                    return _lastActiveExternalWindow;
+                }
+
                 IntPtr target = IntPtr.Zero;
                 uint currentProcessId = GetCurrentProcessId();
                 EnumWindows((wnd, param) =>
