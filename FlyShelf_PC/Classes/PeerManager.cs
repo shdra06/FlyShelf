@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
@@ -11,6 +11,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
+using FlyShelf.ViewModels;
 
 namespace FlyShelf.Classes
 {
@@ -43,7 +44,7 @@ namespace FlyShelf.Classes
         private const int HEARTBEAT_TIMEOUT_MS = 4_000;    // 4s timeout per ping
         private const int MAX_FAILURES = 3;                // 3 misses = dead (quick failover)
         private const int DISCOVERY_MS = 15_000;           // Re-scan Firebase every 15s for reconnection
-        private const int HANDSHAKE_TIMEOUT_LAN_MS = 2_000;   // 2s for LAN
+        private const int HANDSHAKE_TIMEOUT_LAN_MS = 5_000;   // 5s for LAN
         private const int HANDSHAKE_TIMEOUT_CF_MS = 8_000;    // 8s for Cloudflare tunnels
 
         // ═══ Events ═══
@@ -568,6 +569,10 @@ namespace FlyShelf.Classes
                             if (root.TryGetProperty("version", out var ver))
                                 peer.Version = ver.GetString() ?? "";
 
+                            // Extract deviceType
+                            if (root.TryGetProperty("deviceType", out var dtProp))
+                                peer.DeviceType = dtProp.GetString() ?? "";
+
                             // Extract LAN URL from peer's health response (smart discovery)
                             // If we connected via Cloudflare but peer reports a LAN URL, save it for future LAN fallback
                             if (root.TryGetProperty("transport", out var tr))
@@ -717,11 +722,40 @@ namespace FlyShelf.Classes
                 Logger.LogAction("WS", $"{peer.DeviceName} WebSocket monitor error: {ex.Message}");
             }
 
-            // WebSocket died → if peer was still marked alive, trigger death
+            // WebSocket died → if peer was still marked alive, verify via HTTP health check
             if (peer.IsAlive)
             {
-                Logger.LogAction("WS", $"💀 {peer.DeviceName} WebSocket dropped — instant death detection");
-                await HandlePeerDeath(peer);
+                Logger.LogAction("WS", $"⚠️ {peer.DeviceName} WebSocket dropped — verifying health via HTTP...");
+                
+                bool stillAlive = false;
+                try
+                {
+                    using var checkClient = new HttpClient { Timeout = TimeSpan.FromMilliseconds(3000) };
+                    string testUrl = $"{peer.ActiveUrl.TrimEnd('/')}/api/health";
+                    string pk = DevicePairingManager.GetPairingKeyForDevice(peer.DeviceId);
+                    if (string.IsNullOrEmpty(pk)) pk = DevicePairingManager.EnsurePairingKey();
+                    if (!string.IsNullOrEmpty(pk)) checkClient.DefaultRequestHeaders.Add("X-Pairing-Key", pk);
+
+                    var r = await checkClient.GetAsync(testUrl);
+                    if (r.IsSuccessStatusCode)
+                    {
+                        stillAlive = true;
+                    }
+                }
+                catch { }
+
+                if (stillAlive)
+                {
+                    Logger.LogAction("WS", $"ℹ️ {peer.DeviceName} is still reachable via HTTP. Keeping connection alive.");
+                    try { peer.WsCts?.Cancel(); } catch { }
+                    try { peer.LiveSocket?.Dispose(); } catch { }
+                    peer.LiveSocket = null;
+                }
+                else
+                {
+                    Logger.LogAction("WS", $"💀 {peer.DeviceName} WebSocket dropped and HTTP health check failed — instant death detection");
+                    await HandlePeerDeath(peer);
+                }
             }
         }
 
@@ -1306,8 +1340,18 @@ namespace FlyShelf.Classes
             DeviceId = p.DeviceId, DeviceName = p.DeviceName, Transport = p.Transport,
             IsAlive = p.IsAlive, LastSeen = p.LastSeen, ActiveUrl = p.ActiveUrl,
             LanUrl = p.LanUrl, CloudflareUrl = p.CloudflareUrl,
-            IsWebSocketActive = p.LiveSocket?.State == System.Net.WebSockets.WebSocketState.Open
+            IsWebSocketActive = p.LiveSocket?.State == System.Net.WebSockets.WebSocketState.Open,
+            DeviceType = p.DeviceType
         }).ToList();
+
+        public List<PeerConnection> GetAliveLanPcPeers() =>
+            _peers.Values.Where(p => p.IsAlive && p.Transport == "LAN" && p.DeviceType == "PC").ToList();
+
+        public async Task<bool> TrySendGroupToPeer(PeerConnection peer, ClipboardItem groupItem)
+        {
+            if (groupItem == null || string.IsNullOrEmpty(groupItem.ZippedArchivePath)) return false;
+            return await TrySendFile(peer, groupItem.ZippedArchivePath, groupItem.FileName, "Group");
+        }
     }
 
     public class PeerConnection
@@ -1319,6 +1363,7 @@ namespace FlyShelf.Classes
         public string ActiveUrl { get; set; } = "";
         public string Transport { get; set; } = "unknown";
         public string Version { get; set; } = "";   // Peer's app version from /api/health
+        public string DeviceType { get; set; } = ""; // "PC" or "Mobile" from /api/health
         public bool IsAlive { get; set; } = false;
         public DateTime LastSeen { get; set; } = DateTime.MinValue;
         public int ConsecutiveFailures { get; set; } = 0;
@@ -1339,6 +1384,7 @@ namespace FlyShelf.Classes
         public string ActiveUrl { get; set; } = "";
         public string LanUrl { get; set; } = "";
         public string CloudflareUrl { get; set; } = "";
+        public string DeviceType { get; set; } = "";
     }
 
     /// <summary>UI-bindable peer status for the HubWindow paired devices list.</summary>

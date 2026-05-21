@@ -1,4 +1,4 @@
-﻿// ---------------------------------------------------------------
+// ---------------------------------------------------------------
 // FlyShelfViewModel � Drop Handler & Utilities
 // HandleDrop (file/text/image processing), SHFILEINFO interop,
 // SaveGlobalSettings, RelayCommand
@@ -72,6 +72,27 @@ namespace FlyShelf.ViewModels
                     FlyShelf.Classes.NetworkSyncServer.Instance?.NotifyClipboardChanged(
                         groupItem.ItemType.ToString(), 
                         groupItem.FileName);
+
+                    // Sync Group item to alive LAN PC peers in background task
+                    System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        // Wait up to 60s for the ZIP file to finish compressing in the background thread
+                        for (int wait = 0; wait < 120; wait++)
+                        {
+                            if (!string.IsNullOrEmpty(groupItem.ZippedArchivePath) && File.Exists(groupItem.ZippedArchivePath))
+                                break;
+                            await System.Threading.Tasks.Task.Delay(500);
+                        }
+
+                        if (!string.IsNullOrEmpty(groupItem.ZippedArchivePath) && File.Exists(groupItem.ZippedArchivePath))
+                        {
+                            var peers = Classes.PeerManager.Instance.GetAliveLanPcPeers();
+                            foreach (var peer in peers)
+                            {
+                                await Classes.PeerManager.Instance.TrySendGroupToPeer(peer, groupItem);
+                            }
+                        }
+                    });
 
                     // Skip the regular individual batch file processing entirely!
                     return;

@@ -1,4 +1,4 @@
-﻿// ---------------------------------------------------------------
+// ---------------------------------------------------------------
 // NetworkSyncServer � Advanced Operations
 // ChunkUpload, ConvertToPdf, MultipartParsing, FileDownload,
 // QR Pairing, Remote Logging, Log Dashboard
@@ -290,8 +290,7 @@ namespace FlyShelf.Classes
                 res.Close();
             }
         }
-#pragma warning disable CA2022
-        private async Task ProcessStreamingMultipartFile(string tempFilePath, string boundary, string destinationDir, DateTime? applyDate = null)
+        private async Task<string?> ProcessStreamingMultipartFile(string tempFilePath, string boundary, string destinationDir, DateTime? applyDate = null)
         {
             try
             {
@@ -372,14 +371,7 @@ namespace FlyShelf.Classes
                                 } catch { }
                             }
 
-                            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                            {
-                                var dataObj = new System.Windows.DataObject();
-                                var dropList = new System.Collections.Specialized.StringCollection { finalPath };
-                                dataObj.SetFileDropList(dropList);
-                                _viewModel.HandleDrop(dataObj, true);
-                                FlyShelf.Windows.ToastWindow.ShowToast($"File extracted: {Path.GetFileName(finalPath)} 📱");
-                            });
+                            return finalPath;
                         }
                     }
                 }
@@ -392,6 +384,7 @@ namespace FlyShelf.Classes
             {
                 try { if (File.Exists(tempFilePath)) File.Delete(tempFilePath); } catch { }
             }
+            return null;
         }
 #pragma warning restore CA2022
 
@@ -576,7 +569,7 @@ namespace FlyShelf.Classes
             }
         }
 
-        public void InjectReceivedFile(string filePath, string sourceDevice, string transferMethod, string sourceDeviceType = "Mobile")
+        public void InjectReceivedFile(string filePath, string sourceDevice, string transferMethod, string sourceDeviceType = "Mobile", ClipboardItem? placeholder = null)
         {
             _cachedSyncJson = null; // Invalidate sync cache
             
@@ -584,6 +577,10 @@ namespace FlyShelf.Classes
             {
                 try
                 {
+                    if (placeholder != null)
+                    {
+                        _viewModel.DroppedItems.Remove(placeholder);
+                    }
                     var dataObj = new System.Windows.DataObject();
                     var dropList = new System.Collections.Specialized.StringCollection { filePath };
                     dataObj.SetFileDropList(dropList);
@@ -630,6 +627,56 @@ namespace FlyShelf.Classes
                 catch (Exception ex)
                 {
                     Logger.LogAction("FILE INJECTION ERR", ex.Message);
+                }
+            });
+        }
+
+        public void InjectReceivedGroup(string[] files, string sourceDevice, string transferMethod, string sourceDeviceType = "Mobile", ClipboardItem? placeholder = null)
+        {
+            _cachedSyncJson = null; // Invalidate sync cache
+            
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
+            {
+                try
+                {
+                    if (placeholder != null)
+                    {
+                        _viewModel.DroppedItems.Remove(placeholder);
+                    }
+
+                    var groupItem = new ClipboardItem(files);
+                    groupItem.SourceDeviceName = sourceDevice;
+                    groupItem.SourceDeviceType = sourceDeviceType;
+                    groupItem.TransferMethod = transferMethod;
+
+                    _viewModel.DroppedItems.Insert(0, groupItem);
+                    _viewModel.PruneOldItems();
+                    _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
+
+                    // Persist network fields to database
+                    System.Threading.Tasks.Task.Run(() =>
+                    {
+                        Classes.ClipboardHistoryManager.UpdateItemNetworkFields(groupItem);
+                    });
+
+                    // Set file drop list to clipboard
+                    try
+                    {
+                        MainWindow.SetWritingClipboard(true);
+                        var clipList = new System.Collections.Specialized.StringCollection();
+                        foreach (var f in files) clipList.Add(f);
+                        System.Windows.Clipboard.SetFileDropList(clipList);
+                        await System.Threading.Tasks.Task.Delay(500);
+                    }
+                    catch { }
+                    finally { MainWindow.SetWritingClipboard(false); }
+
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Saved: Group of {files.Length} files via {transferMethod} 📦");
+                    NotifyClipboardChanged("Group", groupItem.FileName);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("GROUP INJECTION ERR", ex.Message);
                 }
             });
         }

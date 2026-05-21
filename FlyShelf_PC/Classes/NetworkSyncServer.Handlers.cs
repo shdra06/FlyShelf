@@ -1,4 +1,4 @@
-﻿// ---------------------------------------------------------------
+// ---------------------------------------------------------------
 // NetworkSyncServer � HTTP Request Handlers
 // ServeHtml, ClipboardData, TextUpload, FileUpload,
 // ArchiveUpload, RelayUpload
@@ -262,9 +262,14 @@ namespace FlyShelf.Classes
 
         private async Task HandleFileUpload(HttpListenerRequest req, HttpListenerResponse res)
         {
+            string tempFile = "";
+            ClipboardItem? placeholder = null;
+            string sourceDevice = "Mobile";
+            var fileTransport = DetectTransport(req);
+
             try 
             {
-                string sourceDevice = req.Headers["X-Source-Device"];
+                sourceDevice = req.Headers["X-Source-Device"];
                 if (string.IsNullOrEmpty(sourceDevice)) sourceDevice = req.QueryString["sourceDevice"];
                 if (!string.IsNullOrEmpty(sourceDevice))
                 {
@@ -274,7 +279,6 @@ namespace FlyShelf.Classes
                 {
                     sourceDevice = "Mobile";
                 }
-                var fileTransport = DetectTransport(req);
 
                 string dateString = DateTime.Now.ToString("dd-MM-yyyy");
                 string uploadDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", "Clipboard", sourceDevice, dateString);
@@ -288,120 +292,133 @@ namespace FlyShelf.Classes
                     try { rawName = Uri.UnescapeDataString(encodedName); } catch { }
                 }
 
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                    FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {rawName} from {sourceDevice}... 📥");
-                });
+                long totalBytes = req.ContentLength64;
+                bool isLargeFile = totalBytes >= 10 * 1024 * 1024;
 
-                int counter = 1;
-                string finalPath = Path.Combine(uploadDir, rawName);
-                while(File.Exists(finalPath))
+                if (isLargeFile)
                 {
-                    finalPath = Path.Combine(uploadDir, $"{Path.GetFileNameWithoutExtension(rawName)}_{counter++}{Path.GetExtension(rawName)}");
-                }
-
-                // Parse multipart/form-data or raw body
-                string contentType = req.ContentType ?? "";
-                if (contentType.Contains("multipart/form-data") && contentType.Contains("boundary="))
-                {
-                    // Extract boundary string
-                    string boundary = contentType.Substring(contentType.IndexOf("boundary=") + "boundary=".Length).Trim();
-                    if (boundary.StartsWith("\"") && boundary.EndsWith("\""))
-                        boundary = boundary.Substring(1, boundary.Length - 2);
-                    
-                    byte[] boundaryBytes = Encoding.UTF8.GetBytes("--" + boundary);
-                    
-                    // Read entire body into memory
-                    using var ms = new MemoryStream();
-                    await req.InputStream.CopyToAsync(ms);
-                    byte[] body = ms.ToArray();
-                    
-                    // Find the file content: skip past the first boundary + headers (ends with \r\n\r\n)
-                    int headerEnd = -1;
-                    for (int i = 0; i < body.Length - 3; i++)
+                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                     {
-                        if (body[i] == 0x0D && body[i + 1] == 0x0A && body[i + 2] == 0x0D && body[i + 3] == 0x0A)
-                        {
-                            // Found \r\n\r\n — content starts after this
-                            headerEnd = i + 4;
-                            break;
-                        }
-                    }
-                    
-                    // ── Extract filename from multipart Content-Disposition if X-File-Name was missing ──
-                    if (rawName == "uploaded_file.dat" && headerEnd > 0)
-                    {
-                        string partHeaders = Encoding.UTF8.GetString(body, 0, headerEnd);
-                        // Look for: filename="actual_name.png"  or filename*=UTF-8''encoded_name
-                        var fnMatch = System.Text.RegularExpressions.Regex.Match(partHeaders,
-                            @"filename=""?([^""\r\n]+)""?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                        if (fnMatch.Success)
-                        {
-                            string extracted = fnMatch.Groups[1].Value.Trim();
-                            try { extracted = Uri.UnescapeDataString(extracted); } catch { }
-                            if (!string.IsNullOrWhiteSpace(extracted) && extracted != "file")
-                            {
-                                rawName = extracted;
-                                // Recalculate path with correct filename
-                                counter = 1;
-                                finalPath = Path.Combine(uploadDir, rawName);
-                                while (File.Exists(finalPath))
-                                {
-                                    finalPath = Path.Combine(uploadDir, $"{Path.GetFileNameWithoutExtension(rawName)}_{counter++}{Path.GetExtension(rawName)}");
-                                }
-                            }
-                        }
-                    }
-
-                    if (headerEnd > 0)
-                    {
-                        // Find trailing boundary
-                        int contentEnd = body.Length;
-                        byte[] endMarker = Encoding.UTF8.GetBytes("\r\n--" + boundary);
-                        for (int i = headerEnd; i < body.Length - endMarker.Length; i++)
-                        {
-                            bool match = true;
-                            for (int j = 0; j < endMarker.Length; j++)
-                            {
-                                if (body[i + j] != endMarker[j]) { match = false; break; }
-                            }
-                            if (match) { contentEnd = i; break; }
-                        }
-                        
-                        using var fs = new FileStream(finalPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                        fs.Write(body, headerEnd, contentEnd - headerEnd);
-                    }
-                    else
-                    {
-                        // Fallback: save raw
-                        using var fs = new FileStream(finalPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                        fs.Write(body, 0, body.Length);
-                    }
+                        placeholder = _viewModel.CreateTransferPlaceholder(
+                            rawName, 
+                            totalBytes, 
+                            sourceDevice, 
+                            fileTransport.transport, 
+                            sourceDevice.Contains("PC") || sourceDevice.Contains("LAPTOP") || sourceDevice.Contains("DESKTOP") ? "PC" : "Mobile"
+                        );
+                    });
                 }
                 else
                 {
-                    // Raw binary body — save directly
-                    using var fs = new FileStream(finalPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                    await req.InputStream.CopyToAsync(fs);
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {rawName} from {sourceDevice}... 📥");
+                    });
                 }
 
+                // Copy stream to temporary file on disk with progress
+                tempFile = Path.Combine(Path.GetTempPath(), $"FS_Upload_{Guid.NewGuid().ToString().Substring(0, 8)}.tmp");
+                using (var tempFs = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    byte[] buffer = new byte[65536];
+                    long totalRead = 0;
+                    int read;
+                    var lastProgressUpdate = DateTime.MinValue;
+
+                    while ((read = await req.InputStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    {
+                        await tempFs.WriteAsync(buffer, 0, read);
+                        totalRead += read;
+
+                        if (isLargeFile && placeholder != null && (DateTime.Now - lastProgressUpdate).TotalMilliseconds >= 300)
+                        {
+                            lastProgressUpdate = DateTime.Now;
+                            double progress = totalBytes > 0 ? ((double)totalRead / totalBytes * 100) : 50;
+                            if (progress < 1) progress = 1;
+                            if (progress > 99) progress = 99;
+                            string speedText = totalBytes > 0 
+                                ? $"{FlyShelfViewModel.FormatBytesStatic(totalRead)} of {FlyShelfViewModel.FormatBytesStatic(totalBytes)}" 
+                                : $"{FlyShelfViewModel.FormatBytesStatic(totalRead)}";
+                            
+                            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                placeholder.TransferProgress = progress;
+                                placeholder.TransferStatusText = $"Transferring... {progress:F0}% ({speedText})";
+                            });
+                        }
+                    }
+                }
+
+                DateTime? applyDate = null;
                 string originalDateStr = req.Headers["X-Original-Date"];
                 if (!string.IsNullOrEmpty(originalDateStr) && long.TryParse(originalDateStr, out long epochMs))
                 {
                     try
                     {
-                        var originalDate = DateTimeOffset.FromUnixTimeMilliseconds(epochMs).UtcDateTime.ToLocalTime();
-                        File.SetCreationTime(finalPath, originalDate);
-                        File.SetLastWriteTime(finalPath, originalDate);
+                        applyDate = DateTimeOffset.FromUnixTimeMilliseconds(epochMs).UtcDateTime.ToLocalTime();
                     } catch { }
                 }
 
-                try
+                string? finalPath = null;
+                string contentType = req.ContentType ?? "";
+                if (contentType.Contains("multipart/form-data") && contentType.Contains("boundary="))
                 {
-                    InjectReceivedFile(finalPath, sourceDevice, fileTransport.transport, sourceDevice.Contains("PC") || sourceDevice.Contains("LAPTOP") || sourceDevice.Contains("DESKTOP") ? "PC" : "Mobile");
+                    string boundary = contentType.Substring(contentType.IndexOf("boundary=") + "boundary=".Length).Trim();
+                    if (boundary.StartsWith("\"") && boundary.EndsWith("\""))
+                        boundary = boundary.Substring(1, boundary.Length - 2);
+
+                    finalPath = await ProcessStreamingMultipartFile(tempFile, boundary, uploadDir, applyDate);
                 }
-                catch (Exception ex)
+                else
                 {
-                    FlyShelf.Classes.Logger.LogAction("INJECT FILE ERR", ex.Message);
+                    // Raw binary
+                    int counter = 1;
+                    finalPath = Path.Combine(uploadDir, rawName);
+                    while (File.Exists(finalPath))
+                    {
+                        finalPath = Path.Combine(uploadDir, $"{Path.GetFileNameWithoutExtension(rawName)}_{counter++}{Path.GetExtension(rawName)}");
+                    }
+                    File.Move(tempFile, finalPath, true);
+
+                    if (applyDate.HasValue)
+                    {
+                        try
+                        {
+                            File.SetCreationTime(finalPath, applyDate.Value);
+                            File.SetLastWriteTime(finalPath, applyDate.Value);
+                        } catch { }
+                    }
+                }
+
+                if (string.IsNullOrEmpty(finalPath) || !File.Exists(finalPath))
+                {
+                    throw new FileNotFoundException("Failed to save or parse uploaded file.");
+                }
+
+                // Handle group ZIP reconstruction
+                if (mappedType == "Group")
+                {
+                    string extractDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", "Extracted", $"{Guid.NewGuid().ToString().Substring(0, 8)}");
+                    Directory.CreateDirectory(extractDir);
+                    System.IO.Compression.ZipFile.ExtractToDirectory(finalPath, extractDir);
+
+                    string[] extractedPaths = Directory.GetFileSystemEntries(extractDir);
+                    InjectReceivedGroup(
+                        extractedPaths, 
+                        sourceDevice, 
+                        fileTransport.transport, 
+                        sourceDevice.Contains("PC") || sourceDevice.Contains("LAPTOP") || sourceDevice.Contains("DESKTOP") ? "PC" : "Mobile", 
+                        placeholder
+                    );
+                }
+                else
+                {
+                    InjectReceivedFile(
+                        finalPath, 
+                        sourceDevice, 
+                        fileTransport.transport, 
+                        sourceDevice.Contains("PC") || sourceDevice.Contains("LAPTOP") || sourceDevice.Contains("DESKTOP") ? "PC" : "Mobile", 
+                        placeholder
+                    );
                 }
 
                 res.StatusCode = 200;
@@ -409,13 +426,22 @@ namespace FlyShelf.Classes
             catch (Exception ex)
             {
                 FlyShelf.Classes.Logger.LogAction("SERVER ERR", ex.Message);
+                if (placeholder != null)
+                {
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.DroppedItems.Remove(placeholder));
+                }
                 res.StatusCode = 500;
             }
             finally
             {
+                if (!string.IsNullOrEmpty(tempFile) && File.Exists(tempFile))
+                {
+                    try { File.Delete(tempFile); } catch { }
+                }
                 res.Close();
             }
         }
+
 
         private DateTime _lastArchiveToastTime = DateTime.MinValue;
         // Track files per batch for auto-clipboard (copy to clipboard if ≤2 files in batch)
@@ -1046,32 +1072,104 @@ namespace FlyShelf.Classes
                                         finalPath = Path.Combine(uploadDir, $"{Path.GetFileNameWithoutExtension(fileName)}_{counter++}{Path.GetExtension(fileName)}");
                                     }
 
-                                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                                        FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {fileName} from {sourceDeviceName} (via WS)... 📥");
-                                    });
+                                    bool isLargeFile = fileSize >= 10 * 1024 * 1024;
+                                    ClipboardItem? placeholder = null;
+
+                                    if (isLargeFile)
+                                    {
+                                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                                        {
+                                            placeholder = _viewModel.CreateTransferPlaceholder(
+                                                fileName, 
+                                                fileSize, 
+                                                sourceDeviceName, 
+                                                "WebSocket", 
+                                                "PC"
+                                            );
+                                        });
+                                    }
+                                    else
+                                    {
+                                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                                            FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {fileName} from {sourceDeviceName} (via WS)... 📥");
+                                        });
+                                    }
 
                                     // Direct file streaming Mode: read subsequent binary chunks directly from WebSocket
                                     long bytesReceived = 0;
-                                    using (var fileFs = new FileStream(finalPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true))
+                                    var lastProgressUpdate = DateTime.MinValue;
+                                    try
                                     {
-                                        while (bytesReceived < fileSize)
+                                        using (var fileFs = new FileStream(finalPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true))
                                         {
-                                            long remain = fileSize - bytesReceived;
-                                            int toRead = (int)Math.Min(buffer.Length, remain);
-
-                                            var chunkResult = await ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, toRead), CancellationToken.None);
-                                            if (chunkResult.MessageType == WebSocketMessageType.Close)
+                                            while (bytesReceived < fileSize)
                                             {
-                                                throw new WebSocketException("WebSocket closed during binary file transmission.");
+                                                long remain = fileSize - bytesReceived;
+                                                int toRead = (int)Math.Min(buffer.Length, remain);
+
+                                                var chunkResult = await ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, toRead), CancellationToken.None);
+                                                if (chunkResult.MessageType == WebSocketMessageType.Close)
+                                                {
+                                                    throw new WebSocketException("WebSocket closed during binary file transmission.");
+                                                }
+                                                
+                                                await fileFs.WriteAsync(buffer, 0, chunkResult.Count);
+                                                bytesReceived += chunkResult.Count;
+
+                                                if (isLargeFile && placeholder != null && (DateTime.Now - lastProgressUpdate).TotalMilliseconds >= 300)
+                                                {
+                                                    lastProgressUpdate = DateTime.Now;
+                                                    double progress = fileSize > 0 ? ((double)bytesReceived / fileSize * 100) : 50;
+                                                    if (progress < 1) progress = 1;
+                                                    if (progress > 99) progress = 99;
+                                                    string speedText = $"{FlyShelfViewModel.FormatBytesStatic(bytesReceived)} of {FlyShelfViewModel.FormatBytesStatic(fileSize)}";
+                                                    
+                                                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                                                    {
+                                                        placeholder.TransferProgress = progress;
+                                                        placeholder.TransferStatusText = $"Transferring... {progress:F0}% ({speedText})";
+                                                    });
+                                                }
                                             }
-                                            
-                                            await fileFs.WriteAsync(buffer, 0, chunkResult.Count);
-                                            bytesReceived += chunkResult.Count;
+                                        }
+
+                                        Logger.LogAction("WS", $"SyncFile completed via WS: {fileName} ({bytesReceived} bytes written)");
+
+                                        // Handle group ZIP reconstruction
+                                        if (itemType == "Group")
+                                        {
+                                            string extractDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", "Extracted", $"{Guid.NewGuid().ToString().Substring(0, 8)}");
+                                            Directory.CreateDirectory(extractDir);
+                                            System.IO.Compression.ZipFile.ExtractToDirectory(finalPath, extractDir);
+
+                                            string[] extractedPaths = Directory.GetFileSystemEntries(extractDir);
+                                            InjectReceivedGroup(
+                                                extractedPaths, 
+                                                sourceDeviceName, 
+                                                "WebSocket", 
+                                                "PC", 
+                                                placeholder
+                                            );
+                                        }
+                                        else
+                                        {
+                                            InjectReceivedFile(
+                                                finalPath, 
+                                                sourceDeviceName, 
+                                                "WebSocket", 
+                                                "PC", 
+                                                placeholder
+                                            );
                                         }
                                     }
-
-                                    Logger.LogAction("WS", $"SyncFile completed via WS: {fileName} ({bytesReceived} bytes written)");
-                                    InjectReceivedFile(finalPath, sourceDeviceName, "WebSocket", "PC");
+                                    catch (Exception)
+                                    {
+                                        if (placeholder != null)
+                                        {
+                                            System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.DroppedItems.Remove(placeholder));
+                                        }
+                                        throw;
+                                    }
                                 }
                             }
                             catch (Exception jsonEx)

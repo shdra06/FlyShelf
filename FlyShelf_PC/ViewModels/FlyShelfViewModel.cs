@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
@@ -42,6 +42,34 @@ namespace FlyShelf.ViewModels
         {
             get => _isDatabaseWriteSuspended;
             set => _isDatabaseWriteSuspended = value;
+        }
+
+        private bool _isScrolling = false;
+        public bool IsScrolling
+        {
+            get => _isScrolling;
+            set
+            {
+                if (_isScrolling != value)
+                {
+                    _isScrolling = value;
+                    OnPropertyChanged(nameof(IsScrolling));
+                }
+            }
+        }
+
+        private bool _allowHover = true;
+        public bool AllowHover
+        {
+            get => _allowHover;
+            set
+            {
+                if (_allowHover != value)
+                {
+                    _allowHover = value;
+                    OnPropertyChanged(nameof(AllowHover));
+                }
+            }
         }
 
 
@@ -486,6 +514,65 @@ namespace FlyShelf.ViewModels
             {
                 Classes.ClipboardHistoryManager.UpdateItemDateCopied(item, oldDate);
             });
+        }
+
+        /// <summary>
+        /// Creates a progress placeholder card at index 0 for incoming file transfers ≥ 10MB.
+        /// The placeholder is visible in the UI and displays live download progress.
+        /// Call SwapPlaceholderWithCompleted() when the transfer finishes.
+        /// </summary>
+        public ClipboardItem CreateTransferPlaceholder(string fileName, long totalBytes, string sourceDevice, string transferMethod, string sourceDeviceType)
+        {
+            var placeholder = new ClipboardItem
+            {
+                FileName = $"⏳ Receiving {fileName}...",
+                Extension = "DOWNLOADING",
+                ItemType = ClipboardItemType.File,
+                FormattedSize = FormatBytesStatic(totalBytes),
+                TransferProgress = 0.1,
+                TransferStatusText = $"Connecting to {sourceDevice}...",
+                RawContent = $"⏳ Downloading from {sourceDevice}...",
+                SourceDeviceName = sourceDevice,
+                SourceDeviceType = sourceDeviceType,
+                TransferMethod = transferMethod
+            };
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                DroppedItems.Insert(0, placeholder);
+                OnPropertyChanged(nameof(ShelfVisibility));
+            });
+            return placeholder;
+        }
+
+        /// <summary>
+        /// Replaces a progress placeholder with the completed ClipboardItem at the same position.
+        /// Writes the file to OS clipboard and persists to SQLite.
+        /// </summary>
+        public void SwapPlaceholderWithCompleted(ClipboardItem placeholder, ClipboardItem completed)
+        {
+            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            {
+                int idx = DroppedItems.IndexOf(placeholder);
+                if (idx >= 0)
+                {
+                    DroppedItems.RemoveAt(idx);
+                    DroppedItems.Insert(idx, completed);
+                }
+                else
+                {
+                    // Placeholder was removed (e.g. user deleted it) — insert at top
+                    DroppedItems.Insert(0, completed);
+                }
+                OnPropertyChanged(nameof(ShelfVisibility));
+            });
+        }
+
+        public static string FormatBytesStatic(long bytes)
+        {
+            if (bytes < 1024) return $"{bytes} B";
+            if (bytes < 1024 * 1024) return $"{bytes / 1024.0:F1} KB";
+            if (bytes < 1024L * 1024 * 1024) return $"{bytes / (1024.0 * 1024.0):F1} MB";
+            return $"{bytes / (1024.0 * 1024.0 * 1024.0):F2} GB";
         }
 
         public void RemoveItem(ClipboardItem item)
@@ -1090,7 +1177,7 @@ namespace FlyShelf.ViewModels
         /// <summary>
         /// Prunes oldest unpinned items beyond the cap to prevent unbounded memory growth.
         /// </summary>
-        private void PruneOldItems()
+        public void PruneOldItems()
         {
             var prunedList = new List<ClipboardItem>();
             while (DroppedItems.Count > MAX_UNPINNED_ITEMS)

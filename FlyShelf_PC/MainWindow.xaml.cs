@@ -1,4 +1,4 @@
-﻿using FlyShelf.ViewModels;
+using FlyShelf.ViewModels;
 using MicaWPF.Controls;
 using System;
 using System.Collections.Specialized;
@@ -34,8 +34,12 @@ namespace FlyShelf
         private bool _isEdgeLocked = false;
         private Windows.TaskbarWindow? _taskbarWidget;
         private System.Windows.Threading.DispatcherTimer? _clipboardDebounceTimer;
+        private System.Windows.Threading.DispatcherTimer? _scrollDecayTimer;
         private DateTime _lastMergeToggleTime = DateTime.MinValue;
         private IntPtr _lastActiveExternalWindow = IntPtr.Zero;
+        private DateTime _lastScrollTime = DateTime.MinValue;
+        private double _scrollVelocity = 0;
+        private Point _lastPhysicalMousePosition = new Point(-999, -999);
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
@@ -288,6 +292,10 @@ namespace FlyShelf
 
             // Attach LIST-mode smooth scrolling (very slow for clipboard items)
             Classes.SmoothScroll.AttachList(ShelfListView);
+
+            // Track scrolling to optimize hover button summoning (prevent during scroll)
+            ShelfListView.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(ShelfListView_ScrollChanged));
+            ShelfListView.MouseLeave += ShelfListView_MouseLeave;
 
             // Apply wallpaper if configured
             // Apply wallpaper deferred (100ms) to not block UI init
@@ -1200,6 +1208,60 @@ namespace FlyShelf
                 ShelfListView.ItemContainerGenerator.StatusChanged += statusHandler;
                 ShelfListView.Focus();
             }
+        }
+
+        private void ShelfListView_ScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            if (e.VerticalChange == 0) return;
+
+            var now = DateTime.UtcNow;
+            double elapsedMs = (now - _lastScrollTime).TotalMilliseconds;
+            _lastScrollTime = now;
+
+            double change = Math.Abs(e.VerticalChange);
+            double instVelocity = elapsedMs > 0 ? change / elapsedMs : change;
+
+            if (elapsedMs > 500)
+            {
+                _scrollVelocity = instVelocity;
+            }
+            else
+            {
+                // Smooth the velocity using an EMA (exponential moving average)
+                _scrollVelocity = 0.7 * _scrollVelocity + 0.3 * instVelocity;
+            }
+
+            // Mark that active scrolling is happening, and suppress hover buttons immediately
+            _viewModel.IsScrolling = true;
+            _viewModel.AllowHover = false;
+
+            // Start or reset the timer to reset IsScrolling back to false after a delay
+            if (_scrollDecayTimer == null)
+            {
+                _scrollDecayTimer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(200) // Reset 200ms after scroll activity stops
+                };
+                _scrollDecayTimer.Tick += (s, ev) =>
+                {
+                    _scrollDecayTimer.Stop();
+                    _viewModel.IsScrolling = false;
+                    _scrollVelocity = 0;
+                    // Do not set AllowHover = true here; keep it false until the user physically moves the mouse!
+                };
+            }
+            else
+            {
+                _scrollDecayTimer.Stop();
+            }
+
+            _scrollDecayTimer.Start();
+        }
+
+        private void ShelfListView_MouseLeave(object sender, MouseEventArgs e)
+        {
+            // Reset AllowHover back to true when the mouse leaves the list view area entirely
+            _viewModel.AllowHover = true;
         }
 
     }

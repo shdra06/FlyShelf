@@ -1,4 +1,4 @@
-﻿// ---------------------------------------------------------------
+// ---------------------------------------------------------------
 // MainWindow � Event Handlers
 // Drag/Drop, Search, Item Actions (Pin/Delete/Open/QuickLook),
 // Scroll, KeyDown, NotifyIcon, ContextMenu
@@ -567,7 +567,7 @@ namespace FlyShelf
             }
             e.Handled = true;
         }
-        
+
         private void ShelfListView_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
         {
             e.Handled = true;

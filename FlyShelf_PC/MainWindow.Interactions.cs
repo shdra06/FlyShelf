@@ -1,4 +1,4 @@
-﻿// ---------------------------------------------------------------
+// ---------------------------------------------------------------
 // MainWindow � Mouse Interactions & Advanced Features
 // MouseClick, DragDrop, ForceSend, OpenApp, Selection,
 // PDF Merge, Card Hover Preview
@@ -216,6 +216,21 @@ namespace FlyShelf
 
         private void ShelfListView_MouseMove(object sender, MouseEventArgs e)
         {
+            // --- Physical mouse movement detection for scroll hover optimization ---
+            Point currentPos = e.GetPosition(this);
+            if (Math.Abs(currentPos.X - _lastPhysicalMousePosition.X) > 0.5 ||
+                Math.Abs(currentPos.Y - _lastPhysicalMousePosition.Y) > 0.5)
+            {
+                _lastPhysicalMousePosition = currentPos;
+
+                // Only allow summoning the hover action buttons when scrolling is not active,
+                // or if scroll speed is slow (e.g. less than 0.25 pixels per ms).
+                if (!_viewModel.IsScrolling || _scrollVelocity < 0.25)
+                {
+                    _viewModel.AllowHover = true;
+                }
+            }
+
             if (e.LeftButton == MouseButtonState.Pressed)
             {
                 Point position = e.GetPosition(null);

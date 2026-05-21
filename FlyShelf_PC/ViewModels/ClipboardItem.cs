@@ -1,12 +1,14 @@
-﻿using System;
+using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Windows;
 using System.Windows.Media.Imaging;
 using System.Diagnostics;
 using System.ComponentModel;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
+using System.Runtime.InteropServices;
 
 namespace FlyShelf.ViewModels
 {
@@ -528,6 +530,43 @@ namespace FlyShelf.ViewModels
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedSize)));
             });
 
+            // Zip files in background thread for cross-device transfer
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    string tempZip = Path.Combine(Path.GetTempPath(), $"FlyShelf_Group_{DateTime.Now:yyyyMMdd_HHmmss}.zip");
+                    if (File.Exists(tempZip)) File.Delete(tempZip);
+                    
+                    using (var archive = ZipFile.Open(tempZip, ZipArchiveMode.Create))
+                    {
+                        foreach (var path in capturedFiles)
+                        {
+                            if (File.Exists(path))
+                            {
+                                string entryName = Path.GetFileName(path);
+                                archive.CreateEntryFromFile(path, entryName, CompressionLevel.Fastest);
+                            }
+                            else if (Directory.Exists(path))
+                            {
+                                string dirName = Path.GetFileName(path);
+                                AddDirectoryToZip(archive, path, dirName);
+                            }
+                        }
+                    }
+                    ZippedArchivePath = tempZip;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ZippedArchivePath)));
+                    Classes.Logger.LogAction("GROUP ZIP", $"Created zip for group: {tempZip}");
+                }
+                catch (Exception ex)
+                {
+                    Classes.Logger.LogAction("GROUP ZIP ERR", ex.Message);
+                }
+            });
+
+            // Generate premium overlapping diagonal stacked card icons
+            GenerateStackedGroupIcon(capturedFiles);
+
             EvaluateSmartActions();
         }
 
@@ -843,6 +882,145 @@ namespace FlyShelf.ViewModels
                 dblSByte = bytes / 1024.0;
             }
             return $"{dblSByte:0.##} {suffixes[i]}";
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
+        private struct SHFILEINFO
+        {
+            public IntPtr hIcon;
+            public int iIcon;
+            public uint dwAttributes;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+            public string szDisplayName;
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)]
+            public string szTypeName;
+        };
+
+        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbSizeFileInfo, uint uFlags);
+        [DllImport("user32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool DestroyIcon(IntPtr hIcon);
+
+        private static BitmapSource GetShellIconForStacking(string filePath)
+        {
+            try
+            {
+                const uint SHGFI_ICON = 0x100;
+                const uint SHGFI_LARGEICON = 0x0;
+                const uint SHGFI_USEFILEATTRIBUTES = 0x10;
+                const uint FILE_ATTRIBUTE_NORMAL = 0x80;
+
+                SHFILEINFO shinfo = new SHFILEINFO();
+                IntPtr res = SHGetFileInfo(filePath, FILE_ATTRIBUTE_NORMAL, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
+
+                if (res != IntPtr.Zero && shinfo.hIcon != IntPtr.Zero)
+                {
+                    try
+                    {
+                        var bitmapSource = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
+                            shinfo.hIcon,
+                            Int32Rect.Empty,
+                            BitmapSizeOptions.FromEmptyOptions());
+                        bitmapSource.Freeze();
+                        return bitmapSource;
+                    }
+                    finally
+                    {
+                        DestroyIcon(shinfo.hIcon);
+                    }
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        private void GenerateStackedGroupIcon(string[] files)
+        {
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    var icons = new System.Collections.Generic.List<BitmapSource>();
+                    int count = Math.Min(3, files.Length);
+                    for (int i = 0; i < count; i++)
+                    {
+                        var icon = GetShellIconForStacking(files[i]);
+                        if (icon != null)
+                        {
+                            icons.Add(icon);
+                        }
+                    }
+
+                    if (icons.Count == 0) return;
+
+                    var visual = new System.Windows.Media.DrawingVisual();
+                    using (var dc = visual.RenderOpen())
+                    {
+                        // Draw cards from back (highest index) to front (index 0)
+                        for (int i = icons.Count - 1; i >= 0; i--)
+                        {
+                            var icon = icons[i];
+                            // Draw diagonal overlap:
+                            // If 3 icons:
+                            // i=2: x = 6, y = 34
+                            // i=1: x = 20, y = 20
+                            // i=0: x = 34, y = 6
+                            double step = 14;
+                            double startX = 20 - (icons.Count - 1) * 7;
+                            double startY = 20 + (icons.Count - 1) * 7;
+                            
+                            double x = startX + (icons.Count - 1 - i) * step;
+                            double y = startY - (icons.Count - 1 - i) * step;
+
+                            // 1. Soft drop shadow
+                            dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(30, 0, 0, 0)), null, new Rect(x + 1.5, y + 2.5, 56, 56), 8, 8);
+                            dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(10, 0, 0, 0)), null, new Rect(x + 3, y + 4, 56, 56), 8, 8);
+
+                            // 2. White card background with subtle light-grey border
+                            var borderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(225, 225, 225));
+                            dc.DrawRoundedRectangle(System.Windows.Media.Brushes.White, new System.Windows.Media.Pen(borderBrush, 1.0), new Rect(x, y, 56, 56), 8, 8);
+
+                            // 3. Center shell icon inside the card
+                            dc.DrawImage(icon, new Rect(x + 12, y + 12, 32, 32));
+                        }
+                    }
+
+                    var rtb = new RenderTargetBitmap(96, 96, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                    rtb.Render(visual);
+                    rtb.Freeze();
+                    
+                    // Assign to Icon property
+                    var bmp = new BitmapImage();
+                    using (var ms = new MemoryStream())
+                    {
+                        var encoder = new PngBitmapEncoder();
+                        encoder.Frames.Add(BitmapFrame.Create(rtb));
+                        encoder.Save(ms);
+                        bmp.BeginInit();
+                        bmp.CacheOption = BitmapCacheOption.OnLoad;
+                        bmp.StreamSource = ms;
+                        bmp.EndInit();
+                        bmp.Freeze();
+                    }
+                    
+                    Icon = bmp;
+                }
+                catch (Exception ex)
+                {
+                    Classes.Logger.LogAction("STACKED ICON ERR", ex.Message);
+                }
+            });
+        }
+
+        private static void AddDirectoryToZip(ZipArchive archive, string sourceDir, string entryPrefix)
+        {
+            foreach (var file in Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
+            {
+                string relativePath = Path.GetRelativePath(sourceDir, file);
+                string entryName = Path.Combine(entryPrefix, relativePath);
+                archive.CreateEntryFromFile(file, entryName, CompressionLevel.Fastest);
+            }
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
