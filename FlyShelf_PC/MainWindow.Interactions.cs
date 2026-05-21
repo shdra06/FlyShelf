@@ -1,11 +1,11 @@
-// ---------------------------------------------------------------
+﻿// ---------------------------------------------------------------
 // MainWindow � Mouse Interactions & Advanced Features
 // MouseClick, DragDrop, ForceSend, OpenApp, Selection,
 // PDF Merge, Card Hover Preview
 // Split from MainWindow.xaml.cs for modularity
 // ---------------------------------------------------------------
-using AdvanceClip.ViewModels;
-using AdvanceClip.Classes;
+using FlyShelf.ViewModels;
+using FlyShelf.Classes;
 using System;
 using System.Collections.Specialized;
 using System.IO;
@@ -16,7 +16,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
-namespace AdvanceClip
+namespace FlyShelf
 {
     public partial class MainWindow
     {
@@ -275,7 +275,7 @@ namespace AdvanceClip
                         }
                         catch (Exception ex)
                         {
-                            AdvanceClip.Classes.Logger.LogAction("DRAG OUT FAULT", $"Failed UI Export: {ex.Message}");
+                            FlyShelf.Classes.Logger.LogAction("DRAG OUT FAULT", $"Failed UI Export: {ex.Message}");
                         }
                         finally
                         {
@@ -310,98 +310,13 @@ namespace AdvanceClip
 
         private Windows.HubWindow? _hubWindowInstance;
 
-        private async void ForceSendItem_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var menuItem = sender as System.Windows.Controls.MenuItem;
-                var clipItem = menuItem?.Tag as ClipboardItem;
-                if (clipItem == null) return;
 
-                // Fetch active devices
-                var devices = await AdvanceClip.Classes.FirebaseSyncManager.GetActiveDevices();
-                if (devices.Count == 0)
-                {
-                    AdvanceClip.Windows.ToastWindow.ShowToast("No other devices found online ⚠️");
-                    return;
-                }
-
-                // Build device picker dialog
-                var dialog = new System.Windows.Window
-                {
-                    Title = "⚡ Force Send To",
-                    Width = 340, Height = 300,
-                    WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen,
-                    ResizeMode = System.Windows.ResizeMode.NoResize,
-                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(28, 30, 38)),
-                    Foreground = System.Windows.Media.Brushes.White,
-                };
-
-                var stack = new System.Windows.Controls.StackPanel { Margin = new Thickness(16) };
-                stack.Children.Add(new System.Windows.Controls.TextBlock 
-                { 
-                    Text = $"Send \"{(clipItem.FileName ?? clipItem.RawContent ?? "item").Substring(0, Math.Min(40, (clipItem.FileName ?? clipItem.RawContent ?? "item").Length))}\" to:",
-                    FontWeight = FontWeights.Bold, FontSize = 14, Foreground = System.Windows.Media.Brushes.White,
-                    Margin = new Thickness(0, 0, 0, 12), TextWrapping = TextWrapping.Wrap
-                });
-
-                // Send to ALL button
-                var allBtn = new System.Windows.Controls.Button
-                {
-                    Content = $"Send to ALL Devices ({devices.Count})",
-                    Padding = new Thickness(12, 8, 12, 8), Margin = new Thickness(0, 0, 0, 8),
-                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(74, 98, 235)),
-                    Foreground = System.Windows.Media.Brushes.White, FontWeight = FontWeights.Bold,
-                    BorderThickness = new Thickness(0),
-                };
-                allBtn.Click += async (s2, e2) =>
-                {
-                    dialog.Close();
-                    var allIds = devices.Select(d => d.Id).ToList();
-                    int count = await AdvanceClip.Classes.FirebaseSyncManager.ForceSendToDevices(
-                        new List<ClipboardItem> { clipItem }, allIds);
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"⚡ Force sent to {count} device(s)");
-                };
-                stack.Children.Add(allBtn);
-
-                // Individual device buttons
-                foreach (var dev in devices)
-                {
-                    string emoji = dev.Type == "PC" ? "💻" : "📱";
-                    var btn = new System.Windows.Controls.Button
-                    {
-                        Content = $"{emoji} {dev.Name} ({(dev.IsOnline ? "Online" : "Offline")})",
-                        Padding = new Thickness(10, 6, 10, 6), Margin = new Thickness(0, 0, 0, 4),
-                        Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(42, 47, 58)),
-                        Foreground = System.Windows.Media.Brushes.White,
-                        BorderThickness = new Thickness(0),
-                        Tag = dev.Id
-                    };
-                    btn.Click += async (s3, e3) =>
-                    {
-                        dialog.Close();
-                        string targetId = (s3 as System.Windows.Controls.Button)?.Tag?.ToString() ?? "";
-                        int count = await AdvanceClip.Classes.FirebaseSyncManager.ForceSendToDevices(
-                            new List<ClipboardItem> { clipItem }, new List<string> { targetId });
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"⚡ Force sent ({count} item)");
-                    };
-                    stack.Children.Add(btn);
-                }
-
-                var scroll = new System.Windows.Controls.ScrollViewer { Content = stack, VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto };
-                dialog.Content = scroll;
-                dialog.ShowDialog();
-            }
-            catch (Exception ex)
-            {
-                AdvanceClip.Windows.ToastWindow.ShowToast($"Force Send Error: {ex.Message}");
-            }
-        }
 
         private void OpenApp_Click(object sender, RoutedEventArgs e)
         {
             try
             {
+                CloseEmojiPicker();
                 if (_hubWindowInstance != null && _hubWindowInstance.IsLoaded)
                 {
                     // If the window is on another virtual desktop, close and recreate it
@@ -412,7 +327,7 @@ namespace AdvanceClip
                         var hwnd = new System.Windows.Interop.WindowInteropHelper(_hubWindowInstance).Handle;
                         if (hwnd != IntPtr.Zero)
                         {
-                            var vdm = (AdvanceClip.Classes.NativeMethods.IVirtualDesktopManager)new AdvanceClip.Classes.NativeMethods.VirtualDesktopManager();
+                            var vdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
                             int hr = vdm.IsWindowOnCurrentVirtualDesktop(hwnd, out bool onCurrent);
                             if (hr == 0 && !onCurrent)
                                 needsRecreate = true;
@@ -449,8 +364,8 @@ namespace AdvanceClip
                 var fullMsg = ex.ToString();
                 var inner = ex.InnerException;
                 while (inner != null) { fullMsg += "\n--- INNER: " + inner.Message; inner = inner.InnerException; }
-                AdvanceClip.Classes.Logger.LogAction("HUBWINDOW_FAIL", fullMsg);
-                AdvanceClip.Windows.ToastWindow.ShowToast($"Hub Error: {(ex.InnerException?.Message ?? ex.Message)}");
+                FlyShelf.Classes.Logger.LogAction("HUBWINDOW_FAIL", fullMsg);
+                FlyShelf.Windows.ToastWindow.ShowToast($"Hub Error: {(ex.InnerException?.Message ?? ex.Message)}");
             }
         }
 
@@ -506,8 +421,14 @@ namespace AdvanceClip
                 item.IsPinned = false;
             }
             
-            _viewModel.SavePinnedItems();
-            _viewModel.PersistHistoryPublic();
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                foreach (var item in pinnedSelected)
+                {
+                    Classes.ClipboardHistoryManager.UpdateItemPinState(item);
+                }
+            });
+            
             UnpinSelectedBtn.Visibility = Visibility.Collapsed;
             ShelfListView.SelectedItems.Clear();
         }
@@ -529,7 +450,7 @@ namespace AdvanceClip
             // Convert DOC/DOCX files to PDF first
             if (checkedDocs.Count > 0)
             {
-                AdvanceClip.Windows.ToastWindow.ShowToast($"📄 Converting {checkedDocs.Count} DOC file(s) to PDF...");
+                FlyShelf.Windows.ToastWindow.ShowToast($"📄 Converting {checkedDocs.Count} DOC file(s) to PDF...");
 
                 foreach (var doc in checkedDocs)
                 {
@@ -540,7 +461,7 @@ namespace AdvanceClip
                     }
                     else
                     {
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"❌ Failed to convert: {doc.FileName}");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"❌ Failed to convert: {doc.FileName}");
                     }
                 }
             }
@@ -548,7 +469,7 @@ namespace AdvanceClip
             // Convert Images to PDF next
             if (checkedImages.Count > 0)
             {
-                AdvanceClip.Windows.ToastWindow.ShowToast($"🖼️ Formatting {checkedImages.Count} image(s) to PDF...");
+                FlyShelf.Windows.ToastWindow.ShowToast($"🖼️ Formatting {checkedImages.Count} image(s) to PDF...");
 
                 foreach (var img in checkedImages)
                 {
@@ -562,8 +483,8 @@ namespace AdvanceClip
                     }
                     catch (Exception ex)
                     {
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"❌ Failed to format: {img.FileName}");
-                        AdvanceClip.Classes.Logger.LogAction("IMAGE2PDF_ERR", ex.ToString());
+                        FlyShelf.Windows.ToastWindow.ShowToast($"❌ Failed to format: {img.FileName}");
+                        FlyShelf.Classes.Logger.LogAction("IMAGE2PDF_ERR", ex.ToString());
                     }
                 }
             }
@@ -575,7 +496,7 @@ namespace AdvanceClip
                 var newItem = new ClipboardItem(convertedPdfPaths[0]);
                 _viewModel.DroppedItems.Insert(0, newItem);
                 _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
-                AdvanceClip.Windows.ToastWindow.ShowToast("✅ Converted to PDF");
+                FlyShelf.Windows.ToastWindow.ShowToast("✅ Converted to PDF");
                 return;
             }
 
@@ -592,7 +513,7 @@ namespace AdvanceClip
             if (allPdfs.Count > 1)
             {
                 DismissMergeState();
-                var win = new AdvanceClip.Windows.PdfMergeWindow(allPdfs, _viewModel);
+                var win = new FlyShelf.Windows.PdfMergeWindow(allPdfs, _viewModel);
                 App.ActiveMergeWindow = win;
                 win.Closed += (_, __) => { App.ActiveMergeWindow = null; this.Show(); this.Activate(); };
                 win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
@@ -610,11 +531,11 @@ namespace AdvanceClip
                 var newItem = new ClipboardItem(allPdfs[0].FilePath);
                 _viewModel.DroppedItems.Insert(0, newItem);
                 _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
-                AdvanceClip.Windows.ToastWindow.ShowToast("✅ PDF added to clipboard");
+                FlyShelf.Windows.ToastWindow.ShowToast("✅ PDF added to clipboard");
             }
             else
             {
-                AdvanceClip.Windows.ToastWindow.ShowToast("Select 2+ files to merge, or 1 image/doc to convert.");
+                FlyShelf.Windows.ToastWindow.ShowToast("Select 2+ files to merge, or 1 image/doc to convert.");
             }
         }
 
@@ -719,7 +640,7 @@ namespace AdvanceClip
             }
             catch (Exception ex)
             {
-                AdvanceClip.Windows.ToastWindow.ShowToast($"Search Error: {ex.Message}");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Search Error: {ex.Message}");
             }
         }
 
@@ -731,7 +652,7 @@ namespace AdvanceClip
                 var clipItem = GetClipItemFromSender(sender);
                 if (clipItem == null || string.IsNullOrEmpty(clipItem.FilePath)) return;
 
-                AdvanceClip.Windows.ToastWindow.ShowToast("📄 Converting PDF to Word...");
+                FlyShelf.Windows.ToastWindow.ShowToast("📄 Converting PDF to Word...");
 
                 string outputPath = System.IO.Path.Combine(
                     System.IO.Path.GetDirectoryName(clipItem.FilePath) ?? System.IO.Path.GetTempPath(),
@@ -762,7 +683,7 @@ $word.Quit()
                     }
                     catch (Exception ex)
                     {
-                        AdvanceClip.Classes.Logger.LogAction("PDF2WORD", $"Conversion error: {ex.Message}");
+                        FlyShelf.Classes.Logger.LogAction("PDF2WORD", $"Conversion error: {ex.Message}");
                     }
                 });
 
@@ -775,16 +696,16 @@ $word.Quit()
 
                     // Open containing folder with the file selected
                     System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{outputPath}\"");
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"✅ Converted: {System.IO.Path.GetFileName(outputPath)}");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"✅ Converted: {System.IO.Path.GetFileName(outputPath)}");
                 }
                 else
                 {
-                    AdvanceClip.Windows.ToastWindow.ShowToast("❌ Conversion failed — Microsoft Word required");
+                    FlyShelf.Windows.ToastWindow.ShowToast("❌ Conversion failed — Microsoft Word required");
                 }
             }
             catch (Exception ex)
             {
-                AdvanceClip.Windows.ToastWindow.ShowToast($"❌ PDF to Word error: {ex.Message}");
+                FlyShelf.Windows.ToastWindow.ShowToast($"❌ PDF to Word error: {ex.Message}");
             }
         }
 

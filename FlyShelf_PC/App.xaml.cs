@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 
-namespace AdvanceClip;
+namespace FlyShelf;
 
 public partial class App : Application
 {
@@ -110,14 +110,14 @@ public partial class App : Application
         
         // ------------------------------------------------------------------
         // Single File Deployment: Synthesize the physical scripts locally FIRST!
-        AdvanceClip.Classes.RuntimeHost.Initialize();
+        FlyShelf.Classes.RuntimeHost.Initialize();
         // ------------------------------------------------------------------
 
-        AdvanceClip.Classes.SettingsManager.Load();
+        FlyShelf.Classes.SettingsManager.Load();
         
         // ═══ INTERNAL CLOCK: Sync with NTP before any Firebase/networking ═══
         // Protects against wrong system clock causing auth failures and dead heartbeats
-        _ = AdvanceClip.Classes.NetworkClock.InitializeAsync();
+        _ = FlyShelf.Classes.NetworkClock.InitializeAsync();
         
         try 
         {
@@ -154,7 +154,7 @@ public partial class App : Application
                 try { System.IO.File.AppendAllText("flyshelf_debugger.log", $"[{DateTime.Now}] ASYNC SWALLOWED: {args.Exception.Message}\n"); } catch { }
             };
 
-            if (string.IsNullOrWhiteSpace(AdvanceClip.Classes.SettingsManager.Current.DeviceName))
+            if (string.IsNullOrWhiteSpace(FlyShelf.Classes.SettingsManager.Current.DeviceName))
             {
                 Window namingWindow = new Window
                 {
@@ -244,8 +244,8 @@ public partial class App : Application
                 btnBorder.MouseLeftButtonDown += (s, ev) => {
                     if (!string.IsNullOrWhiteSpace(input.Text))
                     {
-                        AdvanceClip.Classes.SettingsManager.Current.DeviceName = input.Text.Trim();
-                        AdvanceClip.Classes.SettingsManager.Save();
+                        FlyShelf.Classes.SettingsManager.Current.DeviceName = input.Text.Trim();
+                        FlyShelf.Classes.SettingsManager.Save();
                         namingWindow.DialogResult = true;
                         namingWindow.Close();
                     }
@@ -261,7 +261,7 @@ public partial class App : Application
             }
 
             // Provide immediate feedback that the service captured the network without waiting for graphics
-            AdvanceClip.Windows.ToastWindow.ShowToast("Service online");
+            FlyShelf.Windows.ToastWindow.ShowToast("Service online");
 
             // ═══ SLEEP/RESUME RECOVERY ═══
             // When PC wakes from sleep, all sockets die and Cloudflare tunnel breaks.
@@ -270,30 +270,30 @@ public partial class App : Application
             {
                 if (ev.Mode == Microsoft.Win32.PowerModes.Resume)
                 {
-                    AdvanceClip.Classes.Logger.LogAction("POWER", "⚡ PC resumed from sleep — force-restarting network in 5s");
+                    FlyShelf.Classes.Logger.LogAction("POWER", "⚡ PC resumed from sleep — force-restarting network in 5s");
                     _ = System.Threading.Tasks.Task.Run(async () =>
                     {
                         await System.Threading.Tasks.Task.Delay(5000); // Wait for network stack to stabilize
                         
                         // Force-restart Cloudflare tunnel — the old URL is dead after sleep
                         // The GlobalUrlUpdated event will auto-purge stale Firebase entries
-                        var server = AdvanceClip.Classes.NetworkSyncServer.Instance;
+                        var server = FlyShelf.Classes.NetworkSyncServer.Instance;
                         if (server != null)
                         {
-                            AdvanceClip.Classes.Logger.LogAction("POWER", "Killing stale Cloudflare tunnel — will get new URL...");
+                            FlyShelf.Classes.Logger.LogAction("POWER", "Killing stale Cloudflare tunnel — will get new URL...");
                             // Push heartbeat with LAN IP ONLY (no stale Cloudflare URL) so Android can reach us via LAN immediately
-                            try { await AdvanceClip.Classes.FirebaseSyncManager.PushTunnelUrl(server.DisplayUrl, true, server.DisplayUrl); }
-                            catch (Exception ex) { AdvanceClip.Classes.Logger.LogAction("POWER", $"LAN heartbeat failed: {ex.Message}"); }
+                            try { await FlyShelf.Classes.CloudDiscoveryManager.PushTunnelUrl(server.DisplayUrl, true, server.DisplayUrl); }
+                            catch (Exception ex) { FlyShelf.Classes.Logger.LogAction("POWER", $"LAN heartbeat failed: {ex.Message}"); }
                         }
                         
-                        AdvanceClip.Classes.Logger.DumpNetworkDiagnostics();
-                        AdvanceClip.Classes.Logger.LogAction("POWER", "✅ Post-sleep recovery complete — Cloudflare will auto-restart via health monitor");
+                        FlyShelf.Classes.Logger.DumpNetworkDiagnostics();
+                        FlyShelf.Classes.Logger.LogAction("POWER", "✅ Post-sleep recovery complete — Cloudflare will auto-restart via health monitor");
                     });
                 }
             };
 
             // Offload the massive WPF XAML layout rasterization payload directly to the background!
-            // This drops AdvanceClip's actual active startup boot time from ~2000ms straight to < 10ms!
+            // This drops FlyShelf's actual active startup boot time from ~2000ms straight to < 10ms!
             Application.Current.Dispatcher.InvokeAsync(async () => 
             {
                 try
@@ -310,13 +310,13 @@ public partial class App : Application
                     MainWindow.Show();
                     
                     // One-time cleanup: purge old GUID-based device entries from Firebase
-                    _ = AdvanceClip.Classes.FirebaseSyncManager.CleanupStaleDevices();
+                    _ = FlyShelf.Classes.CloudDiscoveryManager.CleanupStaleDevices();
                     
                     // Dump full network diagnostics at startup for remote debugging
                     _ = System.Threading.Tasks.Task.Run(() =>
                     {
                         System.Threading.Thread.Sleep(8000); // Wait for Cloudflare to initialize
-                        AdvanceClip.Classes.Logger.DumpNetworkDiagnostics();
+                        FlyShelf.Classes.Logger.DumpNetworkDiagnostics();
                     });
                     
                     // CRITICAL: Give the NotifyIcon (system tray) and TaskbarWindow (widget)
@@ -345,11 +345,11 @@ public partial class App : Application
         
         try
         {
-            AdvanceClip.Classes.FirebaseSyncManager.PushTunnelUrl("offline", false).Wait(1500);
+            FlyShelf.Classes.CloudDiscoveryManager.PushTunnelUrl("offline", false).Wait(1500);
         }
         catch { }
         
-        AdvanceClip.Classes.Logger.Shutdown();
+        FlyShelf.Classes.Logger.Shutdown();
         base.OnExit(e);
     }
 
@@ -360,7 +360,7 @@ public partial class App : Application
         {
             try
             {
-                if (!AdvanceClip.Classes.SettingsManager.Current.EnableShakeToOpen)
+                if (!FlyShelf.Classes.SettingsManager.Current.EnableShakeToOpen)
                 {
                     _shakeCount = 0;
                     return;
@@ -479,7 +479,7 @@ public partial class App : Application
     {
         try
         {
-            AdvanceClip.Classes.Logger.LogAction("SAFEMODE", $"Launching FlyShelf in Safe Mode due to startup failure: {originalException.Message}");
+            FlyShelf.Classes.Logger.LogAction("SAFEMODE", $"Launching FlyShelf in Safe Mode due to startup failure: {originalException.Message}");
             
             // Create an ultra-safe fallback window
             Window safeWindow = new Window
@@ -587,7 +587,7 @@ public partial class App : Application
             btnReset.MouseLeftButtonDown += (s, ev) => {
                 try
                 {
-                    AdvanceClip.Classes.SettingsManager.ResetToDefaults();
+                    FlyShelf.Classes.SettingsManager.ResetToDefaults();
                     MessageBox.Show("Settings reset to default. Please restart FlyShelf.", "Reset Complete", MessageBoxButton.OK, MessageBoxImage.Information);
                     Application.Current.Shutdown();
                 }
@@ -657,8 +657,8 @@ public partial class App : Application
 
         try
         {
-            AdvanceClip.Classes.Logger.LogAction("FATAL_CRASH", "App crashed, restarting in Safe Mode...");
-            AdvanceClip.Classes.Logger.Shutdown();
+            FlyShelf.Classes.Logger.LogAction("FATAL_CRASH", "App crashed, restarting in Safe Mode...");
+            FlyShelf.Classes.Logger.Shutdown();
         }
         catch { }
 

@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 
-namespace AdvanceClip
+namespace FlyShelf
 {
     /// <summary>
     /// Converts AlternationIndex (0-9) to hotkey label: 0→"Alt+1", 1→"Alt+2", ..., 8→"Alt+9", 9→"Alt+0"

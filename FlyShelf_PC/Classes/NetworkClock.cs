@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     /// <summary>
     /// Lightweight internal clock. Single NTP query to time.google.com at startup.

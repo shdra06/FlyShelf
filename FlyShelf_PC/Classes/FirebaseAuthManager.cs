@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     /// <summary>
     /// Manages Firebase Anonymous Authentication for the PC client.

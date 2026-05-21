@@ -1,4 +1,4 @@
-using AdvanceClip.ViewModels;
+﻿using FlyShelf.ViewModels;
 using MicaWPF.Controls;
 using System;
 using System.Collections.Specialized;
@@ -11,7 +11,7 @@ using System.Runtime.InteropServices;
 using System.Windows.Interop;
 using System.Windows.Media;
 
-namespace AdvanceClip
+namespace FlyShelf
 {
     public partial class MainWindow : MicaWindow
     {
@@ -324,6 +324,36 @@ namespace AdvanceClip
                     Classes.Logger.LogAction("PRE_INIT_HUB_FAIL", ex.ToString());
                 }
             }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+
+            // Wire up paginated scroll loading on-demand
+            try
+            {
+                Dispatcher.InvokeAsync(async () =>
+                {
+                    await System.Threading.Tasks.Task.Delay(500); // Wait for visual templates to generate completely
+                    var sv = FindVisualChild<ScrollViewer>(ShelfListView);
+                    if (sv != null)
+                    {
+                        sv.ScrollChanged += async (s, args) =>
+                        {
+                            // If we scrolled near the bottom (within 50px of ScrollableHeight), load the next page of history items
+                            if (sv.ScrollableHeight > 0 && sv.VerticalOffset >= sv.ScrollableHeight - 50)
+                            {
+                                await _viewModel.LoadNextPageAsync();
+                            }
+                        };
+                        Classes.Logger.LogAction("SCROLL_INIT", "Successfully hooked ShelfListView ScrollViewer for pagination.");
+                    }
+                    else
+                    {
+                        Classes.Logger.LogAction("SCROLL_INIT_WARN", "Could not find ScrollViewer child of ShelfListView.");
+                    }
+                }, System.Windows.Threading.DispatcherPriority.Loaded);
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("SCROLL_INIT_FAIL", $"Failed to hook scroll events: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -784,7 +814,7 @@ namespace AdvanceClip
             base.OnActivated(e);
             // Guard: don't fight QuickLook for focus
             if (System.Windows.Application.Current.Windows.OfType<Window>()
-                .Any(w => w is AdvanceClip.Windows.QuickLookWindow && w.IsActive)) return;
+                .Any(w => w is FlyShelf.Windows.QuickLookWindow && w.IsActive)) return;
             if (_isAnimatingHide) return;
             this.Opacity = 1.0;
             int colorNone = DWMWA_COLOR_NONE;
@@ -809,7 +839,7 @@ namespace AdvanceClip
 
             // Don't dismiss if focus went to our own QuickLook window
             if (System.Windows.Application.Current.Windows.OfType<Window>()
-                .Any(w => w is AdvanceClip.Windows.QuickLookWindow && w.IsActive)) return;
+                .Any(w => w is FlyShelf.Windows.QuickLookWindow && w.IsActive)) return;
 
             // Auto-hide when user clicks away
             if (this.IsVisible)
@@ -1007,9 +1037,10 @@ namespace AdvanceClip
         public void ShowNearPosition(double targetX, double targetY, int mode = 0, bool isPersistent = false, bool stealFocus = true)
         {
             CloseSearch();
+            CloseEmojiPicker();
             _previousForegroundWindow = GetTargetForegroundWindow();
             
-            // AdvanceClip Phase 2: Live AI Memory Association
+            // FlyShelf Phase 2: Live AI Memory Association
             if (_previousForegroundWindow != IntPtr.Zero)
             {
                 var sbTitle = new System.Text.StringBuilder(256);
@@ -1082,7 +1113,7 @@ namespace AdvanceClip
 
             this.Left = rawX;
             // Best-guess initial bound from user settings before ActualHeight resolves
-            double initialSafeHeight = double.IsNaN(this.Height) ? AdvanceClip.Classes.SettingsManager.Current.MiniFormHeight : this.Height;
+            double initialSafeHeight = double.IsNaN(this.Height) ? FlyShelf.Classes.SettingsManager.Current.MiniFormHeight : this.Height;
             this.Top = _lockedBottomEdge - initialSafeHeight - 20;
 
             if (stealFocus)

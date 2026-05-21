@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Threading;
 
-namespace AdvanceClip.Windows
+namespace FlyShelf.Windows
 {
     public partial class PreviewPopup : Window
     {

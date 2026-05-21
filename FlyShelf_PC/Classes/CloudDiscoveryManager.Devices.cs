@@ -1,6 +1,6 @@
-// ═══════════════════════════════════════════════════════════════
-// FirebaseSyncManager — Device Registration, Tunnel URL, Groups
-// Split from FirebaseSyncManager.cs for modularity (<500 lines)
+﻿// ═══════════════════════════════════════════════════════════════
+// CloudDiscoveryManager — Device Registration, Tunnel URL, Groups
+// Split from CloudDiscoveryManager.cs for modularity (<500 lines)
 // ═══════════════════════════════════════════════════════════════
 using System;
 using System.Collections.Generic;
@@ -10,11 +10,11 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using AdvanceClip.ViewModels;
+using FlyShelf.ViewModels;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
-    public partial class FirebaseSyncManager
+    public partial class CloudDiscoveryManager
     {
         /// <summary>
         /// Push device registration to Firebase. Optimized: only writes when URL actually changes
@@ -140,7 +140,7 @@ namespace AdvanceClip.Classes
                                     // No Cloudflare tunnel available — cannot send file remotely
                                     Logger.LogAction("FORCED SYNC", $"⚠️ Cannot send file '{item.FileName}' remotely — no Cloudflare tunnel");
                                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                                        AdvanceClip.Windows.ToastWindow.ShowToast($"⚠️ {item.FileName} — can't share remotely (no tunnel)");
+                                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ {item.FileName} — can't share remotely (no tunnel)");
                                     });
                                     continue;
                                 }

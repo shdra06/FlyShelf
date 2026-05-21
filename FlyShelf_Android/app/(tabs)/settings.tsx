@@ -231,7 +231,7 @@ export default function SettingsScreen() {
                 placeholderTextColor="#4C5361"
                 keyboardType="numbers-and-punctuation"
               />
-              <Text style={styles.helperText}>Fallback IP for direct LAN transfers when your PC isn't auto-detected in Firebase. If your PC shows up in Active Devices, this can be left blank. Format: 192.168.x.x:8999</Text>
+              <Text style={styles.helperText}>Fallback IP for direct LAN transfers when your PC isn't auto-detected. If your PC shows up in Active Devices, this can be left blank. Format: 192.168.x.x:8999</Text>
             </View>
 
             <View style={[styles.inputContainer, { marginTop: 20 }]}>
@@ -255,7 +255,7 @@ export default function SettingsScreen() {
               <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
                   <View style={styles.inputHeaderRow}>
                     <IconSymbol name="cloud" size={20} color="#4A62EB" />
-                    <Text style={styles.inputLabel}>Global Cloud Transfer</Text>
+                    <Text style={styles.inputLabel}>Cloud Discovery</Text>
                   </View>
                   <Switch 
                     value={globalSyncInput} 
@@ -264,7 +264,7 @@ export default function SettingsScreen() {
                     thumbColor="#FFF"
                   />
               </View>
-              <Text style={styles.helperText}>If disabled, your clipboard and files will ONLY synchronize when connected locally. Used to save Firebase active quotas on Free Tiers.</Text>
+              <Text style={styles.helperText}>If disabled, your clipboard and files will ONLY synchronize when connected locally. Cloud Discovery allows paired devices to find each other over the internet using a lightweight signaling coordinator.</Text>
             </View>
           </View>
 

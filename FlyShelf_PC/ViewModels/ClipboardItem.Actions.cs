@@ -1,4 +1,4 @@
-// ═══════════════════════════════════════════════════════════════
+﻿// ═══════════════════════════════════════════════════════════════
 
 
 
@@ -42,7 +42,7 @@ using System.Threading.Tasks;
 
 
 
-namespace AdvanceClip.ViewModels
+namespace FlyShelf.ViewModels
 
 
 
@@ -194,7 +194,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                AdvanceClip.Classes.Logger.LogAction("SANDBOX EXECUTION", $"Launching VS Code payload. Target: {fullPath}");
+                FlyShelf.Classes.Logger.LogAction("SANDBOX EXECUTION", $"Launching VS Code payload. Target: {fullPath}");
 
 
 
@@ -394,7 +394,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                    AdvanceClip.Classes.Logger.LogAction("TERMINAL EXECUTION", $"Spawned native command prompt. Args: {startInfo.Arguments} | WorkingDir: {startInfo.WorkingDirectory}");
+                    FlyShelf.Classes.Logger.LogAction("TERMINAL EXECUTION", $"Spawned native command prompt. Args: {startInfo.Arguments} | WorkingDir: {startInfo.WorkingDirectory}");
 
 
 
@@ -538,7 +538,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                System.Windows.MessageBox.Show($"Failed to launch elevated terminal: {ex.Message}", "AdvanceClip OS Hook Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
+                System.Windows.MessageBox.Show($"Failed to launch elevated terminal: {ex.Message}", "FlyShelf OS Hook Error", System.Windows.MessageBoxButton.OK, System.Windows.MessageBoxImage.Error);
 
 
 
@@ -582,7 +582,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                string exeName = Path.Combine(exeDir, Path.GetFileNameWithoutExtension(string.IsNullOrEmpty(FilePath) ? "AdvanceClipTempCompile" : FilePath) + ".exe");
+                string exeName = Path.Combine(exeDir, Path.GetFileNameWithoutExtension(string.IsNullOrEmpty(FilePath) ? "FlyShelfTempCompile" : FilePath) + ".exe");
 
 
 
@@ -594,7 +594,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                    sourceFile = Path.Combine(Path.GetTempPath(), "AdvanceClipRuntime_" + Guid.NewGuid().ToString().Substring(0, 4) + ".cpp");
+                    sourceFile = Path.Combine(Path.GetTempPath(), "FlyShelfRuntime_" + Guid.NewGuid().ToString().Substring(0, 4) + ".cpp");
 
 
 
@@ -602,7 +602,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                    exeName = Path.Combine(Path.GetTempPath(), "AdvanceClipRuntime.exe");
+                    exeName = Path.Combine(Path.GetTempPath(), "FlyShelfRuntime.exe");
 
 
 
@@ -626,7 +626,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                    Arguments = $"/k title AdvanceClip C/C++ Compiler && echo [AdvanceClip Engine] Executing g++ on payload... && g++ \"{sourceFile}\" -o \"{exeName}\" && echo ----------------------------------------- && \"{exeName}\"",
+                    Arguments = $"/k title FlyShelf C/C++ Compiler && echo [FlyShelf Engine] Executing g++ on payload... && g++ \"{sourceFile}\" -o \"{exeName}\" && echo ----------------------------------------- && \"{exeName}\"",
 
 
 
@@ -694,7 +694,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                        AdvanceClip.Windows.ToastWindow.ShowToast("Synthesizing Document Format natively... ♻️")
+                        FlyShelf.Windows.ToastWindow.ShowToast("Synthesizing Document Format natively... ♻️")
 
 
 
@@ -802,11 +802,11 @@ namespace AdvanceClip.ViewModels
 
 
 
-                                    var mainWin = System.Windows.Application.Current.MainWindow as AdvanceClip.MainWindow;
+                                    var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
 
 
 
-                                    (mainWin?.DataContext as AdvanceClip.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
+                                    (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
 
 
 
@@ -814,7 +814,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                                    AdvanceClip.Windows.ToastWindow.ShowToast("Format Synthesized Successfully ✅");
+                                    FlyShelf.Windows.ToastWindow.ShowToast("Format Synthesized Successfully ✅");
 
 
 
@@ -838,7 +838,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                                    AdvanceClip.Windows.ToastWindow.ShowToast("Synthesis Failed: Could not output file ❌")
+                                    FlyShelf.Windows.ToastWindow.ShowToast("Synthesis Failed: Could not output file ❌")
 
 
 
@@ -874,7 +874,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"Synthesis Exception: {ex.Message} ❌")
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Synthesis Exception: {ex.Message} ❌")
 
 
 
@@ -942,7 +942,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                        AdvanceClip.Windows.ToastWindow.ShowToast("Converting Image to PDF... 📄")
+                        FlyShelf.Windows.ToastWindow.ShowToast("Converting Image to PDF... 📄")
 
 
 
@@ -1214,15 +1214,15 @@ namespace AdvanceClip.ViewModels
 
 
 
-                        var mainWin = System.Windows.Application.Current.MainWindow as AdvanceClip.MainWindow;
+                        var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
 
 
 
-                        (mainWin?.DataContext as AdvanceClip.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
+                        (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
 
 
 
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"Image → PDF converted! ✅ {Path.GetFileName(outputPdf)}");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Image → PDF converted! ✅ {Path.GetFileName(outputPdf)}");
 
 
 
@@ -1246,7 +1246,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"Image→PDF failed: {ex.Message} ❌")
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Image→PDF failed: {ex.Message} ❌")
 
 
 
@@ -1278,7 +1278,7 @@ namespace AdvanceClip.ViewModels
 
             {
 
-                AdvanceClip.Windows.ToastWindow.ShowToast("Scanning Native Hardware OCR...");
+                FlyShelf.Windows.ToastWindow.ShowToast("Scanning Native Hardware OCR...");
 
 
 
@@ -1326,7 +1326,7 @@ namespace AdvanceClip.ViewModels
 
                                     {
 
-                                        AdvanceClip.MainWindow.SetWritingClipboard(true);
+                                        FlyShelf.MainWindow.SetWritingClipboard(true);
 
                                         System.Windows.Clipboard.SetText(result.Text);
 
@@ -1340,11 +1340,11 @@ namespace AdvanceClip.ViewModels
 
                                         await System.Threading.Tasks.Task.Delay(500);
 
-                                        AdvanceClip.MainWindow.SetWritingClipboard(false);
+                                        FlyShelf.MainWindow.SetWritingClipboard(false);
 
                                     });
 
-                                    AdvanceClip.Windows.ToastWindow.ShowToast("OCR Text Copied to Clipboard! 📋");
+                                    FlyShelf.Windows.ToastWindow.ShowToast("OCR Text Copied to Clipboard! 📋");
 
                                 });
 
@@ -1356,7 +1356,7 @@ namespace AdvanceClip.ViewModels
 
                                 System.Windows.Application.Current.Dispatcher.Invoke(() => 
 
-                                    AdvanceClip.Windows.ToastWindow.ShowToast("No Text Detected in Image.")
+                                    FlyShelf.Windows.ToastWindow.ShowToast("No Text Detected in Image.")
 
                                 );
 
@@ -1370,7 +1370,7 @@ namespace AdvanceClip.ViewModels
 
                             System.Windows.Application.Current.Dispatcher.Invoke(() => 
 
-                                AdvanceClip.Windows.ToastWindow.ShowToast("Native OCR engine failed to load.")
+                                FlyShelf.Windows.ToastWindow.ShowToast("Native OCR engine failed to load.")
 
                             );
 
@@ -1388,7 +1388,7 @@ namespace AdvanceClip.ViewModels
 
                 System.Windows.Application.Current.Dispatcher.Invoke(() => 
 
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"OCR Engine Missing/Failed")
+                    FlyShelf.Windows.ToastWindow.ShowToast($"OCR Engine Missing/Failed")
 
                 );
 
@@ -1456,7 +1456,7 @@ namespace AdvanceClip.ViewModels
 
                                         this.RawContent = result.Text;
 
-                                        AdvanceClip.Classes.Logger.LogAction("AUTO_OCR", $"Successfully extracted {result.Text.Length} chars of text.");
+                                        FlyShelf.Classes.Logger.LogAction("AUTO_OCR", $"Successfully extracted {result.Text.Length} chars of text.");
 
                                     }
 
@@ -1474,7 +1474,7 @@ namespace AdvanceClip.ViewModels
 
                 {
 
-                    AdvanceClip.Classes.Logger.LogAction("AUTO_OCR_FAIL", $"Failed to run background OCR: {ex.Message}");
+                    FlyShelf.Classes.Logger.LogAction("AUTO_OCR_FAIL", $"Failed to run background OCR: {ex.Message}");
 
                 }
 
@@ -1504,7 +1504,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                AdvanceClip.Windows.ToastWindow.ShowToast("Extracting Table from Image... ⏳");
+                FlyShelf.Windows.ToastWindow.ShowToast("Extracting Table from Image... ⏳");
 
 
 
@@ -2036,7 +2036,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                        string apiKey = AdvanceClip.Classes.SettingsManager.Current.GeminiApiKey;
+                        string apiKey = FlyShelf.Classes.SettingsManager.Current.GeminiApiKey;
 
 
 
@@ -2052,7 +2052,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                                AdvanceClip.Windows.ToastWindow.ShowToast("OCR couldn't detect table structure. Set Gemini API Key in Settings for AI fallback.")
+                                FlyShelf.Windows.ToastWindow.ShowToast("OCR couldn't detect table structure. Set Gemini API Key in Settings for AI fallback.")
 
 
 
@@ -2072,7 +2072,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                            AdvanceClip.Windows.ToastWindow.ShowToast("OCR inconclusive. Using Gemini AI for table extraction...")
+                            FlyShelf.Windows.ToastWindow.ShowToast("OCR inconclusive. Using Gemini AI for table extraction...")
 
 
 
@@ -2084,7 +2084,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                        finalJsonPayload = await AdvanceClip.Classes.GeminiEngine.ExtractFormattedTableFromImageAsync(FilePath, apiKey);
+                        finalJsonPayload = await FlyShelf.Classes.GeminiEngine.ExtractFormattedTableFromImageAsync(FilePath, apiKey);
 
 
 
@@ -2116,7 +2116,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                        var editor = new AdvanceClip.Windows.TableEditorWindow(finalJsonPayload);
+                        var editor = new FlyShelf.Windows.TableEditorWindow(finalJsonPayload);
 
 
 
@@ -2140,7 +2140,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                    AdvanceClip.Windows.ToastWindow.ShowToast("No table structure detected in this image.");
+                    FlyShelf.Windows.ToastWindow.ShowToast("No table structure detected in this image.");
 
 
 
@@ -2168,7 +2168,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"Table Extraction Failed: {ex.Message}")
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Table Extraction Failed: {ex.Message}")
 
 
 
@@ -2242,7 +2242,7 @@ namespace AdvanceClip.ViewModels
 
                                 {
 
-                                    AdvanceClip.MainWindow.SetWritingClipboard(true);
+                                    FlyShelf.MainWindow.SetWritingClipboard(true);
 
                                     System.Windows.Clipboard.SetText(result.Text);
 
@@ -2256,13 +2256,13 @@ namespace AdvanceClip.ViewModels
 
                                     await System.Threading.Tasks.Task.Delay(500);
 
-                                    AdvanceClip.MainWindow.SetWritingClipboard(false);
+                                    FlyShelf.MainWindow.SetWritingClipboard(false);
 
                                 });
 
 
 
-                                AdvanceClip.Windows.ToastWindow.ShowToast("QR Code Extracted & Copied! 📋");
+                                FlyShelf.Windows.ToastWindow.ShowToast("QR Code Extracted & Copied! 📋");
 
                             });
 
@@ -2338,7 +2338,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"Search Error: {ex.Message}")
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Search Error: {ex.Message}")
 
 
 
@@ -2386,7 +2386,7 @@ namespace AdvanceClip.ViewModels
 
 
 
-                        AdvanceClip.Windows.ToastWindow.ShowToast("📄 Converting PDF to Word...")
+                        FlyShelf.Windows.ToastWindow.ShowToast("📄 Converting PDF to Word...")
 
 
 
@@ -2510,11 +2510,11 @@ $word.Quit();
 
 
 
-                            var mainWin = System.Windows.Application.Current.MainWindow as AdvanceClip.MainWindow;
+                            var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
 
 
 
-                            var vm = mainWin?.DataContext as AdvanceClip.ViewModels.FlyShelfViewModel;
+                            var vm = mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel;
 
 
 
@@ -2530,7 +2530,7 @@ $word.Quit();
 
 
 
-                            AdvanceClip.Windows.ToastWindow.ShowToast($"✅ Converted: {Path.GetFileName(outputPath)}");
+                            FlyShelf.Windows.ToastWindow.ShowToast($"✅ Converted: {Path.GetFileName(outputPath)}");
 
 
 
@@ -2546,7 +2546,7 @@ $word.Quit();
 
 
 
-                            AdvanceClip.Windows.ToastWindow.ShowToast("❌ Conversion failed — Microsoft Word required");
+                            FlyShelf.Windows.ToastWindow.ShowToast("❌ Conversion failed — Microsoft Word required");
 
 
 
@@ -2574,7 +2574,7 @@ $word.Quit();
 
 
 
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"❌ PDF to Word error: {ex.Message}")
+                        FlyShelf.Windows.ToastWindow.ShowToast($"❌ PDF to Word error: {ex.Message}")
 
 
 
@@ -2598,7 +2598,7 @@ $word.Quit();
             {
                 if (string.IsNullOrEmpty(FilePath) || !System.IO.File.Exists(FilePath))
                 {
-                    AdvanceClip.Windows.ToastWindow.ShowToast("No image file found to scan");
+                    FlyShelf.Windows.ToastWindow.ShowToast("No image file found to scan");
                     return;
                 }
 
@@ -2620,29 +2620,29 @@ $word.Quit();
 
                             try
                             {
-                                AdvanceClip.MainWindow.SetWritingClipboard(true);
+                                FlyShelf.MainWindow.SetWritingClipboard(true);
                                 System.Windows.Clipboard.SetText(result.Text);
                             }
                             catch { }
                             _ = System.Threading.Tasks.Task.Run(async () =>
                             {
                                 await System.Threading.Tasks.Task.Delay(500);
-                                AdvanceClip.MainWindow.SetWritingClipboard(false);
+                                FlyShelf.MainWindow.SetWritingClipboard(false);
                             });
 
-                            AdvanceClip.Windows.ToastWindow.ShowToast("QR Code Extracted & Copied! 📋");
+                            FlyShelf.Windows.ToastWindow.ShowToast("QR Code Extracted & Copied! 📋");
                         });
                     }
                     else
                     {
-                        AdvanceClip.Windows.ToastWindow.ShowToast("No QR Code detected in image 🔍");
+                        FlyShelf.Windows.ToastWindow.ShowToast("No QR Code detected in image 🔍");
                     }
                 }
             }
             catch (Exception ex)
             {
                 Classes.Logger.LogAction("QR_MANUAL_SCAN_FAIL", ex.Message);
-                AdvanceClip.Windows.ToastWindow.ShowToast("Error scanning QR Code");
+                FlyShelf.Windows.ToastWindow.ShowToast("Error scanning QR Code");
             }
         }
 

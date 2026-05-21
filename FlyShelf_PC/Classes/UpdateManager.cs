@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
@@ -6,7 +6,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Threading.Tasks;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     public class UpdateManager
     {
@@ -125,6 +125,23 @@ namespace AdvanceClip.Classes
                     return false;
                 }
 
+                // ── Load ExpectedHash from version.json to guarantee security if it is not loaded yet ──
+                if (string.IsNullOrEmpty(ExpectedHash))
+                {
+                    try
+                    {
+                        string url = $"{VERSION_URL}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+                        string json = await _client.GetStringAsync(url);
+                        using var doc = JsonDocument.Parse(json);
+                        var root = doc.RootElement;
+                        ExpectedHash = root.TryGetProperty("pc_sha256", out var h) ? h.GetString()?.ToLowerInvariant() ?? "" : "";
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("UPDATE", $"Could not load verification hash from version.json: {ex.Message}");
+                    }
+                }
+
                 // Compare versions (semver)
                 var current = new Version(CurrentVersion);
                 var latest = new Version(LatestVersion);
@@ -165,7 +182,7 @@ namespace AdvanceClip.Classes
                 return false;
             }
 
-            string tempDir = Path.Combine(Path.GetTempPath(), "AdvanceClip_Update");
+            string tempDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Update");
             Directory.CreateDirectory(tempDir);
             string tempExePath = Path.Combine(tempDir, "FlyShelf_new.exe");
 
@@ -259,7 +276,10 @@ namespace AdvanceClip.Classes
                 }
                 else
                 {
-                    Logger.LogAction("UPDATE", "\u26a0\ufe0f No hash in version.json \u2014 skipping integrity check");
+                    Logger.LogAction("UPDATE", "❌ REJECTED: No SHA-256 hash provided in version.json. Refusing to install unverified update.");
+                    StatusChanged?.Invoke("❌ Update rejected — missing security signature.");
+                    try { File.Delete(tempExePath); } catch { }
+                    return false;
                 }
 
                 StatusChanged?.Invoke("Download complete! Verified and ready to install.");
@@ -388,7 +408,7 @@ namespace AdvanceClip.Classes
         /// </summary>
         public void ApplyUpdateAndRestart()
         {
-            string tempDir = Path.Combine(Path.GetTempPath(), "AdvanceClip_Update");
+            string tempDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Update");
             string tempExePath = Path.Combine(tempDir, "FlyShelf_new.exe");
 
             if (!File.Exists(tempExePath))

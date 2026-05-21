@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -14,7 +14,7 @@ using MicaWPF.Controls;
 using WinPdf = global::Windows.Data.Pdf;
 using global::Windows.Storage;
 
-namespace AdvanceClip.Windows
+namespace FlyShelf.Windows
 {
     public partial class PageReorderWindow : MicaWindow
     {
@@ -52,7 +52,7 @@ namespace AdvanceClip.Windows
         public PageReorderWindow(PdfMergeItem item)
         {
             InitializeComponent();
-            AdvanceClip.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
+            FlyShelf.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             _item = item;
 
             _pageOrder = item.GetSelectedPageIndices().Select(i => i + 1).ToList();

@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     public static class ShellExplorerHelper
     {

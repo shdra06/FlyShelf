@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -6,9 +6,9 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using AdvanceClip.Classes;
+using FlyShelf.Classes;
 
-namespace AdvanceClip.Windows
+namespace FlyShelf.Windows
 {
     public partial class TableEditorWindow : MicaWPF.Controls.MicaWindow
     {

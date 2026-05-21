@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -10,10 +10,10 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using ZXing;
 using ZXing.Common;
-using AdvanceClip.Windows;
+using FlyShelf.Windows;
 using ZXing.Windows.Compatibility;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     /// <summary>
     /// Data model returned when looking up a pairing code from Firebase.
@@ -399,8 +399,8 @@ namespace AdvanceClip.Classes
                     deviceName = SettingsManager.Current.DeviceName,
                     deviceType = "PC",
                     pairingKey,
-                    localUrl = FirebaseSyncManager.CachedLocalUrl ?? "",
-                    globalUrl = FirebaseSyncManager.CachedGlobalUrl ?? "",
+                    localUrl = CloudDiscoveryManager.CachedLocalUrl ?? "",
+                    globalUrl = CloudDiscoveryManager.CachedGlobalUrl ?? "",
                     pin = SettingsManager.Current.WebClientPinToken ?? "",
                 });
                 // Inject Firebase server timestamp Ã¢â‚¬â€ {".sv":"timestamp"} is resolved server-side
@@ -516,10 +516,10 @@ namespace AdvanceClip.Classes
                 TryPairDevice(info.pairingKey, info.deviceId, info.deviceName, info.deviceType, "cloud");
 
                 // Push our own connection info to Firebase so the mobile can discover us
-                _ = FirebaseSyncManager.PushTunnelUrl(
-                    FirebaseSyncManager.CachedGlobalUrl ?? FirebaseSyncManager.CachedLocalUrl ?? "",
+                _ = CloudDiscoveryManager.PushTunnelUrl(
+                    CloudDiscoveryManager.CachedGlobalUrl ?? CloudDiscoveryManager.CachedLocalUrl ?? "",
                     true,
-                    FirebaseSyncManager.CachedLocalUrl ?? "");
+                    CloudDiscoveryManager.CachedLocalUrl ?? "");
 
                 Logger.LogAction("PAIR CODE", $"Ã¢Å“â€¦ Local-only paired with {info.deviceName} (key adoption)");
                 
@@ -565,10 +565,10 @@ namespace AdvanceClip.Classes
                             url.Contains("trycloudflare") ? "cloudflare" : "lan");
                         
                         // Re-register ourselves in Firebase under the shared pairing key scope
-                        _ = FirebaseSyncManager.PushTunnelUrl(
-                            FirebaseSyncManager.CachedGlobalUrl ?? FirebaseSyncManager.CachedLocalUrl ?? "",
+                        _ = CloudDiscoveryManager.PushTunnelUrl(
+                            CloudDiscoveryManager.CachedGlobalUrl ?? CloudDiscoveryManager.CachedLocalUrl ?? "",
                             true,
-                            FirebaseSyncManager.CachedLocalUrl ?? "");
+                            CloudDiscoveryManager.CachedLocalUrl ?? "");
 
                         Logger.LogAction("PAIR CODE", $"Ã¢Å“â€¦ Paired with {info.deviceName} via {url}");
                         
@@ -596,10 +596,10 @@ namespace AdvanceClip.Classes
                 SettingsManager.Save();
                 TryPairDevice(info.pairingKey, info.deviceId, info.deviceName, info.deviceType, "deferred");
                 
-                _ = FirebaseSyncManager.PushTunnelUrl(
-                    FirebaseSyncManager.CachedGlobalUrl ?? FirebaseSyncManager.CachedLocalUrl ?? "",
+                _ = CloudDiscoveryManager.PushTunnelUrl(
+                    CloudDiscoveryManager.CachedGlobalUrl ?? CloudDiscoveryManager.CachedLocalUrl ?? "",
                     true,
-                    FirebaseSyncManager.CachedLocalUrl ?? "");
+                    CloudDiscoveryManager.CachedLocalUrl ?? "");
                 
                 _ = WriteHandshakeToFirebase(info.pairingKey, info.deviceId);
                 
@@ -689,7 +689,7 @@ namespace AdvanceClip.Classes
 
                         System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         {
-                            AdvanceClip.Windows.ToastWindow.ShowToast($"Ã°Å¸â€â€” {devName} joined your sync group!");
+                            FlyShelf.Windows.ToastWindow.ShowToast($"Ã°Å¸â€â€” {devName} joined your sync group!");
                         });
                     }
 
@@ -714,7 +714,8 @@ namespace AdvanceClip.Classes
             {
                 if (File.Exists(_storagePath))
                 {
-                    string json = File.ReadAllText(_storagePath);
+                    string fileContent = File.ReadAllText(_storagePath);
+                    string json = SecureStorage.Decrypt(fileContent);
                     _pairedDevices = JsonSerializer.Deserialize<List<PairedDevice>>(json) ?? new();
                     Logger.LogAction("PAIR", $"Loaded {_pairedDevices.Count} paired device(s)");
                 }
@@ -732,7 +733,8 @@ namespace AdvanceClip.Classes
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(_storagePath));
                 string json = JsonSerializer.Serialize(_pairedDevices, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(_storagePath, json);
+                string encrypted = SecureStorage.Encrypt(json);
+                File.WriteAllText(_storagePath, encrypted);
             }
             catch (Exception ex)
             {

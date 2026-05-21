@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -8,7 +8,7 @@ using System.ComponentModel;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
-namespace AdvanceClip.ViewModels
+namespace FlyShelf.ViewModels
 {
     public enum ClipboardItemType
     {
@@ -382,7 +382,7 @@ namespace AdvanceClip.ViewModels
         [JsonIgnore] public byte ColorB => _colorB;
 
         [JsonIgnore]
-        public System.Windows.Media.SolidColorBrush DetectedColorBrush => HasDetectedColor ? AdvanceClip.Classes.ColorHelper.ToBrush(_detectedColor) : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Transparent);
+        public System.Windows.Media.SolidColorBrush DetectedColorBrush => HasDetectedColor ? FlyShelf.Classes.ColorHelper.ToBrush(_detectedColor) : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Transparent);
 
         public void EvaluateSmartActions()
         {
@@ -470,7 +470,7 @@ namespace AdvanceClip.ViewModels
             // ═══ COLOR DETECTION (always evaluate) ═══
             if (!string.IsNullOrEmpty(RawContent))
             {
-                if (AdvanceClip.Classes.ColorHelper.TryDetectColor(RawContent, out string hex, out byte cr, out byte cg, out byte cb))
+                if (FlyShelf.Classes.ColorHelper.TryDetectColor(RawContent, out string hex, out byte cr, out byte cg, out byte cb))
                 {
                     DetectedColor = hex;
                     _colorR = cr;
@@ -787,7 +787,7 @@ namespace AdvanceClip.ViewModels
                 if (ItemType == ClipboardItemType.Group)
                 {
                     string[] paths = RawContent.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                    AdvanceClip.Classes.ShellExplorerHelper.OpenFilesAndSelect(paths);
+                    FlyShelf.Classes.ShellExplorerHelper.OpenFilesAndSelect(paths);
                     return;
                 }
 
@@ -799,7 +799,7 @@ namespace AdvanceClip.ViewModels
                 else if (ItemType == ClipboardItemType.Text || ItemType == ClipboardItemType.Code)
                 {
                     // Create a scratch temp file to open Text in notepad
-                    string tempFile = Path.Combine(Path.GetTempPath(), $"AdvanceClip_TextDrop_{Guid.NewGuid().ToString().Substring(0, 4)}.txt");
+                    string tempFile = Path.Combine(Path.GetTempPath(), $"FlyShelf_TextDrop_{Guid.NewGuid().ToString().Substring(0, 4)}.txt");
                     File.WriteAllText(tempFile, RawContent);
                     target = tempFile;
                 }

@@ -1,11 +1,11 @@
-// ---------------------------------------------------------------
+﻿// ---------------------------------------------------------------
 // HubWindow � Advanced Features
 // SnifferPaths, Device Management, Device Groups, Updates,
 // Kinetic Scroll, Theming, Wallpaper, QR Pairing, Color Tools
 // Split from HubWindow.xaml.cs for modularity
 // ---------------------------------------------------------------
-using AdvanceClip.ViewModels;
-using AdvanceClip.Classes;
+using FlyShelf.ViewModels;
+using FlyShelf.Classes;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -18,7 +18,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 
-namespace AdvanceClip.Windows
+namespace FlyShelf.Windows
 {
     public partial class HubWindow
     {
@@ -66,7 +66,7 @@ namespace AdvanceClip.Windows
                 // Run the device list fetching and network classification on a background ThreadPool thread
                 var result = await System.Threading.Tasks.Task.Run(async () =>
                 {
-                    var devices = await FirebaseSyncManager.GetActiveDevices();
+                    var devices = await CloudDiscoveryManager.GetActiveDevices();
                     string myName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
 
                     var lanItems = new System.Collections.Generic.List<DeviceDisplayItem>();
@@ -263,7 +263,7 @@ namespace AdvanceClip.Windows
         {
             try
             {
-                var groups = await FirebaseSyncManager.GetDeviceGroups();
+                var groups = await CloudDiscoveryManager.GetDeviceGroups();
                 var displayItems = groups.Select(g => new GroupDisplayItem
                 {
                     Id = g.Id,
@@ -287,7 +287,7 @@ namespace AdvanceClip.Windows
                 var name = ShowInputDialog("Enter group name:", "Create Device Group", "");
                 if (string.IsNullOrWhiteSpace(name)) return;
 
-                var devices = await FirebaseSyncManager.GetActiveDevices();
+                var devices = await CloudDiscoveryManager.GetActiveDevices();
                 var deviceNames = devices.Where(d => d.IsOnline).Select(d => d.Name).ToList();
                 string myName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
                 if (!deviceNames.Contains(myName)) deviceNames.Insert(0, myName);
@@ -308,7 +308,7 @@ namespace AdvanceClip.Windows
                 if (selected.Count == 0) { MessageBox.Show("No devices selected."); return; }
 
                 var groupId = $"grp_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
-                await FirebaseSyncManager.SaveDeviceGroup(groupId, name.Trim(), selected);
+                await CloudDiscoveryManager.SaveDeviceGroup(groupId, name.Trim(), selected);
                 RefreshGroups();
             }
             catch (Exception ex) { Logger.LogAction("GROUPS UI", $"Create error: {ex.Message}"); }
@@ -321,14 +321,14 @@ namespace AdvanceClip.Windows
             {
                 if (sender is System.Windows.Controls.Button btn && btn.Tag is string groupId)
                 {
-                    var groups = await FirebaseSyncManager.GetDeviceGroups();
+                    var groups = await CloudDiscoveryManager.GetDeviceGroups();
                     var group = groups.FirstOrDefault(g => g.Id == groupId);
                     if (group == null) return;
 
                     var name = ShowInputDialog("Edit group name:", "Edit Group", group.Name);
                     if (string.IsNullOrWhiteSpace(name)) return;
 
-                    var devices = await FirebaseSyncManager.GetActiveDevices();
+                    var devices = await CloudDiscoveryManager.GetActiveDevices();
                     var deviceNames = devices.Where(d => d.IsOnline).Select(d => d.Name).ToList();
                     string myName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
                     if (!deviceNames.Contains(myName)) deviceNames.Insert(0, myName);
@@ -354,7 +354,7 @@ namespace AdvanceClip.Windows
                             selected.Add(deviceNames[idx - 1]);
                     }
 
-                    await FirebaseSyncManager.SaveDeviceGroup(groupId, name.Trim(), selected);
+                    await CloudDiscoveryManager.SaveDeviceGroup(groupId, name.Trim(), selected);
                     RefreshGroups();
                 }
             }
@@ -368,7 +368,7 @@ namespace AdvanceClip.Windows
                 var result = MessageBox.Show("Delete this group?", "Confirm", MessageBoxButton.YesNo, MessageBoxImage.Question);
                 if (result != MessageBoxResult.Yes) return;
 
-                await FirebaseSyncManager.DeleteDeviceGroup(groupId);
+                await CloudDiscoveryManager.DeleteDeviceGroup(groupId);
                 RefreshGroups();
             }
         }

@@ -1,18 +1,18 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.IO;
 
-namespace AdvanceClip.Windows
+namespace FlyShelf.Windows
 {
     public partial class QuickLookWindow : Window
     {
-        private AdvanceClip.ViewModels.ClipboardItem _item;
+        private FlyShelf.ViewModels.ClipboardItem _item;
         private Point _startPoint;
         private bool _isImageLoaded = false;
 
-        public QuickLookWindow(AdvanceClip.ViewModels.ClipboardItem item)
+        public QuickLookWindow(FlyShelf.ViewModels.ClipboardItem item)
         {
             InitializeComponent();
             _item = item;
@@ -33,7 +33,7 @@ namespace AdvanceClip.Windows
         {
             try
             {
-                bool isLight = AdvanceClip.Classes.SettingsManager.Current.ColorScheme == 1;
+                bool isLight = FlyShelf.Classes.SettingsManager.Current.ColorScheme == 1;
 
                 // Toggle DWM Immersive Dark Mode attribute on QuickLook so native shadow borders adapt to light/dark
                 try
@@ -42,7 +42,7 @@ namespace AdvanceClip.Windows
                     if (hwnd != IntPtr.Zero)
                     {
                         int darkValue = isLight ? 0 : 1;
-                        AdvanceClip.Classes.NativeMethods.DwmSetWindowAttribute(hwnd, 20, ref darkValue, sizeof(int));
+                        FlyShelf.Classes.NativeMethods.DwmSetWindowAttribute(hwnd, 20, ref darkValue, sizeof(int));
                     }
                 }
                 catch { }
@@ -78,7 +78,7 @@ namespace AdvanceClip.Windows
 
             try
             {
-                if (_item.ItemType == AdvanceClip.ViewModels.ClipboardItemType.Image)
+                if (_item.ItemType == FlyShelf.ViewModels.ClipboardItemType.Image)
                 {
                     PreviewImage.Visibility = Visibility.Visible;
                     
@@ -205,7 +205,7 @@ namespace AdvanceClip.Windows
                     }
                     else
                     {
-                        TextPreview.Text = "[AdvanceClip Codec Error: Cannot extract raw string payload from this artifact natively]";
+                        TextPreview.Text = "[FlyShelf Codec Error: Cannot extract raw string payload from this artifact natively]";
                     }
 
                     this.Width = 550;
@@ -314,17 +314,17 @@ namespace AdvanceClip.Windows
                 if (fresh != null)
                 {
                     PreviewImage.Source = fresh;
-                    AdvanceClip.Classes.Logger.LogAction("ROTATE", "Rotated 90°: " + Path.GetFileName(_item.FilePath));
+                    FlyShelf.Classes.Logger.LogAction("ROTATE", "Rotated 90°: " + Path.GetFileName(_item.FilePath));
                 }
                 else
                 {
-                    AdvanceClip.Windows.ToastWindow.ShowToast("Rotate failed: File could not be written or read");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Rotate failed: File could not be written or read");
                 }
             }
             catch (Exception ex)
             {
-                AdvanceClip.Classes.Logger.LogAction("ROTATE", "Failed: " + ex.Message);
-                AdvanceClip.Windows.ToastWindow.ShowToast("Rotate failed: " + ex.Message);
+                FlyShelf.Classes.Logger.LogAction("ROTATE", "Failed: " + ex.Message);
+                FlyShelf.Windows.ToastWindow.ShowToast("Rotate failed: " + ex.Message);
             }
             finally
             {
@@ -410,9 +410,9 @@ namespace AdvanceClip.Windows
         {
             if (_isImageLoaded)
             {
-                AdvanceClip.Classes.SettingsManager.Current.QuickLookWidth = this.Width;
-                AdvanceClip.Classes.SettingsManager.Current.QuickLookHeight = this.Height;
-                AdvanceClip.Classes.SettingsManager.Save();
+                FlyShelf.Classes.SettingsManager.Current.QuickLookWidth = this.Width;
+                FlyShelf.Classes.SettingsManager.Current.QuickLookHeight = this.Height;
+                FlyShelf.Classes.SettingsManager.Save();
             }
             try
             {

@@ -1,5 +1,5 @@
-// ---------------------------------------------------------------
-// NetworkSyncServer � Advanced Operations
+﻿// ---------------------------------------------------------------
+// NetworkSyncServer � Advanced Operations
 // ChunkUpload, ConvertToPdf, MultipartParsing, FileDownload,
 // QR Pairing, Remote Logging, Log Dashboard
 // Split from NetworkSyncServer.cs for modularity
@@ -13,9 +13,9 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using AdvanceClip.ViewModels;
+using FlyShelf.ViewModels;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     public partial class NetworkSyncServer
     {
@@ -36,7 +36,7 @@ namespace AdvanceClip.Classes
                     return;
                 }
 
-                string chunkDir = Path.Combine(Path.GetTempPath(), "AdvanceClip_Chunks", sessionId);
+                string chunkDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Chunks", sessionId);
                 Directory.CreateDirectory(chunkDir);
                 _chunkSessions[sessionId] = chunkDir;
 
@@ -77,7 +77,7 @@ namespace AdvanceClip.Classes
                     try { rawName = Uri.UnescapeDataString(encodedName); } catch { }
                 if (!string.IsNullOrEmpty(batchName))
                     try { batchName = Uri.UnescapeDataString(batchName); } catch { }
-                if (string.IsNullOrWhiteSpace(batchName)) batchName = "AdvanceClip_Chunked_Transfer";
+                if (string.IsNullOrWhiteSpace(batchName)) batchName = "FlyShelf_Chunked_Transfer";
                 string sourceDevice = req.Headers["X-Source-Device"] ?? "Remote";
                 try { sourceDevice = Uri.UnescapeDataString(sourceDevice); } catch { }
                 var chunkTransport = DetectTransport(req);
@@ -103,7 +103,7 @@ namespace AdvanceClip.Classes
                 var chunkFiles = Directory.GetFiles(chunkDir, "chunk_*").OrderBy(f => f).ToArray();
 
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"Assembling {rawName} ({chunkFiles.Length} chunks)... 📦");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Assembling {rawName} ({chunkFiles.Length} chunks)... 📦");
                 });
 
                 using (var outputFs = new FileStream(finalPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920))
@@ -136,7 +136,7 @@ namespace AdvanceClip.Classes
                 string sizeStr = fileInfo.Length > 1_073_741_824 ? $"{fileInfo.Length / 1_073_741_824.0:F1} GB" : $"{fileInfo.Length / 1_048_576.0:F1} MB";
 
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"✅ {rawName} ({sizeStr}) received!");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"✅ {rawName} ({sizeStr}) received!");
                     // Auto-copy to clipboard + insert into FlyShelf
                     try
                     {
@@ -186,7 +186,7 @@ namespace AdvanceClip.Classes
             try
             {
                 string fileName = req.QueryString["name"] ?? $"document_{DateTime.Now.Ticks}.docx";
-                string convertDir = Path.Combine(Path.GetTempPath(), "AdvanceClip_Conversions");
+                string convertDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Conversions");
                 Directory.CreateDirectory(convertDir);
 
                 string inputPath = Path.Combine(convertDir, fileName);
@@ -259,7 +259,7 @@ namespace AdvanceClip.Classes
                         var dropList = new System.Collections.Specialized.StringCollection { pdfPath };
                         dataObj.SetFileDropList(dropList);
                         _viewModel.HandleDrop(dataObj, true);
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"Converted: {pdfName} ✅");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Converted: {pdfName} ✅");
                     });
 
                     string downloadUrl = $"/download?path={Uri.EscapeDataString(pdfPath)}";
@@ -378,7 +378,7 @@ namespace AdvanceClip.Classes
                                 var dropList = new System.Collections.Specialized.StringCollection { finalPath };
                                 dataObj.SetFileDropList(dropList);
                                 _viewModel.HandleDrop(dataObj, true);
-                                AdvanceClip.Windows.ToastWindow.ShowToast($"File extracted: {Path.GetFileName(finalPath)} 📱");
+                                FlyShelf.Windows.ToastWindow.ShowToast($"File extracted: {Path.GetFileName(finalPath)} 📱");
                             });
                         }
                     }
@@ -386,7 +386,7 @@ namespace AdvanceClip.Classes
             }
             catch (Exception ex)
             {
-                AdvanceClip.Classes.Logger.LogAction("FILE PARSER", ex.Message);
+                FlyShelf.Classes.Logger.LogAction("FILE PARSER", ex.Message);
             }
             finally
             {
@@ -483,13 +483,20 @@ namespace AdvanceClip.Classes
                 {
                     // Large files: stream with 1MB buffer for maximum throughput
                     using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 1048576, FileOptions.SequentialScan | FileOptions.Asynchronous);
-                    byte[] buffer = new byte[1048576]; // 1MB buffer
-                    int bytesRead;
-                    while ((bytesRead = await fs.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    byte[] buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(1048576);
+                    try
                     {
-                        await res.OutputStream.WriteAsync(buffer, 0, bytesRead);
+                        int bytesRead;
+                            while ((bytesRead = await fs.ReadAsync(buffer, 0, 1048576)) > 0)
+                        {
+                            await res.OutputStream.WriteAsync(buffer, 0, bytesRead);
+                        }
+                        await res.OutputStream.FlushAsync();
                     }
-                    await res.OutputStream.FlushAsync();
+                    finally
+                    {
+                        System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+                    }
                     Logger.LogAction("DOWNLOAD", $"Completed (stream): {safeFileName} ({fileSize / 1024}KB)");
                 }
             }
@@ -544,7 +551,7 @@ namespace AdvanceClip.Classes
                     // Show toast on PC
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                     {
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"📱 {deviceName} paired successfully!");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"📱 {deviceName} paired successfully!");
                     });
                 }
                 else
@@ -567,6 +574,174 @@ namespace AdvanceClip.Classes
             {
                 try { res.Close(); } catch { }
             }
+        }
+
+        public void InjectReceivedFile(string filePath, string sourceDevice, string transferMethod, string sourceDeviceType = "Mobile")
+        {
+            _cachedSyncJson = null; // Invalidate sync cache
+            
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
+            {
+                try
+                {
+                    var dataObj = new System.Windows.DataObject();
+                    var dropList = new System.Collections.Specialized.StringCollection { filePath };
+                    dataObj.SetFileDropList(dropList);
+                    
+                    // skipCloudSync=true - file came FROM a peer device, don't echo it back
+                    // forceClipboardSync=false - we write to clipboard ourselves with echo prevention
+                    _viewModel.HandleDrop(dataObj, false, skipCloudSync: true);
+                    
+                    // Tag the newly created item with transport + source device info
+                    if (_viewModel.DroppedItems.Count > 0)
+                    {
+                        var newest = _viewModel.DroppedItems[0];
+                        newest.SourceDeviceName = sourceDevice;
+                        newest.SourceDeviceType = sourceDeviceType;
+                        newest.TransferMethod = transferMethod;
+                        
+                        // Persist these updated network metadata fields to SQLite database
+                        System.Threading.Tasks.Task.Run(() =>
+                        {
+                            Classes.ClipboardHistoryManager.UpdateItemNetworkFields(newest);
+                        });
+
+                        // ECHO PREVENTION: Mark file as cloud-sourced so clipboard monitor
+                        // doesn't re-push it to peers/Firebase when we write to clipboard
+                        string fileFp = $"IMG::{newest.FormattedSize}";
+                        _viewModel.MarkAsCloudSourced(fileFp);
+                    }
+                    
+                    // Write received file to OS clipboard so user can paste it
+                    try
+                    {
+                        MainWindow.SetWritingClipboard(true);
+                        var clipList = new System.Collections.Specialized.StringCollection { filePath };
+                        System.Windows.Clipboard.SetFileDropList(clipList);
+                        await System.Threading.Tasks.Task.Delay(500);
+                    }
+                    catch { }
+                    finally { MainWindow.SetWritingClipboard(false); }
+                    
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Saved: {System.IO.Path.GetFileName(filePath)} via {transferMethod} ðŸ“¥");
+                    // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
+                    NotifyClipboardChanged("File", System.IO.Path.GetFileName(filePath));
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("FILE INJECTION ERR", ex.Message);
+                }
+            });
+        }
+
+        public void InjectReceivedText(string text, string sourceDevice, string transferMethod, string? itemType = null, string sourceDeviceType = "Mobile")
+        {
+            _cachedSyncJson = null; // Invalidate sync cache
+
+            string capturedText = text;
+            string capturedSource = sourceDevice;
+            string capturedType = itemType;
+            string capturedTransport = transferMethod;
+
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
+            {
+                try
+                {
+                    // Detect if capturedText is a path or file:// URI
+                    string possiblePath = capturedText;
+                    if (possiblePath.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
+                    {
+                        try
+                        {
+                            possiblePath = new Uri(possiblePath).LocalPath;
+                        }
+                        catch { }
+                    }
+
+                    bool isPath = false;
+                    try
+                    {
+                        if (System.Text.RegularExpressions.Regex.IsMatch(possiblePath, @"^[a-zA-Z]:[\\/]") || possiblePath.StartsWith("\\\\"))
+                        {
+                            isPath = true;
+                        }
+                    }
+                    catch { }
+
+                    ClipboardItem clip;
+                    if (isPath)
+                    {
+                        // Construct as physical file (using our new offline fallback constructor)
+                        clip = new ClipboardItem(possiblePath)
+                        {
+                            SourceDeviceName = capturedSource,
+                            SourceDeviceType = sourceDeviceType,
+                            TransferMethod = capturedTransport
+                        };
+                        // Load its shell icon in the background thread via _viewModel.GetIcon
+                        _ = System.Threading.Tasks.Task.Run(() =>
+                        {
+                            try
+                            {
+                                var icon = _viewModel.GetIcon(possiblePath);
+                                if (icon != null)
+                                {
+                                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => clip.Icon = icon);
+                                }
+                            }
+                            catch { }
+                        });
+                    }
+                    else
+                    {
+                        // Determine item type from payload or text content
+                        ClipboardItemType clipType;
+                        if (!string.IsNullOrEmpty(capturedType) && Enum.TryParse<ClipboardItemType>(capturedType, true, out var parsed))
+                            clipType = parsed;
+                        else
+                            clipType = capturedText.StartsWith("http") ? ClipboardItemType.Url : ClipboardItemType.Text;
+
+                        clip = new ClipboardItem
+                        {
+                            RawContent = capturedText,
+                            FileName = capturedText.Length > 40 ? capturedText.Substring(0, 40) + "..." : capturedText,
+                            Extension = capturedTransport == "WebSocket" ? "WS" : "SYNC",
+                            ItemType = clipType,
+                            SourceDeviceName = capturedSource,
+                            SourceDeviceType = sourceDeviceType,
+                            TransferMethod = capturedTransport
+                        };
+                    }
+
+                    clip.EvaluateSmartActions();
+                    bool wasEmpty = _viewModel.DroppedItems.Count == 0;
+                    _viewModel.DroppedItems.Insert(0, clip);
+                    if (wasEmpty) _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
+                    
+                    // ECHO PREVENTION: Mark this text as cloud-sourced so the clipboard monitor
+                    // doesn't re-push it to Firebase when we set the Windows clipboard below.
+                    string txtFp = $"TXT::{capturedText.Substring(0, Math.Min(200, capturedText.Length))}";
+                    _viewModel.MarkAsCloudSourced(txtFp);
+                    
+                    // Suppress clipboard monitor during our write
+                    try 
+                    { 
+                        MainWindow.SetWritingClipboard(true);
+                        System.Windows.Clipboard.SetText(capturedText);
+                        await System.Threading.Tasks.Task.Delay(500);
+                    } 
+                    catch { }
+                    finally { MainWindow.SetWritingClipboard(false); }
+                    
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport}! ðŸ“¥");
+                    // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
+                    NotifyClipboardChanged(clip.ItemType.ToString(), capturedText.Length > 40 ? capturedText.Substring(0, 40) : capturedText);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("TEXT INJECTION ERR", ex.Message);
+                }
+            });
         }
     }
 }

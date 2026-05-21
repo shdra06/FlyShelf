@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Media;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     public class NetworkLogEntry
     {

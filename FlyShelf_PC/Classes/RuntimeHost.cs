@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
 using System.Diagnostics;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     public static class RuntimeHost
     {
@@ -29,7 +29,6 @@ namespace AdvanceClip.Classes
             try { if (Directory.Exists(ExecutionDir)) Directory.Delete(ExecutionDir, true); } catch { }
             Directory.CreateDirectory(ExecutionDir);
 
-            ExtractResource("FlyShelf.Scripts.zip", Path.Combine(ExecutionDir, "Scripts"));
             ExtractResource("FlyShelf.WebClient.zip", Path.Combine(ExecutionDir, "Resources", "WebClient"));
 
             File.WriteAllText(verFile, currentVer.ToString());

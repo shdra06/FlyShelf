@@ -1,10 +1,10 @@
-// ---------------------------------------------------------------
+﻿// ---------------------------------------------------------------
 // MainWindow � Event Handlers
 // Drag/Drop, Search, Item Actions (Pin/Delete/Open/QuickLook),
 // Scroll, KeyDown, NotifyIcon, ContextMenu
 // Split from MainWindow.xaml.cs for modularity
 // ---------------------------------------------------------------
-using AdvanceClip.ViewModels;
+using FlyShelf.ViewModels;
 using System;
 using System.Linq;
 using System.Windows;
@@ -12,7 +12,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 
-namespace AdvanceClip
+namespace FlyShelf
 {
     public partial class MainWindow
     {
@@ -141,13 +141,13 @@ namespace AdvanceClip
 
         private void ToggleGlobalSync_Click(object sender, RoutedEventArgs e)
         {
-            bool newState = !AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync;
-            AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync = newState;
+            bool newState = !FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery;
+            FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery = newState;
             // Toggle ALL sync: Cloudflare + LAN
             // When OFF, no data enters or leaves the device
-            AdvanceClip.Classes.SettingsManager.Current.EnableGlobalCloudflare = newState;
-            AdvanceClip.Classes.SettingsManager.Current.EnableLocalLAN = newState;
-            AdvanceClip.Classes.SettingsManager.Save();
+            FlyShelf.Classes.SettingsManager.Current.EnableGlobalCloudflare = newState;
+            FlyShelf.Classes.SettingsManager.Current.EnableLocalLAN = newState;
+            FlyShelf.Classes.SettingsManager.Save();
         }
 
         private void Clear_Click(object sender, RoutedEventArgs e)
@@ -155,13 +155,37 @@ namespace AdvanceClip
             _viewModel.ClearShelf();
         }
 
+        private FlyShelf.Windows.EmojiPickerWindow? _emojiPickerInstance;
+
         private void EmojiPicker_Click(object sender, RoutedEventArgs e)
         {
-            var picker = new AdvanceClip.Windows.EmojiPickerWindow();
+            // Close any existing emoji picker first
+            CloseEmojiPicker();
+
+            var picker = new FlyShelf.Windows.EmojiPickerWindow(_previousForegroundWindow);
             picker.Left = this.Left + (this.Width - picker.Width) / 2;
             picker.Top = this.Top - picker.Height - 8;
             if (picker.Top < 0) picker.Top = this.Top + this.Height + 8;
+            picker.Closed += (s, args) => { if (_emojiPickerInstance == picker) _emojiPickerInstance = null; };
+            _emojiPickerInstance = picker;
+            picker.Topmost = true;
             picker.Show();
+            picker.Activate();
+            picker.Focus();
+        }
+
+        /// <summary>Close the emoji picker if it's open (called when other windows are summoned).</summary>
+        internal void CloseEmojiPicker()
+        {
+            try
+            {
+                if (_emojiPickerInstance != null && _emojiPickerInstance.IsLoaded)
+                {
+                    _emojiPickerInstance.Close();
+                }
+            }
+            catch { }
+            _emojiPickerInstance = null;
         }
 
         private void CloseWindow_Click(object sender, RoutedEventArgs e)
@@ -173,7 +197,6 @@ namespace AdvanceClip
 
         // ═══ SEARCH FEATURE ═══
         private bool _isSearchActive = false;
-        private System.ComponentModel.ICollectionView _collectionView;
 
         private void SearchToggle_Click(object sender, RoutedEventArgs e)
         {
@@ -284,73 +307,29 @@ namespace AdvanceClip
             SearchTextBox.Text = "";
             SearchBarContainer.Visibility = Visibility.Collapsed;
             SearchToggleBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
-            // Remove filter and custom sort
-            if (_collectionView != null)
-            {
-                _collectionView.Filter = null;
-                if (_collectionView is System.Windows.Data.ListCollectionView listCol)
-                {
-                    listCol.CustomSort = null;
-                }
-            }
             // Move focus back to the list view
             ShelfListView.Focus();
         }
 
-        private void ApplySearchFilter(string query)
+        private async void ApplySearchFilter(string query)
         {
-            if (_collectionView == null)
-            {
-                _collectionView = System.Windows.Data.CollectionViewSource.GetDefaultView(ShelfListView.ItemsSource);
-            }
-            if (_collectionView == null) return;
-
             string queryClean = (query ?? "").Trim();
             if (string.IsNullOrWhiteSpace(queryClean))
             {
-                _collectionView.Filter = null;
-                if (_collectionView is System.Windows.Data.ListCollectionView listColReset)
-                {
-                    listColReset.CustomSort = null;
-                }
-                return;
+                _viewModel.IsSearchActive = false;
+                _viewModel.IsDatabaseWriteSuspended = false;
+                _viewModel.DroppedItems.Clear();
+                await _viewModel.LoadPersistedHistoryAsync();
             }
-
-            _collectionView.Filter = obj =>
+            else
             {
-                if (obj is not ClipboardItem item) return false;
-
-                // Don't search images or QR codes
-                if (item.ItemType == AdvanceClip.ViewModels.ClipboardItemType.Image ||
-                    item.ItemType == AdvanceClip.ViewModels.ClipboardItemType.QRCode)
-                {
-                    return false;
-                }
-
-                // Simple substring checks on FileName and RawContent
-                if (item.FileName != null && item.FileName.IndexOf(queryClean, StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    return true;
-                }
-
-                if (item.RawContent != null && item.RawContent.IndexOf(queryClean, StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    return true;
-                }
-
-                return false;
-            };
-
-            // Remove custom sorting completely to keep original fast chronological order
-            if (_collectionView is System.Windows.Data.ListCollectionView listCol)
-            {
-                listCol.CustomSort = null;
+                await _viewModel.SearchHistoryAsync(queryClean);
             }
         }
 
         private void PinSpecific_Click(object sender, MouseButtonEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
             {
                 _viewModel.TogglePin(item);
                 e.Handled = true;
@@ -359,7 +338,7 @@ namespace AdvanceClip
 
         private void DeleteSpecific_Click(object sender, MouseButtonEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
             {
                 // Set flag to suppress the subsequent MouseUp paste-and-close
                 _didDragOut = true;
@@ -372,13 +351,13 @@ namespace AdvanceClip
 
         private void OpenSpecific_Click(object sender, MouseButtonEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
             {
                 if (!string.IsNullOrEmpty(item.FilePath) && System.IO.File.Exists(item.FilePath))
                 {
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(item.FilePath) { UseShellExecute = true });
                 }
-                else if (item.ItemType == AdvanceClip.ViewModels.ClipboardItemType.Url && !string.IsNullOrEmpty(item.RawContent))
+                else if (item.ItemType == FlyShelf.ViewModels.ClipboardItemType.Url && !string.IsNullOrEmpty(item.RawContent))
                 {
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(item.RawContent) { UseShellExecute = true });
                 }
@@ -386,17 +365,17 @@ namespace AdvanceClip
             }
         }
 
-        private AdvanceClip.Windows.QuickLookWindow _activeQuickLook;
+        private FlyShelf.Windows.QuickLookWindow _activeQuickLook;
 
         private void QuickLookSpecific_Click(object sender, MouseButtonEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
             {
                 // Close existing Quick Look window first
                 try { _activeQuickLook?.Close(); } catch { }
                 _activeQuickLook = null;
 
-                var qLook = new AdvanceClip.Windows.QuickLookWindow(item);
+                var qLook = new FlyShelf.Windows.QuickLookWindow(item);
                 qLook.Closed += (s, args) => { if (_activeQuickLook == s) _activeQuickLook = null; };
                 _activeQuickLook = qLook;
                 qLook.Show();
@@ -406,7 +385,7 @@ namespace AdvanceClip
 
         private async void RotateImageSpecific_Click(object sender, MouseButtonEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
             {
                 e.Handled = true;
                 if (string.IsNullOrEmpty(item.FilePath) || !System.IO.File.Exists(item.FilePath)) return;
@@ -500,20 +479,20 @@ namespace AdvanceClip
                     // Move to top without triggering clipboard copy or sync
                     _viewModel.MoveItemToTop(item);
 
-                    AdvanceClip.Classes.Logger.LogAction("ROTATE", "Rotated 90u00B0 in-place: " + System.IO.Path.GetFileName(filePath));
+                    FlyShelf.Classes.Logger.LogAction("ROTATE", "Rotated 90u00B0 in-place: " + System.IO.Path.GetFileName(filePath));
                 }
                 catch (Exception ex)
                 {
-                    AdvanceClip.Classes.Logger.LogAction("ROTATE", "Failed: " + ex.Message);
+                    FlyShelf.Classes.Logger.LogAction("ROTATE", "Failed: " + ex.Message);
                 }
             }
         }
 
                 private void RunTerminalSpecific_Click(object sender, MouseButtonEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
             {
-                if (item.ItemType == AdvanceClip.ViewModels.ClipboardItemType.Code)
+                if (item.ItemType == FlyShelf.ViewModels.ClipboardItemType.Code)
                 {
                     item.RunInTerminal();
                 }
@@ -523,7 +502,7 @@ namespace AdvanceClip
 
         private void SmartActionSpecific_Click(object sender, MouseButtonEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
             {
                 e.Handled = true;
                 if (item.SmartActionType == "CompileAndRun")
@@ -563,12 +542,12 @@ namespace AdvanceClip
                 }
                 else if (item.SmartActionType == "SetTimer")
                 {
-                    var tw = new AdvanceClip.Windows.TimerWindow(item.RawContent);
+                    var tw = new FlyShelf.Windows.TimerWindow(item.RawContent);
                     tw.Show();
                 }
                 else if (item.SmartActionType == "CopyQRText")
                 {
-                    try { System.Windows.Clipboard.SetText(item.RawContent); AdvanceClip.Windows.ToastWindow.ShowToast("QR Text Copied!"); } catch { }
+                    try { System.Windows.Clipboard.SetText(item.RawContent); FlyShelf.Windows.ToastWindow.ShowToast("QR Text Copied!"); } catch { }
                 }
 
             }
@@ -582,7 +561,7 @@ namespace AdvanceClip
 
         private void ExpandToggleSpecific_Click(object sender, MouseButtonEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is AdvanceClip.ViewModels.ClipboardItem item)
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
             {
                 item.IsExpanded = !item.IsExpanded;
             }

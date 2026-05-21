@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -6,7 +6,7 @@ using System.Windows.Shapes;
 using System.Windows.Threading;
 using MicaWPF.Controls;
 
-namespace AdvanceClip.Windows
+namespace FlyShelf.Windows
 {
     public partial class TimerWindow : MicaWindow
     {
@@ -31,7 +31,7 @@ namespace AdvanceClip.Windows
         public TimerWindow(string contextString)
         {
             InitializeComponent();
-            AdvanceClip.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
+            FlyShelf.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             
             // Cache brushes NOW — avoids FindResource calls during tick which crash
             // when another window disrupts the visual tree

@@ -85,7 +85,10 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const storedName = await AsyncStorage.getItem('@deviceName');
       if (storedName) setDeviceNameState(storedName);
 
-      const storedGlobalSync = await AsyncStorage.getItem('@isGlobalSyncEnabled');
+      let storedGlobalSync = await AsyncStorage.getItem('@isCloudDiscoveryEnabled');
+      if (storedGlobalSync === null) {
+        storedGlobalSync = await AsyncStorage.getItem('@isGlobalSyncEnabled');
+      }
       if (storedGlobalSync !== null) setGlobalSyncEnabledState(storedGlobalSync === 'true');
 
       const storedFloatingBall = await AsyncStorage.getItem('@isFloatingBallEnabled');
@@ -135,7 +138,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const setGlobalSyncEnabled = async (val: boolean) => {
     setGlobalSyncEnabledState(val);
-    await AsyncStorage.setItem('@isGlobalSyncEnabled', val.toString());
+    await AsyncStorage.setItem('@isCloudDiscoveryEnabled', val.toString());
   };
 
   const setFloatingBallEnabled = async (val: boolean) => {

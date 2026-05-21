@@ -1,4 +1,4 @@
-# ═══════════════════════════════════════════════════════════════
+﻿# ═══════════════════════════════════════════════════════════════
 #  FlyShelf — Root .gitignore
 #  Structure:
 #    FlyShelf_PC/       ← Windows desktop app (C# / WPF)
@@ -8,8 +8,8 @@
 
 # ─── Leftover old folders ─────────────────────────────────────
 AndroidCompanion/
-AdvanceClip_PC/
-AdvanceClip_Android/
+FlyShelf_PC/
+FlyShelf_Android/
 
 # ─── .NET / C# Build Artifacts ────────────────────────────────
 FlyShelf_PC/bin/
@@ -70,8 +70,8 @@ desktop.ini
 FlyShelf_PC/.nuget/
 
 # ─── Root-level binaries ──────────────────────────────────────
-AdvanceClip.exe
-AdvanceClip_Mobile.apk
+FlyShelf.exe
+FlyShelf_Mobile.apk
 FlyShelf.exe
 FlyShelf_Mobile.apk
 

@@ -1,4 +1,4 @@
-<controls:MicaWindow x:Class="AdvanceClip.Windows.TimerWindow"
+﻿<controls:MicaWindow x:Class="FlyShelf.Windows.TimerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"

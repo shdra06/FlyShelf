@@ -1,8 +1,8 @@
-using System;
+﻿using System;
 using System.Text.RegularExpressions;
 using System.Windows.Media;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     /// <summary>
     /// Detects and converts color codes in clipboard text.

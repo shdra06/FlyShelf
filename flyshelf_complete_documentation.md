@@ -1,4 +1,4 @@
-# FlyShelf â€” Complete Application Documentation
+﻿# FlyShelf â€” Complete Application Documentation
 
 > **Version:** 2.5.1 | **Platform:** Windows 10/11 (PC) + Android (Companion) | **Author:** Shivendra
 
@@ -329,7 +329,7 @@ Users on any device can open `http://{PC_IP}:8999` in a browser to view and mana
 | Clipboard history | `%AppData%\FlyShelf\clipboard_history.json` | JSON |
 | Pinned items | `%AppData%\FlyShelf\pinned_items.json` | JSON |
 | Paired devices | `%AppData%\FlyShelf\paired_devices.json` | JSON |
-| Persistent images | `%AppData%\FlyShelf\Images\ClipFlow_*.png` | PNG files |
+| Persistent images | `%AppData%\FlyShelf\Images\FlyShelf_*.png` | PNG files |
 | Activity logs | `%AppData%\FlyShelf\Logs\activity_log.txt` | Text |
 | Network logs | `%AppData%\FlyShelf\Logs\network_diagnostics.txt` | Text |
 | Extracted scripts | `%LocalAppData%\FlyShelf\RuntimeCore\` | Extracted zips |

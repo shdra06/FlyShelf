@@ -106,10 +106,15 @@ export const getDeviceUrls = (device: any): string[] => {
 
   const add = (raw: string | undefined) => {
     if (!raw || raw === 'offline') return;
-    const normalized = normalizeUrl(raw);
-    if (normalized && !seen.has(normalized)) {
-      seen.add(normalized);
-      urls.push(normalized);
+    const parts = raw.split(',');
+    for (const part of parts) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+      const normalized = normalizeUrl(trimmed);
+      if (normalized && !seen.has(normalized)) {
+        seen.add(normalized);
+        urls.push(normalized);
+      }
     }
   };
 

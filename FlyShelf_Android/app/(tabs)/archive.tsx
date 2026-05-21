@@ -123,16 +123,18 @@ export default function ConnectScreen() {
     const probeLocalPc = async (): Promise<any | null> => {
       if (!pcLocalIp) return null;
       const candidates: string[] = [];
-      const rawIp = pcLocalIp.trim();
-      if (rawIp.startsWith('http')) {
-        candidates.push(rawIp.endsWith('/') ? rawIp.slice(0, -1) : rawIp);
-      } else {
-        const withPort = rawIp.includes(':') ? rawIp : `${rawIp}:8999`;
-        candidates.push(`http://${withPort}`);
-      }
-      const baseIp = rawIp.replace(/^https?:\/\//, '').split(':')[0];
-      if (baseIp && !candidates.includes(`http://${baseIp}:8999`)) {
-        candidates.push(`http://${baseIp}:8999`);
+      const parts = pcLocalIp.split(',').map(s => s.trim()).filter(Boolean);
+      for (const rawIp of parts) {
+        if (rawIp.startsWith('http')) {
+          candidates.push(rawIp.endsWith('/') ? rawIp.slice(0, -1) : rawIp);
+        } else {
+          const withPort = rawIp.includes(':') ? rawIp : `${rawIp}:8999`;
+          candidates.push(`http://${withPort}`);
+        }
+        const baseIp = rawIp.replace(/^https?:\/\//, '').split(':')[0];
+        if (baseIp && !candidates.includes(`http://${baseIp}:8999`)) {
+          candidates.push(`http://${baseIp}:8999`);
+        }
       }
       for (const url of candidates) {
         try {

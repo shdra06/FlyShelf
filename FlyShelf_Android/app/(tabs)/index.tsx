@@ -27,7 +27,7 @@ import { ClipItem, DOWNLOAD_BASE, SYNC_CACHE_BASE, CONVERTED_BASE, IMAGE_CACHE_B
 import { fetchWithTimeout, getConnectionType, connectionColors, resolveOptimalUrl, getDeviceUrls, getMediaUrl, decryptDevice, decryptDeviceList } from '../../utils/networkHelpers';
 import { encrypt as aesEncrypt, decrypt as aesDecrypt } from '../../utils/syncCrypto';
 import { styles } from '../../styles/syncStyles';
-import { colors, font, radius } from '../../styles/theme';
+import { colors, font, radius, space } from '../../styles/theme';
 import AnimatedCard from '../../components/AnimatedCard';
 
 import CachedImage from '../../components/CachedImage';
@@ -342,14 +342,21 @@ export default function SyncScreen() {
     try {
       const storedLocal = await AsyncStorage.getItem('pairedLocalUrl');
       const storedGlobal = await AsyncStorage.getItem('pairedGlobalUrl');
-      for (const url of [storedLocal, storedGlobal].filter(Boolean)) {
+      const candidates: string[] = [];
+      if (storedLocal) {
+        candidates.push(...storedLocal.split(',').map(s => s.trim()).filter(Boolean));
+      }
+      if (storedGlobal) {
+        candidates.push(storedGlobal.trim());
+      }
+      for (const url of candidates) {
         try {
           const res = await fetchWithTimeout(`${url}/api/health`,
             { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }, 2000);
           if (res.ok) {
             cachedPcUrlRef.current = url;
             cachedPcUrlTimestampRef.current = now;
-            return url!;
+            return url;
           }
         } catch {}
       }
@@ -414,8 +421,13 @@ export default function SyncScreen() {
     // Priority 5: manual IP from Settings (legacy fallback)
     const raw = pcLocalIp?.trim();
     if (raw) {
-      const fallback = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
-      return fallback;
+      const parts = raw.split(',');
+      for (const part of parts) {
+        const trimmed = part.trim();
+        if (!trimmed) continue;
+        const fallback = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
+        return fallback;
+      }
     }
     return '';
   };
@@ -810,14 +822,19 @@ export default function SyncScreen() {
         for (let i = 0; i < rawDevices.length; i++) {
           const dev = rawDevices[i];
           if (dev.DeviceType === 'PC' && dev.LocalIp && !dev._lanVerified) {
-            try {
-              const lanIp = dev.LocalIp.trim();
-              const lanUrl = lanIp.startsWith('http') ? lanIp.replace(/\/$/, '') : `http://${lanIp.includes(':') ? lanIp : lanIp + ':8999'}`;
-              const res = await fetch(`${lanUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(1500) });
-              if (res.ok) {
-                rawDevices[i] = { ...dev, _lanVerified: true, _lanUrl: lanUrl };
-              }
-            } catch {}
+            const parts = dev.LocalIp.split(',');
+            for (const part of parts) {
+              const trimmed = part.trim();
+              if (!trimmed) continue;
+              try {
+                const lanUrl = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
+                const res = await fetch(`${lanUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(1500) });
+                if (res.ok) {
+                  rawDevices[i] = { ...dev, _lanVerified: true, _lanUrl: lanUrl };
+                  break;
+                }
+              } catch {}
+            }
           }
           // Cache Cloudflare URL locally — survives the 5-second Firebase auto-delete
           if (dev.DeviceType === 'PC' && dev.GlobalUrl && dev.GlobalUrl.includes('trycloudflare.com')) {
@@ -830,32 +847,50 @@ export default function SyncScreen() {
           }
           // Cache LAN URL if available
           if (dev.DeviceType === 'PC' && dev.LocalIp) {
-            const lanIp = dev.LocalIp.trim();
-            const lanUrl = lanIp.startsWith('http') ? lanIp.replace(/\/$/, '') : `http://${lanIp.includes(':') ? lanIp : lanIp + ':8999'}`;
-            AsyncStorage.setItem('pairedLocalUrl', lanUrl).catch(() => {});
+            const parts = dev.LocalIp.split(',');
+            const normalizedParts = parts.map((part: string) => {
+              const trimmed = part.trim();
+              if (!trimmed) return '';
+              return trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
+            }).filter(Boolean);
+            if (normalizedParts.length > 0) {
+              AsyncStorage.setItem('pairedLocalUrl', normalizedParts.join(',')).catch(() => {});
+            }
           }
         }
         // Fallback: probe manual IP from Settings
         const hasPc = rawDevices.some(d => d.DeviceType === 'PC');
         if (!hasPc && pcLocalIp) {
-          try {
-            const raw = pcLocalIp.trim();
-            const probeUrl = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw.split(':')[0] + ':8999'}`;
-            const res = await fetch(`${probeUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(2000) });
-            if (res.ok) rawDevices.push({ DeviceName: 'PC (LAN)', DeviceType: 'PC', IsOnline: true, Url: probeUrl, LocalIp: probeUrl, _key: 'local_direct', _lanVerified: true, _lanUrl: probeUrl, Timestamp: Date.now() });
-          } catch {}
-        } else if (hasPc && pcLocalIp) {
-          const manualIp = pcLocalIp.trim();
-          const manualUrl = manualIp.startsWith('http') ? manualIp.replace(/\/$/, '') : `http://${manualIp.includes(':') ? manualIp : manualIp + ':8999'}`;
-          const existingLan = rawDevices.some(d => d._lanUrl === manualUrl);
-          if (!existingLan) {
+          const parts = pcLocalIp.split(',');
+          for (const part of parts) {
+            const trimmed = part.trim();
+            if (!trimmed) continue;
             try {
-              const res = await fetch(`${manualUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(1500) });
+              const probeUrl = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed.split(':')[0] + ':8999'}`;
+              const res = await fetch(`${probeUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(2000) });
               if (res.ok) {
-                const pcIdx = rawDevices.findIndex(d => d.DeviceType === 'PC');
-                if (pcIdx >= 0) rawDevices[pcIdx] = { ...rawDevices[pcIdx], _lanVerified: true, _lanUrl: manualUrl, LocalIp: manualUrl };
+                rawDevices.push({ DeviceName: 'PC (LAN)', DeviceType: 'PC', IsOnline: true, Url: probeUrl, LocalIp: probeUrl, _key: 'local_direct', _lanVerified: true, _lanUrl: probeUrl, Timestamp: Date.now() });
+                break;
               }
             } catch {}
+          }
+        } else if (hasPc && pcLocalIp) {
+          const parts = pcLocalIp.split(',');
+          for (const part of parts) {
+            const trimmed = part.trim();
+            if (!trimmed) continue;
+            const manualUrl = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
+            const existingLan = rawDevices.some(d => d._lanUrl === manualUrl);
+            if (!existingLan) {
+              try {
+                const res = await fetch(`${manualUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(1500) });
+                if (res.ok) {
+                  const pcIdx = rawDevices.findIndex(d => d.DeviceType === 'PC');
+                  if (pcIdx >= 0) rawDevices[pcIdx] = { ...rawDevices[pcIdx], _lanVerified: true, _lanUrl: manualUrl, LocalIp: manualUrl };
+                  break;
+                }
+              } catch {}
+            }
           }
         }
         setActiveDevices(rawDevices);
@@ -1096,7 +1131,7 @@ export default function SyncScreen() {
                         const lanCandidates = [
                           ...(targetUrl && !targetUrl.includes('trycloudflare.com') ? [targetUrl] : []),
                           ...(lastWorkingPcUrlRef.current && !lastWorkingPcUrlRef.current.includes('trycloudflare.com') ? [lastWorkingPcUrlRef.current] : []),
-                          ...(pcLocalIp ? [`http://${pcLocalIp}:8999`] : []),
+                          ...(pcLocalIp ? pcLocalIp.split(',').map(s => s.trim()).filter(Boolean).map(ip => ip.startsWith('http') ? ip.replace(/\/$/, '') : `http://${ip.includes(':') ? ip : ip + ':8999'}`) : []),
                         ].filter((v, i, a) => a.indexOf(v) === i); // deduplicate
 
                         for (const candidate of lanCandidates) {
@@ -1230,7 +1265,7 @@ export default function SyncScreen() {
                 const lanCandidates = [
                   ...(targetUrl && !targetUrl.includes('trycloudflare.com') ? [targetUrl] : []),
                   ...(lastWorkingPcUrlRef.current && !lastWorkingPcUrlRef.current.includes('trycloudflare.com') ? [lastWorkingPcUrlRef.current] : []),
-                  ...(pcLocalIp ? [`http://${pcLocalIp}:8999`] : []),
+                          ...(pcLocalIp ? pcLocalIp.split(',').map(s => s.trim()).filter(Boolean).map(ip => ip.startsWith('http') ? ip.replace(/\/$/, '') : `http://${ip.includes(':') ? ip : ip + ':8999'}`) : []),
                 ].filter((v, i, a) => a.indexOf(v) === i);
 
                 for (const candidate of lanCandidates) {
@@ -1497,13 +1532,17 @@ export default function SyncScreen() {
         sentContentFingerprintsRef.current.add(`screenshot::${fileName}`);
         lastSyncedScreenshotRef.current = screenshotPath;
         syncLog('SCREENSHOT', `Native detected: ${fileName}`);
+        const activePc = activeDevices.find((d: any) => d.DeviceType === 'PC');
         let targetUrl = activePc ? ((activePc._lanVerified && activePc._lanUrl) ? activePc._lanUrl : (await resolveOptimalUrl(activePc))) : await getCachedPcUrl();
         if (!targetUrl) {
           if (lastWorkingPcUrlRef.current) {
             targetUrl = lastWorkingPcUrlRef.current;
           } else if (pcLocalIp?.trim()) {
-            const raw = pcLocalIp.trim();
-            targetUrl = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+            const rawParts = pcLocalIp.split(',').map(s => s.trim()).filter(Boolean);
+            if (rawParts.length > 0) {
+              const raw = rawParts[0];
+              targetUrl = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+            }
           }
         }
         if (targetUrl) {
@@ -1600,8 +1639,11 @@ export default function SyncScreen() {
                   if (lastWorkingPcUrlRef.current) {
                     targetUrl = lastWorkingPcUrlRef.current;
                   } else if (pcLocalIp?.trim()) {
-                    const raw = pcLocalIp.trim();
-                    targetUrl = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+                    const rawParts = pcLocalIp.split(',').map(s => s.trim()).filter(Boolean);
+                    if (rawParts.length > 0) {
+                      const raw = rawParts[0];
+                      targetUrl = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+                    }
                   }
                 }
                 let localSuccess = false;
@@ -1734,8 +1776,11 @@ export default function SyncScreen() {
         if (lastWorkingPcUrlRef.current) {
           targetUrl = lastWorkingPcUrlRef.current;
         } else if (pcLocalIp?.trim()) {
-          const raw = pcLocalIp.trim();
-          targetUrl = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+          const rawParts = pcLocalIp.split(',').map(s => s.trim()).filter(Boolean);
+          if (rawParts.length > 0) {
+            const raw = rawParts[0];
+            targetUrl = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+          }
         }
       }
       sentContentFingerprintsRef.current.add(finalRaw.substring(0, 200));
@@ -1877,8 +1922,11 @@ export default function SyncScreen() {
         if (Platform.OS === 'android') ToastAndroid.show('Local merge failed, trying PC...', ToastAndroid.SHORT);
         let targetUrl = '';
         if (pcLocalIp?.trim()) {
-          const raw = pcLocalIp.trim();
-          targetUrl = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+          const rawParts = pcLocalIp.split(',').map(s => s.trim()).filter(Boolean);
+          if (rawParts.length > 0) {
+            const raw = rawParts[0];
+            targetUrl = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+          }
         }
         const activePc = activeDevices.find((d: any) => d.DeviceType === 'PC');
         if (activePc) {
@@ -2298,8 +2346,11 @@ export default function SyncScreen() {
           if (lastWorkingPcUrlRef.current) {
             resolved = lastWorkingPcUrlRef.current;
           } else if (pcLocalIp?.trim()) {
-            const raw = pcLocalIp.trim();
-            resolved = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+            const rawParts = pcLocalIp.split(',').map(s => s.trim()).filter(Boolean);
+            if (rawParts.length > 0) {
+              const raw = rawParts[0];
+              resolved = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+            }
           }
         }
         if (!resolved) { Alert.alert('PC Unreachable', 'Could not reach your PC. Make sure FlyShelf is running.'); setIsSending(false); setPendingUploadPayload(null); return; }
@@ -2312,8 +2363,11 @@ export default function SyncScreen() {
           if (lastWorkingPcUrlRef.current) {
             resolved = lastWorkingPcUrlRef.current;
           } else if (pcLocalIp?.trim()) {
-            const raw = pcLocalIp.trim();
-            resolved = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+            const rawParts = pcLocalIp.split(',').map(s => s.trim()).filter(Boolean);
+            if (rawParts.length > 0) {
+              const raw = rawParts[0];
+              resolved = raw.startsWith('http') ? raw.replace(/\/$/, '') : `http://${raw.includes(':') ? raw : raw + ':8999'}`;
+            }
           }
         }
         if (!resolved) { Alert.alert('Device Unreachable', 'Could not connect to this device. Make sure it is online.'); setIsSending(false); setPendingUploadPayload(null); return; }
@@ -2467,7 +2521,7 @@ export default function SyncScreen() {
           <Text style={styles.modalSubtitle}>Where do you want to transfer this payload?</Text>
           <TouchableOpacity style={styles.targetOption} onPress={() => executeHeavyUpload('Global')}>
             <IconSymbol name="cloud.fill" size={24} color="#4A62EB" />
-            <View style={{marginLeft: 12}}><Text style={{color: '#FFF', fontSize: 16, fontWeight: '600'}}>Global Cloud (Firebase)</Text><Text style={{color: '#8A8F98', fontSize: 12}}>10MB Limit. Visible to all devices.</Text></View>
+            <View style={{marginLeft: 12}}><Text style={{color: '#FFF', fontSize: 16, fontWeight: '600'}}>Cloud Hub</Text><Text style={{color: '#8A8F98', fontSize: 12}}>10MB Limit. Shared across your ecosystem.</Text></View>
           </TouchableOpacity>
           <Text style={{color: '#8A8F98', fontSize: 12, marginTop: 16, marginBottom: 8, fontWeight: '700', textTransform: 'uppercase'}}>Active Proxy Endpoints</Text>
           {activeDevices.map((device, i) => {
@@ -2828,7 +2882,7 @@ export default function SyncScreen() {
                         )}
                         <TouchableOpacity onPress={async () => {
                           try {
-                            if (!item.id) { ToastAndroid.show("Pinning is restricted to Global Cloud payloads.", ToastAndroid.SHORT); return; }
+                            if (!item.id) { ToastAndroid.show("Pinning is restricted to Cloud Hub payloads.", ToastAndroid.SHORT); return; }
                             await update(ref(database, `${clipboardPath()}/${item.id}`), { IsPinned: !item.IsPinned });
                             setClips(prev => prev.map(c => c.id === item.id ? {...c, IsPinned: !c.IsPinned} : c));
                             ToastAndroid.show(item.IsPinned ? "Unpinned" : "Pinned!", ToastAndroid.SHORT);

@@ -1,14 +1,14 @@
-// Copyright © 2024-2026 The FluentFlyout Authors
+﻿// Copyright © 2024-2026 The FlyShelf Authors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-using AdvanceClip.Classes;
+using FlyShelf.Classes;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
-using static AdvanceClip.Classes.NativeMethods;
+using static FlyShelf.Classes.NativeMethods;
 
-namespace AdvanceClip.Classes.Utils;
+namespace FlyShelf.Classes.Utils;
 
 public static class MonitorUtil
 {

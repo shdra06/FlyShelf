@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
@@ -6,7 +6,7 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     public partial class NetworkSyncServer
     {

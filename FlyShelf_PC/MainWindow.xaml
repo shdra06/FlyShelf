@@ -1,10 +1,10 @@
-<controls:MicaWindow x:Class="AdvanceClip.MainWindow"
+﻿<controls:MicaWindow x:Class="FlyShelf.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml" xmlns:tray="http://schemas.lepo.co/wpfui/2022/xaml/tray"
-        xmlns:vm="clr-namespace:AdvanceClip.ViewModels"
-        xmlns:settings="clr-namespace:AdvanceClip.Classes"
+        xmlns:vm="clr-namespace:FlyShelf.ViewModels"
+        xmlns:settings="clr-namespace:FlyShelf.Classes"
         xmlns:gif="https://github.com/XamlAnimatedGif/XamlAnimatedGif"
         xmlns:emoji="clr-namespace:Emoji.Wpf;assembly=Emoji.Wpf"
         Title="FlyShelf" 
@@ -29,7 +29,7 @@
             <Style x:Key="ToolbarSyncButtonStyle" TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                 <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
                 <Style.Triggers>
-                    <DataTrigger Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalFirebaseSync}" Value="True">
+                    <DataTrigger Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableCloudDiscovery}" Value="True">
                         <Setter Property="Foreground" Value="#10B981"/>
                     </DataTrigger>
                 </Style.Triggers>
@@ -87,7 +87,7 @@
 
         <tray:NotifyIcon
             FocusOnLeftClick="False"
-            Icon="pack://application:,,,/Resources/ClipFlowLogo.ico"
+            Icon="pack://application:,,,/Resources/FlyShelfLogo.ico"
             MenuOnRightClick="True"
             LeftClick="nIcon_LeftClick"
             TooltipText="FlyShelf">
@@ -120,7 +120,7 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
                     <Grid Grid.Column="0" Background="Transparent">
-                        <TextBlock x:Name="SearchPlaceholder" Text="Search (Ctrl+F)" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" FontSize="12" IsHitTestVisible="False" Margin="10,0,0,0"/>
+                        <TextBlock x:Name="SearchPlaceholder" Text="Search" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" FontSize="12" IsHitTestVisible="False" Margin="10,0,0,0"/>
                         <TextBox x:Name="SearchTextBox" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
                                  FontSize="12" VerticalAlignment="Center" CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Padding="4,2" Margin="0"
                                  HorizontalContentAlignment="Left"
@@ -368,9 +368,7 @@
                                               Command="{Binding PlacementTarget.Tag.CopyRawContentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                                               CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
 
-                                    <!-- ═══ Universal: Force Send ═══ -->
-                                    <MenuItem Header="⚡ Force Send to Device..." Click="ForceSendItem_Click"
-                                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" />
+
 
                                     <Separator />
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AES-256-GCM encryption for Firebase sync payloads.
  * Compatible with the PC-side SyncCrypto.cs implementation.
  * 
@@ -15,7 +15,7 @@ import { syncLog } from './debugLog';
 
 // Must match PC-side constants in SyncCrypto.cs
 const PBKDF2_ITERATIONS = 100_000;
-const SALT_STRING = 'AdvanceClip_v2.6.0_SyncSalt';
+const SALT_STRING = 'FlyShelf_v2.6.0_SyncSalt';
 const KEY_SIZE_BITS = 256; // AES-256
 const NONCE_SIZE = 12; // GCM standard
 const TAG_SIZE = 16; // GCM auth tag

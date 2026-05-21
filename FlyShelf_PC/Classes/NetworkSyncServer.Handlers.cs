@@ -1,4 +1,4 @@
-// ---------------------------------------------------------------
+﻿// ---------------------------------------------------------------
 // NetworkSyncServer � HTTP Request Handlers
 // ServeHtml, ClipboardData, TextUpload, FileUpload,
 // ArchiveUpload, RelayUpload
@@ -15,9 +15,9 @@ using System.Net.WebSockets;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Collections.Concurrent;
-using AdvanceClip.ViewModels;
+using FlyShelf.ViewModels;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     public partial class NetworkSyncServer
     {
@@ -25,7 +25,7 @@ namespace AdvanceClip.Classes
         {
             try
             {
-                string path = Path.Combine(AdvanceClip.Classes.RuntimeHost.ExecutionDir, "Resources", "WebClient", "index.html");
+                string path = Path.Combine(FlyShelf.Classes.RuntimeHost.ExecutionDir, "Resources", "WebClient", "index.html");
                 Logger.LogAction("HTML", $"Serving from: {path} (exists: {File.Exists(path)})");
                 if (File.Exists(path))
                 {
@@ -254,7 +254,7 @@ namespace AdvanceClip.Classes
                 catch { }
                 finally { MainWindow.SetWritingClipboard(false); }
                 
-                AdvanceClip.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport.transport}! 📱");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport.transport}! 📱");
                 // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
                 NotifyClipboardChanged(clip.ItemType.ToString(), capturedText.Length > 40 ? capturedText.Substring(0, 40) : capturedText);
             });
@@ -289,7 +289,7 @@ namespace AdvanceClip.Classes
                 }
 
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"Receiving {rawName} from {sourceDevice}... 📥");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {rawName} from {sourceDevice}... 📥");
                 });
 
                 int counter = 1;
@@ -395,50 +395,20 @@ namespace AdvanceClip.Classes
                     } catch { }
                 }
 
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(async () =>
+                try
                 {
-                    var dataObj = new System.Windows.DataObject();
-                    var dropList = new System.Collections.Specialized.StringCollection { finalPath };
-                    dataObj.SetFileDropList(dropList);
-                    // skipFirebaseSync=true — file came FROM a peer device, don't echo it back
-                    // forceClipboardSync=false — we write to clipboard ourselves with echo prevention
-                    _viewModel.HandleDrop(dataObj, false, skipFirebaseSync: true);
-                    
-                    // Tag the newly created item with transport + source device info
-                    if (_viewModel.DroppedItems.Count > 0)
-                    {
-                        var newest = _viewModel.DroppedItems[0];
-                        newest.SourceDeviceName = sourceDevice;
-                        newest.SourceDeviceType = sourceDevice.Contains("PC") || sourceDevice.Contains("LAPTOP") || sourceDevice.Contains("DESKTOP") ? "PC" : "Mobile";
-                        newest.TransferMethod = fileTransport.transport;
-                        
-                        // ECHO PREVENTION: Mark file as cloud-sourced so clipboard monitor
-                        // doesn't re-push it to peers/Firebase when we write to clipboard
-                        string fileFp = $"IMG::{newest.FormattedSize}";
-                        _viewModel.MarkAsCloudSourced(fileFp);
-                    }
-                    
-                    // Write received file to OS clipboard so user can paste it
-                    try
-                    {
-                        MainWindow.SetWritingClipboard(true);
-                        var clipList = new System.Collections.Specialized.StringCollection { finalPath };
-                        System.Windows.Clipboard.SetFileDropList(clipList);
-                        await System.Threading.Tasks.Task.Delay(500);
-                    }
-                    catch { }
-                    finally { MainWindow.SetWritingClipboard(false); }
-                    
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"Saved: {Path.GetFileName(finalPath)} via {fileTransport.transport} ✅");
-                    // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
-                    NotifyClipboardChanged("File", rawName);
-                });
+                    InjectReceivedFile(finalPath, sourceDevice, fileTransport.transport, sourceDevice.Contains("PC") || sourceDevice.Contains("LAPTOP") || sourceDevice.Contains("DESKTOP") ? "PC" : "Mobile");
+                }
+                catch (Exception ex)
+                {
+                    FlyShelf.Classes.Logger.LogAction("INJECT FILE ERR", ex.Message);
+                }
 
                 res.StatusCode = 200;
             }
             catch (Exception ex)
             {
-                AdvanceClip.Classes.Logger.LogAction("SERVER ERR", ex.Message);
+                FlyShelf.Classes.Logger.LogAction("SERVER ERR", ex.Message);
                 res.StatusCode = 500;
             }
             finally
@@ -487,7 +457,7 @@ namespace AdvanceClip.Classes
                 {
                     _lastArchiveToastTime = DateTime.Now;
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"Extracting batch data... 📦");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Extracting batch data... 📦");
                     });
                 }
 
@@ -528,7 +498,7 @@ namespace AdvanceClip.Classes
                             var fileList = new System.Collections.Specialized.StringCollection();
                             lock (batchList) { foreach (var f in batchList) fileList.Add(f); }
                             System.Windows.Clipboard.SetFileDropList(fileList);
-                            AdvanceClip.Windows.ToastWindow.ShowToast($"📋 {rawName} copied to clipboard");
+                            FlyShelf.Windows.ToastWindow.ShowToast($"📋 {rawName} copied to clipboard");
                             
                             // Insert proper file entry into FlyShelf (clickable → opens in default app)
                             var clip = new ClipboardItem
@@ -674,7 +644,7 @@ namespace AdvanceClip.Classes
 
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"📡 Relayed {rawName} ({sizeStr}) from {senderDevice}");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"📡 Relayed {rawName} ({sizeStr}) from {senderDevice}");
                 });
 
                 res.StatusCode = 200;
@@ -747,8 +717,8 @@ namespace AdvanceClip.Classes
                             uptime = (int)(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds,
                             transport = new
                             {
-                                lan = FirebaseSyncManager.CachedLocalUrl ?? "",
-                                cloudflare = FirebaseSyncManager.CachedGlobalUrl ?? "",
+                                lan = CloudDiscoveryManager.CachedLocalUrl ?? "",
+                                cloudflare = CloudDiscoveryManager.CachedGlobalUrl ?? "",
                             },
                             peers = PeerManager.Instance?.AliveCount ?? 0,
                             timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
@@ -875,8 +845,8 @@ namespace AdvanceClip.Classes
                                 uptime = (int)(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds,
                                 transport = new
                                 {
-                                    lan = FirebaseSyncManager.CachedLocalUrl ?? "",
-                                    cloudflare = FirebaseSyncManager.CachedGlobalUrl ?? "",
+                                    lan = CloudDiscoveryManager.CachedLocalUrl ?? "",
+                                    cloudflare = CloudDiscoveryManager.CachedGlobalUrl ?? "",
                                 },
                                 peers = PeerManager.Instance?.AliveCount ?? 0,
                                 timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
@@ -895,7 +865,7 @@ namespace AdvanceClip.Classes
                         // Track this device as directly connected (Phase 3)
                         string deviceId = req.Headers["X-Pairing-Key"] ?? req.Headers["X-Device-Id"] ?? req.RemoteEndPoint?.Address?.ToString() ?? "unknown";
                         _directDeviceLastSeen[deviceId] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                        FirebaseSyncManager.DirectlyConnectedDeviceCount = GetDirectlyConnectedDeviceCount();
+                        CloudDiscoveryManager.DirectlyConnectedDeviceCount = GetDirectlyConnectedDeviceCount();
                         ServeClipboardData(res);
                     }
                     else if (path == "/api/events" && req.HttpMethod == "GET")
@@ -1002,34 +972,119 @@ namespace AdvanceClip.Classes
         /// </summary>
         private async Task HandlePeerWebSocket(WebSocket ws, string peerDeviceId)
         {
-            var buf = new byte[256];
+            byte[] buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(65536); // 64KB rented read buffer
             try
             {
                 while (ws.State == WebSocketState.Open)
                 {
-                    // Wait for incoming messages (peer sends pings, we just read them)
-                    var result = await ws.ReceiveAsync(new ArraySegment<byte>(buf), CancellationToken.None);
-                    if (result.MessageType == WebSocketMessageType.Close)
+                    // 1. Read the complete next message (either text JSON or ping/pong)
+                    using var ms = new MemoryStream();
+                    WebSocketReceiveResult result;
+                    do
                     {
-                        Logger.LogAction("WS", $"Peer {peerDeviceId} closed WebSocket gracefully");
-                        await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None);
-                        break;
-                    }
-                    // If we receive a text "ping", reply "pong"
+                        result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                        if (result.MessageType == WebSocketMessageType.Close)
+                        {
+                            Logger.LogAction("WS", $"Peer {peerDeviceId} closed WebSocket gracefully");
+                            await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None);
+                            return;
+                        }
+                        ms.Write(buffer, 0, result.Count);
+                    } while (!result.EndOfMessage);
+
+                    byte[] messageBytes = ms.ToArray();
+
                     if (result.MessageType == WebSocketMessageType.Text)
                     {
-                        string msg = Encoding.UTF8.GetString(buf, 0, result.Count);
-                        if (msg == "ping")
+                        string text = Encoding.UTF8.GetString(messageBytes);
+                        if (text == "ping")
                         {
                             byte[] pong = Encoding.UTF8.GetBytes("pong");
                             await ws.SendAsync(new ArraySegment<byte>(pong), WebSocketMessageType.Text, true, CancellationToken.None);
+                            continue;
+                        }
+
+                        // If it starts with { and ends with }, parse as JSON control envelope
+                        if (text.TrimStart().StartsWith("{"))
+                        {
+                            try
+                            {
+                                using var doc = JsonDocument.Parse(text);
+                                var root = doc.RootElement;
+                                string envelopeType = root.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : "";
+
+                                if (envelopeType == "SyncText")
+                                {
+                                    string itemType = root.TryGetProperty("itemType", out var itProp) ? itProp.GetString() : "Text";
+                                    string title = root.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : "";
+                                    string data = root.TryGetProperty("data", out var dataProp) ? dataProp.GetString() : "";
+                                    string sourceDeviceName = root.TryGetProperty("sourceDeviceName", out var nameProp) ? nameProp.GetString() : "Remote PC";
+
+                                    Logger.LogAction("WS", $"Received SyncText via WebSocket from {sourceDeviceName}: '{title}'");
+                                    InjectReceivedText(data, sourceDeviceName, "WebSocket", itemType, "PC");
+                                }
+                                else if (envelopeType == "SyncFileStart")
+                                {
+                                    string fileName = root.TryGetProperty("fileName", out var fnProp) ? fnProp.GetString() : "file.dat";
+                                    long fileSize = root.TryGetProperty("fileSize", out var fsProp) ? fsProp.GetInt64() : 0;
+                                    string itemType = root.TryGetProperty("itemType", out var itProp) ? itProp.GetString() : "File";
+                                    string title = root.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : "";
+                                    string sourceDeviceName = root.TryGetProperty("sourceDeviceName", out var nameProp) ? nameProp.GetString() : "Remote PC";
+
+                                    Logger.LogAction("WS", $"Received SyncFileStart: {fileName} ({fileSize} bytes) from {sourceDeviceName}");
+
+                                    // Let's create the destination folder and temp/final paths
+                                    string dateString = DateTime.Now.ToString("dd-MM-yyyy");
+                                    string uploadDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), 
+                                        "FlyShelf", "SyncedFiles", "Clipboard", sourceDeviceName, dateString);
+                                    Directory.CreateDirectory(uploadDir);
+
+                                    int counter = 1;
+                                    string finalPath = Path.Combine(uploadDir, fileName);
+                                    while (File.Exists(finalPath))
+                                    {
+                                        finalPath = Path.Combine(uploadDir, $"{Path.GetFileNameWithoutExtension(fileName)}_{counter++}{Path.GetExtension(fileName)}");
+                                    }
+
+                                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                                        FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {fileName} from {sourceDeviceName} (via WS)... 📥");
+                                    });
+
+                                    // Direct file streaming Mode: read subsequent binary chunks directly from WebSocket
+                                    long bytesReceived = 0;
+                                    using (var fileFs = new FileStream(finalPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true))
+                                    {
+                                        while (bytesReceived < fileSize)
+                                        {
+                                            long remain = fileSize - bytesReceived;
+                                            int toRead = (int)Math.Min(buffer.Length, remain);
+
+                                            var chunkResult = await ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, toRead), CancellationToken.None);
+                                            if (chunkResult.MessageType == WebSocketMessageType.Close)
+                                            {
+                                                throw new WebSocketException("WebSocket closed during binary file transmission.");
+                                            }
+                                            
+                                            await fileFs.WriteAsync(buffer, 0, chunkResult.Count);
+                                            bytesReceived += chunkResult.Count;
+                                        }
+                                    }
+
+                                    Logger.LogAction("WS", $"SyncFile completed via WS: {fileName} ({bytesReceived} bytes written)");
+                                    InjectReceivedFile(finalPath, sourceDeviceName, "WebSocket", "PC");
+                                }
+                            }
+                            catch (Exception jsonEx)
+                            {
+                                Logger.LogAction("WS ERROR", $"Failed parsing WS JSON payload: {jsonEx.Message}");
+                            }
                         }
                     }
                 }
             }
-            catch (WebSocketException)
+            catch (WebSocketException wsEx)
             {
-                Logger.LogAction("WS", $"Peer {peerDeviceId} WebSocket dropped (connection lost)");
+                Logger.LogAction("WS", $"Peer {peerDeviceId} WebSocket connection lost/dropped: {wsEx.Message}");
             }
             catch (Exception ex)
             {
@@ -1037,6 +1092,7 @@ namespace AdvanceClip.Classes
             }
             finally
             {
+                System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
                 ws.Dispose();
             }
         }

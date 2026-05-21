@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     /// <summary>
     /// Natural-feeling smooth scroll for WPF, modeled after Windows 11 native clipboard.
@@ -25,11 +25,11 @@ namespace AdvanceClip.Classes
         private const double ListMinImpulse      = 0.3;    // minimum impulse so gentle scrolls register
 
         // ═══ PAGE profile (settings, diagnostics — bigger sweeps, long glide) ═══
-        private const double PageFriction        = 0.93;   // slightly higher friction for longer momentum
-        private const double PageMaxVelocity     = 110;    // higher cap for big page scrolls
-        private const double PageTouchpadMul     = 0.60;   // touchpad impulse for pages
-        private const double PageMouseMul        = 0.70;   // mouse wheel impulse for pages
-        private const double PageMinImpulse      = 0.4;    // minimum impulse
+        private const double PageFriction        = 0.94;   // higher friction = longer momentum glide
+        private const double PageMaxVelocity     = 130;    // higher cap for big page scrolls
+        private const double PageTouchpadMul     = 0.70;   // touchpad impulse for pages
+        private const double PageMouseMul        = 0.85;   // mouse wheel impulse for pages (reduced friction feel)
+        private const double PageMinImpulse      = 0.5;    // minimum impulse
 
         // ═══ Shared constants ═══
         private const double MinVelocity         = 0.05;   // below this → stop (lower = smoother final stop)

@@ -1,4 +1,4 @@
-# ClipFlow  — Feature Ideas
+# FlyShelf — Feature Ideas
 
 ## Planned Features
 

@@ -1,19 +1,19 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using AdvanceClip.Classes;
-using AdvanceClip.ViewModels;
+using FlyShelf.Classes;
+using FlyShelf.ViewModels;
 using MicaWPF.Controls;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Windows.Interop;
 using System.Threading.Tasks;
-using static AdvanceClip.Classes.NativeMethods;
+using static FlyShelf.Classes.NativeMethods;
 
-namespace AdvanceClip.Windows
+namespace FlyShelf.Windows
 {
     public partial class HubWindow : MicaWindow
     {
@@ -109,14 +109,12 @@ namespace AdvanceClip.Windows
                 RefreshDevices_Click(null, null);
                 // LIST profile for clipboard items (very slow, precise)
                 Classes.SmoothScroll.AttachList(HubListView);
-                // PAGE profile for everything else (settings, diagnostics — normal speed)
-                Classes.SmoothScroll.AttachToWindow(this);
+                // Settings panels use native WPF smooth scrolling (CanContentScroll=False)
             };
             Unloaded += (s, ev) =>
             {
                 // Unregister SmoothScroll hooks to prevent memory leaks
                 Classes.SmoothScroll.Detach(HubListView);
-                Classes.SmoothScroll.DetachFromWindow(this);
 
                 // Clean up static rendering hook for kinetic scrolling to prevent memory leak
                 if (_isKineticScrolling)
@@ -548,7 +546,7 @@ namespace AdvanceClip.Windows
             try
             {
                 SendLogsToDashboardBtn.IsEnabled = false;
-                var vm = DataContext as AdvanceClip.ViewModels.FlyShelfViewModel;
+                var vm = DataContext as FlyShelf.ViewModels.FlyShelfViewModel;
 
                 // Gather PC logs
                 string pcLogs = Logger.GetRecentNetworkLogs(500);
@@ -679,7 +677,7 @@ namespace AdvanceClip.Windows
             }
             catch (Exception ex)
             {
-                AdvanceClip.Classes.Logger.LogAction("UI", $"Failed to open Network Logs: {ex.Message}");
+                FlyShelf.Classes.Logger.LogAction("UI", $"Failed to open Network Logs: {ex.Message}");
             }
         }
 
@@ -926,7 +924,7 @@ namespace AdvanceClip.Windows
         {
             try
             {
-                var vm = DataContext as AdvanceClip.ViewModels.FlyShelfViewModel;
+                var vm = DataContext as FlyShelf.ViewModels.FlyShelfViewModel;
                 if (vm?.LocalServer == null) { ToastWindow.ShowToast("❌ Server instance not found"); return; }
 
                 ServerDiagnosticsLog.Text = "⏳ Stopping server...\n";
@@ -963,7 +961,7 @@ namespace AdvanceClip.Windows
             try
             {
                 string diagnostics = GetServerDiagnostics();
-                string systemInfo = $"=== AdvanceClip Server Diagnostics ===\n" +
+                string systemInfo = $"=== FlyShelf Server Diagnostics ===\n" +
                     $"PC Name: {Environment.MachineName}\n" +
                     $"OS: {Environment.OSVersion}\n" +
                     $"User: {Environment.UserName}\n" +
@@ -1314,6 +1312,114 @@ namespace AdvanceClip.Windows
             {
                 _deviceRefreshTimer.Stop();
                 _deviceRefreshTimer = null;
+            }
+        }
+
+        // ═══ Browser-style Smooth Scroll (Chrome/Edge cubic ease-out) ═══
+        // Uses target-offset animation like modern browsers: each scroll event adds to a
+        // target offset, and a single animation smoothly interpolates using cubic ease-out.
+        // This feels natural, not physics-y — exactly like CSS scroll-behavior: smooth.
+        
+        private readonly Dictionary<ScrollViewer, double> _scrollTargets = new();
+        private readonly Dictionary<ScrollViewer, double> _scrollStartOffsets = new();
+        private readonly Dictionary<ScrollViewer, long> _scrollStartTimes = new();
+        private const double ScrollAnimationMs = 250;  // Chrome uses ~250ms for smooth scroll
+        private const double ScrollStepPx = 100;       // pixels per mouse wheel notch (Chrome default)
+        private bool _browserScrollRendering;
+
+        private void SettingsScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            ScrollViewer? sv = sender as ScrollViewer;
+            if (sv == null)
+            {
+                // Walk up to find the ScrollViewer ancestor
+                DependencyObject? source = e.OriginalSource as DependencyObject;
+                while (source != null)
+                {
+                    if (source is ScrollViewer found) { sv = found; break; }
+                    source = VisualTreeHelper.GetParent(source);
+                }
+            }
+            if (sv == null || sv.ScrollableHeight <= 0) return;
+
+            e.Handled = true;
+
+            // Touchpad: let WPF handle natively (high-res deltas have hardware inertia)
+            if (e.Delta % 120 != 0) { e.Handled = false; return; }
+
+            double scrollAmount = -(e.Delta / 120.0) * ScrollStepPx;
+            long now = Environment.TickCount64;
+
+            if (!_scrollTargets.ContainsKey(sv) || !_scrollStartTimes.ContainsKey(sv))
+            {
+                // First scroll — start fresh
+                _scrollStartOffsets[sv] = sv.VerticalOffset;
+                _scrollTargets[sv] = sv.VerticalOffset + scrollAmount;
+                _scrollStartTimes[sv] = now;
+            }
+            else
+            {
+                long elapsed = now - _scrollStartTimes[sv];
+                if (elapsed >= ScrollAnimationMs)
+                {
+                    // Previous animation finished — start new from current position
+                    _scrollStartOffsets[sv] = sv.VerticalOffset;
+                    _scrollTargets[sv] = sv.VerticalOffset + scrollAmount;
+                    _scrollStartTimes[sv] = now;
+                }
+                else
+                {
+                    // Chain: accumulate onto existing target (responsive rapid scrolling)
+                    _scrollTargets[sv] += scrollAmount;
+                    // Reset start to current position & time for fresh ease-out curve
+                    _scrollStartOffsets[sv] = sv.VerticalOffset;
+                    _scrollStartTimes[sv] = now;
+                }
+            }
+
+            // Clamp target to valid range
+            _scrollTargets[sv] = Math.Clamp(_scrollTargets[sv], 0, sv.ScrollableHeight);
+
+            if (!_browserScrollRendering)
+            {
+                _browserScrollRendering = true;
+                CompositionTarget.Rendering += BrowserScroll_Rendering;
+            }
+        }
+
+        private void BrowserScroll_Rendering(object? sender, EventArgs e)
+        {
+            bool anyActive = false;
+            long now = Environment.TickCount64;
+
+            foreach (var sv in _scrollTargets.Keys.ToList())
+            {
+                if (!_scrollStartTimes.ContainsKey(sv)) continue;
+
+                long elapsed = now - _scrollStartTimes[sv];
+                double t = Math.Clamp(elapsed / ScrollAnimationMs, 0, 1);
+
+                // Cubic ease-out: cubic-bezier(0, 0, 0.58, 1) — matches Chrome/Edge
+                // Simplified: 1 - (1 - t)^3
+                double eased = 1.0 - Math.Pow(1.0 - t, 3);
+
+                double start = _scrollStartOffsets[sv];
+                double target = _scrollTargets[sv];
+                double newOffset = start + (target - start) * eased;
+                newOffset = Math.Clamp(newOffset, 0, sv.ScrollableHeight);
+                sv.ScrollToVerticalOffset(newOffset);
+
+                if (t < 1.0)
+                    anyActive = true;
+            }
+
+            if (!anyActive)
+            {
+                CompositionTarget.Rendering -= BrowserScroll_Rendering;
+                _browserScrollRendering = false;
+                _scrollTargets.Clear();
+                _scrollStartOffsets.Clear();
+                _scrollStartTimes.Clear();
             }
         }
 

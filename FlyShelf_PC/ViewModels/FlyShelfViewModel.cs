@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
@@ -12,7 +12,7 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 
-namespace AdvanceClip.ViewModels
+namespace FlyShelf.ViewModels
 {
     public partial class FlyShelfViewModel : INotifyPropertyChanged
     {
@@ -20,6 +20,29 @@ namespace AdvanceClip.ViewModels
         private readonly System.Collections.Generic.LinkedList<System.Collections.Generic.List<ClipboardItem>> _deletedItemsHistory = new System.Collections.Generic.LinkedList<System.Collections.Generic.List<ClipboardItem>>();
         // Limit parallel image/icon decodes to prevent memory spikes on bulk file copies
         private static readonly System.Threading.SemaphoreSlim _iconDecodeSemaphore = new System.Threading.SemaphoreSlim(2, 2);
+
+        private bool _isPaginating = false;
+        private bool _isDatabaseWriteSuspended = false;
+        private bool _isSearchActive = false;
+
+        public bool IsSearchActive
+        {
+            get => _isSearchActive;
+            set
+            {
+                if (_isSearchActive != value)
+                {
+                    _isSearchActive = value;
+                    OnPropertyChanged(nameof(IsSearchActive));
+                }
+            }
+        }
+
+        public bool IsDatabaseWriteSuspended
+        {
+            get => _isDatabaseWriteSuspended;
+            set => _isDatabaseWriteSuspended = value;
+        }
 
 
         /// <summary>
@@ -30,83 +53,111 @@ namespace AdvanceClip.ViewModels
         {
             await LoadPinnedItemsAsync();
             
-            var items = await System.Threading.Tasks.Task.Run(() => Classes.ClipboardHistoryManager.LoadHistory());
-            
-            // Build lookup of items already loaded (e.g. pinned items from LoadPinnedItems)
-            // to prevent duplicates on restart
-            var existingKeys = new HashSet<string>();
-            foreach (var existing in DroppedItems)
+            _isPaginating = true;
+            try
             {
-                string key = GetDeduplicationKey(existing);
-                if (!string.IsNullOrEmpty(key)) existingKeys.Add(key);
-            }
-            
-            // Phase 1: Add all items IMMEDIATELY with no icons — makes the UI appear instantly
-            var itemsNeedingIcons = new List<ClipboardItem>();
-            foreach (var item in items)
-            {
-                if (IsEffectivelyEmpty(item)) continue;
+                var items = await System.Threading.Tasks.Task.Run(() => Classes.ClipboardHistoryManager.LoadHistory());
                 
-                string itemKey = GetDeduplicationKey(item);
-                if (!string.IsNullOrEmpty(itemKey) && !existingKeys.Add(itemKey))
-                    continue;
-
-                // Heal legacy items
-                if (string.IsNullOrWhiteSpace(item.FileName) && !string.IsNullOrWhiteSpace(item.RawContent))
-                    item.FileName = item.RawContent.Length > 800 ? item.RawContent.Substring(0, 800) + "..." : item.RawContent;
-
-                item.EvaluateSmartActions();
-                DroppedItems.Add(item);
-                
-                // Queue for background icon loading
-                bool needsIcon = (item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
-                    && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath);
-                bool needsFileIcon = !needsIcon && (item.ItemType == ClipboardItemType.File || item.ItemType == ClipboardItemType.Document ||
-                    item.ItemType == ClipboardItemType.Pdf || item.ItemType == ClipboardItemType.Archive ||
-                    item.ItemType == ClipboardItemType.Video || item.ItemType == ClipboardItemType.Audio ||
-                    item.ItemType == ClipboardItemType.Presentation) && !string.IsNullOrEmpty(item.FilePath);
-                if (needsIcon || needsFileIcon)
-                    itemsNeedingIcons.Add(item);
-            }
-            OnPropertyChanged(nameof(ShelfVisibility));
-
-            // Wire up auto-save on any collection change (except Remove — handled by journal append in RemoveItem)
-            DroppedItems.CollectionChanged += (s, e) =>
-            {
-                if (e.Action != System.Collections.Specialized.NotifyCollectionChangedAction.Remove)
+                // Build lookup of items already loaded (e.g. pinned items from LoadPinnedItems)
+                // to prevent duplicates on restart
+                var existingKeys = new HashSet<string>();
+                foreach (var existing in DroppedItems)
                 {
-                    Classes.ClipboardHistoryManager.SaveHistoryDebounced(DroppedItems);
+                    string key = GetDeduplicationKey(existing);
+                    if (!string.IsNullOrEmpty(key)) existingKeys.Add(key);
                 }
-            };
-
-            // Phase 2: Load icons in background — batched to limit memory pressure
-            if (itemsNeedingIcons.Count > 0)
-            {
-                _ = System.Threading.Tasks.Task.Run(async () =>
+                
+                // Phase 1: Add all items IMMEDIATELY with no icons — makes the UI appear instantly
+                var itemsNeedingIcons = new List<ClipboardItem>();
+                var corruptCount = 0;
+                foreach (var item in items)
                 {
-                    foreach (var item in itemsNeedingIcons)
+                    try
                     {
-                        await _iconDecodeSemaphore.WaitAsync();
-                        try
+                        if (IsEffectivelyEmpty(item)) continue;
+                        
+                        string itemKey = GetDeduplicationKey(item);
+                        if (!string.IsNullOrEmpty(itemKey) && !existingKeys.Add(itemKey))
+                            continue;
+
+                        // Heal legacy items
+                        if (string.IsNullOrWhiteSpace(item.FileName) && !string.IsNullOrWhiteSpace(item.RawContent))
+                            item.FileName = item.RawContent.Length > 800 ? item.RawContent.Substring(0, 800) + "..." : item.RawContent;
+
+                        item.EvaluateSmartActions();
+                        DroppedItems.Add(item);
+                        
+                        // Queue for background icon loading
+                        bool needsIcon = (item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
+                            && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath);
+                        bool needsFileIcon = !needsIcon && (item.ItemType == ClipboardItemType.File || item.ItemType == ClipboardItemType.Document ||
+                            item.ItemType == ClipboardItemType.Pdf || item.ItemType == ClipboardItemType.Archive ||
+                            item.ItemType == ClipboardItemType.Video || item.ItemType == ClipboardItemType.Audio ||
+                            item.ItemType == ClipboardItemType.Presentation) && !string.IsNullOrEmpty(item.FilePath);
+                        if (needsIcon || needsFileIcon)
+                            itemsNeedingIcons.Add(item);
+                    }
+                    catch
+                    {
+                        // Silently drop corrupt/broken items — don't crash the entire load
+                        corruptCount++;
+                    }
+                }
+                if (corruptCount > 0)
+                    FlyShelf.Classes.Logger.LogAction("HISTORY_LOAD", $"Silently dropped {corruptCount} corrupt/broken entries");
+                OnPropertyChanged(nameof(ShelfVisibility));
+
+                // Wire up auto-save on any collection change (except Remove — handled by journal append in RemoveItem)
+                DroppedItems.CollectionChanged += (s, e) =>
+                {
+                    if (!_isDatabaseWriteSuspended && !_isPaginating)
+                    {
+                        if (e.Action == System.Collections.Specialized.NotifyCollectionChangedAction.Add && e.NewItems != null)
                         {
-                            if ((item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
-                                && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath))
+                            foreach (ClipboardItem item in e.NewItems)
                             {
-                                var icon = LoadImageThumbnail(item.FilePath);
-                                if (icon != null)
-                                    await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
-                            }
-                            else if (!string.IsNullOrEmpty(item.FilePath))
-                            {
-                                var icon = GetIcon(item.FilePath);
-                                if (icon != null)
-                                    await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
+                                System.Threading.Tasks.Task.Run(() =>
+                                {
+                                    Classes.ClipboardHistoryManager.SaveItem(item);
+                                });
                             }
                         }
-                        catch { }
-                        finally { _iconDecodeSemaphore.Release(); }
                     }
-                });
+                };
+
+                // Phase 2: Load icons in background — batched to limit memory pressure
+                if (itemsNeedingIcons.Count > 0)
+                {
+                    _ = System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        foreach (var item in itemsNeedingIcons)
+                        {
+                            await _iconDecodeSemaphore.WaitAsync();
+                            try
+                            {
+                                if ((item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
+                                    && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath))
+                                {
+                                    var icon = LoadImageThumbnail(item.FilePath);
+                                    if (icon != null)
+                                        await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
+                                }
+                                else if (!string.IsNullOrEmpty(item.FilePath))
+                                {
+                                    var icon = GetIcon(item.FilePath);
+                                    if (icon != null)
+                                        await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
+                                }
+                            }
+                            catch { }
+                            finally { _iconDecodeSemaphore.Release(); }
+                        }
+                    });
+                }
+            }
+            finally
+            {
+                _isPaginating = false;
             }
         }
 
@@ -182,8 +233,8 @@ namespace AdvanceClip.ViewModels
         {
             get
             {
-                if (CurrentMode == 0) return AdvanceClip.Classes.SettingsManager.Current.MiniFormHeight;
-                if (CurrentMode == 1) return AdvanceClip.Classes.SettingsManager.Current.MediumFormHeight;
+                if (CurrentMode == 0) return FlyShelf.Classes.SettingsManager.Current.MiniFormHeight;
+                if (CurrentMode == 1) return FlyShelf.Classes.SettingsManager.Current.MediumFormHeight;
                 return (int)SystemParameters.WorkArea.Height - 100;
             }
         }
@@ -192,8 +243,8 @@ namespace AdvanceClip.ViewModels
         {
             get
             {
-                if (CurrentMode == 0) return AdvanceClip.Classes.SettingsManager.Current.MiniFormWidth;
-                if (CurrentMode == 1) return AdvanceClip.Classes.SettingsManager.Current.MediumFormWidth;
+                if (CurrentMode == 0) return FlyShelf.Classes.SettingsManager.Current.MiniFormWidth;
+                if (CurrentMode == 1) return FlyShelf.Classes.SettingsManager.Current.MediumFormWidth;
                 return 850;
             }
         }
@@ -214,7 +265,7 @@ namespace AdvanceClip.ViewModels
         public ICommand LaunchTerminalCommand { get; }
         public ICommand OpenInBrowserCommand { get; }
         public ICommand RunAdminTerminalCommand { get; }
-        public ICommand ToggleGlobalFirebaseCommand { get; }
+        public ICommand ToggleCloudDiscoveryCommand { get; }
         public ICommand CompileNativeCommand { get; }
         public ICommand ConvertDocumentCommand { get; }
         public ICommand ExtractTextCommand { get; }
@@ -228,9 +279,9 @@ namespace AdvanceClip.ViewModels
         public ICommand ConvertPdfToWordCommand { get; }
         public ICommand ManualScanQRCodeCommand { get; }
         
-        public AdvanceClip.Classes.NetworkSyncServer LocalServer { get; private set; }
-        public AdvanceClip.Classes.DocumentSniffer Sniffer { get; private set; }
-        public AdvanceClip.Classes.FirebaseListener CloudListener { get; private set; }
+        public FlyShelf.Classes.NetworkSyncServer LocalServer { get; private set; }
+        public FlyShelf.Classes.DocumentSniffer Sniffer { get; private set; }
+        public FlyShelf.Classes.CloudDiscoveryListener CloudListener { get; private set; }
 
         public void RefreshLocalServerData()
         {
@@ -259,8 +310,8 @@ namespace AdvanceClip.ViewModels
             ExtractTextCommand = new RelayCommand<ClipboardItem>(item => item?.ExtractText());
             ExtractTableCommand = new RelayCommand<ClipboardItem>(item => item?.ExtractTable());
             SaveSettingsCommand = new RelayCommand(SaveGlobalSettings);
-            ToggleGlobalFirebaseCommand = new RelayCommand(() => {
-                AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync = !AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync;
+            ToggleCloudDiscoveryCommand = new RelayCommand(() => {
+                FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery = !FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery;
             });
             CopyRawContentCommand = new RelayCommand<ClipboardItem>(item => {
                 if (item == null) return;
@@ -269,7 +320,7 @@ namespace AdvanceClip.ViewModels
                     string content = !string.IsNullOrEmpty(item.RawContent) ? item.RawContent : item.FileName;
                     if (!string.IsNullOrEmpty(content))
                         System.Windows.Clipboard.SetText(content);
-                    AdvanceClip.Windows.ToastWindow.ShowToast("Copied to clipboard! 📋");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Copied to clipboard! 📋");
                 }
                 catch { }
             });
@@ -277,10 +328,10 @@ namespace AdvanceClip.ViewModels
                 var pdfs = DroppedItems.Where(i => i.ItemType == ClipboardItemType.Pdf && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath)).ToList();
                 if (pdfs.Count < 2)
                 {
-                    AdvanceClip.Windows.ToastWindow.ShowToast("Select at least 2 PDFs to merge.");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Select at least 2 PDFs to merge.");
                     return;
                 }
-                var win = new AdvanceClip.Windows.PdfMergeWindow(pdfs, this);
+                var win = new FlyShelf.Windows.PdfMergeWindow(pdfs, this);
                 win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
                 win.Topmost = true;
                 win.Show();
@@ -293,7 +344,7 @@ namespace AdvanceClip.ViewModels
                 if (item.ItemType == ClipboardItemType.Group)
                 {
                     string[] paths = item.RawContent.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                    AdvanceClip.Classes.ShellExplorerHelper.OpenFilesAndSelect(paths);
+                    FlyShelf.Classes.ShellExplorerHelper.OpenFilesAndSelect(paths);
                     return;
                 }
                 if (string.IsNullOrEmpty(item.FilePath)) return;
@@ -326,48 +377,48 @@ namespace AdvanceClip.ViewModels
                 }
             });
             
-            LocalServer = new AdvanceClip.Classes.NetworkSyncServer(this);
-            Sniffer = new AdvanceClip.Classes.DocumentSniffer(this);
-            CloudListener = new AdvanceClip.Classes.FirebaseListener(this);
+            LocalServer = new FlyShelf.Classes.NetworkSyncServer(this);
+            Sniffer = new FlyShelf.Classes.DocumentSniffer(this);
+            CloudListener = new FlyShelf.Classes.CloudDiscoveryListener(this);
             
 
             
-            AdvanceClip.Classes.SettingsManager.Current.PropertyChanged += (s, e) =>
+            FlyShelf.Classes.SettingsManager.Current.PropertyChanged += (s, e) =>
             {
-                if (e.PropertyName == nameof(AdvanceClip.Classes.AdvanceSettings.EnableLocalNetworkSync))
+                if (e.PropertyName == nameof(FlyShelf.Classes.AdvanceSettings.EnableLocalNetworkSync))
                 {
-                    if (AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync) LocalServer.Start();
+                    if (FlyShelf.Classes.SettingsManager.Current.EnableLocalNetworkSync) LocalServer.Start();
                     else LocalServer.Stop();
                     OnPropertyChanged(nameof(LocalServer));
                 }
-                else if (e.PropertyName == nameof(AdvanceClip.Classes.AdvanceSettings.EnableLocalLAN))
+                else if (e.PropertyName == nameof(FlyShelf.Classes.AdvanceSettings.EnableLocalLAN))
                 {
                     // LAN toggle changed — auto-manage the master server toggle
-                    bool lanOn = AdvanceClip.Classes.SettingsManager.Current.EnableLocalLAN;
-                    bool cfOn = AdvanceClip.Classes.SettingsManager.Current.EnableGlobalCloudflare;
+                    bool lanOn = FlyShelf.Classes.SettingsManager.Current.EnableLocalLAN;
+                    bool cfOn = FlyShelf.Classes.SettingsManager.Current.EnableGlobalCloudflare;
                     
                     if (lanOn || cfOn)
                     {
                         // At least one transport active — ensure server is running
-                        if (!AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync)
-                            AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync = true;
+                        if (!FlyShelf.Classes.SettingsManager.Current.EnableLocalNetworkSync)
+                            FlyShelf.Classes.SettingsManager.Current.EnableLocalNetworkSync = true;
                     }
                     else
                     {
                         // Both transports off — stop the server
-                        AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync = false;
+                        FlyShelf.Classes.SettingsManager.Current.EnableLocalNetworkSync = false;
                     }
                     
                     // Force PeerManager to re-handshake with new transport preference
                     _ = System.Threading.Tasks.Task.Run(async () =>
                     {
-                        if (AdvanceClip.Classes.PeerManager.Instance != null) await AdvanceClip.Classes.PeerManager.Instance.ForceResync();
+                        if (FlyShelf.Classes.PeerManager.Instance != null) await FlyShelf.Classes.PeerManager.Instance.ForceResync();
                     });
-                    AdvanceClip.Classes.Logger.LogAction("SETTINGS", $"LAN transport: {(lanOn ? "ON" : "OFF")}");
+                    FlyShelf.Classes.Logger.LogAction("SETTINGS", $"LAN transport: {(lanOn ? "ON" : "OFF")}");
                 }
-                else if (e.PropertyName == nameof(AdvanceClip.Classes.AdvanceSettings.EnableGlobalFirebaseSync))
+                else if (e.PropertyName == nameof(FlyShelf.Classes.AdvanceSettings.EnableCloudDiscovery))
                 {
-                    if (AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync)
+                    if (FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery)
                     {
                         CloudListener.StartPolling();
                     }
@@ -376,10 +427,10 @@ namespace AdvanceClip.ViewModels
                         CloudListener.StopPolling();
                     }
                 }
-                else if (e.PropertyName == nameof(AdvanceClip.Classes.AdvanceSettings.MiniFormWidth) ||
-                         e.PropertyName == nameof(AdvanceClip.Classes.AdvanceSettings.MiniFormHeight) ||
-                         e.PropertyName == nameof(AdvanceClip.Classes.AdvanceSettings.MediumFormWidth) ||
-                         e.PropertyName == nameof(AdvanceClip.Classes.AdvanceSettings.MediumFormHeight))
+                else if (e.PropertyName == nameof(FlyShelf.Classes.AdvanceSettings.MiniFormWidth) ||
+                         e.PropertyName == nameof(FlyShelf.Classes.AdvanceSettings.MiniFormHeight) ||
+                         e.PropertyName == nameof(FlyShelf.Classes.AdvanceSettings.MediumFormWidth) ||
+                         e.PropertyName == nameof(FlyShelf.Classes.AdvanceSettings.MediumFormHeight))
                 {
                     OnPropertyChanged(nameof(CurrentFlyShelfMaxHeight));
                     OnPropertyChanged(nameof(CurrentFlyShelfWidth));
@@ -387,24 +438,24 @@ namespace AdvanceClip.ViewModels
             };
             
             // Background Boot Optimization: Shift heavy DNS polling, port binding, and I/O sniffing completely off 
-            // the main UI Constructor thread so AdvanceClip can bootstrap in under 50ms natively!
+            // the main UI Constructor thread so FlyShelf can bootstrap in under 50ms natively!
             System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
             {
                 // Auto-reconcile: server should be up if either transport is on
-                bool lanOn = AdvanceClip.Classes.SettingsManager.Current.EnableLocalLAN;
-                bool cfOn = AdvanceClip.Classes.SettingsManager.Current.EnableGlobalCloudflare;
-                if ((lanOn || cfOn) && !AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync)
+                bool lanOn = FlyShelf.Classes.SettingsManager.Current.EnableLocalLAN;
+                bool cfOn = FlyShelf.Classes.SettingsManager.Current.EnableGlobalCloudflare;
+                if ((lanOn || cfOn) && !FlyShelf.Classes.SettingsManager.Current.EnableLocalNetworkSync)
                 {
-                    AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync = true;
+                    FlyShelf.Classes.SettingsManager.Current.EnableLocalNetworkSync = true;
                 }
                 
-                if (AdvanceClip.Classes.SettingsManager.Current.EnableLocalNetworkSync) 
+                if (FlyShelf.Classes.SettingsManager.Current.EnableLocalNetworkSync) 
                 {
                     LocalServer.Start();
                 }
-                AdvanceClip.Classes.SyncQueue.Start(); // Guaranteed-delivery sync queue
+                FlyShelf.Classes.SyncQueue.Start(); // Guaranteed-delivery sync queue
                 Sniffer.StartSniffing();
-                if (AdvanceClip.Classes.SettingsManager.Current.EnableGlobalFirebaseSync)
+                if (FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery)
                 {
                     CloudListener.StartPolling();
                 }
@@ -423,14 +474,18 @@ namespace AdvanceClip.ViewModels
             int oldIndex = DroppedItems.IndexOf(item);
             if (oldIndex == 0) return; // Already at top
             
+            var oldDate = item.DateCopied;
             // Update timestamp so it sorts as newest
             item.DateCopied = DateTime.Now;
             
             // Move without triggering add/sync logic
             DroppedItems.Move(oldIndex, 0);
             
-            // Save silently
-            try { Classes.ClipboardHistoryManager.SaveHistoryDebounced(DroppedItems); } catch { }
+            // Save silently by updating row DateCopied in SQLite
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                Classes.ClipboardHistoryManager.UpdateItemDateCopied(item, oldDate);
+            });
         }
 
         public void RemoveItem(ClipboardItem item)
@@ -499,8 +554,11 @@ namespace AdvanceClip.ViewModels
             if (item != null && DroppedItems.Contains(item))
             {
                 item.IsPinned = !item.IsPinned;
-                SavePinnedItems();
-                PersistHistory(); // Save pin state change
+                
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    Classes.ClipboardHistoryManager.UpdateItemPinState(item);
+                });
                 
                 // The user explicitly requested Pinned items to remain strictly invisible to the Delete feature
                 // WITHOUT physically sorting them to the top of the Stack anymore.
@@ -565,7 +623,7 @@ namespace AdvanceClip.ViewModels
 
             if (needsReorder)
             {
-                // AdvanceClip Phase 2.1: Use logical pointer swapping rather than destructive visual tree clears!
+                // FlyShelf Phase 2.1: Use logical pointer swapping rather than destructive visual tree clears!
                 // This eliminates the 1.5s visual freeze spike on large payload buffers!
                 for (int i = 0; i < sorted.Count; i++)
                 {
@@ -591,16 +649,7 @@ namespace AdvanceClip.ViewModels
             try
             {
                 var pinned = DroppedItems.Where(i => i.IsPinned).ToList();
-                string path = GetDbPath();
-                System.Threading.Tasks.Task.Run(() =>
-                {
-                    try
-                    {
-                        var json = JsonSerializer.Serialize(pinned);
-                        File.WriteAllText(path, json);
-                    }
-                    catch { }
-                });
+                Classes.ClipboardHistoryManager.SavePinnedHistory(pinned);
             }
             catch { }
         }
@@ -609,66 +658,257 @@ namespace AdvanceClip.ViewModels
         {
             try
             {
-                string path = GetDbPath();
-                var docs = await System.Threading.Tasks.Task.Run(() =>
-                {
-                    try
-                    {
-                        if (File.Exists(path))
-                        {
-                            var json = File.ReadAllText(path);
-                            return JsonSerializer.Deserialize<List<ClipboardItem>>(json);
-                        }
-                    }
-                    catch { }
-                    return null;
-                });
+                var docs = await System.Threading.Tasks.Task.Run(() => Classes.ClipboardHistoryManager.LoadPinnedHistory());
 
                 if (docs != null)
                 {
                     var seenKeys = new HashSet<string>();
                     foreach (var d in docs)
                     {
-                        // Skip duplicates within the pinned file itself
-                        string key = GetDeduplicationKey(d);
-                        if (!string.IsNullOrEmpty(key) && !seenKeys.Add(key))
-                            continue;
-                        
-                        d.IsPinned = true;
-                        if (d.ItemType == ClipboardItemType.File && !string.IsNullOrEmpty(d.FilePath))
+                        try
                         {
-                            System.Threading.Tasks.Task.Run(() => {
-                                var icon = GetIcon(d.FilePath);
-                                if (icon != null) Application.Current.Dispatcher.Invoke(() => d.Icon = icon);
-                            });
-                        }
-                        else if (d.ItemType == ClipboardItemType.Image && !string.IsNullOrEmpty(d.FilePath))
-                        {
-                            string imagePath = d.FilePath;
-                            var capturedD = d;
-                            System.Threading.Tasks.Task.Run(() => {
-                                try 
+                            // Skip duplicates within the pinned list itself
+                            string key = GetDeduplicationKey(d);
+                            if (!string.IsNullOrEmpty(key) && !seenKeys.Add(key))
+                                continue;
+
+                            // Validate file-based pinned items — drop if the file is gone
+                            if (!string.IsNullOrEmpty(d.FilePath))
+                            {
+                                bool isFileBased = d.ItemType == ClipboardItemType.Image || d.ItemType == ClipboardItemType.QRCode ||
+                                    d.ItemType == ClipboardItemType.File || d.ItemType == ClipboardItemType.Document ||
+                                    d.ItemType == ClipboardItemType.Pdf || d.ItemType == ClipboardItemType.Archive ||
+                                    d.ItemType == ClipboardItemType.Video || d.ItemType == ClipboardItemType.Audio ||
+                                    d.ItemType == ClipboardItemType.Presentation;
+                                if (isFileBased && !File.Exists(d.FilePath) && !Directory.Exists(d.FilePath))
                                 {
-                                    if (File.Exists(imagePath))
+                                    FlyShelf.Classes.Logger.LogAction("PINNED_LOAD", $"Dropped pinned item with missing file: {d.FilePath}");
+                                    continue;
+                                }
+                            }
+
+                            // Drop completely empty pinned items
+                            if (IsEffectivelyEmpty(d)) continue;
+
+                            d.IsPinned = true;
+                            if (d.ItemType == ClipboardItemType.File && !string.IsNullOrEmpty(d.FilePath))
+                            {
+                                System.Threading.Tasks.Task.Run(() => {
+                                    try
                                     {
-                                        var bmp = new BitmapImage();
-                                        bmp.BeginInit();
-                                        bmp.CacheOption = BitmapCacheOption.OnLoad;
-                                        bmp.DecodePixelWidth = 250;
-                                        bmp.UriSource = new Uri(imagePath);
-                                        bmp.EndInit();
-                                        bmp.Freeze();
-                                        Application.Current.Dispatcher.InvokeAsync(() => capturedD.Icon = bmp);
+                                        var icon = GetIcon(d.FilePath);
+                                        if (icon != null) Application.Current.Dispatcher.Invoke(() => d.Icon = icon);
                                     }
-                                } catch { }
-                            });
+                                    catch { }
+                                });
+                            }
+                            else if (d.ItemType == ClipboardItemType.Image && !string.IsNullOrEmpty(d.FilePath))
+                            {
+                                string imagePath = d.FilePath;
+                                var capturedD = d;
+                                System.Threading.Tasks.Task.Run(() => {
+                                    try 
+                                    {
+                                        if (File.Exists(imagePath))
+                                        {
+                                            var bmp = new BitmapImage();
+                                            bmp.BeginInit();
+                                            bmp.CacheOption = BitmapCacheOption.OnLoad;
+                                            bmp.DecodePixelWidth = 512;
+                                            bmp.UriSource = new Uri(imagePath);
+                                            bmp.EndInit();
+                                            bmp.Freeze();
+                                            Application.Current.Dispatcher.InvokeAsync(() => capturedD.Icon = bmp);
+                                        }
+                                    } catch { }
+                                });
+                            }
+                            DroppedItems.Add(d);
                         }
-                        DroppedItems.Add(d);
+                        catch
+                        {
+                            // Single corrupt pinned item — skip it, don't crash the whole pinned load
+                            FlyShelf.Classes.Logger.LogAction("PINNED_LOAD_ERROR", "Dropped corrupt pinned item");
+                        }
                     }
                 }
             }
             catch { }
         }
+
+        /// <summary>
+        /// Loads the next page of unpinned history items from SQLite on-demand (incremental scroll).
+        /// </summary>
+        public async Task LoadNextPageAsync()
+        {
+            if (_isPaginating || IsSearchActive) return;
+
+            _isPaginating = true;
+            try
+            {
+                // Calculate current offset as the number of unpinned items loaded
+                int offset = DroppedItems.Count(i => !i.IsPinned);
+                
+                var nextItems = await System.Threading.Tasks.Task.Run(() => Classes.ClipboardHistoryManager.LoadHistoryPage(offset, 50));
+                if (nextItems.Count == 0) return;
+
+                var existingKeys = new HashSet<string>(DroppedItems.Select(GetDeduplicationKey).Where(k => !string.IsNullOrEmpty(k)));
+                var itemsNeedingIcons = new List<ClipboardItem>();
+
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    foreach (var item in nextItems)
+                    {
+                        string itemKey = GetDeduplicationKey(item);
+                        if (!string.IsNullOrEmpty(itemKey) && !existingKeys.Add(itemKey))
+                            continue;
+
+                        if (IsEffectivelyEmpty(item)) continue;
+
+                        if (string.IsNullOrWhiteSpace(item.FileName) && !string.IsNullOrWhiteSpace(item.RawContent))
+                            item.FileName = item.RawContent.Length > 800 ? item.RawContent.Substring(0, 800) + "..." : item.RawContent;
+
+                        item.EvaluateSmartActions();
+                        DroppedItems.Add(item);
+
+                        bool needsIcon = (item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
+                            && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath);
+                        bool needsFileIcon = !needsIcon && (item.ItemType == ClipboardItemType.File || item.ItemType == ClipboardItemType.Document ||
+                            item.ItemType == ClipboardItemType.Pdf || item.ItemType == ClipboardItemType.Archive ||
+                            item.ItemType == ClipboardItemType.Video || item.ItemType == ClipboardItemType.Audio ||
+                            item.ItemType == ClipboardItemType.Presentation) && !string.IsNullOrEmpty(item.FilePath);
+                        
+                        if (needsIcon || needsFileIcon)
+                            itemsNeedingIcons.Add(item);
+                    }
+                });
+
+                // Load icons in background
+                if (itemsNeedingIcons.Count > 0)
+                {
+                    _ = System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        foreach (var item in itemsNeedingIcons)
+                        {
+                            await _iconDecodeSemaphore.WaitAsync();
+                            try
+                            {
+                                if ((item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
+                                    && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath))
+                                {
+                                    var icon = LoadImageThumbnail(item.FilePath);
+                                    if (icon != null)
+                                        await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
+                                }
+                                else if (!string.IsNullOrEmpty(item.FilePath))
+                                {
+                                    var icon = GetIcon(item.FilePath);
+                                    if (icon != null)
+                                        await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
+                                }
+                            }
+                            catch { }
+                            finally { _iconDecodeSemaphore.Release(); }
+                        }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("PAGINATION_ERROR", $"Failed to load next page: {ex.Message}");
+            }
+            finally
+            {
+                _isPaginating = false;
+            }
+        }
+
+        /// <summary>
+        /// Searches the history database using FTS5 and populates DroppedItems with results, loading icons asynchronously.
+        /// </summary>
+        public async Task SearchHistoryAsync(string query)
+        {
+            _isPaginating = true; // Suspend save hooks during search loading
+            IsSearchActive = true;
+            IsDatabaseWriteSuspended = true;
+
+            try
+            {
+                var nextItems = await System.Threading.Tasks.Task.Run(() => Classes.ClipboardHistoryManager.SearchHistory(query));
+                
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    DroppedItems.Clear();
+                });
+
+                if (nextItems.Count == 0) return;
+
+                var itemsNeedingIcons = new List<ClipboardItem>();
+
+                await Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    foreach (var item in nextItems)
+                    {
+                        if (IsEffectivelyEmpty(item)) continue;
+
+                        if (string.IsNullOrWhiteSpace(item.FileName) && !string.IsNullOrWhiteSpace(item.RawContent))
+                            item.FileName = item.RawContent.Length > 800 ? item.RawContent.Substring(0, 800) + "..." : item.RawContent;
+
+                        item.EvaluateSmartActions();
+                        DroppedItems.Add(item);
+
+                        bool needsIcon = (item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
+                            && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath);
+                        bool needsFileIcon = !needsIcon && (item.ItemType == ClipboardItemType.File || item.ItemType == ClipboardItemType.Document ||
+                            item.ItemType == ClipboardItemType.Pdf || item.ItemType == ClipboardItemType.Archive ||
+                            item.ItemType == ClipboardItemType.Video || item.ItemType == ClipboardItemType.Audio ||
+                            item.ItemType == ClipboardItemType.Presentation) && !string.IsNullOrEmpty(item.FilePath);
+                        
+                        if (needsIcon || needsFileIcon)
+                            itemsNeedingIcons.Add(item);
+                    }
+                });
+
+                // Load icons in background
+                if (itemsNeedingIcons.Count > 0)
+                {
+                    _ = System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        foreach (var item in itemsNeedingIcons)
+                        {
+                            await _iconDecodeSemaphore.WaitAsync();
+                            try
+                            {
+                                if ((item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
+                                    && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath))
+                                {
+                                    var icon = LoadImageThumbnail(item.FilePath);
+                                    if (icon != null)
+                                        await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
+                                }
+                                else if (!string.IsNullOrEmpty(item.FilePath))
+                                {
+                                    var icon = GetIcon(item.FilePath);
+                                    if (icon != null)
+                                        await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
+                                }
+                            }
+                            catch { }
+                            finally { _iconDecodeSemaphore.Release(); }
+                        }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("SEARCH_ERROR", $"Failed to execute search: {ex.Message}");
+            }
+            finally
+            {
+                _isPaginating = false;
+            }
+        }
+
         public void UndoDelete()
         {
             if (_deletedItemsHistory.Count > 0)
@@ -773,76 +1013,75 @@ namespace AdvanceClip.ViewModels
             {
                 long fSize = new FileInfo(filePath).Length;
                 var srv = LocalServer;
-                bool tunnelOk = AdvanceClip.Classes.FirebaseSyncManager.CachedTunnelVerified;
+                bool tunnelOk = FlyShelf.Classes.CloudDiscoveryManager.CachedTunnelVerified;
 
-                // PRIORITY 1: Direct P2P push to connected peers via Cloudflare tunnel
-                if (srv != null && !string.IsNullOrEmpty(srv.GlobalUrl) && srv.GlobalUrl.Contains("trycloudflare.com") && tunnelOk)
+                bool hasLanPeers = FlyShelf.Classes.PeerManager.Instance != null && FlyShelf.Classes.PeerManager.Instance.AliveCount > 0;
+                bool hasMobilePollers = srv != null && srv.GetDirectlyConnectedDeviceCount() > 0;
+                bool lanSuccess = false;
+
+                // PRIORITY 1: Try direct high-speed local LAN transfer first
+                if (hasLanPeers || hasMobilePollers)
                 {
-                    string downloadUrl = $"{srv.GlobalUrl}/download?path={Uri.EscapeDataString(filePath)}";
-                    AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"Sending '{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) via Cloudflare P2P");
-                    var syncItem = item.CloneForSync(downloadUrl);
-                    await AdvanceClip.Classes.FirebaseSyncManager.PushToGlobalSync(syncItem);
-                    Application.Current.Dispatcher.Invoke(() =>
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"{label} ({FormatFileSize(fSize)}) synced via P2P \ud83c\udf10"));
+                    if (hasLanPeers)
+                    {
+                        FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"Syncing '{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) directly via high-speed LAN");
+                        try
+                        {
+                            int delivered = await FlyShelf.Classes.PeerManager.Instance.PushFileToAllPeers(
+                                filePath, item.FileName ?? Path.GetFileName(filePath), item.ItemType.ToString());
+
+                            if (delivered > 0)
+                            {
+                                lanSuccess = true;
+                                Application.Current.Dispatcher.Invoke(() =>
+                                    FlyShelf.Windows.ToastWindow.ShowToast($"{label} ({FormatFileSize(fSize)}) synced directly via LAN! \ud83d\udce1"));
+                            }
+                            else
+                            {
+                                FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"LAN direct sync failed — no active peers accepted the file. Falling back to Cloudflare...");
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"Direct LAN transfer error: {ex.Message}. Falling back to Cloudflare...");
+                        }
+                    }
+
+                    // Fallback to local server polling if direct push didn't succeed but companions are connected
+                    if (hasMobilePollers && !lanSuccess)
+                    {
+                        FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"'{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) placed on local server for companion app pulling");
+                        lanSuccess = true;
+                        Application.Current.Dispatcher.Invoke(() =>
+                            FlyShelf.Windows.ToastWindow.ShowToast($"Synced via LAN! \u26a1 (Available for companion app pulling)"));
+                    }
+                }
+
+                if (lanSuccess)
+                {
                     return;
                 }
 
-                else
+                // PRIORITY 2: Fallback to Cloudflare P2P push if local LAN is not available/failed
+                if (srv != null && !string.IsNullOrEmpty(srv.GlobalUrl) && srv.GlobalUrl.Contains("trycloudflare.com") && tunnelOk)
                 {
-                    // TESTING NEW NETOWRKING LOGIC
-                    // Fallback: Direct high-speed local LAN transfer when Cloudflare tunnel is not running
-                    bool hasLanPeers = AdvanceClip.Classes.PeerManager.Instance != null && AdvanceClip.Classes.PeerManager.Instance.AliveCount > 0;
-                    bool hasMobilePollers = srv != null && srv.GetDirectlyConnectedDeviceCount() > 0;
-
-                    if (hasLanPeers || hasMobilePollers)
-                    {
-                        if (hasLanPeers)
-                        {
-                            AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"[TESTING NEW NETOWRKING LOGIC] Syncing '{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) directly via high-speed LAN");
-                            
-                            _ = System.Threading.Tasks.Task.Run(async () =>
-                            {
-                                try
-                                {
-                                    int delivered = await AdvanceClip.Classes.PeerManager.Instance.PushFileToAllPeers(
-                                        filePath, item.FileName ?? Path.GetFileName(filePath), item.ItemType.ToString());
-                                    
-                                    Application.Current.Dispatcher.Invoke(() =>
-                                    {
-                                        if (delivered > 0)
-                                        {
-                                            AdvanceClip.Windows.ToastWindow.ShowToast($"{label} ({FormatFileSize(fSize)}) synced directly via LAN! \ud83d\udce1");
-                                        }
-                                        else
-                                        {
-                                            AdvanceClip.Windows.ToastWindow.ShowToast($"\u26a0\ufe0f LAN direct sync failed \u2014 no active peers accepted the file");
-                                        }
-                                    });
-                                }
-                                catch (Exception ex)
-                                {
-                                    AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"[TESTING NEW NETOWRKING LOGIC] Direct LAN transfer error: {ex.Message}");
-                                }
-                            });
-                        }
-                        else
-                        {
-                            AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"[TESTING NEW NETOWRKING LOGIC] '{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) placed on local server for companion app pulling");
-                            Application.Current.Dispatcher.Invoke(() =>
-                                AdvanceClip.Windows.ToastWindow.ShowToast($"Synced via LAN! \u26a1 (Available for companion app pulling)"));
-                        }
-                        return;
-                    }
-
-                    // No Cloudflare tunnel or active LAN peers available — file cannot be synced
-                    AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"'{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) \u2014 no Cloudflare tunnel or LAN peers, file not synced");
+                    string downloadUrl = $"{srv.GlobalUrl}/download?path={Uri.EscapeDataString(filePath)}";
+                    FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"Sending '{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) via Cloudflare P2P");
+                    var syncItem = item.CloneForSync(downloadUrl);
+                    await FlyShelf.Classes.CloudDiscoveryManager.PushToCloudHub(syncItem);
                     Application.Current.Dispatcher.Invoke(() =>
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"\u26a0\ufe0f {Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) \u2014 no active LAN peers or Cloudflare tunnel"));
+                        FlyShelf.Windows.ToastWindow.ShowToast($"{label} ({FormatFileSize(fSize)}) synced via P2P \ud83c\udf10"));
+                    return;
                 }
+
+                // No LAN success and no Cloudflare tunnel available
+                FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"'{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) \u2014 no active LAN peers or Cloudflare tunnel available");
+                Application.Current.Dispatcher.Invoke(() =>
+                    FlyShelf.Windows.ToastWindow.ShowToast($"\u26a0\ufe0f {Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) \u2014 no active LAN peers or Cloudflare tunnel"));
             }
             catch (Exception ex)
             {
-                AdvanceClip.Classes.Logger.LogAction($"{label} SYNC", $"Error: {ex.Message}");
+                FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"Error: {ex.Message}");
             }
         }
 

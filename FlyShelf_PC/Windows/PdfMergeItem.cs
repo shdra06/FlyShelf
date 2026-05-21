@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
@@ -6,7 +6,7 @@ using System.Linq;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
 
-namespace AdvanceClip.Windows
+namespace FlyShelf.Windows
 {
     /// <summary>
     /// Wraps a PDF file for the merge window — holds page count, selected pages, and display info.

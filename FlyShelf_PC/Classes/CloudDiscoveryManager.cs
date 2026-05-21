@@ -1,15 +1,16 @@
-using System;
+﻿using System;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using AdvanceClip.ViewModels;
+using FlyShelf.ViewModels;
 using System.Linq;
 using System.IO;
+using System.Collections.Generic;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
-    public partial class FirebaseSyncManager
+    public partial class CloudDiscoveryManager
     {
         private static readonly HttpClient _client = new HttpClient();
         private const string FIREBASE_BASE = "https://advance-sync-default-rtdb.firebaseio.com";
@@ -52,19 +53,19 @@ namespace AdvanceClip.Classes
         
         // Time-windowed dedup: track fingerprint ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ last push time (10s cooldown)
         private static readonly Dictionary<string, long> _recentPushTimes = new();
-        private const int DEDUP_COOLDOWN_MS = 10_000; // 10 seconds ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â same content within this window is skipped
+        private const int DEDUP_COOLDOWN_MS = 10_000; // 10 seconds ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â  same content within this window is skipped
         private const int AUTO_DELETE_TEXT_MS = 5 * 60_000; // 5 minutes
         private const int AUTO_DELETE_FILE_MS = 6 * 60 * 60_000; // 6 hours safety net
 
-        public static async Task PushToGlobalSync(ClipboardItem item)
+        public static async Task PushToCloudHub(ClipboardItem item)
         {
-            if (!SettingsManager.Current.EnableGlobalFirebaseSync)
+            if (!SettingsManager.Current.EnableCloudDiscovery)
                 return;
 
             // CRITICAL: Do not sync unless device has been explicitly paired
             if (!DevicePairingManager.HasPairingKey)
             {
-                Logger.LogAction("FIREBASE SYNC", "Blocked ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â no pairing key. Pair with another device first.");
+                Logger.LogAction("FIREBASE SYNC", "Blocked ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â  no pairing key. Pair with another device first.");
                 return;
             }
 

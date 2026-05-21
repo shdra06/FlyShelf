@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -11,7 +11,7 @@ using WpfButton = System.Windows.Controls.Button;
 using WinPdf = global::Windows.Data.Pdf;
 using global::Windows.Storage;
 
-namespace AdvanceClip.Windows
+namespace FlyShelf.Windows
 {
     public partial class PageSelectorWindow : MicaWindow
     {
@@ -25,7 +25,7 @@ namespace AdvanceClip.Windows
         public PageSelectorWindow(PdfMergeItem item)
         {
             InitializeComponent();
-            AdvanceClip.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
+            FlyShelf.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             _item = item;
             HeaderText.Text = $"Select Pages \u2014 {item.FileName}";
             LoadThumbnailsAsync();

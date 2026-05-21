@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -13,9 +13,9 @@ using System.Linq;
 using System.Text.Json;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
-using AdvanceClip.ViewModels;
+using FlyShelf.ViewModels;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     public partial class NetworkSyncServer
     {
@@ -61,7 +61,7 @@ namespace AdvanceClip.Classes
 
         /// <summary>
         /// Returns the count of paired devices that have polled /api/sync within the last 30 seconds.
-        /// Used by FirebaseSyncManager to decide whether Firebase push can be skipped.
+        /// Used by CloudDiscoveryManager to decide whether Firebase push can be skipped.
         /// </summary>
         public int GetDirectlyConnectedDeviceCount()
         {
@@ -112,7 +112,7 @@ namespace AdvanceClip.Classes
 
         private static readonly string[] _allowedRoots = {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "AdvanceClip"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"),
             Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
             Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
@@ -136,7 +136,7 @@ namespace AdvanceClip.Classes
 
         /// <summary>
         /// Loads or generates a self-signed X509 certificate for HTTPS.
-        /// Stored in %AppData%\AdvanceClip\server.pfx (persists across restarts).
+        /// Stored in %AppData%\FlyShelf\server.pfx (persists across restarts).
         /// </summary>
         private X509Certificate2 EnsureTlsCertificate()
         {
@@ -260,11 +260,11 @@ namespace AdvanceClip.Classes
                     if (!string.IsNullOrEmpty(oldUrl) && oldUrl != url)
                     {
                         Logger.LogAction("TUNNEL CHANGE", $"URL changed: {oldUrl.Substring(0, Math.Min(40, oldUrl.Length))}... → {url.Substring(0, Math.Min(40, url.Length))}...");
-                        _ = FirebaseSyncManager.PurgeStaleFileEntries(oldUrl);
+                        _ = CloudDiscoveryManager.PurgeStaleFileEntries(oldUrl);
                     }
-                    FirebaseSyncManager.CachedGlobalUrl = url; // Cache for file download URL construction
-                    FirebaseSyncManager.CachedTunnelVerified = _cfDaemon.IsTunnelVerified; // Only allow file downloads if verified
-                    _ = FirebaseSyncManager.PushTunnelUrl(url, true, ServerUrl);
+                    CloudDiscoveryManager.CachedGlobalUrl = url; // Cache for file download URL construction
+                    CloudDiscoveryManager.CachedTunnelVerified = _cfDaemon.IsTunnelVerified; // Only allow file downloads if verified
+                    _ = CloudDiscoveryManager.PushTunnelUrl(url, true, ServerUrl);
                 }
             };
             
@@ -450,7 +450,7 @@ namespace AdvanceClip.Classes
                 _listenerThread.Start();
 
                 UpdateServerUrl();
-                FirebaseSyncManager.CachedLocalUrl = DisplayUrl; // Cache first LAN URL for file download fallback
+                CloudDiscoveryManager.CachedLocalUrl = DisplayUrl; // Cache first LAN URL for file download fallback
                 string bindMode = needsProxy ? "TCP Proxy" : "Direct";
                 Logger.LogAction("NETWORK", $"✅ Web server launched on {ServerUrl} (port {CurrentPort}, mode: {bindMode})");
                 NetworkActivityLog.Instance.ServerStatus = "Online";
@@ -459,7 +459,7 @@ namespace AdvanceClip.Classes
                 // If we used a TCP proxy, Cloudflare tunnels to publicPort which the TcpProxy handles.
                 // If we bound directly, Cloudflare tunnels to publicPort which HttpListener handles.
                 _ = _cfDaemon.StartAsync(CurrentPort);
-                _ = FirebaseSyncManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl);
+                _ = CloudDiscoveryManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl);
 
                 // Heartbeat: reduced from 60s to 300s — Firebase writes are now throttled
                 // inside PushTunnelUrl (only writes on URL change). Timer is mainly for
@@ -468,7 +468,7 @@ namespace AdvanceClip.Classes
                 _heartbeatTimer.Elapsed += (s, e) =>
                 {
                     // PushTunnelUrl is now smart — it only writes to Firebase if URL changed
-                    _ = FirebaseSyncManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl);
+                    _ = CloudDiscoveryManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl);
                     // Check for new devices that joined via pairing code
                     _ = DevicePairingManager.CheckForHandshakes();
                 };
@@ -740,7 +740,7 @@ namespace AdvanceClip.Classes
             ServerUrl = "Offline";
             try { _heartbeatTimer?.Stop(); _heartbeatTimer?.Dispose(); } catch { }
             _cfDaemon.Stop();
-            _ = FirebaseSyncManager.PushTunnelUrl("offline", false, "", forceWrite: true);
+            _ = CloudDiscoveryManager.PushTunnelUrl("offline", false, "", forceWrite: true);
             try { _listener?.Stop(); } catch { }
             try { _proxyListener?.Stop(); } catch { }
             // Stop TLS proxy

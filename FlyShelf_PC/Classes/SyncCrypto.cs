@@ -1,9 +1,9 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     /// <summary>
     /// AES-256-GCM encryption for Firebase sync payloads.
@@ -16,7 +16,7 @@ namespace AdvanceClip.Classes
         private const int NONCE_SIZE = 12;        // GCM standard
         private const int TAG_SIZE = 16;          // GCM authentication tag
         private const int PBKDF2_ITERATIONS = 100_000;
-        private static readonly byte[] SALT = Encoding.UTF8.GetBytes("AdvanceClip_v2.6.0_SyncSalt");
+        private static readonly byte[] SALT = Encoding.UTF8.GetBytes("FlyShelf_v2.6.0_SyncSalt");
 
         private static byte[]? _cachedKey;
         private static string? _cachedPairingKey;

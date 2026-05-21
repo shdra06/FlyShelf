@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -10,9 +10,9 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
-using AdvanceClip.Classes;
+using FlyShelf.Classes;
 
-namespace AdvanceClip.Windows
+namespace FlyShelf.Windows
 {
     public partial class NetworkLogsWindow : MicaWPF.Controls.MicaWindow
     {

@@ -1,5 +1,5 @@
-using AdvanceClip.Classes;
-using AdvanceClip.Classes.Utils;
+﻿using FlyShelf.Classes;
+using FlyShelf.Classes.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,9 +10,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Threading;
-using static AdvanceClip.Classes.NativeMethods;
+using static FlyShelf.Classes.NativeMethods;
 
-namespace AdvanceClip.Windows
+namespace FlyShelf.Windows
 {
     public partial class TaskbarWindow : Window
     {

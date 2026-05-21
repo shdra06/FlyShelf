@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 using PdfSharp.Pdf;
 using PdfSharp.Drawing;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     public static class ConversionUtils
     {

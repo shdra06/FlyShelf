@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
@@ -6,7 +6,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     public class CloudflareDaemon
     {
@@ -25,7 +25,7 @@ namespace AdvanceClip.Classes
         /// <summary>
         /// True ONLY when the tunnel has been self-verified (HTTP 200 on /api/health).
         /// False if verification was inconclusive (HTTP 400/530/timeout).
-        /// FirebaseSyncManager checks this before using the URL for file downloads.
+        /// CloudDiscoveryManager checks this before using the URL for file downloads.
         /// </summary>
         public bool IsTunnelVerified { get; private set; } = false;
         public event Action<string> GlobalUrlUpdated;

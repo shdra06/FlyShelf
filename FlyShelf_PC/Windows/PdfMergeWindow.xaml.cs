@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -9,13 +9,13 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using AdvanceClip.ViewModels;
+using FlyShelf.ViewModels;
 using MicaWPF.Controls;
 using PdfSharp.Pdf;
 using PdfSharp.Pdf.IO;
 using Microsoft.Win32;
 
-namespace AdvanceClip.Windows
+namespace FlyShelf.Windows
 {
     // ═══════════════════════════════════════════════════════════════
     // Drag adorner — shows a ghost of the dragged card
@@ -68,7 +68,7 @@ namespace AdvanceClip.Windows
         public PdfMergeWindow(List<ClipboardItem> pdfsToMerge, FlyShelfViewModel vm)
         {
             InitializeComponent();
-            AdvanceClip.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
+            FlyShelf.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             _viewModel = vm;
             MergeItems = new ObservableCollection<PdfMergeItem>(
                 pdfsToMerge.Select(p => new PdfMergeItem(p.FilePath))
@@ -407,7 +407,7 @@ namespace AdvanceClip.Windows
                 }
                 catch (Exception ex)
                 {
-                    AdvanceClip.Classes.Logger.LogAction("PDF SAVE", $"Error saving: {ex.Message}");
+                    FlyShelf.Classes.Logger.LogAction("PDF SAVE", $"Error saving: {ex.Message}");
                     return false;
                 }
             });
@@ -445,7 +445,7 @@ namespace AdvanceClip.Windows
                     else if (ext == ".doc" || ext == ".docx")
                     {
                         ToastWindow.ShowToast($"📄 Converting {Path.GetFileName(file)} to PDF...");
-                        string pdfPath = await AdvanceClip.Classes.ConversionUtils.ConvertDocToPdfAsync(file);
+                        string pdfPath = await FlyShelf.Classes.ConversionUtils.ConvertDocToPdfAsync(file);
                         if (!string.IsNullOrEmpty(pdfPath) && File.Exists(pdfPath))
                         {
                             MergeItems.Add(new PdfMergeItem(pdfPath));
@@ -460,7 +460,7 @@ namespace AdvanceClip.Windows
                         ToastWindow.ShowToast($"🖼️ Converting {Path.GetFileName(file)} to PDF...");
                         try
                         {
-                            string pdfPath = await System.Threading.Tasks.Task.Run(() => AdvanceClip.Classes.ConversionUtils.ConvertImageToPdf(file));
+                            string pdfPath = await System.Threading.Tasks.Task.Run(() => FlyShelf.Classes.ConversionUtils.ConvertImageToPdf(file));
                             if (!string.IsNullOrEmpty(pdfPath) && File.Exists(pdfPath))
                             {
                                 MergeItems.Add(new PdfMergeItem(pdfPath));
@@ -469,7 +469,7 @@ namespace AdvanceClip.Windows
                         catch (Exception ex)
                         {
                             ToastWindow.ShowToast($"❌ Failed to convert image: {Path.GetFileName(file)}");
-                            AdvanceClip.Classes.Logger.LogAction("MERGE_ADD_IMAGE_ERR", ex.ToString());
+                            FlyShelf.Classes.Logger.LogAction("MERGE_ADD_IMAGE_ERR", ex.ToString());
                         }
                     }
                 }
@@ -614,7 +614,7 @@ namespace AdvanceClip.Windows
                             catch (Exception fileEx)
                             {
                                 failedFiles.Add($"{item.FileName}: {fileEx.Message}");
-                                AdvanceClip.Classes.Logger.LogAction("PDF MERGE", $"Skipped '{item.FileName}': {fileEx.Message}");
+                                FlyShelf.Classes.Logger.LogAction("PDF MERGE", $"Skipped '{item.FileName}': {fileEx.Message}");
                             }
                         }
 

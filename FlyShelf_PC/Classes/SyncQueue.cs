@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
-using AdvanceClip.ViewModels;
+using FlyShelf.ViewModels;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     /// <summary>
     /// Reliable sync queue: guarantees delivery via P2P (LAN/Cloudflare) with retries.
@@ -106,7 +106,7 @@ namespace AdvanceClip.Classes
                     {
                         case "p2p":
                         case "firebase": // legacy callers — all go through P2P now
-                            await FirebaseSyncManager.PushToGlobalSync(job.Item);
+                            await CloudDiscoveryManager.PushToCloudHub(job.Item);
                             break;
                     }
 

@@ -1,9 +1,9 @@
-using System.ComponentModel;
+﻿using System.ComponentModel;
 using System.IO;
 using System.Text.Json;
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     public class AdvanceSettings : ObservableObject
     {
@@ -44,8 +44,8 @@ namespace AdvanceClip.Classes
         private bool _enableGlobalCloudflare = false;
         public bool EnableGlobalCloudflare { get => _enableGlobalCloudflare; set => SetProperty(ref _enableGlobalCloudflare, value); }
         
-        private bool _enableGlobalFirebaseSync = true;
-        public bool EnableGlobalFirebaseSync { get => _enableGlobalFirebaseSync; set => SetProperty(ref _enableGlobalFirebaseSync, value); }
+        private bool _enableCloudDiscovery = true;
+        public bool EnableCloudDiscovery { get => _enableCloudDiscovery; set => SetProperty(ref _enableCloudDiscovery, value); }
         
         private string _webClientPinToken = "55555";
         public string WebClientPinToken { get => _webClientPinToken; set => SetProperty(ref _webClientPinToken, value); }
@@ -89,6 +89,9 @@ namespace AdvanceClip.Classes
         // Taskbar Widget
         private bool _enableTaskbarWidget = true;
         public bool EnableTaskbarWidget { get => _enableTaskbarWidget; set => SetProperty(ref _enableTaskbarWidget, value); }
+
+        private int _version = 1;
+        public int Version { get => _version; set => SetProperty(ref _version, value); }
     }
 
     public static class SettingsManager
@@ -107,17 +110,62 @@ namespace AdvanceClip.Classes
 
         public static void Load()
         {
+            string path = GetConfigPath();
             try
             {
-                string path = GetConfigPath();
                 if (File.Exists(path))
                 {
                     var json = File.ReadAllText(path);
+                    
+                    // Legacy migration: Rename old settings keys in raw json if needed
+                    if (json.Contains("\"EnableGlobalFirebaseSync\""))
+                    {
+                        Logger.LogAction("SETTINGS_MIGRATION", "Migrating legacy 'EnableGlobalFirebaseSync' setting.");
+                        json = json.Replace("\"EnableGlobalFirebaseSync\"", "\"EnableCloudDiscovery\"");
+                    }
+
+                    // Check version via JsonDocument
+                    int version = 0;
+                    try
+                    {
+                        using (var doc = JsonDocument.Parse(json))
+                        {
+                            if (doc.RootElement.TryGetProperty("Version", out var versionProp))
+                            {
+                                version = versionProp.GetInt32();
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("SETTINGS_LOAD_WARN", $"Settings JSON is corrupt: {ex.Message}");
+                        // Backup corrupt file
+                        try 
+                        { 
+                            string corruptBackup = path + ".corrupt_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                            File.Copy(path, corruptBackup, true);
+                            Logger.LogAction("SETTINGS_LOAD_WARN", $"Backed up corrupt settings to {corruptBackup}");
+                        } 
+                        catch { }
+                    }
+
                     var settings = JsonSerializer.Deserialize<AdvanceSettings>(json);
-                    if (settings != null) Current = settings;
+                    if (settings != null)
+                    {
+                        Current = settings;
+                        if (version < 1)
+                        {
+                            Logger.LogAction("SETTINGS_MIGRATION", $"Upgrading config version from {version} to 1.");
+                            Current.Version = 1;
+                            Save(); // Persist the migrated settings with version 1
+                        }
+                    }
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.LogAction("SETTINGS_LOAD_ERROR", $"Failed to load settings: {ex.Message}");
+            }
             
             Current.PropertyChanged += (s, e) => DebouncedSave();
             if (Current.CustomSnifferPaths != null)

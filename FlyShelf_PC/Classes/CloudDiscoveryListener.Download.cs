@@ -1,8 +1,8 @@
-// ═══════════════════════════════════════════════════════════════
-// FirebaseListener — File Download, Integrity & Forced Sync
+﻿// ═══════════════════════════════════════════════════════════════
+// CloudDiscoveryListener — File Download, Integrity & Forced Sync
 // FetchAndInjectCloudFile, retry/fallback logic, SHA-256 verify,
 // ProcessForcedSyncPayload, CloudItem model
-// Split from FirebaseListener.cs for modularity
+// Split from CloudDiscoveryListener.cs for modularity
 // ═══════════════════════════════════════════════════════════════
 using System;
 using System.Collections.Generic;
@@ -12,11 +12,11 @@ using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using AdvanceClip.ViewModels;
+using FlyShelf.ViewModels;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
-    public partial class FirebaseListener
+    public partial class CloudDiscoveryListener
     {
         private async Task FetchAndInjectCloudFile(CloudItem cloudItem)
         {
@@ -70,7 +70,7 @@ namespace AdvanceClip.Classes
                 {
                     _ = Task.Run(async () =>
                     {
-                        try { await FirebaseSyncManager.MarkDownloading(cloudItem.Id); }
+                        try { await CloudDiscoveryManager.MarkDownloading(cloudItem.Id); }
                         catch { }
                     });
                 }
@@ -94,9 +94,9 @@ namespace AdvanceClip.Classes
                 {
                     try
                     {
-                        string senderCurrentUrl = await FirebaseSyncManager.GetSenderCurrentUrl(cloudItem.SourceDeviceId);
+                        string senderCurrentUrl = await CloudDiscoveryManager.GetSenderCurrentUrl(cloudItem.SourceDeviceId);
                         if (string.IsNullOrEmpty(senderCurrentUrl))
-                            senderCurrentUrl = await FirebaseSyncManager.FindSenderUrlByName(cloudItem.SourceDeviceName);
+                            senderCurrentUrl = await CloudDiscoveryManager.FindSenderUrlByName(cloudItem.SourceDeviceName);
                         if (!string.IsNullOrEmpty(senderCurrentUrl) && senderCurrentUrl.Contains(".trycloudflare.com"))
                         {
                             var pathMatch = System.Text.RegularExpressions.Regex.Match(cloudItem.Raw, @"(/download\?path=.+)$");
@@ -126,15 +126,23 @@ namespace AdvanceClip.Classes
                     // LAST RESORT: Try sender's LAN URL
                     try
                     {
-                        string lanUrl = await FirebaseSyncManager.FindSenderLanUrl(cloudItem.SourceDeviceName);
+                        string lanUrl = await CloudDiscoveryManager.FindSenderLanUrl(cloudItem.SourceDeviceName);
                         if (!string.IsNullOrEmpty(lanUrl))
                         {
+                            var parts = lanUrl.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
                             var lanPathMatch = System.Text.RegularExpressions.Regex.Match(cloudItem.Raw, @"(/download\?path=.+)$");
                             if (lanPathMatch.Success)
                             {
-                                string lanDownloadUrl = lanUrl.TrimEnd('/') + lanPathMatch.Groups[1].Value;
-                                urlsToTry.Add(lanDownloadUrl);
-                                Logger.LogAction("FIREBASE SSE", $"Added LAN fallback URL: {lanDownloadUrl}");
+                                foreach (var part in parts)
+                                {
+                                    var trimmedPart = part.Trim();
+                                    if (trimmedPart.StartsWith("http"))
+                                    {
+                                        string lanDownloadUrl = trimmedPart.TrimEnd('/') + lanPathMatch.Groups[1].Value;
+                                        urlsToTry.Add(lanDownloadUrl);
+                                        Logger.LogAction("FIREBASE SSE", $"Added LAN fallback URL: {lanDownloadUrl}");
+                                    }
+                                }
                             }
                         }
                     }
@@ -226,31 +234,38 @@ namespace AdvanceClip.Classes
                 using (var contentStream = await response.Content.ReadAsStreamAsync())
                 using (var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None, 262144))
                 {
-                    byte[] buffer = new byte[262144];
-                    long totalRead = 0;
-                    int bytesRead;
-                    DateTime lastProgressUpdate = DateTime.MinValue;
-
-                    while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    byte[] buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(262144);
+                    try
                     {
-                        await fileStream.WriteAsync(buffer, 0, bytesRead);
-                        totalRead += bytesRead;
+                        long totalRead = 0;
+                        int bytesRead;
+                        DateTime lastProgressUpdate = DateTime.MinValue;
 
-                        if ((DateTime.Now - lastProgressUpdate).TotalMilliseconds > 300 && progressClip != null)
+                        while ((bytesRead = await contentStream.ReadAsync(buffer, 0, 262144)) > 0)
                         {
-                            lastProgressUpdate = DateTime.Now;
-                            string readStr = totalRead > 1_073_741_824 ? $"{totalRead / 1_073_741_824.0:F1} GB" : $"{totalRead / 1_048_576.0:F1} MB";
-                            int pct = totalBytes > 0 ? (int)(totalRead * 100 / totalBytes) : -1;
-                            string statusText = pct >= 0
-                                ? $"⬇️ {pct}% — {readStr}/{totalSizeStr} — {cloudItem.Title}"
-                                : $"⬇️ {readStr} — {cloudItem.Title}";
+                            await fileStream.WriteAsync(buffer, 0, bytesRead);
+                            totalRead += bytesRead;
 
-                            progressClip.RawContent = statusText;
-                            progressClip.TransferProgress = pct >= 0 ? pct : 0.1;
-                            progressClip.TransferStatusText = pct >= 0
-                                ? $"{readStr} of {totalSizeStr} ({pct}%)"
-                                : $"{readStr} downloaded";
+                            if ((DateTime.Now - lastProgressUpdate).TotalMilliseconds > 300 && progressClip != null)
+                            {
+                                lastProgressUpdate = DateTime.Now;
+                                string readStr = totalRead > 1_073_741_824 ? $"{totalRead / 1_073_741_824.0:F1} GB" : $"{totalRead / 1_048_576.0:F1} MB";
+                                int pct = totalBytes > 0 ? (int)(totalRead * 100 / totalBytes) : -1;
+                                string statusText = pct >= 0
+                                    ? $"⬇️ {pct}% — {readStr}/{totalSizeStr} — {cloudItem.Title}"
+                                    : $"⬇️ {readStr} — {cloudItem.Title}";
+
+                                progressClip.RawContent = statusText;
+                                progressClip.TransferProgress = pct >= 0 ? pct : 0.1;
+                                progressClip.TransferStatusText = pct >= 0
+                                    ? $"{readStr} of {totalSizeStr} ({pct}%)"
+                                    : $"{readStr} downloaded";
+                            }
                         }
+                    }
+                    finally
+                    {
+                        System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
                     }
                 }
 
@@ -284,7 +299,7 @@ namespace AdvanceClip.Classes
                     {
                         if (progressClip != null)
                             _viewModel.DroppedItems.Remove(progressClip);
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"❌ {cloudItem.Title} — file corrupted during transfer");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"❌ {cloudItem.Title} — file corrupted during transfer");
                     });
                     return;
                 }
@@ -300,7 +315,7 @@ namespace AdvanceClip.Classes
                         : $"{fileInfo.Length / 1_048_576.0:F1} MB";
 
                     try { MainWindow.SetWritingClipboard(true); System.Windows.Clipboard.SetFileDropList(new System.Collections.Specialized.StringCollection { filePath }); await System.Threading.Tasks.Task.Delay(500); } catch { } finally { MainWindow.SetWritingClipboard(false); }
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"✅ {cloudItem.Title} ({sizeStr}) from {cloudItem.SourceDeviceName}");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"✅ {cloudItem.Title} ({sizeStr}) from {cloudItem.SourceDeviceName}");
 
                     var clip = new ClipboardItem(filePath);
                     clip.SourceDeviceName = cloudItem.SourceDeviceName ?? "Remote";
@@ -341,7 +356,7 @@ namespace AdvanceClip.Classes
                         {
                             try
                             {
-                                await FirebaseSyncManager.MarkFileDownloaded(cloudItem.Id);
+                                await CloudDiscoveryManager.MarkFileDownloaded(cloudItem.Id);
                                 Logger.LogAction("SYNC_TRACK", $"Marked download complete: {cloudItem.Title} [{cloudItem.Id}]");
                             }
                             catch (Exception delEx)
@@ -360,7 +375,7 @@ namespace AdvanceClip.Classes
                 {
                     if (progressClip != null)
                         _viewModel.DroppedItems.Remove(progressClip);
-                    AdvanceClip.Windows.ToastWindow.ShowToast($"❌ Dropped: {cloudItem.Title} — source unreachable");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"❌ Dropped: {cloudItem.Title} — source unreachable");
                 });
                 
                 try { if (File.Exists(filePath)) File.Delete(filePath); } catch { }
@@ -510,7 +525,7 @@ namespace AdvanceClip.Classes
                                 _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                             }
 
-                            AdvanceClip.Windows.ToastWindow.ShowToast($"⚡ Force Sync from {source}");
+                            FlyShelf.Windows.ToastWindow.ShowToast($"⚡ Force Sync from {source}");
                         });
 
                         keysToDelete.Add(prop.Name);

@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Threading;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     public static class Logger
     {
@@ -180,7 +180,7 @@ namespace AdvanceClip.Classes
 
                 // Sync Settings
                 sb.AppendLine("── SYNC SETTINGS ──");
-                sb.AppendLine($"  GlobalFirebaseSync:    {SettingsManager.Current.EnableGlobalFirebaseSync}");
+                sb.AppendLine($"  CloudDiscovery:        {SettingsManager.Current.EnableCloudDiscovery}");
                 sb.AppendLine($"  GlobalCloudflare:      {SettingsManager.Current.EnableGlobalCloudflare}");
                 sb.AppendLine($"  LocalLAN:              {SettingsManager.Current.EnableLocalLAN}");
                 sb.AppendLine($"  LocalNetworkSync:      {SettingsManager.Current.EnableLocalNetworkSync}");
@@ -188,9 +188,9 @@ namespace AdvanceClip.Classes
 
                 // Cloudflare State
                 sb.AppendLine("── CLOUDFLARE STATE ──");
-                sb.AppendLine($"  CachedGlobalUrl:  {FirebaseSyncManager.CachedGlobalUrl ?? "(empty)"}");
-                sb.AppendLine($"  CachedLocalUrl:   {FirebaseSyncManager.CachedLocalUrl ?? "(empty)"}");
-                sb.AppendLine($"  IsTunnelActive:   {(!string.IsNullOrEmpty(FirebaseSyncManager.CachedGlobalUrl) && FirebaseSyncManager.CachedGlobalUrl.Contains("trycloudflare.com"))}");
+                sb.AppendLine($"  CachedGlobalUrl:  {CloudDiscoveryManager.CachedGlobalUrl ?? "(empty)"}");
+                sb.AppendLine($"  CachedLocalUrl:   {CloudDiscoveryManager.CachedLocalUrl ?? "(empty)"}");
+                sb.AppendLine($"  IsTunnelActive:   {(!string.IsNullOrEmpty(CloudDiscoveryManager.CachedGlobalUrl) && CloudDiscoveryManager.CachedGlobalUrl.Contains("trycloudflare.com"))}");
                 sb.AppendLine();
 
                 // Cloudflared process check
@@ -253,12 +253,12 @@ namespace AdvanceClip.Classes
                 catch (Exception ex) { sb.AppendLine($"  Firebase RTDB:     FAILED — {ex.InnerException?.Message ?? ex.Message}"); }
 
                 // Test Cloudflare tunnel reachability
-                if (!string.IsNullOrEmpty(FirebaseSyncManager.CachedGlobalUrl) && FirebaseSyncManager.CachedGlobalUrl.Contains("trycloudflare.com"))
+                if (!string.IsNullOrEmpty(CloudDiscoveryManager.CachedGlobalUrl) && CloudDiscoveryManager.CachedGlobalUrl.Contains("trycloudflare.com"))
                 {
                     try
                     {
                         using var client = new System.Net.Http.HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
-                        var t = client.GetAsync($"{FirebaseSyncManager.CachedGlobalUrl}/api/health").Result;
+                        var t = client.GetAsync($"{CloudDiscoveryManager.CachedGlobalUrl}/api/health").Result;
                         sb.AppendLine($"  Cloudflare Tunnel: HTTP {(int)t.StatusCode} {(t.IsSuccessStatusCode ? "✓" : "✗")}");
                     }
                     catch (Exception ex) { sb.AppendLine($"  Cloudflare Tunnel: FAILED — {ex.InnerException?.Message ?? ex.Message}"); }

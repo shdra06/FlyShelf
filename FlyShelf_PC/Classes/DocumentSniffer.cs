@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using System.Linq;
-using AdvanceClip.ViewModels;
+using FlyShelf.ViewModels;
 
-namespace AdvanceClip.Classes
+namespace FlyShelf.Classes
 {
     public class DocumentSniffer
     {
@@ -134,7 +134,7 @@ namespace AdvanceClip.Classes
                         dataObj.SetFileDropList(dropList);
                         _viewModel.HandleDrop(dataObj, true);
                         
-                        AdvanceClip.Windows.ToastWindow.ShowToast($"Sniffed Document: {Path.GetFileName(targetPath)} 📄");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Sniffed Document: {Path.GetFileName(targetPath)} 📄");
                     });
                 }
                 catch 
