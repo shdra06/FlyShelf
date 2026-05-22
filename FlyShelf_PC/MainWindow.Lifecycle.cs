@@ -149,7 +149,6 @@ namespace FlyShelf
             // Stop the mascot and live wallpaper animations to drop background CPU/GPU usage to zero
             try
             {
-                Classes.AnimationTriggerService.Instance.StopAll();
                 MascotIdle.PausePlayback();
                 var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
                 animator?.Pause();
