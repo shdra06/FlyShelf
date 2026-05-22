@@ -602,13 +602,11 @@ namespace FlyShelf
                 }
 
                 MergeSelectedPdfsBtn.Visibility = Visibility.Visible;
-                EmojiBtn.Visibility = Visibility.Collapsed;
                 MergePdfToolbarBtn.Visibility = Visibility.Visible;
             }
             else
             {
                 MergeSelectedPdfsBtn.Visibility = Visibility.Collapsed;
-                EmojiBtn.Visibility = Visibility.Visible;
                 MergePdfToolbarBtn.Visibility = Visibility.Collapsed;
             }
         }
@@ -617,7 +615,6 @@ namespace FlyShelf
         internal void DismissMergeState()
         {
             MergeSelectedPdfsBtn.Visibility = Visibility.Collapsed;
-            EmojiBtn.Visibility = Visibility.Visible;
             MergePdfToolbarBtn.Visibility = Visibility.Collapsed;
 
             // Uncheck all IsCheckedForMerge

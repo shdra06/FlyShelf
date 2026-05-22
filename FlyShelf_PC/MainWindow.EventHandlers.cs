@@ -206,7 +206,6 @@ namespace FlyShelf
                 // Activate the window so it receives keyboard input (normally it's a non-activating overlay)
                 this.Activate();
                 SearchBarContainer.Visibility = Visibility.Visible;
-                SearchToggleBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x14, 0xB8, 0xA6));
                 
                 // Smooth slide-down + fade-in animation
                 var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(-8, 0, new Duration(TimeSpan.FromMilliseconds(150)))
@@ -309,7 +308,6 @@ namespace FlyShelf
             _searchDebounceTimer?.Stop();
             SearchTextBox.Text = "";
             SearchBarContainer.Visibility = Visibility.Collapsed;
-            SearchToggleBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
             
             // Clear the CollectionView filter to show all items again
             var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
