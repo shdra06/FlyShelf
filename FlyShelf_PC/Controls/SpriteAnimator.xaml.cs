@@ -21,6 +21,12 @@ namespace FlyShelf.Controls
         public SpriteAnimator()
         {
             InitializeComponent();
+            this.Unloaded += SpriteAnimator_Unloaded;
+        }
+
+        private void SpriteAnimator_Unloaded(object sender, RoutedEventArgs e)
+        {
+            UnwireFromTriggerService();
         }
 
         // ═══ Dependency Properties ═══
@@ -201,9 +207,18 @@ namespace FlyShelf.Controls
 
         private void WireToTriggerService()
         {
+            // Unsubscribe first to prevent duplicate registrations if called multiple times
+            UnwireFromTriggerService();
+
             // Subscribe to animation requests matching our trigger
             AnimationTriggerService.Instance.AnimationRequested += OnAnimationRequested;
             AnimationTriggerService.Instance.AllAnimationsStop += OnAllStop;
+        }
+
+        private void UnwireFromTriggerService()
+        {
+            AnimationTriggerService.Instance.AnimationRequested -= OnAnimationRequested;
+            AnimationTriggerService.Instance.AllAnimationsStop -= OnAllStop;
         }
 
         private void OnAnimationRequested(object? sender, AnimationRequestEventArgs e)

@@ -23,6 +23,9 @@ namespace FlyShelf.Windows
         private System.Windows.Threading.DispatcherTimer? _deviceRefreshTimer;
         private Action<string>? _devicePairedHandler;
         private System.Windows.Threading.DispatcherTimer? _pairingHandshakeTimer;
+        private Action<string, string>? _peerConnectedHandler;
+        private Action<string>? _peerDisconnectedHandler;
+        private Action<string, string>? _transportSwitchedHandler;
 
         public HubWindow(FlyShelfViewModel viewModel)
         {
@@ -45,20 +48,15 @@ namespace FlyShelf.Windows
             DevicePairingManager.OnDevicePaired += _devicePairedHandler;
 
             // Real-time peer status updates — refresh UI when peers connect/disconnect
+            _peerConnectedHandler = (deviceId, transport) => Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
+            _peerDisconnectedHandler = (deviceId) => Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
+            _transportSwitchedHandler = (deviceId, newTransport) => Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
+
             if (PeerManager.Instance != null)
             {
-                PeerManager.Instance.PeerConnected += (deviceId, transport) =>
-                {
-                    Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
-                };
-                PeerManager.Instance.PeerDisconnected += (deviceId) =>
-                {
-                    Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
-                };
-                PeerManager.Instance.TransportSwitched += (deviceId, newTransport) =>
-                {
-                    Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
-                };
+                PeerManager.Instance.PeerConnected += _peerConnectedHandler;
+                PeerManager.Instance.PeerDisconnected += _peerDisconnectedHandler;
+                PeerManager.Instance.TransportSwitched += _transportSwitchedHandler;
             }
 
             // Show real version from assembly
@@ -191,6 +189,20 @@ namespace FlyShelf.Windows
                 {
                     _pairingHandshakeTimer.Stop();
                     _pairingHandshakeTimer = null;
+                }
+
+                // Clean up PeerManager static event subscriptions to prevent memory leak
+                if (PeerManager.Instance != null)
+                {
+                    PeerManager.Instance.PeerConnected -= _peerConnectedHandler;
+                    PeerManager.Instance.PeerDisconnected -= _peerDisconnectedHandler;
+                    PeerManager.Instance.TransportSwitched -= _transportSwitchedHandler;
+                }
+
+                // Clean up DevicePairingManager static event subscription to prevent memory leak
+                if (_devicePairedHandler != null)
+                {
+                    DevicePairingManager.OnDevicePaired -= _devicePairedHandler;
                 }
             };
         }

@@ -45,6 +45,9 @@ namespace FlyShelf
         private static string? _cachedDesktopWallpaperPath = null;
         private ScrollViewer? _shelfScrollViewer;
         private double _lastActualHeight = 0;
+        private EventHandler<Classes.AnimationRequestEventArgs>? _mascotAnimationRequestedHandler;
+        private Action<Classes.ThemePackage?>? _themeChangedHandler;
+        private System.ComponentModel.PropertyChangedEventHandler? _settingsChangedHandler;
 
         private ScrollViewer? GetShelfScrollViewer()
         {
@@ -177,11 +180,12 @@ namespace FlyShelf
             };
 
             // Live-refresh wallpaper when user changes it in settings
-            Classes.SettingsManager.Current.PropertyChanged += (s, e) =>
+            _settingsChangedHandler = (s, e) =>
             {
                 if (e.PropertyName == nameof(Classes.AdvanceSettings.ClipboardWallpaperPath))
                     Dispatcher.InvokeAsync(() => ApplyWallpaper());
             };
+            Classes.SettingsManager.Current.PropertyChanged += _settingsChangedHandler;
 
             // Auto-dismiss merge state when new items arrive on the shelf
             _viewModel.DroppedItems.CollectionChanged += (s, e) =>
@@ -387,7 +391,7 @@ namespace FlyShelf
 
                     // ═══ Unified Header Mascot Event Routing ═══
                     // Route all mascot triggers directly to the header mascot control MascotIdle
-                    Classes.AnimationTriggerService.Instance.AnimationRequested += (s, e) =>
+                    _mascotAnimationRequestedHandler = (s, e) =>
                     {
                         Dispatcher.InvokeAsync(() =>
                         {
@@ -428,10 +432,11 @@ namespace FlyShelf
                             }
                         });
                     };
+                    Classes.AnimationTriggerService.Instance.AnimationRequested += _mascotAnimationRequestedHandler;
 
                     // ═══ Theme Wallpaper Auto-Loading ═══
                     // Load wallpaper from theme when it activates or changes
-                    Classes.ThemeManager.Instance.ActiveThemeChanged += (theme) =>
+                    _themeChangedHandler = (theme) =>
                     {
                         Dispatcher.InvokeAsync(() =>
                         {
@@ -740,8 +745,16 @@ namespace FlyShelf
                     UnregisterHotKey(handle, HOTKEY_QUICKPASTE_BASE + 10); // Alt+0
                     HwndSource.FromHwnd(handle)?.RemoveHook(HwndHook);
                 }
+
+                // Clean up static event subscriptions to prevent memory leaks
+                if (_mascotAnimationRequestedHandler != null)
+                    Classes.AnimationTriggerService.Instance.AnimationRequested -= _mascotAnimationRequestedHandler;
+                if (_themeChangedHandler != null)
+                    Classes.ThemeManager.Instance.ActiveThemeChanged -= _themeChangedHandler;
+                if (_settingsChangedHandler != null)
+                    Classes.SettingsManager.Current.PropertyChanged -= _settingsChangedHandler;
             }
-            catch { /* Window already destroyed â€” nothing to clean up */ }
+            catch { /* Window already destroyed — nothing to clean up */ }
             base.OnClosed(e);
         }
 
