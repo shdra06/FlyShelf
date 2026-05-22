@@ -24,6 +24,11 @@
 
         <!-- Premium Theme-Aware Setting Card Style -->
         <Style x:Key="PremiumSettingStyle" TargetType="Border">
+            <Setter Property="CacheMode">
+                <Setter.Value>
+                    <BitmapCache EnableClearType="True" RenderAtScale="1"/>
+                </Setter.Value>
+            </Setter>
             <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
             <Setter Property="RenderTransform">
                 <Setter.Value>
@@ -739,6 +744,11 @@
                                 <Border Margin="0,0,0,6" Padding="0" ClipToBounds="True" CornerRadius="12" Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
                                     <Border.Style>
                                         <Style TargetType="Border">
+                                            <Setter Property="CacheMode">
+                                                <Setter.Value>
+                                                    <BitmapCache EnableClearType="True" RenderAtScale="1"/>
+                                                </Setter.Value>
+                                            </Setter>
                                             <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" />
                                             <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" />
                                             <Setter Property="BorderThickness" Value="1" />
