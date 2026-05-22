@@ -35,11 +35,25 @@ namespace FlyShelf
         private Windows.TaskbarWindow? _taskbarWidget;
         private System.Windows.Threading.DispatcherTimer? _clipboardDebounceTimer;
         private System.Windows.Threading.DispatcherTimer? _scrollDecayTimer;
+        private System.Windows.Threading.DispatcherTimer? _scrollHighQualityTimer;
         private DateTime _lastMergeToggleTime = DateTime.MinValue;
         private IntPtr _lastActiveExternalWindow = IntPtr.Zero;
         private DateTime _lastScrollTime = DateTime.MinValue;
         private double _scrollVelocity = 0;
         private Point _lastPhysicalMousePosition = new Point(-999, -999);
+        private string _currentLoadedWallpaperPath = "";
+        private static string? _cachedDesktopWallpaperPath = null;
+        private ScrollViewer? _shelfScrollViewer;
+        private double _lastActualHeight = 0;
+
+        private ScrollViewer? GetShelfScrollViewer()
+        {
+            if (_shelfScrollViewer == null)
+            {
+                _shelfScrollViewer = FindVisualChild<ScrollViewer>(ShelfListView);
+            }
+            return _shelfScrollViewer;
+        }
 
         [DllImport("user32.dll", SetLastError = true)]
         private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
@@ -75,7 +89,7 @@ namespace FlyShelf
         private const uint MOD_NOREPEAT = 0x4000;
         private const int WM_HOTKEY = 0x0312;
 
-        // Hover preview popup state (DISABLED — replaced by expand/collapse chevron button)
+        // Hover preview popup state (DISABLED â€” replaced by expand/collapse chevron button)
 #pragma warning disable CS0649
         private System.Windows.Threading.DispatcherTimer? _hoverPreviewTimer;
         private ClipboardItem? _hoveredItem;
@@ -96,7 +110,7 @@ namespace FlyShelf
             _viewModel = vm;
             InitializeComponent();
 
-            // Register global hotkeys EAGERLY in constructor — do NOT wait for Loaded event.
+            // Register global hotkeys EAGERLY in constructor â€” do NOT wait for Loaded event.
             // EnsureHandle() forces HWND creation so hotkeys work immediately on app start.
             var interop = new WindowInteropHelper(this);
             interop.EnsureHandle();
@@ -137,7 +151,7 @@ namespace FlyShelf
             // Restore keyboard focus to ListView after window is moved/repositioned
             this.Activated += (s, e) =>
             {
-                // Skip re-focus if a topmost child window (QuickLook) is active — prevents infinite activation loop
+                // Skip re-focus if a topmost child window (QuickLook) is active â€” prevents infinite activation loop
                 if (System.Windows.Application.Current.Windows.OfType<Window>().Any(w => w.Topmost && w != this && w.IsActive)) return;
                 // Debounce: only re-focus if the ListView isn't already keyboard-focused
                 if (!ShelfListView.IsKeyboardFocusWithin)
@@ -263,7 +277,7 @@ namespace FlyShelf
                 Classes.Logger.LogAction("HOOK_FAIL", $"Failed to setup foreground win event hook: {ex.Message}");
             }
 
-            // DWM border styling — must happen after window is shown
+            // DWM border styling â€” must happen after window is shown
             var handle = new WindowInteropHelper(this).Handle;
             if (handle != IntPtr.Zero)
             {
@@ -339,7 +353,7 @@ namespace FlyShelf
                 Dispatcher.InvokeAsync(async () =>
                 {
                     await System.Threading.Tasks.Task.Delay(500); // Wait for visual templates to generate completely
-                    var sv = FindVisualChild<ScrollViewer>(ShelfListView);
+                    var sv = GetShelfScrollViewer();
                     if (sv != null)
                     {
                         sv.ScrollChanged += async (s, args) =>
@@ -362,6 +376,123 @@ namespace FlyShelf
             {
                 Classes.Logger.LogAction("SCROLL_INIT_FAIL", $"Failed to hook scroll events: {ex.Message}");
             }
+            // ═══ MASCOT THEME ENGINE INIT ═══
+            // Deferred initialization so it doesn't block main UI render
+            Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    Classes.ThemeManager.Instance.Initialize();
+                    Classes.AnimationTriggerService.Instance.Initialize();
+
+                    // ═══ Unified Header Mascot Event Routing ═══
+                    // Route all mascot triggers directly to the header mascot control MascotIdle
+                    Classes.AnimationTriggerService.Instance.AnimationRequested += (s, e) =>
+                    {
+                        Dispatcher.InvokeAsync(() =>
+                        {
+                            if (e.IsStop)
+                            {
+                                // Return to idle state when a looping action stops (e.g. search ended)
+                                Classes.AnimationTriggerService.Instance.StartIdleAnimation();
+                                return;
+                            }
+
+                            Classes.ThemeAnimation? anim = null;
+                            if (e.TriggerName == "idle")
+                            {
+                                anim = e.Animation;
+                            }
+                            else if (e.TriggerName == "delete")
+                            {
+                                anim = Classes.ThemeManager.Instance.GetAnimation("header_reaction") 
+                                       ?? Classes.ThemeManager.Instance.GetAnimation("delete");
+                            }
+                            else if (e.TriggerName == "copy")
+                            {
+                                anim = Classes.ThemeManager.Instance.GetAnimation("insert") 
+                                       ?? Classes.ThemeManager.Instance.GetAnimation("copy");
+                            }
+                            else if (e.TriggerName == "search")
+                            {
+                                anim = Classes.ThemeManager.Instance.GetAnimation("search");
+                            }
+                            else if (e.TriggerName == "running")
+                            {
+                                anim = Classes.ThemeManager.Instance.GetAnimation("running");
+                            }
+
+                            if (anim != null)
+                            {
+                                MascotIdle.PlayAnimation(anim);
+                            }
+                        });
+                    };
+
+                    // ═══ Theme Wallpaper Auto-Loading ═══
+                    // Load wallpaper from theme when it activates or changes
+                    Classes.ThemeManager.Instance.ActiveThemeChanged += (theme) =>
+                    {
+                        Dispatcher.InvokeAsync(() =>
+                        {
+                            try
+                            {
+                                // STEP 1: Always stop/clear the old mascot animation first
+                                MascotIdle.StopAnimation();
+
+                                // STEP 2: Always clear old wallpaper first
+                                XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
+                                WallpaperBg.Source = null;
+                                WallpaperBg.Visibility = Visibility.Collapsed;
+                                WallpaperThemeOverlay.Visibility = Visibility.Collapsed;
+                                WallpaperFrostHeader.Visibility = Visibility.Collapsed;
+                                _currentLoadedWallpaperPath = "";
+
+                                if (theme == null)
+                                {
+                                    Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                                    // Themes disabled entirely — reset to clean gradient
+                                    ApplyPopupBackground();
+                                    Classes.Logger.LogAction("THEME", "Theme disabled — cleared wallpaper and mascot");
+                                    return;
+                                }
+
+                                // STEP 3: Apply new theme's wallpaper (if it has one)
+                                string? themeWp = Classes.ThemeManager.Instance.GetWallpaperPath();
+                                if (!string.IsNullOrEmpty(themeWp) && System.IO.File.Exists(themeWp))
+                                {
+                                    Classes.SettingsManager.Current.ClipboardWallpaperPath = themeWp;
+                                    Classes.Logger.LogAction("THEME", $"Applied theme wallpaper: {themeWp}");
+                                }
+                                else
+                                {
+                                    // Theme has no wallpaper — use clean gradient
+                                    ApplyPopupBackground();
+                                    Classes.Logger.LogAction("THEME", $"Theme '{theme.Name}' has no wallpaper — using default background");
+                                }
+
+                                // STEP 4: Start idle animation for the new theme (if it has sprites)
+                                Classes.AnimationTriggerService.Instance.StartIdleAnimation();
+                            }
+                            catch (Exception ex) { Classes.Logger.LogAction("THEME", $"Theme switch error: {ex.Message}"); }
+                        });
+                    };
+
+                    // Apply wallpaper from current active theme on startup
+                    string? startupWp = Classes.ThemeManager.Instance.GetWallpaperPath();
+                    if (!string.IsNullOrEmpty(startupWp) && System.IO.File.Exists(startupWp))
+                    {
+                        Classes.SettingsManager.Current.ClipboardWallpaperPath = startupWp;
+                        ApplyWallpaper();
+                    }
+
+                    Classes.Logger.LogAction("THEME", "Mascot overlays wired to trigger service");
+                }
+                catch (Exception ex)
+                {
+                    Classes.Logger.LogAction("THEME", $"Theme init failed (non-fatal): {ex.Message}");
+                }
+            }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
 
         /// <summary>
@@ -386,20 +517,43 @@ namespace FlyShelf
         /// <summary>
         /// Applies the user's wallpaper with frosted glass header + theme color gradient.
         /// </summary>
-        /// <summary>Gets current Windows desktop wallpaper path from registry.</summary>
+        /// <summary>Gets current Windows desktop wallpaper path from registry (cached).</summary>
         private static string GetDesktopWallpaperPath()
         {
+            if (_cachedDesktopWallpaperPath != null)
+                return _cachedDesktopWallpaperPath;
+
             try
             {
-                using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop");
-                return key?.GetValue("Wallpaper") as string ?? "";
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop"))
+                {
+                    _cachedDesktopWallpaperPath = key?.GetValue("Wallpaper") as string ?? "";
+                    return _cachedDesktopWallpaperPath;
+                }
             }
-            catch { return ""; }
+            catch 
+            { 
+                _cachedDesktopWallpaperPath = "";
+                return ""; 
+            }
         }
 
         private void ApplyWallpaper()
         {
             string path = Classes.SettingsManager.Current.ClipboardWallpaperPath;
+            bool themeApplied = Classes.ThemeManager.Instance.ActiveTheme != null;
+
+            // If no custom wallpaper set and no theme is applied, skip heavy desktop wallpaper
+            // registry query, image load, decoding, and blur operations entirely.
+            if (!themeApplied && string.IsNullOrEmpty(path))
+            {
+                XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
+                WallpaperBg.Source = null;
+                WallpaperBg.Visibility = Visibility.Collapsed;
+                WallpaperThemeOverlay.Visibility = Visibility.Collapsed;
+                WallpaperFrostHeader.Visibility = Visibility.Collapsed;
+                return;
+            }
 
             // If no custom wallpaper set, use the current Windows desktop wallpaper
             if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
@@ -415,69 +569,111 @@ namespace FlyShelf
 
             if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
             {
+                if (_currentLoadedWallpaperPath == "") return; // Already cleared
                 // No wallpaper at all — hide all layers
+                XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
+                WallpaperBg.Source = null;
                 WallpaperBg.Visibility = Visibility.Collapsed;
                 WallpaperThemeOverlay.Visibility = Visibility.Collapsed;
                 WallpaperFrostHeader.Visibility = Visibility.Collapsed;
+                _currentLoadedWallpaperPath = "";
                 return;
+            }
+
+            if (path == _currentLoadedWallpaperPath)
+            {
+                return; // Already loaded! Bypasses heavy disk I/O and visual changes.
             }
 
             try
             {
-                var bmp = new System.Windows.Media.Imaging.BitmapImage();
-                bmp.BeginInit();
-                bmp.UriSource = new Uri(path, UriKind.Absolute);
-                bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                bmp.DecodePixelWidth = 400; // Keep it lightweight
-                bmp.EndInit();
-                bmp.Freeze();
+                _currentLoadedWallpaperPath = path;
+                string ext = System.IO.Path.GetExtension(path).ToLowerInvariant();
+                bool isGif = ext == ".gif";
 
-                // Layer 1: Background image
-                WallpaperBg.Source = bmp;
-                WallpaperBg.Visibility = Visibility.Visible;
-
-                // Layer 3: Frosted glass header
-                WallpaperFrostImg.Source = bmp;
-                WallpaperFrostHeader.Visibility = Visibility.Visible;
-
-                // Extract dominant color for theme gradient asynchronously to prevent UI stutter
-                System.Threading.Tasks.Task.Run(() =>
+                if (isGif)
                 {
-                    try
-                    {
-                        return ExtractDominantColor(bmp);
-                    }
-                    catch
-                    {
-                        return System.Windows.Media.Color.FromRgb(99, 102, 241); // Fallback indigo
-                    }
-                }).ContinueWith(t =>
+                    // ═══ LIVE WALLPAPER: Animated GIF via XamlAnimatedGif ═══
+                    WallpaperBg.Source = null; // Clear static source
+                    var uri = new Uri(path, UriKind.Absolute);
+                    XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, uri);
+                    XamlAnimatedGif.AnimationBehavior.SetRepeatBehavior(WallpaperBg,
+                        System.Windows.Media.Animation.RepeatBehavior.Forever);
+                    WallpaperBg.Visibility = Visibility.Visible;
+
+                    // For GIF wallpapers, use a themed color directly (can't extract from animated)
+                    WallpaperFrostHeader.Visibility = Visibility.Collapsed; // No frost for GIF (looks odd)
+                    var themeColor = System.Windows.Media.Color.FromRgb(255, 140, 0); // Cozy dark orange / Gravity Cat
+                    var centerColor = System.Windows.Media.Color.FromArgb(30, themeColor.R, themeColor.G, themeColor.B);
+                    var edgeColor = System.Windows.Media.Color.FromArgb(120, (byte)(themeColor.R / 5), (byte)(themeColor.G / 5), (byte)(themeColor.B / 5));
+                    WallpaperRadialBrush.GradientStops[0].Color = centerColor;
+                    WallpaperRadialBrush.GradientStops[1].Color = edgeColor;
+                    WallpaperThemeOverlay.Visibility = Visibility.Visible;
+
+                    Classes.Logger.LogAction("WALLPAPER", $"Live animated wallpaper: {path}");
+                }
+                else
                 {
-                    if (t.Status == System.Threading.Tasks.TaskStatus.RanToCompletion)
+                    // ═══ STATIC WALLPAPER: PNG/JPG via BitmapImage ═══
+                    XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null); // Clear any GIF
+
+                    var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                    bmp.BeginInit();
+                    bmp.UriSource = new Uri(path, UriKind.Absolute);
+                    bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                    bmp.DecodePixelWidth = 300; // Keep it lightweight
+                    bmp.EndInit();
+                    bmp.Freeze();
+
+                    // Layer 1: Background image
+                    WallpaperBg.Source = bmp;
+                    WallpaperBg.Visibility = Visibility.Visible;
+
+                    // Layer 3: Frosted glass header
+                    WallpaperFrostImg.Source = bmp;
+                    WallpaperFrostHeader.Visibility = Visibility.Visible;
+
+                    // Extract dominant color for theme gradient asynchronously to prevent UI stutter
+                    System.Threading.Tasks.Task.Run(() =>
                     {
-                        var dominantColor = t.Result;
-                        Dispatcher.InvokeAsync(() =>
+                        try
                         {
-                            try
+                            return ExtractDominantColor(bmp);
+                        }
+                        catch
+                        {
+                            return System.Windows.Media.Color.FromRgb(99, 102, 241); // Fallback indigo
+                        }
+                    }).ContinueWith(t =>
+                    {
+                        if (t.Status == System.Threading.Tasks.TaskStatus.RanToCompletion)
+                        {
+                            var dominantColor = t.Result;
+                            Dispatcher.InvokeAsync(() =>
                             {
-                                var centerColor = System.Windows.Media.Color.FromArgb(40, dominantColor.R, dominantColor.G, dominantColor.B);
-                                var edgeColor = System.Windows.Media.Color.FromArgb(140, (byte)(dominantColor.R / 4), (byte)(dominantColor.G / 4), (byte)(dominantColor.B / 4));
+                                try
+                                {
+                                    var centerColor = System.Windows.Media.Color.FromArgb(40, dominantColor.R, dominantColor.G, dominantColor.B);
+                                    var edgeColor = System.Windows.Media.Color.FromArgb(140, (byte)(dominantColor.R / 4), (byte)(dominantColor.G / 4), (byte)(dominantColor.B / 4));
 
-                                WallpaperRadialBrush.GradientStops[0].Color = centerColor;
-                                WallpaperRadialBrush.GradientStops[1].Color = edgeColor;
-                                WallpaperThemeOverlay.Visibility = Visibility.Visible;
+                                    WallpaperRadialBrush.GradientStops[0].Color = centerColor;
+                                    WallpaperRadialBrush.GradientStops[1].Color = edgeColor;
+                                    WallpaperThemeOverlay.Visibility = Visibility.Visible;
 
-                                // Tint the frost header with the theme color
-                                WallpaperFrostTint.Background = new System.Windows.Media.SolidColorBrush(
-                                    System.Windows.Media.Color.FromArgb(90, dominantColor.R, dominantColor.G, dominantColor.B));
-                            }
-                            catch { }
-                        });
-                    }
-                });
+                                    // Tint the frost header with the theme color
+                                    WallpaperFrostTint.Background = new System.Windows.Media.SolidColorBrush(
+                                        System.Windows.Media.Color.FromArgb(90, dominantColor.R, dominantColor.G, dominantColor.B));
+                                }
+                                catch { }
+                            });
+                        }
+                    });
+                }
             }
             catch
             {
+                _currentLoadedWallpaperPath = "";
+                XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
                 WallpaperBg.Visibility = Visibility.Collapsed;
                 WallpaperThemeOverlay.Visibility = Visibility.Collapsed;
                 WallpaperFrostHeader.Visibility = Visibility.Collapsed;
@@ -545,7 +741,7 @@ namespace FlyShelf
                     HwndSource.FromHwnd(handle)?.RemoveHook(HwndHook);
                 }
             }
-            catch { /* Window already destroyed — nothing to clean up */ }
+            catch { /* Window already destroyed â€” nothing to clean up */ }
             base.OnClosed(e);
         }
 
@@ -574,12 +770,12 @@ namespace FlyShelf
                     Classes.Logger.LogAction("HOTKEY", $"Alt+{(index + 1) % 10} fired, items={_viewModel.DroppedItems.Count}");
                     if (index < _viewModel.DroppedItems.Count)
                     {
-                        // Capture the target window — filter out our own window
+                        // Capture the target window â€” filter out our own window
                         IntPtr targetWindow = GetTargetForegroundWindow();
                         Classes.Logger.LogAction("HOTKEY", $"Target window: 0x{targetWindow:X}");
                         var item = _viewModel.DroppedItems[index];
                         
-                        // Set clipboard directly — guard against echo
+                        // Set clipboard directly â€” guard against echo
                         SetWritingClipboard(true);
                         try
                         {
@@ -605,7 +801,7 @@ namespace FlyShelf
                         if (targetThreadId != ourThreadId)
                             AttachThreadInput(ourThreadId, targetThreadId, false);
 
-                        // Release Alt key FIRST — user is still holding it from Alt+N,
+                        // Release Alt key FIRST â€” user is still holding it from Alt+N,
                         // otherwise the target app receives Alt+Ctrl+V instead of Ctrl+V
                         keybd_event((byte)VK_MENU, 0, KEYEVENTF_KEYUP, 0);
 
@@ -627,6 +823,7 @@ namespace FlyShelf
             }
             else if (msg == Classes.NativeMethods.WM_SETTINGCHANGE)
             {
+                _cachedDesktopWallpaperPath = null;
                 Dispatcher.InvokeAsync(() => { try { ApplyWallpaper(); } catch { } });
             }
             else if (msg == WM_CLIPBOARDUPDATE)
@@ -644,7 +841,7 @@ namespace FlyShelf
                 {
                     _clipboardDebounceTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background)
                     {
-                        Interval = TimeSpan.FromMilliseconds(150) // 150ms debounce — fast response while still collapsing burst events
+                        Interval = TimeSpan.FromMilliseconds(150) // 150ms debounce â€” fast response while still collapsing burst events
                     };
                     _clipboardDebounceTimer.Tick += (s, ev) =>
                     {
@@ -656,37 +853,28 @@ namespace FlyShelf
                             IDataObject data = Clipboard.GetDataObject();
                             if (data == null) return;
 
-                            // DEBUG: Log all clipboard formats to diagnose screenshot detection issues
-                            try
-                            {
-                                var formats = data.GetFormats();
-                                Classes.Logger.LogAction("CLIPBOARD", $"Formats: {string.Join(", ", formats)}");
-                            }
-                            catch { }
+                            // PERF: Verbose format logging removed — was causing string alloc + I/O on every clipboard event
 
-                            // Snapshot all data now while we're on the STA thread — IDataObject can't cross threads
+                            // Snapshot all data now while we're on the STA thread â€” IDataObject can't cross threads
                             string[] files = null;
                             string text = null;
                             System.Windows.Media.Imaging.BitmapSource bitmap = null;
 
-                            // STEP 1: Always try to extract bitmap FIRST — screenshots from Snipping Tool
+                            // STEP 1: Always try to extract bitmap FIRST â€” screenshots from Snipping Tool
                             // set BOTH FileDrop AND Bitmap, but the file may not exist yet (async save).
                             try
                             {
                                 if (data.GetDataPresent(DataFormats.Bitmap))
                                 {
                                     bitmap = data.GetData(DataFormats.Bitmap) as System.Windows.Media.Imaging.BitmapSource;
-                                    Classes.Logger.LogAction("CLIPBOARD", $"Bitmap via DataFormats.Bitmap: {(bitmap != null ? $"{bitmap.PixelWidth}x{bitmap.PixelHeight}" : "null")}");
                                 }
                                 if (bitmap == null && data.GetDataPresent(typeof(System.Windows.Media.Imaging.BitmapSource)))
                                 {
                                     bitmap = data.GetData(typeof(System.Windows.Media.Imaging.BitmapSource)) as System.Windows.Media.Imaging.BitmapSource;
-                                    Classes.Logger.LogAction("CLIPBOARD", $"Bitmap via BitmapSource type: {(bitmap != null ? $"{bitmap.PixelWidth}x{bitmap.PixelHeight}" : "null")}");
                                 }
                                 if (bitmap == null && data.GetDataPresent(DataFormats.Dib))
                                 {
                                     bitmap = data.GetData(DataFormats.Bitmap) as System.Windows.Media.Imaging.BitmapSource;
-                                    Classes.Logger.LogAction("CLIPBOARD", $"Bitmap via DIB fallback: {(bitmap != null ? $"{bitmap.PixelWidth}x{bitmap.PixelHeight}" : "null")}");
                                 }
                                 if (bitmap != null && bitmap.CanFreeze) bitmap.Freeze(); // Make thread-safe
                             }
@@ -703,8 +891,7 @@ namespace FlyShelf
                                 if ((files == null || files.Length == 0) && data.GetDataPresent("FileNameW"))
                                     files = data.GetData("FileNameW") as string[];
                                 
-                                if (files != null && files.Length > 0)
-                                    Classes.Logger.LogAction("CLIPBOARD", $"Files: {string.Join(", ", files)}");
+                                // PERF: File list logging removed
                             }
                             catch { }
 
@@ -712,20 +899,20 @@ namespace FlyShelf
                             // (Snipping Tool sets FileDrop but the file may not exist yet)
                             if (bitmap != null && files != null && files.Length > 0)
                             {
-                                // Check if file actually exists — if not, the bitmap is the real data
+                                // Check if file actually exists â€” if not, the bitmap is the real data
                                 bool allFilesExist = files.All(f => System.IO.File.Exists(f));
                                 if (!allFilesExist)
                                 {
-                                    Classes.Logger.LogAction("CLIPBOARD", "Files don't exist yet — using bitmap instead");
+                                    Classes.Logger.LogAction("CLIPBOARD", "Files don't exist yet â€” using bitmap instead");
                                     files = null; // Force bitmap path
                                 }
                                 else
                                 {
-                                    // Files exist — check if they're image files (prefer bitmap for images)
+                                    // Files exist â€” check if they're image files (prefer bitmap for images)
                                     string ext = System.IO.Path.GetExtension(files[0]).ToLower();
                                     if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".gif")
                                     {
-                                        Classes.Logger.LogAction("CLIPBOARD", "Image file detected — using bitmap for richer preview");
+                                        Classes.Logger.LogAction("CLIPBOARD", "Image file detected â€” using bitmap for richer preview");
                                         files = null; // Force bitmap path for image files
                                     }
                                 }
@@ -744,20 +931,20 @@ namespace FlyShelf
                                 catch { }
                             }
 
-                            // Now dispatch to background — no more COM calls needed
+                            // Now dispatch to background â€” no more COM calls needed
                             var vm = (FlyShelfViewModel)DataContext;
                             if (bitmap != null && (files == null || files.Length == 0))
                             {
-                                // ═══ FIX: Filter out fully transparent/ghost images ═══
+                                // â•â•â• FIX: Filter out fully transparent/ghost images â•â•â•
                                 // Some apps and screenshot tools place transparent bitmaps on clipboard.
-                                // Check if >95% of pixels are fully transparent — if so, discard.
+                                // Check if >95% of pixels are fully transparent â€” if so, discard.
                                 bool isGhostImage = false;
                                 try
                                 {
                                     var converted = new System.Windows.Media.Imaging.FormatConvertedBitmap(bitmap, System.Windows.Media.PixelFormats.Bgra32, null, 0);
                                     int w = converted.PixelWidth;
                                     int h = converted.PixelHeight;
-                                    // Ultra-light ghost check: read 16 single pixels from a 4×4 grid (64 bytes total)
+                                    // Ultra-light ghost check: read 16 single pixels from a 4Ã—4 grid (64 bytes total)
                                     byte[] pixel = new byte[4];
                                     int transparentCount = 0;
                                     const int gridSize = 4;
@@ -783,23 +970,20 @@ namespace FlyShelf
                                 {
                                     Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as BITMAP ({bitmap.PixelWidth}x{bitmap.PixelHeight})");
                                     var dataObj = new System.Windows.DataObject(typeof(System.Windows.Media.Imaging.BitmapSource), bitmap);
-                                    System.Threading.Tasks.Task.Run(() =>
-                                        Application.Current.Dispatcher.InvokeAsync(() => vm.HandleDrop(dataObj, false)));
+                                    Application.Current.Dispatcher.InvokeAsync(() => vm.HandleDrop(dataObj, false));
                                 }
                             }
                             else if (files != null && files.Length > 0)
                             {
                                 Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as FILES ({files.Length} items)");
                                 var dataObj = new System.Windows.DataObject(DataFormats.FileDrop, files);
-                                System.Threading.Tasks.Task.Run(() =>
-                                    Application.Current.Dispatcher.InvokeAsync(() => vm.HandleDrop(dataObj, false)));
+                                Application.Current.Dispatcher.InvokeAsync(() => vm.HandleDrop(dataObj, false));
                             }
                             else if (!string.IsNullOrWhiteSpace(text))
                             {
                                 Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as TEXT ({text.Length} chars)");
                                 var dataObj = new System.Windows.DataObject(DataFormats.UnicodeText, text);
-                                System.Threading.Tasks.Task.Run(() =>
-                                    Application.Current.Dispatcher.InvokeAsync(() => vm.HandleDrop(dataObj, false)));
+                                Application.Current.Dispatcher.InvokeAsync(() => vm.HandleDrop(dataObj, false));
                             }
                             else
                             {
@@ -815,453 +999,6 @@ namespace FlyShelf
                 handled = true;
             }
             return IntPtr.Zero;
-        }
-
-        protected override void OnActivated(EventArgs e)
-        {
-            base.OnActivated(e);
-            // Guard: don't fight QuickLook for focus
-            if (System.Windows.Application.Current.Windows.OfType<Window>()
-                .Any(w => w is FlyShelf.Windows.QuickLookWindow && w.IsActive)) return;
-            if (_isAnimatingHide) return;
-            this.Opacity = 1.0;
-            int colorNone = DWMWA_COLOR_NONE;
-            DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, DWMWA_BORDER_COLOR, ref colorNone, Marshal.SizeOf<int>());
-        }
-
-
-        /// <summary>
-        /// Auto-hide the clipboard shelf when user clicks elsewhere (e.g. to type in another app).
-        /// Respects persistent mode and prevents accidental dismissal during the first 400ms after spawn.
-        /// </summary>
-        private void MicaWindow_Deactivated(object sender, EventArgs e)
-        {
-            // Don't auto-hide in persistent/docked mode (taskbar widget click)
-            if (_isPersistentMode) return;
-
-            // Guard: Don't dismiss if the window JUST appeared (prevents flicker from focus races)
-            if ((DateTime.Now - _spawnTime).TotalMilliseconds < 100) return;
-
-            // Don't dismiss while user is mid-drag
-            if (_isDragHovering) return;
-
-            // Don't dismiss if focus went to our own QuickLook window
-            if (System.Windows.Application.Current.Windows.OfType<Window>()
-                .Any(w => w is FlyShelf.Windows.QuickLookWindow && w.IsActive)) return;
-
-            // Auto-hide when user clicks away
-            if (this.IsVisible)
-            {
-                AnimateAndHide();
-            }
-        }
-
-        /// <summary>
-        /// Native Win32 callback triggered when the active foreground window changes globally.
-        /// Handles auto-dismissing FlyShelf when shown in a non-activated / non-focus-stealing state.
-        /// </summary>
-        private void ForegroundChangedCallback(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
-        {
-            if (hwnd != IntPtr.Zero)
-            {
-                // Get thread/process ID of the new foreground window
-                GetWindowThreadProcessId(hwnd, out uint focusedProcId);
-                uint currProcId = (uint)System.Environment.ProcessId;
-
-                // Cache the last active external window, filtering out our own app, taskbar, desktop, and standard system Windows Core UI
-                if (focusedProcId != currProcId)
-                {
-                    var sbClass = new System.Text.StringBuilder(256);
-                    GetClassName(hwnd, sbClass, 256);
-                    string clsName = sbClass.ToString();
-                    if (clsName != "Shell_TrayWnd" && 
-                        clsName != "Shell_SecondaryTrayWnd" && 
-                        clsName != "WorkerW" && 
-                        clsName != "Progman" && 
-                        clsName != "Windows.UI.Core.CoreWindow" &&
-                        clsName != "MultitaskingViewFrame")
-                    {
-                        _lastActiveExternalWindow = hwnd;
-                    }
-                }
-            }
-
-            if (_isPersistentMode) return;
-
-            // Don't auto-dismiss during first 250ms of spawn to avoid startup focus race transitions
-            if ((DateTime.Now - _spawnTime).TotalMilliseconds < 250) return;
-
-            if (_isDragHovering) return;
-
-            // Get thread/process ID of the new foreground window
-            GetWindowThreadProcessId(hwnd, out uint focusedProcessId);
-            uint currentProcessId = (uint)System.Environment.ProcessId;
-
-            // If the focused window belongs to our own app (e.g. MainWindow, HubWindow, QuickLook), do not dismiss
-            if (focusedProcessId == currentProcessId) return;
-
-            // Foreground changed to another app (browser, editor, desktop, etc.)! Auto-dismiss FlyShelf!
-            Application.Current.Dispatcher.InvokeAsync(() =>
-            {
-                if (this.IsVisible && !_isAnimatingHide)
-                {
-                    AnimateAndHide();
-                }
-            });
-        }
-        private bool _isPersistentMode = false;
-        private bool _isAnimatingHide = false;
-
-        /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
-        private void PlayShowAnimation()
-        {
-            RootContent.RenderTransformOrigin = new Point(0.5, 1);
-            RootContent.RenderTransform = new TransformGroup
-            {
-                Children = { new ScaleTransform(0.97, 0.97), new TranslateTransform(0, 6) }
-            };
-            RootContent.Opacity = 0;
-
-            var dur = TimeSpan.FromMilliseconds(200);
-            var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
-
-            RootContent.BeginAnimation(OpacityProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 1, dur) { EasingFunction = ease });
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, new System.Windows.Media.Animation.DoubleAnimation(0.97, 1, dur) { EasingFunction = ease });
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, new System.Windows.Media.Animation.DoubleAnimation(0.97, 1, dur) { EasingFunction = ease });
-            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(6, 0, dur) { EasingFunction = ease });
-        }
-
-        /// <summary>Fast dismiss animation on inner content, then hides window.</summary>
-        private void AnimateAndHide()
-        {
-            if (_isAnimatingHide || !this.IsVisible) return;
-            _isAnimatingHide = true;
-
-            // Clear PDF merge selections so they don't persist on reopen
-            DismissMergeState();
-            CloseSearch();
-
-            RootContent.RenderTransformOrigin = new Point(0.5, 1);
-            RootContent.RenderTransform = new TransformGroup
-            {
-                Children = { new ScaleTransform(1, 1), new TranslateTransform(0, 0) }
-            };
-
-            var dur = TimeSpan.FromMilliseconds(140);
-            var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn };
-
-            var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, dur) { EasingFunction = ease };
-            fadeOut.Completed += (s, e) =>
-            {
-                try
-                {
-                    this.Hide();
-                    RootContent.BeginAnimation(OpacityProperty, null);
-                    RootContent.Opacity = 1;
-                    RootContent.RenderTransform = null;
-                }
-                catch { }
-                _isAnimatingHide = false;
-            };
-
-            RootContent.BeginAnimation(OpacityProperty, fadeOut);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, dur) { EasingFunction = ease });
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, dur) { EasingFunction = ease });
-            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, new System.Windows.Media.Animation.DoubleAnimation(0, 5, dur) { EasingFunction = ease });
-        }
-        private DateTime _spawnTime = DateTime.MinValue;
-        private IntPtr _previousForegroundWindow = IntPtr.Zero;
-        internal static bool _isWritingClipboard = false;
-        private static System.Threading.Timer _clipboardWriteResetTimer;
-        
-        /// <summary>
-        /// Sets _isWritingClipboard = true with automatic 2-second safety reset.
-        /// Prevents the flag from getting stuck true if an exception prevents the finally block.
-        /// </summary>
-        internal static void SetWritingClipboard(bool value)
-        {
-            _isWritingClipboard = value;
-            _clipboardWriteResetTimer?.Dispose();
-            if (value)
-            {
-                _clipboardWriteResetTimer = new System.Threading.Timer(_ =>
-                {
-                    if (_isWritingClipboard)
-                    {
-                        Classes.Logger.LogAction("CLIPBOARD", "⚠️ _isWritingClipboard was stuck true — auto-reset after 2s safety timeout");
-                        _isWritingClipboard = false;
-                    }
-                }, null, 2000, System.Threading.Timeout.Infinite);
-            }
-        }
-
-        private IntPtr GetTargetForegroundWindow()
-        {
-            IntPtr ptr = GetForegroundWindow();
-            
-            var sb = new System.Text.StringBuilder(256);
-            GetClassName(ptr, sb, 256);
-            string className = sb.ToString();
-
-            if (className == "Shell_TrayWnd" || className == "Shell_SecondaryTrayWnd" || className == "WorkerW" || className == "Progman")
-            {
-                // Quick bypass: If we have a cached valid/visible external window, return it instantly!
-                if (_lastActiveExternalWindow != IntPtr.Zero && IsWindow(_lastActiveExternalWindow) && IsWindowVisible(_lastActiveExternalWindow))
-                {
-                    return _lastActiveExternalWindow;
-                }
-
-                IntPtr target = IntPtr.Zero;
-                uint currentProcessId = GetCurrentProcessId();
-                EnumWindows((wnd, param) =>
-                {
-                    if (IsWindowVisible(wnd))
-                    {
-                        uint processId;
-                        GetWindowThreadProcessId(wnd, out processId);
-                        if (processId != currentProcessId)
-                        {
-                            GetClassName(wnd, sb, 256);
-                            string cName = sb.ToString();
-                            if (cName != "Shell_TrayWnd" && cName != "Shell_SecondaryTrayWnd" && cName != "WorkerW" && cName != "Progman")
-                            {
-                                GetWindowText(wnd, sb, 256);
-                                if (sb.Length > 0 && sb.ToString() != "FlyShelf" && sb.ToString() != "Program Manager")
-                                {
-                                    target = wnd;
-                                    return false; 
-                                }
-                            }
-                        }
-                    }
-                    return true;
-                }, IntPtr.Zero);
-                if (target != IntPtr.Zero) return target;
-            }
-            
-            return ptr;
-        }
-
-        public void ShowNearPosition(double targetX, double targetY, int mode = 0, bool isPersistent = false, bool stealFocus = true)
-        {
-            CloseSearch();
-            CloseEmojiPicker();
-            _previousForegroundWindow = GetTargetForegroundWindow();
-            
-            // FlyShelf Phase 2: Live AI Memory Association
-            if (_previousForegroundWindow != IntPtr.Zero)
-            {
-                var sbTitle = new System.Text.StringBuilder(256);
-                GetWindowText(_previousForegroundWindow, sbTitle, 256);
-                string currentTitle = sbTitle.ToString();
-                
-                // Fire sorting asynchronously AFTER the UI finishes its layout!
-                System.Threading.Tasks.Task.Delay(50).ContinueWith(_ =>
-                {
-                    Application.Current.Dispatcher.InvokeAsync(() => _viewModel.SortForContext(currentTitle));
-                });
-            }
-
-            _spawnTime = DateTime.Now;
-            _isPersistentMode = isPersistent;
-            if (this.IsVisible)
-            {
-                this.Hide(); 
-            }
-
-            this.ShowInTaskbar = true;
-            this.ShowInTaskbar = false;
-
-            _viewModel.CurrentMode = mode;
-            this.MaxHeight = _viewModel.CurrentFlyShelfMaxHeight;
-            this.Width = _viewModel.CurrentFlyShelfWidth;
-
-            // Always reset selection to the first item when showing/opening the shelf
-            if (_viewModel.DroppedItems.Count > 0)
-            {
-                ShelfListView.SelectedIndex = 0;
-            }
-
-            // Always scroll to the very top so the shelf never opens at a previous scroll offset
-            {
-                var sv = FindVisualChild<ScrollViewer>(ShelfListView);
-                sv?.ScrollToTop();
-            }
-
-            // Force a deterministic height so the window doesn't bounce around with SizeToContent
-            if (mode == 0)
-            {
-                // Mini mode: let content drive height, capped by MaxHeight
-                this.SizeToContent = SizeToContent.Height;
-                this.Height = double.NaN;
-            }
-            else
-            {
-                // Mode 1/2: use the stored height exactly — no content-driven fluctuation
-                this.SizeToContent = SizeToContent.Manual;
-                this.Height = _viewModel.CurrentFlyShelfMaxHeight;
-            }
-
-            var workArea = SystemParameters.WorkArea;
-            double safeWidth = double.IsNaN(this.Width) ? 360 : this.Width;
-            if (safeWidth <= 0) safeWidth = 320;
-
-            double rawX = targetX - (safeWidth / 2);
-            if (rawX + safeWidth > workArea.Left + workArea.Width - 16)
-                rawX = workArea.Left + workArea.Width - safeWidth - 16;
-            if (rawX < workArea.Left + 16)
-                rawX = workArea.Left + 16;
-
-            double rawY = targetY - 16;
-            if (rawY > workArea.Top + workArea.Height - 16)
-                rawY = workArea.Top + workArea.Height - 16;
-            
-            _lockedBottomEdge = rawY;
-            _isEdgeLocked = true;
-
-            this.Left = rawX;
-            // Best-guess initial bound from user settings before ActualHeight resolves
-            double initialSafeHeight = double.IsNaN(this.Height) ? FlyShelf.Classes.SettingsManager.Current.MiniFormHeight : this.Height;
-            this.Top = _lockedBottomEdge - initialSafeHeight - 20;
-
-            if (stealFocus)
-            {
-                this.ShowActivated = true;
-                RootContent.Opacity = 0;
-                this.Show();
-                this.Activate();
-                { int cn = DWMWA_COLOR_NONE; DwmSetWindowAttribute(new System.Windows.Interop.WindowInteropHelper(this).Handle, DWMWA_BORDER_COLOR, ref cn, sizeof(int)); }
-                PlayShowAnimation();
-            }
-            else
-            {
-                this.ShowActivated = false;
-                RootContent.Opacity = 0;
-                this.Show();
-                { int cn = DWMWA_COLOR_NONE; DwmSetWindowAttribute(new System.Windows.Interop.WindowInteropHelper(this).Handle, DWMWA_BORDER_COLOR, ref cn, sizeof(int)); }
-                PlayShowAnimation();
-            }
-
-            this.UpdateLayout();
-            if (this.ActualHeight > 0)
-            {
-                // Push it 20px dynamically upward to completely avoid taskbar z-index clipping!
-                this.Top = _lockedBottomEdge - this.ActualHeight - 20; 
-                
-                if (this.Top < workArea.Top)
-                {
-                    this.Top = workArea.Top + 20;
-                }
-            }
-
-            int currentToken = ++_spawnToken;
-
-            // Give keyboard focus to the ListView so arrow keys + Enter work immediately
-            if (stealFocus)
-            {
-                FocusFirstItemContainer();
-            }
-        }
-
-        private void FocusFirstItemContainer()
-        {
-            if (_viewModel.DroppedItems.Count == 0) return;
-
-            if (ShelfListView.SelectedIndex < 0)
-                ShelfListView.SelectedIndex = 0;
-
-            int index = ShelfListView.SelectedIndex;
-            
-            // If the containers are already generated, focus immediately:
-            var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(index) as ListViewItem;
-            if (container != null)
-            {
-                container.Focus();
-                Keyboard.Focus(container);
-                ShelfListView.ScrollIntoView(container);
-            }
-            else
-            {
-                // Otherwise, register event handler to focus as soon as they are ready:
-                EventHandler? statusHandler = null;
-                statusHandler = (s, ev) =>
-                {
-                    if (ShelfListView.ItemContainerGenerator.Status == System.Windows.Controls.Primitives.GeneratorStatus.ContainersGenerated)
-                    {
-                        ShelfListView.ItemContainerGenerator.StatusChanged -= statusHandler;
-                        Dispatcher.InvokeAsync(() =>
-                        {
-                            var lazyContainer = ShelfListView.ItemContainerGenerator.ContainerFromIndex(index) as ListViewItem;
-                            if (lazyContainer != null)
-                            {
-                                lazyContainer.Focus();
-                                Keyboard.Focus(lazyContainer);
-                                ShelfListView.ScrollIntoView(lazyContainer);
-                            }
-                            else
-                            {
-                                ShelfListView.Focus();
-                            }
-                        }, System.Windows.Threading.DispatcherPriority.Input);
-                    }
-                };
-                ShelfListView.ItemContainerGenerator.StatusChanged += statusHandler;
-                ShelfListView.Focus();
-            }
-        }
-
-        private void ShelfListView_ScrollChanged(object sender, ScrollChangedEventArgs e)
-        {
-            if (e.VerticalChange == 0) return;
-
-            var now = DateTime.UtcNow;
-            double elapsedMs = (now - _lastScrollTime).TotalMilliseconds;
-            _lastScrollTime = now;
-
-            double change = Math.Abs(e.VerticalChange);
-            double instVelocity = elapsedMs > 0 ? change / elapsedMs : change;
-
-            if (elapsedMs > 500)
-            {
-                _scrollVelocity = instVelocity;
-            }
-            else
-            {
-                // Smooth the velocity using an EMA (exponential moving average)
-                _scrollVelocity = 0.7 * _scrollVelocity + 0.3 * instVelocity;
-            }
-
-            // Mark that active scrolling is happening, and suppress hover buttons immediately
-            _viewModel.IsScrolling = true;
-            _viewModel.AllowHover = false;
-
-            // Start or reset the timer to reset IsScrolling back to false after a delay
-            if (_scrollDecayTimer == null)
-            {
-                _scrollDecayTimer = new System.Windows.Threading.DispatcherTimer
-                {
-                    Interval = TimeSpan.FromMilliseconds(200) // Reset 200ms after scroll activity stops
-                };
-                _scrollDecayTimer.Tick += (s, ev) =>
-                {
-                    _scrollDecayTimer.Stop();
-                    _viewModel.IsScrolling = false;
-                    _scrollVelocity = 0;
-                    // Do not set AllowHover = true here; keep it false until the user physically moves the mouse!
-                };
-            }
-            else
-            {
-                _scrollDecayTimer.Stop();
-            }
-
-            _scrollDecayTimer.Start();
-        }
-
-        private void ShelfListView_MouseLeave(object sender, MouseEventArgs e)
-        {
-            // Reset AllowHover back to true when the mouse leaves the list view area entirely
-            _viewModel.AllowHover = true;
         }
 
     }

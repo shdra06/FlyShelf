@@ -224,6 +224,9 @@ namespace FlyShelf
                     Keyboard.Focus(SearchTextBox);
                     SearchTextBox.CaretIndex = 0;
                 }, System.Windows.Threading.DispatcherPriority.Input);
+
+                // Trigger mascot search animation
+                try { Classes.AnimationTriggerService.Instance.OnSearchToggle(true); } catch { }
             }
             else
             {
@@ -307,23 +310,45 @@ namespace FlyShelf
             SearchTextBox.Text = "";
             SearchBarContainer.Visibility = Visibility.Collapsed;
             SearchToggleBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
+            
+            // Clear the CollectionView filter to show all items again
+            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
+            if (view != null) view.Filter = null;
+            _viewModel.IsSearchActive = false;
+            
             // Move focus back to the list view
             ShelfListView.Focus();
+
+            // Stop mascot search animation
+            try { Classes.AnimationTriggerService.Instance.OnSearchToggle(false); } catch { }
         }
 
-        private async void ApplySearchFilter(string query)
+        private void ApplySearchFilter(string query)
         {
             string queryClean = (query ?? "").Trim();
+            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
+            if (view == null) return;
+
             if (string.IsNullOrWhiteSpace(queryClean))
             {
+                view.Filter = null;
                 _viewModel.IsSearchActive = false;
-                _viewModel.IsDatabaseWriteSuspended = false;
-                _viewModel.DroppedItems.Clear();
-                await _viewModel.LoadPersistedHistoryAsync();
             }
             else
             {
-                await _viewModel.SearchHistoryAsync(queryClean);
+                string q = queryClean.ToLowerInvariant();
+                _viewModel.IsSearchActive = true;
+                view.Filter = obj =>
+                {
+                    if (obj is FlyShelf.ViewModels.ClipboardItem item)
+                    {
+                        if (!string.IsNullOrEmpty(item.RawContent) && item.RawContent.ToLowerInvariant().Contains(q))
+                            return true;
+                        if (!string.IsNullOrEmpty(item.FileName) && item.FileName.ToLowerInvariant().Contains(q))
+                            return true;
+                    }
+                    return false;
+                };
             }
         }
 
@@ -342,6 +367,14 @@ namespace FlyShelf
             {
                 // Set flag to suppress the subsequent MouseUp paste-and-close
                 _didDragOut = true;
+                
+                // PERF FIX: Auto-reset after 100ms so rapid-fire delete clicks
+                // on sequential items don't get swallowed by a stale flag
+                Dispatcher.InvokeAsync(async () =>
+                {
+                    await System.Threading.Tasks.Task.Delay(100);
+                    _didDragOut = false;
+                });
                 
                 _viewModel.RemoveItem(item);
                 
@@ -572,7 +605,7 @@ namespace FlyShelf
         {
             e.Handled = true;
 
-            var scrollViewer = FindVisualChild<ScrollViewer>(ShelfListView);
+            var scrollViewer = GetShelfScrollViewer();
             if (scrollViewer == null) return;
 
             double scrollAmount = -e.Delta / 120.0 * 48.0;
