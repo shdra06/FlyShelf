@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net;
 using System.Net.Http;
@@ -214,8 +214,16 @@ namespace FlyShelf.Classes
                 string resolved = Path.GetFullPath(requestedPath);
                 foreach (var root in _allowedRoots)
                 {
-                    if (resolved.StartsWith(Path.GetFullPath(root), StringComparison.OrdinalIgnoreCase))
+                    string allowedRoot = Path.GetFullPath(root);
+                    string rootWithSeparator = allowedRoot.EndsWith(Path.DirectorySeparatorChar.ToString())
+                        ? allowedRoot
+                        : allowedRoot + Path.DirectorySeparatorChar;
+
+                    if (resolved.Equals(allowedRoot, StringComparison.OrdinalIgnoreCase) ||
+                        resolved.StartsWith(rootWithSeparator, StringComparison.OrdinalIgnoreCase))
+                    {
                         return true;
+                    }
                 }
                 // Check if file is currently in the clipboard (live items)
                 var activePaths = GetAllActiveFilePaths();
@@ -322,6 +330,18 @@ namespace FlyShelf.Classes
 
             try
             {
+                // Cleanup chunk directories from previous runs on startup
+                try
+                {
+                    string chunksRoot = Path.Combine(Path.GetTempPath(), "FlyShelf_Chunks");
+                    if (Directory.Exists(chunksRoot))
+                    {
+                        Directory.Delete(chunksRoot, true);
+                        Logger.LogAction("CLEANUP", "Purged temporary chunk directories on startup.");
+                    }
+                }
+                catch { }
+
                 // Determine physical Local IP beforehand for bind fallback
                 string localIp = "127.0.0.1";
                 try
@@ -471,6 +491,31 @@ namespace FlyShelf.Classes
                     _ = CloudDiscoveryManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl);
                     // Check for new devices that joined via pairing code
                     _ = DevicePairingManager.CheckForHandshakes();
+
+                    // Clean up abandoned chunk upload sessions older than 2 hours
+                    try
+                    {
+                        string chunksRoot = Path.Combine(Path.GetTempPath(), "FlyShelf_Chunks");
+                        if (Directory.Exists(chunksRoot))
+                        {
+                            var dirs = Directory.GetDirectories(chunksRoot);
+                            foreach (var dir in dirs)
+                            {
+                                try
+                                {
+                                    var dirInfo = new DirectoryInfo(dir);
+                                    if (DateTime.Now - dirInfo.LastWriteTime > TimeSpan.FromHours(2))
+                                    {
+                                        Directory.Delete(dir, true);
+                                        _chunkSessions.TryRemove(dirInfo.Name, out _);
+                                        Logger.LogAction("CLEANUP", $"Deleted abandoned chunk session directory: {dirInfo.Name}");
+                                    }
+                                }
+                                catch { }
+                            }
+                        }
+                    }
+                    catch { }
                 };
                 _heartbeatTimer.AutoReset = true;
                 _heartbeatTimer.Start();

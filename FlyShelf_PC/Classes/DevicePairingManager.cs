@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -393,6 +393,7 @@ namespace FlyShelf.Classes
                 // This ensures the timestamp comes from Firebase's server, not the PC clock,
                 // so the phone's TTL check always works regardless of clock drift.
                 string pairingKey = CreatePairingKeyIfNeeded();
+                await CloudDiscoveryManager.RegisterRoomMembershipAsync(pairingKey);
                 string jsonPayload = JsonSerializer.Serialize(new
                 {
                     deviceId = SettingsManager.Current.DeviceId,
@@ -510,6 +511,7 @@ namespace FlyShelf.Classes
                     SettingsManager.Current.PairingKey = info.pairingKey;
                     SettingsManager.Save();
                     Logger.LogAction("PAIR CODE", $"Adopted pairing key from {info.deviceName}: {info.pairingKey.Substring(0, 8)}...");
+                    await CloudDiscoveryManager.RegisterRoomMembershipAsync(info.pairingKey);
                 }
 
                 // Register the remote device in our paired devices list
@@ -558,6 +560,7 @@ namespace FlyShelf.Classes
                             SettingsManager.Current.PairingKey = info.pairingKey;
                             SettingsManager.Save();
                             Logger.LogAction("PAIR CODE", $"Adopted pairing key from {info.deviceName}: {info.pairingKey.Substring(0, 8)}...");
+                            await CloudDiscoveryManager.RegisterRoomMembershipAsync(info.pairingKey);
                         }
 
                         // Now register the remote device locally (TryPairDevice checks key match)
@@ -586,14 +589,15 @@ namespace FlyShelf.Classes
                 }
             }
 
-            // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â CASE 3: Device has URLs but is unreachable Ã¢â‚¬â€ adopt key anyway Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+            // ═══ CASE 3: Device has URLs but is unreachable — adopt key anyway ═══ 
             // The device was found in Firebase, so the pairing key is valid.
             // Save it so cloud sync works once the device comes online.
             if (!string.IsNullOrEmpty(info.pairingKey))
             {
-                Logger.LogAction("PAIR CODE", $"Device {info.deviceName} unreachable Ã¢â‚¬â€ adopting key for deferred pairing");
+                Logger.LogAction("PAIR CODE", $"Device {info.deviceName} unreachable — adopting key for deferred pairing");
                 SettingsManager.Current.PairingKey = info.pairingKey;
                 SettingsManager.Save();
+                await CloudDiscoveryManager.RegisterRoomMembershipAsync(info.pairingKey);
                 TryPairDevice(info.pairingKey, info.deviceId, info.deviceName, info.deviceType, "deferred");
                 
                 _ = CloudDiscoveryManager.PushTunnelUrl(

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using System.Threading.Tasks;
@@ -20,6 +20,10 @@ namespace FlyShelf.Classes
 
         private const int MAX_RETRIES = 3;
         private static readonly int[] RETRY_DELAYS_MS = { 1000, 3000, 5000 };
+
+        // Bounded concurrency: up to 3 items transfer in parallel
+        // This prevents the second screenshot from waiting for the first to finish
+        private static readonly SemaphoreSlim _concurrency = new(3, 3);
 
         /// <summary>
         /// Enqueue a clipboard item for sync. Returns immediately — delivery is guaranteed via retries.
@@ -45,7 +49,7 @@ namespace FlyShelf.Classes
             _running = true;
             _cts = new CancellationTokenSource();
             _ = Task.Run(() => ProcessLoop(_cts.Token));
-            Logger.LogAction("SYNC_QUEUE", "Background processor started");
+            Logger.LogAction("SYNC_QUEUE", "Background processor started (concurrent mode, max 3 parallel)");
         }
 
         /// <summary>
@@ -72,7 +76,24 @@ namespace FlyShelf.Classes
 
                     if (_queue.TryDequeue(out var job))
                     {
-                        await ProcessJob(job, ct);
+                        // Fire concurrently — don't block the dequeue loop
+                        // Bounded by _concurrency semaphore (max 3 parallel)
+                        _ = Task.Run(async () =>
+                        {
+                            await _concurrency.WaitAsync(ct);
+                            try
+                            {
+                                await ProcessJob(job, ct);
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.LogAction("SYNC_QUEUE", $"Job error: {ex.Message}");
+                            }
+                            finally
+                            {
+                                _concurrency.Release();
+                            }
+                        }, ct);
                     }
                 }
                 catch (OperationCanceledException) { break; }

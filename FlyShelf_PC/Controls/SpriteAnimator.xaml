@@ -1,0 +1,20 @@
+<UserControl x:Class="FlyShelf.Controls.SpriteAnimator"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:gif="https://github.com/XamlAnimatedGif/XamlAnimatedGif"
+             IsHitTestVisible="False">
+    
+    <!-- The sprite is rendered as an animated GIF image inside a Canvas for absolute positioning -->
+    <Grid x:Name="AnimatorRoot" Visibility="Collapsed">
+        <Image x:Name="SpriteImage"
+               Width="{Binding SpriteWidth, RelativeSource={RelativeSource AncestorType=UserControl}}"
+               Height="{Binding SpriteHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"
+               Stretch="Uniform"
+               RenderOptions.BitmapScalingMode="NearestNeighbor"
+               RenderTransformOrigin="0.5,0.5">
+            <Image.RenderTransform>
+                <ScaleTransform x:Name="SpriteFlip" ScaleX="1" ScaleY="1"/>
+            </Image.RenderTransform>
+        </Image>
+    </Grid>
+</UserControl>

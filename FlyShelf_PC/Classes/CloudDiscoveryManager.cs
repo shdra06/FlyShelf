@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -56,6 +56,41 @@ namespace FlyShelf.Classes
         private const int DEDUP_COOLDOWN_MS = 10_000; // 10 seconds ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â  same content within this window is skipped
         private const int AUTO_DELETE_TEXT_MS = 5 * 60_000; // 5 minutes
         private const int AUTO_DELETE_FILE_MS = 6 * 60 * 60_000; // 6 hours safety net
+
+        /// <summary>
+        /// Registers room presence under members/{pairingKey}/{uid} = true.
+        /// Authenticates the path and makes a PUT request to secure membership in the room.
+        /// </summary>
+        public static async Task RegisterRoomMembershipAsync(string pairingKey)
+        {
+            if (string.IsNullOrEmpty(pairingKey)) return;
+            try
+            {
+                string uid = await FirebaseAuthManager.GetUidAsync();
+                if (string.IsNullOrEmpty(uid))
+                {
+                    Logger.LogAction("ROOM_MEMBER", "Cannot register room membership: UID is empty.");
+                    return;
+                }
+
+                string url = await AuthUrl($"members/{pairingKey}/{uid}.json");
+                var content = new StringContent("true", Encoding.UTF8, "application/json");
+                var response = await _client.PutAsync(url, content);
+                if (response.IsSuccessStatusCode)
+                {
+                    Logger.LogAction("ROOM_MEMBER", $"Registered room membership successfully for pairing key: {pairingKey}");
+                }
+                else
+                {
+                    string body = await response.Content.ReadAsStringAsync();
+                    Logger.LogAction("ROOM_MEMBER", $"Room membership registration failed: HTTP {(int)response.StatusCode} - {body}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("ROOM_MEMBER", $"Room membership registration error: {ex.Message}");
+            }
+        }
 
         public static async Task PushToCloudHub(ClipboardItem item)
         {

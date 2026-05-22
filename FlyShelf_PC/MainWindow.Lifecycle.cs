@@ -421,24 +421,15 @@ namespace FlyShelf
                 // This eliminates the position shift glitch during the fade/scale animation.
                 PlayShowAnimation();
 
-                // Resume the live wallpaper and mascot animations with a 250ms delay to avoid CPU/GPU contention
-                // during the 200ms scale/fade visual appear transition.
-                _ = System.Threading.Tasks.Task.Run(async () =>
+                // PERF: Resume paused GIF animations immediately — since hide only pauses (not destroys),
+                // this is instant with no disk I/O or GIF re-parsing.
+                try
                 {
-                    await System.Threading.Tasks.Task.Delay(250);
-                    Dispatcher.Invoke(() =>
-                    {
-                        try
-                        {
-                            var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
-                            animator?.Play();
-                            
-                            MascotIdle.ResumePlayback();
-                            Classes.AnimationTriggerService.Instance.StartIdleAnimation();
-                        }
-                        catch { }
-                    });
-                });
+                    var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
+                    animator?.Play();
+                    MascotIdle.ResumePlayback();
+                }
+                catch { }
 
                 // Trigger visible high-quality render after 1s of opening
                 if (_scrollHighQualityTimer == null)

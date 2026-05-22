@@ -2,8 +2,8 @@ const { withDangerousMod, withMainApplication, withAndroidManifest } = require('
 const fs = require('fs');
 const path = require('path');
 
-const PACKAGE_NAME = 'com.anonymous.AllSync';
-const PACKAGE_DIR = 'com/anonymous/AllSync';
+const PACKAGE_NAME = 'com.shivendra.flyshelf';
+const PACKAGE_DIR = 'com/shivendra/flyshelf';
 
 // ====== NATIVE KOTLIN SOURCE FILES ======
 
@@ -815,7 +815,7 @@ function withOverlayPackageRegistration(config) {
         // Add import
         contents = contents.replace(
             'import com.facebook.react.ReactPackage',
-            'import com.facebook.react.ReactPackage\nimport com.anonymous.AllSync.AdvanceOverlayPackage'
+            'import com.facebook.react.ReactPackage\nimport com.shivendra.flyshelf.AdvanceOverlayPackage'
         );
 
         // Add to getPackages

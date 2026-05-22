@@ -1,6 +1,7 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace FlyShelf.Classes
@@ -11,7 +12,20 @@ namespace FlyShelf.Classes
         public bool KeepItemOnDragOut { get => _keepItemOnDragOut; set => SetProperty(ref _keepItemOnDragOut, value); }
         
         private string _geminiApiKey = "";
-        public string GeminiApiKey { get => _geminiApiKey; set => SetProperty(ref _geminiApiKey, value); }
+        /// <summary>Stored encrypted via DPAPI. Getter returns plaintext, setter accepts plaintext.</summary>
+        [JsonIgnore]
+        public string GeminiApiKey
+        {
+            get => _geminiApiKey;
+            set => SetProperty(ref _geminiApiKey, value);
+        }
+        
+        /// <summary>Serialized to JSON — holds the DPAPI-encrypted blob of GeminiApiKey.</summary>
+        public string GeminiApiKeyEncrypted
+        {
+            get => string.IsNullOrEmpty(_geminiApiKey) ? "" : SecureStorage.Encrypt(_geminiApiKey);
+            set => _geminiApiKey = string.IsNullOrEmpty(value) ? "" : SecureStorage.Decrypt(value);
+        }
 
         private int _mediumFormWidth = 360;
         public int MediumFormWidth { get => _mediumFormWidth; set => SetProperty(ref _mediumFormWidth, value); }
@@ -47,7 +61,7 @@ namespace FlyShelf.Classes
         private bool _enableCloudDiscovery = true;
         public bool EnableCloudDiscovery { get => _enableCloudDiscovery; set => SetProperty(ref _enableCloudDiscovery, value); }
         
-        private string _webClientPinToken = "55555";
+        private string _webClientPinToken = "";
         public string WebClientPinToken { get => _webClientPinToken; set => SetProperty(ref _webClientPinToken, value); }
         
         private int _savedLocalPort = 0;
@@ -92,6 +106,21 @@ namespace FlyShelf.Classes
 
         private int _version = 1;
         public int Version { get => _version; set => SetProperty(ref _version, value); }
+
+        // Auto-Cleanup: 7=7 days, 14=14 days, 30=30 days, 0=Never
+        private int _clipboardRetentionDays = 7;
+        public int ClipboardRetentionDays { get => _clipboardRetentionDays; set => SetProperty(ref _clipboardRetentionDays, value); }
+
+        // ═══ Mascot Theme System ═══
+        private string _activeThemeName = "";
+        public string ActiveThemeName { get => _activeThemeName; set => SetProperty(ref _activeThemeName, value); }
+
+        private bool _themeAnimationsEnabled = true;
+        public bool ThemeAnimationsEnabled { get => _themeAnimationsEnabled; set => SetProperty(ref _themeAnimationsEnabled, value); }
+
+        // Auto-Start on Windows Boot
+        private bool _autoStartEnabled = true;
+        public bool AutoStartEnabled { get => _autoStartEnabled; set => SetProperty(ref _autoStartEnabled, value); }
     }
 
     public static class SettingsManager
@@ -161,6 +190,13 @@ namespace FlyShelf.Classes
                         }
                     }
                 }
+
+                // Generate a random PIN for first-time users (replaces insecure static '55555' default)
+                if (string.IsNullOrEmpty(Current.WebClientPinToken))
+                {
+                    Current.WebClientPinToken = Random.Shared.Next(10000, 99999).ToString();
+                    Logger.LogAction("SETTINGS", "Generated random WebClient PIN for new install.");
+                }
             }
             catch (Exception ex)
             {
@@ -194,6 +230,8 @@ namespace FlyShelf.Classes
             Save();
         }
 
+        private static readonly object _saveLock = new();
+
         public static void Save()
         {
             try
@@ -202,14 +240,23 @@ namespace FlyShelf.Classes
                 string path = GetConfigPath();
                 System.Threading.Tasks.Task.Run(() =>
                 {
-                    try
+                    lock (_saveLock)
                     {
-                        File.WriteAllText(path, json);
+                        try
+                        {
+                            File.WriteAllText(path, json);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogAction("SETTINGS_SAVE", $"Failed to write config: {ex.Message}");
+                        }
                     }
-                    catch { }
                 });
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.LogAction("SETTINGS_SAVE", $"Failed to serialize config: {ex.Message}");
+            }
         }
     }
 }

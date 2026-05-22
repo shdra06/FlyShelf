@@ -46,6 +46,7 @@ namespace FlyShelf.Classes
             public bool IsAnimating;
             public Profile Mode;
             public long LastFrameTick;
+            public bool IsTouchpad;
         }
 
         private static readonly Dictionary<ScrollViewer, ScrollState> _states = new();
@@ -130,18 +131,6 @@ namespace FlyShelf.Classes
 
             if (sv == null) return;
 
-            // Touchpad / Precision scroll bypass: Touchpads send high-resolution deltas
-            // that are not multiples of 120. Let WPF handle these natively with hardware inertia.
-            if (e.Delta % 120 != 0)
-            {
-                if (_states.TryGetValue(sv, out var activeState))
-                {
-                    activeState.Velocity = 0;
-                    activeState.IsAnimating = false;
-                }
-                return;
-            }
-
             _listScrollViewers.Add(sv);
             ApplyImpulse(sv, e, Profile.List);
         }
@@ -155,17 +144,6 @@ namespace FlyShelf.Classes
             if (sv == null) return;
             if (sv.ScrollableHeight <= 0) return;
             if (_listScrollViewers.Contains(sv)) return;
-
-            // Touchpad / Precision scroll bypass: Let WPF handle these natively
-            if (e.Delta % 120 != 0)
-            {
-                if (_states.TryGetValue(sv, out var activeState))
-                {
-                    activeState.Velocity = 0;
-                    activeState.IsAnimating = false;
-                }
-                return;
-            }
 
             ApplyImpulse(sv, e, Profile.Page);
         }
@@ -182,9 +160,8 @@ namespace FlyShelf.Classes
 
             double rawDelta = e.Delta;
 
-            // Touchpad detection: touchpads typically send deltas < 120 (one notch = ±120)
-            // Precision touchpads on Windows send high-resolution deltas in rapid succession
-            bool isTouchpad = Math.Abs(rawDelta) < 120;
+            // Touchpad detection: captured when delta is not a multiple of 120, or is very small
+            state.IsTouchpad = (e.Delta % 120 != 0) || (Math.Abs(rawDelta) < 120);
 
             double touchMul   = mode == Profile.List ? ListTouchpadMul   : PageTouchpadMul;
             double mouseMul   = mode == Profile.List ? ListMouseMul      : PageMouseMul;
@@ -192,10 +169,14 @@ namespace FlyShelf.Classes
             double maxVel     = mode == Profile.List ? ListMaxVelocity   : PageMaxVelocity;
 
             double impulse;
-            if (isTouchpad)
+            if (state.IsTouchpad)
             {
+                // Progressive velocity scaling for buttery smooth 144Hz-feel touchpad momentum
                 double capped = Math.Sign(rawDelta) * Math.Min(Math.Abs(rawDelta), DeltaCapTouchpad);
-                impulse = capped * touchMul;
+                double speedFactor = Math.Min(Math.Abs(rawDelta) / 40.0, 1.0);
+                double progressiveMul = 0.30 + (0.45 * speedFactor); // ranges 0.30 (gentle drag) to 0.75 (fast swipe)
+                impulse = capped * progressiveMul;
+                
                 // Guarantee minimum so very gentle scrolls still register
                 if (Math.Abs(impulse) < minImpulse && impulse != 0)
                     impulse = Math.Sign(impulse) * minImpulse;
@@ -261,7 +242,9 @@ namespace FlyShelf.Classes
                 sv.ScrollToVerticalOffset(newOffset);
 
                 // Exponential deceleration (friction applied per frame, scaled by time)
-                double friction = state.Mode == Profile.List ? ListFriction : PageFriction;
+                double friction = state.IsTouchpad 
+                    ? 0.72 // responsive trackpad momentum decay to avoid runway scrolling
+                    : (state.Mode == Profile.List ? ListFriction : PageFriction);
                 // Apply friction proportional to elapsed time:
                 // For 1 frame (16.67ms), apply friction once. For 2 frames, apply twice, etc.
                 state.Velocity *= Math.Pow(friction, timeScale);

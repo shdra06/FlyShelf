@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
@@ -41,7 +41,7 @@ namespace FlyShelf.Classes
     {
         public static NetworkActivityLog Instance { get; } = new();
         
-        private const int MAX_ENTRIES = 500;
+        private const int MAX_ENTRIES = 100;
         
         public ObservableCollection<NetworkLogEntry> Entries { get; } = new();
 

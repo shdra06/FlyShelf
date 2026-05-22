@@ -438,10 +438,8 @@ namespace FlyShelf
             
             System.Threading.Tasks.Task.Run(() =>
             {
-                foreach (var item in pinnedSelected)
-                {
-                    Classes.ClipboardHistoryManager.UpdateItemPinState(item);
-                }
+                _viewModel.SavePinnedItems();
+                _viewModel.PersistHistoryPublic();
             });
             
             UnpinSelectedBtn.Visibility = Visibility.Collapsed;

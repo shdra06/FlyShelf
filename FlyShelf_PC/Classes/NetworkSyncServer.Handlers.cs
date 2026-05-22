@@ -1,5 +1,5 @@
-// ---------------------------------------------------------------
-// NetworkSyncServer � HTTP Request Handlers
+﻿// ---------------------------------------------------------------
+// NetworkSyncServer ï¿½ HTTP Request Handlers
 // ServeHtml, ClipboardData, TextUpload, FileUpload,
 // ArchiveUpload, RelayUpload
 // Split from NetworkSyncServer.cs for modularity
@@ -46,11 +46,11 @@ namespace FlyShelf.Classes
             finally { try { res.Close(); } catch { } }
         }
 
-        // ═══ RESPONSE CACHE: Avoid re-serializing on rapid polls ═══
+        // â•â•â• RESPONSE CACHE: Avoid re-serializing on rapid polls â•â•â•
         private byte[]? _cachedSyncJson = null;
         private long _cachedSyncTimestamp = 0;
         private int _cachedItemCount = 0;
-        private const int SYNC_CACHE_TTL_MS = 500; // Cache for 500ms — fast invalidation for real-time sync
+        private const int SYNC_CACHE_TTL_MS = 500; // Cache for 500ms â€” fast invalidation for real-time sync
 
         private void ServeClipboardData(HttpListenerResponse res)
         {
@@ -91,7 +91,7 @@ namespace FlyShelf.Classes
                         SourceDeviceName = x.Extension == "MOBILE" ? "Mobile" : (SettingsManager.Current.DeviceName ?? Environment.MachineName),
                         SourceDeviceType = x.Extension == "MOBILE" ? "Mobile" : "PC"
                     })
-                    // Sort by freshness — bumped items get DateCopied = Now, so they appear first
+                    // Sort by freshness â€” bumped items get DateCopied = Now, so they appear first
                     .OrderByDescending(x => x.Timestamp)
                     .ToList();
 
@@ -150,11 +150,11 @@ namespace FlyShelf.Classes
                 }
                 catch
                 {
-                    // Not valid JSON — treat entire body as plain text (legacy sender)
+                    // Not valid JSON â€” treat entire body as plain text (legacy sender)
                 }
             }
 
-            // Respond instantly — don't make Android wait for UI processing
+            // Respond instantly â€” don't make Android wait for UI processing
             res.StatusCode = 200;
             res.Close();
 
@@ -236,12 +236,13 @@ namespace FlyShelf.Classes
 
                 clip.EvaluateSmartActions();
                 bool wasEmpty = _viewModel.DroppedItems.Count == 0;
-                _viewModel.DroppedItems.Insert(0, clip);
+                _viewModel.InsertWithDedup(clip);
                 if (wasEmpty) _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                 
                 // ECHO PREVENTION: Mark this text as cloud-sourced so the clipboard monitor
                 // doesn't re-push it to Firebase when we set the Windows clipboard below.
-                string txtFp = $"TXT::{capturedText.Substring(0, Math.Min(200, capturedText.Length))}";
+                string normalizedContent = FlyShelfViewModel.NormalizeTextForFingerprint(capturedText);
+                string txtFp = $"TXT::{normalizedContent.Substring(0, Math.Min(200, normalizedContent.Length))}";
                 _viewModel.MarkAsCloudSourced(txtFp);
                 
                 // Suppress clipboard monitor during our write
@@ -254,7 +255,7 @@ namespace FlyShelf.Classes
                 catch { }
                 finally { MainWindow.SetWritingClipboard(false); }
                 
-                FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport.transport}! 📱");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport.transport}! ðŸ“±");
                 // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
                 NotifyClipboardChanged(clip.ItemType.ToString(), capturedText.Length > 40 ? capturedText.Substring(0, 40) : capturedText);
             });
@@ -285,7 +286,7 @@ namespace FlyShelf.Classes
                 Directory.CreateDirectory(uploadDir);
 
                 string encodedName = req.Headers["X-File-Name"] ?? req.QueryString["name"];
-                string mappedType = req.Headers["X-File-Type"] ?? req.QueryString["type"] ?? "Document";
+                string mappedType = req.Headers["X-File-Type"] ?? req.Headers["X-Item-Type"] ?? req.QueryString["type"] ?? "Document";
                 string rawName = "uploaded_file.dat";
                 if (!string.IsNullOrEmpty(encodedName))
                 {
@@ -311,7 +312,7 @@ namespace FlyShelf.Classes
                 else
                 {
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {rawName} from {sourceDevice}... 📥");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {rawName} from {sourceDevice}... ðŸ“¥");
                     });
                 }
 
@@ -399,7 +400,7 @@ namespace FlyShelf.Classes
                 {
                     string extractDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", "Extracted", $"{Guid.NewGuid().ToString().Substring(0, 8)}");
                     Directory.CreateDirectory(extractDir);
-                    System.IO.Compression.ZipFile.ExtractToDirectory(finalPath, extractDir);
+                    SafeExtractZip(finalPath, extractDir);
 
                     string[] extractedPaths = Directory.GetFileSystemEntries(extractDir);
                     InjectReceivedGroup(
@@ -444,7 +445,7 @@ namespace FlyShelf.Classes
 
 
         private DateTime _lastArchiveToastTime = DateTime.MinValue;
-        // Track files per batch for auto-clipboard (copy to clipboard if ≤2 files in batch)
+        // Track files per batch for auto-clipboard (copy to clipboard if â‰¤2 files in batch)
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, List<string>> _batchFiles = new();
 
         private async Task HandleArchiveUpload(HttpListenerRequest req, HttpListenerResponse res)
@@ -483,7 +484,7 @@ namespace FlyShelf.Classes
                 {
                     _lastArchiveToastTime = DateTime.Now;
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Extracting batch data... 📦");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Extracting batch data... ðŸ“¦");
                     });
                 }
 
@@ -514,7 +515,7 @@ namespace FlyShelf.Classes
                 var batchList = _batchFiles.GetOrAdd(batchName, _ => new List<string>());
                 lock (batchList) { batchList.Add(finalPath); }
                 
-                // Auto-copy to Windows clipboard if ≤2 files in this batch
+                // Auto-copy to Windows clipboard if â‰¤2 files in this batch
                 if (batchList.Count <= 2)
                 {
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
@@ -524,9 +525,9 @@ namespace FlyShelf.Classes
                             var fileList = new System.Collections.Specialized.StringCollection();
                             lock (batchList) { foreach (var f in batchList) fileList.Add(f); }
                             System.Windows.Clipboard.SetFileDropList(fileList);
-                            FlyShelf.Windows.ToastWindow.ShowToast($"📋 {rawName} copied to clipboard");
+                            FlyShelf.Windows.ToastWindow.ShowToast($"ðŸ“‹ {rawName} copied to clipboard");
                             
-                            // Insert proper file entry into FlyShelf (clickable → opens in default app)
+                            // Insert proper file entry into FlyShelf (clickable â†’ opens in default app)
                             var clip = new ClipboardItem
                             {
                                 RawContent = finalPath,
@@ -540,7 +541,7 @@ namespace FlyShelf.Classes
                             };
                             clip.EvaluateSmartActions();
                             bool wasEmpty = _viewModel.DroppedItems.Count == 0;
-                            _viewModel.DroppedItems.Insert(0, clip);
+                            _viewModel.InsertWithDedup(clip);
                             if (wasEmpty) _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                         }
                         catch { }
@@ -561,7 +562,7 @@ namespace FlyShelf.Classes
             }
         }
 
-        // ─── Relay Upload: Android uploads file → PC saves + pushes Cloudflare URL to Firebase ───
+        // â”€â”€â”€ Relay Upload: Android uploads file â†’ PC saves + pushes Cloudflare URL to Firebase â”€â”€â”€
         private async Task HandleRelayUpload(HttpListenerRequest req, HttpListenerResponse res)
         {
             try
@@ -670,7 +671,7 @@ namespace FlyShelf.Classes
 
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast($"📡 Relayed {rawName} ({sizeStr}) from {senderDevice}");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"ðŸ“¡ Relayed {rawName} ({sizeStr}) from {senderDevice}");
                 });
 
                 res.StatusCode = 200;
@@ -689,513 +690,5 @@ namespace FlyShelf.Classes
                 res.Close();
             }
         }
-        private async Task ProcessRequest(HttpListenerContext context)
-        {
-            var req = context.Request;
-            var res = context.Response;
-
-            try
-            {
-                string path = req.Url.LocalPath.ToLower();
-                string remoteAddr = req.RemoteEndPoint?.ToString() ?? "unknown";
-                Logger.LogAction("HTTP", $"[{remoteAddr}] {req.HttpMethod} {path}");
-                
-                res.AddHeader("Access-Control-Allow-Origin", "*");
-                res.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                res.AddHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Original-Date, X-FlyShelf-Client, X-Pairing-Key");
-                res.AddHeader("Access-Control-Expose-Headers", "X-Global-Url");
-                // Disable keep-alive: HttpListener's TCP reuse causes 400 errors on rapid-fire requests
-                res.KeepAlive = false;
-                if (!string.IsNullOrEmpty(GlobalUrl)) res.AddHeader("X-Global-Url", GlobalUrl);
-
-                if (req.HttpMethod == "OPTIONS")
-                {
-                    res.StatusCode = 200;
-                    res.Close();
-                    return;
-                }
-
-                if (path == "/" || path == "/index.html")
-                {
-                    ServeHtml(res);
-                }
-                else if (path == "/ping")
-                {
-                    // Unauthenticated ping for LAN reachability detection
-                    byte[] pong = Encoding.UTF8.GetBytes("pong");
-                    res.StatusCode = 200;
-                    res.ContentType = "text/plain";
-                    res.OutputStream.Write(pong, 0, pong.Length);
-                    res.Close();
-                }
-                else if (path == "/api/health" && req.HttpMethod == "GET")
-                {
-                    // Rich health endpoint — returns device state for smart peer management
-                    try
-                    {
-                        var healthData = new
-                        {
-                            status = "online",
-                            version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0",
-                            deviceId = SettingsManager.Current.DeviceId,
-                            deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
-                            deviceType = "PC",
-                            uptime = (int)(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds,
-                            transport = new
-                            {
-                                lan = CloudDiscoveryManager.CachedLocalUrl ?? "",
-                                cloudflare = CloudDiscoveryManager.CachedGlobalUrl ?? "",
-                            },
-                            peers = PeerManager.Instance?.AliveCount ?? 0,
-                            timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-                        };
-                        string json = System.Text.Json.JsonSerializer.Serialize(healthData);
-                        byte[] data = Encoding.UTF8.GetBytes(json);
-                        res.StatusCode = 200;
-                        res.ContentType = "application/json";
-                        res.OutputStream.Write(data, 0, data.Length);
-                    }
-                    catch
-                    {
-                        // Fallback: still return 200 even if serialization fails
-                        res.StatusCode = 200;
-                    }
-                    res.Close();
-                }
-                else if (path == "/ws/peer" && req.IsWebSocketRequest)
-                {
-                    // WebSocket peer liveness — persistent connection for instant death detection
-                    string wsPairingKey = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"] ?? "";
-                    if (string.IsNullOrEmpty(wsPairingKey) || !DevicePairingManager.IsDevicePaired(wsPairingKey))
-                    {
-                        res.StatusCode = 403;
-                        res.Close();
-                        return;
-                    }
-                    string peerDeviceId = req.Headers["X-Device-Id"] ?? req.QueryString["deviceId"] ?? "unknown";
-                    Logger.LogAction("WS", $"✅ Peer WebSocket accepted from {peerDeviceId}");
-                    var wsContext = await context.AcceptWebSocketAsync(null);
-                    _ = Task.Run(() => HandlePeerWebSocket(wsContext.WebSocket, peerDeviceId));
-                }
-                else if (path == "/download" && req.HttpMethod == "GET")
-                {
-                    // SECURITY: /download requires authentication (pairing key or PIN)
-                    string dlPairingKey = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"] ?? "";
-                    string dlPin = req.Headers["Authorization"]?.Replace("Bearer ", "") ?? req.QueryString["pin"] ?? "";
-                    bool dlAuthed = DevicePairingManager.IsDevicePaired(dlPairingKey) ||
-                                   (!string.IsNullOrEmpty(dlPin) && dlPin == SettingsManager.Current.WebClientPinToken);
-
-                    if (!dlAuthed)
-                    {
-                        Logger.LogAction("SECURITY", $"⛔ Rejected unauthenticated /download from {req.RemoteEndPoint}");
-                        byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"401 — Download requires authentication\"}");
-                        res.StatusCode = 401;
-                        res.ContentType = "application/json";
-                        res.OutputStream.Write(err, 0, err.Length);
-                        res.Close();
-                    }
-                    else
-                    {
-                        await ServeFileDownload(req, res);
-                    }
-                }
-                else if (path == "/api/pair" && req.HttpMethod == "POST")
-                {
-                    // QR Code pairing — validates pairing key and registers device
-                    await HandlePairRequest(req, res);
-                }
-                else if (path == "/api/discover" && req.HttpMethod == "GET")
-                {
-                    // Paired device discovery — returns current connection URLs
-                    string pairingKey = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"];
-                    if (DevicePairingManager.IsDevicePaired(pairingKey))
-                    {
-                        string deviceId = req.Headers["X-Device-Id"] ?? "";
-                        string remoteIp = req.RemoteEndPoint?.Address?.ToString() ?? "";
-                        if (!string.IsNullOrEmpty(deviceId))
-                            DevicePairingManager.TouchDevice(deviceId, remoteIp);
-
-                        var info = new
-                        {
-                            status = "ok",
-                            localUrl = DisplayUrl,
-                            globalUrl = GlobalUrl ?? "",
-                            pin = SettingsManager.Current.WebClientPinToken,
-                            deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName
-                        };
-                        byte[] json = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(info));
-                        res.StatusCode = 200;
-                        res.ContentType = "application/json";
-                        res.OutputStream.Write(json, 0, json.Length);
-                        res.Close();
-                    }
-                    else
-                    {
-                        byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Invalid pairing key\"}");
-                        res.StatusCode = 403;
-                        res.ContentType = "application/json";
-                        res.OutputStream.Write(err, 0, err.Length);
-                        res.Close();
-                    }
-                }
-                else
-                {
-                    // HARD SECURE AUTHENTICATION BARRIER
-                    string providedPin = req.Headers["Authorization"]?.Replace("Bearer ", "") ?? req.QueryString["pin"];
-                    string pairingKey = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"];
-                    
-                    bool isNativeMobileCompanion = req.Headers["User-Agent"]?.Contains("FlyShelfMobile_Native") == true || req.Headers["X-FlyShelf-Client"] == "MobileCompanion" || req.Headers["X-FlyShelf-Client"] == "DesktopSync";
-                    bool isPairedDevice = DevicePairingManager.IsDevicePaired(pairingKey);
-                    
-                    if (!isNativeMobileCompanion && !isPairedDevice && (string.IsNullOrEmpty(providedPin) || providedPin != SettingsManager.Current.WebClientPinToken))
-                    {
-                        byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"401 Unauthorized - Invalid PIN\"}");
-                        res.StatusCode = 401;
-                        res.ContentType = "application/json";
-                        res.OutputStream.Write(err, 0, err.Length);
-                        res.Close();
-                        return;
-                    }
-
-                    if (path == "/api/health" && req.HttpMethod == "GET")
-                    {
-                        try
-                        {
-                            var healthData = new
-                            {
-                                status = "online",
-                                version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0",
-                                deviceId = SettingsManager.Current.DeviceId,
-                                deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
-                                deviceType = "PC",
-                                uptime = (int)(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds,
-                                transport = new
-                                {
-                                    lan = CloudDiscoveryManager.CachedLocalUrl ?? "",
-                                    cloudflare = CloudDiscoveryManager.CachedGlobalUrl ?? "",
-                                },
-                                peers = PeerManager.Instance?.AliveCount ?? 0,
-                                timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
-                            };
-                            string json = System.Text.Json.JsonSerializer.Serialize(healthData);
-                            byte[] data = Encoding.UTF8.GetBytes(json);
-                            res.StatusCode = 200;
-                            res.ContentType = "application/json";
-                            res.OutputStream.Write(data, 0, data.Length);
-                        }
-                        catch { res.StatusCode = 200; }
-                        res.Close();
-                    }
-                    else if (path == "/api/sync" && req.HttpMethod == "GET")
-                    {
-                        // Track this device as directly connected (Phase 3)
-                        string deviceId = req.Headers["X-Pairing-Key"] ?? req.Headers["X-Device-Id"] ?? req.RemoteEndPoint?.Address?.ToString() ?? "unknown";
-                        _directDeviceLastSeen[deviceId] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-                        CloudDiscoveryManager.DirectlyConnectedDeviceCount = GetDirectlyConnectedDeviceCount();
-                        ServeClipboardData(res);
-                    }
-                    else if (path == "/api/events" && req.HttpMethod == "GET")
-                    {
-                        // Long-poll endpoint — blocks until clipboard changes or 30s timeout
-                        // React Native can't use SSE/ReadableStream, so we use long-polling instead
-                        var tcs = new TaskCompletionSource<string>();
-                        lock (_longPollLock) { _longPollWaiters.Add(tcs); }
-                        try
-                        {
-                            var timeoutTask = Task.Delay(30000);
-                            var completedTask = await Task.WhenAny(tcs.Task, timeoutTask);
-                            
-                            if (completedTask == tcs.Task)
-                            {
-                                // Clipboard changed! Return the event data
-                                string payload = await tcs.Task;
-                                byte[] data = Encoding.UTF8.GetBytes(payload);
-                                res.StatusCode = 200;
-                                res.ContentType = "application/json";
-                                res.ContentLength64 = data.Length;
-                                res.OutputStream.Write(data, 0, data.Length);
-                            }
-                            else
-                            {
-                                // Timeout — return 204 No Content (no new events)
-                                res.StatusCode = 204;
-                            }
-                        }
-                        catch { res.StatusCode = 500; }
-                        finally
-                        {
-                            lock (_longPollLock) { _longPollWaiters.Remove(tcs); }
-                            try { res.Close(); } catch { }
-                        }
-                    }
-                    else if (path == "/api/sync_text" && req.HttpMethod == "POST")
-                    {
-                        await HandleTextUpload(req, res);
-                    }
-                    else if (path == "/api/sync_file" && req.HttpMethod == "POST")
-                    {
-                        await HandleFileUpload(req, res);
-                    }
-                    else if (path == "/api/archive_upload" && req.HttpMethod == "POST")
-                    {
-                        await HandleArchiveUpload(req, res);
-                    }
-                    else if (path == "/api/upload_chunk" && req.HttpMethod == "POST")
-                    {
-                        await HandleChunkUpload(req, res);
-                    }
-                    else if (path == "/api/upload_finalize" && req.HttpMethod == "POST")
-                    {
-                        await HandleChunkFinalize(req, res);
-                    }
-                    else if (path == "/api/relay_upload" && req.HttpMethod == "POST")
-                    {
-                        await HandleRelayUpload(req, res);
-                    }
-                    else if (path == "/api/convert_to_pdf" && req.HttpMethod == "POST")
-                    {
-                        await HandleConvertToPdf(req, res);
-                    }
-                    else if (path == "/logs" && req.HttpMethod == "GET")
-                    {
-                        // Serve the live log dashboard page
-                        ServeLogDashboard(res);
-                    }
-                    else if (path == "/api/logs/stream" && req.HttpMethod == "GET")
-                    {
-                        // SSE live log stream — stays open, pushes new log lines in real-time
-                        await ServeLogStream(req, res);
-                    }
-                    else if (path == "/api/logs" && req.HttpMethod == "GET")
-                    {
-                        // Return combined PC + mobile logs as JSON
-                        ServeLogsJson(req, res);
-                    }
-                    else if (path == "/api/logs" && req.HttpMethod == "POST")
-                    {
-                        // Accept logs from paired devices
-                        await HandleRemoteLogPost(req, res);
-                    }
-                    else
-                    {
-                        res.StatusCode = 404;
-                        res.Close();
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("SERVER REQUEST FAULT", ex.Message);
-                try { res.StatusCode = 500; } catch { }
-                try { res.Close(); } catch { }
-            }
-        }
-
-        /// <summary>
-        /// Holds a WebSocket connection with a peer for instant liveness detection.
-        /// Sends ping every 30s, receives pong. If the peer dies or tunnel drops,
-        /// the WebSocket closes instantly — no 50s heartbeat delay.
-        /// </summary>
-        private async Task HandlePeerWebSocket(WebSocket ws, string peerDeviceId)
-        {
-            byte[] buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(65536); // 64KB rented read buffer
-            try
-            {
-                while (ws.State == WebSocketState.Open)
-                {
-                    // 1. Read the complete next message (either text JSON or ping/pong)
-                    using var ms = new MemoryStream();
-                    WebSocketReceiveResult result;
-                    do
-                    {
-                        result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
-                        if (result.MessageType == WebSocketMessageType.Close)
-                        {
-                            Logger.LogAction("WS", $"Peer {peerDeviceId} closed WebSocket gracefully");
-                            await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None);
-                            return;
-                        }
-                        ms.Write(buffer, 0, result.Count);
-                    } while (!result.EndOfMessage);
-
-                    byte[] messageBytes = ms.ToArray();
-
-                    if (result.MessageType == WebSocketMessageType.Text)
-                    {
-                        string text = Encoding.UTF8.GetString(messageBytes);
-                        if (text == "ping")
-                        {
-                            byte[] pong = Encoding.UTF8.GetBytes("pong");
-                            await ws.SendAsync(new ArraySegment<byte>(pong), WebSocketMessageType.Text, true, CancellationToken.None);
-                            continue;
-                        }
-
-                        // If it starts with { and ends with }, parse as JSON control envelope
-                        if (text.TrimStart().StartsWith("{"))
-                        {
-                            try
-                            {
-                                using var doc = JsonDocument.Parse(text);
-                                var root = doc.RootElement;
-                                string envelopeType = root.TryGetProperty("type", out var typeProp) ? typeProp.GetString() : "";
-
-                                if (envelopeType == "SyncText")
-                                {
-                                    string itemType = root.TryGetProperty("itemType", out var itProp) ? itProp.GetString() : "Text";
-                                    string title = root.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : "";
-                                    string data = root.TryGetProperty("data", out var dataProp) ? dataProp.GetString() : "";
-                                    string sourceDeviceName = root.TryGetProperty("sourceDeviceName", out var nameProp) ? nameProp.GetString() : "Remote PC";
-
-                                    Logger.LogAction("WS", $"Received SyncText via WebSocket from {sourceDeviceName}: '{title}'");
-                                    InjectReceivedText(data, sourceDeviceName, "WebSocket", itemType, "PC");
-                                }
-                                else if (envelopeType == "SyncFileStart")
-                                {
-                                    string fileName = root.TryGetProperty("fileName", out var fnProp) ? fnProp.GetString() : "file.dat";
-                                    long fileSize = root.TryGetProperty("fileSize", out var fsProp) ? fsProp.GetInt64() : 0;
-                                    string itemType = root.TryGetProperty("itemType", out var itProp) ? itProp.GetString() : "File";
-                                    string title = root.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : "";
-                                    string sourceDeviceName = root.TryGetProperty("sourceDeviceName", out var nameProp) ? nameProp.GetString() : "Remote PC";
-
-                                    Logger.LogAction("WS", $"Received SyncFileStart: {fileName} ({fileSize} bytes) from {sourceDeviceName}");
-
-                                    // Let's create the destination folder and temp/final paths
-                                    string dateString = DateTime.Now.ToString("dd-MM-yyyy");
-                                    string uploadDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), 
-                                        "FlyShelf", "SyncedFiles", "Clipboard", sourceDeviceName, dateString);
-                                    Directory.CreateDirectory(uploadDir);
-
-                                    int counter = 1;
-                                    string finalPath = Path.Combine(uploadDir, fileName);
-                                    while (File.Exists(finalPath))
-                                    {
-                                        finalPath = Path.Combine(uploadDir, $"{Path.GetFileNameWithoutExtension(fileName)}_{counter++}{Path.GetExtension(fileName)}");
-                                    }
-
-                                    bool isLargeFile = fileSize >= 10 * 1024 * 1024;
-                                    ClipboardItem? placeholder = null;
-
-                                    if (isLargeFile)
-                                    {
-                                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                                        {
-                                            placeholder = _viewModel.CreateTransferPlaceholder(
-                                                fileName, 
-                                                fileSize, 
-                                                sourceDeviceName, 
-                                                "WebSocket", 
-                                                "PC"
-                                            );
-                                        });
-                                    }
-                                    else
-                                    {
-                                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                                            FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {fileName} from {sourceDeviceName} (via WS)... 📥");
-                                        });
-                                    }
-
-                                    // Direct file streaming Mode: read subsequent binary chunks directly from WebSocket
-                                    long bytesReceived = 0;
-                                    var lastProgressUpdate = DateTime.MinValue;
-                                    try
-                                    {
-                                        using (var fileFs = new FileStream(finalPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true))
-                                        {
-                                            while (bytesReceived < fileSize)
-                                            {
-                                                long remain = fileSize - bytesReceived;
-                                                int toRead = (int)Math.Min(buffer.Length, remain);
-
-                                                var chunkResult = await ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, toRead), CancellationToken.None);
-                                                if (chunkResult.MessageType == WebSocketMessageType.Close)
-                                                {
-                                                    throw new WebSocketException("WebSocket closed during binary file transmission.");
-                                                }
-                                                
-                                                await fileFs.WriteAsync(buffer, 0, chunkResult.Count);
-                                                bytesReceived += chunkResult.Count;
-
-                                                if (isLargeFile && placeholder != null && (DateTime.Now - lastProgressUpdate).TotalMilliseconds >= 300)
-                                                {
-                                                    lastProgressUpdate = DateTime.Now;
-                                                    double progress = fileSize > 0 ? ((double)bytesReceived / fileSize * 100) : 50;
-                                                    if (progress < 1) progress = 1;
-                                                    if (progress > 99) progress = 99;
-                                                    string speedText = $"{FlyShelfViewModel.FormatBytesStatic(bytesReceived)} of {FlyShelfViewModel.FormatBytesStatic(fileSize)}";
-                                                    
-                                                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                                                    {
-                                                        placeholder.TransferProgress = progress;
-                                                        placeholder.TransferStatusText = $"Transferring... {progress:F0}% ({speedText})";
-                                                    });
-                                                }
-                                            }
-                                        }
-
-                                        Logger.LogAction("WS", $"SyncFile completed via WS: {fileName} ({bytesReceived} bytes written)");
-
-                                        // Handle group ZIP reconstruction
-                                        if (itemType == "Group")
-                                        {
-                                            string extractDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", "Extracted", $"{Guid.NewGuid().ToString().Substring(0, 8)}");
-                                            Directory.CreateDirectory(extractDir);
-                                            System.IO.Compression.ZipFile.ExtractToDirectory(finalPath, extractDir);
-
-                                            string[] extractedPaths = Directory.GetFileSystemEntries(extractDir);
-                                            InjectReceivedGroup(
-                                                extractedPaths, 
-                                                sourceDeviceName, 
-                                                "WebSocket", 
-                                                "PC", 
-                                                placeholder
-                                            );
-                                        }
-                                        else
-                                        {
-                                            InjectReceivedFile(
-                                                finalPath, 
-                                                sourceDeviceName, 
-                                                "WebSocket", 
-                                                "PC", 
-                                                placeholder
-                                            );
-                                        }
-                                    }
-                                    catch (Exception)
-                                    {
-                                        if (placeholder != null)
-                                        {
-                                            System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.DroppedItems.Remove(placeholder));
-                                        }
-                                        throw;
-                                    }
-                                }
-                            }
-                            catch (Exception jsonEx)
-                            {
-                                Logger.LogAction("WS ERROR", $"Failed parsing WS JSON payload: {jsonEx.Message}");
-                            }
-                        }
-                    }
-                }
-            }
-            catch (WebSocketException wsEx)
-            {
-                Logger.LogAction("WS", $"Peer {peerDeviceId} WebSocket connection lost/dropped: {wsEx.Message}");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("WS", $"Peer {peerDeviceId} WebSocket error: {ex.Message}");
-            }
-            finally
-            {
-                System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
-                ws.Dispose();
-            }
-        }
-
     }
 }
-
-

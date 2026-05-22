@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -345,7 +345,7 @@ namespace FlyShelf.Windows
                 // Also build TSV fallback
                 string tsv = BuildTsv();
 
-                MainWindow._isWritingClipboard = true;
+                MainWindow.SetWritingClipboard(true);
                 try
                 {
                     var dataObj = new DataObject();
@@ -353,7 +353,7 @@ namespace FlyShelf.Windows
                     dataObj.SetData(DataFormats.Text, tsv);
                     Clipboard.SetDataObject(dataObj, true);
                 }
-                finally { MainWindow._isWritingClipboard = false; }
+                finally { MainWindow.SetWritingClipboard(false); }
 
                 ToastWindow.ShowToast("Table copied! Paste into Word 📋");
             }
@@ -366,26 +366,26 @@ namespace FlyShelf.Windows
 
         private void ExportCsv_Click(object sender, RoutedEventArgs e)
         {
-            MainWindow._isWritingClipboard = true;
+            MainWindow.SetWritingClipboard(true);
             try
             {
                 Clipboard.SetText(BuildCsv());
                 ToastWindow.ShowToast("Table copied as CSV 📋");
             }
             catch { ToastWindow.ShowToast("Clipboard busy — try again"); }
-            finally { MainWindow._isWritingClipboard = false; }
+            finally { MainWindow.SetWritingClipboard(false); }
         }
 
         private void ExportTsv_Click(object sender, RoutedEventArgs e)
         {
-            MainWindow._isWritingClipboard = true;
+            MainWindow.SetWritingClipboard(true);
             try
             {
                 Clipboard.SetText(BuildTsv());
                 ToastWindow.ShowToast("Table copied as TSV 📋");
             }
             catch { ToastWindow.ShowToast("Clipboard busy — try again"); }
-            finally { MainWindow._isWritingClipboard = false; }
+            finally { MainWindow.SetWritingClipboard(false); }
         }
 
         private string BuildCsv()

@@ -72,20 +72,20 @@ namespace FlyShelf.ViewModels
             {
                 string emoji = TransferMethod switch
                 {
-                    "LAN" => "📡",
-                    "Cloud" => "☁️",
-                    "Cloudflare" => "🌐",
-                    "ForceSend" => "🎯",
-                    _ => "📋"
+                    "LAN" => "ðŸ“¡",
+                    "Cloud" => "â˜ï¸",
+                    "Cloudflare" => "ðŸŒ",
+                    "ForceSend" => "ðŸŽ¯",
+                    _ => "ðŸ“‹"
                 };
                 string deviceEmoji = SourceDeviceType switch
                 {
-                    "Mobile" => "📱",
-                    "PC" => "💻",
+                    "Mobile" => "ðŸ“±",
+                    "PC" => "ðŸ’»",
                     _ => ""
                 };
                 if (SourceDeviceName == "Local") return $"{emoji} Local";
-                return $"{deviceEmoji} {SourceDeviceName} · {emoji} {TransferMethod}";
+                return $"{deviceEmoji} {SourceDeviceName} Â· {emoji} {TransferMethod}";
             }
         }
         public bool HasTransferBadge => SourceDeviceName != "Local";
@@ -111,10 +111,10 @@ namespace FlyShelf.ViewModels
             };
         }
 
-        private BitmapImage? _icon;
+        private BitmapSource? _icon;
         
         [JsonIgnore]
-        public BitmapImage? Icon
+        public BitmapSource? Icon
         {
             get => _icon;
             set
@@ -153,6 +153,24 @@ namespace FlyShelf.ViewModels
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLongText)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ExpandToggleText)));
+                    
+                    // Notify all visual preview triggers to re-evaluate dynamically
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsImagePreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsStaticImagePreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsGifPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsDocPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPdfPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsUrlPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsCodePreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsGroupPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsQRCodePreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsVideoPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsArchivePreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsFolderPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsTextPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsAudioPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPresentationPreview)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsFilePreview)));
                 }
             }
         }
@@ -163,9 +181,11 @@ namespace FlyShelf.ViewModels
             get => _rawContent;
             set
             {
-                if (_rawContent != value)
+                // Cap at 10K chars to prevent unbounded memory growth at 1000-item scale
+                string capped = value?.Length > 10_000 ? value.Substring(0, 10_000) : value;
+                if (_rawContent != capped)
                 {
-                    _rawContent = value;
+                    _rawContent = capped;
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContent)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLongText)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));
@@ -221,7 +241,7 @@ namespace FlyShelf.ViewModels
         public double CollapsedMaxHeight => IsLongText ? (IsExpanded ? double.PositiveInfinity : 100.0) : 57.0;
 
         [JsonIgnore]
-        public string ExpandToggleText => IsExpanded ? "▴" : "▾";
+        public string ExpandToggleText => IsExpanded ? "â–´" : "â–¾";
 
         private System.Windows.Input.ICommand? _toggleExpandCommand;
         [JsonIgnore]
@@ -386,640 +406,34 @@ namespace FlyShelf.ViewModels
         [JsonIgnore]
         public System.Windows.Media.SolidColorBrush DetectedColorBrush => HasDetectedColor ? FlyShelf.Classes.ColorHelper.ToBrush(_detectedColor) : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Transparent);
 
-        public void EvaluateSmartActions()
+
+        private bool _isLoadedHighQuality;
+        [JsonIgnore]
+        public bool IsLoadedHighQuality
         {
-            HasSmartAction = false;
-            
-            if (ItemType == ClipboardItemType.Pdf)
+            get => _isLoadedHighQuality;
+            set
             {
-                SmartActionName = "Open PDF";
-                SmartActionIcon = "Eye24";
-                SmartActionType = "OpenPDF";
-                HasSmartAction = true;
-            }
-            else if (ItemType == ClipboardItemType.Document)
-            {
-                if (Extension == ".DOCX" || Extension == ".DOC")
+                if (_isLoadedHighQuality != value)
                 {
-                    SmartActionName = "Convert to PDF";
-                    SmartActionIcon = "DocumentPdf24";
-                    SmartActionType = "ConvertToPdf";
-                    HasSmartAction = true;
-                }
-            }
-            else if (ItemType == ClipboardItemType.Url || (!string.IsNullOrEmpty(RawContent) && RawContent.StartsWith("http")))
-            {
-                string r = RawContent.ToLower();
-                if (r.Contains("zoom.us/j/") || r.Contains("meet.google.com/"))
-                {
-                    SmartActionName = "Join Meeting";
-                    SmartActionIcon = "Video24";
-                    SmartActionType = "JoinMeeting";
-                }
-                else
-                {
-                    SmartActionName = "Navigate QR Link";
-                    SmartActionIcon = "QRCode24";
-                    SmartActionType = "OpenBrowser";
-                }
-                HasSmartAction = true;
-            }
-            else if (ItemType == ClipboardItemType.QRCode)
-            {
-                if (!string.IsNullOrEmpty(RawContent) && RawContent.ToLower().StartsWith("http"))
-                {
-                    SmartActionName = "Open QR Link";
-                    SmartActionIcon = "Globe24";
-                    SmartActionType = "OpenBrowser";
-                }
-                else
-                {
-                    SmartActionName = "Copy QR Text";
-                    SmartActionIcon = "Copy24";
-                    SmartActionType = "CopyQRText";
-                }
-                HasSmartAction = true;
-            }
-            else if ((ItemType == ClipboardItemType.Text || ItemType == ClipboardItemType.Code) && !string.IsNullOrEmpty(RawContent))
-            {
-                if (System.Text.RegularExpressions.Regex.IsMatch(RawContent, @"(#include\s*<[a-z.]+>|int\s+main\s*\()"))
-                {
-                    SmartActionName = "Run C/C++";
-                    SmartActionIcon = "Play24";
-                    SmartActionType = "CompileAndRun";
-                    HasSmartAction = true;
-                }
-                else if (System.Text.RegularExpressions.Regex.IsMatch(RawContent, @"\b(?:[01]?\d|2[0-3]):[0-5]\d\b") || 
-                    System.Text.RegularExpressions.Regex.IsMatch(RawContent.ToLower(), @"\d+\s*(sec|min|hour|hr|minute|second)s?\b") ||
-                    System.Text.RegularExpressions.Regex.IsMatch(RawContent.Trim(), @"^\/\d+$"))
-                {
-                    SmartActionName = "Set Timer";
-                    SmartActionIcon = "Clock24";
-                    SmartActionType = "SetTimer";
-                    HasSmartAction = true;
-                }
-                else if (System.Text.RegularExpressions.Regex.IsMatch(RawContent.ToLower(), @"\d{1,5}\s+\w+\s+(st|street|ave|avenue|blvd|boulevard|rd|road|dr|drive|lane|ln)\b"))
-                {
-                    SmartActionName = "Open Maps";
-                    SmartActionIcon = "Map24";
-                    SmartActionType = "OpenMap";
-                    HasSmartAction = true;
-                }
-            }
-
-
-
-            // ═══ COLOR DETECTION (always evaluate) ═══
-            if (!string.IsNullOrEmpty(RawContent))
-            {
-                if (FlyShelf.Classes.ColorHelper.TryDetectColor(RawContent, out string hex, out byte cr, out byte cg, out byte cb))
-                {
-                    DetectedColor = hex;
-                    _colorR = cr;
-                    _colorG = cg;
-                    _colorB = cb;
+                    _isLoadedHighQuality = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLoadedHighQuality)));
                 }
             }
         }
 
-        
-        // Default constructor for standard objects
-        public ClipboardItem() { }
-
-        public ClipboardItem(string[] files)
+        private bool _isLoadingHighQuality;
+        [JsonIgnore]
+        public bool IsLoadingHighQuality
         {
-            ItemType = ClipboardItemType.Group;
-            FileName = $"{files.Length} Files Grouped";
-            Extension = "GROUP";
-            RawContent = string.Join("\n", files);
-            FormattedSize = "Calculating size...";
-
-            // Dynamically calculate total size in background thread to prevent UI freezing
-            string[] capturedFiles = files;
-            System.Threading.Tasks.Task.Run(() =>
+            get => _isLoadingHighQuality;
+            set
             {
-                long totalSize = 0;
-                int fileCount = 0;
-                int folderCount = 0;
-
-                foreach (var path in capturedFiles)
+                if (_isLoadingHighQuality != value)
                 {
-                    try
-                    {
-                        if (File.Exists(path))
-                        {
-                            totalSize += new FileInfo(path).Length;
-                            fileCount++;
-                        }
-                        else if (Directory.Exists(path))
-                        {
-                            var dirInfo = new DirectoryInfo(path);
-                            var allFiles = dirInfo.GetFiles("*", SearchOption.AllDirectories);
-                            totalSize += allFiles.Sum(f => f.Length);
-                            folderCount++;
-                        }
-                    }
-                    catch { }
+                    _isLoadingHighQuality = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLoadingHighQuality)));
                 }
-
-                string filesLabel = fileCount > 1 ? $"{fileCount} files" : (fileCount == 1 ? "1 file" : "");
-                string foldersLabel = folderCount > 1 ? $"{folderCount} folders" : (folderCount == 1 ? "1 folder" : "");
-                string separator = (fileCount > 0 && folderCount > 0) ? ", " : "";
-                
-                FormattedSize = $"{FormatBytes(totalSize)} • {filesLabel}{separator}{foldersLabel}";
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedSize)));
-            });
-
-            // Zip files in background thread for cross-device transfer
-            System.Threading.Tasks.Task.Run(() =>
-            {
-                try
-                {
-                    string tempZip = Path.Combine(Path.GetTempPath(), $"FlyShelf_Group_{DateTime.Now:yyyyMMdd_HHmmss}.zip");
-                    if (File.Exists(tempZip)) File.Delete(tempZip);
-                    
-                    using (var archive = ZipFile.Open(tempZip, ZipArchiveMode.Create))
-                    {
-                        foreach (var path in capturedFiles)
-                        {
-                            if (File.Exists(path))
-                            {
-                                string entryName = Path.GetFileName(path);
-                                archive.CreateEntryFromFile(path, entryName, CompressionLevel.Fastest);
-                            }
-                            else if (Directory.Exists(path))
-                            {
-                                string dirName = Path.GetFileName(path);
-                                AddDirectoryToZip(archive, path, dirName);
-                            }
-                        }
-                    }
-                    ZippedArchivePath = tempZip;
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ZippedArchivePath)));
-                    Classes.Logger.LogAction("GROUP ZIP", $"Created zip for group: {tempZip}");
-                }
-                catch (Exception ex)
-                {
-                    Classes.Logger.LogAction("GROUP ZIP ERR", ex.Message);
-                }
-            });
-
-            // Generate premium overlapping diagonal stacked card icons
-            GenerateStackedGroupIcon(capturedFiles);
-
-            EvaluateSmartActions();
-        }
-
-        public ClipboardItem(string path)
-        {
-            if (!string.IsNullOrEmpty(path))
-            {
-                try
-                {
-                    if (path.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var uri = new Uri(path);
-                        path = uri.LocalPath;
-                    }
-                }
-                catch { }
-            }
-
-            FilePath = path ?? string.Empty;
-            try
-            {
-                FileName = Path.GetFileName(path) ?? string.Empty;
-                Extension = Path.GetExtension(path)?.ToUpperInvariant() ?? "FILE";
-            }
-            catch
-            {
-                FileName = path ?? string.Empty;
-                Extension = "FILE";
-            }
-            
-            try
-            {
-                bool exists = false;
-                bool isDir = false;
-                long length = 0;
-
-                try
-                {
-                    if (!string.IsNullOrEmpty(path))
-                    {
-                        var fileInfo = new FileInfo(path);
-                        exists = fileInfo.Exists;
-                        if (exists) length = fileInfo.Length;
-                        isDir = Directory.Exists(path);
-                    }
-                }
-                catch { }
-
-                if (exists)
-                {
-                    FormattedSize = FormatBytes(length);
-                    // Classify obvious extensions
-                    string ext = Extension.ToLowerInvariant();
-                    if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".bmp" || ext == ".webp")
-                    {
-                        ItemType = ClipboardItemType.Image;
-                        ScanForQRCodeAsync(path);
-                        ScanForOcrTextAsync(path);
-                    }
-                    else if (ext == ".pdf")
-                    {
-                        ItemType = ClipboardItemType.Pdf;
-                    }
-                    else if (ext == ".doc" || ext == ".docx" || ext == ".txt")
-                    {
-                        ItemType = ClipboardItemType.Document;
-                    }
-                    else if (ext == ".cpp" || ext == ".c" || ext == ".bat" || ext == ".cmd" || ext == ".ps1" || ext == ".js" || ext == ".py" || ext == ".cs")
-                    {
-                        ItemType = ClipboardItemType.Code;
-                    }
-                    else if (ext == ".ppt" || ext == ".pptx")
-                    {
-                        ItemType = ClipboardItemType.Presentation;
-                    }
-                    else if (ext == ".zip" || ext == ".rar" || ext == ".7z" || ext == ".tar" || ext == ".gz" || ext == ".apk")
-                    {
-                        ItemType = ClipboardItemType.Archive;
-                        // List archive contents for .zip files
-                        if (ext == ".zip" || ext == ".apk")
-                        {
-                            try
-                            {
-                                using var archive = ZipFile.OpenRead(path);
-                                var entries = archive.Entries
-                                    .Where(e => !string.IsNullOrEmpty(e.Name))
-                                    .Take(50)
-                                    .ToList();
-                                var listing = new System.Text.StringBuilder();
-                                listing.AppendLine($"📦 {entries.Count} file(s) in archive:");
-                                long totalSize = 0;
-                                foreach (var entry in entries)
-                                {
-                                    string entrySize = entry.Length > 0 ? $" ({FormatBytes(entry.Length)})" : "";
-                                    listing.AppendLine($"  • {entry.FullName}{entrySize}");
-                                    totalSize += entry.Length;
-                                }
-                                if (archive.Entries.Count(e => !string.IsNullOrEmpty(e.Name)) > 50)
-                                    listing.AppendLine($"  ... and {archive.Entries.Count(e => !string.IsNullOrEmpty(e.Name)) - 50} more");
-                                listing.AppendLine($"\nTotal uncompressed: {FormatBytes(totalSize)}");
-                                RawContent = listing.ToString();
-                            }
-                            catch { }
-                        }
-                    }
-                    else if (ext == ".mp4" || ext == ".mkv" || ext == ".avi" || ext == ".mov")
-                    {
-                        ItemType = ClipboardItemType.Video;
-                    }
-                    else if (ext == ".mp3" || ext == ".wav" || ext == ".flac" || ext == ".ogg")
-                    {
-                        ItemType = ClipboardItemType.Audio;
-                    }
-                    else
-                    {
-                        // Explicit Fallback for any unknown binary payload to physically guarantee Web Client Distribution capability!
-                        ItemType = ClipboardItemType.Document;
-                    }
-                }
-                else if (isDir)
-                {
-                    // Folder copied — set lightweight properties immediately, defer heavy I/O
-                    ItemType = ClipboardItemType.Folder;
-                    Extension = "FOLDER";
-                    FileName = Path.GetFileName(path) ?? "Folder";
-                    FormattedSize = "Scanning...";
-                    
-                    // Heavy enumeration + zip runs on background thread
-                    string capturedPath = path;
-                    string capturedName = FileName;
-                    Task.Run(() => {
-                        try
-                        {
-                            var allFiles = Directory.GetFiles(capturedPath, "*", SearchOption.AllDirectories);
-                            var allDirs = Directory.GetDirectories(capturedPath, "*", SearchOption.AllDirectories);
-                            long folderSize = allFiles.Sum(f => { try { return new FileInfo(f).Length; } catch { return 0L; } });
-                            FormattedSize = $"{FormatBytes(folderSize)} • {allFiles.Length} files";
-                            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedSize)));
-                            
-                            // Build contents listing
-                            var listing = new System.Text.StringBuilder();
-                            listing.AppendLine($"📁 {capturedName}/");
-                            listing.AppendLine($"   {allFiles.Length} file(s), {allDirs.Length} subfolder(s)");
-                            listing.AppendLine();
-                            
-                            var topItems = Directory.GetFileSystemEntries(capturedPath).Take(30).ToArray();
-                            foreach (var entry in topItems)
-                            {
-                                bool entryIsDir = Directory.Exists(entry);
-                                string name = Path.GetFileName(entry);
-                                if (entryIsDir)
-                                {
-                                    int subCount = 0;
-                                    try { subCount = Directory.GetFileSystemEntries(entry).Length; } catch { }
-                                    listing.AppendLine($"  📂 {name}/ ({subCount} items)");
-                                }
-                                else
-                                {
-                                    long fSize = 0;
-                                    try { fSize = new FileInfo(entry).Length; } catch { }
-                                    listing.AppendLine($"  📄 {name} ({FormatBytes(fSize)})");
-                                }
-                            }
-                            if (Directory.GetFileSystemEntries(capturedPath).Length > 30)
-                                listing.AppendLine($"  ... and more");
-                            
-                            RawContent = listing.ToString();
-                            
-                            // Zip for cross-device transfer
-                            string tempZip = Path.Combine(Path.GetTempPath(), $"FlyShelf_{capturedName}_{DateTime.Now:HHmmss}.zip");
-                            if (File.Exists(tempZip)) File.Delete(tempZip);
-                            ZipFile.CreateFromDirectory(capturedPath, tempZip, CompressionLevel.Fastest, true);
-                            ZippedArchivePath = tempZip;
-                            var zipInfo = new FileInfo(tempZip);
-                            FormattedSize = $"{FormatBytes(folderSize)} → {FormatBytes(zipInfo.Length)} zipped • {allFiles.Length} files";
-                            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedSize)));
-                            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ZippedArchivePath)));
-                        }
-                        catch (Exception ex)
-                        {
-                            Classes.Logger.LogAction("FOLDER ZIP", $"Failed: {ex.Message}");
-                            FormattedSize = "Folder";
-                            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedSize)));
-                        }
-                    });
-                }
-                else
-                {
-                    // Fallback for non-existent / remote / offline files/directories
-                    FormattedSize = "Offline / Remote";
-                    string ext = Extension.ToLowerInvariant();
-                    if (path != null && (path.EndsWith("\\") || path.EndsWith("/")))
-                    {
-                        ItemType = ClipboardItemType.Folder;
-                        Extension = "FOLDER";
-                    }
-                    else if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".gif" || ext == ".bmp" || ext == ".webp")
-                    {
-                        // To prevent layout breaking on offline images where a thumbnail is unavailable,
-                        // classify them as ClipboardItemType.File.
-                        ItemType = ClipboardItemType.File;
-                    }
-                    else if (ext == ".pdf")
-                    {
-                        ItemType = ClipboardItemType.Pdf;
-                    }
-                    else if (ext == ".doc" || ext == ".docx" || ext == ".txt")
-                    {
-                        ItemType = ClipboardItemType.Document;
-                    }
-                    else if (ext == ".cpp" || ext == ".c" || ext == ".bat" || ext == ".cmd" || ext == ".ps1" || ext == ".js" || ext == ".py" || ext == ".cs")
-                    {
-                        ItemType = ClipboardItemType.Code;
-                    }
-                    else if (ext == ".ppt" || ext == ".pptx")
-                    {
-                        ItemType = ClipboardItemType.Presentation;
-                    }
-                    else if (ext == ".zip" || ext == ".rar" || ext == ".7z" || ext == ".tar" || ext == ".gz" || ext == ".apk")
-                    {
-                        ItemType = ClipboardItemType.Archive;
-                    }
-                    else if (ext == ".mp4" || ext == ".mkv" || ext == ".avi" || ext == ".mov")
-                    {
-                        ItemType = ClipboardItemType.Video;
-                    }
-                    else if (ext == ".mp3" || ext == ".wav" || ext == ".flac" || ext == ".ogg")
-                    {
-                        ItemType = ClipboardItemType.Audio;
-                    }
-                    else
-                    {
-                        ItemType = ClipboardItemType.File;
-                    }
-                }
-
-                // Explicitly bind the Raw Content buffer natively securely mapping the File Execution Constraints!
-                string xExt = Extension.ToLowerInvariant();
-                bool isPlainText = xExt == ".txt" || xExt == ".json" || xExt == ".md" || xExt == ".csv" || xExt == ".xml" || ItemType == ClipboardItemType.Code;
-                
-                if (isPlainText && exists && length < 1000000)
-                {
-                    try { RawContent = File.ReadAllText(path); } catch { }
-                }
-            }
-            catch
-            {
-                FormattedSize = "Unknown";
-            }
-            EvaluateSmartActions();
-        }
-
-        public void Execute()
-        {
-            try
-            {
-                if (ItemType == ClipboardItemType.Group)
-                {
-                    string[] paths = RawContent.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                    FlyShelf.Classes.ShellExplorerHelper.OpenFilesAndSelect(paths);
-                    return;
-                }
-
-                string target = string.Empty;
-                if (!string.IsNullOrEmpty(FilePath))
-                    target = FilePath;
-                else if (ItemType == ClipboardItemType.Url)
-                    target = RawContent; // URL
-                else if (ItemType == ClipboardItemType.Text || ItemType == ClipboardItemType.Code)
-                {
-                    // Create a scratch temp file to open Text in notepad
-                    string tempFile = Path.Combine(Path.GetTempPath(), $"FlyShelf_TextDrop_{Guid.NewGuid().ToString().Substring(0, 4)}.txt");
-                    File.WriteAllText(tempFile, RawContent);
-                    target = tempFile;
-                }
-
-                if (!string.IsNullOrEmpty(target))
-                {
-                    Process.Start(new ProcessStartInfo
-                    {
-                        FileName = target,
-                        UseShellExecute = true
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Failed to execute drop item: {ex.Message}");
-            }
-        }
-
-        public void RefreshPhysicalStats()
-        {
-            if (string.IsNullOrEmpty(FilePath)) return;
-            try
-            {
-                var fileInfo = new FileInfo(FilePath);
-                if (fileInfo.Exists)
-                {
-                    FormattedSize = FormatBytes(fileInfo.Length);
-                }
-            }
-            catch { }
-        }
-
-        private static string FormatBytes(long bytes)
-        {
-            string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
-            int i;
-            double dblSByte = bytes;
-            for (i = 0; i < suffixes.Length && bytes >= 1024; i++, bytes /= 1024)
-            {
-                dblSByte = bytes / 1024.0;
-            }
-            return $"{dblSByte:0.##} {suffixes[i]}";
-        }
-
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Auto)]
-        private struct SHFILEINFO
-        {
-            public IntPtr hIcon;
-            public int iIcon;
-            public uint dwAttributes;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
-            public string szDisplayName;
-            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)]
-            public string szTypeName;
-        };
-
-        [DllImport("shell32.dll", CharSet = CharSet.Auto)]
-        private static extern IntPtr SHGetFileInfo(string pszPath, uint dwFileAttributes, ref SHFILEINFO psfi, uint cbSizeFileInfo, uint uFlags);
-        [DllImport("user32.dll", SetLastError = true)]
-        [return: MarshalAs(UnmanagedType.Bool)]
-        private static extern bool DestroyIcon(IntPtr hIcon);
-
-        private static BitmapSource GetShellIconForStacking(string filePath)
-        {
-            try
-            {
-                const uint SHGFI_ICON = 0x100;
-                const uint SHGFI_LARGEICON = 0x0;
-                const uint SHGFI_USEFILEATTRIBUTES = 0x10;
-                const uint FILE_ATTRIBUTE_NORMAL = 0x80;
-
-                SHFILEINFO shinfo = new SHFILEINFO();
-                IntPtr res = SHGetFileInfo(filePath, FILE_ATTRIBUTE_NORMAL, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
-
-                if (res != IntPtr.Zero && shinfo.hIcon != IntPtr.Zero)
-                {
-                    try
-                    {
-                        var bitmapSource = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
-                            shinfo.hIcon,
-                            Int32Rect.Empty,
-                            BitmapSizeOptions.FromEmptyOptions());
-                        bitmapSource.Freeze();
-                        return bitmapSource;
-                    }
-                    finally
-                    {
-                        DestroyIcon(shinfo.hIcon);
-                    }
-                }
-            }
-            catch { }
-            return null;
-        }
-
-        private void GenerateStackedGroupIcon(string[] files)
-        {
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-            {
-                try
-                {
-                    var icons = new System.Collections.Generic.List<BitmapSource>();
-                    int count = Math.Min(3, files.Length);
-                    for (int i = 0; i < count; i++)
-                    {
-                        var icon = GetShellIconForStacking(files[i]);
-                        if (icon != null)
-                        {
-                            icons.Add(icon);
-                        }
-                    }
-
-                    if (icons.Count == 0) return;
-
-                    var visual = new System.Windows.Media.DrawingVisual();
-                    using (var dc = visual.RenderOpen())
-                    {
-                        // Draw cards from back (highest index) to front (index 0)
-                        for (int i = icons.Count - 1; i >= 0; i--)
-                        {
-                            var icon = icons[i];
-                            // Draw diagonal overlap:
-                            // If 3 icons:
-                            // i=2: x = 6, y = 34
-                            // i=1: x = 20, y = 20
-                            // i=0: x = 34, y = 6
-                            double step = 14;
-                            double startX = 20 - (icons.Count - 1) * 7;
-                            double startY = 20 + (icons.Count - 1) * 7;
-                            
-                            double x = startX + (icons.Count - 1 - i) * step;
-                            double y = startY - (icons.Count - 1 - i) * step;
-
-                            // 1. Soft drop shadow
-                            dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(30, 0, 0, 0)), null, new Rect(x + 1.5, y + 2.5, 56, 56), 8, 8);
-                            dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(10, 0, 0, 0)), null, new Rect(x + 3, y + 4, 56, 56), 8, 8);
-
-                            // 2. White card background with subtle light-grey border
-                            var borderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(225, 225, 225));
-                            dc.DrawRoundedRectangle(System.Windows.Media.Brushes.White, new System.Windows.Media.Pen(borderBrush, 1.0), new Rect(x, y, 56, 56), 8, 8);
-
-                            // 3. Center shell icon inside the card
-                            dc.DrawImage(icon, new Rect(x + 12, y + 12, 32, 32));
-                        }
-                    }
-
-                    var rtb = new RenderTargetBitmap(96, 96, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
-                    rtb.Render(visual);
-                    rtb.Freeze();
-                    
-                    // Assign to Icon property
-                    var bmp = new BitmapImage();
-                    using (var ms = new MemoryStream())
-                    {
-                        var encoder = new PngBitmapEncoder();
-                        encoder.Frames.Add(BitmapFrame.Create(rtb));
-                        encoder.Save(ms);
-                        bmp.BeginInit();
-                        bmp.CacheOption = BitmapCacheOption.OnLoad;
-                        bmp.StreamSource = ms;
-                        bmp.EndInit();
-                        bmp.Freeze();
-                    }
-                    
-                    Icon = bmp;
-                }
-                catch (Exception ex)
-                {
-                    Classes.Logger.LogAction("STACKED ICON ERR", ex.Message);
-                }
-            });
-        }
-
-        private static void AddDirectoryToZip(ZipArchive archive, string sourceDir, string entryPrefix)
-        {
-            foreach (var file in Directory.GetFiles(sourceDir, "*", SearchOption.AllDirectories))
-            {
-                string relativePath = Path.GetRelativePath(sourceDir, file);
-                string entryName = Path.Combine(entryPrefix, relativePath);
-                archive.CreateEntryFromFile(file, entryName, CompressionLevel.Fastest);
             }
         }
 
@@ -1027,3 +441,4 @@ namespace FlyShelf.ViewModels
         
     }
 }
+

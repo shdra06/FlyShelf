@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 
 export type PairedDevice = {
   deviceId: string;
@@ -117,7 +118,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       }
 
       // ── Pairing Key (also stored as 'pairingKey' for backward compat with index.tsx) ──
-      let storedKey = await AsyncStorage.getItem('pairingKey');
+      let storedKey = await getSecureItem('pairingKey');
       if (storedKey) {
         setPairingKeyState(storedKey);
       }
@@ -197,7 +198,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const regeneratePairingKey = async (): Promise<string> => {
     const newKey = generatePairingKey();
     setPairingKeyState(newKey);
-    await AsyncStorage.setItem('pairingKey', newKey);
+    await setSecureItem('pairingKey', newKey);
     return newKey;
   };
 

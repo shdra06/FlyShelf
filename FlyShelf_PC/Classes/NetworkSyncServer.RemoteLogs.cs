@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
@@ -23,7 +23,8 @@ namespace FlyShelf.Classes
         private const int MAX_REMOTE_LOG_ENTRIES = 500;
 
         // SSE clients waiting for live log stream
-        private static readonly ConcurrentBag<HttpListenerResponse> _sseLogClients = new();
+        private static readonly ConcurrentDictionary<int, HttpListenerResponse> _sseLogClients = new();
+        private static int _sseClientIdCounter;
 
         private struct RemoteLogEntry
         {
@@ -181,7 +182,8 @@ namespace FlyShelf.Classes
             await res.OutputStream.FlushAsync();
 
             // Register this response as an SSE client
-            _sseLogClients.Add(res);
+            int clientId = System.Threading.Interlocked.Increment(ref _sseClientIdCounter);
+            _sseLogClients[clientId] = res;
 
             // Keep connection alive — send heartbeat every 15s
             try
@@ -197,7 +199,8 @@ namespace FlyShelf.Classes
             catch { }
             finally
             {
-                // Remove from SSE clients (ConcurrentBag doesn't support Remove, but it's ok — we check on write)
+                // Remove from SSE clients
+                _sseLogClients.TryRemove(clientId, out _);
                 try { res.Close(); } catch { }
             }
         }
@@ -210,17 +213,17 @@ namespace FlyShelf.Classes
             string sseData = $"data: {{\"device\":\"{JsonEscape(entry.Device)}\",\"log\":\"{JsonEscape(entry.Raw)}\",\"ts\":{entry.Timestamp}}}\n\n";
             byte[] bytes = Encoding.UTF8.GetBytes(sseData);
 
-            var dead = new System.Collections.Generic.List<HttpListenerResponse>();
-            foreach (var client in _sseLogClients)
+            var dead = new System.Collections.Generic.List<int>();
+            foreach (var kvp in _sseLogClients)
             {
                 try
                 {
-                    client.OutputStream.Write(bytes, 0, bytes.Length);
-                    client.OutputStream.Flush();
+                    kvp.Value.OutputStream.Write(bytes, 0, bytes.Length);
+                    kvp.Value.OutputStream.Flush();
                 }
-                catch { dead.Add(client); }
+                catch { dead.Add(kvp.Key); }
             }
-            // Clean dead clients (ConcurrentBag doesn't support removal, but entries are GC'd when response closes)
+            foreach (var id in dead) _sseLogClients.TryRemove(id, out _);
         }
 
         /// <summary>

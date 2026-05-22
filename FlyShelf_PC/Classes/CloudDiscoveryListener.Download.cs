@@ -1,4 +1,4 @@
-﻿// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 // CloudDiscoveryListener — File Download, Integrity & Forced Sync
 // FetchAndInjectCloudFile, retry/fallback logic, SHA-256 verify,
 // ProcessForcedSyncPayload, CloudItem model
@@ -314,7 +314,7 @@ namespace FlyShelf.Classes
                         ? $"{fileInfo.Length / 1_073_741_824.0:F1} GB"
                         : $"{fileInfo.Length / 1_048_576.0:F1} MB";
 
-                    try { MainWindow.SetWritingClipboard(true); System.Windows.Clipboard.SetFileDropList(new System.Collections.Specialized.StringCollection { filePath }); await System.Threading.Tasks.Task.Delay(500); } catch { } finally { MainWindow.SetWritingClipboard(false); }
+                    try { MainWindow.SetWritingClipboard(true); System.Windows.Clipboard.SetFileDropList(new System.Collections.Specialized.StringCollection { filePath }); await System.Threading.Tasks.Task.Delay(100); } catch { } finally { MainWindow.SetWritingClipboard(false); }
                     FlyShelf.Windows.ToastWindow.ShowToast($"✅ {cloudItem.Title} ({sizeStr}) from {cloudItem.SourceDeviceName}");
 
                     var clip = new ClipboardItem(filePath);
@@ -332,7 +332,7 @@ namespace FlyShelf.Classes
                             bmp.BeginInit();
                             bmp.UriSource = new Uri(filePath);
                             bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                            bmp.DecodePixelWidth = 400;
+                            bmp.DecodePixelWidth = 300;
                             bmp.EndInit();
                             bmp.Freeze();
                             clip.Icon = bmp;
@@ -344,7 +344,7 @@ namespace FlyShelf.Classes
                     }
 
                     clip.EvaluateSmartActions();
-                    _viewModel.DroppedItems.Insert(0, clip);
+                    _viewModel.InsertWithDedup(clip);
                     _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                     
                     string fileFp = $"IMG::{(clip.FormattedSize ?? "")}";
@@ -482,6 +482,12 @@ namespace FlyShelf.Classes
                         string sourceDeviceType = data.TryGetProperty("SourceDeviceType", out var t5b) ? t5b.GetString() ?? "Unknown" : "Unknown";
                         string downloadUrl = data.TryGetProperty("DownloadUrl", out var t6) ? t6.GetString() ?? "" : "";
                         string senderUrl = data.TryGetProperty("SenderUrl", out var t7) ? t7.GetString() ?? "" : "";
+                        string sourceDeviceId = data.TryGetProperty("SourceDeviceId", out var t8) ? t8.GetString() ?? "" : "";
+
+                        // Decrypt URLs safely (handles both encrypted and legacy plaintext gracefully)
+                        raw = SyncCrypto.DecryptUrlSafe(raw);
+                        downloadUrl = SyncCrypto.DecryptUrlSafe(downloadUrl);
+                        senderUrl = SyncCrypto.DecryptUrlSafe(senderUrl);
 
                         Logger.LogAction("FORCED SYNC", $"Received from '{source}': {type} - {title}");
 
@@ -503,7 +509,7 @@ namespace FlyShelf.Classes
 
                             if (isFilePayload && resolvedUrl.StartsWith("http"))
                             {
-                                var ci = new CloudItem { Id = prop.Name, Type = type, Title = title, Raw = resolvedUrl, DownloadUrl = downloadUrl, SenderUrl = senderUrl, SourceDeviceName = source };
+                                var ci = new CloudItem { Id = prop.Name, Type = type, Title = title, Raw = resolvedUrl, DownloadUrl = downloadUrl, SenderUrl = senderUrl, SourceDeviceName = source, SourceDeviceId = sourceDeviceId };
                                 _ = FetchAndInjectCloudFile(ci);
                             }
                             else
@@ -521,8 +527,12 @@ namespace FlyShelf.Classes
                                     TransferMethod = "ForceSend"
                                 };
                                 clip.EvaluateSmartActions();
-                                _viewModel.DroppedItems.Insert(0, clip);
+                                _viewModel.InsertWithDedup(clip);
                                 _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
+                                
+                                string normalizedContent = FlyShelfViewModel.NormalizeTextForFingerprint(raw);
+                                string txtFp = $"TXT::{normalizedContent.Substring(0, Math.Min(200, normalizedContent.Length))}";
+                                _viewModel.MarkAsCloudSourced(txtFp);
                             }
 
                             FlyShelf.Windows.ToastWindow.ShowToast($"⚡ Force Sync from {source}");

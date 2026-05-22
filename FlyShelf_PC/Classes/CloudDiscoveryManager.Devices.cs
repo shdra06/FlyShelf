@@ -1,4 +1,4 @@
-﻿// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 // CloudDiscoveryManager — Device Registration, Tunnel URL, Groups
 // Split from CloudDiscoveryManager.cs for modularity (<500 lines)
 // ═══════════════════════════════════════════════════════════════
@@ -75,6 +75,7 @@ namespace FlyShelf.Classes
                 // Use PUT to register or update our specific Device node (scoped to pairing key)
                 string pairingKey = DevicePairingManager.EnsurePairingKey();
                 if (string.IsNullOrEmpty(pairingKey)) { Logger.LogAction("FIREBASE SYNC", "Skipped device registration — no pairing key"); return; }
+                await RegisterRoomMembershipAsync(pairingKey);
                 string tunnelNodeUrl = (await AuthUrl($"active_devices/{pairingKey}/{SettingsManager.Current.DeviceId}.json"));
                 var response = await _client.PutAsync(tunnelNodeUrl, content);
                 
@@ -147,19 +148,24 @@ namespace FlyShelf.Classes
                             }
                         }
 
+                        string encryptedRaw = SyncCrypto.Encrypt(raw);
+                        string encryptedDownloadUrl = SyncCrypto.Encrypt(downloadUrl);
+                        string encryptedSenderUrl = SyncCrypto.Encrypt(!string.IsNullOrEmpty(CachedGlobalUrl) ? CachedGlobalUrl : CachedLocalUrl ?? "");
+
                         var payload = new
                         {
                             Title = string.IsNullOrEmpty(item.FileName) ? (raw.Length > 30 ? raw.Substring(0, 30) + "..." : raw) : item.FileName,
                             Type = item.ItemType.ToString(),
-                            Raw = raw,
-                            DownloadUrl = downloadUrl,
+                            Raw = encryptedRaw,
+                            DownloadUrl = encryptedDownloadUrl,
                             FileName = item.FileName ?? "",
                             FileSize = isFile ? new FileInfo(item.FilePath).Length : 0,
-                            SenderUrl = !string.IsNullOrEmpty(CachedGlobalUrl) ? CachedGlobalUrl : CachedLocalUrl ?? "",
+                            SenderUrl = encryptedSenderUrl,
                             ForcedBy = deviceName,
                             ForcedAt = NetworkClock.UtcNowMs,
                             SourceDeviceName = deviceName,
                             SourceDeviceType = "PC",
+                            SourceDeviceId = SettingsManager.Current.DeviceId ?? "",
                             Timestamp = NetworkClock.UtcNowMs
                         };
 

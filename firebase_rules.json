@@ -1,9 +1,19 @@
 {
   "rules": {
+    "members": {
+      "$pairingKey": {
+        "$uid": {
+          ".read": "auth != null && (auth.uid == $uid || root.child('members/' + $pairingKey + '/' + auth.uid).exists())",
+          ".write": "auth != null && auth.uid == $uid"
+        }
+      },
+      ".read": false,
+      ".write": false
+    },
     "clipboard": {
       "$pairingKey": {
-        ".read": "auth != null",
-        ".write": "auth != null",
+        ".read": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()",
+        ".write": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()",
         "$entryId": {
           ".validate": "newData.hasChildren(['Type', 'Timestamp'])"
         }
@@ -13,8 +23,8 @@
     },
     "active_devices": {
       "$pairingKey": {
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".read": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()",
+        ".write": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()"
       },
       ".read": false,
       ".write": false
@@ -30,8 +40,8 @@
     },
     "pairing_handshake": {
       "$pairingKey": {
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".read": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()",
+        ".write": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()"
       },
       ".read": false,
       ".write": false
@@ -45,17 +55,17 @@
       ".write": false
     },
     "device_groups": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".read": false,
+      ".write": false
     },
     "global_clipboard": {
-      ".read": "auth != null",
-      ".write": "auth != null"
+      ".read": false,
+      ".write": false
     },
     "nodes": {
       "$pairingKey": {
-        ".read": "auth != null",
-        ".write": "auth != null"
+        ".read": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()",
+        ".write": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()"
       },
       ".read": false,
       ".write": false

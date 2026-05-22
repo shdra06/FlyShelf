@@ -12,7 +12,8 @@ import { syncLog } from '../../utils/debugLog';
 import { ref, push, set, get, onValue, query, limitToLast, orderByChild, update, remove } from 'firebase/database';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
+import { getSecureItem, setSecureItem } from '../../utils/secureStorage';
 import * as MediaLibrary from 'expo-media-library';
 import { Image } from 'expo-image';
 
@@ -35,6 +36,11 @@ import PdfPageEditor from '../../components/PdfPageEditor';
 import { mergePdfs as localMergePdfs, convertImageToPdf as localConvertImageToPdf } from '../../utils/pdfUtils';
 
 const { AdvanceOverlay } = NativeModules;
+
+const normalizeTextForFingerprint = (text: string): string => {
+  if (!text) return '';
+  return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+};
 
 // ════════════════════════════════════════════════════════
 // MAIN SCREEN
@@ -83,6 +89,15 @@ export default function SyncScreen() {
   const CLIPS_STORAGE_KEY = '@flyshelf_clips';
   const clipPersistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clipsInitializedRef = useRef<boolean>(false);
+  const connectionPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const connectionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (connectionPollRef.current) clearInterval(connectionPollRef.current);
+      if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+    };
+  }, []);
 
   // Debounced persist: save clips to AsyncStorage 800ms after last change
   const persistClips = useCallback((clipsToSave: ClipItem[]) => {
@@ -318,7 +333,7 @@ export default function SyncScreen() {
   // ─── Scoped Clipboard (only paired devices see each other) ───
   const pairingKeyRef = useRef<string>('');
   useEffect(() => {
-    AsyncStorage.getItem('pairingKey').then(k => { if (k) pairingKeyRef.current = k; });
+    getSecureItem('pairingKey').then(k => { if (k) pairingKeyRef.current = k; });
   }, []);
   // Keep ref in sync when context key changes (e.g. after pairing or regeneration)
   useEffect(() => {
@@ -340,8 +355,8 @@ export default function SyncScreen() {
 
     // Priority 2: Stored pairing URLs from QR scan / code entry
     try {
-      const storedLocal = await AsyncStorage.getItem('pairedLocalUrl');
-      const storedGlobal = await AsyncStorage.getItem('pairedGlobalUrl');
+      const storedLocal = await getSecureItem('pairedLocalUrl');
+      const storedGlobal = await getSecureItem('pairedGlobalUrl');
       const candidates: string[] = [];
       if (storedLocal) {
         candidates.push(...storedLocal.split(',').map(s => s.trim()).filter(Boolean));
@@ -365,7 +380,7 @@ export default function SyncScreen() {
     // Priority 3: Last-known Cloudflare URL (Phase 4 — cached from previous session)
     // This eliminates the Firebase query on most app restarts.
     try {
-      const lastCfUrl = await AsyncStorage.getItem('lastCloudflareUrl');
+      const lastCfUrl = await getSecureItem('lastCloudflareUrl');
       if (lastCfUrl && lastCfUrl.includes('trycloudflare.com')) {
         try {
           const res = await fetchWithTimeout(`${lastCfUrl}/api/health`,
@@ -838,8 +853,8 @@ export default function SyncScreen() {
           }
           // Cache Cloudflare URL locally — survives the 5-second Firebase auto-delete
           if (dev.DeviceType === 'PC' && dev.GlobalUrl && dev.GlobalUrl.includes('trycloudflare.com')) {
-            AsyncStorage.setItem('lastCloudflareUrl', dev.GlobalUrl).catch(() => {});
-            AsyncStorage.setItem('pairedGlobalUrl', dev.GlobalUrl).catch(() => {});
+            setSecureItem('lastCloudflareUrl', dev.GlobalUrl).catch(() => {});
+            setSecureItem('pairedGlobalUrl', dev.GlobalUrl).catch(() => {});
             // Also update the in-memory PC URL cache immediately
             cachedPcUrlRef.current = dev.GlobalUrl;
             cachedPcUrlTimestampRef.current = Date.now();
@@ -854,7 +869,7 @@ export default function SyncScreen() {
               return trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
             }).filter(Boolean);
             if (normalizedParts.length > 0) {
-              AsyncStorage.setItem('pairedLocalUrl', normalizedParts.join(',')).catch(() => {});
+              setSecureItem('pairedLocalUrl', normalizedParts.join(',')).catch(() => {});
             }
           }
         }
@@ -1049,7 +1064,7 @@ export default function SyncScreen() {
           try {
             const globalUrl = response.headers.get('X-Global-Url');
             if (globalUrl && globalUrl.includes('trycloudflare.com')) {
-              AsyncStorage.setItem('lastCloudflareUrl', globalUrl).catch(() => {});
+              setSecureItem('lastCloudflareUrl', globalUrl).catch(() => {});
             }
           } catch {}
           const data = await response.json();
@@ -1078,7 +1093,9 @@ export default function SyncScreen() {
                   const latestRaw = latest.Raw;
                   if (latestRaw) {
                     const currentContent = await Clipboard.getStringAsync();
-                    if (currentContent !== latestRaw) {
+                    const normCurrent = normalizeTextForFingerprint(currentContent);
+                    const normLatest = normalizeTextForFingerprint(latestRaw);
+                    if (normCurrent !== normLatest) {
                       if (Platform.OS === 'android' && AdvanceOverlay) {
                         try { AdvanceOverlay.setClipboardSuppressed(latestRaw); } catch(e) { await Clipboard.setStringAsync(latestRaw); }
                       } else { await Clipboard.setStringAsync(latestRaw); }
@@ -1444,8 +1461,8 @@ export default function SyncScreen() {
       try { await set(ref(database, `active_devices/${pk}/${myDeviceId}`), { DeviceId: myDeviceId, DeviceName: deviceName, DeviceType: 'Mobile', IsOnline: true, Timestamp: Date.now() }); } catch(e) {}
     };
     registerSelf();
-    // Reduced from 30s to 300s — Firebase writes are expensive at scale
-    const heartbeat = setInterval(registerSelf, 300_000);
+    // Reduced from 30s to 600s — Firebase writes are expensive at scale (10-minute heartbeat)
+    const heartbeat = setInterval(registerSelf, 600_000);
     return () => { clearInterval(heartbeat); if (!isFloatingBallEnabled) set(ref(database, `active_devices/${pk}/${myDeviceId}/IsOnline`), false).catch(() => {}); };
   }, [deviceName, isFloatingBallEnabled]);
 
@@ -1504,7 +1521,9 @@ export default function SyncScreen() {
         const text = await Clipboard.getStringAsync();
         // NEVER send flyshelf:// scheme strings — these are internal markers
         if (text && text.startsWith('flyshelf://')) return;
-        if (text && text !== lastCopiedRef.current) {
+        const normText = normalizeTextForFingerprint(text);
+        const normLastCopied = normalizeTextForFingerprint(lastCopiedRef.current || '');
+        if (normText && normText !== normLastCopied) {
           lastCopiedRef.current = text; // Set BEFORE transmit to prevent re-entry
           setLastCopiedText(text);
           await transmitTextSecurely(text);
@@ -1708,7 +1727,9 @@ export default function SyncScreen() {
           try {
             if (latest.Type === 'Text' || latest.Type === 'Url' || latest.Type === 'Code') {
               const currentClip = await Clipboard.getStringAsync();
-              if (currentClip !== latest.Raw) { await Clipboard.setStringAsync(latest.Raw); setLastCopiedText(latest.Raw); lastCopiedRef.current = latest.Raw; Platform.OS === 'android' && ToastAndroid.show("Copied Natively", ToastAndroid.SHORT); }
+              const normCurrent = normalizeTextForFingerprint(currentClip);
+              const normLatest = normalizeTextForFingerprint(latest.Raw || '');
+              if (normCurrent !== normLatest) { await Clipboard.setStringAsync(latest.Raw); setLastCopiedText(latest.Raw); lastCopiedRef.current = latest.Raw; Platform.OS === 'android' && ToastAndroid.show("Copied Natively", ToastAndroid.SHORT); }
             } else if (latest.Type === 'Image' || latest.Type === 'ImageLink') {
               const mediaUrl = getMediaUrlForItem(latest);
               if (mediaUrl) {
@@ -1788,7 +1809,7 @@ export default function SyncScreen() {
       processedEventsRef.current.set(txEventId, Date.now());
       let localSuccess = false;
       try {
-        const pairingKey = await AsyncStorage.getItem('pairingKey');
+        const pairingKey = await getSecureItem('pairingKey');
         const hdrs: any = { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion', 'X-Source-Device': deviceName || 'Mobile' };
         if (pairingKey) hdrs['X-Pairing-Key'] = pairingKey;
         const jsonBody = JSON.stringify({
@@ -2136,10 +2157,16 @@ export default function SyncScreen() {
     // ═══ ALWAYS save pairing info — the key is what matters for cloud sync ═══
     // Even if we can't reach the PC right now, the shared key enables Firebase sync.
     const pairingTs = Date.now().toString();
-    await AsyncStorage.multiSet([
-      ['pairingKey', key || ''], ['pairedPcName', pcName || ''], ['pairedPcId', pcId || ''],
-      ['pairedLocalUrl', local || ''], ['pairedGlobalUrl', globalUrl || ''],
-      ['pairedPin', pin || ''], ['pairingTimestamp', pairingTs],
+    await Promise.all([
+      setSecureItem('pairingKey', key || ''),
+      setSecureItem('pairedPcName', pcName || ''),
+      setSecureItem('pairedLocalUrl', local || ''),
+      setSecureItem('pairedGlobalUrl', globalUrl || ''),
+      AsyncStorage.multiSet([
+        ['pairedPcId', pcId || ''],
+        ['pairedPin', pin || ''],
+        ['pairingTimestamp', pairingTs]
+      ])
     ]);
     pairingKeyRef.current = key || '';
     pairingTimestampRef.current = parseInt(pairingTs);
@@ -2234,6 +2261,9 @@ export default function SyncScreen() {
       setMyPairingCode(code);
       if (Platform.OS === 'android') ToastAndroid.show(`Code: ${code} (5 min) — Waiting for device...`, ToastAndroid.SHORT);
 
+      if (connectionPollRef.current) clearInterval(connectionPollRef.current);
+      if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+
       // ── Poll for incoming connections ──
       // When the PC enters our code, it appears in active_devices with our pairing key.
       // We poll every 3s to detect this and auto-register the paired device.
@@ -2261,8 +2291,8 @@ export default function SyncScreen() {
                   pairedAt: Date.now(),
                 });
                 // Save their connection URLs for fast LAN sync
-                if (dev.LocalIp) await AsyncStorage.setItem('pairedLocalUrl', dev.LocalIp.startsWith('http') ? dev.LocalIp : `http://${dev.LocalIp}`);
-                if (dev.GlobalUrl) await AsyncStorage.setItem('pairedGlobalUrl', dev.GlobalUrl);
+                if (dev.LocalIp) await setSecureItem('pairedLocalUrl', dev.LocalIp.startsWith('http') ? dev.LocalIp : `http://${dev.LocalIp}`);
+                if (dev.GlobalUrl) await setSecureItem('pairedGlobalUrl', dev.GlobalUrl);
                 if (dev.Url) {
                   cachedPcUrlRef.current = dev.Url;
                   cachedPcUrlTimestampRef.current = Date.now();
@@ -2270,7 +2300,13 @@ export default function SyncScreen() {
                 setPairedPcName(dev.DeviceName || 'PC');
                 if (!isGlobalSyncEnabled) setGlobalSyncEnabled(true);
                 if (Platform.OS === 'android') ToastAndroid.show(`✅ ${dev.DeviceName || 'PC'} connected!`, ToastAndroid.LONG);
+                
                 clearInterval(pollForConnection);
+                connectionPollRef.current = null;
+                if (connectionTimeoutRef.current) {
+                  clearTimeout(connectionTimeoutRef.current);
+                  connectionTimeoutRef.current = null;
+                }
                 setMyPairingCode(null);
                 // Clean up the pairing code from Firebase
                 try { const _delToken = await getFirebaseIdToken(); await fetch(`https://advance-sync-default-rtdb.firebaseio.com/pairing_codes/${code}.json${_delToken ? `?auth=${_delToken}` : ''}`, { method: 'DELETE' }); } catch {}
@@ -2280,10 +2316,13 @@ export default function SyncScreen() {
           }
         } catch {}
       }, 3000);
+      connectionPollRef.current = pollForConnection;
 
       // Auto-expire after 5 min
-      setTimeout(async () => {
+      connectionTimeoutRef.current = setTimeout(async () => {
         clearInterval(pollForConnection);
+        connectionPollRef.current = null;
+        connectionTimeoutRef.current = null;
         try { const _expToken = await getFirebaseIdToken(); await fetch(`https://advance-sync-default-rtdb.firebaseio.com/pairing_codes/${code}.json${_expToken ? `?auth=${_expToken}` : ''}`, { method: 'DELETE' }); } catch {}
         if (myPairingCode === code) setMyPairingCode(null);
       }, 5 * 60 * 1000);
@@ -2312,7 +2351,7 @@ export default function SyncScreen() {
 
   // Load paired PC name on startup
   useEffect(() => {
-    AsyncStorage.getItem('pairedPcName').then(name => { if (name) setPairedPcName(name); });
+    getSecureItem('pairedPcName').then(name => { if (name) setPairedPcName(name); });
   }, []);
 
   // Clear pairedPcName when all paired devices are removed in Settings

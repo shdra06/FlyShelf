@@ -7,6 +7,7 @@
         xmlns:settings="clr-namespace:FlyShelf.Classes"
         xmlns:gif="https://github.com/XamlAnimatedGif/XamlAnimatedGif"
         xmlns:emoji="clr-namespace:Emoji.Wpf;assembly=Emoji.Wpf"
+        xmlns:local="clr-namespace:FlyShelf.Controls"
         Title="FlyShelf" 
         Width="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormWidth}" 
         Opacity="1"
@@ -49,7 +50,7 @@
         <!-- ═══ WALLPAPER LAYERS (hidden when no wallpaper set) ═══ -->
         <!-- Layer 1: Full background image (center, fills entire window) -->
         <Image x:Name="WallpaperBg" Grid.RowSpan="2" Stretch="UniformToFill" Opacity="0.25"
-               RenderOptions.BitmapScalingMode="HighQuality" Visibility="Collapsed"
+               Visibility="Collapsed"
                HorizontalAlignment="Center" VerticalAlignment="Center"/>
         
         <!-- Layer 2: Theme color gradient overlay emanating from center -->
@@ -242,6 +243,13 @@
             </StackPanel>
         </Grid>
 
+        <!-- ═══ MASCOT THEME OVERLAYS ═══ -->
+        <!-- Header Mascot: beside the search icon (top-right of toolbar) -->
+        <local:SpriteAnimator x:Name="MascotIdle" Grid.Row="0" 
+                              HorizontalAlignment="Left" VerticalAlignment="Top" 
+                              Margin="8,6,0,0" Panel.ZIndex="20"
+                              SpriteWidth="42" SpriteHeight="42"/>
+
         <ListView Name="ShelfListView" Grid.Row="1" ItemsSource="{Binding DroppedItems}" Background="#01000000" BorderThickness="0" Margin="12,0,12,12"
                   Focusable="True" KeyboardNavigation.DirectionalNavigation="Contained"
                   ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Hidden"
@@ -249,7 +257,7 @@
                   VirtualizingStackPanel.IsVirtualizing="True"
                   VirtualizingStackPanel.VirtualizationMode="Recycling"
                   VirtualizingPanel.ScrollUnit="Pixel"
-                  VirtualizingPanel.CacheLength="5,5"
+                  VirtualizingPanel.CacheLength="1,1"
                   VirtualizingPanel.CacheLengthUnit="Item"
                   SelectionMode="Extended" MouseMove="ShelfListView_MouseMove" PreviewMouseLeftButtonDown="ShelfListView_PreviewMouseLeftButtonDown"
                   PreviewMouseLeftButtonUp="ShelfListView_PreviewMouseLeftButtonUp"

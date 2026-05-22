@@ -1,5 +1,5 @@
-﻿// ---------------------------------------------------------------
-// HubWindow � Advanced Features
+// ---------------------------------------------------------------
+// HubWindow ï¿½ Advanced Features
 // SnifferPaths, Device Management, Device Groups, Updates,
 // Kinetic Scroll, Theming, Wallpaper, QR Pairing, Color Tools
 // Split from HubWindow.xaml.cs for modularity
@@ -76,7 +76,7 @@ namespace FlyShelf.Windows
                     string myLocalUrl = _viewModel.LocalServer?.ServerUrl ?? "";
                     string myGlobalUrl = _viewModel.LocalServer?.GlobalUrl ?? "";
 
-                    // Always add self to LAN — this device IS a LAN device
+                    // Always add self to LAN â€” this device IS a LAN device
                     lanItems.Add(new DeviceDisplayItem
                     {
                         DeviceName = myName + " (You)",
@@ -88,11 +88,11 @@ namespace FlyShelf.Windows
                         GlobalUrl = myGlobalUrl
                     });
 
-                    // ═══ Use PeerManager's CONFIRMED connection data ═══
+                    // â•â•â• Use PeerManager's CONFIRMED connection data â•â•â•
                     // PeerManager has already handshaked with each peer and knows the exact transport.
-                    // This is the ground truth — no guessing needed.
+                    // This is the ground truth â€” no guessing needed.
                     var peerStatuses = PeerManager.Instance?.GetPeerStatuses() 
-                        ?? new System.Collections.Generic.List<PeerStatus>();
+                        ?? new System.Collections.Generic.List<PeerStatusItem>();
                     var confirmedPeerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
                     foreach (var peer in peerStatuses)
@@ -108,7 +108,7 @@ namespace FlyShelf.Windows
                                 DeviceType = "PC",
                                 IsOnline = true,
                                 ConnectionType = "Local",
-                                LastSeen = $"LAN active — {peer.ActiveUrl}",
+                                LastSeen = $"LAN active â€” {peer.ActiveUrl}",
                                 LocalIp = peer.LanUrl,
                                 GlobalUrl = peer.CloudflareUrl
                             });
@@ -143,7 +143,7 @@ namespace FlyShelf.Windows
                         }
                     }
 
-                    // ═══ Non-PeerManager devices (phones, other platforms from Firebase) ═══
+                    // â•â•â• Non-PeerManager devices (phones, other platforms from Firebase) â•â•â•
                     // These are devices we don't have a direct P2P handshake with.
                     // Classify by checking if they share our LAN subnet AND respond to a health check.
                     var pingTasks = devices
@@ -176,7 +176,7 @@ namespace FlyShelf.Windows
                         var d = c.Device;
                         if (c.IsLan)
                         {
-                            // Confirmed reachable on LAN — place in LAN column only
+                            // Confirmed reachable on LAN â€” place in LAN column only
                             lanItems.Add(new DeviceDisplayItem
                             {
                                 DeviceName = d.Name,
@@ -189,7 +189,7 @@ namespace FlyShelf.Windows
                         }
                         else if (d.IsOnline)
                         {
-                            // Online but NOT on LAN — Cloud only
+                            // Online but NOT on LAN â€” Cloud only
                             cloudItems.Add(new DeviceDisplayItem
                             {
                                 DeviceName = d.Name,
@@ -209,7 +209,7 @@ namespace FlyShelf.Windows
                 LanDevicesPanel.ItemsSource = result.LanItems;
                 CloudDevicesPanel.ItemsSource = result.CloudItems;
 
-                // Show/hide empty text — lanItems always has self, so "No LAN devices" means no OTHER LAN peers
+                // Show/hide empty text â€” lanItems always has self, so "No LAN devices" means no OTHER LAN peers
                 LanEmptyText.Visibility = result.LanItems.Count <= 1 ? Visibility.Visible : Visibility.Collapsed;
                 CloudEmptyText.Visibility = result.CloudItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
@@ -244,20 +244,20 @@ namespace FlyShelf.Windows
                 string copyUrl = !string.IsNullOrEmpty(device.GlobalUrl) ? device.GlobalUrl : device.LocalIp;
                 if (!string.IsNullOrEmpty(copyUrl))
                 {
-                    try { Clipboard.SetText(copyUrl); info += "\n\n✅ URL copied to clipboard!"; } catch { }
+                    try { Clipboard.SetText(copyUrl); info += "\n\nâœ… URL copied to clipboard!"; } catch { }
                 }
 
-                MessageBox.Show(info, $"Device Info — {device.DeviceName}", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(info, $"Device Info â€” {device.DeviceName}", MessageBoxButton.OK, MessageBoxImage.Information);
                 e.Handled = true;
             }
         }
 
         /// <summary>
-        /// Extracts the subnet prefix from an IP address (first 3 octets): "192.168.1.106" → "192.168.1"
+        /// Extracts the subnet prefix from an IP address (first 3 octets): "192.168.1.106" â†’ "192.168.1"
         /// </summary>
 
 
-        // ═══ Device Groups (Firebase-synced) ═══
+        // â•â•â• Device Groups (Firebase-synced) â•â•â•
 
         private async void RefreshGroups()
         {
@@ -340,7 +340,7 @@ namespace FlyShelf.Windows
                     for (int i = 0; i < deviceNames.Count; i++)
                     {
                         bool inGroup = (group.DeviceNames ?? new List<string>()).Contains(deviceNames[i]);
-                        prompt += $"  {i + 1}. {deviceNames[i]}{(inGroup ? " ★" : "")}\n";
+                        prompt += $"  {i + 1}. {deviceNames[i]}{(inGroup ? " â˜…" : "")}\n";
                         if (inGroup) preSelected.Add(i + 1);
                     }
 
@@ -374,7 +374,7 @@ namespace FlyShelf.Windows
         }
 
         /// <summary>
-        /// Pure WPF input dialog — no System.Windows.Forms dependency.
+        /// Pure WPF input dialog â€” no System.Windows.Forms dependency.
         /// </summary>
         private static string ShowInputDialog(string message, string title, string defaultValue)
         {
@@ -445,7 +445,7 @@ namespace FlyShelf.Windows
                 if (success)
                 {
                     UpdateBtn.Content = "Restarting...";
-                    UpdateStatusText.Text = "✅ Update downloaded! Restarting now...";
+                    UpdateStatusText.Text = "âœ… Update downloaded! Restarting now...";
                     await Task.Delay(1500);
                     _updateManager.ApplyUpdateAndRestart();
                 }
@@ -480,7 +480,7 @@ namespace FlyShelf.Windows
             {
                 RedownloadBtn.IsEnabled = false;
                 UpdateBtn.Content = "Restarting...";
-                UpdateStatusText.Text = $"✅ v{UpdateManager.CurrentVersion} re-downloaded! Restarting now...";
+                UpdateStatusText.Text = $"âœ… v{UpdateManager.CurrentVersion} re-downloaded! Restarting now...";
                 UpdatePctText.Text = "100%";
 
                 await Task.Delay(1500);
@@ -490,11 +490,11 @@ namespace FlyShelf.Windows
             {
                 RedownloadBtn.IsEnabled = true;
                 UpdateBtn.IsEnabled = true;
-                UpdateStatusText.Text = "❌ Redownload failed — check your internet connection.";
+                UpdateStatusText.Text = "âŒ Redownload failed â€” check your internet connection.";
             }
         }
 
-        // ═══ Kinetic Smooth Scroll Engine ═══
+        // â•â•â• Kinetic Smooth Scroll Engine â•â•â•
         private ScrollViewer _activeScrollViewer;
         private double _scrollVelocity;
         private bool _isKineticScrolling;
@@ -544,7 +544,7 @@ namespace FlyShelf.Windows
             newOffset = Math.Max(0, Math.Min(newOffset, _activeScrollViewer.ScrollableHeight));
             _activeScrollViewer.ScrollToVerticalOffset(newOffset);
 
-            // Apply friction — 0.92 gives natural deceleration (like Chrome)
+            // Apply friction â€” 0.92 gives natural deceleration (like Chrome)
             _scrollVelocity *= 0.92;
         }
 
@@ -559,403 +559,6 @@ namespace FlyShelf.Windows
         public string LastSeen { get; set; } = "";
         public string LocalIp { get; set; } = "";
         public string GlobalUrl { get; set; } = "";
-        public string ConnectionInfo => !string.IsNullOrEmpty(GlobalUrl) ? "🌐 Cloudflare Active" : !string.IsNullOrEmpty(LocalIp) ? "📡 LAN" : "";
-    }
-
-    public partial class HubWindow
-    {
-        // ═══ Theme & Appearance Handlers ═══
-
-        private void ApplyTheme()
-        {
-            try
-            {
-                // Apply DWM Immersive Dark Mode attribute so the title bar and Mica backdrop respect our theme choice
-                try
-                {
-                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                    if (hwnd != IntPtr.Zero)
-                    {
-                        bool isLight = SettingsManager.Current.ColorScheme == 1;
-                        int darkValue = isLight ? 0 : 1;
-                        NativeMethods.DwmSetWindowAttribute(hwnd, NativeMethods.DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkValue, sizeof(int));
-                    }
-                }
-                catch { }
-
-                // Wallpaper preview (asynchronously decoded to prevent UI thread blocking)
-                string wallpaperPath = SettingsManager.Current.ClipboardWallpaperPath;
-                if (!string.IsNullOrEmpty(wallpaperPath))
-                {
-                    System.Threading.Tasks.Task.Run(() =>
-                    {
-                        try
-                        {
-                            if (!System.IO.File.Exists(wallpaperPath))
-                            {
-                                Dispatcher.InvokeAsync(() =>
-                                {
-                                    if (SettingsManager.Current.ClipboardWallpaperPath == wallpaperPath)
-                                    {
-                                        WallpaperPreviewImg.Source = null;
-                                        NoWallpaperText.Visibility = Visibility.Visible;
-                                    }
-                                });
-                                return;
-                            }
-
-                            var bmp = new System.Windows.Media.Imaging.BitmapImage();
-                            bmp.BeginInit();
-                            bmp.UriSource = new Uri(wallpaperPath, UriKind.Absolute);
-                            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                            bmp.DecodePixelWidth = 400;
-                            bmp.EndInit();
-                            bmp.Freeze();
-
-                            Dispatcher.InvokeAsync(() =>
-                            {
-                                if (SettingsManager.Current.ClipboardWallpaperPath == wallpaperPath)
-                                {
-                                    WallpaperPreviewImg.Source = bmp;
-                                    NoWallpaperText.Visibility = Visibility.Collapsed;
-                                }
-                            });
-                        }
-                        catch
-                        {
-                            Dispatcher.InvokeAsync(() =>
-                            {
-                                WallpaperPreviewImg.Source = null;
-                                NoWallpaperText.Visibility = Visibility.Visible;
-                            });
-                        }
-                    });
-                }
-                else
-                {
-                    WallpaperPreviewImg.Source = null;
-                    NoWallpaperText.Visibility = Visibility.Visible;
-                }
-
-                // Blur + dark fallback when Mica is off
-                if (SettingsManager.Current.EnableBlurBehind && NativeMethods.ShouldUseBlur())
-                {
-                    this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
-                    this.Background = System.Windows.Media.Brushes.Transparent;
-                    if (RootGrid != null) RootGrid.Background = null;
-                    // Reset caption to default (transparent for Mica)
-                    try
-                    {
-                        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                        if (hwnd != IntPtr.Zero)
-                        {
-                            int colorDefault = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE = transparent for Mica
-                            NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref colorDefault, sizeof(int));
-                        }
-                    } catch { }
-                }
-                else
-                {
-                    this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
-                    bool isLight = SettingsManager.Current.ColorScheme == 1;
-                    var bgColor = isLight ? System.Windows.Media.Color.FromRgb(245, 246, 248) : System.Windows.Media.Color.FromRgb(18, 18, 26);
-                    var bgBrush = new System.Windows.Media.SolidColorBrush(bgColor);
-                    this.Background = bgBrush;
-                    if (RootGrid != null) RootGrid.Background = bgBrush;
-                    // Force title bar to match the fallback color via DWM (DWMWA_CAPTION_COLOR = 35)
-                    try
-                    {
-                        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                        if (hwnd != IntPtr.Zero)
-                        {
-                            int dwmColor = isLight ? ((248 << 16) | (246 << 8) | 245) : ((26 << 16) | (18 << 8) | 18);
-                            NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref dwmColor, sizeof(int));
-                        }
-                    } catch { }
-                }
-
-                // Color scheme — always dark mode (Light mode removed)
-                // Force ColorScheme to 0 (dark) in case old settings had 1 (light)
-                if (SettingsManager.Current.ColorScheme != 0)
-                    SettingsManager.Current.ColorScheme = 0;
-
-                try
-                {
-                    var mergedDicts = Application.Current.Resources.MergedDictionaries;
-
-                    // Remove any previous theme override dictionaries
-                    for (int i = mergedDicts.Count - 1; i >= 0; i--)
-                    {
-                        var d = mergedDicts[i];
-                        if (d.Source == null && d.Contains("FlyShelf.ThemeOverride"))
-                            mergedDicts.RemoveAt(i);
-                    }
-
-                    // Ensure MicaWPF is set to Dark
-                    foreach (var dict in mergedDicts)
-                    {
-                        if (dict is MicaWPF.Styles.ThemeDictionary md)
-                            md.Theme = MicaWPF.Core.Enums.WindowsTheme.Dark;
-                    }
-
-                    // Dark mode accent override — prevent system accent color bleeding
-                    var overrides = new ResourceDictionary();
-                    overrides["FlyShelf.ThemeOverride"] = true;
-                    overrides["MicaWPF.Brushes.SystemAccentColor"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(99, 102, 241));
-                    overrides["MicaWPF.Brushes.SystemAccentColorLight1"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(129, 132, 255));
-                    overrides["MicaWPF.Brushes.SystemAccentColorLight2"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(159, 162, 255));
-                    overrides["MicaWPF.Brushes.SystemAccentColorDark1"] = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(79, 82, 221));
-                    mergedDicts.Add(overrides);
-                }
-                catch { /* Theme switching may not be supported on all versions */ }
-
-                // Re-apply window backdrop and background (Mica dark or solid dark fallback)
-                NativeMethods.ApplyWindowBackdropAndBackground(this, RootGrid);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("THEME", $"Apply failed: {ex.Message}");
-            }
-        }
-
-        private void ChooseWallpaper_Click(object sender, RoutedEventArgs e)
-        {
-            var dialog = new Microsoft.Win32.OpenFileDialog
-            {
-                Title = "Choose Clipboard Wallpaper",
-                Filter = "Image Files|*.png;*.jpg;*.jpeg;*.bmp;*.webp|All Files|*.*"
-            };
-            if (dialog.ShowDialog() == true)
-            {
-                SettingsManager.Current.ClipboardWallpaperPath = dialog.FileName;
-                SettingsManager.Save();
-                ApplyTheme();
-            }
-        }
-
-        private void RemoveWallpaper_Click(object sender, RoutedEventArgs e)
-        {
-            SettingsManager.Current.ClipboardWallpaperPath = "";
-            SettingsManager.Save();
-            ApplyTheme();
-        }
-
-        private void BlurToggle_Changed(object sender, RoutedEventArgs e)
-        {
-            SettingsManager.Save();
-            ApplyTheme();
-        }
-
-        private void ColorScheme_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
-        {
-            SettingsManager.Save();
-            ApplyTheme();
-        }
-
-        // ═══ QR Code Pairing Handlers ═══
-
-        private void RefreshQRCode()
-        {
-            try
-            {
-                if (PairingQRImage == null) return;
-                string localUrl = _viewModel.LocalServer?.DisplayUrl ?? "";
-                string globalUrl = _viewModel.LocalServer?.GlobalUrl ?? "";
-                string pin = SettingsManager.Current.WebClientPinToken;
-
-                var qr = DevicePairingManager.GenerateQRCode(localUrl, globalUrl, pin, 250);
-                if (qr != null)
-                {
-                    PairingQRImage.Source = qr;
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("QR", $"Refresh failed: {ex.Message}");
-            }
-        }
-
-        private void RefreshPairedDevicesList()
-        {
-            try
-            {
-                var devices = DevicePairingManager.GetPairedDevices();
-                var peerStatuses = PeerManager.Instance?.GetPeerStatuses();
-
-                // Build merged list with live P2P status
-                var mergedList = devices.Select(d =>
-                {
-                    var peer = peerStatuses?.FirstOrDefault(p => p.DeviceId == d.DeviceId);
-                    return new PeerStatusItem
-                    {
-                        DeviceId = d.DeviceId,
-                        DeviceName = d.DeviceName,
-                        IsAlive = peer?.IsAlive ?? false,
-                        Transport = peer?.Transport ?? "offline",
-                        IsLanActive = !string.IsNullOrEmpty(peer?.LanUrl) && (peer?.IsAlive ?? false),
-                        IsCloudActive = !string.IsNullOrEmpty(peer?.CloudflareUrl) && (peer?.IsAlive ?? false),
-                        StatusText = peer?.IsAlive == true
-                            ? $"Connected via {peer.Transport} • Last seen {peer.LastSeen:HH:mm:ss}"
-                            : "Offline"
-                    };
-                }).ToList();
-
-                PeerStatusPanel.ItemsSource = mergedList;
-                NoPairedDevicesText.Visibility = mergedList.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
-
-                int onlineCount = mergedList.Count(p => p.IsAlive);
-                PeerCountBadge.Text = $"{onlineCount} online";
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("QR", $"Refresh paired list failed: {ex.Message}");
-            }
-        }
-
-        private void RegenerateQR_Click(object sender, RoutedEventArgs e)
-        {
-            DevicePairingManager.RegeneratePairingKey();
-            RefreshQRCode();
-            Windows.ToastWindow.ShowToast("New QR code generated! ✅");
-        }
-
-        private void CopyPairingInfo_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                string localUrl = _viewModel.LocalServer?.DisplayUrl ?? "";
-                string globalUrl = _viewModel.LocalServer?.GlobalUrl ?? "";
-                string pin = SettingsManager.Current.WebClientPinToken;
-                string payload = DevicePairingManager.BuildQRPayload(localUrl, globalUrl, pin);
-                System.Windows.Clipboard.SetText(payload);
-                Windows.ToastWindow.ShowToast("Pairing info copied! 📋");
-            }
-            catch { }
-        }
-
-        private async void ForcePeerSync_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                Windows.ToastWindow.ShowToast("🔄 Force syncing peers...");
-                if (PeerManager.Instance != null)
-                {
-                    await PeerManager.Instance.ForceResync();
-                }
-                RefreshPairedDevicesList();
-                Windows.ToastWindow.ShowToast("✅ Peer sync complete!");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("HUB", $"Force sync failed: {ex.Message}");
-                Windows.ToastWindow.ShowToast("⚠️ Sync failed — check logs");
-            }
-        }
-
-        private void RemovePairedDevice_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is System.Windows.Controls.Button btn && btn.Tag is string deviceId)
-            {
-                DevicePairingManager.RemoveDevice(deviceId);
-                RefreshPairedDevicesList();
-                Windows.ToastWindow.ShowToast("Device removed ✕");
-            }
-        }
-
-        private async void GeneratePairingCode_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                PairingCodeDisplay.Text = "...";
-                string code = await DevicePairingManager.PublishPairingCode();
-                PairingCodeDisplay.Text = code;
-                Windows.ToastWindow.ShowToast($"Code generated: {code} (expires in 5 min) 🔑");
-            }
-            catch (Exception ex)
-            {
-                PairingCodeDisplay.Text = "ERROR";
-                Logger.LogAction("PAIR CODE", $"Generate failed: {ex.Message}");
-            }
-        }
-
-        private async void ConnectByCode_Click(object sender, RoutedEventArgs e)
-        {
-            string code = RemoteCodeInput?.Text?.Trim().ToUpper() ?? "";
-            if (string.IsNullOrEmpty(code) || code.Length != 6)
-            {
-                Windows.ToastWindow.ShowToast("⚠️ Enter a 6-character code");
-                return;
-            }
-
-            Windows.ToastWindow.ShowToast($"Looking up {code}...");
-
-            try
-            {
-                var (success, deviceName) = await DevicePairingManager.ConnectByCode(code);
-                if (success)
-                {
-                    Windows.ToastWindow.ShowToast($"✅ Paired with {deviceName}!");
-                    RefreshPairedDevicesList();
-                    RemoteCodeInput.Text = "";
-
-                    // Restart Firebase listener so it reads from the newly adopted pairing key scope
-                    _viewModel.CloudListener?.StopPolling();
-                    _viewModel.CloudListener?.StartPolling();
-                    Logger.LogAction("PAIR CODE", "Firebase listener restarted for new pairing key scope");
-                }
-                else if (!string.IsNullOrEmpty(deviceName))
-                {
-                    Windows.ToastWindow.ShowToast($"⚠️ Found {deviceName} but couldn't connect — make sure it's online");
-                }
-                else
-                {
-                    Windows.ToastWindow.ShowToast("❌ Code not found or expired");
-                }
-            }
-            catch (Exception ex)
-            {
-                Windows.ToastWindow.ShowToast($"❌ Connection failed: {ex.Message}");
-                Logger.LogAction("PAIR CODE", $"ConnectByCode UI error: {ex.Message}");
-            }
-        }
-
-        // ═══ Color Copy Handlers ═══
-
-        private void CopyColorHex_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.DataContext is ViewModels.ClipboardItem item && item.HasDetectedColor)
-            {
-                try { System.Windows.Clipboard.SetText(Classes.ColorHelper.ToHex(item.ColorR, item.ColorG, item.ColorB)); Windows.ToastWindow.ShowToast($"Hex copied: {item.DetectedColor} 🎨"); }
-                catch { Windows.ToastWindow.ShowToast("Clipboard busy — try again"); }
-            }
-        }
-
-        private void CopyColorRgb_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.DataContext is ViewModels.ClipboardItem item && item.HasDetectedColor)
-            {
-                string rgb = Classes.ColorHelper.ToRgb(item.ColorR, item.ColorG, item.ColorB);
-                try { System.Windows.Clipboard.SetText(rgb); Windows.ToastWindow.ShowToast($"RGB copied: {rgb} 🎨"); }
-                catch { Windows.ToastWindow.ShowToast("Clipboard busy — try again"); }
-            }
-        }
-
-        private void CopyColorHsl_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.DataContext is ViewModels.ClipboardItem item && item.HasDetectedColor)
-            {
-                string hsl = Classes.ColorHelper.ToHsl(item.ColorR, item.ColorG, item.ColorB);
-                try { System.Windows.Clipboard.SetText(hsl); Windows.ToastWindow.ShowToast($"HSL copied: {hsl} 🎨"); }
-                catch { Windows.ToastWindow.ShowToast("Clipboard busy — try again"); }
-            }
-        }
-    }
-
-    public class GroupDisplayItem
-    {
-        public string Id { get; set; } = "";
-        public string Name { get; set; } = "";
-        public string DeviceList { get; set; } = "";
+        public string ConnectionInfo => !string.IsNullOrEmpty(GlobalUrl) ? "ðŸŒ  Cloudflare Active" : !string.IsNullOrEmpty(LocalIp) ? "ðŸ“¡ LAN" : "";
     }
 }
-

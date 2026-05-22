@@ -155,7 +155,7 @@ namespace FlyShelf.Classes
                             TransferMethod = chunkTransport.transport
                         };
                         clip.EvaluateSmartActions();
-                        _viewModel.DroppedItems.Insert(0, clip);
+                        _viewModel.InsertWithDedup(clip);
                         _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                     }
                     catch { }
@@ -597,11 +597,8 @@ namespace FlyShelf.Classes
                         newest.SourceDeviceType = sourceDeviceType;
                         newest.TransferMethod = transferMethod;
                         
-                        // Persist these updated network metadata fields to SQLite database
-                        System.Threading.Tasks.Task.Run(() =>
-                        {
-                            Classes.ClipboardHistoryManager.UpdateItemNetworkFields(newest);
-                        });
+                        // Persist network metadata via debounced JSON save
+                        _viewModel.PersistHistoryPublic();
 
                         // ECHO PREVENTION: Mark file as cloud-sourced so clipboard monitor
                         // doesn't re-push it to peers/Firebase when we write to clipboard
@@ -615,7 +612,7 @@ namespace FlyShelf.Classes
                         MainWindow.SetWritingClipboard(true);
                         var clipList = new System.Collections.Specialized.StringCollection { filePath };
                         System.Windows.Clipboard.SetFileDropList(clipList);
-                        await System.Threading.Tasks.Task.Delay(500);
+                        await System.Threading.Tasks.Task.Delay(100);
                     }
                     catch { }
                     finally { MainWindow.SetWritingClipboard(false); }
@@ -649,15 +646,12 @@ namespace FlyShelf.Classes
                     groupItem.SourceDeviceType = sourceDeviceType;
                     groupItem.TransferMethod = transferMethod;
 
-                    _viewModel.DroppedItems.Insert(0, groupItem);
+                    _viewModel.InsertWithDedup(groupItem);
                     _viewModel.PruneOldItems();
                     _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
 
-                    // Persist network fields to database
-                    System.Threading.Tasks.Task.Run(() =>
-                    {
-                        Classes.ClipboardHistoryManager.UpdateItemNetworkFields(groupItem);
-                    });
+                    // Persist network metadata via debounced JSON save
+                    _viewModel.PersistHistoryPublic();
 
                     // Set file drop list to clipboard
                     try
@@ -666,7 +660,7 @@ namespace FlyShelf.Classes
                         var clipList = new System.Collections.Specialized.StringCollection();
                         foreach (var f in files) clipList.Add(f);
                         System.Windows.Clipboard.SetFileDropList(clipList);
-                        await System.Threading.Tasks.Task.Delay(500);
+                        await System.Threading.Tasks.Task.Delay(100);
                     }
                     catch { }
                     finally { MainWindow.SetWritingClipboard(false); }
@@ -751,7 +745,7 @@ namespace FlyShelf.Classes
                         clip = new ClipboardItem
                         {
                             RawContent = capturedText,
-                            FileName = capturedText.Length > 40 ? capturedText.Substring(0, 40) + "..." : capturedText,
+                            FileName = capturedText.Length > 800 ? capturedText.Substring(0, 800) + "..." : capturedText,
                             Extension = capturedTransport == "WebSocket" ? "WS" : "SYNC",
                             ItemType = clipType,
                             SourceDeviceName = capturedSource,
@@ -762,7 +756,7 @@ namespace FlyShelf.Classes
 
                     clip.EvaluateSmartActions();
                     bool wasEmpty = _viewModel.DroppedItems.Count == 0;
-                    _viewModel.DroppedItems.Insert(0, clip);
+                    _viewModel.InsertWithDedup(clip);
                     if (wasEmpty) _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                     
                     // ECHO PREVENTION: Mark this text as cloud-sourced so the clipboard monitor
@@ -775,7 +769,7 @@ namespace FlyShelf.Classes
                     { 
                         MainWindow.SetWritingClipboard(true);
                         System.Windows.Clipboard.SetText(capturedText);
-                        await System.Threading.Tasks.Task.Delay(500);
+                        await System.Threading.Tasks.Task.Delay(100);
                     } 
                     catch { }
                     finally { MainWindow.SetWritingClipboard(false); }

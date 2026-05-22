@@ -1,4 +1,4 @@
-﻿// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 
 
 
@@ -690,7 +690,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                    System.Windows.Application.Current.Dispatcher.Invoke(() => 
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
 
 
 
@@ -770,7 +770,12 @@ namespace FlyShelf.ViewModels
 
 
 
-                            process.WaitForExit();
+                            process.WaitForExit(60000); // 60s timeout — prevent stuck Word COM from hanging forever
+                            if (!process.HasExited)
+                            {
+                                try { process.Kill(); } catch { }
+                                FlyShelf.Classes.Logger.LogAction("CONVERT_DOC", "Killed stuck Word process after 60s timeout");
+                            }
 
 
 
@@ -782,7 +787,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                                System.Windows.Application.Current.Dispatcher.Invoke(() => 
+                                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
 
 
 
@@ -834,7 +839,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                                System.Windows.Application.Current.Dispatcher.Invoke(() => 
+                                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
 
 
 
@@ -870,7 +875,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                    System.Windows.Application.Current.Dispatcher.Invoke(() => 
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
 
 
 
@@ -938,7 +943,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
 
 
 
@@ -1198,7 +1203,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
 
 
 
@@ -1242,7 +1247,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
 
 
 
@@ -1318,7 +1323,7 @@ namespace FlyShelf.ViewModels
 
                             {
 
-                                System.Windows.Application.Current.Dispatcher.Invoke(() => 
+                                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
 
                                 {
 
@@ -1354,7 +1359,7 @@ namespace FlyShelf.ViewModels
 
                             {
 
-                                System.Windows.Application.Current.Dispatcher.Invoke(() => 
+                                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
 
                                     FlyShelf.Windows.ToastWindow.ShowToast("No Text Detected in Image.")
 
@@ -1368,7 +1373,7 @@ namespace FlyShelf.ViewModels
 
                         {
 
-                            System.Windows.Application.Current.Dispatcher.Invoke(() => 
+                            System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
 
                                 FlyShelf.Windows.ToastWindow.ShowToast("Native OCR engine failed to load.")
 
@@ -1386,7 +1391,7 @@ namespace FlyShelf.ViewModels
 
             {
 
-                System.Windows.Application.Current.Dispatcher.Invoke(() => 
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
 
                     FlyShelf.Windows.ToastWindow.ShowToast($"OCR Engine Missing/Failed")
 
@@ -1446,7 +1451,7 @@ namespace FlyShelf.ViewModels
 
                             {
 
-                                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
 
                                 {
 
@@ -2048,7 +2053,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                            System.Windows.Application.Current.Dispatcher.Invoke(() => 
+                            System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
 
 
 
@@ -2068,7 +2073,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                        System.Windows.Application.Current.Dispatcher.Invoke(() => 
+                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
 
 
 
@@ -2108,7 +2113,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                    System.Windows.Application.Current.Dispatcher.Invoke(() => 
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
 
 
 
@@ -2164,7 +2169,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                System.Windows.Application.Current.Dispatcher.Invoke(() => 
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
 
 
 
@@ -2334,7 +2339,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
 
 
 
@@ -2382,7 +2387,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
 
 
 
@@ -2479,6 +2484,11 @@ $word.Quit();
 
 
                         process?.WaitForExit(60000);
+                        if (process != null && !process.HasExited)
+                        {
+                            try { process.Kill(); } catch { }
+                            FlyShelf.Classes.Logger.LogAction("PDF2WORD", "Killed stuck conversion process after 60s timeout");
+                        }
 
 
 
@@ -2486,7 +2496,7 @@ $word.Quit();
 
 
 
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
 
 
 
@@ -2570,7 +2580,7 @@ $word.Quit();
 
 
 
-                    System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
 
 
 
@@ -2610,7 +2620,7 @@ $word.Quit();
                     var result = reader.Decode(bmp);
                     if (result != null && !string.IsNullOrWhiteSpace(result.Text))
                     {
-                        System.Windows.Application.Current.Dispatcher.Invoke(() => {
+                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                             this.ItemType = ClipboardItemType.QRCode;
                             this.RawContent = result.Text;
                             this.EvaluateSmartActions();

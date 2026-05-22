@@ -3,7 +3,8 @@ import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, Keyb
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSettings } from '../../context/SettingsContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
+import { getSecureItem } from '../../utils/secureStorage';
 import * as IntentLauncher from 'expo-intent-launcher';
 import Constants from 'expo-constants';
 import { colors, font, radius, shadows, space } from '../../styles/theme';
@@ -558,12 +559,10 @@ export default function SettingsScreen() {
                 try {
                   const logs = getNetworkLogs();
                   if (logs.length === 0) { Alert.alert('No Logs', 'No network logs to send.'); return; }
-                  // Resolve PC URL
-                  const AsyncStorage = (await import('@react-native-async-storage/async-storage')).default;
                   const [localUrl, globalUrl, pk] = await Promise.all([
-                    AsyncStorage.getItem('pairedLocalUrl'),
-                    AsyncStorage.getItem('pairedGlobalUrl'),
-                    AsyncStorage.getItem('pairingKey'),
+                    getSecureItem('pairedLocalUrl'),
+                    getSecureItem('pairedGlobalUrl'),
+                    getSecureItem('pairingKey'),
                   ]);
                   const candidates = [localUrl, globalUrl].filter(u => u && u.startsWith('http')) as string[];
                   if (candidates.length === 0) { Alert.alert('No PC', 'No paired PC URL found. Pair with a PC first.'); return; }

@@ -16,13 +16,13 @@ using FlyShelf.ViewModels;
 namespace FlyShelf.Classes
 {
     /// <summary>
-    /// v5 PeerManager — Pure P2P engine.
+    /// v5 PeerManager â€” Pure P2P engine.
     /// 
     /// Firebase = phone book ONLY. Stores device URLs, never file data.
-    /// Flow: Discover → Handshake → Confirm tick → Talk direct. URLs persist in Firebase as a "phone book".
+    /// Flow: Discover â†’ Handshake â†’ Confirm tick â†’ Talk direct. URLs persist in Firebase as a "phone book".
     /// All text/files flow device-to-device via LAN or Cloudflare. 5s heartbeat.
     /// </summary>
-    public class PeerManager
+    public partial class PeerManager
     {
         public static PeerManager? Instance { get; private set; }
 
@@ -35,24 +35,24 @@ namespace FlyShelf.Classes
         private DateTime _lastUrlRequestTime = DateTime.MinValue; // Throttle urlRequest to max once per 60s
         private readonly HashSet<string> _prunedGhosts = new(StringComparer.OrdinalIgnoreCase);
 
-        // ═══ Local URL cache — survives app restart ═══
+        // â•â•â• Local URL cache â€” survives app restart â•â•â•
         private static readonly string _urlCacheFile = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "peer_urls.json");
 
-        // ═══ Config ═══
+        // â•â•â• Config â•â•â•
         private const int HEARTBEAT_MS = 5_000;            // 5s heartbeat (fast LAN detection)
         private const int HEARTBEAT_TIMEOUT_MS = 4_000;    // 4s timeout per ping
         private const int MAX_FAILURES = 3;                // 3 misses = dead (quick failover)
-        private const int DISCOVERY_MS = 15_000;           // Re-scan Firebase every 15s for reconnection
+        private const int DISCOVERY_MS = 600_000;          // Re-scan Firebase every 10m (safety fallback only - real-time updates use SSE)
         private const int HANDSHAKE_TIMEOUT_LAN_MS = 5_000;   // 5s for LAN
         private const int HANDSHAKE_TIMEOUT_CF_MS = 8_000;    // 8s for Cloudflare tunnels
 
-        // ═══ Events ═══
+        // â•â•â• Events â•â•â•
         public event Action<string, string>? PeerConnected;     // (deviceId, transport)
         public event Action<string>? PeerDisconnected;          // (deviceId)
         public event Action<string, string>? TransportSwitched; // (deviceId, newTransport)
 
-        // ═══ Shared HttpClient — connection pooling eliminates TLS re-handshake per request ═══
+        // â•â•â• Shared HttpClient â€” connection pooling eliminates TLS re-handshake per request â•â•â•
         // Critical for Cloudflare: each new HttpClient = new TLS handshake (~800ms via tunnel).
         // Reusing connections saves that on every subsequent request.
         private static readonly SocketsHttpHandler _sharedHandler = new()
@@ -80,14 +80,14 @@ namespace FlyShelf.Classes
             _myPairingKey = DevicePairingManager.EnsurePairingKey();
             if (string.IsNullOrEmpty(_myPairingKey))
             {
-                Logger.LogAction("PEER", "No pairing key — PeerManager idle.");
+                Logger.LogAction("PEER", "No pairing key â€” PeerManager idle.");
                 return;
             }
 
             Logger.LogAction("PEER", $"v5 PeerManager starting [device={_myDeviceId}]");
             _cts = new CancellationTokenSource();
 
-            // ═══ FIX 1: Re-publish our own URLs to Firebase on startup ═══
+            // â•â•â• FIX 1: Re-publish our own URLs to Firebase on startup â•â•â•
             // Ensures peers can always find us, even if ConfirmAndCleanup deleted them last session.
             _ = Task.Run(async () =>
             {
@@ -99,13 +99,13 @@ namespace FlyShelf.Classes
                     if (!string.IsNullOrEmpty(globalUrl) || !string.IsNullOrEmpty(localUrl))
                     {
                         await CloudDiscoveryManager.PushTunnelUrl(globalUrl ?? "", true, localUrl, forceWrite: true);
-                        Logger.LogAction("PEER", $"📡 Startup: re-published URLs to Firebase (LAN={localUrl} CF={globalUrl})");
+                        Logger.LogAction("PEER", $"ðŸ“¡ Startup: re-published URLs to Firebase (LAN={localUrl} CF={globalUrl})");
                     }
                 }
                 catch (Exception ex) { Logger.LogAction("PEER", $"Startup URL publish error: {ex.Message}"); }
             });
 
-            // ═══ FIX 2: Try cached URLs first before Firebase ═══
+            // â•â•â• FIX 2: Try cached URLs first before Firebase â•â•â•
             // If we have locally cached URLs from last session, try them directly.
             // This provides instant reconnection even if Firebase URLs were cleaned.
             await TryCachedUrlsFirst();
@@ -115,7 +115,7 @@ namespace FlyShelf.Classes
             _ = Task.Run(() => HeartbeatLoop(_cts.Token));
             _ = Task.Run(() => DiscoveryLoop(_cts.Token));
 
-            Logger.LogAction("PEER", $"PeerManager running — {AliveCount}/{_peers.Count} peer(s) alive");
+            Logger.LogAction("PEER", $"PeerManager running â€” {AliveCount}/{_peers.Count} peer(s) alive");
         }
 
         /// <summary>
@@ -133,7 +133,7 @@ namespace FlyShelf.Classes
                 var cache = JsonSerializer.Deserialize<Dictionary<string, CachedPeerUrls>>(json);
                 if (cache == null || cache.Count == 0) return;
 
-                Logger.LogAction("PEER", $"📋 Loaded {cache.Count} cached peer URL(s) from last session");
+                Logger.LogAction("PEER", $"ðŸ“‹ Loaded {cache.Count} cached peer URL(s) from last session");
 
                 foreach (var (devId, urls) in cache)
                 {
@@ -150,7 +150,7 @@ namespace FlyShelf.Classes
 
                     if (!peer.IsAlive)
                     {
-                        Logger.LogAction("PEER", $"📋 Trying cached URLs for {peer.DeviceName}: LAN={peer.LanUrl} CF={peer.CloudflareUrl}");
+                        Logger.LogAction("PEER", $"ðŸ“‹ Trying cached URLs for {peer.DeviceName}: LAN={peer.LanUrl} CF={peer.CloudflareUrl}");
                         await Handshake(peer);
                     }
                 }
@@ -201,7 +201,7 @@ namespace FlyShelf.Classes
             Logger.LogAction("PEER", "PeerManager stopped.");
         }
 
-        // ═══════════════════════════════════════════════════════════════
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
         private async Task DiscoverAndHandshake()
         {
@@ -237,7 +237,7 @@ namespace FlyShelf.Classes
                         // Only log + delete once per unknown device to avoid spam
                         if (_prunedGhosts.Add(devId))
                         {
-                            Logger.LogAction("PEER", $"⏭️ Skipping unpaired device in Firebase: {name} ({devId}) — not in local paired list");
+                            Logger.LogAction("PEER", $"â­ï¸ Skipping unpaired device in Firebase: {name} ({devId}) â€” not in local paired list");
 
                             // Actively delete the ghost entry from Firebase
                             _ = Task.Run(async () =>
@@ -247,7 +247,7 @@ namespace FlyShelf.Classes
                                     string deleteUrl = await CloudDiscoveryManager.AuthUrlPublic($"active_devices/{_myPairingKey}/{prop.Name}.json");
                                     using var delClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
                                     await delClient.DeleteAsync(deleteUrl);
-                                    Logger.LogAction("PEER", $"🗑️ Deleted ghost device from Firebase: {name} ({prop.Name})");
+                                    Logger.LogAction("PEER", $"ðŸ—‘ï¸ Deleted ghost device from Firebase: {name} ({prop.Name})");
                                 }
                                 catch (Exception ex)
                                 {
@@ -284,7 +284,7 @@ namespace FlyShelf.Classes
                         if (!string.IsNullOrEmpty(lan)) existing.LanUrl = lan;
                         if (!string.IsNullOrEmpty(cf) && cf != existing.CloudflareUrl)
                         {
-                            Logger.LogAction("PEER", $"{name}: Cloudflare URL changed → {cf}");
+                            Logger.LogAction("PEER", $"{name}: Cloudflare URL changed â†’ {cf}");
                             existing.CloudflareUrl = cf;
                             if (existing.Transport == "Cloudflare") existing.ActiveUrl = cf;
                         }
@@ -304,8 +304,8 @@ namespace FlyShelf.Classes
                 var tasks = _peers.Values.Where(p => !p.IsAlive).Select(Handshake);
                 await Task.WhenAll(tasks);
 
-                // ═══ FIX 3: Send urlRequest whenever we have dead peers ═══
-                // Don't gate on _urlRequestSent — re-send every 60s if peers are still dead.
+                // â•â•â• FIX 3: Send urlRequest whenever we have dead peers â•â•â•
+                // Don't gate on _urlRequestSent â€” re-send every 60s if peers are still dead.
                 // This ensures recovery even if the first request was missed.
                 bool hasDeadPeers2 = _peers.Values.Any(p => !p.IsAlive);
                 if (hasDeadPeers2 && AliveCount == 0 && totalPeers > 0
@@ -326,21 +326,9 @@ namespace FlyShelf.Classes
             }
         }
 
-        /// <summary>
-        /// Safely decrypt a URL. Returns the original string if decryption fails
-        /// (meaning it wasn't encrypted, or it's already a plaintext URL).
-        /// </summary>
         private static string DecryptUrlSafe(string value)
         {
-            if (string.IsNullOrEmpty(value)) return value;
-            // If it already looks like a URL, it's not encrypted
-            if (value.StartsWith("http://") || value.StartsWith("https://")) return value;
-            try
-            {
-                string? decrypted = SyncCrypto.Decrypt(value);
-                return !string.IsNullOrEmpty(decrypted) ? decrypted : value;
-            }
-            catch { return value; }
+            return SyncCrypto.DecryptUrlSafe(value);
         }
 
         /// <summary>
@@ -353,8 +341,8 @@ namespace FlyShelf.Classes
             {
                 using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
 
-                // ═══ FIX 4: Write urlRequest under EACH dead peer's path ═══
-                // Previously wrote under our OWN device path — the other PC's SSE watcher
+                // â•â•â• FIX 4: Write urlRequest under EACH dead peer's path â•â•â•
+                // Previously wrote under our OWN device path â€” the other PC's SSE watcher
                 // was watching for changes to their OWN path, not ours. This fixes the signal.
                 foreach (var peer in _peers.Values.Where(p => !p.IsAlive))
                 {
@@ -383,7 +371,7 @@ namespace FlyShelf.Classes
 
                 _urlRequestSent = true;
                 _lastUrlRequestTime = DateTime.UtcNow;
-                Logger.LogAction("PEER", "📡 URL request signal sent + our URLs re-published");
+                Logger.LogAction("PEER", "ðŸ“¡ URL request signal sent + our URLs re-published");
             }
             catch (Exception ex)
             {
@@ -399,7 +387,7 @@ namespace FlyShelf.Classes
         {
             if (requestingDeviceId == _myDeviceId) return;
 
-            Logger.LogAction("PEER", $"📡 {requestingDeviceId} is requesting URLs — re-publishing ours...");
+            Logger.LogAction("PEER", $"ðŸ“¡ {requestingDeviceId} is requesting URLs â€” re-publishing ours...");
 
             string globalUrl = CloudDiscoveryManager.CachedGlobalUrl;
             string localUrl = CloudDiscoveryManager.CachedLocalUrl;
@@ -407,7 +395,7 @@ namespace FlyShelf.Classes
             {
                 _urlCleanedFromFirebase = false;
                 await CloudDiscoveryManager.PushTunnelUrl(globalUrl ?? "", true, localUrl, forceWrite: true);
-                Logger.LogAction("PEER", $"📡 Re-published encrypted URLs for {requestingDeviceId}");
+                Logger.LogAction("PEER", $"ðŸ“¡ Re-published encrypted URLs for {requestingDeviceId}");
             }
         }
 
@@ -445,7 +433,7 @@ namespace FlyShelf.Classes
                         return;
                 }
 
-                Logger.LogAction("PEER", $"⏭️ Skipping unpaired device URL update: {deviceName} ({deviceId})");
+                Logger.LogAction("PEER", $"â­ï¸ Skipping unpaired device URL update: {deviceName} ({deviceId})");
                 // Actively delete the ghost entry from Firebase
                 _ = Task.Run(async () =>
                 {
@@ -454,14 +442,14 @@ namespace FlyShelf.Classes
                         string deleteUrl = await CloudDiscoveryManager.AuthUrlPublic($"active_devices/{_myPairingKey}/{deviceId}.json");
                         using var delClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
                         await delClient.DeleteAsync(deleteUrl);
-                        Logger.LogAction("PEER", $"🗑️ Deleted ghost device from Firebase: {deviceName} ({deviceId})");
+                        Logger.LogAction("PEER", $"ðŸ—‘ï¸ Deleted ghost device from Firebase: {deviceName} ({deviceId})");
                     }
                     catch { }
                 });
                 return;
             }
 
-            Logger.LogAction("PEER", $"📡 Target URL update for {deviceName}: LAN={lan} CF={cf}");
+            Logger.LogAction("PEER", $"ðŸ“¡ Target URL update for {deviceName}: LAN={lan} CF={cf}");
 
             PeerConnection peer;
             if (_peers.TryGetValue(deviceId, out var existing))
@@ -501,7 +489,7 @@ namespace FlyShelf.Classes
         private async Task Handshake(PeerConnection peer)
         {
             bool lanEnabled = SettingsManager.Current.EnableLocalLAN;
-            Logger.LogAction("PEER", $"🔌 Handshake {peer.DeviceName}: LAN={peer.LanUrl ?? "(empty)"} CF={peer.CloudflareUrl ?? "(empty)"} lanEnabled={lanEnabled}");
+            Logger.LogAction("PEER", $"ðŸ”Œ Handshake {peer.DeviceName}: LAN={peer.LanUrl ?? "(empty)"} CF={peer.CloudflareUrl ?? "(empty)"} lanEnabled={lanEnabled}");
             
             // Priority 1: LAN (only if enabled)
             if (lanEnabled && await TryConnect(peer, peer.LanUrl, "LAN")) return;
@@ -510,7 +498,7 @@ namespace FlyShelf.Classes
 
             peer.IsAlive = false;
             peer.Transport = "offline";
-            Logger.LogAction("PEER", $"⚠️ {peer.DeviceName} unreachable (LAN:{(lanEnabled ? "on" : "off")}) tried LAN={peer.LanUrl ?? "null"} CF={peer.CloudflareUrl ?? "null"}");
+            Logger.LogAction("PEER", $"âš ï¸ {peer.DeviceName} unreachable (LAN:{(lanEnabled ? "on" : "off")}) tried LAN={peer.LanUrl ?? "null"} CF={peer.CloudflareUrl ?? "null"}");
         }
 
         private async Task<bool> TryConnect(PeerConnection peer, string testUrl, string transport)
@@ -583,7 +571,7 @@ namespace FlyShelf.Classes
                                     if (!string.IsNullOrEmpty(peerLan) && peerLan.StartsWith("http") && peerLan != peer.LanUrl)
                                     {
                                         peer.LanUrl = peerLan;
-                                        Logger.LogAction("PEER", $"🔍 Discovered {peer.DeviceName} LAN URL from health: {peerLan}");
+                                        Logger.LogAction("PEER", $"ðŸ” Discovered {peer.DeviceName} LAN URL from health: {peerLan}");
                                     }
                                 }
                                 if (tr.TryGetProperty("cloudflare", out var cfProp))
@@ -592,7 +580,7 @@ namespace FlyShelf.Classes
                                     if (!string.IsNullOrEmpty(peerCf) && peerCf.Contains("trycloudflare") && peerCf != peer.CloudflareUrl)
                                     {
                                         peer.CloudflareUrl = peerCf;
-                                        Logger.LogAction("PEER", $"🔍 Discovered {peer.DeviceName} CF URL from health: {peerCf}");
+                                        Logger.LogAction("PEER", $"ðŸ” Discovered {peer.DeviceName} CF URL from health: {peerCf}");
                                     }
                                 }
                             }
@@ -601,17 +589,17 @@ namespace FlyShelf.Classes
                             string myVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "";
                             if (!string.IsNullOrEmpty(peer.Version) && peer.Version != myVersion)
                             {
-                                Logger.LogAction("PEER", $"⚠️ Version mismatch: {peer.DeviceName} is on v{peer.Version}, we are on v{myVersion}");
+                                Logger.LogAction("PEER", $"âš ï¸ Version mismatch: {peer.DeviceName} is on v{peer.Version}, we are on v{myVersion}");
                             }
                         }
                     }
-                    catch { /* Health parsing is optional — connection is already confirmed */ }
+                    catch { /* Health parsing is optional â€” connection is already confirmed */ }
 
-                    Logger.LogAction("PEER", $"✅ {peer.DeviceName} connected via {transport}: {testUrl}" +
+                    Logger.LogAction("PEER", $"âœ… {peer.DeviceName} connected via {transport}: {testUrl}" +
                         (!string.IsNullOrEmpty(peer.Version) ? $" (v{peer.Version})" : ""));
                     PeerConnected?.Invoke(peer.DeviceId, transport);
 
-                    // ═══ FIX 5: Cache URLs locally on successful connection ═══
+                    // â•â•â• FIX 5: Cache URLs locally on successful connection â•â•â•
                     SaveUrlCache();
 
                     // Establish persistent WebSocket for instant liveness detection
@@ -628,7 +616,7 @@ namespace FlyShelf.Classes
 
         /// <summary>
         /// Opens a persistent WebSocket to the peer.
-        /// If it drops → peer is instantly dead (no 50s heartbeat delay).
+        /// If it drops â†’ peer is instantly dead (no 50s heartbeat delay).
         /// Sends "ping" every 30s, expects "pong" back.
         /// </summary>
         private async Task ConnectWebSocket(PeerConnection peer)
@@ -655,15 +643,15 @@ namespace FlyShelf.Classes
 
                 await ws.ConnectAsync(new Uri(wsUrl), peer.WsCts.Token);
                 peer.LiveSocket = ws;
-                Logger.LogAction("WS", $"🔗 WebSocket connected to {peer.DeviceName} via {peer.Transport}");
+                Logger.LogAction("WS", $"ðŸ”— WebSocket connected to {peer.DeviceName} via {peer.Transport}");
 
-                // Monitor the WebSocket — when it drops, peer is dead
+                // Monitor the WebSocket â€” when it drops, peer is dead
                 await MonitorWebSocket(peer);
             }
             catch (Exception ex)
             {
                 Logger.LogAction("WS", $"WebSocket to {peer.DeviceName} failed: {ex.Message}");
-                // WebSocket is optional — HTTP heartbeat still works as fallback
+                // WebSocket is optional â€” HTTP heartbeat still works as fallback
             }
         }
 
@@ -706,8 +694,8 @@ namespace FlyShelf.Classes
                     }
                     catch (OperationCanceledException) when (!cts.Token.IsCancellationRequested)
                     {
-                        // Pong timeout — peer may be dead
-                        Logger.LogAction("WS", $"⚠️ {peer.DeviceName} WebSocket pong timeout");
+                        // Pong timeout â€” peer may be dead
+                        Logger.LogAction("WS", $"âš ï¸ {peer.DeviceName} WebSocket pong timeout");
                         break;
                     }
 
@@ -722,10 +710,10 @@ namespace FlyShelf.Classes
                 Logger.LogAction("WS", $"{peer.DeviceName} WebSocket monitor error: {ex.Message}");
             }
 
-            // WebSocket died → if peer was still marked alive, verify via HTTP health check
+            // WebSocket died â†’ if peer was still marked alive, verify via HTTP health check
             if (peer.IsAlive)
             {
-                Logger.LogAction("WS", $"⚠️ {peer.DeviceName} WebSocket dropped — verifying health via HTTP...");
+                Logger.LogAction("WS", $"âš ï¸ {peer.DeviceName} WebSocket dropped â€” verifying health via HTTP...");
                 
                 bool stillAlive = false;
                 try
@@ -746,22 +734,22 @@ namespace FlyShelf.Classes
 
                 if (stillAlive)
                 {
-                    Logger.LogAction("WS", $"ℹ️ {peer.DeviceName} is still reachable via HTTP. Keeping connection alive.");
+                    Logger.LogAction("WS", $"â„¹ï¸ {peer.DeviceName} is still reachable via HTTP. Keeping connection alive.");
                     try { peer.WsCts?.Cancel(); } catch { }
                     try { peer.LiveSocket?.Dispose(); } catch { }
                     peer.LiveSocket = null;
                 }
                 else
                 {
-                    Logger.LogAction("WS", $"💀 {peer.DeviceName} WebSocket dropped and HTTP health check failed — instant death detection");
+                    Logger.LogAction("WS", $"ðŸ’€ {peer.DeviceName} WebSocket dropped and HTTP health check failed â€” instant death detection");
                     await HandlePeerDeath(peer);
                 }
             }
         }
 
         /// <summary>
-        /// All peers confirmed alive → write tick, then delete URLs from Firebase.
-        /// URLs are deleted immediately for SECURITY — they expose clipboard data via Cloudflare.
+        /// All peers confirmed alive â†’ write tick, then delete URLs from Firebase.
+        /// URLs are deleted immediately for SECURITY â€” they expose clipboard data via Cloudflare.
         /// When a peer restarts, it uses the urlRequest signal to ask online peers to re-publish.
         /// </summary>
         private async Task ConfirmAndCleanup()
@@ -780,9 +768,9 @@ namespace FlyShelf.Classes
                     peers = peerIds
                 });
                 await client.PutAsync(tickUrl, new StringContent(tickJson, Encoding.UTF8, "application/json"));
-                Logger.LogAction("PEER", $"✅ Confirmation tick written — {peerIds.Count} peer(s) confirmed");
+                Logger.LogAction("PEER", $"âœ… Confirmation tick written â€” {peerIds.Count} peer(s) confirmed");
 
-                // ═══ FIX 6: DON'T delete URLs from Firebase ═══
+                // â•â•â• FIX 6: DON'T delete URLs from Firebase â•â•â•
                 // The old code deleted GlobalUrl/LocalIp/Url from Firebase for "security".
                 // But this caused a critical bug: after app restart, Firebase had no URLs
                 // and PeerManager couldn't reconnect. The URLs are already encrypted,
@@ -797,7 +785,7 @@ namespace FlyShelf.Classes
 
                 _urlCleanedFromFirebase = true;
                 _urlRequestSent = false;
-                Logger.LogAction("PEER", "✅ Peer confirmation written (URLs preserved in Firebase for reconnection)");
+                Logger.LogAction("PEER", "âœ… Peer confirmation written (URLs preserved in Firebase for reconnection)");
             }
             catch (Exception ex)
             {
@@ -805,609 +793,7 @@ namespace FlyShelf.Classes
             }
         }
 
-        // ═══════════════════════════════════════════════════════════════
-        // PUSH — Send data directly to peers (never Firebase)
-        // ═══════════════════════════════════════════════════════════════
-
-        public async Task<int> PushTextToAllPeers(string text, string title, string itemType = "Text")
-        {
-            int delivered = 0;
-            var alive = _peers.Values.Where(p => p.IsAlive).ToList();
-            if (alive.Count == 0) return 0;
-
-            await Task.WhenAll(alive.Select(async peer =>
-            {
-                bool sent = await TrySendText(peer, text, title, itemType);
-                if (!sent)
-                {
-                    // First attempt failed — peer's tunnel may have died. Reconnect + retry once.
-                    Logger.LogAction("PEER", $"⚡ Text delivery failed — reconnecting {peer.DeviceName}...");
-                    peer.IsAlive = false;
-                    peer.ConsecutiveFailures = 0;
-                    _urlCleanedFromFirebase = false;
-                    _urlRequestSent = false;
-                    await DiscoverAndHandshake();
-                    if (peer.IsAlive)
-                    {
-                        sent = await TrySendText(peer, text, title, itemType);
-                        if (sent) Logger.LogAction("PEER", $"✅ Text delivered on retry to {peer.DeviceName}");
-                    }
-                }
-                if (sent) Interlocked.Increment(ref delivered);
-            }));
-            return delivered;
-        }
-
-        private async Task<bool> TrySendText(PeerConnection peer, string text, string title, string itemType)
-        {
-            // WebSocket Direct Send Fallback Path
-            if (peer.LiveSocket != null && peer.LiveSocket.State == WebSocketState.Open)
-            {
-                try
-                {
-                    var envelope = JsonSerializer.Serialize(new
-                    {
-                        type = "SyncText",
-                        itemType = itemType,
-                        title = title,
-                        data = text,
-                        sourceDeviceId = _myDeviceId,
-                        sourceDeviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
-                        timestamp = NetworkClock.UtcNowMs
-                    });
-
-                    byte[] envelopeBytes = Encoding.UTF8.GetBytes(envelope);
-                    
-                    await peer.SendSemaphore.WaitAsync();
-                    try
-                    {
-                        await peer.LiveSocket.SendAsync(new ArraySegment<byte>(envelopeBytes), WebSocketMessageType.Text, true, CancellationToken.None);
-                    }
-                    finally
-                    {
-                        peer.SendSemaphore.Release();
-                    }
-
-                    peer.LastSeen = DateTime.UtcNow;
-                    peer.ConsecutiveFailures = 0;
-                    Logger.LogAction("PEER", $"→ Text '{title}' to {peer.DeviceName} via WebSocket direct");
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogAction("PEER", $"WebSocket Direct Text to {peer.DeviceName} failed: {ex.Message}. Falling back to HTTP...");
-                }
-            }
-
-            try
-            {
-                string pk = DevicePairingManager.GetPairingKeyForDevice(peer.DeviceId);
-                if (string.IsNullOrEmpty(pk)) pk = DevicePairingManager.EnsurePairingKey();
-                var payload = JsonSerializer.Serialize(new
-                {
-                    type = itemType, title, data = text,
-                    sourceDeviceId = _myDeviceId,
-                    sourceDeviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
-                    timestamp = NetworkClock.UtcNowMs
-                });
-
-                using var req = new HttpRequestMessage(HttpMethod.Post, $"{peer.ActiveUrl.TrimEnd('/')}/api/sync_text");
-                req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
-                if (!string.IsNullOrEmpty(pk)) req.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
-
-                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-                var resp = await _sharedClient.SendAsync(req, cts.Token);
-
-                if (resp.IsSuccessStatusCode)
-                {
-                    peer.LastSeen = DateTime.UtcNow;
-                    peer.ConsecutiveFailures = 0;
-                    Logger.LogAction("PEER", $"→ Text to {peer.DeviceName} via {peer.Transport}");
-                    return true;
-                }
-                Logger.LogAction("PEER", $"Text to {peer.DeviceName}: HTTP {(int)resp.StatusCode}");
-                return false;
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("PEER", $"Text to {peer.DeviceName} failed: {ex.Message}");
-                HandlePeerFailure(peer, ex.Message);
-                return false;
-            }
-        }
-
-        public async Task<int> PushFileToAllPeers(string filePath, string title, string itemType = "Image")
-        {
-            int delivered = 0;
-            var alive = _peers.Values.Where(p => p.IsAlive).ToList();
-            if (alive.Count == 0) return 0;
-
-            await Task.WhenAll(alive.Select(async peer =>
-            {
-                bool sent = await TrySendFile(peer, filePath, title, itemType);
-                if (!sent)
-                {
-                    // First attempt failed — peer's tunnel may have died. Reconnect + retry once.
-                    Logger.LogAction("PEER", $"⚡ File delivery failed — reconnecting {peer.DeviceName}...");
-                    peer.IsAlive = false;
-                    peer.ConsecutiveFailures = 0;
-                    _urlCleanedFromFirebase = false;
-                    _urlRequestSent = false;
-                    await DiscoverAndHandshake();
-                    if (peer.IsAlive)
-                    {
-                        sent = await TrySendFile(peer, filePath, title, itemType);
-                        if (sent) Logger.LogAction("PEER", $"✅ File delivered on retry to {peer.DeviceName}");
-                    }
-                }
-                if (sent) Interlocked.Increment(ref delivered);
-            }));
-            return delivered;
-        }
-
-        private async Task<bool> TrySendFile(PeerConnection peer, string filePath, string title, string itemType)
-        {
-            try
-            {
-                Interlocked.Increment(ref peer.ActiveTransfers);
-
-                // WebSocket Direct File Send Path
-                if (peer.LiveSocket != null && peer.LiveSocket.State == WebSocketState.Open)
-                {
-                    try
-                    {
-                        string wsFileName = Path.GetFileName(filePath);
-                        long wsFileSize = new FileInfo(filePath).Length;
-
-                        // 1. Send the metadata start frame
-                        var startEnvelope = JsonSerializer.Serialize(new
-                        {
-                            type = "SyncFileStart",
-                            fileName = wsFileName,
-                            fileSize = wsFileSize,
-                            itemType = itemType,
-                            title = title,
-                            sourceDeviceId = _myDeviceId,
-                            sourceDeviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
-                            timestamp = NetworkClock.UtcNowMs
-                        });
-
-                        byte[] startBytes = Encoding.UTF8.GetBytes(startEnvelope);
-
-                        await peer.SendSemaphore.WaitAsync();
-                        try
-                        {
-                            // Send start frame
-                            await peer.LiveSocket.SendAsync(new ArraySegment<byte>(startBytes), WebSocketMessageType.Text, true, CancellationToken.None);
-
-                            // 2. Stream the file in binary chunks (zero-allocation renting)
-                            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-                            {
-                                byte[] rentBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(262144); // 256KB chunks
-                                try
-                                {
-                                    int readBytes;
-                                    long totalSent = 0;
-                                    while ((readBytes = await fs.ReadAsync(rentBuffer, 0, rentBuffer.Length)) > 0)
-                                    {
-                                        totalSent += readBytes;
-                                        bool isEnd = totalSent >= wsFileSize;
-                                        await peer.LiveSocket.SendAsync(new ArraySegment<byte>(rentBuffer, 0, readBytes), WebSocketMessageType.Binary, isEnd, CancellationToken.None);
-                                    }
-                                }
-                                finally
-                                {
-                                    System.Buffers.ArrayPool<byte>.Shared.Return(rentBuffer);
-                                }
-                            }
-                        }
-                        finally
-                        {
-                            peer.SendSemaphore.Release();
-                        }
-
-                        peer.LastSeen = DateTime.UtcNow;
-                        peer.ConsecutiveFailures = 0;
-                        Logger.LogAction("PEER", $"→ File '{title}' to {peer.DeviceName} via WebSocket direct");
-                        return true;
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.LogAction("PEER", $"WebSocket Direct File to {peer.DeviceName} failed: {ex.Message}. Falling back to HTTP...");
-                    }
-                }
-
-                string pk = DevicePairingManager.GetPairingKeyForDevice(peer.DeviceId);
-                if (string.IsNullOrEmpty(pk)) pk = DevicePairingManager.EnsurePairingKey();
-                string actualFileName = Path.GetFileName(filePath);
-                bool isCf = peer.Transport == "Cloudflare";
-                long fileSize = new FileInfo(filePath).Length;
-
-                // ═══ CLOUDFLARE + LARGE FILE → parallel chunked upload ═══
-                // Split into 512KB chunks, upload 4 in parallel. Each chunk goes through
-                // a separate CF connection, bypassing per-connection throughput limits.
-                if (isCf && fileSize > 256 * 1024)
-                {
-                    return await TrySendFileChunked(peer, filePath, actualFileName, title, itemType, pk);
-                }
-
-                using var req = new HttpRequestMessage(HttpMethod.Post, $"{peer.ActiveUrl.TrimEnd('/')}/api/sync_file");
-                if (!string.IsNullOrEmpty(pk)) req.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
-                req.Headers.TryAddWithoutValidation("X-Item-Type", itemType);
-                req.Headers.TryAddWithoutValidation("X-Source-Device", SettingsManager.Current.DeviceName ?? "");
-                req.Headers.TryAddWithoutValidation("X-Source-DeviceId", _myDeviceId);
-                req.Headers.TryAddWithoutValidation("X-File-Name", Uri.EscapeDataString(actualFileName));
-
-                if (isCf)
-                {
-                    // Small file via CF — raw binary (skip multipart overhead)
-                    var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    var content = new StreamContent(fs);
-                    content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-                    req.Content = content;
-                }
-                else
-                {
-                    // ═══ LAN PATH — multipart ═══
-                    var form = new MultipartFormDataContent();
-                    var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-                    form.Add(new StreamContent(fs), "file", actualFileName);
-                    form.Add(new StringContent(title), "title");
-                    form.Add(new StringContent(itemType), "type");
-                    req.Content = form;
-                }
-
-                using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-                var resp = await _sharedClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
-                if (resp.IsSuccessStatusCode)
-                {
-                    peer.LastSeen = DateTime.UtcNow;
-                    peer.ConsecutiveFailures = 0;
-                    Logger.LogAction("PEER", $"→ File '{title}' to {peer.DeviceName} via {peer.Transport}");
-                    return true;
-                }
-                Logger.LogAction("PEER", $"File to {peer.DeviceName}: HTTP {(int)resp.StatusCode}");
-                return false;
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("PEER", $"File to {peer.DeviceName} failed: {ex.Message}");
-                HandlePeerFailure(peer, ex.Message);
-                return false;
-            }
-            finally
-            {
-                Interlocked.Decrement(ref peer.ActiveTransfers);
-            }
-        }
-
-        /// <summary>
-        /// Parallel chunked upload for Cloudflare. Splits file into 512KB chunks and sends
-        /// up to 4 in parallel, then finalizes. This bypasses per-connection throughput limits.
-        /// </summary>
-        private const int CHUNK_SIZE = 512 * 1024; // 512KB per chunk
-        private const int MAX_PARALLEL_CHUNKS = 4;  // 4 concurrent uploads
-
-        private async Task<bool> TrySendFileChunked(PeerConnection peer, string filePath, string fileName, string title, string itemType, string pk)
-        {
-            var sw = System.Diagnostics.Stopwatch.StartNew();
-            string sessionId = Guid.NewGuid().ToString("N");
-            string baseUrl = peer.ActiveUrl.TrimEnd('/');
-
-            byte[] fileBytes = await File.ReadAllBytesAsync(filePath);
-            int totalChunks = (int)Math.Ceiling((double)fileBytes.Length / CHUNK_SIZE);
-
-            Logger.LogAction("PEER", $"⚡ CF chunked: {fileName} ({fileBytes.Length / 1024}KB) → {totalChunks} chunks × {CHUNK_SIZE / 1024}KB, {MAX_PARALLEL_CHUNKS} parallel");
-
-            // Upload chunks in parallel batches
-            var semaphore = new SemaphoreSlim(MAX_PARALLEL_CHUNKS);
-            var tasks = new List<Task<bool>>();
-
-            for (int i = 0; i < totalChunks; i++)
-            {
-                int chunkIndex = i;
-                int offset = chunkIndex * CHUNK_SIZE;
-                int length = Math.Min(CHUNK_SIZE, fileBytes.Length - offset);
-
-                tasks.Add(Task.Run(async () =>
-                {
-                    await semaphore.WaitAsync();
-                    try
-                    {
-                        using var req = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/upload_chunk");
-                        if (!string.IsNullOrEmpty(pk)) req.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
-                        req.Headers.TryAddWithoutValidation("X-Upload-Session", sessionId);
-                        req.Headers.TryAddWithoutValidation("X-Chunk-Index", chunkIndex.ToString());
-
-                        var chunkData = new byte[length];
-                        Buffer.BlockCopy(fileBytes, offset, chunkData, 0, length);
-                        req.Content = new ByteArrayContent(chunkData);
-                        req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-
-                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-                        var resp = await _sharedClient.SendAsync(req, cts.Token);
-                        return resp.IsSuccessStatusCode;
-                    }
-                    finally { semaphore.Release(); }
-                }));
-            }
-
-            var results = await Task.WhenAll(tasks);
-            int successCount = results.Count(r => r);
-
-            if (successCount != totalChunks)
-            {
-                Logger.LogAction("PEER", $"CF chunked: only {successCount}/{totalChunks} chunks uploaded — aborting");
-                return false;
-            }
-
-            // Finalize: tell receiver to reassemble
-            using var finReq = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/upload_finalize");
-            if (!string.IsNullOrEmpty(pk)) finReq.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
-            finReq.Headers.TryAddWithoutValidation("X-Upload-Session", sessionId);
-            finReq.Headers.TryAddWithoutValidation("X-File-Name", Uri.EscapeDataString(fileName));
-            finReq.Headers.TryAddWithoutValidation("X-Total-Chunks", totalChunks.ToString());
-            finReq.Headers.TryAddWithoutValidation("X-Source-Device", SettingsManager.Current.DeviceName ?? "");
-            finReq.Headers.TryAddWithoutValidation("X-Item-Type", itemType);
-            finReq.Content = new StringContent("", Encoding.UTF8, "application/json");
-
-            using var finCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
-            var finResp = await _sharedClient.SendAsync(finReq, finCts.Token);
-
-            sw.Stop();
-            if (finResp.IsSuccessStatusCode)
-            {
-                peer.LastSeen = DateTime.UtcNow;
-                peer.ConsecutiveFailures = 0;
-                double speed = fileBytes.Length / 1024.0 / (sw.ElapsedMilliseconds / 1000.0);
-                Logger.LogAction("PEER", $"→ File '{title}' to {peer.DeviceName} via CF chunked ({sw.ElapsedMilliseconds}ms, {speed:F0} KB/s)");
-                return true;
-            }
-            Logger.LogAction("PEER", $"CF chunked finalize failed: HTTP {(int)finResp.StatusCode}");
-            return false;
-        }
-
-        // ═══════════════════════════════════════════════════════════════
-        // HEARTBEAT — HTTP fallback when WebSocket is not available
-        // WebSocket provides instant death detection; HTTP heartbeat is backup only.
-        // ═══════════════════════════════════════════════════════════════
-
-        private async Task HeartbeatLoop(CancellationToken ct)
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                try { await Task.Delay(HEARTBEAT_MS, ct); } catch { break; }
-
-                foreach (var peer in _peers.Values.Where(p => p.IsAlive).ToList())
-                {
-                    // Skip if WebSocket is monitoring this peer (instant detection)
-                    if (peer.LiveSocket?.State == WebSocketState.Open)
-                    {
-                        peer.ConsecutiveFailures = 0;
-                        continue;
-                    }
-
-                    // Skip heartbeat if peer has an active file transfer in progress
-                    // The transfer itself proves the connection is alive
-                    if (peer.ActiveTransfers > 0)
-                    {
-                        peer.ConsecutiveFailures = 0;
-                        peer.LastSeen = DateTime.UtcNow;
-                        continue;
-                    }
-
-                    try
-                    {
-                        using var c = new HttpClient { Timeout = TimeSpan.FromMilliseconds(HEARTBEAT_TIMEOUT_MS) };
-                        var r = await c.GetAsync($"{peer.ActiveUrl.TrimEnd('/')}/api/health");
-                        if (r.IsSuccessStatusCode)
-                        {
-                            peer.ConsecutiveFailures = 0;
-                            peer.LastSeen = DateTime.UtcNow;
-                        }
-                        else
-                        {
-                            peer.ConsecutiveFailures++;
-                        }
-                    }
-                    catch
-                    {
-                        peer.ConsecutiveFailures++;
-                    }
-
-                    if (peer.ConsecutiveFailures >= 3)
-                        Logger.LogAction("PEER", $"Heartbeat {peer.DeviceName}: {peer.ConsecutiveFailures}/{MAX_FAILURES}");
-
-                    if (peer.ConsecutiveFailures >= MAX_FAILURES)
-                        await HandlePeerDeath(peer);
-                }
-            }
-        }
-
-        private async Task DiscoveryLoop(CancellationToken ct)
-        {
-            while (!ct.IsCancellationRequested)
-            {
-                try { await Task.Delay(DISCOVERY_MS, ct); } catch { break; }
-
-                // Only re-discover if we have dead peers (need new URLs)
-                bool hasDeadPeers = _peers.Values.Any(p => !p.IsAlive);
-                if (hasDeadPeers || _peers.IsEmpty)
-                {
-                    _urlCleanedFromFirebase = false; // Allow re-registration
-                    _urlRequestSent = false;         // Allow fresh URL requests
-                    await DiscoverAndHandshake();
-                }
-            }
-        }
-
-        // ═══════════════════════════════════════════════════════════════
-        // RECONNECT — Transport switching + Firebase re-watch
-        // ═══════════════════════════════════════════════════════════════
-
-        private async Task HandlePeerDeath(PeerConnection peer)
-        {
-            string old = peer.Transport;
-            peer.IsAlive = false;
-            peer.ConsecutiveFailures = 0;
-
-            // Close WebSocket
-            try { peer.WsCts?.Cancel(); } catch { }
-            try { peer.LiveSocket?.Dispose(); } catch { }
-            peer.LiveSocket = null;
-
-            Logger.LogAction("PEER", $"💀 {peer.DeviceName} dead (was {old})");;
-
-            // Try other transport
-            bool lanEnabled = SettingsManager.Current.EnableLocalLAN;
-            if (old == "LAN" && await TryConnect(peer, peer.CloudflareUrl, "Cloudflare"))
-            {
-                TransportSwitched?.Invoke(peer.DeviceId, "Cloudflare");
-                return;
-            }
-            if (old == "Cloudflare" && lanEnabled && await TryConnect(peer, peer.LanUrl, "LAN"))
-            {
-                TransportSwitched?.Invoke(peer.DeviceId, "LAN");
-                return;
-            }
-
-            // Both dead → re-register our URL in Firebase so peer can find us when it comes back
-            PeerDisconnected?.Invoke(peer.DeviceId);
-            _urlCleanedFromFirebase = false; // Allow Firebase re-registration
-
-            // Push our current URL back to Firebase for the returning peer
-            string globalUrl = CloudDiscoveryManager.CachedGlobalUrl;
-            string localUrl = CloudDiscoveryManager.CachedLocalUrl;
-            if (!string.IsNullOrEmpty(globalUrl) || !string.IsNullOrEmpty(localUrl))
-            {
-                await CloudDiscoveryManager.PushTunnelUrl(globalUrl ?? "", true, localUrl, forceWrite: true);
-                Logger.LogAction("PEER", $"Re-registered URLs in Firebase for {peer.DeviceName} to find us");
-            }
-        }
-
-        private void HandlePeerFailure(PeerConnection peer, string msg)
-        {
-            bool fatal = msg.Contains("No such host") || msg.Contains("refused");
-            if (fatal) { peer.ConsecutiveFailures = MAX_FAILURES; _ = HandlePeerDeath(peer); }
-            else peer.ConsecutiveFailures++;
-        }
-
-        public async Task RefreshPeer(string deviceId)
-        {
-            if (_peers.TryGetValue(deviceId, out var p)) { p.IsAlive = false; p.ConsecutiveFailures = 0; }
-            await DiscoverAndHandshake();
-        }
-
-        /// <summary>
-        /// Force Sync: Re-publish own URL to Firebase, mark all peers dead, re-discover fresh URLs, reconnect.
-        /// Called from UI "Force Sync" button.
-        /// </summary>
-        public async Task ForceResync()
-        {
-            Logger.LogAction("PEER", "═══ FORCE SYNC triggered ═══");
-
-            // 1. Re-publish our own URL to Firebase so other devices can find us
-            string globalUrl = CloudDiscoveryManager.CachedGlobalUrl;
-            string localUrl = CloudDiscoveryManager.CachedLocalUrl;
-            if (!string.IsNullOrEmpty(globalUrl) || !string.IsNullOrEmpty(localUrl))
-            {
-                await CloudDiscoveryManager.PushTunnelUrl(globalUrl ?? "", true, localUrl, forceWrite: true);
-                Logger.LogAction("PEER", $"Re-published our URLs → LAN={localUrl} CF={globalUrl}");
-            }
-
-            // 2. Reset all peers to dead — fresh start
-            foreach (var p in _peers.Values)
-            {
-                p.IsAlive = false;
-                p.ConsecutiveFailures = 0;
-                try { p.WsCts?.Cancel(); } catch { }
-                try { p.LiveSocket?.Dispose(); } catch { }
-                p.LiveSocket = null;
-            }
-
-            // 3. Clear cleanup flag so we can re-fetch URLs from Firebase
-            _urlCleanedFromFirebase = false;
-            _urlRequestSent = false;
-
-            // 4. Full discovery + handshake cycle
-            await DiscoverAndHandshake();
-
-            Logger.LogAction("PEER", $"Force sync complete — {AliveCount}/{_peers.Count} peer(s) alive");
-        }
-
-        public List<PeerStatus> GetPeerStatuses() => _peers.Values.Select(p => new PeerStatus
-        {
-            DeviceId = p.DeviceId, DeviceName = p.DeviceName, Transport = p.Transport,
-            IsAlive = p.IsAlive, LastSeen = p.LastSeen, ActiveUrl = p.ActiveUrl,
-            LanUrl = p.LanUrl, CloudflareUrl = p.CloudflareUrl,
-            IsWebSocketActive = p.LiveSocket?.State == System.Net.WebSockets.WebSocketState.Open,
-            DeviceType = p.DeviceType
-        }).ToList();
-
-        public List<PeerConnection> GetAliveLanPcPeers() =>
-            _peers.Values.Where(p => p.IsAlive && p.Transport == "LAN" && p.DeviceType == "PC").ToList();
-
-        public async Task<bool> TrySendGroupToPeer(PeerConnection peer, ClipboardItem groupItem)
-        {
-            if (groupItem == null || string.IsNullOrEmpty(groupItem.ZippedArchivePath)) return false;
-            return await TrySendFile(peer, groupItem.ZippedArchivePath, groupItem.FileName, "Group");
-        }
-    }
-
-    public class PeerConnection
-    {
-        public string DeviceId { get; set; } = "";
-        public string DeviceName { get; set; } = "";
-        public string LanUrl { get; set; } = "";
-        public string CloudflareUrl { get; set; } = "";
-        public string ActiveUrl { get; set; } = "";
-        public string Transport { get; set; } = "unknown";
-        public string Version { get; set; } = "";   // Peer's app version from /api/health
-        public string DeviceType { get; set; } = ""; // "PC" or "Mobile" from /api/health
-        public bool IsAlive { get; set; } = false;
-        public DateTime LastSeen { get; set; } = DateTime.MinValue;
-        public int ConsecutiveFailures { get; set; } = 0;
-        public int ActiveTransfers = 0; // Interlocked counter — heartbeat skips when > 0
-        public System.Net.WebSockets.ClientWebSocket? LiveSocket { get; set; }
-        public CancellationTokenSource? WsCts { get; set; }
-        public System.Threading.SemaphoreSlim SendSemaphore { get; } = new System.Threading.SemaphoreSlim(1, 1);
-    }
-
-    public class PeerStatus
-    {
-        public string DeviceId { get; set; } = "";
-        public string DeviceName { get; set; } = "";
-        public string Transport { get; set; } = "";
-        public bool IsAlive { get; set; }
-        public bool IsWebSocketActive { get; set; }
-        public DateTime LastSeen { get; set; }
-        public string ActiveUrl { get; set; } = "";
-        public string LanUrl { get; set; } = "";
-        public string CloudflareUrl { get; set; } = "";
-        public string DeviceType { get; set; } = "";
-    }
-
-    /// <summary>UI-bindable peer status for the HubWindow paired devices list.</summary>
-    public class PeerStatusItem
-    {
-        public string DeviceId { get; set; } = "";
-        public string DeviceName { get; set; } = "";
-        public bool IsAlive { get; set; }
-        public string Transport { get; set; } = "offline";
-        public bool IsLanActive { get; set; }
-        public bool IsCloudActive { get; set; }
-        public bool IsWebSocketActive { get; set; }
-        public string StatusText { get; set; } = "Offline";
-        public string ActiveUrl { get; set; } = "";
-    }
-    /// <summary>Cached peer URLs for local persistence across restarts.</summary>
-    public class CachedPeerUrls
-    {
-        public string? DeviceName { get; set; }
-        public string? LanUrl { get; set; }
-        public string? CloudflareUrl { get; set; }
-        public DateTime LastSeen { get; set; }
+        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
     }
 }
-
 

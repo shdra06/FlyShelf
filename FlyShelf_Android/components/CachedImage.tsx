@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Image as RNImage } from 'react-native';
 import { Image } from 'expo-image';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as FileSystem from 'expo-file-system';
 import { IMAGE_CACHE_BASE } from '../utils/clipTypes';
 
 const safeHash = (s: string): string => {

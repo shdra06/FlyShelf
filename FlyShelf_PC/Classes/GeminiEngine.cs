@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Net.Http;
 using System.Text;
@@ -9,7 +9,7 @@ namespace FlyShelf.Classes
 {
     public static class GeminiEngine
     {
-        private static readonly HttpClient _httpClient = new HttpClient();
+        private static readonly HttpClient _httpClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(30) };
 
         public static async Task<string> ExtractFormattedTableFromImageAsync(string imagePath, string apiKey)
         {

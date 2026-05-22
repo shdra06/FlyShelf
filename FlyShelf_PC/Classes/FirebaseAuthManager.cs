@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
@@ -21,6 +21,7 @@ namespace FlyShelf.Classes
         // Cached token state
         private static string _idToken = "";
         private static string _refreshToken = "";
+        private static string _uid = "";
         private static DateTime _tokenExpiry = DateTime.MinValue;
         private static readonly SemaphoreSlim _tokenLock = new(1, 1);
         
@@ -73,6 +74,18 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
+        /// Gets the cached anonymous user ID (UID), authenticating if necessary.
+        /// </summary>
+        public static async Task<string> GetUidAsync()
+        {
+            if (string.IsNullOrEmpty(_uid))
+            {
+                await GetIdTokenAsync();
+            }
+            return _uid;
+        }
+
+        /// <summary>
         /// Appends the auth token as a query parameter to a Firebase REST URL.
         /// Usage: string secureUrl = await FirebaseAuthManager.AuthenticateUrl(baseUrl);
         /// </summary>
@@ -111,6 +124,10 @@ namespace FlyShelf.Classes
                 using var doc = JsonDocument.Parse(body);
                 _idToken = doc.RootElement.GetProperty("idToken").GetString() ?? "";
                 _refreshToken = doc.RootElement.GetProperty("refreshToken").GetString() ?? "";
+                if (doc.RootElement.TryGetProperty("localId", out var uidProp))
+                {
+                    _uid = uidProp.GetString() ?? "";
+                }
                 
                 // expiresIn is in seconds (usually 3600 = 1 hour)
                 string expiresIn = doc.RootElement.GetProperty("expiresIn").GetString() ?? "3600";
@@ -149,6 +166,10 @@ namespace FlyShelf.Classes
             using var doc = JsonDocument.Parse(body);
             _idToken = doc.RootElement.GetProperty("id_token").GetString() ?? "";
             _refreshToken = doc.RootElement.GetProperty("refresh_token").GetString() ?? "";
+            if (doc.RootElement.TryGetProperty("user_id", out var uidProp))
+            {
+                _uid = uidProp.GetString() ?? "";
+            }
             
             string expiresIn = doc.RootElement.GetProperty("expires_in").GetString() ?? "3600";
             int seconds = int.TryParse(expiresIn, out var s) ? s : 3600;

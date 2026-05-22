@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -156,6 +156,23 @@ namespace FlyShelf.Classes
             {
                 return null;
             }
+        }
+
+        /// <summary>
+        /// Safely decrypt a URL. Returns the original string if decryption fails
+        /// (meaning it wasn't encrypted, or it's already a plaintext URL).
+        /// </summary>
+        public static string DecryptUrlSafe(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return value;
+            // If it already looks like a URL, it's not encrypted
+            if (value.StartsWith("http://") || value.StartsWith("https://")) return value;
+            try
+            {
+                string? decrypted = Decrypt(value);
+                return !string.IsNullOrEmpty(decrypted) ? decrypted : value;
+            }
+            catch { return value; }
         }
 
         /// <summary>

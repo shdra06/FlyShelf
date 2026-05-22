@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -84,11 +84,13 @@ public partial class App : Application
         if (startInSafeMode)
         {
             string safeModeError = "Manual trigger or unspecified crash.";
+            string crashPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "crash_error.txt");
             try
             {
-                if (System.IO.File.Exists("crash_error.txt"))
+                if (System.IO.File.Exists(crashPath))
                 {
-                    safeModeError = System.IO.File.ReadAllText("crash_error.txt");
+                    safeModeError = System.IO.File.ReadAllText(crashPath);
                 }
             }
             catch { }
@@ -123,8 +125,18 @@ public partial class App : Application
         {
             using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
             {
-                // Environment.ProcessPath guarantees absolute pathing even for self-contained SingleFile bundles 
-                if (key != null) key.SetValue("FlyShelf", Environment.ProcessPath ?? System.IO.Path.Combine(AppContext.BaseDirectory, "FlyShelf.exe"));
+                if (key != null)
+                {
+                    if (FlyShelf.Classes.SettingsManager.Current.AutoStartEnabled)
+                    {
+                        // Environment.ProcessPath guarantees absolute pathing even for self-contained SingleFile bundles 
+                        key.SetValue("FlyShelf", Environment.ProcessPath ?? System.IO.Path.Combine(AppContext.BaseDirectory, "FlyShelf.exe"));
+                    }
+                    else
+                    {
+                        key.DeleteValue("FlyShelf", false);
+                    }
+                }
             }
         }
         catch (Exception) { /* Swallow permission constraint exceptions gracefully */ }
@@ -151,7 +163,9 @@ public partial class App : Application
             System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (s, args) =>
             {
                 args.SetObserved();
-                try { System.IO.File.AppendAllText("flyshelf_debugger.log", $"[{DateTime.Now}] ASYNC SWALLOWED: {args.Exception.Message}\n"); } catch { }
+                try { System.IO.File.AppendAllText(
+                    System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs", "flyshelf_debugger.log"),
+                    $"[{DateTime.Now}] ASYNC SWALLOWED: {args.Exception.Message}\n"); } catch { }
             };
 
             if (string.IsNullOrWhiteSpace(FlyShelf.Classes.SettingsManager.Current.DeviceName))
@@ -313,9 +327,9 @@ public partial class App : Application
                     _ = FlyShelf.Classes.CloudDiscoveryManager.CleanupStaleDevices();
                     
                     // Dump full network diagnostics at startup for remote debugging
-                    _ = System.Threading.Tasks.Task.Run(() =>
+                    _ = System.Threading.Tasks.Task.Run(async () =>
                     {
-                        System.Threading.Thread.Sleep(8000); // Wait for Cloudflare to initialize
+                        await System.Threading.Tasks.Task.Delay(8000); // Wait for Cloudflare to initialize
                         FlyShelf.Classes.Logger.DumpNetworkDiagnostics();
                     });
                     
@@ -554,9 +568,11 @@ public partial class App : Application
             btnRestart.MouseLeftButtonDown += (s, ev) => {
                 try
                 {
-                    if (System.IO.File.Exists("crash_error.txt"))
+                    string crashCleanPath = System.IO.Path.Combine(
+                        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "crash_error.txt");
+                    if (System.IO.File.Exists(crashCleanPath))
                     {
-                        System.IO.File.Delete("crash_error.txt");
+                        System.IO.File.Delete(crashCleanPath);
                     }
                 }
                 catch {}
@@ -651,7 +667,9 @@ public partial class App : Application
 
         try
         {
-            System.IO.File.WriteAllText("crash_error.txt", errorDetails);
+            string crashPath = System.IO.Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "crash_error.txt");
+            System.IO.File.WriteAllText(crashPath, errorDetails);
         }
         catch { }
 
