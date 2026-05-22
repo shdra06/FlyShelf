@@ -603,11 +603,13 @@ namespace FlyShelf
 
                 MergeSelectedPdfsBtn.Visibility = Visibility.Visible;
                 MergePdfToolbarBtn.Visibility = Visibility.Visible;
+                UpdateToolbarButtonsVisibility();
             }
             else
             {
                 MergeSelectedPdfsBtn.Visibility = Visibility.Collapsed;
                 MergePdfToolbarBtn.Visibility = Visibility.Collapsed;
+                UpdateToolbarButtonsVisibility();
             }
         }
 
@@ -616,6 +618,7 @@ namespace FlyShelf
         {
             MergeSelectedPdfsBtn.Visibility = Visibility.Collapsed;
             MergePdfToolbarBtn.Visibility = Visibility.Collapsed;
+            UpdateToolbarButtonsVisibility();
 
             // Uncheck all IsCheckedForMerge
             foreach (var item in _viewModel.DroppedItems)
@@ -734,6 +737,29 @@ $word.Quit()
         private void HoverPreviewTimer_Tick(object? sender, EventArgs e)
         {
             _hoverPreviewTimer?.Stop();
+        }
+
+        internal void UpdateToolbarButtonsVisibility()
+        {
+            if (_viewModel == null) return;
+            bool isMini = _viewModel.CurrentMode == 0;
+            
+            if (SearchToggleBtn != null)
+            {
+                SearchToggleBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
+            }
+            
+            if (ClearShelfBtn != null)
+            {
+                ClearShelfBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
+            }
+            
+            if (EmojiBtn != null)
+            {
+                // In medium/full mode, emoji btn is visible UNLESS PDF merge toolbar is visible
+                bool isMergeActive = MergePdfToolbarBtn != null && MergePdfToolbarBtn.Visibility == Visibility.Visible;
+                EmojiBtn.Visibility = (isMini || isMergeActive) ? Visibility.Collapsed : Visibility.Visible;
+            }
         }
     }
 }

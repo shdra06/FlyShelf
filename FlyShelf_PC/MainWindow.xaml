@@ -155,6 +155,11 @@
             
             <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                 
+                <!-- Search Toggle -->
+                <ui:Button x:Name="SearchToggleBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="SearchToggle_Click" ToolTip="Search Clipboard (Ctrl+F)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
+                    <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" /></ui:Button.Icon>
+                </ui:Button>
+
                 <!-- Bouncy Drag Drop Arrow Indicator — borderless, appears only when dragging -->
                 <Grid Width="28" Height="28" Margin="0,0,6,0" VerticalAlignment="Center" HorizontalAlignment="Center">
                     <Grid.Style>
@@ -201,6 +206,11 @@
                     <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowMaximize24" /></ui:Button.Icon>
                 </ui:Button>
 
+                <!-- Emoji Picker -->
+                <ui:Button x:Name="EmojiBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
+                    <ui:Button.Icon><ui:SymbolIcon Symbol="Emoji24" /></ui:Button.Icon>
+                </ui:Button>
+
                 <!-- Merge PDF button — hidden by default, replaces emoji space when PDFs selected -->
                 <ui:Button x:Name="MergePdfToolbarBtn" Focusable="False" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,6,0" Padding="8,6" CornerRadius="8" Background="#30EF4444" Foreground="#EF4444" BorderBrush="#50EF4444">
                     <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24" Foreground="#EF4444"/></ui:Button.Icon>
@@ -208,6 +218,11 @@
                 
                 <ui:Button Focusable="False" Appearance="Secondary" Style="{StaticResource ToolbarSyncButtonStyle}" Click="ToggleGlobalSync_Click" ToolTip="Toggle All Sync (LAN + Cloud)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
                     <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowSync24" Filled="True"/></ui:Button.Icon>
+                </ui:Button>
+
+                <!-- Clear Shelf -->
+                <ui:Button x:Name="ClearShelfBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="Clear_Click" ToolTip="Clear Shelf (keeps pinned)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
+                    <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" /></ui:Button.Icon>
                 </ui:Button>
                 
                 <ui:Button Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="CloseWindow_Click" ToolTip="Hide (Esc)" Padding="8,6" CornerRadius="8">

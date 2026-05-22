@@ -248,9 +248,6 @@
                     <ui:NavigationViewItem Content="Dashboard" Tag="Dashboard" PreviewMouseLeftButtonDown="Nav_Click">
                         <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="ChartMultiple24"/></ui:NavigationViewItem.Icon>
                     </ui:NavigationViewItem>
-                    <ui:NavigationViewItem Content="Automations" Tag="Automation" PreviewMouseLeftButtonDown="Nav_Click">
-                        <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Grid24"/></ui:NavigationViewItem.Icon>
-                    </ui:NavigationViewItem>
                     <ui:NavigationViewItem Content="Network" Tag="Network" PreviewMouseLeftButtonDown="Nav_Click">
                         <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Globe24"/></ui:NavigationViewItem.Icon>
                     </ui:NavigationViewItem>
@@ -274,8 +271,6 @@
                             <!-- TOP ROW: 3 Stat Cards  -->
                             <Grid Margin="0,0,0,16">
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="12"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="12"/>
                                     <ColumnDefinition Width="*"/>
@@ -306,33 +301,8 @@
                                     </Grid>
                                 </Border>
 
-                                <!-- Folders Watched Stat -->
-                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="20,18" Cursor="Hand" Tag="Automation" MouseLeftButtonDown="DashboardCard_Click">
-                                    <Grid>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
-                                        <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,12">
-                                            <Border Width="36" Height="36" CornerRadius="10" Margin="0,0,12,0">
-                                                <Border.Background>
-                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                        <GradientStop Color="#E11D48" Offset="0"/>
-                                                        <GradientStop Color="#F43F5E" Offset="1"/>
-                                                    </LinearGradientBrush>
-                                                </Border.Background>
-                                                <ui:SymbolIcon Symbol="FolderOpen24" Foreground="White" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <TextBlock Text="Auto-Scan" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                        <TextBlock Grid.Row="1" Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=CustomSnifferPaths.Count}" FontSize="36" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Margin="0,0,0,2" />
-                                        <TextBlock Grid.Row="2" Text="folders watched" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
-                                    </Grid>
-                                </Border>
-
                                 <!-- Network Status Stat -->
-                                <Border Grid.Column="4" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="20,18" Cursor="Hand" Tag="Network" MouseLeftButtonDown="DashboardCard_Click">
+                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="20,18" Cursor="Hand" Tag="Network" MouseLeftButtonDown="DashboardCard_Click">
                                     <Grid>
                                         <Grid.RowDefinitions>
                                             <RowDefinition Height="Auto"/>
@@ -1471,100 +1441,7 @@
 
                 </Grid>
 
-                <!-- 2. AUTOMATION TAB -->
-                <Grid x:Name="AutomationGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="VerticalOnly" PreviewMouseWheel="SettingsScrollViewer_PreviewMouseWheel">
-                        <StackPanel>
-                            <StackPanel Margin="0,0,0,6">
-                                <TextBlock Text="Smart Automations" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
-                                <TextBlock Text="Configure intelligent rules to keep your clipboard clean and fast." FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,4,0,0" TextWrapping="Wrap" />
-                            </StackPanel>
-                            <Border Height="2" CornerRadius="1" HorizontalAlignment="Left" Width="60" Margin="0,8,0,28">
-                                <Border.Background>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                        <GradientStop Color="#6366F1" Offset="0"/>
-                                        <GradientStop Color="#8B5CF6" Offset="1"/>
-                                    </LinearGradientBrush>
-                                </Border.Background>
-                            </Border>
 
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                <ui:SymbolIcon Symbol="DocumentSearch24" FontSize="18" Foreground="#60A5FA" Margin="0,0,8,0"/>
-                                <TextBlock Text="Auto-Scan PDF &amp; Word Files" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" />
-                            </StackPanel>
-                            <Border Style="{StaticResource PremiumSettingStyle}">
-                                <StackPanel>
-                                    <Grid Margin="0,0,0,16">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Border Grid.Column="0" Width="40" Height="40" CornerRadius="10" Margin="0,0,16,0">
-                                            <Border.Background>
-                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                    <GradientStop Color="#6366F1" Offset="0"/>
-                                                    <GradientStop Color="#8B5CF6" Offset="1"/>
-                                                </LinearGradientBrush>
-                                            </Border.Background>
-                                            <ui:SymbolIcon Symbol="Scan24" FontSize="20" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Border>
-                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="Smart Desktop Scanner" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                                            <TextBlock Text="Watches Downloads + custom folders for new PDFs and Word docs." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap" LineHeight="18"/>
-                                        </StackPanel>
-                                    </Grid>
-                                    
-                                    <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderThickness="1" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" CornerRadius="12" Padding="6" Margin="0,0,0,16" MinHeight="80">
-                                        <Grid>
-                                            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <StackPanel.Style>
-                                                    <Style TargetType="StackPanel">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=CustomSnifferPaths.Count}" Value="0">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </StackPanel.Style>
-                                                <ui:SymbolIcon Symbol="FolderAdd24" FontSize="28" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,8,0,8"/>
-                                                <TextBlock Text="No custom folders added yet" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" HorizontalAlignment="Center"/>
-                                            </StackPanel>
-                                            <ListBox ItemsSource="{Binding Source={x:Static settings:SettingsManager.Current}, Path=CustomSnifferPaths}" Margin="0" BorderThickness="0" Background="Transparent" ScrollViewer.VerticalScrollBarVisibility="Auto">
-                                                <ListBox.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <Border Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,3">
-                                                            <Grid>
-                                                                <Grid.ColumnDefinitions>
-                                                                    <ColumnDefinition Width="Auto"/>
-                                                                    <ColumnDefinition Width="*"/>
-                                                                </Grid.ColumnDefinitions>
-                                                                <Border Grid.Column="0" Width="32" Height="32" CornerRadius="8" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" Margin="0,0,12,0">
-                                                                    <ui:SymbolIcon Symbol="Folder24" Foreground="#F59E0B" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                                </Border>
-                                                                <TextBlock Grid.Column="1" Text="{Binding}" VerticalAlignment="Center" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" FontWeight="Medium" FontSize="13"/>
-                                                            </Grid>
-                                                        </Border>
-                                                    </DataTemplate>
-                                                </ListBox.ItemTemplate>
-                                            </ListBox>
-                                        </Grid>
-                                    </Border>
-
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                                        <ui:Button Padding="16,8" Margin="0,0,10,0" Click="AddSnifferPath_Click">
-                                            <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Add24" Margin="0,0,8,0" FontSize="14"/><TextBlock Text="Add Folder" FontWeight="SemiBold" FontSize="13"/></StackPanel>
-                                        </ui:Button>
-                                        <ui:Button Padding="16,8" Click="ClearSnifferPaths_Click">
-                                            <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Delete24" Foreground="#EF4444" Margin="0,0,8,0" FontSize="14"/><TextBlock Text="Clear All" Foreground="#EF4444" FontSize="13"/></StackPanel>
-                                        </ui:Button>
-                                    </StackPanel>
-                                </StackPanel>
-                            </Border>
-
-                        </StackPanel>
-                    </ScrollViewer>
-                </Grid>
 
                 <!-- 3. NETWORK SYNC TAB -->
                 <Grid x:Name="NetworkGrid" Visibility="Collapsed">
@@ -2711,84 +2588,11 @@
                                                 <TextBlock Text="Select from installed theme packs" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,2,0,0"/>
                                             </StackPanel>
                                             <ComboBox x:Name="ThemeCombo" Grid.Column="1" VerticalAlignment="Center" MinWidth="160" SelectionChanged="ThemeCombo_SelectionChanged">
-                                                <ComboBoxItem Content="(None)" Tag=""/>
+                                                <ComboBoxItem Content="FlyShelf (Classic)" Tag=""/>
                                             </ComboBox>
                                         </Grid>
                                     </Border>
 
-                                    <!-- Action Buttons -->
-                                    <Grid Margin="0,4,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="8"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="8"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-
-                                        <!-- Open Themes Folder -->
-                                        <Border Grid.Column="0" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="10" Padding="12,10" Cursor="Hand" MouseLeftButtonDown="OpenThemesFolder_Click">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Style.Triggers>
-                                                        <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
-                                                        </Trigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                            <StackPanel HorizontalAlignment="Center">
-                                                <ui:SymbolIcon Symbol="FolderOpen24" FontSize="18" Foreground="#8B5CF6" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                                <TextBlock Text="Open Themes Folder" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" HorizontalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-
-                                        <!-- Import Theme -->
-                                        <Border Grid.Column="2" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="10" Padding="12,10" Cursor="Hand" MouseLeftButtonDown="ImportTheme_Click">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Style.Triggers>
-                                                        <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
-                                                        </Trigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                            <StackPanel HorizontalAlignment="Center">
-                                                <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="18" Foreground="#D946EF" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                                <TextBlock Text="Import .flyshelf-theme" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" HorizontalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-
-                                        <!-- Delete Theme -->
-                                        <Border Grid.Column="4" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#30EF4444" BorderThickness="1" CornerRadius="10" Padding="12,10" Cursor="Hand" MouseLeftButtonDown="DeleteTheme_Click">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Style.Triggers>
-                                                        <Trigger Property="IsMouseOver" Value="True">
-                                                            <Setter Property="Background" Value="#15EF4444"/>
-                                                        </Trigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                            <StackPanel HorizontalAlignment="Center">
-                                                <ui:SymbolIcon Symbol="Delete24" FontSize="18" Foreground="#EF4444" HorizontalAlignment="Center" Margin="0,0,0,4"/>
-                                                <TextBlock Text="Delete Active Theme" FontSize="10" FontWeight="SemiBold" Foreground="#EF4444" HorizontalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-                                    </Grid>
-
-                                    <!-- Info Text -->
-                                    <Border Background="#0A8B5CF6" CornerRadius="8" Padding="12,8" Margin="0,12,0,0">
-                                        <TextBlock TextWrapping="Wrap" FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" LineHeight="16">
-                                            <Run Text="💡"/>
-                                            <Run Text="Drop a" FontWeight="SemiBold"/>
-                                            <Run Text=".flyshelf-theme" FontWeight="Bold" Foreground="#8B5CF6"/>
-                                            <Run Text="file onto FlyShelf to import. Themes are hot-loaded from"/>
-                                            <Run Text="%AppData%/FlyShelf/Themes/" FontFamily="Consolas" Foreground="#D946EF"/>
-                                            <Run Text="— no restart needed!"/>
-                                        </TextBlock>
-                                    </Border>
                                 </StackPanel>
                             </Border>
                         </StackPanel>

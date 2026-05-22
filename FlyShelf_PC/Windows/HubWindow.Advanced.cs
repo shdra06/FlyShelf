@@ -22,43 +22,6 @@ namespace FlyShelf.Windows
 {
     public partial class HubWindow
     {
-        private void AddSnifferPath_Click(object sender, RoutedEventArgs e)
-        {
-            var dialog = new Microsoft.Win32.OpenFolderDialog
-            {
-                Title = "Select Folder to Auto-Sniff for PDF / Word Documents",
-                Multiselect = false
-            };
-            
-            if (dialog.ShowDialog() == true)
-            {
-                string path = dialog.FolderName;
-                if (!SettingsManager.Current.CustomSnifferPaths.Contains(path))
-                {
-                    SettingsManager.Current.CustomSnifferPaths.Add(path);
-                    SettingsManager.Save();
-                    
-                    if (_viewModel.Sniffer != null)
-                    {
-                        _viewModel.Sniffer.StopSniffing();
-                        _viewModel.Sniffer.StartSniffing();
-                    }
-                }
-            }
-        }
-
-        private void ClearSnifferPaths_Click(object sender, RoutedEventArgs e)
-        {
-            SettingsManager.Current.CustomSnifferPaths.Clear();
-            SettingsManager.Save();
-            
-            if (_viewModel.Sniffer != null)
-            {
-                _viewModel.Sniffer.StopSniffing();
-                _viewModel.Sniffer.StartSniffing();
-            }
-        }
-
         private async void RefreshDevices_Click(object? sender, RoutedEventArgs? e)
         {
             try

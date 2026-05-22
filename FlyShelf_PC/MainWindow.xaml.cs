@@ -177,6 +177,10 @@ namespace FlyShelf
                         if (this.Top < workArea.Top) this.Top = workArea.Top + 16;
                     }
                 }
+                else if (e.PropertyName == nameof(FlyShelfViewModel.CurrentMode))
+                {
+                    UpdateToolbarButtonsVisibility();
+                }
             };
 
             // Live-refresh wallpaper when user changes it in settings
@@ -203,6 +207,9 @@ namespace FlyShelf
                     }, System.Windows.Threading.DispatcherPriority.Background);
                 }
             };
+
+            // Calculate initial toolbar buttons visibility based on current mode
+            UpdateToolbarButtonsVisibility();
         }
 
         private delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
@@ -482,6 +489,7 @@ namespace FlyShelf
                             catch (Exception ex) { Classes.Logger.LogAction("THEME", $"Theme switch error: {ex.Message}"); }
                         });
                     };
+                    Classes.ThemeManager.Instance.ActiveThemeChanged += _themeChangedHandler;
 
                     // Apply wallpaper from current active theme on startup
                     string? startupWp = Classes.ThemeManager.Instance.GetWallpaperPath();

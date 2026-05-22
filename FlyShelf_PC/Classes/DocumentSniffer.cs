@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
@@ -82,6 +82,55 @@ namespace FlyShelf.Classes
             });
         }
 
+        private async Task<bool> WaitForFileReadyAsync(string filePath, int maxRetries = 15, int initialDelayMs = 200)
+        {
+            int currentRetry = 0;
+            int delay = initialDelayMs;
+
+            while (currentRetry < maxRetries)
+            {
+                if (!File.Exists(filePath))
+                {
+                    await Task.Delay(delay);
+                    currentRetry++;
+                    delay = Math.Min(delay * 2, 2000);
+                    continue;
+                }
+
+                try
+                {
+                    using (var fs1 = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    {
+                        long size1 = fs1.Length;
+                        if (size1 > 0)
+                        {
+                            await Task.Delay(150);
+                            using (var fs2 = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                            {
+                                if (fs2.Length == size1)
+                                {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (IOException)
+                {
+                    // Locked by another process
+                }
+                catch (Exception)
+                {
+                }
+
+                currentRetry++;
+                await Task.Delay(delay);
+                delay = Math.Min(delay * 2, 2000);
+            }
+
+            return false;
+        }
+
         private async Task OnFileDetectedCore(FileSystemEventArgs e)
         {
             string ext = Path.GetExtension(e.FullPath).ToLower();
@@ -94,9 +143,6 @@ namespace FlyShelf.Classes
             if (_recentlyTriggeredFiles.ContainsKey(e.FullPath)) return;
             
             _recentlyTriggeredFiles.TryAdd(e.FullPath, 0);
-            
-            // Wait for file lock release
-            await Task.Delay(2000);
 
             string targetPath = e.FullPath;
 
@@ -121,26 +167,28 @@ namespace FlyShelf.Classes
                 catch { return; }
             }
 
-            if (File.Exists(targetPath))
+            bool isReady = await WaitForFileReadyAsync(targetPath);
+            if (!isReady)
             {
-                try
+                _recentlyTriggeredFiles.TryRemove(e.FullPath, out _);
+                return;
+            }
+
+            try
+            {
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    using (var fs = File.Open(targetPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) { }
+                    var dataObj = new System.Windows.DataObject();
+                    var dropList = new System.Collections.Specialized.StringCollection { targetPath };
+                    dataObj.SetFileDropList(dropList);
+                    _viewModel.HandleDrop(dataObj, true);
                     
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                    {
-                        var dataObj = new System.Windows.DataObject();
-                        var dropList = new System.Collections.Specialized.StringCollection { targetPath };
-                        dataObj.SetFileDropList(dropList);
-                        _viewModel.HandleDrop(dataObj, true);
-                        
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Sniffed Document: {Path.GetFileName(targetPath)} 📄");
-                    });
-                }
-                catch 
-                {
-                    _recentlyTriggeredFiles.TryRemove(e.FullPath, out _);
-                }
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Sniffed Document: {Path.GetFileName(targetPath)} 📄");
+                });
+            }
+            catch 
+            {
+                _recentlyTriggeredFiles.TryRemove(e.FullPath, out _);
             }
 
             await Task.Delay(13000);

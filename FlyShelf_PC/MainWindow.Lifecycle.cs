@@ -134,11 +134,14 @@ namespace FlyShelf
 
         /// <summary>Fast dismiss animation on inner content, then hides window.</summary>
         // PERF: Cached hide animation objects — avoid GC pressure from allocating new ones on every dismiss
-        private static readonly TimeSpan _hideAnimDuration = TimeSpan.FromMilliseconds(140);
+        private static readonly TimeSpan _hideAnimDuration = TimeSpan.FromMilliseconds(100);
         private static readonly System.Windows.Media.Animation.CubicEase _hideEaseIn = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn };
         private static readonly System.Windows.Media.Animation.DoubleAnimation _scaleOutX = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, _hideAnimDuration) { EasingFunction = _hideEaseIn };
         private static readonly System.Windows.Media.Animation.DoubleAnimation _scaleOutY = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, _hideAnimDuration) { EasingFunction = _hideEaseIn };
         private static readonly System.Windows.Media.Animation.DoubleAnimation _slideOut = new System.Windows.Media.Animation.DoubleAnimation(0, 5, _hideAnimDuration) { EasingFunction = _hideEaseIn };
+
+        // PERF: Deferred mascot/GIF resume timer — mascot starts 1s after spawn, not during spawn
+        private System.Windows.Threading.DispatcherTimer? _mascotDelayTimer;
 
         private void AnimateAndHide()
         {
@@ -146,10 +149,13 @@ namespace FlyShelf
             _isAnimatingHide = true;
             _lastActualHeight = this.ActualHeight;
 
-            // Stop the mascot and live wallpaper animations to drop background CPU/GPU usage to zero
+            // PERF: Cancel any pending mascot delay so it doesn't fire after hide
+            _mascotDelayTimer?.Stop();
+
+            // PERF: Immediately STOP (not pause) mascot and wallpaper GIF to drop CPU/GPU to zero instantly
             try
             {
-                MascotIdle.PausePlayback();
+                MascotIdle.StopAnimation();
                 var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
                 animator?.Pause();
             }
@@ -421,15 +427,30 @@ namespace FlyShelf
                 // This eliminates the position shift glitch during the fade/scale animation.
                 PlayShowAnimation();
 
-                // PERF: Resume paused GIF animations immediately — since hide only pauses (not destroys),
-                // this is instant with no disk I/O or GIF re-parsing.
-                try
+                // PERF: Do NOT resume mascot/GIF immediately — let the clipboard spawn lag-free first.
+                // Defer mascot + wallpaper GIF start by 1 second so old laptops don't stutter on spawn.
+                _mascotDelayTimer?.Stop();
+                if (_mascotDelayTimer == null)
                 {
-                    var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
-                    animator?.Play();
-                    MascotIdle.ResumePlayback();
+                    _mascotDelayTimer = new System.Windows.Threading.DispatcherTimer
+                    {
+                        Interval = TimeSpan.FromMilliseconds(1000)
+                    };
+                    _mascotDelayTimer.Tick += (s, ev) =>
+                    {
+                        _mascotDelayTimer.Stop();
+                        if (!this.IsVisible || _isAnimatingHide) return; // Window was dismissed before timer fired
+                        try
+                        {
+                            var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
+                            animator?.Play();
+                            MascotIdle.ResumePlayback();
+                            Classes.AnimationTriggerService.Instance.StartIdleAnimation();
+                        }
+                        catch { }
+                    };
                 }
-                catch { }
+                _mascotDelayTimer.Start();
 
                 // Trigger visible high-quality render after 1s of opening
                 if (_scrollHighQualityTimer == null)

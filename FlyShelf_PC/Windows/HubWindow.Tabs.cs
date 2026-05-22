@@ -415,17 +415,21 @@ namespace FlyShelf.Windows
             {
                 if (ThemeCombo == null) return;
                 ThemeCombo.Items.Clear();
-                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "(None)", Tag = "" });
 
+                // Option 1: Classic look — no mascot, uses desktop wallpaper
+                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "FlyShelf (Classic)", Tag = "" });
+
+                // Option 2: The first valid installed mascot theme (if any)
                 var themes = ThemeManager.Instance.GetInstalledThemes();
                 int selectedIdx = 0;
                 string activeTheme = SettingsManager.Current.ActiveThemeName ?? "";
 
-                for (int i = 0; i < themes.Count; i++)
+                if (themes.Count > 0)
                 {
-                    var t = themes[i];
-                    ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = t.Name, Tag = t.Name });
-                    if (t.Name == activeTheme) selectedIdx = i + 1;
+                    var firstTheme = themes[0];
+                    ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = firstTheme.Name, Tag = firstTheme.Name });
+                    if (firstTheme.Name.Equals(activeTheme, System.StringComparison.OrdinalIgnoreCase))
+                        selectedIdx = 1;
                 }
 
                 ThemeCombo.SelectedIndex = selectedIdx;
