@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -22,6 +22,7 @@ namespace FlyShelf.Windows
         private bool _updateDownloaded = false;
         private System.Windows.Threading.DispatcherTimer? _deviceRefreshTimer;
         private Action<string>? _devicePairedHandler;
+        private System.Windows.Threading.DispatcherTimer? _pairingHandshakeTimer;
 
         public HubWindow(FlyShelfViewModel viewModel)
         {
@@ -29,14 +30,36 @@ namespace FlyShelf.Windows
             DataContext = _viewModel;
             InitializeComponent();
             _viewModel.DroppedItems.CollectionChanged += DroppedItems_CollectionChanged;
-            ApplyTheme();
+            // Theme override dictionary modification thrashes visual tree at construction,
+            // so we only apply the theme in OnSourceInitialized when the handle is active.
 
             // Auto-refresh device list when a new device pairs
             _devicePairedHandler = (deviceName) =>
             {
-                Dispatcher.InvokeAsync(() => RefreshDevices_Click(null, null));
+                Dispatcher.InvokeAsync(() =>
+                {
+                    RefreshDevices_Click(null, null);
+                    RefreshPairedDevicesList();
+                });
             };
             DevicePairingManager.OnDevicePaired += _devicePairedHandler;
+
+            // Real-time peer status updates — refresh UI when peers connect/disconnect
+            if (PeerManager.Instance != null)
+            {
+                PeerManager.Instance.PeerConnected += (deviceId, transport) =>
+                {
+                    Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
+                };
+                PeerManager.Instance.PeerDisconnected += (deviceId) =>
+                {
+                    Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
+                };
+                PeerManager.Instance.TransportSwitched += (deviceId, newTransport) =>
+                {
+                    Dispatcher.InvokeAsync(() => RefreshPairedDevicesList());
+                };
+            }
 
             // Show real version from assembly
             string v = UpdateManager.CurrentVersion;
@@ -60,7 +83,7 @@ namespace FlyShelf.Windows
             {
                 if (hasUpdate)
                 {
-                    LatestVersionText.Text = $"→ v{_updateManager.LatestVersion} available!";
+                    LatestVersionText.Text = $"â†’ v{_updateManager.LatestVersion} available!";
                     ChangelogText.Text = _updateManager.Changelog;
                     ChangelogPanel.Visibility = Visibility.Visible;
                     UpdateBtn.Content = "Downloading...";
@@ -72,7 +95,7 @@ namespace FlyShelf.Windows
                     if (success)
                     {
                         UpdateBtn.Content = "Restarting...";
-                        UpdateStatusText.Text = "✅ Update downloaded! Restarting now...";
+                        UpdateStatusText.Text = "âœ… Update downloaded! Restarting now...";
                         UpdatePctText.Text = "100%";
 
                         // Auto-apply after a brief moment so user sees the status
@@ -87,7 +110,7 @@ namespace FlyShelf.Windows
                 }
                 else
                 {
-                    UpdateBtn.Content = "✓ Up to Date";
+                    UpdateBtn.Content = "âœ“ Up to Date";
                     UpdateBtn.IsEnabled = false;
                     UpdateProgressPanel.Visibility = Visibility.Collapsed;
 
@@ -98,7 +121,21 @@ namespace FlyShelf.Windows
                 }
             });
 
-            // No auto-update at startup — manual only via the button
+            // No auto-update at startup â€” manual only via the button
+
+            // Active fast-polling timer for pairing handshakes (runs every 2 seconds when Network tab is visible)
+            _pairingHandshakeTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+            _pairingHandshakeTimer.Tick += async (s, ev) =>
+            {
+                try
+                {
+                    await DevicePairingManager.CheckForHandshakes();
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("PAIR TIMER", $"Handshake check failed: {ex.Message}");
+                }
+            };
 
             // Auto-refresh device list every 30 seconds + on initial load
             _deviceRefreshTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
@@ -106,10 +143,29 @@ namespace FlyShelf.Windows
             _deviceRefreshTimer.Start();
             Loaded += (s, ev) =>
             {
-                RefreshDevices_Click(null, null);
-                // LIST profile for clipboard items (very slow, precise)
-                Classes.SmoothScroll.AttachList(HubListView);
-                // Settings panels use native WPF smooth scrolling (CanContentScroll=False)
+                // Defer wiring and refreshing to background dispatcher frames so that
+                // the main window shell and layout appear instantly without any initial blocking ticks.
+                Dispatcher.InvokeAsync(() =>
+                {
+                    RefreshDevices_Click(null, null);
+                    // LIST profile for clipboard items (very slow, precise)
+                    Classes.SmoothScroll.AttachList(HubListView);
+
+                    // Initialize retention ComboBox from saved setting
+                    if (RetentionCombo != null)
+                    {
+                        int retention = SettingsManager.Current.ClipboardRetentionDays;
+                        for (int i = 0; i < RetentionCombo.Items.Count; i++)
+                        {
+                            if (RetentionCombo.Items[i] is ComboBoxItem cbi && cbi.Tag?.ToString() == retention.ToString())
+                            {
+                                RetentionCombo.SelectedIndex = i;
+                                break;
+                            }
+                        }
+                        if (RetentionCombo.SelectedIndex < 0) RetentionCombo.SelectedIndex = 0; // default to 7 days
+                    }
+                }, System.Windows.Threading.DispatcherPriority.Background);
             };
             Unloaded += (s, ev) =>
             {
@@ -128,6 +184,13 @@ namespace FlyShelf.Windows
                 {
                     _deviceRefreshTimer.Stop();
                     _deviceRefreshTimer = null;
+                }
+
+                // Stop and clean up fast-polling handshake timer
+                if (_pairingHandshakeTimer != null)
+                {
+                    _pairingHandshakeTimer.Stop();
+                    _pairingHandshakeTimer = null;
                 }
             };
         }
@@ -177,7 +240,7 @@ namespace FlyShelf.Windows
             int count = _viewModel.DroppedItems.Count;
             _viewModel.ClearShelf();
             UpdateEmptyState();
-            ToastWindow.ShowToast($"Cleared {count} items 🗑️");
+            ToastWindow.ShowToast($"Cleared {count} items ðŸ—‘ï¸");
         }
 
         private bool _isApplicationShuttingDown = false;
@@ -194,6 +257,9 @@ namespace FlyShelf.Windows
             {
                 e.Cancel = true;
                 this.Hide();
+
+                // Stop fast-polling when window is hidden
+                _pairingHandshakeTimer?.Stop();
             }
             base.OnClosing(e);
         }
@@ -209,6 +275,12 @@ namespace FlyShelf.Windows
         {
             base.OnActivated(e);
             SuppressWindowBorder();
+
+            // Resume fast-polling if we are currently on the Network tab
+            if (NetworkGrid != null && NetworkGrid.Visibility == Visibility.Visible)
+            {
+                _pairingHandshakeTimer?.Start();
+            }
         }
 
         /// <summary>
@@ -251,6 +323,7 @@ namespace FlyShelf.Windows
                 if (LogsGrid != null) LogsGrid.Visibility = tag == "Logs" ? Visibility.Visible : Visibility.Collapsed;
                 
                 if (tag == "Logs") RefreshLogs_Click(null, null);
+                if (tag == "Settings") PopulateThemeCombo();
                 if (tag == "Network")
                 {
                     RefreshDevices_Click(null, null);
@@ -261,6 +334,12 @@ namespace FlyShelf.Windows
                     {
                         ServerDiagnosticsLog.Text = GetServerDiagnostics();
                     }
+
+                    _pairingHandshakeTimer?.Start();
+                }
+                else
+                {
+                    _pairingHandshakeTimer?.Stop();
                 }
             }
         }
@@ -285,6 +364,18 @@ namespace FlyShelf.Windows
         {
             SettingsManager.Save();
             MessageBox.Show("Configuration updated successfully.", "FlyShelf", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void RetentionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (RetentionCombo.SelectedItem is ComboBoxItem selected && selected.Tag != null)
+            {
+                if (int.TryParse(selected.Tag.ToString(), out int days))
+                {
+                    SettingsManager.Current.ClipboardRetentionDays = days;
+                    SettingsManager.Save();
+                }
+            }
         }
 
         private void ResetClipboardSize_Click(object sender, RoutedEventArgs e)
@@ -316,7 +407,7 @@ namespace FlyShelf.Windows
         // Live Preview buttons
         private void PreviewClipboardSize_Click(object sender, RoutedEventArgs e)
         {
-            // The HubWindow itself IS the clipboard preview — just flash to show effect
+            // The HubWindow itself IS the clipboard preview â€” just flash to show effect
             this.Width = SettingsManager.Current.MediumFormWidth;
             this.Height = SettingsManager.Current.MediumFormHeight;
             this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -360,9 +451,9 @@ namespace FlyShelf.Windows
                 if (System.IO.File.Exists(logFile))
                 {
                     string activityLog = System.IO.File.ReadAllText(logFile);
-                    sb.AppendLine("══════════════════════════════════════════════════════════");
+                    sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
                     sb.AppendLine("  ACTIVITY LOG");
-                    sb.AppendLine("══════════════════════════════════════════════════════════");
+                    sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
                     sb.AppendLine(activityLog);
                 }
 
@@ -372,9 +463,9 @@ namespace FlyShelf.Windows
                 {
                     string netLog = System.IO.File.ReadAllText(netLogFile);
                     sb.AppendLine();
-                    sb.AppendLine("══════════════════════════════════════════════════════════");
+                    sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
                     sb.AppendLine("  NETWORK DIAGNOSTICS");
-                    sb.AppendLine("══════════════════════════════════════════════════════════");
+                    sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
                     sb.AppendLine(netLog);
                 }
 
@@ -383,9 +474,9 @@ namespace FlyShelf.Windows
                 if (!string.IsNullOrWhiteSpace(serverDiag) && !serverDiag.StartsWith("No"))
                 {
                     sb.AppendLine();
-                    sb.AppendLine("══════════════════════════════════════════════════════════");
+                    sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
                     sb.AppendLine("  SERVER TROUBLESHOOTING");
-                    sb.AppendLine("══════════════════════════════════════════════════════════");
+                    sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
                     sb.AppendLine(serverDiag);
                 }
 
@@ -443,7 +534,7 @@ namespace FlyShelf.Windows
                             // Flush previous repeat group
                             if (repeatCount > 2)
                             {
-                                dedupedLines.Add($"    ↑↑↑ repeated {repeatCount}× (collapsed)");
+                                dedupedLines.Add($"    â†‘â†‘â†‘ repeated {repeatCount}Ã— (collapsed)");
                             }
                             else if (repeatCount == 2)
                             {
@@ -459,14 +550,14 @@ namespace FlyShelf.Windows
                     // Flush final group
                     if (repeatCount > 2)
                     {
-                        dedupedLines.Add($"    ↑↑↑ repeated {repeatCount}× (collapsed)");
+                        dedupedLines.Add($"    â†‘â†‘â†‘ repeated {repeatCount}Ã— (collapsed)");
                     }
 
                     if (dedupedLines.Any())
                     {
-                        report.AppendLine("══════════════════════════════════════════════════════════");
+                        report.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
                         report.AppendLine("  ACTIVITY LOG");
-                        report.AppendLine("══════════════════════════════════════════════════════════");
+                        report.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
                         foreach (var line in dedupedLines) report.AppendLine(line);
                     }
                 }
@@ -479,9 +570,9 @@ namespace FlyShelf.Windows
                     if (lines.Any())
                     {
                         report.AppendLine();
-                        report.AppendLine("══════════════════════════════════════════════════════════");
+                        report.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
                         report.AppendLine("  NETWORK DIAGNOSTICS");
-                        report.AppendLine("══════════════════════════════════════════════════════════");
+                        report.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
                         foreach (var line in lines) report.AppendLine(line);
                     }
                 }
@@ -494,37 +585,37 @@ namespace FlyShelf.Windows
                     if (lines.Any())
                     {
                         report.AppendLine();
-                        report.AppendLine("══════════════════════════════════════════════════════════");
+                        report.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
                         report.AppendLine("  SERVER TROUBLESHOOTING");
-                        report.AppendLine("══════════════════════════════════════════════════════════");
+                        report.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
                         foreach (var line in lines) report.AppendLine(line.TrimEnd('\r'));
                     }
                 }
 
                 if (report.Length == 0)
                 {
-                    ToastWindow.ShowToast("⚠️ No logs to send");
+                    ToastWindow.ShowToast("âš ï¸ No logs to send");
                     return;
                 }
 
                 // Prepend system info header
                 var header = new System.Text.StringBuilder();
-                header.AppendLine("═══════════════════════════════════════════════════════════");
+                header.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
                 header.AppendLine($"  FlyShelf Full Diagnostic Report");
                 header.AppendLine($"  PC: {Environment.MachineName}");
                 header.AppendLine($"  OS: {Environment.OSVersion}");
                 header.AppendLine($"  Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                 header.AppendLine($"  Version: {UpdateManager.CurrentVersion}");
-                header.AppendLine("═══════════════════════════════════════════════════════════");
+                header.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
                 header.AppendLine();
                 header.Append(report);
 
                 Clipboard.SetText(header.ToString());
-                ToastWindow.ShowToast("📋 All logs copied to clipboard (health-check noise filtered) — paste and send!");
+                ToastWindow.ShowToast("ðŸ“‹ All logs copied to clipboard (health-check noise filtered) â€” paste and send!");
             }
             catch (Exception ex)
             {
-                ToastWindow.ShowToast($"❌ Failed to copy: {ex.Message}");
+                ToastWindow.ShowToast($"âŒ Failed to copy: {ex.Message}");
             }
         }
 
@@ -534,11 +625,11 @@ namespace FlyShelf.Windows
             {
                 string logs = Logger.GetRecentNetworkLogs(200);
                 Clipboard.SetText(logs);
-                ToastWindow.ShowToast("📋 Network logs copied to clipboard (last 200 lines)");
+                ToastWindow.ShowToast("ðŸ“‹ Network logs copied to clipboard (last 200 lines)");
             }
             catch (Exception ex)
             {
-                ToastWindow.ShowToast($"❌ Failed to copy: {ex.Message}");
+                ToastWindow.ShowToast($"âŒ Failed to copy: {ex.Message}");
             }
         }
         private async void SendLogsToDashboard_Click(object sender, RoutedEventArgs e)
@@ -558,12 +649,12 @@ namespace FlyShelf.Windows
 
                 if (logLines.Count == 0)
                 {
-                    ToastWindow.ShowToast("⚠️ No network logs to send");
+                    ToastWindow.ShowToast("âš ï¸ No network logs to send");
                     SendLogsToDashboardBtn.IsEnabled = true;
                     return;
                 }
 
-                // ── Always save a local diagnostic file ──
+                // â”€â”€ Always save a local diagnostic file â”€â”€
                 string logsDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
                 System.IO.Directory.CreateDirectory(logsDir);
                 string deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
@@ -573,20 +664,20 @@ namespace FlyShelf.Windows
                 string filePath = System.IO.Path.Combine(logsDir, fileName);
 
                 var sb = new System.Text.StringBuilder();
-                sb.AppendLine("═══════════════════════════════════════════════════════════════");
-                sb.AppendLine($"  FlyShelf Diagnostic Log — {deviceName}");
+                sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                sb.AppendLine($"  FlyShelf Diagnostic Log â€” {deviceName}");
                 sb.AppendLine($"  Captured: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                 sb.AppendLine($"  PC Host:  {Environment.MachineName}");
                 sb.AppendLine($"  OS:       {Environment.OSVersion}");
                 sb.AppendLine($"  Entries:  {logLines.Count}");
-                sb.AppendLine("═══════════════════════════════════════════════════════════════");
+                sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
                 sb.AppendLine();
                 foreach (var line in logLines)
                     sb.AppendLine(line);
 
                 await System.IO.File.WriteAllTextAsync(filePath, sb.ToString());
 
-                // ── Also POST to dashboard if server is running ──
+                // â”€â”€ Also POST to dashboard if server is running â”€â”€
                 bool dashboardSuccess = false;
                 if (vm?.LocalServer != null)
                 {
@@ -601,12 +692,12 @@ namespace FlyShelf.Windows
                         var res = await client.PostAsync($"{serverUrl}/api/logs", content);
                         dashboardSuccess = res.IsSuccessStatusCode;
                     }
-                    catch { /* Server POST failed — file is still saved */ }
+                    catch { /* Server POST failed â€” file is still saved */ }
                 }
 
-                string msg = $"✅ {logLines.Count} entries saved → {fileName}";
-                if (dashboardSuccess) msg += "\n📊 Also pushed to web dashboard";
-                msg += $"\n📁 {logsDir}";
+                string msg = $"âœ… {logLines.Count} entries saved â†’ {fileName}";
+                if (dashboardSuccess) msg += "\nðŸ“Š Also pushed to web dashboard";
+                msg += $"\nðŸ“ {logsDir}";
                 ToastWindow.ShowToast(msg);
 
                 // Open the Logs folder so user can grab the file
@@ -614,812 +705,11 @@ namespace FlyShelf.Windows
             }
             catch (Exception ex)
             {
-                ToastWindow.ShowToast($"❌ Failed: {ex.Message}");
+                ToastWindow.ShowToast($"âŒ Failed: {ex.Message}");
             }
             finally
             {
                 SendLogsToDashboardBtn.IsEnabled = true;
-            }
-        }
-
-        private void RunDiagnostics_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                ToastWindow.ShowToast("🔍 Network diagnostics started...");
-                System.Threading.Tasks.Task.Run(() =>
-                {
-                    try
-                    {
-                        Logger.DumpNetworkDiagnostics();
-                        Dispatcher.Invoke(() =>
-                        {
-                            ToastWindow.ShowToast("🔍 Network diagnostics captured!");
-                            RefreshLogs_Click(null, null);
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        Dispatcher.Invoke(() => ToastWindow.ShowToast($"❌ Diagnostics failed: {ex.Message}"));
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                ToastWindow.ShowToast($"❌ Diagnostics failed: {ex.Message}");
-            }
-        }
-
-        private void OpenLogsFolder_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                string logsDir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
-                if (!System.IO.Directory.Exists(logsDir)) System.IO.Directory.CreateDirectory(logsDir);
-                System.Diagnostics.Process.Start("explorer.exe", logsDir);
-            }
-            catch { }
-        }
-
-        private static NetworkLogsWindow? _networkLogsWindow;
-        private void OpenNetworkLogs_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                if (_networkLogsWindow != null && _networkLogsWindow.IsLoaded)
-                {
-                    _networkLogsWindow.Activate();
-                    _networkLogsWindow.Focus();
-                    return;
-                }
-                _networkLogsWindow = new NetworkLogsWindow();
-                _networkLogsWindow.Show();
-            }
-            catch (Exception ex)
-            {
-                FlyShelf.Classes.Logger.LogAction("UI", $"Failed to open Network Logs: {ex.Message}");
-            }
-        }
-
-        private async void CopyDeviceLogs_Click(object sender, RoutedEventArgs e)
-        {
-            if (sender is not System.Windows.Controls.Button btn) return;
-            string activeUrl = btn.Tag?.ToString() ?? "";
-            // Get device name from DataContext
-            string deviceName = "Unknown";
-            if (btn.DataContext is PeerStatusItem psi)
-                deviceName = psi.DeviceName;
-
-            btn.IsEnabled = false;
-            var origContent = btn.Content;
-            btn.Content = "⏳...";
-
-            try
-            {
-                if (string.IsNullOrEmpty(activeUrl))
-                {
-                    Clipboard.SetText($"⚠ Device '{deviceName}' has no active URL — cannot fetch remote data.\nDevice may be offline. Try Force Sync first.");
-                    ToastWindow.ShowToast($"⚠ {deviceName} is offline");
-                    btn.Content = "❌ Offline";
-                    await Task.Delay(1500);
-                    return;
-                }
-
-                string baseUrl = activeUrl.TrimEnd('/');
-                string pairingKey = DevicePairingManager.EnsurePairingKey();
-                string pin = SettingsManager.Current?.WebClientPinToken;
-
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine("═══════════════════════════════════════════════════════════");
-                sb.AppendLine($"  FlyShelf Remote Diagnostic — {deviceName}");
-                sb.AppendLine($"  URL: {activeUrl}");
-                sb.AppendLine($"  Fetched: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
-                sb.AppendLine("═══════════════════════════════════════════════════════════");
-
-                // ── SECTION 1: Health ──
-                sb.AppendLine();
-                sb.AppendLine("┌─────────────────────────────────────────────────────────┐");
-                sb.AppendLine("│  DEVICE HEALTH                                          │");
-                sb.AppendLine("└─────────────────────────────────────────────────────────┘");
-                try
-                {
-                    using var hc = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(8) };
-                    var healthResp = await hc.GetStringAsync($"{baseUrl}/api/health");
-                    using var healthDoc = System.Text.Json.JsonDocument.Parse(healthResp);
-                    var h = healthDoc.RootElement;
-
-                    string version = h.TryGetProperty("version", out var vp) ? vp.GetString() ?? "?" : "?";
-                    string devId = h.TryGetProperty("deviceId", out var dp) ? dp.GetString() ?? "?" : "?";
-                    string devType = h.TryGetProperty("deviceType", out var dtp) ? dtp.GetString() ?? "?" : "?";
-                    int uptime = h.TryGetProperty("uptime", out var up) ? up.GetInt32() : 0;
-                    int peers = h.TryGetProperty("peers", out var pp) ? pp.GetInt32() : 0;
-                    string lanUrl = "", cfUrl = "";
-                    if (h.TryGetProperty("transport", out var tr))
-                    {
-                        lanUrl = tr.TryGetProperty("lan", out var lp) ? lp.GetString() ?? "" : "";
-                        cfUrl = tr.TryGetProperty("cloudflare", out var cp) ? cp.GetString() ?? "" : "";
-                    }
-
-                    string uptimeStr = uptime >= 3600 ? $"{uptime/3600}h {(uptime%3600)/60}m" : $"{uptime/60}m {uptime%60}s";
-                    sb.AppendLine($"  Version:    v{version}");
-                    sb.AppendLine($"  Device ID:  {devId}");
-                    sb.AppendLine($"  Type:       {devType}");
-                    sb.AppendLine($"  Uptime:     {uptimeStr}");
-                    sb.AppendLine($"  Peers:      {peers} connected");
-                    sb.AppendLine($"  LAN:        {(string.IsNullOrEmpty(lanUrl) ? "—" : lanUrl)}");
-                    sb.AppendLine($"  Cloudflare: {(string.IsNullOrEmpty(cfUrl) ? "—" : cfUrl)}");
-                }
-                catch (Exception ex)
-                {
-                    sb.AppendLine($"  ❌ Failed to fetch health: {ex.Message}");
-                }
-
-                // ── SECTION 2: Clipboard Contents ──
-                sb.AppendLine();
-                sb.AppendLine("┌─────────────────────────────────────────────────────────┐");
-                sb.AppendLine("│  CLIPBOARD CONTENTS                                     │");
-                sb.AppendLine("└─────────────────────────────────────────────────────────┘");
-                try
-                {
-                    using var sc = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-                    if (!string.IsNullOrEmpty(pairingKey))
-                        sc.DefaultRequestHeaders.Add("X-Pairing-Key", pairingKey);
-                    if (!string.IsNullOrEmpty(pin))
-                        sc.DefaultRequestHeaders.Add("Authorization", $"Bearer {pin}");
-                    sc.DefaultRequestHeaders.Add("X-FlyShelf-Client", "DesktopSync");
-
-                    var syncResp = await sc.GetStringAsync($"{baseUrl}/api/sync");
-                    using var syncDoc = System.Text.Json.JsonDocument.Parse(syncResp);
-
-                    int idx = 0;
-                    foreach (var item in syncDoc.RootElement.EnumerateArray())
-                    {
-                        idx++;
-                        string type = item.TryGetProperty("Type", out var tp) ? tp.GetString() ?? "?" : "?";
-                        string title = item.TryGetProperty("Title", out var ttp) ? ttp.GetString() ?? "" : "";
-                        string raw = item.TryGetProperty("Raw", out var rp) ? rp.GetString() ?? "" : "";
-                        string fileName = item.TryGetProperty("FileName", out var fnp) ? fnp.GetString() ?? "" : "";
-                        string time = item.TryGetProperty("Time", out var tmp) ? tmp.GetString() ?? "" : "";
-                        string source = item.TryGetProperty("SourceDeviceName", out var sp) ? sp.GetString() ?? "" : "";
-                        string sourceType = item.TryGetProperty("SourceDeviceType", out var stp) ? stp.GetString() ?? "" : "";
-                        string previewUrl = item.TryGetProperty("PreviewUrl", out var pvp) ? pvp.GetString() ?? "" : "";
-                        string downloadUrl = item.TryGetProperty("DownloadUrl", out var dup) ? dup.GetString() ?? "" : "";
-
-                        // Type icon
-                        string icon = type switch
-                        {
-                            "Text" => "📝",
-                            "Url" => "🔗",
-                            "Image" => "🖼️",
-                            "QRCode" => "📱",
-                            "File" => "📎",
-                            "Pdf" => "📄",
-                            _ => "📋"
-                        };
-
-                        sb.AppendLine();
-                        sb.AppendLine($"  {icon} [{idx}] {type.ToUpper()} — {time}");
-                        if (!string.IsNullOrEmpty(title))
-                            sb.AppendLine($"     Title:  {title}");
-                        if (!string.IsNullOrEmpty(fileName) && fileName != title)
-                            sb.AppendLine($"     File:   {fileName}");
-                        if (!string.IsNullOrEmpty(source))
-                            sb.AppendLine($"     From:   {source} ({sourceType})");
-
-                        // Content preview (truncated for text, full URLs)
-                        if (type == "Text" || type == "Url")
-                        {
-                            string preview = raw.Length > 200 ? raw.Substring(0, 200) + "..." : raw;
-                            // Replace newlines for cleaner log
-                            preview = preview.Replace("\r\n", "\\n").Replace("\n", "\\n");
-                            sb.AppendLine($"     Content: {preview}");
-                        }
-                        else if (type == "Image" || type == "QRCode")
-                        {
-                            if (!string.IsNullOrEmpty(previewUrl))
-                                sb.AppendLine($"     Preview: {baseUrl}{previewUrl}");
-                            if (!string.IsNullOrEmpty(downloadUrl) && downloadUrl.StartsWith("/"))
-                                sb.AppendLine($"     Download: {baseUrl}{downloadUrl}");
-                        }
-                        else if (!string.IsNullOrEmpty(downloadUrl))
-                        {
-                            if (downloadUrl.StartsWith("/"))
-                                sb.AppendLine($"     Download: {baseUrl}{downloadUrl}");
-                            else if (downloadUrl.StartsWith("http"))
-                                sb.AppendLine($"     Path: {downloadUrl}");
-                        }
-                    }
-
-                    if (idx == 0)
-                        sb.AppendLine("  (clipboard is empty)");
-                    else
-                        sb.AppendLine($"\n  — {idx} items on clipboard");
-                }
-                catch (Exception ex)
-                {
-                    sb.AppendLine($"  ❌ Failed to fetch clipboard: {ex.Message}");
-                }
-
-                // ── SECTION 3: Logs ──
-                sb.AppendLine();
-                sb.AppendLine("┌─────────────────────────────────────────────────────────┐");
-                sb.AppendLine("│  NETWORK LOGS (last 200)                                │");
-                sb.AppendLine("└─────────────────────────────────────────────────────────┘");
-                try
-                {
-                    using var lc = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-                    var logReq = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get,
-                        $"{baseUrl}/api/logs?lines=200");
-                    logReq.Headers.Add("X-FlyShelf-Client", "DesktopSync");
-                    if (!string.IsNullOrEmpty(pairingKey))
-                        logReq.Headers.Add("X-Pairing-Key", pairingKey);
-                    if (!string.IsNullOrEmpty(pin))
-                        logReq.Headers.Add("Authorization", $"Bearer {pin}");
-
-                    var logResp = await lc.SendAsync(logReq);
-                    string logJson = await logResp.Content.ReadAsStringAsync();
-
-                    if (logResp.IsSuccessStatusCode)
-                    {
-                        using var logDoc = System.Text.Json.JsonDocument.Parse(logJson);
-                        int count = 0;
-                        if (logDoc.RootElement.TryGetProperty("logs", out var logsArr))
-                        {
-                            foreach (var logEl in logsArr.EnumerateArray())
-                            {
-                                string line = "";
-                                if (logEl.ValueKind == System.Text.Json.JsonValueKind.Object)
-                                    line = logEl.TryGetProperty("log", out var lp) ? lp.GetString() ?? "" : "";
-                                else if (logEl.ValueKind == System.Text.Json.JsonValueKind.String)
-                                    line = logEl.GetString() ?? "";
-
-                                if (string.IsNullOrWhiteSpace(line)) continue;
-                                // Filter health-check noise
-                                if (line.Contains("[HTTP]") && line.Contains("GET /api/health")) continue;
-                                if (line.Contains("[HTTP]") && line.Contains("GET /health")) continue;
-
-                                sb.AppendLine(line);
-                                count++;
-                            }
-                        }
-                        sb.AppendLine($"\n— {count} log entries (health noise filtered)");
-                    }
-                    else
-                    {
-                        sb.AppendLine($"  ❌ HTTP {logResp.StatusCode}: {logJson}");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    sb.AppendLine($"  ❌ Failed to fetch logs: {ex.Message}");
-                }
-
-                Clipboard.SetText(sb.ToString());
-                ToastWindow.ShowToast($"📋 Full diagnostic from {deviceName} copied!");
-                btn.Content = "✅ Copied";
-                await Task.Delay(1500);
-            }
-            catch (TaskCanceledException)
-            {
-                ToastWindow.ShowToast($"⏱ Timeout fetching from {deviceName}");
-                btn.Content = "❌ Timeout";
-                await Task.Delay(1500);
-            }
-            catch (Exception ex)
-            {
-                ToastWindow.ShowToast($"❌ Failed: {ex.Message}");
-                btn.Content = "❌ Error";
-                await Task.Delay(1500);
-            }
-            finally
-            {
-                btn.IsEnabled = true;
-                btn.Content = origContent;
-            }
-        }
-
-        private string _currentFilterTag = "All";
-
-        private void RestartServer_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                var vm = DataContext as FlyShelf.ViewModels.FlyShelfViewModel;
-                if (vm?.LocalServer == null) { ToastWindow.ShowToast("❌ Server instance not found"); return; }
-
-                ServerDiagnosticsLog.Text = "⏳ Stopping server...\n";
-                ServerDiagnosticsLog.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF5, 0x9E, 0x0B)); // amber
-
-                vm.LocalServer.Stop();
-                ServerDiagnosticsLog.Text += "✅ Server stopped.\n⏳ Starting server...\n";
-
-                _ = Task.Run(async () =>
-                {
-                    await Task.Delay(1000); // Brief cooldown
-                    Dispatcher.Invoke(() =>
-                    {
-                        vm.LocalServer.Start();
-                        vm.RefreshLocalServerData();
-
-                        // Read the BIND/PROXY/NETWORK log lines from the activity log
-                        string diagnostics = GetServerDiagnostics();
-                        ServerDiagnosticsLog.Text = diagnostics;
-                        ServerDiagnosticsLog.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x10, 0xB9, 0x81)); // green
-                        ToastWindow.ShowToast("🔄 Server restarted — check diagnostics below");
-                    });
-                });
-            }
-            catch (Exception ex)
-            {
-                ServerDiagnosticsLog.Text = $"❌ Restart failed: {ex.Message}";
-                ServerDiagnosticsLog.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44));
-            }
-        }
-
-        private void CopyServerDiagnostics_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                string diagnostics = GetServerDiagnostics();
-                string systemInfo = $"=== FlyShelf Server Diagnostics ===\n" +
-                    $"PC Name: {Environment.MachineName}\n" +
-                    $"OS: {Environment.OSVersion}\n" +
-                    $"User: {Environment.UserName}\n" +
-                    $"Is Admin: {new System.Security.Principal.WindowsPrincipal(System.Security.Principal.WindowsIdentity.GetCurrent()).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator)}\n" +
-                    $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
-                    $"======================================\n\n{diagnostics}";
-                Clipboard.SetText(systemInfo);
-                ToastWindow.ShowToast("📋 Server diagnostics copied — share this with the developer!");
-            }
-            catch (Exception ex)
-            {
-                ToastWindow.ShowToast($"❌ Failed: {ex.Message}");
-            }
-        }
-
-        private string GetServerDiagnostics()
-        {
-            try
-            {
-                string logPath = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs", "activity_log.txt");
-                if (!System.IO.File.Exists(logPath)) return "No log file found.";
-
-                // Read last 500 lines and filter for server-related entries
-                var allLines = System.IO.File.ReadAllLines(logPath);
-                int startIdx = Math.Max(0, allLines.Length - 500);
-                var relevantLines = new System.Collections.Generic.List<string>();
-                for (int i = startIdx; i < allLines.Length; i++)
-                {
-                    string line = allLines[i];
-                    if (line.Contains("[BIND]") || line.Contains("[NETWORK") || line.Contains("[TCP PROXY]") ||
-                        line.Contains("[CLOUDFLARE]") || line.Contains("[CF_STDERR]") || line.Contains("[HEARTBEAT]") ||
-                        line.Contains("[FIREBASE SYNC]") || line.Contains("[DIAGNOSTICS]") || line.Contains("[HTTP]") && line.Contains("health"))
-                    {
-                        relevantLines.Add(line);
-                    }
-                }
-
-                if (relevantLines.Count == 0) return "No server log entries found in last 500 lines.";
-
-                // Take last 50 relevant lines
-                var output = relevantLines.Count > 50
-                    ? relevantLines.GetRange(relevantLines.Count - 50, 50)
-                    : relevantLines;
-
-                return string.Join("\n", output);
-            }
-            catch (Exception ex)
-            {
-                return $"Error reading logs: {ex.Message}";
-            }
-        }
-
-        private void Filter_Checked(object sender, RoutedEventArgs e)
-        {
-            if (sender is System.Windows.Controls.RadioButton rb && HubListView != null)
-            {
-                _currentFilterTag = rb.Tag as string ?? "All";
-                ApplyFilters();
-            }
-        }
-
-        private void SearchBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
-        {
-            if (SearchPlaceholderPanel != null)
-                SearchPlaceholderPanel.Visibility = string.IsNullOrEmpty(SearchBox.Text) ? Visibility.Visible : Visibility.Collapsed;
-            
-            if (HubListView != null)
-            {
-                ApplyFilters();
-            }
-        }
-
-        private void ApplyFilters()
-        {
-            if (HubListView.ItemsSource == null) return;
-            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(HubListView.ItemsSource);
-            
-            string query = SearchBox?.Text?.ToLowerInvariant() ?? "";
-
-            view.Filter = item =>
-            {
-                if (item is ClipboardItem clip)
-                {
-                    bool passesType = true;
-                    switch (_currentFilterTag)
-                    {
-                        case "Code": passesType = clip.ItemType == ClipboardItemType.Code; break;
-                        case "Image": passesType = clip.ItemType == ClipboardItemType.Image || clip.ItemType == ClipboardItemType.QRCode; break;
-                        case "Url": passesType = clip.ItemType == ClipboardItemType.Url; break;
-                        case "Pdf": passesType = clip.ItemType == ClipboardItemType.Pdf; break;
-                        case "Document": passesType = clip.ItemType == ClipboardItemType.Document; break;
-                        case "Video": passesType = clip.ItemType == ClipboardItemType.Video; break;
-                        case "Text": passesType = clip.ItemType == ClipboardItemType.Text; break;
-                        case "All": passesType = true; break;
-                    }
-
-                    bool passesSearch = true;
-                    if (!string.IsNullOrWhiteSpace(query))
-                    {
-                        passesSearch = (clip.FileName != null && clip.FileName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) ||
-                                       (clip.RawContent != null && clip.RawContent.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) ||
-                                       (clip.FormatIdentifier != null && clip.FormatIdentifier.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0);
-                    }
-
-                    return passesType && passesSearch;
-                }
-                return false;
-            };
-            view.Refresh();
-        }
-
-        private void PinSpecific_Click(object sender, MouseButtonEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
-            {
-                _viewModel.TogglePin(item);
-                e.Handled = true;
-            }
-        }
-
-        private void DeleteSpecific_Click(object sender, MouseButtonEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
-            {
-                _viewModel.RemoveItem(item);
-                e.Handled = true;
-            }
-        }
-
-        private void ExpandToggleSpecific_Click(object sender, MouseButtonEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
-            {
-                item.IsExpanded = !item.IsExpanded;
-            }
-            e.Handled = true;
-        }
-
-        private void SelectAll_Click(object sender, RoutedEventArgs e)
-        {
-            bool anyUnselected = _viewModel.DroppedItems.Any(i => !i.IsCheckedForMerge);
-            foreach (var item in _viewModel.DroppedItems)
-            {
-                item.IsCheckedForMerge = anyUnselected; // Toggle: if any unselected, select all; otherwise deselect all
-            }
-            UpdateMergeButton();
-        }
-
-        private void HubListView_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
-        {
-            UpdateMergeButton();
-        }
-
-        private void ItemCheckBox_Click(object sender, RoutedEventArgs e)
-        {
-            // Defer so the two-way binding updates IsCheckedForMerge first
-            Dispatcher.InvokeAsync(() => UpdateMergeButton(), System.Windows.Threading.DispatcherPriority.Background);
-        }
-
-        private void UpdateMergeButton()
-        {
-            if (_viewModel == null || MergePdfFloatingBar == null) return;
-            var checkedPdfs = _viewModel.DroppedItems
-                .Where(i => i.IsCheckedForMerge && i.IsPdfPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
-                .ToList();
-            var checkedDocs = _viewModel.DroppedItems
-                .Where(i => i.IsCheckedForMerge && i.IsDocPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
-                .ToList();
-            var checkedImages = _viewModel.DroppedItems
-                .Where(i => i.IsCheckedForMerge && i.ItemType == ClipboardItemType.Image && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
-                .ToList();
-
-            int totalChecked = checkedPdfs.Count + checkedDocs.Count + checkedImages.Count;
-
-            if (totalChecked >= 2 || (checkedDocs.Count == 1 && checkedPdfs.Count == 0 && checkedImages.Count == 0))
-            {
-                MergePdfFloatingBar.Visibility = Visibility.Visible;
-                if (checkedImages.Count > 0 && checkedPdfs.Count == 0 && checkedDocs.Count == 0)
-                {
-                    MergeBarText.Text = $"{checkedImages.Count} Images selected";
-                    MergeBarBtn.Content = "Merge Images";
-                    MergeBarBtn.ToolTip = $"Merge {checkedImages.Count} images into a single PDF";
-                }
-                else if (checkedDocs.Count > 0 && checkedPdfs.Count == 0 && checkedImages.Count == 0 && checkedDocs.Count == 1)
-                {
-                    MergeBarText.Text = "1 DOC selected";
-                    MergeBarBtn.Content = "Convert to PDF";
-                    MergeBarBtn.ToolTip = "Convert DOC/DOCX to PDF";
-                }
-                else if (checkedDocs.Count > 0 && checkedPdfs.Count == 0 && checkedImages.Count == 0)
-                {
-                    MergeBarText.Text = $"{checkedDocs.Count} DOCs selected";
-                    MergeBarBtn.Content = "Convert DOCs";
-                    MergeBarBtn.ToolTip = $"Convert {checkedDocs.Count} DOC files to PDF";
-                }
-                else
-                {
-                    MergeBarText.Text = $"{totalChecked} Files selected";
-                    MergeBarBtn.Content = "Merge Files";
-                    MergeBarBtn.ToolTip = $"Convert & merge all {totalChecked} files";
-                }
-            }
-            else
-            {
-                MergePdfFloatingBar.Visibility = Visibility.Collapsed;
-            }
-        }
-
-        private async void MergeSelectedPdfsBtn_Click(object sender, RoutedEventArgs e)
-        {
-            if (_viewModel == null) return;
-            var checkedPdfs = _viewModel.DroppedItems
-                .Where(i => i.IsCheckedForMerge && i.IsPdfPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
-                .ToList();
-            var checkedDocs = _viewModel.DroppedItems
-                .Where(i => i.IsCheckedForMerge && i.IsDocPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
-                .ToList();
-            var checkedImages = _viewModel.DroppedItems
-                .Where(i => i.IsCheckedForMerge && i.ItemType == ClipboardItemType.Image && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
-                .ToList();
-
-            var convertedPdfPaths = new List<string>();
-
-            // Convert DOC/DOCX files to PDF first
-            if (checkedDocs.Count > 0)
-            {
-                ToastWindow.ShowToast($"📄 Converting {checkedDocs.Count} DOC file(s) to PDF...");
-
-                foreach (var doc in checkedDocs)
-                {
-                    string pdfPath = await ConversionUtils.ConvertDocToPdfAsync(doc.FilePath);
-                    if (!string.IsNullOrEmpty(pdfPath) && System.IO.File.Exists(pdfPath))
-                    {
-                        convertedPdfPaths.Add(pdfPath);
-                    }
-                    else
-                    {
-                        ToastWindow.ShowToast($"❌ Failed to convert: {doc.FileName}");
-                    }
-                }
-            }
-
-            // Convert Images to PDF next
-            if (checkedImages.Count > 0)
-            {
-                ToastWindow.ShowToast($"🖼️ Formatting {checkedImages.Count} image(s) to PDF...");
-
-                foreach (var img in checkedImages)
-                {
-                    try
-                    {
-                        string pdfPath = await System.Threading.Tasks.Task.Run(() => ConversionUtils.ConvertImageToPdf(img.FilePath));
-                        if (!string.IsNullOrEmpty(pdfPath) && System.IO.File.Exists(pdfPath))
-                        {
-                            convertedPdfPaths.Add(pdfPath);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        ToastWindow.ShowToast($"❌ Failed to format: {img.FileName}");
-                        Logger.LogAction("IMAGE2PDF_ERR", ex.ToString());
-                    }
-                }
-            }
-
-            // If only DOCs/Images selected and no merge needed (only 1 output item)
-            if (checkedPdfs.Count == 0 && checkedDocs.Count + checkedImages.Count == convertedPdfPaths.Count && convertedPdfPaths.Count == 1)
-            {
-                foreach (var item in _viewModel.DroppedItems)
-                {
-                    item.IsCheckedForMerge = false;
-                }
-                UpdateMergeButton();
-
-                var newItem = new ClipboardItem(convertedPdfPaths[0]);
-                _viewModel.DroppedItems.Insert(0, newItem);
-                _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
-                ToastWindow.ShowToast("✅ Converted to PDF");
-                return;
-            }
-
-            // Build the final list of PDF items for the merge window
-            var allPdfs = new List<ClipboardItem>();
-            allPdfs.AddRange(checkedPdfs);
-
-            // Add converted items as ClipboardItems
-            foreach (string path in convertedPdfPaths)
-            {
-                allPdfs.Add(new ClipboardItem(path));
-            }
-
-            if (allPdfs.Count > 1)
-            {
-                foreach (var item in _viewModel.DroppedItems)
-                {
-                    item.IsCheckedForMerge = false;
-                }
-                UpdateMergeButton();
-
-                var win = new PdfMergeWindow(allPdfs, _viewModel);
-                App.ActiveMergeWindow = win;
-                win.Closed += (_, __) => App.ActiveMergeWindow = null;
-                win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
-                win.Topmost = true;
-                win.Show();
-                win.Activate();
-                win.Focus();
-                win.Topmost = false;
-            }
-            else if (allPdfs.Count == 1)
-            {
-                foreach (var item in _viewModel.DroppedItems)
-                {
-                    item.IsCheckedForMerge = false;
-                }
-                UpdateMergeButton();
-
-                var newItem = new ClipboardItem(allPdfs[0].FilePath);
-                _viewModel.DroppedItems.Insert(0, newItem);
-                _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
-                ToastWindow.ShowToast("✅ PDF added to clipboard");
-            }
-            else
-            {
-                ToastWindow.ShowToast("Select 2+ files to merge, or 1 image/doc to convert.");
-            }
-        }
-
-        protected override void OnClosed(EventArgs e)
-        {
-            base.OnClosed(e);
-
-            // Unsubscribe from global pairing events to prevent static reference memory leaks
-            if (_devicePairedHandler != null)
-            {
-                DevicePairingManager.OnDevicePaired -= _devicePairedHandler;
-                _devicePairedHandler = null;
-            }
-
-            // Unsubscribe from ViewModel CollectionChanged to prevent memory leak of this window
-            if (_viewModel?.DroppedItems != null)
-            {
-                _viewModel.DroppedItems.CollectionChanged -= DroppedItems_CollectionChanged;
-            }
-
-            // Clean up any timers
-            if (_deviceRefreshTimer != null)
-            {
-                _deviceRefreshTimer.Stop();
-                _deviceRefreshTimer = null;
-            }
-        }
-
-        // ═══ Browser-style Smooth Scroll (Chrome/Edge cubic ease-out) ═══
-        // Uses target-offset animation like modern browsers: each scroll event adds to a
-        // target offset, and a single animation smoothly interpolates using cubic ease-out.
-        // This feels natural, not physics-y — exactly like CSS scroll-behavior: smooth.
-        
-        private readonly Dictionary<ScrollViewer, double> _scrollTargets = new();
-        private readonly Dictionary<ScrollViewer, double> _scrollStartOffsets = new();
-        private readonly Dictionary<ScrollViewer, long> _scrollStartTimes = new();
-        private const double ScrollAnimationMs = 250;  // Chrome uses ~250ms for smooth scroll
-        private const double ScrollStepPx = 100;       // pixels per mouse wheel notch (Chrome default)
-        private bool _browserScrollRendering;
-
-        private void SettingsScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-        {
-            ScrollViewer? sv = sender as ScrollViewer;
-            if (sv == null)
-            {
-                // Walk up to find the ScrollViewer ancestor
-                DependencyObject? source = e.OriginalSource as DependencyObject;
-                while (source != null)
-                {
-                    if (source is ScrollViewer found) { sv = found; break; }
-                    source = VisualTreeHelper.GetParent(source);
-                }
-            }
-            if (sv == null || sv.ScrollableHeight <= 0) return;
-
-            e.Handled = true;
-
-            // Touchpad: let WPF handle natively (high-res deltas have hardware inertia)
-            if (e.Delta % 120 != 0) { e.Handled = false; return; }
-
-            double scrollAmount = -(e.Delta / 120.0) * ScrollStepPx;
-            long now = Environment.TickCount64;
-
-            if (!_scrollTargets.ContainsKey(sv) || !_scrollStartTimes.ContainsKey(sv))
-            {
-                // First scroll — start fresh
-                _scrollStartOffsets[sv] = sv.VerticalOffset;
-                _scrollTargets[sv] = sv.VerticalOffset + scrollAmount;
-                _scrollStartTimes[sv] = now;
-            }
-            else
-            {
-                long elapsed = now - _scrollStartTimes[sv];
-                if (elapsed >= ScrollAnimationMs)
-                {
-                    // Previous animation finished — start new from current position
-                    _scrollStartOffsets[sv] = sv.VerticalOffset;
-                    _scrollTargets[sv] = sv.VerticalOffset + scrollAmount;
-                    _scrollStartTimes[sv] = now;
-                }
-                else
-                {
-                    // Chain: accumulate onto existing target (responsive rapid scrolling)
-                    _scrollTargets[sv] += scrollAmount;
-                    // Reset start to current position & time for fresh ease-out curve
-                    _scrollStartOffsets[sv] = sv.VerticalOffset;
-                    _scrollStartTimes[sv] = now;
-                }
-            }
-
-            // Clamp target to valid range
-            _scrollTargets[sv] = Math.Clamp(_scrollTargets[sv], 0, sv.ScrollableHeight);
-
-            if (!_browserScrollRendering)
-            {
-                _browserScrollRendering = true;
-                CompositionTarget.Rendering += BrowserScroll_Rendering;
-            }
-        }
-
-        private void BrowserScroll_Rendering(object? sender, EventArgs e)
-        {
-            bool anyActive = false;
-            long now = Environment.TickCount64;
-
-            foreach (var sv in _scrollTargets.Keys.ToList())
-            {
-                if (!_scrollStartTimes.ContainsKey(sv)) continue;
-
-                long elapsed = now - _scrollStartTimes[sv];
-                double t = Math.Clamp(elapsed / ScrollAnimationMs, 0, 1);
-
-                // Cubic ease-out: cubic-bezier(0, 0, 0.58, 1) — matches Chrome/Edge
-                // Simplified: 1 - (1 - t)^3
-                double eased = 1.0 - Math.Pow(1.0 - t, 3);
-
-                double start = _scrollStartOffsets[sv];
-                double target = _scrollTargets[sv];
-                double newOffset = start + (target - start) * eased;
-                newOffset = Math.Clamp(newOffset, 0, sv.ScrollableHeight);
-                sv.ScrollToVerticalOffset(newOffset);
-
-                if (t < 1.0)
-                    anyActive = true;
-            }
-
-            if (!anyActive)
-            {
-                CompositionTarget.Rendering -= BrowserScroll_Rendering;
-                _browserScrollRendering = false;
-                _scrollTargets.Clear();
-                _scrollStartOffsets.Clear();
-                _scrollStartTimes.Clear();
             }
         }
 
