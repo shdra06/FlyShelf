@@ -15,7 +15,7 @@
         WindowStyle="None" ResizeMode="NoResize" Background="Transparent" SystemBackdropType="Acrylic"
         ShowInTaskbar="False" Margin="0" Topmost="True" ShowActivated="False"
         AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver"
-        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Display" TextOptions.TextHintingMode="Animated" UseLayoutRounding="True"
         Loaded="MicaWindow_Loaded" Deactivated="MicaWindow_Deactivated">
 
     <controls:MicaWindow.Resources>
@@ -978,6 +978,11 @@
                                                 </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
                                             </MultiDataTrigger>
+                                            
+                                            <!-- Hide generic fallback icon if color is detected -->
+                                            <DataTrigger Binding="{Binding HasDetectedColor}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Border.Style>
@@ -1027,6 +1032,23 @@
                                         </Style>
                                     </ui:SymbolIcon.Style>
                                 </ui:SymbolIcon>
+                            </Border>
+
+                            <!-- Color Swatch Premium Preview — shown when a HEX, RGB, or HSL color is detected -->
+                            <Border Name="ColorSwatchBorder" Grid.Row="0" Grid.Column="0" Width="40" Height="40" Margin="0,0,12,0"
+                                    Background="{Binding DetectedColorBrush}" CornerRadius="10" 
+                                    BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1.5">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasDetectedColor}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <ui:SymbolIcon Symbol="Color24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
 
                             <!-- Sender Badge — Top-right corner overlay -->
@@ -1115,6 +1137,44 @@
                                     </ProgressBar>
                                     <TextBlock Text="{Binding TransferStatusText}" FontSize="10.5" Foreground="#10B981" Margin="0,3,0,0" FontWeight="Medium" Opacity="0.9"/>
                                 </StackPanel>
+
+                                <!-- Inline Audio Player Panel -->
+                                <Grid Margin="0,6,0,2" Visibility="{Binding IsAudioPreview, Converter={StaticResource BooleanToVisibilityConverter}}" HorizontalAlignment="Stretch">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    
+                                    <!-- Play/Pause Button -->
+                                    <ui:Button Grid.Column="0" Focusable="False" Padding="6" CornerRadius="18" Width="36" Height="36" VerticalAlignment="Center" Margin="0,0,8,0"
+                                               Command="{Binding PlayPauseAudioCommand}" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}">
+                                        <ui:Button.Icon>
+                                            <ui:SymbolIcon FontSize="18">
+                                                <ui:SymbolIcon.Style>
+                                                    <Style TargetType="ui:SymbolIcon">
+                                                        <Setter Property="Symbol" Value="Play24"/>
+                                                        <Setter Property="Filled" Value="True"/>
+                                                        <Setter Property="Foreground" Value="#EC4899"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsAudioPlaying}" Value="True">
+                                                                <Setter Property="Symbol" Value="Pause24"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ui:SymbolIcon.Style>
+                                            </ui:SymbolIcon>
+                                        </ui:Button.Icon>
+                                    </ui:Button>
+
+                                    <!-- Progress Slider -->
+                                    <Slider Grid.Column="1" Value="{Binding AudioPosition, Mode=TwoWay}" Maximum="{Binding AudioDuration}" Minimum="0"
+                                            VerticalAlignment="Center" Height="22" Focusable="False" Foreground="#EC4899"/>
+
+                                    <!-- Time indicator text -->
+                                    <TextBlock Grid.Column="2" Text="{Binding AudioPlaybackText}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
+                                               FontSize="11.5" FontWeight="Medium" VerticalAlignment="Center" Margin="8,0,4,0"/>
+                                </Grid>
                             </StackPanel>
 
                         </Grid>

@@ -1,7 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
-// CloudDiscoveryListener — File Download, Integrity & Forced Sync
+// CloudDiscoveryListener — File Download, Integrity Verification
 // FetchAndInjectCloudFile, retry/fallback logic, SHA-256 verify,
-// ProcessForcedSyncPayload, CloudItem model
+// CloudItem model. ProcessForcedSyncPayload REMOVED (Firebase
+// must never relay content — P2P only).
 // Split from CloudDiscoveryListener.cs for modularity
 // ═══════════════════════════════════════════════════════════════
 using System;
@@ -453,106 +454,12 @@ namespace FlyShelf.Classes
             return false;
         }
 
-        private void ProcessForcedSyncPayload(string json, string deviceId)
-        {
-            _ = Task.Run(async () =>
-            {
-                try { await ProcessForcedSyncPayloadCore(json, deviceId); }
-                catch (Exception ex) { Logger.LogAction("FIREBASE", $"ProcessForcedSyncPayload crash: {ex.Message}"); }
-            });
-        }
-
-        private async Task ProcessForcedSyncPayloadCore(string json, string deviceId)
-        {
-            try
-            {
-                using (JsonDocument doc = JsonDocument.Parse(json))
-                {
-                    var root = doc.RootElement;
-                    var keysToDelete = new List<string>();
-
-                    foreach (JsonProperty prop in root.EnumerateObject())
-                    {
-                        var data = prop.Value;
-                        string type = data.TryGetProperty("Type", out var t) ? t.GetString() ?? "Text" : "Text";
-                        string title = data.TryGetProperty("Title", out var t2) ? t2.GetString() ?? "" : "";
-                        string raw = data.TryGetProperty("Raw", out var t3) ? t3.GetString() ?? "" : "";
-                        string source = data.TryGetProperty("ForcedBy", out var t4) ? t4.GetString() ?? "" :
-                                       (data.TryGetProperty("SourceDeviceName", out var t5) ? t5.GetString() ?? "" : "");
-                        string sourceDeviceType = data.TryGetProperty("SourceDeviceType", out var t5b) ? t5b.GetString() ?? "Unknown" : "Unknown";
-                        string downloadUrl = data.TryGetProperty("DownloadUrl", out var t6) ? t6.GetString() ?? "" : "";
-                        string senderUrl = data.TryGetProperty("SenderUrl", out var t7) ? t7.GetString() ?? "" : "";
-                        string sourceDeviceId = data.TryGetProperty("SourceDeviceId", out var t8) ? t8.GetString() ?? "" : "";
-
-                        // Decrypt URLs safely (handles both encrypted and legacy plaintext gracefully)
-                        raw = SyncCrypto.DecryptUrlSafe(raw);
-                        downloadUrl = SyncCrypto.DecryptUrlSafe(downloadUrl);
-                        senderUrl = SyncCrypto.DecryptUrlSafe(senderUrl);
-
-                        Logger.LogAction("FORCED SYNC", $"Received from '{source}': {type} - {title}");
-
-                        // Resolve relative URLs using SenderUrl
-                        string resolvedUrl = raw;
-                        if (!resolvedUrl.StartsWith("http") && !string.IsNullOrEmpty(downloadUrl))
-                        {
-                            if (downloadUrl.StartsWith("http"))
-                                resolvedUrl = downloadUrl;
-                            else if (!string.IsNullOrEmpty(senderUrl) && senderUrl.StartsWith("http"))
-                                resolvedUrl = senderUrl + downloadUrl;
-                        }
-                        if (!resolvedUrl.StartsWith("http") && !string.IsNullOrEmpty(senderUrl) && senderUrl.StartsWith("http") && resolvedUrl.StartsWith("/"))
-                            resolvedUrl = senderUrl + resolvedUrl;
-
-                        System.Windows.Application.Current.Dispatcher.Invoke(() =>
-                        {
-                            bool isFilePayload = type == "Image" || type == "ImageLink" || type == "Pdf" || type == "Archive" || type == "Video" || type == "Document" || type == "File";
-
-                            if (isFilePayload && resolvedUrl.StartsWith("http"))
-                            {
-                                var ci = new CloudItem { Id = prop.Name, Type = type, Title = title, Raw = resolvedUrl, DownloadUrl = downloadUrl, SenderUrl = senderUrl, SourceDeviceName = source, SourceDeviceId = sourceDeviceId };
-                                _ = FetchAndInjectCloudFile(ci);
-                            }
-                            else
-                            {
-                                if (string.IsNullOrWhiteSpace(raw)) return;
-
-                                var clip = new ClipboardItem
-                                {
-                                    RawContent = raw,
-                                    FileName = title,
-                                    Extension = "FORCED",
-                                    ItemType = type == "Url" ? ClipboardItemType.Url : ClipboardItemType.Text,
-                                    SourceDeviceName = source,
-                                    SourceDeviceType = sourceDeviceType,
-                                    TransferMethod = "ForceSend"
-                                };
-                                clip.EvaluateSmartActions();
-                                _viewModel.InsertWithDedup(clip);
-                                _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
-                                
-                                string normalizedContent = FlyShelfViewModel.NormalizeTextForFingerprint(raw);
-                                string txtFp = $"TXT::{normalizedContent.Substring(0, Math.Min(200, normalizedContent.Length))}";
-                                _viewModel.MarkAsCloudSourced(txtFp);
-                            }
-
-                            FlyShelf.Windows.ToastWindow.ShowToast($"⚡ Force Sync from {source}");
-                        });
-
-                        keysToDelete.Add(prop.Name);
-                    }
-
-                    foreach (var key in keysToDelete)
-                    {
-                        string deleteUrl = (await AuthUrl($"forced_sync/{deviceId}/{key}.json"));
-                        try { await _pollClient.DeleteAsync(deleteUrl); } catch { }
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("FORCED SYNC", "Parse Error: " + ex.Message);
-            }
-        }
+        // ═══════════════════════════════════════════════════════════════
+        // ProcessForcedSyncPayload: REMOVED — Firebase must never relay content.
+        // All content transfer is P2P-only via PeerManager (LAN/Cloudflare direct).
+        // Firebase is strictly for exchanging encrypted device URLs (discovery).
+        // The forced_sync SSE listener that called this has also been removed.
+        // ═══════════════════════════════════════════════════════════════
 
         private class CloudItem
         {

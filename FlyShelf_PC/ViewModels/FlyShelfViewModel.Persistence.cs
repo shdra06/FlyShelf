@@ -28,6 +28,12 @@ namespace FlyShelf.ViewModels
                 // Structural Lock: Pinned items cannot be deleted unless physically unpinned first!
                 if (item.IsPinned) return; 
 
+                // Stop audio playback if removing the active playing item
+                if (item.IsAudioPlaying)
+                {
+                    ClipboardItem.StopActivePlayback();
+                }
+
                 DroppedItems.Remove(item);
 
                 // PERF: Debounce ShelfVisibility — batch rapid deletes into one notification
@@ -115,7 +121,11 @@ namespace FlyShelf.ViewModels
 
         public void ClearShelf()
         {
+            // Stop any active audio playback when clearing the shelf
+            ClipboardItem.StopActivePlayback();
+
             var volatileItems = DroppedItems.Where(i => !i.IsPinned).ToList();
+
             if (volatileItems.Count > 0)
             {
                 DroppedItems.RemoveRange(volatileItems);
@@ -308,87 +318,6 @@ namespace FlyShelf.ViewModels
             catch { }
         }
 
-        /// <summary>
-        /// Loads the next page of unpinned history items from SQLite on-demand (incremental scroll).
-        /// </summary>
-        public async Task LoadNextPageAsync()
-        {
-            // No pagination needed — all 200 items are loaded at startup
-            await System.Threading.Tasks.Task.CompletedTask;
-            return;
-            
-            if (_isPaginating || IsSearchActive) return;
-
-            _isPaginating = true;
-            try
-            {
-                // Dead code — kept for compilation only
-                var nextItems = new List<ClipboardItem>();
-                if (nextItems.Count == 0) return;
-
-                var existingKeys = new HashSet<string>(DroppedItems.Select(GetDeduplicationKey).Where(k => !string.IsNullOrEmpty(k)));
-                var itemsNeedingIcons = new List<ClipboardItem>();
-
-                await Application.Current.Dispatcher.InvokeAsync(() =>
-                {
-                    foreach (var item in nextItems)
-                    {
-                        string itemKey = GetDeduplicationKey(item);
-                        if (!string.IsNullOrEmpty(itemKey) && !existingKeys.Add(itemKey))
-                            continue;
-                        if (IsEffectivelyEmpty(item)) continue;
-                        if (string.IsNullOrWhiteSpace(item.FileName) && !string.IsNullOrWhiteSpace(item.RawContent))
-                            item.FileName = item.RawContent.Length > 800 ? item.RawContent.Substring(0, 800) + "..." : item.RawContent;
-                        item.EvaluateSmartActions();
-                        DroppedItems.Add(item);
-                        bool needsIcon = (item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
-                            && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath);
-                        bool needsFileIcon = !needsIcon && (item.ItemType == ClipboardItemType.File || item.ItemType == ClipboardItemType.Document ||
-                            item.ItemType == ClipboardItemType.Pdf || item.ItemType == ClipboardItemType.Archive ||
-                            item.ItemType == ClipboardItemType.Video || item.ItemType == ClipboardItemType.Audio ||
-                            item.ItemType == ClipboardItemType.Presentation) && !string.IsNullOrEmpty(item.FilePath);
-                        if (needsIcon || needsFileIcon) itemsNeedingIcons.Add(item);
-                    }
-                });
-
-                if (itemsNeedingIcons.Count > 0)
-                {
-                    _ = System.Threading.Tasks.Task.Run(async () =>
-                    {
-                        foreach (var item in itemsNeedingIcons)
-                        {
-                            await _iconDecodeSemaphore.WaitAsync();
-                            try
-                            {
-                                if ((item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
-                                    && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath))
-                                {
-                                    var icon = LoadImageThumbnail(item.FilePath);
-                                    if (icon != null)
-                                        await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
-                                }
-                                else if (!string.IsNullOrEmpty(item.FilePath))
-                                {
-                                    var icon = GetIcon(item.FilePath);
-                                    if (icon != null)
-                                        await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
-                                }
-                            }
-                            catch { }
-                            finally { _iconDecodeSemaphore.Release(); }
-                        }
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                Classes.Logger.LogAction("PAGINATION_ERROR", $"Failed to load next page: {ex.Message}");
-            }
-            finally
-            {
-                _isPaginating = false;
-            }
-        }
 
         /// <summary>
         /// Searches the history database using FTS5 and populates DroppedItems with results, loading icons asynchronously.
@@ -593,8 +522,10 @@ namespace FlyShelf.ViewModels
         /// </summary>
         public void PruneOldItems()
         {
-            // Show warning starting at 100 items (but don't prune yet)
-            if (DroppedItems.Count >= WARNING_THRESHOLD && DroppedItems.Count <= MAX_UNPINNED_ITEMS)
+            int totalCount = DroppedItems.Count;
+            
+            // Show warning starting at 150 items (but don't prune yet)
+            if (totalCount >= WARNING_THRESHOLD && totalCount <= MAX_UNPINNED_ITEMS)
             {
                 int unpinnedCount = DroppedItems.Count(i => !i.IsPinned);
                 if (unpinnedCount >= WARNING_THRESHOLD && unpinnedCount < MAX_UNPINNED_ITEMS)
@@ -603,21 +534,30 @@ namespace FlyShelf.ViewModels
                     if (unpinnedCount % 50 == 0)
                     {
                         int remaining = MAX_UNPINNED_ITEMS - unpinnedCount;
-                        FlyShelf.Windows.ToastWindow.ShowToast($"\u26a0\ufe0f Clipboard has {unpinnedCount} items. {remaining} slots remaining (max {MAX_UNPINNED_ITEMS}).");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Clipboard has {unpinnedCount} items. {remaining} slots remaining (max {MAX_UNPINNED_ITEMS}).");
                     }
                 }
             }
 
-            if (DroppedItems.Count <= MAX_UNPINNED_ITEMS) return;
+            if (totalCount <= MAX_UNPINNED_ITEMS) return;
 
-            // Collect unpinned items to remove (from end, oldest first)
+            // Collect unpinned items to remove (from end of the list, oldest first)
             var itemsToRemove = new List<ClipboardItem>();
+            
+            var itemsToRemoveFromDropped = new List<ClipboardItem>();
             for (int i = DroppedItems.Count - 1; i >= 0 && DroppedItems.Count - itemsToRemove.Count > MAX_UNPINNED_ITEMS; i--)
             {
                 if (!DroppedItems[i].IsPinned)
+                {
                     itemsToRemove.Add(DroppedItems[i]);
+                    itemsToRemoveFromDropped.Add(DroppedItems[i]);
+                }
             }
-
+            if (itemsToRemoveFromDropped.Count > 0)
+            {
+                DroppedItems.RemoveRange(itemsToRemoveFromDropped);
+            }
+            
             if (itemsToRemove.Count > 0)
             {
                 var filesToCleanup = new List<(string path, ClipboardItemType type)>();
@@ -626,9 +566,7 @@ namespace FlyShelf.ViewModels
                     filesToCleanup.Add((item.FilePath, item.ItemType));
                 }
 
-                DroppedItems.RemoveRange(itemsToRemove);
-
-                FlyShelf.Windows.ToastWindow.ShowToast($"\ud83d\uddd1\ufe0f Clipboard full \u2014 removed {itemsToRemove.Count} oldest items.");
+                FlyShelf.Windows.ToastWindow.ShowToast($"🗑️ Clipboard full — removed {itemsToRemove.Count} oldest items.");
 
                 // Background cleanup
                 _ = System.Threading.Tasks.Task.Run(() =>
@@ -726,5 +664,6 @@ namespace FlyShelf.ViewModels
                 Classes.Logger.LogAction("AUTO_CLEANUP_ERROR", $"Cleanup failed: {ex.Message}");
             }
         }
+
     }
 }

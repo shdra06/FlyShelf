@@ -51,11 +51,9 @@ namespace FlyShelf.Classes
 
             Logger.LogAction("FIREBASE LISTENER", "Starting SSE real-time stream + forced sync poller.");
 
-            // 1. Main clipboard feed: DISABLED — Firebase is no longer used for content transfer
-            //    All content now flows via P2P (LAN/Cloudflare direct push)
-
-            // 2. Forced sync: real-time SSE stream (replaces 5s polling)
-            Task.Run(() => RunForcedSyncSSE(_cts.Token));
+            // 2. Forced sync SSE: REMOVED — Firebase must never relay content (text, files, URLs).
+            //    All content transfer is P2P-only via PeerManager (LAN/Cloudflare direct).
+            //    Firebase is strictly for exchanging encrypted device URLs (discovery).
 
             // 3. Peer URL discovery: SSE stream on active_devices — instant reconnect when any peer comes online
             Task.Run(() => RunPeerDiscoverySSE(_cts.Token));
@@ -70,114 +68,11 @@ namespace FlyShelf.Classes
             }
         }
 
-
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-        // FORCED SYNC SSE: Real-time stream for items force-sent to this device
-        // Replaces the old 5s polling loop Ã¢â‚¬â€ delivery is now ~100-300ms
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
-        private async Task RunForcedSyncSSE(CancellationToken ct)
-        {
-            int reconnectDelay = 1000;
-            const int MAX_RECONNECT_DELAY = 30_000;
-
-            while (!ct.IsCancellationRequested)
-            {
-                try
-                {
-                    string deviceId = SettingsManager.Current.DeviceId;
-                    if (string.IsNullOrEmpty(deviceId))
-                    {
-                        await Task.Delay(5000, ct);
-                        continue;
-                    }
-
-                    string forcedUrl = (await AuthUrl($"forced_sync/{deviceId}.json"));
-                    var request = new HttpRequestMessage(HttpMethod.Get, forcedUrl);
-                    request.Headers.Add("Accept", "text/event-stream");
-
-                    using var response = await _streamClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-
-                    if (!response.IsSuccessStatusCode)
-                    {
-                        Logger.LogAction("FORCED SYNC SSE", $"HTTP {(int)response.StatusCode} Ã¢â‚¬â€ retrying in {reconnectDelay}ms");
-                        await Task.Delay(reconnectDelay, ct);
-                        reconnectDelay = Math.Min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
-                        continue;
-                    }
-
-                    reconnectDelay = 1000;
-                    Logger.LogAction("FORCED SYNC SSE", "Real-time stream CONNECTED Ã¢Å“â€œ");
-
-                    using var stream = await response.Content.ReadAsStreamAsync();
-                    using var reader = new StreamReader(stream);
-
-                    string currentEvent = "";
-                    string currentData = "";
-
-                    while (!ct.IsCancellationRequested)
-                    {
-                        string? line = await reader.ReadLineAsync();
-                        if (line == null) break;
-
-                        if (line.StartsWith("event:"))
-                            currentEvent = line.Substring(6).Trim();
-                        else if (line.StartsWith("data:"))
-                            currentData = line.Substring(5).Trim();
-                        else if (string.IsNullOrEmpty(line))
-                        {
-                            if (!string.IsNullOrEmpty(currentData) && currentData != "null" && currentEvent == "put")
-                            {
-                                try
-                                {
-                                    using var doc = JsonDocument.Parse(currentData);
-                                    var root = doc.RootElement;
-                                    string path = root.TryGetProperty("path", out var p) ? p.GetString() ?? "/" : "/";
-                                    if (!root.TryGetProperty("data", out var data) || data.ValueKind == JsonValueKind.Null)
-                                    {
-                                        currentEvent = ""; currentData = ""; continue;
-                                    }
-
-                                    // Re-serialize the data to JSON for ProcessForcedSyncPayload
-                                    if (path == "/")
-                                    {
-                                        // Full payload: data is the entire forced_sync/{deviceId} node
-                                        if (data.ValueKind == JsonValueKind.Object)
-                                            ProcessForcedSyncPayload(data.GetRawText(), deviceId);
-                                    }
-                                    else
-                                    {
-                                        // Single item: path is /{key}, data is the item
-                                        string key = path.TrimStart('/');
-                                        if (data.ValueKind == JsonValueKind.Object)
-                                        {
-                                            string wrappedJson = "{" + $"\"{key}\":{data.GetRawText()}" + "}";
-                                            ProcessForcedSyncPayload(wrappedJson, deviceId);
-                                        }
-                                    }
-                                }
-                                catch (Exception parseEx)
-                                {
-                                    Logger.LogAction("FORCED SYNC SSE", $"Parse error: {parseEx.Message}");
-                                }
-                            }
-                            currentEvent = "";
-                            currentData = "";
-                        }
-                    }
-
-                    Logger.LogAction("FORCED SYNC SSE", "Stream closed Ã¢â‚¬â€ reconnecting...");
-                }
-                catch (OperationCanceledException) { break; }
-                catch (Exception ex)
-                {
-                    Logger.LogAction("FORCED SYNC SSE", $"Stream error: {ex.Message} Ã¢â‚¬â€ retrying in {reconnectDelay}ms");
-                    try { await Task.Delay(reconnectDelay, ct); } catch { break; }
-                    reconnectDelay = Math.Min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
-                }
-            }
-
-            Logger.LogAction("FORCED SYNC SSE", "Stream STOPPED.");
-        }
+        // ═══════════════════════════════════════════════════════════════
+        // FORCED SYNC SSE: REMOVED — Firebase must never relay content.
+        // All content transfer is P2P-only via PeerManager.
+        // Firebase is strictly for device URL discovery (active_devices).
+        // ═══════════════════════════════════════════════════════════════
 
         // ═══════════════════════════════════════════════════════════════
         // PEER DISCOVERY SSE: Watch active_devices for URL changes

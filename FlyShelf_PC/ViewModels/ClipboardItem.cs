@@ -60,7 +60,7 @@ namespace FlyShelf.ViewModels
 
         public string SourceDeviceName { get; set; } = "Local";
         public string SourceDeviceType { get; set; } = "PC";
-        public string TransferMethod { get; set; } = "Local"; // Local, LAN, Cloud, Cloudflare, ForceSend
+        public string TransferMethod { get; set; } = "Local"; // Local, LAN, Cloudflare
 
         /// <summary>
         /// Computed display badge combining transfer method emoji + device name.
@@ -72,16 +72,15 @@ namespace FlyShelf.ViewModels
             {
                 string emoji = TransferMethod switch
                 {
-                    "LAN" => "ðŸ“¡",
-                    "Cloud" => "â˜ï¸",
-                    "Cloudflare" => "ðŸŒ",
-                    "ForceSend" => "ðŸŽ¯",
-                    _ => "ðŸ“‹"
+                    "LAN" => "📡",
+                    "Cloud" => "☀",
+                    "Cloudflare" => "🌐",
+                    _ => "📋"
                 };
                 string deviceEmoji = SourceDeviceType switch
                 {
-                    "Mobile" => "ðŸ“±",
-                    "PC" => "ðŸ’»",
+                    "Mobile" => "📱",
+                    "PC" => "💻",
                     _ => ""
                 };
                 if (SourceDeviceName == "Local") return $"{emoji} Local";

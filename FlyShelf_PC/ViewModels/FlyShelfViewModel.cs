@@ -76,8 +76,6 @@ namespace FlyShelf.ViewModels
         /// Loads persisted clipboard history from disk and rebuilds Icon previews.
         /// Called once at app startup asynchronously.
         /// </summary>
-        private const int INITIAL_LOAD_COUNT = 30;
-        private List<ClipboardItem>? _deferredItems = null;
 
         public async Task LoadPersistedHistoryAsync()
         {
@@ -124,18 +122,14 @@ namespace FlyShelf.ViewModels
                     catch { }
                 }
 
-                // PERF: Load only the first 30 items immediately — rest are deferred
-                var initialBatch = allItems.Take(INITIAL_LOAD_COUNT).ToList();
-                _deferredItems = allItems.Skip(INITIAL_LOAD_COUNT).ToList();
-
-                if (initialBatch.Count > 0)
+                if (allItems.Count > 0)
                 {
-                    await Application.Current.Dispatcher.InvokeAsync(() => DroppedItems.AddRange(initialBatch));
+                    await Application.Current.Dispatcher.InvokeAsync(() => DroppedItems.AddRange(allItems));
                 }
 
                 OnPropertyChanged(nameof(ShelfVisibility));
 
-                // Auto-save on collection changes (debounced JSON compaction)
+                // Auto-save on collection changes (debounced)
                 DroppedItems.CollectionChanged += (s, e) =>
                 {
                     if (!_isDatabaseWriteSuspended && !_isPaginating)
@@ -147,8 +141,11 @@ namespace FlyShelf.ViewModels
                 // Start the auto-cleanup timer
                 StartAutoCleanupTimer();
 
-                // Load icons ONLY for initial 30 items — rest load via scroll-triggered RenderVisibleThumbnails
-                foreach (var item in initialBatch)
+                // Only decode icons for the first ~12 items (visible viewport) at startup.
+                // Off-screen items stay as placeholder cards — RenderVisibleThumbnails lazily
+                // loads their thumbnails when they scroll into view.
+                var visibleBatch = allItems.Take(12).ToList();
+                foreach (var item in visibleBatch)
                 {
                     bool needsIcon = (item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
                         && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath);
@@ -194,48 +191,11 @@ namespace FlyShelf.ViewModels
                     });
                 }
 
-                // PERF: Load deferred items in background after 500ms so UI is ready first
-                // CRITICAL: Keep _isPaginating = true until deferred loading completes!
-                // Otherwise CollectionChanged fires during batch loading → SaveHistoryDebounced
-                // → CompactNow writes a snapshot with only 30 items, destroying the full database.
-                if (_deferredItems != null && _deferredItems.Count > 0)
-                {
-                    // _isPaginating stays TRUE — LoadDeferredItemsAsync sets it false when done
-                    _ = LoadDeferredItemsAsync();
-                    return; // Don't fall through to _isPaginating = false
-                }
+                _isPaginating = false;
             }
             finally
             {
                 _isPaginating = false;
-            }
-        }
-
-        /// <summary>
-        /// Loads remaining items in batches of 30 with small delays to avoid UI stutter.
-        /// </summary>
-        private async Task LoadDeferredItemsAsync()
-        {
-            await System.Threading.Tasks.Task.Delay(500); // Let UI settle first
-            if (_deferredItems == null || _deferredItems.Count == 0) return;
-
-            var deferred = _deferredItems;
-            _deferredItems = null;
-
-            _isPaginating = true;
-            try
-            {
-                for (int offset = 0; offset < deferred.Count; offset += 30)
-                {
-                    var batch = deferred.Skip(offset).Take(30).ToList();
-                    await Application.Current.Dispatcher.InvokeAsync(() => DroppedItems.AddRange(batch));
-                    await System.Threading.Tasks.Task.Delay(50); // Small yield between batches
-                }
-            }
-            finally
-            {
-                _isPaginating = false;
-                OnPropertyChanged(nameof(ShelfVisibility));
             }
         }
 
@@ -244,7 +204,8 @@ namespace FlyShelf.ViewModels
         /// </summary>
         private void PersistHistory()
         {
-            Classes.ClipboardHistoryManager.SaveHistoryDebounced(DroppedItems);
+            var fullHistory = DroppedItems.ToList();
+            Classes.ClipboardHistoryManager.SaveHistoryDebounced(fullHistory);
         }
 
         /// <summary>

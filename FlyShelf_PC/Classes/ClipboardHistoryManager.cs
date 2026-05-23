@@ -179,58 +179,29 @@ namespace FlyShelf.Classes
         /// <summary>
         /// Saves clipboard history to disk. Debounced — waits 500ms after last call to avoid disk thrashing.
         /// This performs a FULL compaction (snapshot rewrite + journal clear).
+        /// Accepts a copy of the list to avoid collection modified exceptions.
         /// </summary>
-        public static void SaveHistoryDebounced(ObservableCollection<ViewModels.ClipboardItem> items)
+        public static void SaveHistoryDebounced(List<ViewModels.ClipboardItem> items)
         {
-            // CRITICAL: Do NOT acquire _lock here — this runs on the UI thread via CollectionChanged.
-            // If CompactNow holds _lock on a background thread, the UI thread would deadlock.
-            var newTimer = new Timer(_ => SaveHistoryNow(items), null, 500, Timeout.Infinite);
-            var oldTimer = Interlocked.Exchange(ref _debounceTimer, newTimer);
-            oldTimer?.Dispose();
-        }
-
-        /// <summary>
-        /// Immediately saves clipboard history to disk (full compaction).
-        /// </summary>
-        public static void SaveHistoryNow(ObservableCollection<ViewModels.ClipboardItem> items)
-        {
-            try
+            var newTimer = new Timer(_ =>
             {
-                Directory.CreateDirectory(_appDataDir);
-
-                // Take a snapshot on the UI thread — use InvokeAsync to avoid blocking the UI
-                List<ViewModels.ClipboardItem> snapshot = null;
                 try
                 {
-                    if (System.Windows.Application.Current != null)
-                    {
-                        var op = System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                        {
-                            return items.ToList();
-                        });
-                        op.Wait(); // Wait on the threadpool thread, not the UI thread
-                        snapshot = op.Result;
-                    }
-                    else
-                    {
-                        snapshot = items.ToList();
-                    }
+                    var snapshot = items;
+                    // Enforce cap before saving
+                    if (snapshot.Count > MAX_HISTORY_ITEMS)
+                        snapshot = snapshot.Take(MAX_HISTORY_ITEMS).ToList();
+
+                    CompactNow(snapshot);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    return; // Collection was being modified, skip this save
+                    Logger.LogAction("HISTORY_SAVE_ERROR", $"Failed to save history: {ex.Message}");
                 }
+            }, null, 500, Timeout.Infinite);
 
-                // Enforce cap before saving
-                if (snapshot.Count > MAX_HISTORY_ITEMS)
-                    snapshot = snapshot.Take(MAX_HISTORY_ITEMS).ToList();
-
-                CompactNow(snapshot);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("HISTORY_SAVE_ERROR", $"Failed to save history: {ex.Message}");
-            }
+            var oldTimer = Interlocked.Exchange(ref _debounceTimer, newTimer);
+            oldTimer?.Dispose();
         }
 
         /// <summary>
