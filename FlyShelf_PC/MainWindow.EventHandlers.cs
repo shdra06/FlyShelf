@@ -327,10 +327,6 @@ namespace FlyShelf
         private void ApplySearchFilter(string query)
         {
             string queryClean = (query ?? "").Trim();
-            if (!string.IsNullOrWhiteSpace(queryClean))
-            {
-                _viewModel.LoadAllDeferredItems();
-            }
             var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
             if (view == null) return;
 

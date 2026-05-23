@@ -658,18 +658,6 @@ namespace FlyShelf
 
         private void ShelfListView_ScrollChanged(object sender, ScrollChangedEventArgs e)
         {
-            if (e.OriginalSource is ScrollViewer sv)
-            {
-                if (sv.ScrollableHeight > 0 && sv.VerticalOffset > 0)
-                {
-                    double threshold = sv.ScrollableHeight * 0.85;
-                    if (sv.VerticalOffset >= threshold && _viewModel.HasDeferredItems)
-                    {
-                        _ = _viewModel.LoadNextPageAsync();
-                    }
-                }
-            }
-
             if (e.VerticalChange == 0) return;
 
             var now = DateTime.UtcNow;
