@@ -1,4 +1,4 @@
-﻿using System.Windows.Controls;
+using System.Windows.Controls;
 using System.Windows.Input;
 
 namespace FlyShelf.Controls
@@ -26,21 +26,8 @@ namespace FlyShelf.Controls
         {
             if (_mainWindow != null)
             {
-                var point = PointToScreen(e.GetPosition(this));
-                bool isMode1 = false;
-                if (_mainWindow.DataContext is FlyShelf.ViewModels.FlyShelfViewModel vm && vm.CurrentMode == 1)
-                {
-                    isMode1 = true;
-                }
-
-                if (_mainWindow.IsVisible && isMode1)
-                {
-                    _mainWindow.Hide();
-                }
-                else
-                {
-                    _mainWindow.ShowNearPosition(point.X, point.Y, 1, false);
-                }
+                // Widget click toggles the Main Clipboard overlay (MainWindow in Medium Mode/Mode 1) at cursor
+                _mainWindow.ToggleMainClipboard();
             }
         }
     }

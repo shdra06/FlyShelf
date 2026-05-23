@@ -216,8 +216,13 @@
                     <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24" Foreground="#EF4444"/></ui:Button.Icon>
                 </ui:Button>
                 
-                <ui:Button Focusable="False" Appearance="Secondary" Style="{StaticResource ToolbarSyncButtonStyle}" Click="ToggleGlobalSync_Click" ToolTip="Toggle All Sync (LAN + Cloud)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
+                <ui:Button x:Name="SyncToolbarBtn" Focusable="False" Appearance="Secondary" Style="{StaticResource ToolbarSyncButtonStyle}" Click="ToggleGlobalSync_Click" ToolTip="Toggle All Sync (LAN + Cloud)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
                     <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowSync24" Filled="True"/></ui:Button.Icon>
+                </ui:Button>
+
+                <!-- Unpin toolbar button — hidden by default, replaces sync space when pinned items selected -->
+                <ui:Button x:Name="UnpinToolbarBtn" Focusable="False" Visibility="Collapsed" Click="UnpinSelectedBtn_Click" ToolTip="Unpin Selected Items" Margin="0,0,6,0" Padding="8,6" CornerRadius="8" Background="#30F59E0B" Foreground="#F59E0B" BorderBrush="#50F59E0B">
+                    <ui:Button.Icon><ui:SymbolIcon Symbol="PinOff24" Foreground="#F59E0B"/></ui:Button.Icon>
                 </ui:Button>
 
                 <!-- Clear Shelf -->
@@ -241,7 +246,7 @@
 
         <ListView Name="ShelfListView" Grid.Row="1" ItemsSource="{Binding DroppedItems}" Background="#01000000" BorderThickness="0" Margin="12,0,12,12"
                   Focusable="True" KeyboardNavigation.DirectionalNavigation="Contained"
-                  ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                  ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                   ScrollViewer.CanContentScroll="True"
                   VirtualizingStackPanel.IsVirtualizing="True"
                   VirtualizingStackPanel.VirtualizationMode="Recycling"
@@ -253,8 +258,7 @@
                   MouseDoubleClick="ShelfListView_MouseDoubleClick" SelectionChanged="ShelfListView_SelectionChanged"
                   HorizontalContentAlignment="Stretch"
                   AlternationCount="10"
-                  PreviewKeyDown="ShelfListView_KeyDown"
-                  PreviewMouseWheel="ShelfListView_PreviewMouseWheel">
+                  PreviewKeyDown="ShelfListView_KeyDown">
             <ListView.ItemContainerStyle>
                 <Style TargetType="ListViewItem">
                     <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
@@ -501,16 +505,9 @@
                                 <StackPanel.Resources>
                                     <Style x:Key="ActionPillStyle" TargetType="Border">
                                         <Setter Property="CornerRadius" Value="6" />
-                                        <!-- Translucent Premium Dark Acrylic (80% opacity dark slate grey) -->
-                                        <Setter Property="Background" Value="#CC1F1F23" />
-                                        <!-- Subtle white highlight on top border for glassmorphic edge definition -->
-                                        <Setter Property="BorderBrush" Value="#22FFFFFF" />
+                                        <Setter Property="Background" Value="{DynamicResource ActionPillBg}" />
+                                        <Setter Property="BorderBrush" Value="{DynamicResource ActionPillBorder}" />
                                         <Setter Property="BorderThickness" Value="1" />
-                                        <Setter Property="Effect">
-                                            <Setter.Value>
-                                                <DropShadowEffect BlurRadius="6" Color="#000000" Opacity="0.45" ShadowDepth="1.2" Direction="270" />
-                                            </Setter.Value>
-                                        </Setter>
                                     </Style>
                                 </StackPanel.Resources>
 
@@ -735,7 +732,29 @@
                                 </Grid>
                             </Border>
 
-                            <!-- u2550u2550u2550 Rotate Image u2014 round floating button, bottom-right of icon u2550u2550u2550 -->
+                            <!-- Image Placeholder — shown when Icon hasn't loaded yet for image items -->
+                            <Border Name="ImagePlaceholderBorder" Grid.Row="0" Grid.Column="0" Width="40" Height="40" Margin="0,0,12,0"
+                                    Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" CornerRadius="8">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <!-- Show only when Icon is null AND item is an Image -->
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                    <Condition Binding="{Binding IsImagePreview}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="Image" FontSize="9" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+
+                            <!-- ═══ Rotate Image — round floating button, bottom-right of icon ═══ -->
                             <Button Grid.Row="0" Grid.Column="0" VerticalAlignment="Bottom" HorizontalAlignment="Right"
                                     Margin="0,0,-6,10" Panel.ZIndex="8" Focusable="False"
                                     Tag="RotateImage" PreviewMouseLeftButtonDown="RotateImageSpecific_Click">
@@ -860,10 +879,8 @@
                                                     <!-- 26x26 container with interactive circular border -->
                                                     <Grid Width="26" Height="26" Background="Transparent">
                                                         <Border x:Name="CircleBorder" Width="22" Height="22" CornerRadius="11"
-                                                                Background="#CC202024" BorderBrush="#33FFFFFF" BorderThickness="1.5">
-                                                            <Border.Effect>
-                                                                <DropShadowEffect BlurRadius="6" Color="#000000" Opacity="0.45" ShadowDepth="1.2" Direction="270" />
-                                                            </Border.Effect>
+                                                                Background="{DynamicResource ChevronBg}" BorderBrush="{DynamicResource ChevronBorder}" BorderThickness="1.5">
+                                                            <!-- PERF: DropShadowEffect removed — was per-item software shader -->
                                                             <!-- Toggle Icon: Blue chevron down when collapsed, Red chevron up when expanded -->
                                                             <ui:SymbolIcon x:Name="ChevronIcon" Symbol="ChevronDown24" FontSize="13" Foreground="#3B82F6"
                                                                            HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0.5,0,0"/>
@@ -1146,27 +1163,119 @@
             </ListView.ItemTemplate>
         </ListView>
 
-        <!-- Floating Merge Selected PDFs Button -->
-        <ui:Button x:Name="MergeSelectedPdfsBtn" Grid.Row="1" Appearance="Primary" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24" Padding="16,10" Panel.ZIndex="50" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click">
+        <!-- ═══ Floating Multi-Action Bar — pill-shaped, frosted glass, Google-searchbar inspired ═══ -->
+        <!-- Priority: Merge PDF is shown first (left), Unpin second (right) -->
+        <Border Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,20" Panel.ZIndex="50"
+                CornerRadius="24" Padding="4" SnapsToDevicePixels="True">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Visibility" Value="Collapsed"/>
+                    <Style.Triggers>
+                        <DataTrigger Binding="{Binding Visibility, ElementName=MergeSelectedPdfsBtn}" Value="Visible">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                        <DataTrigger Binding="{Binding Visibility, ElementName=UnpinSelectedBtn}" Value="Visible">
+                            <Setter Property="Visibility" Value="Visible"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <Border.Background>
+                <SolidColorBrush Color="#D0181818"/>
+            </Border.Background>
+            <Border.BorderBrush>
+                <SolidColorBrush Color="#30FFFFFF"/>
+            </Border.BorderBrush>
+            <Border.BorderThickness>1</Border.BorderThickness>
+            <!-- PERF: DropShadowEffect removed — was software-rendered every frame -->
+            <Border.CacheMode>
+                <BitmapCache EnableClearType="True" RenderAtScale="1"/>
+            </Border.CacheMode>
             <StackPanel Orientation="Horizontal">
-                <ui:SymbolIcon Symbol="DocumentCopy24" Margin="0,0,8,0" />
-                <TextBlock x:Name="MergeSelectedPdfsText" Text="Merge 2 PDFs" FontWeight="SemiBold" FontSize="14"/>
-            </StackPanel>
-            <ui:Button.Effect>
-                <DropShadowEffect Color="Black" BlurRadius="15" Opacity="0.4" Direction="270" ShadowDepth="4" />
-            </ui:Button.Effect>
-        </ui:Button>
+                <!-- Merge PDF action (primary — always left, theme-aware accent pill) -->
+                <Button x:Name="MergeSelectedPdfsBtn" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" Cursor="Hand"
+                        Focusable="False" OverridesDefaultStyle="True" Content="Merge 2 PDFs">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="MergePillBg" CornerRadius="20" Padding="16,9" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="{DynamicResource FloatingMergeAccentBg}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource FloatingMergeAccentBorder}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource FloatingMergeAccentBgHover}"/>
+                                                <Setter Property="BorderBrush" Value="{DynamicResource FloatingMergeAccentBorderHover}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsPressed, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource FloatingMergeAccentBgPressed}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="DocumentCopy24" FontSize="15"
+                                                   Foreground="{DynamicResource FloatingMergeAccentIcon}" Margin="0,0,8,0"/>
+                                    <TextBlock Text="{TemplateBinding Content}" FontWeight="SemiBold" FontSize="13"
+                                               Foreground="{DynamicResource FloatingMergeAccentText}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
 
-        <!-- Floating Unpin Selected Button -->
-        <ui:Button x:Name="UnpinSelectedBtn" Grid.Row="1" Appearance="Caution" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,24" Padding="16,10" Panel.ZIndex="50" Visibility="Collapsed" Click="UnpinSelectedBtn_Click">
-            <StackPanel Orientation="Horizontal">
-                <ui:SymbolIcon Symbol="PinOff24" Margin="0,0,8,0" />
-                <TextBlock x:Name="UnpinSelectedText" Text="Unpin Selected" FontWeight="SemiBold" FontSize="14"/>
+                <!-- Separator dot (only visible when both are shown) -->
+                <Ellipse Width="4" Height="4" Margin="8,0">
+                    <Ellipse.Style>
+                        <Style TargetType="Ellipse">
+                            <Setter Property="Fill" Value="#40FFFFFF"/>
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <MultiDataTrigger>
+                                    <MultiDataTrigger.Conditions>
+                                        <Condition Binding="{Binding Visibility, ElementName=MergeSelectedPdfsBtn}" Value="Visible"/>
+                                        <Condition Binding="{Binding Visibility, ElementName=UnpinSelectedBtn}" Value="Visible"/>
+                                    </MultiDataTrigger.Conditions>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </MultiDataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Ellipse.Style>
+                </Ellipse>
+
+                <!-- Unpin action (secondary — right side, theme-aware amber pill) -->
+                <Button x:Name="UnpinSelectedBtn" Visibility="Collapsed" Click="UnpinSelectedBtn_Click" Cursor="Hand"
+                        Focusable="False" OverridesDefaultStyle="True" Content="Unpin Selected">
+                    <Button.Template>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="UnpinPillBg" CornerRadius="20" Padding="14,9" BorderThickness="1">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="{DynamicResource FloatingUnpinBg}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource FloatingUnpinBorder}"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource FloatingUnpinBgHover}"/>
+                                                <Setter Property="BorderBrush" Value="{DynamicResource FloatingUnpinBorderHover}"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsPressed, RelativeSource={RelativeSource AncestorType=Button}}" Value="True">
+                                                <Setter Property="Background" Value="{DynamicResource FloatingUnpinBgPressed}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="PinOff24" FontSize="14"
+                                                   Foreground="{DynamicResource FloatingUnpinIcon}" Margin="0,0,7,0"/>
+                                    <TextBlock Text="{TemplateBinding Content}" FontWeight="Medium" FontSize="12.5"
+                                               Foreground="{DynamicResource FloatingUnpinText}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </ControlTemplate>
+                    </Button.Template>
+                </Button>
             </StackPanel>
-            <ui:Button.Effect>
-                <DropShadowEffect Color="Black" BlurRadius="15" Opacity="0.4" Direction="270" ShadowDepth="4" />
-            </ui:Button.Effect>
-        </ui:Button>
+        </Border>
 
         <!-- Empty State -->
         <StackPanel Name="EmptyStatePanel" Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center">
@@ -1190,7 +1299,7 @@
                 <Border.Triggers>
                     <EventTrigger RoutedEvent="Loaded">
                         <BeginStoryboard>
-                            <Storyboard RepeatBehavior="Forever">
+                            <Storyboard RepeatBehavior="Forever" Storyboard.DesiredFrameRate="15">
                                 <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" From="0" To="-6" Duration="0:0:1.5" AutoReverse="True">
                                     <DoubleAnimation.EasingFunction>
                                         <SineEase EasingMode="EaseInOut" />

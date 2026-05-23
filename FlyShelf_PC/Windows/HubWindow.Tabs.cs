@@ -419,18 +419,23 @@ namespace FlyShelf.Windows
                 // Mode 1: Mica Blur — pure system blur, no wallpaper, no mascot
                 ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "Mica Blur", Tag = "__mica__" });
 
-                // Mode 2: FlyShelf — desktop wallpaper on clipboard, Mica blur on hub
+                // Mode 2: Glass — glassmorphism UI (frosted buttons, translucent cards)
+                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "Glass", Tag = "__glass__" });
+
+                // Mode 3: FlyShelf — desktop wallpaper on clipboard, Mica blur on hub
                 ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "FlyShelf", Tag = "__desktop__" });
 
-                // Mode 3+: Custom mascot themes (skip skeleton templates with no sprite files)
+                // Mode 4+: Custom mascot themes (skip skeleton templates with no sprite files)
                 var themes = ThemeManager.Instance.GetInstalledThemes();
                 int selectedIdx = 0;
                 string savedMode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
                 string activeTheme = SettingsManager.Current.ActiveThemeName ?? "";
 
                 // Determine which item should be pre-selected
-                if (savedMode == "desktop")
+                if (savedMode == "glass")
                     selectedIdx = 1;
+                else if (savedMode == "desktop")
+                    selectedIdx = 2;
 
                 foreach (var theme in themes)
                 {
@@ -460,11 +465,22 @@ namespace FlyShelf.Windows
             {
                 string tag = selected.Tag?.ToString() ?? "__mica__";
 
+                // Always clean up Glass theme first when switching away
+                if (tag != "__glass__")
+                    ThemeManager.Instance.RemoveGlassTheme();
+
                 if (tag == "__mica__")
                 {
                     // Mica Blur mode — pure system blur, no wallpaper, no mascot
                     SettingsManager.Current.ThemeDisplayMode = "mica";
                     ThemeManager.Instance.SetActiveTheme(null);
+                }
+                else if (tag == "__glass__")
+                {
+                    // Glass mode — glassmorphism UI (frosted buttons, translucent cards)
+                    SettingsManager.Current.ThemeDisplayMode = "glass";
+                    ThemeManager.Instance.SetActiveTheme(null);
+                    ThemeManager.Instance.ApplyGlassTheme();
                 }
                 else if (tag == "__desktop__")
                 {

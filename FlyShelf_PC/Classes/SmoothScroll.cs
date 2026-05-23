@@ -1,98 +1,92 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 
 namespace FlyShelf.Classes
 {
     /// <summary>
-    /// Natural-feeling smooth scroll for WPF, modeled after Windows 11 native clipboard.
-    /// Uses frame-time-based physics with exponential ease-out deceleration.
-    ///
-    /// Two profiles:
-    ///   LIST  — clipboard item lists (moderate speed, tight feel)
-    ///   PAGE  — settings, diagnostics (faster, more page-like)
+    /// Custom configuration profile for the smooth scroll engine.
+    /// </summary>
+    public class ScrollProfile
+    {
+        public double MouseEase { get; set; } = 0.18;
+        public double MouseScrollStep { get; set; } = 96.0;
+        public double TouchpadEase { get; set; } = 1.0; // 1.0 = direct response (zero artificial LERP lag)
+        public double TouchpadMultiplier { get; set; } = 0.85;
+    }
+
+    /// <summary>
+    /// Premium target-based smooth scroll engine for WPF.
+    /// Modeled after Windows 11 / Modern Web (Chrome, Edge) native scroll behaviors.
+    /// Supports modular scrolling profiles for Clipboard vs PC App windows.
     /// </summary>
     public static class SmoothScroll
     {
-        // ═══ LIST profile (clipboard / flyshelf — buttery smooth, responsive) ═══
-        private const double ListFriction        = 0.92;   // per-frame decay (higher = longer glide, more premium)
-        private const double ListMaxVelocity     = 90;     // px/frame cap (higher = faster swipes feel responsive)
-        private const double ListTouchpadMul     = 0.55;   // touchpad impulse scale (was 0.35 — too weak)
-        private const double ListMouseMul        = 0.65;   // mouse wheel impulse scale (was 0.45 — too weak)
-        private const double ListMinImpulse      = 0.3;    // minimum impulse so gentle scrolls register
+        // ═══ Global scrolling profiles ═══
+        
+        /// <summary>
+        /// Highly responsive, tactile profile designed for the floating Clipboard Overlay (snappy glides).
+        /// </summary>
+        public static readonly ScrollProfile ClipboardProfile = new()
+        {
+            MouseEase = 0.20,
+            MouseScrollStep = 90.0,
+            TouchpadEase = 1.0,           // Direct trackpad input
+            TouchpadMultiplier = 0.85
+        };
 
-        // ═══ PAGE profile (settings, diagnostics — bigger sweeps, long glide) ═══
-        private const double PageFriction        = 0.94;   // higher friction = longer momentum glide
-        private const double PageMaxVelocity     = 130;    // higher cap for big page scrolls
-        private const double PageTouchpadMul     = 0.70;   // touchpad impulse for pages
-        private const double PageMouseMul        = 0.85;   // mouse wheel impulse for pages (reduced friction feel)
-        private const double PageMinImpulse      = 0.5;    // minimum impulse
+        /// <summary>
+        /// Silky smooth, modern web-like sweeping glide designed for the PC Dashboard application.
+        /// </summary>
+        public static readonly ScrollProfile PCAppProfile = new()
+        {
+            MouseEase = 0.11,             // Luxurious long glide
+            MouseScrollStep = 120.0,      // Deeper notch steps for tall settings/logs pages
+            TouchpadEase = 1.0,           // Direct trackpad input
+            TouchpadMultiplier = 0.85
+        };
 
-        // ═══ Shared constants ═══
-        private const double MinVelocity         = 0.05;   // below this → stop (lower = smoother final stop)
-        private const double DeltaCapTouchpad    = 80;     // clamp raw touchpad delta (raised for precision trackpads)
-        private const double DeltaCapMouse       = 280;    // clamp raw mouse delta
-        private const double DirectionBreakMul   = 0.2;    // velocity retained on direction reversal (lower = snappier reversal)
-        private const double TargetFrameMs       = 16.667; // 60 fps baseline
-
-        private enum Profile { List, Page }
+        private static readonly ScrollProfile _defaultProfile = new();
+        private static readonly Dictionary<Window, ScrollProfile> _windowProfiles = new();
+        private static readonly Dictionary<ScrollViewer, ScrollState> _states = new();
+        
+        private static bool _renderingAttached;
+        private static DispatcherTimer? _cleanupTimer;
+        private const double TargetFrameMs = 16.667; // 60 FPS standard baseline
 
         private class ScrollState
         {
-            public double Velocity;
+            public double TargetOffset;
             public bool IsAnimating;
-            public Profile Mode;
-            public long LastFrameTick;
             public bool IsTouchpad;
-        }
-
-        private static readonly Dictionary<ScrollViewer, ScrollState> _states = new();
-        private static readonly HashSet<ScrollViewer> _listScrollViewers = new();
-        private static bool _renderingAttached;
-
-        /// <summary>
-        /// Attach LIST profile to a specific ListView/ItemsControl.
-        /// </summary>
-        public static void AttachList(FrameworkElement element)
-        {
-            element.PreviewMouseWheel += OnListPreviewMouseWheel;
+            public long LastFrameTick;
+            public ScrollProfile Profile = null!;
         }
 
         /// <summary>
-        /// Attach PAGE profile to ALL ScrollViewers in a Window (skips LIST ones).
+        /// Hook unified window-wide scroll logic at the Window level with a custom profile.
         /// </summary>
-        public static void AttachToWindow(Window window)
+        public static void AttachToWindow(Window window, ScrollProfile? profile = null)
         {
+            window.PreviewMouseWheel -= OnWindowPreviewMouseWheel;
             window.PreviewMouseWheel += OnWindowPreviewMouseWheel;
-        }
 
-        public static void Detach(FrameworkElement element)
-        {
-            element.PreviewMouseWheel -= OnListPreviewMouseWheel;
-            
-            ScrollViewer? sv = null;
-            if (element is ScrollViewer s)
-                sv = s;
-            else if (element is ItemsControl ic)
-                sv = FindVisualChild<ScrollViewer>(ic);
-
-            if (sv != null)
-            {
-                _states.Remove(sv);
-                _listScrollViewers.Remove(sv);
-            }
+            _windowProfiles[window] = profile ?? _defaultProfile;
         }
 
         /// <summary>
-        /// Detach PAGE profile and clear references to all ScrollViewers inside the Window.
+        /// Unhook and clean up references.
         /// </summary>
         public static void DetachFromWindow(Window window)
         {
             window.PreviewMouseWheel -= OnWindowPreviewMouseWheel;
-            
+            _windowProfiles.Remove(window);
+
             var toRemove = new List<ScrollViewer>();
             foreach (var sv in _states.Keys)
             {
@@ -105,8 +99,201 @@ namespace FlyShelf.Classes
             foreach (var sv in toRemove)
             {
                 _states.Remove(sv);
-                _listScrollViewers.Remove(sv);
             }
+
+            if (_states.Count == 0 && _renderingAttached)
+            {
+                _cleanupTimer?.Stop();
+                CompositionTarget.Rendering -= OnRendering;
+                _renderingAttached = false;
+            }
+        }
+
+        private static void OnWindowPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (e.Handled) return;
+
+            Window? window = sender as Window;
+            if (window == null) return;
+
+            if (!_windowProfiles.TryGetValue(window, out var profile))
+            {
+                profile = _defaultProfile;
+            }
+
+            DependencyObject? source = e.OriginalSource as DependencyObject;
+            ScrollViewer? sv = FindScrollableScrollViewerAncestor(source);
+
+            if (sv == null) return;
+
+            // Bubbling Boundary check: If we are already at the top/bottom physical limits,
+            // do not handle the event. Let it bubble naturally to parent ScrollViewers.
+            bool atTopBoundary = sv.VerticalOffset <= 0 && e.Delta > 0;
+            bool atBottomBoundary = sv.VerticalOffset >= sv.ScrollableHeight && e.Delta < 0;
+
+            if (atTopBoundary || atBottomBoundary)
+            {
+                return;
+            }
+
+            // Intercept and handle scroll
+            e.Handled = true;
+            ApplyScroll(sv, e.Delta, profile);
+        }
+
+        private static void ApplyScroll(ScrollViewer sv, int delta, ScrollProfile profile)
+        {
+            // Cancel cleanup timer since there is active scroll input
+            if (_cleanupTimer != null && _cleanupTimer.IsEnabled)
+            {
+                _cleanupTimer.Stop();
+            }
+
+            // Distinguish Precision Touchpad (high frequency, small deltas) vs Mouse Wheel (discrete 120s)
+            bool isTouchpad = (delta % 120 != 0) || (Math.Abs(delta) < 120);
+
+            // Direct touchpad follow logic (if touchpad ease >= 1.0, bypass LERP loop for 1:1 tactile follow)
+            if (isTouchpad && profile.TouchpadEase >= 1.0)
+            {
+                double scrollAmount = -delta * profile.TouchpadMultiplier;
+                double nextOffset = Math.Clamp(sv.VerticalOffset + scrollAmount, 0, sv.ScrollableHeight);
+                sv.ScrollToVerticalOffset(nextOffset);
+
+                // If currently animating via mouse wheel, update the target to stay in sync
+                if (_states.TryGetValue(sv, out var activeState) && activeState.IsAnimating)
+                {
+                    activeState.TargetOffset = nextOffset;
+                }
+                return;
+            }
+
+            if (!_states.TryGetValue(sv, out var state))
+            {
+                state = new ScrollState
+                {
+                    TargetOffset = sv.VerticalOffset
+                };
+                _states[sv] = state;
+            }
+
+            state.IsTouchpad = isTouchpad;
+            state.Profile = profile;
+
+            if (state.IsTouchpad)
+            {
+                double scrollAmount = -delta * profile.TouchpadMultiplier;
+                state.TargetOffset += scrollAmount;
+            }
+            else
+            {
+                double scrollAmount = -(delta / 120.0) * profile.MouseScrollStep;
+                
+                // Snap starting target if starting a fresh scroll or reversing direction
+                if (!state.IsAnimating || Math.Sign(scrollAmount) != Math.Sign(state.TargetOffset - sv.VerticalOffset))
+                {
+                    state.TargetOffset = sv.VerticalOffset;
+                }
+                
+                state.TargetOffset += scrollAmount;
+            }
+
+            state.TargetOffset = Math.Clamp(state.TargetOffset, 0, sv.ScrollableHeight);
+
+            if (!state.IsAnimating)
+            {
+                state.IsAnimating = true;
+                state.LastFrameTick = Environment.TickCount64;
+            }
+
+            if (!_renderingAttached)
+            {
+                CompositionTarget.Rendering += OnRendering;
+                _renderingAttached = true;
+            }
+        }
+
+        private static void OnRendering(object? sender, EventArgs e)
+        {
+            bool anyAnimating = false;
+            long now = Environment.TickCount64;
+
+            var scrollKeys = _states.Keys.ToList();
+            var completed = new List<ScrollViewer>();
+
+            foreach (var sv in scrollKeys)
+            {
+                if (!_states.TryGetValue(sv, out var state)) continue;
+
+                if (!state.IsAnimating)
+                {
+                    completed.Add(sv);
+                    continue;
+                }
+
+                long elapsed = now - state.LastFrameTick;
+                if (elapsed <= 0) elapsed = 1;
+                double timeScale = elapsed / TargetFrameMs;
+                
+                timeScale = Math.Min(timeScale, 4.0);
+                state.LastFrameTick = now;
+
+                double currentOffset = sv.VerticalOffset;
+                double diff = state.TargetOffset - currentOffset;
+
+                if (Math.Abs(diff) < 0.01)
+                {
+                    sv.ScrollToVerticalOffset(state.TargetOffset);
+                    state.IsAnimating = false;
+                    completed.Add(sv);
+                }
+                else
+                {
+                    double ease = state.IsTouchpad 
+                        ? state.Profile.TouchpadEase 
+                        : state.Profile.MouseEase;
+
+                    double factor = 1.0 - Math.Pow(1.0 - ease, timeScale);
+                    double step = diff * factor;
+                    double nextOffset = currentOffset + step;
+                    
+                    nextOffset = Math.Clamp(nextOffset, 0, sv.ScrollableHeight);
+                    sv.ScrollToVerticalOffset(nextOffset);
+
+                    if (nextOffset <= 0 || nextOffset >= sv.ScrollableHeight)
+                    {
+                        state.IsAnimating = false;
+                        completed.Add(sv);
+                    }
+                    else
+                    {
+                        anyAnimating = true;
+                    }
+                }
+            }
+
+            foreach (var sv in completed)
+            {
+                _states.Remove(sv);
+            }
+
+            if (!anyAnimating)
+            {
+                CompositionTarget.Rendering -= OnRendering;
+                _renderingAttached = false;
+            }
+        }
+
+        private static ScrollViewer? FindScrollableScrollViewerAncestor(DependencyObject? element)
+        {
+            while (element != null)
+            {
+                if (element is ScrollViewer sv && sv.ScrollableHeight > 0)
+                {
+                    return sv;
+                }
+                element = VisualTreeHelper.GetParent(element);
+            }
+            return null;
         }
 
         private static bool IsDescendantOf(DependencyObject child, DependencyObject parent)
@@ -118,194 +305,6 @@ namespace FlyShelf.Classes
                 current = VisualTreeHelper.GetParent(current);
             }
             return false;
-        }
-
-        // ═══ LIST handler ═══
-        private static void OnListPreviewMouseWheel(object sender, MouseWheelEventArgs e)
-        {
-            ScrollViewer? sv = null;
-            if (sender is ScrollViewer s)
-                sv = s;
-            else if (sender is ItemsControl ic)
-                sv = FindVisualChild<ScrollViewer>(ic);
-
-            if (sv == null) return;
-
-            _listScrollViewers.Add(sv);
-            ApplyImpulse(sv, e, Profile.List);
-        }
-
-        // ═══ Window-level PAGE handler ═══
-        private static void OnWindowPreviewMouseWheel(object sender, MouseWheelEventArgs e)
-        {
-            DependencyObject? source = e.OriginalSource as DependencyObject;
-            ScrollViewer? sv = FindScrollViewerAncestor(source);
-
-            if (sv == null) return;
-            if (sv.ScrollableHeight <= 0) return;
-            if (_listScrollViewers.Contains(sv)) return;
-
-            ApplyImpulse(sv, e, Profile.Page);
-        }
-
-        private static void ApplyImpulse(ScrollViewer sv, MouseWheelEventArgs e, Profile mode)
-        {
-            e.Handled = true;
-
-            if (!_states.TryGetValue(sv, out var state))
-            {
-                state = new ScrollState { Mode = mode };
-                _states[sv] = state;
-            }
-
-            double rawDelta = e.Delta;
-
-            // Touchpad detection: captured when delta is not a multiple of 120, or is very small
-            state.IsTouchpad = (e.Delta % 120 != 0) || (Math.Abs(rawDelta) < 120);
-
-            double touchMul   = mode == Profile.List ? ListTouchpadMul   : PageTouchpadMul;
-            double mouseMul   = mode == Profile.List ? ListMouseMul      : PageMouseMul;
-            double minImpulse = mode == Profile.List ? ListMinImpulse    : PageMinImpulse;
-            double maxVel     = mode == Profile.List ? ListMaxVelocity   : PageMaxVelocity;
-
-            double impulse;
-            if (state.IsTouchpad)
-            {
-                // Progressive velocity scaling for buttery smooth 144Hz-feel touchpad momentum
-                double capped = Math.Sign(rawDelta) * Math.Min(Math.Abs(rawDelta), DeltaCapTouchpad);
-                double speedFactor = Math.Min(Math.Abs(rawDelta) / 40.0, 1.0);
-                double progressiveMul = 0.30 + (0.45 * speedFactor); // ranges 0.30 (gentle drag) to 0.75 (fast swipe)
-                impulse = capped * progressiveMul;
-                
-                // Guarantee minimum so very gentle scrolls still register
-                if (Math.Abs(impulse) < minImpulse && impulse != 0)
-                    impulse = Math.Sign(impulse) * minImpulse;
-            }
-            else
-            {
-                double capped = Math.Sign(rawDelta) * Math.Min(Math.Abs(rawDelta), DeltaCapMouse);
-                impulse = capped * mouseMul;
-            }
-
-            // Direction reversal: if scrolling the opposite way, partially brake first
-            // This prevents the "bouncy" feel when quickly changing direction
-            if (state.Velocity != 0 && Math.Sign(state.Velocity) != Math.Sign(-impulse))
-            {
-                state.Velocity *= DirectionBreakMul;
-            }
-
-            state.Velocity -= impulse;
-            state.Velocity = Math.Clamp(state.Velocity, -maxVel, maxVel);
-
-            if (!state.IsAnimating)
-            {
-                state.IsAnimating = true;
-                state.LastFrameTick = Environment.TickCount64;
-                EnsureRenderingAttached();
-            }
-        }
-
-        private static void EnsureRenderingAttached()
-        {
-            if (!_renderingAttached)
-            {
-                CompositionTarget.Rendering += OnRendering;
-                _renderingAttached = true;
-            }
-        }
-
-        private static void OnRendering(object? sender, EventArgs e)
-        {
-            bool anyActive = false;
-            long now = Environment.TickCount64;
-
-            foreach (var kvp in _states)
-            {
-                var sv = kvp.Key;
-                var state = kvp.Value;
-
-                if (!state.IsAnimating) continue;
-
-                // Frame-time compensation: normalize velocity against 60fps baseline
-                // If a frame takes 32ms instead of 16ms, move proportionally more
-                long elapsed = now - state.LastFrameTick;
-                if (elapsed <= 0) elapsed = 1;
-                double timeScale = elapsed / TargetFrameMs;
-                // Clamp time scale to avoid huge jumps on lag spikes (e.g., window resize)
-                timeScale = Math.Min(timeScale, 3.0);
-                state.LastFrameTick = now;
-
-                // Apply velocity with frame-time compensation
-                double displacement = state.Velocity * timeScale;
-                double newOffset = sv.VerticalOffset + displacement;
-                newOffset = Math.Clamp(newOffset, 0, sv.ScrollableHeight);
-                sv.ScrollToVerticalOffset(newOffset);
-
-                // Exponential deceleration (friction applied per frame, scaled by time)
-                double friction = state.IsTouchpad 
-                    ? 0.72 // responsive trackpad momentum decay to avoid runway scrolling
-                    : (state.Mode == Profile.List ? ListFriction : PageFriction);
-                // Apply friction proportional to elapsed time:
-                // For 1 frame (16.67ms), apply friction once. For 2 frames, apply twice, etc.
-                state.Velocity *= Math.Pow(friction, timeScale);
-
-                // Stop if at boundary or velocity negligible
-                bool atBound = (newOffset <= 0 && state.Velocity < 0) ||
-                               (newOffset >= sv.ScrollableHeight && state.Velocity > 0);
-                if (Math.Abs(state.Velocity) < MinVelocity || atBound)
-                {
-                    state.Velocity = 0;
-                    state.IsAnimating = false;
-                }
-                else
-                {
-                    anyActive = true;
-                }
-            }
-
-            // Purge non-animating ScrollViewers from states to prevent static reference leaks
-            var toRemove = new List<ScrollViewer>();
-            foreach (var kvp in _states)
-            {
-                if (!kvp.Value.IsAnimating)
-                {
-                    toRemove.Add(kvp.Key);
-                }
-            }
-            foreach (var sv in toRemove)
-            {
-                _states.Remove(sv);
-                _listScrollViewers.Remove(sv);
-            }
-
-            if (!anyActive)
-            {
-                CompositionTarget.Rendering -= OnRendering;
-                _renderingAttached = false;
-            }
-        }
-
-        private static ScrollViewer? FindScrollViewerAncestor(DependencyObject? element)
-        {
-            while (element != null)
-            {
-                if (element is ScrollViewer sv)
-                    return sv;
-                element = VisualTreeHelper.GetParent(element);
-            }
-            return null;
-        }
-
-        private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject
-        {
-            for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
-            {
-                var child = VisualTreeHelper.GetChild(parent, i);
-                if (child is T found) return found;
-                var result = FindVisualChild<T>(child);
-                if (result != null) return result;
-            }
-            return null;
         }
     }
 }

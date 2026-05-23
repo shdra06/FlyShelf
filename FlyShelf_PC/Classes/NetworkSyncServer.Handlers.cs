@@ -76,10 +76,13 @@ namespace FlyShelf.Classes
                     string deviceId = SettingsManager.Current.DeviceId ?? "PC";
                     var payload = _viewModel.DroppedItems
                         .Where(x => x.Extension != "MOBILE") // Don't echo Mobile items back
-                        .Take(15).Select(x => new
+                        .Take(15).Select(x => {
+                        string contentKey = x.RawContent ?? x.FileName ?? x.FilePath ?? "";
+                        int stableHash = contentKey.GetHashCode(StringComparison.Ordinal);
+                        return new
                     {
-                        id = x.GetHashCode().ToString() + "_" + x.DateCopied.Ticks.ToString(),
-                        EventId = $"{deviceId}_{((DateTimeOffset)x.DateCopied).ToUnixTimeMilliseconds()}_{x.GetHashCode():X4}",
+                        id = stableHash.ToString("X8") + "_" + x.DateCopied.Ticks.ToString(),
+                        EventId = $"{deviceId}_{((DateTimeOffset)x.DateCopied).ToUnixTimeMilliseconds()}_{stableHash:X8}",
                         Title = string.IsNullOrEmpty(x.FileName) ? (x.RawContent?.Length > 20 ? x.RawContent.Substring(0, 20) + "..." : x.RawContent) : x.FileName,
                         Type = x.ItemType.ToString(),
                         PreviewUrl = (x.ItemType == ClipboardItemType.Image || x.ItemType == ClipboardItemType.QRCode) ? (!string.IsNullOrEmpty(x.FilePath) ? $"/download?path={Uri.EscapeDataString(x.FilePath)}" : (x.RawContent ?? "")) : "",
@@ -90,15 +93,15 @@ namespace FlyShelf.Classes
                         Timestamp = ((DateTimeOffset)x.DateCopied).ToUnixTimeMilliseconds(),
                         SourceDeviceName = x.Extension == "MOBILE" ? "Mobile" : (SettingsManager.Current.DeviceName ?? Environment.MachineName),
                         SourceDeviceType = x.Extension == "MOBILE" ? "Mobile" : "PC"
+                    };
                     })
                     // Sort by freshness â€” bumped items get DateCopied = Now, so they appear first
                     .OrderByDescending(x => x.Timestamp)
                     .ToList();
 
-                    // Filter out encrypted/Base64 blobs that echo back from mobile
                     payload.RemoveAll(x => {
                         var raw = x.Raw ?? x.Title ?? "";
-                        return raw.Length > 30 && !raw.Contains(' ') && System.Text.RegularExpressions.Regex.IsMatch(raw, @"^[A-Za-z0-9+/=\r\n]+$");
+                        return raw.Length > 30 && !raw.Contains(' ') && _rxBase64.IsMatch(raw);
                     });
 
                     string json = JsonSerializer.Serialize(payload);
@@ -112,7 +115,7 @@ namespace FlyShelf.Classes
                 try { res.OutputStream.Write(_cachedSyncJson, 0, _cachedSyncJson.Length); } catch { }
                 res.Close();
             }
-            catch { try { res.StatusCode = 500; } catch { } try { res.Close(); } catch { } }
+            catch (Exception ex) { Logger.LogAction("SYNC_SERVE", $"ServeClipboardData failed: {ex.Message}"); try { res.StatusCode = 500; } catch { } try { res.Close(); } catch { } }
         }
 
         private async Task HandleTextUpload(HttpListenerRequest req, HttpListenerResponse res)
@@ -182,7 +185,7 @@ namespace FlyShelf.Classes
                 bool isPath = false;
                 try
                 {
-                    if (System.Text.RegularExpressions.Regex.IsMatch(possiblePath, @"^[a-zA-Z]:[\\/]") || possiblePath.StartsWith("\\\\"))
+                    if (_rxWinPath.IsMatch(possiblePath) || possiblePath.StartsWith("\\\\"))
                     {
                         isPath = true;
                     }
@@ -544,7 +547,7 @@ namespace FlyShelf.Classes
                             _viewModel.InsertWithDedup(clip);
                             if (wasEmpty) _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
                         }
-                        catch { }
+                        catch (Exception ex) { Logger.LogAction("ARCHIVE", $"Clipboard set failed: {ex.Message}"); }
                     });
                 }
                 
@@ -661,7 +664,7 @@ namespace FlyShelf.Classes
                                 });
                             }
                         }
-                        catch { }
+                        catch (Exception ex) { Logger.LogAction("RELAY", $"Firebase response parse failed: {ex.Message}"); }
                     }
                 }
 

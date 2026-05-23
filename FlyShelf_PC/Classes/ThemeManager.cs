@@ -376,6 +376,84 @@ namespace FlyShelf.Classes
         }
 
         // ═══════════════════════════════════════════════════════════════
+        // GLASS UI THEME — Dynamic ResourceDictionary injection
+        // Separate from mascot sprite themes; controls button/card styles.
+        // ═══════════════════════════════════════════════════════════════
+
+        private const string GlassThemeSource = "pack://application:,,,/Resources/Styles/GlassTheme.xaml";
+
+        /// <summary>
+        /// Returns true if the Glass UI theme ResourceDictionary is currently loaded.
+        /// </summary>
+        public bool IsGlassThemeActive
+        {
+            get
+            {
+                var app = System.Windows.Application.Current;
+                if (app == null) return false;
+                foreach (var d in app.Resources.MergedDictionaries)
+                {
+                    if (d.Source != null && d.Source.OriginalString == GlassThemeSource)
+                        return true;
+                }
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Merges the GlassTheme.xaml ResourceDictionary into Application.Resources.
+        /// Safe to call multiple times — skips if already loaded.
+        /// </summary>
+        public void ApplyGlassTheme()
+        {
+            try
+            {
+                if (IsGlassThemeActive) return;
+                var dict = new System.Windows.ResourceDictionary
+                {
+                    Source = new Uri(GlassThemeSource, UriKind.Absolute)
+                };
+                System.Windows.Application.Current?.Resources.MergedDictionaries.Add(dict);
+                Logger.LogAction("THEME", "Glass UI theme applied");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("THEME", $"Failed to apply Glass theme: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Removes the GlassTheme.xaml ResourceDictionary from Application.Resources.
+        /// Safe to call even if not loaded.
+        /// </summary>
+        public void RemoveGlassTheme()
+        {
+            try
+            {
+                var app = System.Windows.Application.Current;
+                if (app == null) return;
+                System.Windows.ResourceDictionary? toRemove = null;
+                foreach (var d in app.Resources.MergedDictionaries)
+                {
+                    if (d.Source != null && d.Source.OriginalString == GlassThemeSource)
+                    {
+                        toRemove = d;
+                        break;
+                    }
+                }
+                if (toRemove != null)
+                {
+                    app.Resources.MergedDictionaries.Remove(toRemove);
+                    Logger.LogAction("THEME", "Glass UI theme removed");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("THEME", $"Failed to remove Glass theme: {ex.Message}");
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
         // INTERNAL: FileSystemWatcher for hot-reload
         // ═══════════════════════════════════════════════════════════════
 

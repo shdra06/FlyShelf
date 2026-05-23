@@ -227,7 +227,7 @@ namespace FlyShelf.Classes
                             Logger.LogAction("PURGE", $"Deleted MY stale file entry: {title} (dead URL: {deadUrl.Substring(0, Math.Min(40, deadUrl.Length))}...)");
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { Logger.LogAction("PURGE", $"Failed to process entry during purge: {ex.Message}"); }
                 }
 
                 if (purged > 0)
@@ -249,7 +249,7 @@ namespace FlyShelf.Classes
                 string deleteUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryKey}.json"));
                 await _client.DeleteAsync(deleteUrl);
             }
-            catch { }
+            catch (Exception ex) { Logger.LogAction("FIREBASE", $"DeleteFirebaseEntry failed: {ex.Message}"); }
         }
 
         /// <summary>
@@ -301,7 +301,7 @@ namespace FlyShelf.Classes
                     await _client.PutAsync(statusUrl, new StringContent(statusJson, Encoding.UTF8, "application/json"));
                     Logger.LogAction("SYNC_STATUS", $"Signaled DOWNLOADED: {entryId}");
                 }
-                catch { }
+                catch (Exception ex) { Logger.LogAction("SYNC_STATUS", $"Download status signal failed: {ex.Message}"); }
 
                 // Step 2: Read the full entry to check if all targets have downloaded
                 string entryUrl = (await AuthUrl($"clipboard/{pairingKey}/{entryId}.json"));
@@ -373,7 +373,7 @@ namespace FlyShelf.Classes
                             }
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { Logger.LogAction("SYNC_TRACK", $"Offline device check failed: {ex.Message}"); }
                 }
 
                 // Step 4: If all target devices have downloaded (or are offline), delete entry

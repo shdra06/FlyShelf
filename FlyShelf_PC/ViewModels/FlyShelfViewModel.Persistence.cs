@@ -585,11 +585,11 @@ namespace FlyShelf.ViewModels
         }
 
         private const int MAX_UNPINNED_ITEMS = 500;
-        private const int WARNING_THRESHOLD = 100;
+        private const int WARNING_THRESHOLD = 150;
 
         /// <summary>
         /// Prunes oldest unpinned items beyond the cap to prevent unbounded memory growth.
-        /// Warning toast at 100 items, hard cap at 500.
+        /// Warning toast at 150 items, hard cap at 500.
         /// </summary>
         public void PruneOldItems()
         {

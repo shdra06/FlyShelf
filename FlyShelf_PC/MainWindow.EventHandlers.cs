@@ -106,11 +106,6 @@ namespace FlyShelf
                     Classes.SettingsManager.Current.MiniFormWidth = (int)e.NewSize.Width;
                     Classes.SettingsManager.Current.MiniFormHeight = (int)e.NewSize.Height;
                 }
-                else if (_viewModel.CurrentMode == 1)
-                {
-                    Classes.SettingsManager.Current.MediumFormWidth = (int)e.NewSize.Width;
-                    Classes.SettingsManager.Current.MediumFormHeight = (int)e.NewSize.Height;
-                }
                 // Mode 2 (Full) is always screen-relative, no persistence needed
             }
         }
@@ -468,19 +463,17 @@ namespace FlyShelf
                     await System.Threading.Tasks.Task.Run(() =>
                     {
                         byte[] fileBytes = System.IO.File.ReadAllBytes(filePath);
-                        System.Windows.Media.Imaging.BitmapImage original = null;
-                        Dispatcher.Invoke(() =>
+                        // PERF: BitmapImage with CacheOption.OnLoad + Freeze() is thread-safe
+                        // — no need to marshal to UI thread via Dispatcher.Invoke
+                        var original = new System.Windows.Media.Imaging.BitmapImage();
+                        using (var ms = new System.IO.MemoryStream(fileBytes))
                         {
-                            original = new System.Windows.Media.Imaging.BitmapImage();
-                            using (var ms = new System.IO.MemoryStream(fileBytes))
-                            {
-                                original.BeginInit();
-                                original.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                                original.StreamSource = ms;
-                                original.EndInit();
-                                original.Freeze();
-                            }
-                        });
+                            original.BeginInit();
+                            original.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                            original.StreamSource = ms;
+                            original.EndInit();
+                            original.Freeze();
+                        }
 
                         var rotated = new System.Windows.Media.Imaging.TransformedBitmap(original, new System.Windows.Media.RotateTransform(90));
                         rotated.Freeze();
@@ -613,19 +606,6 @@ namespace FlyShelf
                 item.IsExpanded = !item.IsExpanded;
             }
             e.Handled = true;
-        }
-
-        private void ShelfListView_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-        {
-            e.Handled = true;
-
-            var scrollViewer = GetShelfScrollViewer();
-            if (scrollViewer == null) return;
-
-            double scrollAmount = -e.Delta / 120.0 * 48.0;
-            double targetOffset = scrollViewer.VerticalOffset + scrollAmount;
-            targetOffset = Math.Max(0, Math.Min(targetOffset, scrollViewer.ScrollableHeight));
-            scrollViewer.ScrollToVerticalOffset(targetOffset);
         }
 
 

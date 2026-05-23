@@ -297,7 +297,7 @@ namespace FlyShelf
             {
                 System.Threading.Tasks.Task.Delay(50).ContinueWith(_ =>
                 {
-                    Dispatcher.Invoke(() =>
+                    Dispatcher.InvokeAsync(() =>
                     {
                         if (new WindowInteropHelper(this).Handle != IntPtr.Zero)
                         {
@@ -318,18 +318,15 @@ namespace FlyShelf
                 Classes.Logger.LogAction("WIDGET_FAIL", $"Failed to create taskbar widget: {ex.Message}");
             }
 
-            // Attach LIST-mode smooth scrolling (very slow for clipboard items)
-            Classes.SmoothScroll.AttachList(ShelfListView);
+            // Attach window-level smooth scrolling with specialized snappy ClipboardProfile
+            Classes.SmoothScroll.AttachToWindow(this, Classes.SmoothScroll.ClipboardProfile);
 
             // Track scrolling to optimize hover button summoning (prevent during scroll)
             ShelfListView.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(ShelfListView_ScrollChanged));
             ShelfListView.MouseLeave += ShelfListView_MouseLeave;
 
-            // Apply wallpaper if configured
-            // Apply wallpaper deferred (100ms) to not block UI init
-            System.Threading.Tasks.Task.Delay(100).ContinueWith(_ => {
-                Dispatcher.InvokeAsync(() => { try { ApplyWallpaper(); } catch { } });
-            });
+            // Apply wallpaper is now handled by the deferred theme block at ApplicationIdle
+            // (no more redundant early load that gets overwritten by theme init)
 
             // Blur-off or system transparency disabled: solid dark gradient fallback
             if (!Classes.SettingsManager.Current.EnableBlurBehind || !Classes.NativeMethods.ShouldUseBlur())
@@ -337,14 +334,15 @@ namespace FlyShelf
                 this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
                 System.Threading.Tasks.Task.Delay(150).ContinueWith(_ =>
                 {
-                    Dispatcher.Invoke(() =>
+                    Dispatcher.InvokeAsync(() =>
                     {
                         ApplyPopupBackground();
                     });
                 });
             }
 
-            // Pre-initialize the heavy Hub Window in the background when the app is idle
+            // Pre-initialize the heavy Hub Window in the background when the system is truly idle
+            // Priority: SystemIdle (lowest) — runs AFTER theme init to avoid competing for UI thread
             Dispatcher.InvokeAsync(() =>
             {
                 try
@@ -359,7 +357,7 @@ namespace FlyShelf
                 {
                     Classes.Logger.LogAction("PRE_INIT_HUB_FAIL", ex.ToString());
                 }
-            }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            }, System.Windows.Threading.DispatcherPriority.SystemIdle);
 
             // Wire up paginated scroll loading on-demand
             try
@@ -468,6 +466,10 @@ namespace FlyShelf
 
                                 string displayMode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica";
 
+                                // Always remove Glass UI theme unless glass mode is active
+                                if (displayMode != "glass")
+                                    Classes.ThemeManager.Instance.RemoveGlassTheme();
+
                                 if (displayMode == "mica")
                                 {
                                     // ═══ MICA BLUR MODE ═══
@@ -476,10 +478,20 @@ namespace FlyShelf
                                     RestoreMicaBlur();
                                     Classes.Logger.LogAction("THEME", "Mode: Mica Blur — pure system backdrop");
                                 }
+                                else if (displayMode == "glass")
+                                {
+                                    // ═══ GLASS MODE ═══
+                                    // Glassmorphism UI — frosted buttons, translucent cards, NO system blur
+                                    Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                                    ApplyNonMicaBackground();
+                                    Classes.ThemeManager.Instance.ApplyGlassTheme();
+                                    Classes.Logger.LogAction("THEME", "Mode: Glass — glassmorphism UI applied (no blur)");
+                                }
                                 else if (displayMode == "desktop")
                                 {
                                     // ═══ FLYSHELF (DESKTOP WALLPAPER) MODE ═══
-                                    // Clipboard gets the user's Windows desktop wallpaper
+                                    // Clipboard gets the user's Windows desktop wallpaper, NO system blur
+                                    ApplyNonMicaBackground();
                                     string desktopWp = GetDesktopWallpaperPath();
                                     if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
                                     {
@@ -489,22 +501,19 @@ namespace FlyShelf
                                     }
                                     else
                                     {
-                                        // No desktop wallpaper found — fall back to Mica blur
                                         Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
-                                        RestoreMicaBlur();
-                                        Classes.Logger.LogAction("THEME", "Mode: FlyShelf — no desktop wallpaper found, using Mica blur fallback");
+                                        Classes.Logger.LogAction("THEME", "Mode: FlyShelf — no desktop wallpaper found, solid dark bg");
                                     }
                                 }
                                 else // displayMode == "theme"
                                 {
                                     // ═══ CUSTOM THEME MODE ═══
-                                    // Clipboard gets theme wallpaper + mascot animation
+                                    // Clipboard gets theme wallpaper + mascot animation, NO system blur
+                                    ApplyNonMicaBackground();
                                     if (theme == null)
                                     {
-                                        // Theme was cleared but mode is still "theme" — restore Mica
                                         Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
-                                        RestoreMicaBlur();
-                                        Classes.Logger.LogAction("THEME", "Mode: Theme — but no theme active, falling back to Mica");
+                                        Classes.Logger.LogAction("THEME", "Mode: Theme — but no theme active, solid dark bg");
                                         return;
                                     }
 
@@ -517,10 +526,8 @@ namespace FlyShelf
                                     }
                                     else
                                     {
-                                        // Theme has no wallpaper — keep Mica blur
                                         Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
-                                        RestoreMicaBlur();
-                                        Classes.Logger.LogAction("THEME", $"Mode: Theme '{theme.Name}' — no wallpaper, using Mica blur");
+                                        Classes.Logger.LogAction("THEME", $"Mode: Theme '{theme.Name}' — no wallpaper, solid dark bg");
                                     }
 
                                     // Start mascot idle animation
@@ -534,9 +541,17 @@ namespace FlyShelf
 
                     // ═══ Startup: Apply correct mode ═══
                     string startupMode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica";
-                    if (startupMode == "desktop")
+                    if (startupMode == "glass")
                     {
-                        // Desktop wallpaper mode
+                        // Glass mode — no system blur, glassmorphism UI
+                        Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                        ApplyNonMicaBackground();
+                        Classes.ThemeManager.Instance.ApplyGlassTheme();
+                    }
+                    else if (startupMode == "desktop")
+                    {
+                        // Desktop wallpaper mode — no system blur
+                        ApplyNonMicaBackground();
                         _cachedDesktopWallpaperPath = null; // Force re-read
                         string desktopWp = GetDesktopWallpaperPath();
                         if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
@@ -547,7 +562,8 @@ namespace FlyShelf
                     }
                     else if (startupMode == "theme")
                     {
-                        // Custom theme mode — apply theme wallpaper
+                        // Custom theme mode — no system blur
+                        ApplyNonMicaBackground();
                         string? startupWp = Classes.ThemeManager.Instance.GetWallpaperPath();
                         if (!string.IsNullOrEmpty(startupWp) && System.IO.File.Exists(startupWp))
                         {
@@ -557,7 +573,7 @@ namespace FlyShelf
                     }
                     else
                     {
-                        // "mica" mode — ensure clean slate: no wallpaper, just system blur or grey
+                        // "mica" mode — ensure clean slate: no wallpaper, just system blur
                         Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
                         RestoreMicaBlur();
                     }
@@ -585,11 +601,12 @@ namespace FlyShelf
         /// Sets Background = Transparent so the system backdrop effect is visible.
         /// Falls back to solid gradient when system doesn't support blur.
         /// </summary>
-        private void RestoreMicaBlur()
+        /// <summary>
+        /// Clears ALL wallpaper/theme visual layers without touching the window backdrop.
+        /// Shared cleanup used by both RestoreMicaBlur and ApplyNonMicaBackground.
+        /// </summary>
+        private void ClearWallpaperLayers()
         {
-            // ═══ COMPREHENSIVE CLEANUP: Clear ALL wallpaper/theme visual layers ═══
-            // Without this, switching from a theme with a wallpaper back to Mica leaves
-            // residual wallpaper images, overlays, or frost tints visible.
             try
             {
                 // Clear animated GIF source (XamlAnimatedGif holds onto frames)
@@ -613,6 +630,15 @@ namespace FlyShelf
                 _currentLoadedWallpaperPath = "";
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Restores Mica/Acrylic blur — ONLY for "mica" display mode.
+        /// Clears all wallpaper layers, then enables the system acrylic backdrop.
+        /// </summary>
+        private void RestoreMicaBlur()
+        {
+            ClearWallpaperLayers();
 
             // ═══ RESTORE MICA/ACRYLIC BLUR ═══
             if (Classes.SettingsManager.Current.EnableBlurBehind && Classes.NativeMethods.ShouldUseBlur())
@@ -627,6 +653,25 @@ namespace FlyShelf
             {
                 ApplyPopupBackground(); // Solid gradient fallback when blur is disabled/unsupported
             }
+
+            // Reset selection accent to default (violet)
+            ResetSelectionAccent();
+        }
+
+        /// <summary>
+        /// Applies a solid dark background with NO system blur — for Glass, Desktop, and Custom themes.
+        /// Clears all wallpaper layers, disables SystemBackdropType, and sets a neutral dark bg.
+        /// </summary>
+        private void ApplyNonMicaBackground()
+        {
+            ClearWallpaperLayers();
+
+            // Disable system blur/acrylic — only Mica mode gets it
+            this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+            ApplyPopupBackground();
+
+            // Reset selection accent to default (violet)
+            ResetSelectionAccent();
         }
 
         /// <summary>
@@ -641,6 +686,62 @@ namespace FlyShelf
             grey.Freeze();
             this.Background = grey;
             if (RootContent != null) RootContent.Background = grey;
+        }
+
+        /// <summary>
+        /// Injects the wallpaper's dominant color as selection accent brushes.
+        /// Called from ApplyWallpaper() after ExtractDominantColor completes.
+        /// </summary>
+        private void ApplyDominantColorAccent(System.Windows.Media.Color dominant)
+        {
+            try
+            {
+                var app = System.Windows.Application.Current;
+                if (app == null) return;
+
+                var selBorder = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromArgb(0x60, dominant.R, dominant.G, dominant.B));
+                selBorder.Freeze();
+                var selBg = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromArgb(0x10, dominant.R, dominant.G, dominant.B));
+                selBg.Freeze();
+                var focusBorder = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromArgb(0x80, dominant.R, dominant.G, dominant.B));
+                focusBorder.Freeze();
+
+                app.Resources["ShelfCardSelectionBorder"] = selBorder;
+                app.Resources["ShelfCardSelectionBg"] = selBg;
+                app.Resources["ShelfCardFocusBorder"] = focusBorder;
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Resets selection accent brushes to the default violet.
+        /// Called when switching to Mica or non-wallpaper modes.
+        /// </summary>
+        private void ResetSelectionAccent()
+        {
+            try
+            {
+                var app = System.Windows.Application.Current;
+                if (app == null) return;
+
+                var selBorder = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromArgb(0x60, 0xA7, 0x8B, 0xFA)); // #60A78BFA
+                selBorder.Freeze();
+                var selBg = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromArgb(0x10, 0xA7, 0x8B, 0xFA)); // #10A78BFA
+                selBg.Freeze();
+                var focusBorder = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromArgb(0x80, 0xA7, 0x8B, 0xFA)); // #80A78BFA
+                focusBorder.Freeze();
+
+                app.Resources["ShelfCardSelectionBorder"] = selBorder;
+                app.Resources["ShelfCardSelectionBg"] = selBg;
+                app.Resources["ShelfCardFocusBorder"] = focusBorder;
+            }
+            catch { }
         }
 
         /// <summary>
@@ -768,6 +869,9 @@ namespace FlyShelf
                                     // Tint the frost header with the theme color
                                     WallpaperFrostTint.Background = new System.Windows.Media.SolidColorBrush(
                                         System.Windows.Media.Color.FromArgb(90, dominantColor.R, dominantColor.G, dominantColor.B));
+
+                                    // Inject wallpaper dominant color as selection accent
+                                    ApplyDominantColorAccent(dominantColor);
                                 }
                                 catch { }
                             });
@@ -854,6 +958,9 @@ namespace FlyShelf
                     Classes.ThemeManager.Instance.ActiveThemeChanged -= _themeChangedHandler;
                 if (_settingsChangedHandler != null)
                     Classes.SettingsManager.Current.PropertyChanged -= _settingsChangedHandler;
+
+                // Detach smooth scroll window hooks
+                Classes.SmoothScroll.DetachFromWindow(this);
             }
             catch { /* Window already destroyed — nothing to clean up */ }
             base.OnClosed(e);
@@ -866,15 +973,8 @@ namespace FlyShelf
                 int hotkeyId = wParam.ToInt32();
                 if (hotkeyId == HOTKEY_ID)
                 {
-                    // Toggle: if already visible, just hide and return
-                    if (this.IsVisible)
-                    {
-                        AnimateAndHide();
-                        handled = true;
-                        return IntPtr.Zero;
-                    }
-                    var workArea = SystemParameters.WorkArea;
-                    ShowNearPosition(workArea.Left + 16, workArea.Top + workArea.Height, 1, true, true);
+                    // Alt+C summons the Main Clipboard overlay (MainWindow in Medium Mode/Mode 1) at cursor
+                    ToggleMainClipboard();
                     handled = true;
                 }
                 else if (hotkeyId >= HOTKEY_QUICKPASTE_BASE + 1 && hotkeyId <= HOTKEY_QUICKPASTE_BASE + 10)

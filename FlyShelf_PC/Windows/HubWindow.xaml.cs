@@ -146,8 +146,8 @@ namespace FlyShelf.Windows
                 Dispatcher.InvokeAsync(() =>
                 {
                     RefreshDevices_Click(null, null);
-                    // LIST profile for clipboard items (very slow, precise)
-                    Classes.SmoothScroll.AttachList(HubListView);
+                    // Hook window-level smooth scrolling with elegant sweeping PCAppProfile
+                    Classes.SmoothScroll.AttachToWindow(this, Classes.SmoothScroll.PCAppProfile);
 
                     // Initialize retention ComboBox from saved setting
                     if (RetentionCombo != null)
@@ -167,15 +167,8 @@ namespace FlyShelf.Windows
             };
             Unloaded += (s, ev) =>
             {
-                // Unregister SmoothScroll hooks to prevent memory leaks
-                Classes.SmoothScroll.Detach(HubListView);
-
-                // Clean up static rendering hook for kinetic scrolling to prevent memory leak
-                if (_isKineticScrolling)
-                {
-                    _isKineticScrolling = false;
-                    CompositionTarget.Rendering -= KineticScroll_Rendering;
-                }
+                // Detach window-level smooth scrolling to prevent memory leaks
+                Classes.SmoothScroll.DetachFromWindow(this);
 
                 // Stop auto-refresh device timer
                 if (_deviceRefreshTimer != null)

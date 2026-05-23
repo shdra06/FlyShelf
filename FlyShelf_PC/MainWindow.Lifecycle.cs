@@ -121,13 +121,6 @@ namespace FlyShelf
         private bool _isAnimatingHide = false;
 
         /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
-        // Cached animation objects — avoid GC pressure from allocating new ones on every show
-        private static readonly TimeSpan _showAnimDuration = TimeSpan.FromMilliseconds(200);
-        private static readonly System.Windows.Media.Animation.CubicEase _showEaseOut = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
-        private static readonly System.Windows.Media.Animation.DoubleAnimation _fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, _showAnimDuration) { EasingFunction = _showEaseOut };
-        private static readonly System.Windows.Media.Animation.DoubleAnimation _scaleIn = new System.Windows.Media.Animation.DoubleAnimation(0.97, 1, _showAnimDuration) { EasingFunction = _showEaseOut };
-        private static readonly System.Windows.Media.Animation.DoubleAnimation _slideIn = new System.Windows.Media.Animation.DoubleAnimation(6, 0, _showAnimDuration) { EasingFunction = _showEaseOut };
-
         private void PlayShowAnimation()
         {
             RootContent.RenderTransformOrigin = new Point(0.5, 1);
@@ -137,19 +130,29 @@ namespace FlyShelf
             };
             RootContent.Opacity = 0;
 
-            RootContent.BeginAnimation(OpacityProperty, _fadeIn);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, _scaleIn);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, _scaleIn);
-            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, _slideIn);
+            // GPU Optimization: Cache the visual tree as a flat texture during the animation
+            // to bypass expensive re-rasterization of frosted glass and heavy card rendering.
+            RootContent.CacheMode = new BitmapCache { EnableClearType = false, RenderAtScale = 1.0 };
+
+            var showEaseOut = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
+            var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)) { EasingFunction = showEaseOut };
+            var scaleIn = new System.Windows.Media.Animation.DoubleAnimation(0.97, 1, TimeSpan.FromMilliseconds(200)) { EasingFunction = showEaseOut };
+            var slideIn = new System.Windows.Media.Animation.DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(200)) { EasingFunction = showEaseOut };
+
+            fadeIn.Completed += (s, e) =>
+            {
+                RootContent.CacheMode = null; // Restore crisp Cleartype rendering on visual completion
+            };
+
+            RootContent.BeginAnimation(OpacityProperty, fadeIn);
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, scaleIn);
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, scaleIn);
+            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, slideIn);
         }
 
         /// <summary>Fast dismiss animation on inner content, then hides window.</summary>
-        // PERF: Cached hide animation objects — avoid GC pressure from allocating new ones on every dismiss
         private static readonly TimeSpan _hideAnimDuration = TimeSpan.FromMilliseconds(100);
         private static readonly System.Windows.Media.Animation.CubicEase _hideEaseIn = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn };
-        private static readonly System.Windows.Media.Animation.DoubleAnimation _scaleOutX = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, _hideAnimDuration) { EasingFunction = _hideEaseIn };
-        private static readonly System.Windows.Media.Animation.DoubleAnimation _scaleOutY = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, _hideAnimDuration) { EasingFunction = _hideEaseIn };
-        private static readonly System.Windows.Media.Animation.DoubleAnimation _slideOut = new System.Windows.Media.Animation.DoubleAnimation(0, 5, _hideAnimDuration) { EasingFunction = _hideEaseIn };
 
         // PERF: Deferred mascot/GIF resume timer — mascot starts 1s after spawn, not during spawn
         private System.Windows.Threading.DispatcherTimer? _mascotDelayTimer;
@@ -182,6 +185,13 @@ namespace FlyShelf
                 Children = { new ScaleTransform(1, 1), new TranslateTransform(0, 0) }
             };
 
+            // GPU Optimization: Cache the visual tree as a flat texture during the dismiss animation
+            RootContent.CacheMode = new BitmapCache { EnableClearType = false, RenderAtScale = 1.0 };
+
+            var scaleOutX = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, _hideAnimDuration) { EasingFunction = _hideEaseIn };
+            var scaleOutY = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, _hideAnimDuration) { EasingFunction = _hideEaseIn };
+            var slideOut = new System.Windows.Media.Animation.DoubleAnimation(0, 5, _hideAnimDuration) { EasingFunction = _hideEaseIn };
+
             var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, _hideAnimDuration) { EasingFunction = _hideEaseIn };
             fadeOut.Completed += (s, e) =>
             {
@@ -191,15 +201,16 @@ namespace FlyShelf
                     RootContent.BeginAnimation(OpacityProperty, null);
                     RootContent.Opacity = 1;
                     RootContent.RenderTransform = null;
+                    RootContent.CacheMode = null;
                 }
                 catch { }
                 _isAnimatingHide = false;
             };
 
             RootContent.BeginAnimation(OpacityProperty, fadeOut);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, _scaleOutX);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, _scaleOutY);
-            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, _slideOut);
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, scaleOutX);
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, scaleOutY);
+            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, slideOut);
         }
         private DateTime _spawnTime = DateTime.MinValue;
         private IntPtr _previousForegroundWindow = IntPtr.Zero;

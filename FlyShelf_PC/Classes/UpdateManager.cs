@@ -415,7 +415,12 @@ namespace FlyShelf.Classes
 
         /// <summary>
         /// Replaces the running EXE with the downloaded update and restarts.
-        /// Uses a batch script to wait for the current process to exit, then swap.
+        /// 
+        /// STRATEGY: Instead of a batch script (which triggers every antivirus),
+        /// we launch the DOWNLOADED EXE itself with --apply-update flags.
+        /// The new EXE waits for the old process to die, copies itself to the
+        /// target path, then launches the target. This is the standard approach
+        /// used by modern self-updating desktop apps (Squirrel, Velopack, etc.)
         /// </summary>
         public void ApplyUpdateAndRestart()
         {
@@ -432,8 +437,7 @@ namespace FlyShelf.Classes
                 return;
             }
 
-            // For single-file published apps, MainModule.FileName can be empty.
-            // Use AppContext.BaseDirectory which always works.
+            // Determine current EXE path (multiple fallback strategies for single-file deployment)
             string currentExePath = Process.GetCurrentProcess().MainModule?.FileName ?? "";
             if (string.IsNullOrEmpty(currentExePath) || !File.Exists(currentExePath))
             {
@@ -441,7 +445,6 @@ namespace FlyShelf.Classes
             }
             if (string.IsNullOrEmpty(currentExePath) || !File.Exists(currentExePath))
             {
-                // Last resort: find ourselves by process name
                 currentExePath = Environment.ProcessPath ?? "";
             }
             if (string.IsNullOrEmpty(currentExePath))
@@ -451,65 +454,162 @@ namespace FlyShelf.Classes
                 return;
             }
 
-            Logger.LogAction("UPDATE", $"Current EXE: {currentExePath}");
-            Logger.LogAction("UPDATE", $"New EXE: {tempExePath}");
-
             int pid = Process.GetCurrentProcess().Id;
 
-            // Create a robust batch script with retry logic
-            string batchPath = Path.Combine(tempDir, "update.bat");
-            string batchContent = $@"@echo off
-echo FlyShelf Auto-Updater
-echo Waiting for app to close (PID {pid})...
-:waitloop
-tasklist /fi ""PID eq {pid}"" 2>nul | find ""{pid}"" >nul
-if not errorlevel 1 (
-    timeout /t 1 /nobreak > nul
-    goto waitloop
-)
-echo App closed. Replacing EXE...
-set RETRIES=0
-:copyloop
-copy /Y ""{tempExePath}"" ""{currentExePath}"" >nul 2>&1
-if errorlevel 1 (
-    set /a RETRIES+=1
-    if %RETRIES% GEQ 10 (
-        echo ERROR: Could not replace EXE after 10 attempts.
-        pause
-        exit /b 1
-    )
-    echo Retry %RETRIES%... file may be locked
-    timeout /t 1 /nobreak > nul
-    goto copyloop
-)
-echo Update applied! Starting new version...
-start """" ""{currentExePath}""
-timeout /t 2 /nobreak > nul
-del ""{tempExePath}"" 2>nul
-del ""%~f0"" 2>nul
-";
-
-            File.WriteAllText(batchPath, batchContent);
-
-            Logger.LogAction("UPDATE", $"Launching updater batch: {batchPath}");
+            Logger.LogAction("UPDATE", $"Current EXE: {currentExePath}");
+            Logger.LogAction("UPDATE", $"New EXE: {tempExePath}");
+            Logger.LogAction("UPDATE", $"Launching new EXE as self-updater (PID to wait for: {pid})");
             StatusChanged?.Invoke("Restarting with update...");
 
-            // Launch the batch script — must use UseShellExecute=true so it survives our process exit
+            // Launch the NEW EXE with self-update arguments.
+            // The new EXE will: wait for us to die → copy itself to our path → launch from that path.
+            // This is a .NET EXE, not a batch script — AV doesn't flag .NET apps as droppers.
             var psi = new ProcessStartInfo
             {
-                FileName = batchPath,
-                CreateNoWindow = true,
+                FileName = tempExePath,
+                Arguments = $"--apply-update --target \"{currentExePath}\" --pid {pid}",
+                CreateNoWindow = false,
                 WindowStyle = ProcessWindowStyle.Hidden,
-                UseShellExecute = true
+                UseShellExecute = true // Required so it survives our process exit
             };
             Process.Start(psi);
 
-            // Exit current app
+            // Exit current app — the new EXE is watching our PID
             System.Windows.Application.Current.Dispatcher.Invoke(() =>
             {
                 System.Windows.Application.Current.Shutdown();
             });
 #endif
+        }
+
+        /// <summary>
+        /// Handles the --apply-update startup path. Called from App.OnStartup
+        /// when the EXE was launched as a self-updater by a previous version.
+        /// 
+        /// Flow:
+        /// 1. Wait for the old process (--pid) to die
+        /// 2. Copy ourselves to the target path (--target)
+        /// 3. Launch the target (which is now the new version)
+        /// 4. Clean up temp files
+        /// 5. Exit without showing UI
+        /// 
+        /// Returns true if this was an --apply-update invocation (caller should exit).
+        /// Returns false if this is a normal app launch.
+        /// </summary>
+        public static bool HandleUpdateIfRequested(string[] args)
+        {
+            // Check if --apply-update flag is present
+            bool isUpdate = false;
+            string targetPath = "";
+            int waitPid = -1;
+
+            for (int i = 0; i < args.Length; i++)
+            {
+                if (args[i].Equals("--apply-update", StringComparison.OrdinalIgnoreCase))
+                    isUpdate = true;
+                else if (args[i].Equals("--target", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                    targetPath = args[++i].Trim('"');
+                else if (args[i].Equals("--pid", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+                    int.TryParse(args[++i], out waitPid);
+            }
+
+            if (!isUpdate) return false;
+
+            // We ARE the updater — run the update logic and exit
+            try
+            {
+                string logPath = Path.Combine(Path.GetTempPath(), "FlyShelf_Update", "update_log.txt");
+                void Log(string msg)
+                {
+                    try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss}] {msg}\n"); } catch { }
+                }
+
+                Log($"Self-updater started. Target: {targetPath}, WaitPID: {waitPid}");
+
+                // Step 1: Wait for old process to exit (up to 30 seconds)
+                if (waitPid > 0)
+                {
+                    Log($"Waiting for PID {waitPid} to exit...");
+                    try
+                    {
+                        var oldProcess = Process.GetProcessById(waitPid);
+                        if (!oldProcess.WaitForExit(30_000))
+                        {
+                            Log("Old process didn't exit in 30s — attempting kill...");
+                            try { oldProcess.Kill(); } catch { }
+                            oldProcess.WaitForExit(5_000);
+                        }
+                        Log("Old process exited.");
+                    }
+                    catch (ArgumentException)
+                    {
+                        Log("Old process already exited.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"Wait error (non-fatal): {ex.Message}");
+                    }
+                }
+
+                // Step 2: Small delay for file handles to release
+                System.Threading.Thread.Sleep(1000);
+
+                // Step 3: Copy ourselves to the target path (retry up to 10 times)
+                string selfPath = Environment.ProcessPath ?? Process.GetCurrentProcess().MainModule?.FileName ?? "";
+                if (string.IsNullOrEmpty(selfPath))
+                {
+                    Log("FATAL: Cannot determine own EXE path.");
+                    return true;
+                }
+
+                Log($"Copying {selfPath} → {targetPath}");
+                bool copied = false;
+                for (int attempt = 1; attempt <= 10; attempt++)
+                {
+                    try
+                    {
+                        File.Copy(selfPath, targetPath, overwrite: true);
+                        copied = true;
+                        Log($"Copy succeeded on attempt {attempt}.");
+                        break;
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"Copy attempt {attempt}/10 failed: {ex.Message}");
+                        System.Threading.Thread.Sleep(1000);
+                    }
+                }
+
+                if (!copied)
+                {
+                    Log("FATAL: Could not copy new EXE after 10 attempts.");
+                    return true;
+                }
+
+                // Step 4: Launch the updated EXE from the target path
+                Log($"Launching updated app: {targetPath}");
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = targetPath,
+                    UseShellExecute = true
+                });
+
+                // Step 5: Clean up temp files (best-effort)
+                System.Threading.Thread.Sleep(2000);
+                try { File.Delete(selfPath); } catch { }
+                Log("Update complete. Self-updater exiting.");
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    string logPath = Path.Combine(Path.GetTempPath(), "FlyShelf_Update", "update_error.txt");
+                    File.WriteAllText(logPath, $"[{DateTime.Now}] Update failed:\n{ex}");
+                }
+                catch { }
+            }
+
+            return true; // Signal caller to exit without UI
         }
     }
 }

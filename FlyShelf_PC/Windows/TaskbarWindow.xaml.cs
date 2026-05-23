@@ -496,6 +496,46 @@ namespace FlyShelf.Windows
 
 
 
+        public Point GetWidgetScreenPosition()
+        {
+            try
+            {
+                var interop = new WindowInteropHelper(this);
+                IntPtr taskbarWindowHandle = interop.Handle;
+                IntPtr taskbarHandle = GetSelectedTaskbarHandle(out _);
+                if (taskbarHandle != IntPtr.Zero && taskbarWindowHandle != IntPtr.Zero)
+                {
+                    double dpiScale = GetDpiForWindow(taskbarHandle) / 96.0;
+                    if (dpiScale <= 0) dpiScale = 1.0;
+
+                    GetWindowRect(taskbarHandle, out RECT rawTaskbarRect);
+                    
+                    double widgetLeftLogical = Canvas.GetLeft(Widget);
+                    double widgetTopLogical = Canvas.GetTop(Widget);
+                    double widgetWidthLogical = Widget.Width;
+
+                    if (double.IsNaN(widgetLeftLogical)) widgetLeftLogical = 0;
+                    if (double.IsNaN(widgetTopLogical)) widgetTopLogical = 0;
+                    if (double.IsNaN(widgetWidthLogical)) widgetWidthLogical = 80;
+
+                    // Widget's absolute screen coordinates in logical pixels:
+                    double taskbarLeftLogical = rawTaskbarRect.Left / dpiScale;
+                    double widgetCenterXLogical = taskbarLeftLogical + widgetLeftLogical + (widgetWidthLogical / 2.0);
+
+                    // Compute the taskbar top Y (in logical pixels)
+                    double taskbarTopLogical = rawTaskbarRect.Top / dpiScale;
+
+                    return new Point(widgetCenterXLogical, taskbarTopLogical);
+                }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("WIDGET_POS_ERR", ex.ToString());
+            }
+
+            return new Point(-1, -1);
+        }
+
         private (bool, Rect) GetTaskbarFrameRect(IntPtr taskbarHandle)
         {
             GetWindowRect(taskbarHandle, out RECT rect);

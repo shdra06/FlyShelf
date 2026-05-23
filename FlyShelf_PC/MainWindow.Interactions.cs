@@ -115,9 +115,11 @@ namespace FlyShelf
                     }
                     
                     byte[] moveEffect = new byte[] { 5, 0, 0, 0 };
-                    System.IO.MemoryStream dropEffect = new System.IO.MemoryStream();
-                    dropEffect.Write(moveEffect, 0, moveEffect.Length);
-                    dataObj.SetData("Preferred DropEffect", dropEffect);
+                    using (var dropEffect = new System.IO.MemoryStream())
+                    {
+                        dropEffect.Write(moveEffect, 0, moveEffect.Length);
+                        dataObj.SetData("Preferred DropEffect", dropEffect);
+                    }
 
                     for(int retry=0; retry<3; retry++) {
                         try { System.Windows.Clipboard.SetDataObject(dataObj, true); break; }
@@ -271,9 +273,11 @@ namespace FlyShelf
 
                             // Explicit Win32 Shell 'Copy' Effect override (Required for Windows Explorer Drag Drop)
                             byte[] moveEffect = new byte[] { 5, 0, 0, 0 }; // DragDropEffects.Copy
-                            System.IO.MemoryStream dropEffect = new System.IO.MemoryStream();
-                            dropEffect.Write(moveEffect, 0, moveEffect.Length);
-                            dataObj.SetData("Preferred DropEffect", dropEffect);
+                            using (var dropEffect = new System.IO.MemoryStream())
+                            {
+                                dropEffect.Write(moveEffect, 0, moveEffect.Length);
+                                dataObj.SetData("Preferred DropEffect", dropEffect);
+                            }
                         }
                         else 
                         {
@@ -326,6 +330,95 @@ namespace FlyShelf
         private Windows.HubWindow? _hubWindowInstance;
 
 
+
+        /// <summary>
+        /// Toggles or summons the Main Clipboard overlay (MainWindow in Medium Mode/Mode 1) at the cursor position.
+        /// </summary>
+        public void ToggleMainClipboard()
+        {
+            // If the overlay is already visible and in Mode 1, hide it
+            if (this.IsVisible && _viewModel.CurrentMode == 1)
+            {
+                AnimateAndHide();
+            }
+            else
+            {
+                double targetX = -1;
+                double targetY = -1;
+                bool positionFound = false;
+
+                // Try to get the taskbar widget position
+                if (_taskbarWidget != null && _taskbarWidget.IsVisible)
+                {
+                    try
+                    {
+                        Point widgetPos = _taskbarWidget.GetWidgetScreenPosition();
+                        if (widgetPos.X >= 0 && widgetPos.Y >= 0)
+                        {
+                            targetX = widgetPos.X;
+                            targetY = widgetPos.Y;
+                            positionFound = true;
+                            Classes.Logger.LogAction("SUMMON", $"Spawn at widget center logical X={targetX}, top Y={targetY}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Classes.Logger.LogAction("SUMMON_FAIL", $"Failed to get widget position: {ex.Message}");
+                    }
+                }
+
+                if (!positionFound)
+                {
+                    // Fallback to cursor position
+                    Classes.NativeMethods.POINT pt;
+                    if (Classes.NativeMethods.GetCursorPos(out pt))
+                    {
+                        // Convert physical cursor to logical pixels using the monitor of the cursor
+                        double scaleX = 1.0;
+                        double scaleY = 1.0;
+                        try
+                        {
+                            var monitor = Classes.Utils.MonitorUtil.GetMonitorWithCursor();
+                            scaleX = monitor.dpiX / 96.0;
+                            scaleY = monitor.dpiY / 96.0;
+                        }
+                        catch { }
+
+                        if (scaleX <= 0) scaleX = 1.0;
+                        if (scaleY <= 0) scaleY = 1.0;
+
+                        targetX = pt.X / scaleX;
+                        targetY = pt.Y / scaleY;
+                        Classes.Logger.LogAction("SUMMON", $"Spawn fallback at cursor logical X={targetX}, Y={targetY}");
+                    }
+                    else
+                    {
+                        // Last resort fallback: screen center
+                        var workArea = SystemParameters.WorkArea;
+                        targetX = workArea.Left + workArea.Width / 2;
+                        targetY = workArea.Top + workArea.Height - 50;
+                        Classes.Logger.LogAction("SUMMON", $"Spawn fallback at workarea center logical X={targetX}, Y={targetY}");
+                    }
+                }
+
+                ShowNearPosition(targetX, targetY, 1, false, true); // mode = 1, isPersistent = false, stealFocus = true
+            }
+        }
+
+        /// <summary>
+        /// Public entry point for external callers (widget, hotkey) to open the HubWindow (big clipboard).
+        /// Toggles: if Hub is already visible and active, hide it instead.
+        /// </summary>
+        public void OpenHubWindow()
+        {
+            // Toggle: if HubWindow is already visible and focused, just hide it
+            if (_hubWindowInstance != null && _hubWindowInstance.IsVisible)
+            {
+                _hubWindowInstance.Hide();
+                return;
+            }
+            OpenApp_Click(null, null);
+        }
 
         private void OpenApp_Click(object sender, RoutedEventArgs e)
         {
@@ -400,13 +493,16 @@ namespace FlyShelf
 
                 if (pinnedCount > 0)
                 {
-                    UnpinSelectedText.Text = pinnedCount == 1 ? "Unpin 1 Item" : $"Unpin {pinnedCount} Items";
+                    UnpinSelectedBtn.Content = pinnedCount == 1 ? "Unpin 1 Item" : $"Unpin {pinnedCount} Items";
                     UnpinSelectedBtn.Visibility = Visibility.Visible;
                 }
                 else
                 {
                     UnpinSelectedBtn.Visibility = Visibility.Collapsed;
                 }
+
+                // Sync → Unpin swap in toolbar (mirrors emoji → merge pattern)
+                UpdateToolbarButtonsVisibility();
 
                 // Shift/Ctrl-select PDF/DOC/Image merge: auto-check selected files for merge/convert
                 var selectedMergeable = ShelfListView.SelectedItems.Cast<ClipboardItem>()
@@ -423,6 +519,7 @@ namespace FlyShelf
             else
             {
                 UnpinSelectedBtn.Visibility = Visibility.Collapsed;
+                UpdateToolbarButtonsVisibility();
             }
         }
 
@@ -445,6 +542,7 @@ namespace FlyShelf
             });
             
             UnpinSelectedBtn.Visibility = Visibility.Collapsed;
+            UpdateToolbarButtonsVisibility();
             ShelfListView.SelectedItems.Clear();
         }
 
@@ -593,25 +691,25 @@ namespace FlyShelf
             {
                 if (checkedImages.Count > 0 && checkedPdfs.Count == 0 && checkedDocs.Count == 0)
                 {
-                    MergeSelectedPdfsText.Text = $"Merge {checkedImages.Count} Images";
+                    MergeSelectedPdfsBtn.Content = $"Merge {checkedImages.Count} Images";
                     MergePdfToolbarBtn.ToolTip = $"Merge {checkedImages.Count} images into a single PDF";
                 }
                 else if (checkedDocs.Count > 0 && checkedPdfs.Count == 0 && checkedImages.Count == 0 && checkedDocs.Count == 1)
                 {
                     // Single DOC — show Convert to PDF
-                    MergeSelectedPdfsText.Text = "Convert to PDF";
+                    MergeSelectedPdfsBtn.Content = "Convert to PDF";
                     MergePdfToolbarBtn.ToolTip = "Convert DOC/DOCX to PDF";
                 }
                 else if (checkedDocs.Count > 0 && checkedPdfs.Count == 0)
                 {
                     // Multiple DOCs — show Convert All
-                    MergeSelectedPdfsText.Text = $"Convert {checkedDocs.Count} to PDF";
+                    MergeSelectedPdfsBtn.Content = $"Convert {checkedDocs.Count} to PDF";
                     MergePdfToolbarBtn.ToolTip = $"Convert {checkedDocs.Count} DOC files to PDF";
                 }
                 else
                 {
                     // Mixed
-                    MergeSelectedPdfsText.Text = $"Merge {totalChecked} Files";
+                    MergeSelectedPdfsBtn.Content = $"Merge {totalChecked} Files";
                     MergePdfToolbarBtn.ToolTip = $"Convert & merge all {totalChecked} files";
                 }
 
@@ -771,11 +869,22 @@ $word.Quit()
                 ClearShelfBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
             }
             
+            // Emoji → Merge PDF swap (existing behavior)
+            bool isMergeActive = MergePdfToolbarBtn != null && MergePdfToolbarBtn.Visibility == Visibility.Visible;
             if (EmojiBtn != null)
             {
-                // In medium/full mode, emoji btn is visible UNLESS PDF merge toolbar is visible
-                bool isMergeActive = MergePdfToolbarBtn != null && MergePdfToolbarBtn.Visibility == Visibility.Visible;
                 EmojiBtn.Visibility = (isMini || isMergeActive) ? Visibility.Collapsed : Visibility.Visible;
+            }
+
+            // Sync → Unpin swap: when pinned items are multi-selected, swap sync button for unpin icon
+            bool hasUnpinTarget = UnpinSelectedBtn != null && UnpinSelectedBtn.Visibility == Visibility.Visible;
+            if (SyncToolbarBtn != null)
+            {
+                SyncToolbarBtn.Visibility = hasUnpinTarget ? Visibility.Collapsed : Visibility.Visible;
+            }
+            if (UnpinToolbarBtn != null)
+            {
+                UnpinToolbarBtn.Visibility = hasUnpinTarget ? Visibility.Visible : Visibility.Collapsed;
             }
         }
     }

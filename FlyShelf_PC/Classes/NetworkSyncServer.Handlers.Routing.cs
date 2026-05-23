@@ -20,6 +20,41 @@ namespace FlyShelf.Classes
 {
     public partial class NetworkSyncServer
     {
+        // ═══ RATE LIMITING: Per-IP request counter ═══
+        // TRUSTED (paired P2P devices): Very high limit — never throttle real sync.
+        // UNTRUSTED (web client / external): Strict limit — prevent DoS via public URL.
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int count, long windowStart)> _rateLimits = new();
+        private const int RATE_LIMIT_TRUSTED_WRITE = 2000;  // Paired devices: effectively unlimited
+        private const int RATE_LIMIT_TRUSTED_READ = 2000;
+        private const int RATE_LIMIT_EXTERNAL_WRITE = 30;   // Web/external: strict
+        private const int RATE_LIMIT_EXTERNAL_READ = 60;
+        private const long RATE_WINDOW_MS = 60_000;         // 1 minute window
+
+        /// <summary>
+        /// Returns true if the request should be rejected due to rate limiting.
+        /// Trusted peers (paired devices, native mobile app) get near-unlimited rates.
+        /// External web clients get strict limits to prevent DoS via Cloudflare URL.
+        /// </summary>
+        private static bool IsRateLimited(string ip, bool isWrite, bool isTrusted)
+        {
+            int limit = isTrusted
+                ? (isWrite ? RATE_LIMIT_TRUSTED_WRITE : RATE_LIMIT_TRUSTED_READ)
+                : (isWrite ? RATE_LIMIT_EXTERNAL_WRITE : RATE_LIMIT_EXTERNAL_READ);
+            string key = $"{(isTrusted ? "T" : "E")}:{(isWrite ? "W" : "R")}:{ip}";
+            long now = Environment.TickCount64;
+
+            var entry = _rateLimits.AddOrUpdate(key,
+                _ => (1, now),
+                (_, prev) =>
+                {
+                    if (now - prev.windowStart > RATE_WINDOW_MS)
+                        return (1, now); // Reset window
+                    return (prev.count + 1, prev.windowStart);
+                });
+
+            return entry.count > limit;
+        }
+
         private async Task ProcessRequest(HttpListenerContext context)
         {
             var req = context.Request;
@@ -38,6 +73,25 @@ namespace FlyShelf.Classes
                 // Disable keep-alive: HttpListener's TCP reuse causes 400 errors on rapid-fire requests
                 res.KeepAlive = false;
                 if (!string.IsNullOrEmpty(GlobalUrl)) res.AddHeader("X-Global-Url", GlobalUrl);
+
+                // ═══ RATE LIMITING ═══
+                // Determine trust level: paired devices and native mobile app are trusted.
+                string clientIp = req.RemoteEndPoint?.Address?.ToString() ?? "unknown";
+                string pairingKeyForRateCheck = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"] ?? "";
+                bool isNativeClient = req.Headers["X-FlyShelf-Client"] == "MobileCompanion" || req.Headers["X-FlyShelf-Client"] == "DesktopSync";
+                bool isTrustedPeer = isNativeClient || DevicePairingManager.IsDevicePaired(pairingKeyForRateCheck);
+                bool isWriteEndpoint = req.HttpMethod == "POST";
+
+                if (IsRateLimited(clientIp, isWriteEndpoint, isTrustedPeer))
+                {
+                    Logger.LogAction("RATE_LIMIT", $"⛔ Rate limited {clientIp} (trusted={isTrustedPeer}, {(isWriteEndpoint ? "write" : "read")})");
+                    res.StatusCode = 429;
+                    byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"429 Too Many Requests\"}");
+                    res.ContentType = "application/json";
+                    try { res.OutputStream.Write(err, 0, err.Length); } catch { }
+                    res.Close();
+                    return;
+                }
 
                 if (req.HttpMethod == "OPTIONS")
                 {

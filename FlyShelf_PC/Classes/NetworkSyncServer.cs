@@ -31,6 +31,11 @@ namespace FlyShelf.Classes
         private int _proxyInternalPort = 0;
         private static readonly HttpClient _httpClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(30) };
 
+        private static readonly System.Text.RegularExpressions.Regex _rxBase64 = new System.Text.RegularExpressions.Regex(
+            @"^[A-Za-z0-9+/=\r\n]+$", System.Text.RegularExpressions.RegexOptions.Compiled);
+        private static readonly System.Text.RegularExpressions.Regex _rxWinPath = new System.Text.RegularExpressions.Regex(
+            @"^[a-zA-Z]:[\\/]", System.Text.RegularExpressions.RegexOptions.Compiled);
+
         // ═══════════════════════════════════════════════════════════════════
         // Phase 3: Track directly-connected devices (via LAN/Cloudflare)
         // When all paired devices are polling /api/sync directly, we can

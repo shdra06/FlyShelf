@@ -422,10 +422,13 @@
             </div>
         </div>
 
-        <h2>Synchronized Workspace</h2>
+        <h2>Latest Transfer</h2>
         <div id="shelf">
-            <div class="glass-panel" style="text-align: center; color: var(--text-secondary); padding: 32px; font-weight: 500;">Establishing zero-trust network linkage...</div>
+            <div class="glass-panel" style="text-align: center; color: var(--text-secondary); padding: 32px; font-weight: 500;">Waiting for transfer...</div>
         </div>
+        <p style="color: var(--text-secondary); font-size: 0.8rem; margin-top: 12px; text-align: center; opacity: 0.6;">
+            Transfers auto-clear after 60 seconds for your privacy.
+        </p>
     </div>
 
     <div id="toast" class="toast">
@@ -443,6 +446,17 @@
         // Environment Detection
         const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         const canWebShare = navigator.canShare || navigator.share;
+
+        // Auto-clear timer: wipe displayed data after 60 seconds
+        let autoClearTimer = null;
+        function scheduleAutoClear() {
+            if (autoClearTimer) clearTimeout(autoClearTimer);
+            autoClearTimer = setTimeout(() => {
+                const shelf = document.getElementById('shelf');
+                shelf.innerHTML = '<div class="glass-panel" style="text-align: center; color: var(--text-secondary); padding: 32px; font-weight: 500;">Transfer cleared for privacy.</div>';
+                window.lastItemsHash = null;
+            }, 60000);
+        }
 
         function showToast(msg, isErr = false) {
             const t = document.getElementById('toast');
@@ -551,7 +565,6 @@
         window.copyImageNative = async function(url) {
             try {
                 showToast("Reformatting image buffer...");
-                // All browsers require image/png strictly to bypass memory sandbox block
                 const pngBlob = await fetchAsPng(url); 
                 const item = new ClipboardItem({ 'image/png': pngBlob });
                 await navigator.clipboard.write([item]);
@@ -563,7 +576,6 @@
         }
 
         window.shareOrDownloadBlob = async function(title, url, forceMobileDownloadFallback = false) {
-            // If the user taps the explicit "PC Download" button on a Mobile device (because we render both for Image)
             if (forceMobileDownloadFallback) {
                 showToast("Downloading to local storage...");
                 window.open(url, '_blank');
@@ -581,7 +593,7 @@
                     if (navigator.canShare && navigator.canShare({ files: [file] })) {
                         await navigator.share({
                             title: title,
-                            text: 'Beamed from PC via AdvanceClip Engine',
+                            text: 'Beamed from PC via FlyShelf',
                             files: [file]
                         });
                         showToast("ShareSheet dispatched.");
@@ -589,13 +601,11 @@
                         throw new Error("Sandbox blocked native share payload.");
                     }
                 } else {
-                    // PC explicitly enforces formal filesystem downloads since Web Share is limited there natively!
                     showToast("Downloading to local environment...");
                     window.open(url, '_blank');
                 }
             } catch (err) {
                 console.warn(err);
-                // Fallback absolutely defaults to downloading
                 window.open(url, '_blank');
             }
         }
@@ -639,74 +649,70 @@
                 document.getElementById('authOverlay').classList.add('hidden');
                 const items = await response.json();
                 
-                // Diff the new state against the old state to prevent destructive DOM reloading!
-                const currentHash = JSON.stringify(items);
+                // PRIVACY: Only show the LATEST item (not full clipboard history)
+                const latestItem = items && items.length > 0 ? items[0] : null;
+                const currentHash = latestItem ? JSON.stringify(latestItem) : "empty";
                 if (window.lastItemsHash === currentHash) return;
                 window.lastItemsHash = currentHash;
 
                 const shelf = document.getElementById('shelf');
                 
-                if(!items || items.length === 0) {
-                    shelf.innerHTML = '<div class="glass-panel" style="text-align: center; color: var(--text-secondary); padding: 32px; font-weight: 500;">No blocks allocated in volatile memory.</div>';
+                if(!latestItem) {
+                    shelf.innerHTML = '<div class="glass-panel" style="text-align: center; color: var(--text-secondary); padding: 32px; font-weight: 500;">No pending transfers.</div>';
                     return;
                 }
 
-                let html = '';
+                // Only render the single latest transfer item
+                const item = latestItem;
                 const p = localStorage.getItem('advanceclip_pin');
+                const isQRCode = item.Type === 'QRCode';
+                const isImage = item.Type === 'Image' || isQRCode;
+                const isUrl = item.Type === 'Url';
+                const isCode = item.Type === 'Code';
+                const isFile = !isImage && !isUrl && !isCode && item.Type !== 'Text';
+                const dlUrl = (isFile || isImage) ? (item.DownloadUrl.startsWith('http') ? item.DownloadUrl : `${item.DownloadUrl}&pin=${encodeURIComponent(p)}`) : '';
+
+                let buttonsHtml = '';
                 
-                items.forEach(item => {
-                    const isQRCode = item.Type === 'QRCode';
-                    const isImage = item.Type === 'Image' || isQRCode;
-                    const isUrl = item.Type === 'Url';
-                    const isCode = item.Type === 'Code';
-                    const isFile = !isImage && !isUrl && !isCode && item.Type !== 'Text';
-                    const dlUrl = (isFile || isImage) ? (item.DownloadUrl.startsWith('http') ? item.DownloadUrl : `${item.DownloadUrl}&pin=${encodeURIComponent(p)}`) : '';
-
-                    let buttonsHtml = '';
-                    
-                    // Generate specialized Action Rows intelligently based on Environment & Type
-                    if (isQRCode) {
-                        const isQRUrl = item.Raw.toLowerCase().startsWith('http');
-                        if (isQRUrl) {
-                            buttonsHtml += `<button class="btn-icon" onclick="copyToClipboardFallback(\`${item.Raw.replace(/`/g, '\\`')}\`)" title="Copy Secret Link">${ICON_COPY}</button>`;
-                            buttonsHtml += `<button class="btn-icon btn-action" onclick="window.open('${item.Raw}', '_blank')" title="Execute QR Link">${ICON_EXTERNAL}</button>`;
-                        } else {
-                            buttonsHtml += `<button class="btn-icon btn-action" onclick="copyToClipboardFallback(\`${item.Raw.replace(/`/g, '\\`')}\`)" title="Copy QR Text">${ICON_COPY}</button>`;
-                        }
-                    } else if (isUrl) {
-                        buttonsHtml += `<button class="btn-icon" onclick="copyToClipboardFallback(\`${item.Raw.replace(/`/g, '\\`')}\`)" title="Copy Link">${ICON_COPY}</button>`;
-                        buttonsHtml += `<button class="btn-icon btn-action" onclick="window.open('${item.Raw}', '_blank')" title="Execute URL">${ICON_EXTERNAL}</button>`;
-                    } else if (isImage) {
-                        // Desktop gets Copy Image natively 
-                        buttonsHtml += `<button class="btn-icon" onclick="copyImageNative('${dlUrl}')" title="Copy Raw Image to PC Clipboard">${ICON_COPY}</button>`;
-                        // Phone gets Share Media natively natively
-                        if (isMobileDevice) buttonsHtml += `<button class="btn-icon btn-action" onclick="shareOrDownloadBlob('${item.Title}', '${dlUrl}')" title="Share via Native Menu">${ICON_SHARE}</button>`;
-                        // Everyone gets an explicit Download button
-                        buttonsHtml += `<button class="btn-icon" onclick="shareOrDownloadBlob('${item.Title}', '${dlUrl}', true)" title="Force Local Download">${ICON_DOWNLOAD}</button>`;
-                    } else if (isFile) {
-                        if (isMobileDevice) {
-                            buttonsHtml += `<button class="btn-icon btn-action" onclick="shareOrDownloadBlob('${item.Title}', '${dlUrl}')" title="Share Document">${ICON_SHARE}</button>`;
-                        }
-                        buttonsHtml += `<button class="btn-icon ${!isMobileDevice ? 'btn-action' : ''}" onclick="shareOrDownloadBlob('${item.Title}', '${dlUrl}', true)" title="Download Document to Local Storage">${ICON_DOWNLOAD}</button>`;
+                if (isQRCode) {
+                    const isQRUrl = item.Raw.toLowerCase().startsWith('http');
+                    if (isQRUrl) {
+                        buttonsHtml += `<button class="btn-icon" onclick="copyToClipboardFallback(\`${item.Raw.replace(/`/g, '\\`')}\`)" title="Copy Secret Link">${ICON_COPY}</button>`;
+                        buttonsHtml += `<button class="btn-icon btn-action" onclick="window.open('${item.Raw}', '_blank')" title="Execute QR Link">${ICON_EXTERNAL}</button>`;
                     } else {
-                        // Text / Code Default Options
-                        buttonsHtml += `<button class="btn-icon" onclick="copyToClipboardFallback(\`${item.Raw.replace(/`/g, '\\`')}\`)" title="Extract Block Memory">${ICON_COPY}</button>`;
+                        buttonsHtml += `<button class="btn-icon btn-action" onclick="copyToClipboardFallback(\`${item.Raw.replace(/`/g, '\\`')}\`)" title="Copy QR Text">${ICON_COPY}</button>`;
                     }
+                } else if (isUrl) {
+                    buttonsHtml += `<button class="btn-icon" onclick="copyToClipboardFallback(\`${item.Raw.replace(/`/g, '\\`')}\`)" title="Copy Link">${ICON_COPY}</button>`;
+                    buttonsHtml += `<button class="btn-icon btn-action" onclick="window.open('${item.Raw}', '_blank')" title="Execute URL">${ICON_EXTERNAL}</button>`;
+                } else if (isImage) {
+                    buttonsHtml += `<button class="btn-icon" onclick="copyImageNative('${dlUrl}')" title="Copy Raw Image to PC Clipboard">${ICON_COPY}</button>`;
+                    if (isMobileDevice) buttonsHtml += `<button class="btn-icon btn-action" onclick="shareOrDownloadBlob('${item.Title}', '${dlUrl}')" title="Share via Native Menu">${ICON_SHARE}</button>`;
+                    buttonsHtml += `<button class="btn-icon" onclick="shareOrDownloadBlob('${item.Title}', '${dlUrl}', true)" title="Force Local Download">${ICON_DOWNLOAD}</button>`;
+                } else if (isFile) {
+                    if (isMobileDevice) {
+                        buttonsHtml += `<button class="btn-icon btn-action" onclick="shareOrDownloadBlob('${item.Title}', '${dlUrl}')" title="Share Document">${ICON_SHARE}</button>`;
+                    }
+                    buttonsHtml += `<button class="btn-icon ${!isMobileDevice ? 'btn-action' : ''}" onclick="shareOrDownloadBlob('${item.Title}', '${dlUrl}', true)" title="Download Document to Local Storage">${ICON_DOWNLOAD}</button>`;
+                } else {
+                    buttonsHtml += `<button class="btn-icon" onclick="copyToClipboardFallback(\`${item.Raw.replace(/`/g, '\\`')}\`)" title="Extract Block Memory">${ICON_COPY}</button>`;
+                }
 
-                    html += `
-                        <div class="clip-card glass-panel">
-                            <div class="clip-icon">${getIcon(item.Type, item.PreviewUrl)}</div>
-                            <div class="clip-content">
-                                <div class="clip-title">${item.Title}</div>
-                                <div class="clip-meta"><strong>${item.Type}</strong> • ${item.Time}</div>
-                            </div>
-                            <div class="clip-actions">
-                                ${buttonsHtml}
-                            </div>
+                shelf.innerHTML = `
+                    <div class="clip-card glass-panel">
+                        <div class="clip-icon">${getIcon(item.Type, item.PreviewUrl)}</div>
+                        <div class="clip-content">
+                            <div class="clip-title">${item.Title}</div>
+                            <div class="clip-meta"><strong>${item.Type}</strong> • ${item.Time}</div>
                         </div>
-                    `;
-                });
-                shelf.innerHTML = html;
+                        <div class="clip-actions">
+                            ${buttonsHtml}
+                        </div>
+                    </div>
+                `;
+
+                // Schedule auto-clear for privacy
+                scheduleAutoClear();
             } catch(e) {
                 // Background poll fail tolerance
             }

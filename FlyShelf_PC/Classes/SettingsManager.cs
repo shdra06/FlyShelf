@@ -250,7 +250,9 @@ namespace FlyShelf.Classes
                     {
                         try
                         {
-                            File.WriteAllText(path, json);
+                            string tempPath = path + ".tmp";
+                            File.WriteAllText(tempPath, json);
+                            File.Move(tempPath, path, true);
                         }
                         catch (Exception ex)
                         {

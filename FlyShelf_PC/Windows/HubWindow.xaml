@@ -12,8 +12,7 @@
         MinWidth="300" MinHeight="400"
         WindowStartupLocation="CenterScreen"
         SystemBackdropType="Mica"
-        Background="Transparent"
-        PreviewMouseWheel="HubWindow_PreviewMouseWheel">
+        Background="Transparent">
     
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="44" ResizeBorderThickness="6" CornerRadius="8" GlassFrameThickness="-1" />
@@ -265,7 +264,7 @@
                 
                 <!-- 0. DASHBOARD TAB -->
                 <Grid x:Name="DashboardGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="VerticalOnly" PreviewMouseWheel="SettingsScrollViewer_PreviewMouseWheel">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="VerticalOnly">
                         <StackPanel Margin="0,8,0,0">
 
                             <!-- TOP ROW: 3 Stat Cards  -->
@@ -1445,7 +1444,7 @@
 
                 <!-- 3. NETWORK SYNC TAB -->
                 <Grid x:Name="NetworkGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="VerticalOnly" PreviewMouseWheel="SettingsScrollViewer_PreviewMouseWheel">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="VerticalOnly">
                         <StackPanel>
                             <StackPanel Margin="0,0,0,6">
                                 <TextBlock Text="Wi-Fi Sync Server" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
@@ -2017,7 +2016,7 @@
 
                 <!-- 4. CORE SETTINGS TAB -->
                 <Grid x:Name="SettingsGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="VerticalOnly" PreviewMouseWheel="SettingsScrollViewer_PreviewMouseWheel">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="VerticalOnly">
                         <StackPanel>
                             <!-- Settings Meta -->
                             <StackPanel Margin="0,0,0,6">

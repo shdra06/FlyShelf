@@ -56,6 +56,15 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        // ═══ SELF-UPDATE HANDLER ═══
+        // If launched with --apply-update, we are the updater EXE running from temp.
+        // Run the replacement logic and exit — no UI, no mutex, no WPF initialization.
+        if (FlyShelf.Classes.UpdateManager.HandleUpdateIfRequested(e.Args))
+        {
+            Environment.Exit(0);
+            return;
+        }
+
         // 1. Check command line arguments for Safe Mode
         bool startInSafeMode = false;
         for (int i = 0; i < e.Args.Length; i++)
@@ -479,7 +488,23 @@ public partial class App : Application
             MainWindow = _mainWinInstance;
         }
 
-        _mainWinInstance.ShowNearPosition(x, y, mode, isPersistent, stealFocus);
+        // Convert physical x and y to logical coordinates before calling ShowNearPosition
+        double logicalX = x;
+        double logicalY = y;
+        try
+        {
+            var monitor = Classes.Utils.MonitorUtil.GetMonitorWithCursor();
+            double scaleX = monitor.dpiX / 96.0;
+            double scaleY = monitor.dpiY / 96.0;
+            if (scaleX > 0 && scaleY > 0)
+            {
+                logicalX = x / scaleX;
+                logicalY = y / scaleY;
+            }
+        }
+        catch { }
+
+        _mainWinInstance.ShowNearPosition(logicalX, logicalY, mode, isPersistent, stealFocus);
     }
 
     [DllImport("user32.dll")]

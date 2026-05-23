@@ -58,8 +58,9 @@
     <PropertyGroup>
       <SecretsFile>Classes\FirebaseSecrets.cs</SecretsFile>
     </PropertyGroup>
+    <!-- Stub: compiles but Firebase features won't work until real file is provided -->
     <WriteLinesToFile File="$(SecretsFile)" 
-                      Lines="namespace FlyShelf.Classes;%0D%0A%0D%0Apublic static class FirebaseSecrets%0D%0A{%0D%0A    public const string ApiKey = &quot;&quot;;%0D%0A    public const string DatabaseUrl = &quot;https://advance-sync-default-rtdb.firebaseio.com&quot;;%0D%0A}" 
+                      Lines="namespace FlyShelf.Classes%0D%0A{%0D%0A    public static class FirebaseSecrets%0D%0A    {%0D%0A        public static string ApiKey => &quot;&quot;;%0D%0A        public static string DatabaseUrl => &quot;&quot;;%0D%0A    }%0D%0A}" 
                       Overwrite="true" 
                       Condition="!Exists('$(SecretsFile)')" />
   </Target>

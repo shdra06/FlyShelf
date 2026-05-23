@@ -16,6 +16,7 @@ namespace FlyShelf.Classes
         private bool _useHttp2 = false; // Start with QUIC, fallback to HTTP/2 for restricted networks
         private bool _stopped = false;  // True when Stop() is called — prevents auto-retry
         private const long MIN_EXE_SIZE = 10_000_000; // cloudflared.exe should be >10MB
+        private const string TRUSTED_CF_HASH = "b3279f2186a1c3c438ad5865e802bbbec26090c5d3fdb4ac1113f1143a94837a";
         private System.Timers.Timer _healthTimer;      // Periodic tunnel health monitor
         private int _quicErrorCount = 0;                 // Track consecutive QUIC/datagram failures for fast auto-restart
 
@@ -48,14 +49,41 @@ namespace FlyShelf.Classes
                 Directory.CreateDirectory(agentDir);
                 string exePath = Path.Combine(agentDir, "cloudflared.exe");
 
-                // Download cloudflared.exe if missing or corrupted (too small)
+                // Verify if cloudflared.exe exists, has valid size, and is cryptographically integral
+                bool needsDownload = false;
                 if (!File.Exists(exePath) || new FileInfo(exePath).Length < MIN_EXE_SIZE)
+                {
+                    needsDownload = true;
+                }
+                else
+                {
+                    try
+                    {
+                        using (var sha = System.Security.Cryptography.SHA256.Create())
+                        using (var fs = File.OpenRead(exePath))
+                        {
+                            string existingHash = BitConverter.ToString(sha.ComputeHash(fs)).Replace("-", "").ToLowerInvariant();
+                            if (existingHash != TRUSTED_CF_HASH)
+                            {
+                                Logger.LogAction("CLOUDFLARE", "Existing cloudflared.exe hash mismatch — will re-download to guarantee integrity.");
+                                needsDownload = true;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("CLOUDFLARE_ERROR", $"Failed to verify existing cloudflared.exe hash: {ex.Message} — forcing secure re-download.");
+                        needsDownload = true;
+                    }
+                }
+
+                if (needsDownload)
                 {
                     try { if (File.Exists(exePath)) File.Delete(exePath); } catch { }
 
                     GlobalUrl = "Downloading secure agent...";
                     GlobalUrlUpdated?.Invoke(GlobalUrl);
-                    Logger.LogAction("CLOUDFLARE", "Downloading cloudflared.exe...");
+                    Logger.LogAction("CLOUDFLARE", "Downloading cryptographically verified cloudflared.exe...");
 
                     bool downloaded = await DownloadCloudflaredAsync(exePath);
                     if (!downloaded)
@@ -418,9 +446,9 @@ namespace FlyShelf.Classes
 
         private async Task<bool> DownloadCloudflaredAsync(string exePath)
         {
+            // Pin to a known stable release to guarantee signature verification is deterministic and reliable
             string[] downloadUrls = new[]
             {
-                "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe",
                 "https://github.com/cloudflare/cloudflared/releases/download/2024.12.2/cloudflared-windows-amd64.exe"
             };
 
@@ -430,7 +458,7 @@ namespace FlyShelf.Classes
             {
                 try
                 {
-                    Logger.LogAction("CLOUDFLARE", $"Downloading from: {url}");
+                    Logger.LogAction("CLOUDFLARE", $"Downloading secure tunnel client from: {url}");
                     var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
                     response.EnsureSuccessStatusCode();
 
@@ -458,10 +486,24 @@ namespace FlyShelf.Classes
                         }
                     }
 
-                    // Atomic rename: only replace after complete download
+                    // SECURITY: Cryptographic integrity check
+                    Logger.LogAction("CLOUDFLARE", "Verifying SHA-256 signature of downloaded binary...");
+                    using (var sha = System.Security.Cryptography.SHA256.Create())
+                    using (var fs = File.OpenRead(tempPath))
+                    {
+                        string downloadedHash = BitConverter.ToString(sha.ComputeHash(fs)).Replace("-", "").ToLowerInvariant();
+                        if (downloadedHash != TRUSTED_CF_HASH)
+                        {
+                            Logger.LogAction("CLOUDFLARE_ERROR", $"❌ SHA-256 mismatch! Downloaded: {downloadedHash}, Expected: {TRUSTED_CF_HASH}. Rejecting insecure binary.");
+                            try { File.Delete(tempPath); } catch { }
+                            continue;
+                        }
+                    }
+
+                    // Atomic rename: only replace after complete download and successful signature verification
                     try { if (File.Exists(exePath)) File.Delete(exePath); } catch { }
                     File.Move(tempPath, exePath);
-                    Logger.LogAction("CLOUDFLARE", $"Downloaded cloudflared.exe ({new FileInfo(exePath).Length / 1048576.0:F1} MB)");
+                    Logger.LogAction("CLOUDFLARE", $"✅ Download complete and verified: cloudflared.exe ({new FileInfo(exePath).Length / 1048576.0:F1} MB)");
                     return true;
                 }
                 catch (Exception ex)

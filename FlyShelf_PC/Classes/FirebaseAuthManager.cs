@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Net.Http;
 using System.Text.Json;
 using System.Threading;
@@ -10,12 +11,19 @@ namespace FlyShelf.Classes
     /// Manages Firebase Anonymous Authentication for the PC client.
     /// Obtains and caches an ID token that must be appended to all Firebase REST API calls.
     /// Token is auto-refreshed before expiry (tokens last 1 hour).
+    /// 
+    /// IMPORTANT: The refresh token and UID are persisted to disk (DPAPI-encrypted)
+    /// so the same anonymous identity is reused across app restarts. This prevents
+    /// creating a new Firebase Auth user on every launch, which would:
+    /// - Hit Firebase's 100-accounts-per-IP-per-hour rate limit
+    /// - Balloon Firebase Auth user count with orphaned accounts
+    /// - Incur Firebase charges past the free tier
     /// </summary>
     public static class FirebaseAuthManager
     {
         private static readonly HttpClient _authClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(15) };
         
-        // Firebase Web API Key (same as in firebaseConfig.ts)
+        // Firebase Web API Key (obfuscated — see FirebaseSecrets.cs)
         private static string FIREBASE_API_KEY => FirebaseSecrets.ApiKey;
         
         public static string FirebaseDatabaseUrl => FirebaseSecrets.DatabaseUrl;
@@ -26,13 +34,21 @@ namespace FlyShelf.Classes
         private static string _uid = "";
         private static DateTime _tokenExpiry = DateTime.MinValue;
         private static readonly SemaphoreSlim _tokenLock = new(1, 1);
+        private static bool _diskLoaded = false;
         
         // Pre-refresh 5 minutes before expiry to avoid 401s
         private const int TOKEN_REFRESH_BUFFER_MINUTES = 5;
-        
+
+        // Persistence path for refresh token (DPAPI-encrypted)
+        private static readonly string _tokenPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            "FlyShelf", "firebase_auth.dat");
+
         /// <summary>
         /// Returns a valid Firebase ID token. Signs in anonymously if needed,
         /// refreshes if expired. Thread-safe via SemaphoreSlim.
+        /// 
+        /// Flow: Load persisted token → Refresh → Sign up (last resort)
         /// </summary>
         public static async Task<string> GetIdTokenAsync()
         {
@@ -51,22 +67,40 @@ namespace FlyShelf.Classes
                     return _idToken;
                 }
 
-                // Try refresh first if we have a refresh token
+                // Step 1: Load persisted refresh token from disk (first call only)
+                if (!_diskLoaded)
+                {
+                    LoadPersistedToken();
+                    _diskLoaded = true;
+                }
+
+                // Step 2: Try refresh if we have a refresh token (either from memory or disk)
                 if (!string.IsNullOrEmpty(_refreshToken))
                 {
                     try
                     {
                         await RefreshTokenAsync();
+                        PersistToken(); // Save updated tokens to disk
                         return _idToken;
                     }
                     catch (Exception ex)
                     {
-                        Logger.LogAction("FIREBASE AUTH", $"Token refresh failed, signing in fresh: {ex.Message}");
+                        Logger.LogAction("FIREBASE AUTH", $"Token refresh failed: {ex.Message}");
+                        // If refresh fails with 400 (invalid grant), the refresh token is dead.
+                        // Clear it so we don't keep retrying a dead token.
+                        if (ex.Message.Contains("400"))
+                        {
+                            Logger.LogAction("FIREBASE AUTH", "Refresh token expired/revoked — will create new anonymous identity");
+                            _refreshToken = "";
+                            DeletePersistedToken();
+                        }
                     }
                 }
 
-                // Sign in anonymously
+                // Step 3: Last resort — create a new anonymous identity
+                // This only happens on truly fresh installs or when the refresh token is revoked
                 await SignInAnonymouslyAsync();
+                PersistToken(); // Save the new identity to disk for future sessions
                 return _idToken;
             }
             finally
@@ -136,7 +170,7 @@ namespace FlyShelf.Classes
                 int seconds = int.TryParse(expiresIn, out var s) ? s : 3600;
                 _tokenExpiry = DateTime.UtcNow.AddSeconds(seconds);
 
-                Logger.LogAction("FIREBASE AUTH", $"Anonymous sign-in successful — token valid for {seconds}s");
+                Logger.LogAction("FIREBASE AUTH", $"Anonymous sign-in successful (new identity) — UID: {_uid.Substring(0, Math.Min(8, _uid.Length))}... token valid for {seconds}s");
             }
             catch (Exception ex)
             {
@@ -177,7 +211,82 @@ namespace FlyShelf.Classes
             int seconds = int.TryParse(expiresIn, out var s) ? s : 3600;
             _tokenExpiry = DateTime.UtcNow.AddSeconds(seconds);
 
-            Logger.LogAction("FIREBASE AUTH", $"Token refreshed — valid for {seconds}s");
+            Logger.LogAction("FIREBASE AUTH", $"Token refreshed (existing identity) — UID: {_uid.Substring(0, Math.Min(8, _uid.Length))}... valid for {seconds}s");
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // Token Persistence — DPAPI encrypted to %AppData%\FlyShelf\
+        // ═══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Persists the refresh token and UID to disk using DPAPI encryption.
+        /// Called after successful sign-in or token refresh.
+        /// </summary>
+        private static void PersistToken()
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(_refreshToken)) return;
+
+                var data = new { refreshToken = _refreshToken, uid = _uid };
+                string json = JsonSerializer.Serialize(data);
+                string encrypted = SecureStorage.Encrypt(json);
+
+                Directory.CreateDirectory(Path.GetDirectoryName(_tokenPath)!);
+                string tempPath = _tokenPath + ".tmp";
+                File.WriteAllText(tempPath, encrypted);
+                File.Move(tempPath, _tokenPath, true);
+
+                Logger.LogAction("FIREBASE AUTH", $"Persisted auth identity to disk (UID: {_uid.Substring(0, Math.Min(8, _uid.Length))}...)");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("FIREBASE AUTH", $"Failed to persist token: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Loads persisted refresh token and UID from disk.
+        /// Called once on first GetIdTokenAsync() invocation.
+        /// </summary>
+        private static void LoadPersistedToken()
+        {
+            try
+            {
+                if (!File.Exists(_tokenPath)) return;
+
+                string encrypted = File.ReadAllText(_tokenPath);
+                string json = SecureStorage.Decrypt(encrypted);
+
+                using var doc = JsonDocument.Parse(json);
+                string refreshToken = doc.RootElement.TryGetProperty("refreshToken", out var rt) ? rt.GetString() ?? "" : "";
+                string uid = doc.RootElement.TryGetProperty("uid", out var u) ? u.GetString() ?? "" : "";
+
+                if (!string.IsNullOrEmpty(refreshToken))
+                {
+                    _refreshToken = refreshToken;
+                    _uid = uid;
+                    Logger.LogAction("FIREBASE AUTH", $"Loaded persisted identity from disk (UID: {_uid.Substring(0, Math.Min(8, _uid.Length))}...)");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("FIREBASE AUTH", $"Failed to load persisted token (will create new identity): {ex.Message}");
+                // Corrupted file — delete it so next launch creates a fresh identity
+                DeletePersistedToken();
+            }
+        }
+
+        /// <summary>
+        /// Deletes the persisted token file (used when refresh token is revoked).
+        /// </summary>
+        private static void DeletePersistedToken()
+        {
+            try
+            {
+                if (File.Exists(_tokenPath)) File.Delete(_tokenPath);
+            }
+            catch { }
         }
 
         /// <summary>
@@ -188,6 +297,22 @@ namespace FlyShelf.Classes
             _idToken = "";
             _tokenExpiry = DateTime.MinValue;
             Logger.LogAction("FIREBASE AUTH", "Token invalidated — will re-authenticate on next call");
+        }
+
+        /// <summary>
+        /// Completely resets the Firebase identity — deletes the persisted token
+        /// and forces a new anonymous sign-up on next call. Use when the user
+        /// wants to fully reset their sync identity.
+        /// </summary>
+        public static void ResetIdentity()
+        {
+            _idToken = "";
+            _refreshToken = "";
+            _uid = "";
+            _tokenExpiry = DateTime.MinValue;
+            _diskLoaded = false;
+            DeletePersistedToken();
+            Logger.LogAction("FIREBASE AUTH", "Identity fully reset — will create new anonymous user on next call");
         }
     }
 }

@@ -702,7 +702,7 @@ namespace FlyShelf.Classes
                     bool isPath = false;
                     try
                     {
-                        if (System.Text.RegularExpressions.Regex.IsMatch(possiblePath, @"^[a-zA-Z]:[\\/]") || possiblePath.StartsWith("\\\\"))
+                        if (_rxWinPath.IsMatch(possiblePath) || possiblePath.StartsWith("\\\\"))
                         {
                             isPath = true;
                         }

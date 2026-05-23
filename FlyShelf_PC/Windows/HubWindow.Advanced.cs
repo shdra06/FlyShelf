@@ -453,62 +453,8 @@ namespace FlyShelf.Windows
             {
                 RedownloadBtn.IsEnabled = true;
                 UpdateBtn.IsEnabled = true;
-                UpdateStatusText.Text = "âŒ Redownload failed â€” check your internet connection.";
+                UpdateStatusText.Text = "â Œ Redownload failed â€” check your internet connection.";
             }
-        }
-
-        // â•â•â• Kinetic Smooth Scroll Engine â•â•â•
-        private ScrollViewer _activeScrollViewer;
-        private double _scrollVelocity;
-        private bool _isKineticScrolling;
-
-        private void HubWindow_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
-        {
-            // Walk up visual tree to find nearest active ScrollViewer
-            var element = e.OriginalSource as DependencyObject;
-            ScrollViewer sv = null;
-            while (element != null)
-            {
-                if (element is ScrollViewer found && found.ScrollableHeight > 0)
-                {
-                    sv = found;
-                    break;
-                }
-                element = VisualTreeHelper.GetParent(element);
-            }
-            if (sv == null) return;
-
-            e.Handled = true;
-            _activeScrollViewer = sv;
-
-            // Add velocity: ~4px per delta unit, accumulates for fast flicks
-            _scrollVelocity += -e.Delta / 120.0 * 4.0;
-
-            // Start the rendering loop if not already running
-            if (!_isKineticScrolling)
-            {
-                _isKineticScrolling = true;
-                CompositionTarget.Rendering += KineticScroll_Rendering;
-            }
-        }
-
-        private void KineticScroll_Rendering(object sender, EventArgs e)
-        {
-            if (_activeScrollViewer == null || Math.Abs(_scrollVelocity) < 0.3)
-            {
-                // Stop when velocity is negligible
-                _scrollVelocity = 0;
-                _isKineticScrolling = false;
-                CompositionTarget.Rendering -= KineticScroll_Rendering;
-                return;
-            }
-
-            double newOffset = _activeScrollViewer.VerticalOffset + _scrollVelocity;
-            newOffset = Math.Max(0, Math.Min(newOffset, _activeScrollViewer.ScrollableHeight));
-            _activeScrollViewer.ScrollToVerticalOffset(newOffset);
-
-            // Apply friction â€” 0.92 gives natural deceleration (like Chrome)
-            _scrollVelocity *= 0.92;
         }
 
     } // end HubWindow class

@@ -14,6 +14,21 @@ namespace FlyShelf.ViewModels
 {
     public partial class ClipboardItem
     {
+        private static readonly System.Text.RegularExpressions.Regex _rxCppCheck = new System.Text.RegularExpressions.Regex(
+            @"#include\s*<[a-z.]+>|int\s+main\s*\(", System.Text.RegularExpressions.RegexOptions.Compiled);
+        
+        private static readonly System.Text.RegularExpressions.Regex _rxTimeCheck = new System.Text.RegularExpressions.Regex(
+            @"\b(?:[01]?\d|2[0-3]):[0-5]\d\b", System.Text.RegularExpressions.RegexOptions.Compiled);
+        
+        private static readonly System.Text.RegularExpressions.Regex _rxDurationCheck = new System.Text.RegularExpressions.Regex(
+            @"\d+\s*(sec|min|hour|hr|minute|second)s?\b", System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        
+        private static readonly System.Text.RegularExpressions.Regex _rxSlashTimerCheck = new System.Text.RegularExpressions.Regex(
+            @"^\/\d+$", System.Text.RegularExpressions.RegexOptions.Compiled);
+        
+        private static readonly System.Text.RegularExpressions.Regex _rxAddressCheck = new System.Text.RegularExpressions.Regex(
+            @"\d{1,5}\s+\w+\s+(st|street|ave|avenue|blvd|boulevard|rd|road|dr|drive|lane|ln)\b", System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
         /// <summary>Parameterless constructor for object initializer syntax and JSON deserialization.</summary>
         public ClipboardItem() { }
 
@@ -73,23 +88,23 @@ namespace FlyShelf.ViewModels
             }
             else if ((ItemType == ClipboardItemType.Text || ItemType == ClipboardItemType.Code) && !string.IsNullOrEmpty(RawContent))
             {
-                if (System.Text.RegularExpressions.Regex.IsMatch(RawContent, @"(#include\s*<[a-z.]+>|int\s+main\s*\()"))
+                if (_rxCppCheck.IsMatch(RawContent))
                 {
                     SmartActionName = "Run C/C++";
                     SmartActionIcon = "Play24";
                     SmartActionType = "CompileAndRun";
                     HasSmartAction = true;
                 }
-                else if (System.Text.RegularExpressions.Regex.IsMatch(RawContent, @"\b(?:[01]?\d|2[0-3]):[0-5]\d\b") || 
-                    System.Text.RegularExpressions.Regex.IsMatch(RawContent.ToLower(), @"\d+\s*(sec|min|hour|hr|minute|second)s?\b") ||
-                    System.Text.RegularExpressions.Regex.IsMatch(RawContent.Trim(), @"^\/\d+$"))
+                else if (_rxTimeCheck.IsMatch(RawContent) || 
+                    _rxDurationCheck.IsMatch(RawContent) ||
+                    _rxSlashTimerCheck.IsMatch(RawContent.Trim()))
                 {
                     SmartActionName = "Set Timer";
                     SmartActionIcon = "Clock24";
                     SmartActionType = "SetTimer";
                     HasSmartAction = true;
                 }
-                else if (System.Text.RegularExpressions.Regex.IsMatch(RawContent.ToLower(), @"\d{1,5}\s+\w+\s+(st|street|ave|avenue|blvd|boulevard|rd|road|dr|drive|lane|ln)\b"))
+                else if (_rxAddressCheck.IsMatch(RawContent))
                 {
                     SmartActionName = "Open Maps";
                     SmartActionIcon = "Map24";

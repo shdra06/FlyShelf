@@ -177,10 +177,7 @@ namespace FlyShelf.ViewModels
                 // Phase 2: Batch-insert into ObservableCollection on UI thread
                 Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    for (int i = newItems.Count - 1; i >= 0; i--)
-                    {
-                        DroppedItems.Insert(0, newItems[i].item);
-                    }
+                    DroppedItems.InsertRange(0, newItems.Select(x => x.item));
                     PruneOldItems();
                     OnPropertyChanged(nameof(ShelfVisibility));
                 });
@@ -500,31 +497,31 @@ namespace FlyShelf.ViewModels
                             {
                                 item.Extension = "TERM";
                             }
-                            else if (capturedText.Contains("std::") || capturedText.Contains("<iostream>") || capturedText.Contains("<cstdlib>") || capturedText.Contains("<vector>") || capturedText.Contains("using namespace") || Regex.IsMatch(capturedText, @"(cout|cin|endl|cerr)\s*<<"))
+                            else if (capturedText.Contains("std::") || capturedText.Contains("<iostream>") || capturedText.Contains("<cstdlib>") || capturedText.Contains("<vector>") || capturedText.Contains("using namespace") || _rxCpp.IsMatch(capturedText))
                             {
                                 item.Extension = "C++";
                             }
-                            else if (capturedText.Contains("<stdio.h>") || capturedText.Contains("<stdlib.h>") || capturedText.Contains("<string.h>") || Regex.IsMatch(capturedText, @"\b(printf|scanf|malloc|free|sizeof|typedef|struct\s+\w+)\s*[\(;]"))
+                            else if (capturedText.Contains("<stdio.h>") || capturedText.Contains("<stdlib.h>") || capturedText.Contains("<string.h>") || _rxC.IsMatch(capturedText))
                             {
                                 item.Extension = "C";
                             }
-                            else if (Regex.IsMatch(capturedText, @"(def\s+\w+\s*\(|import\s+(os|sys|json|re|math|numpy|pandas|flask|django|requests|typing|pathlib)|from\s+\w+\s+import|if\s+__name__\s*==|self\.|__init__|lambda\s|print\s*\(|class\s+\w+\s*[\(:]|@(staticmethod|classmethod|property)|except\s|elif\s|raise\s)"))
+                            else if (_rxPython.IsMatch(capturedText))
                             {
                                 item.Extension = "PYTHON";
                             }
-                            else if (Regex.IsMatch(capturedText, @"(public\s+static\s+void\s+main|System\.(out|in|err)\.|import\s+java\.|throws\s|implements\s|extends\s|interface\s+\w+|abstract\s+class|@Override|@Deprecated|\.println\()"))
+                            else if (_rxJava.IsMatch(capturedText))
                             {
                                 item.Extension = "JAVA";
                             }
-                            else if (Regex.IsMatch(capturedText, @"(function\s+\w+\s*\(|console\.(log|error|warn)\(|require\s*\(|module\.exports|export\s+(default|const|function|class)|async\s+function|await\s|const\s+\w+\s*=\s*(require|\(|async|\{)|=>\s*\{)"))
+                            else if (_rxJs.IsMatch(capturedText))
                             {
                                 item.Extension = "JS";
                             }
-                            else if (capturedText.Contains("public class") || capturedText.Contains("private void") || capturedText.Contains("Console.") || capturedText.Contains("namespace ") || Regex.IsMatch(capturedText, @"(using\s+System|var\s+\w+\s*=\s*new|async\s+Task)"))
+                            else if (capturedText.Contains("public class") || capturedText.Contains("private void") || capturedText.Contains("Console.") || capturedText.Contains("namespace ") || _rxCs.IsMatch(capturedText))
                             {
                                 item.Extension = "C#";
                             }
-                            else if (Regex.IsMatch(capturedText, @"(SELECT\s+.*\s+FROM|INSERT\s+INTO|CREATE\s+(TABLE|DATABASE)|ALTER\s+TABLE|WHERE\s+\w+)", RegexOptions.IgnoreCase))
+                            else if (_rxSql.IsMatch(capturedText))
                             {
                                 item.Extension = "SQL";
                             }
@@ -532,7 +529,7 @@ namespace FlyShelf.ViewModels
                             {
                                 item.Extension = "JSON";
                             }
-                            else if (Regex.IsMatch(capturedText, @"<\/?(html|div|span|body|script|style|form|table)[\s>]", RegexOptions.IgnoreCase))
+                            else if (_rxHtml.IsMatch(capturedText))
                             {
                                 item.Extension = "HTML";
                             }
@@ -577,7 +574,7 @@ namespace FlyShelf.ViewModels
 
                         FlyShelf.Classes.NetworkSyncServer.Instance?.NotifyClipboardChanged(item.ItemType.ToString(), item.FileName ?? item.RawContent?.Substring(0, Math.Min(40, item.RawContent?.Length ?? 0)) ?? "");
 
-                        if (item.SmartActionType == "SetTimer" && System.Text.RegularExpressions.Regex.IsMatch(item.RawContent.Trim(), @"^\/\d+$"))
+                        if (item.SmartActionType == "SetTimer" && _rxSlashTimer.IsMatch(item.RawContent.Trim()))
                         {
                             var tw = new FlyShelf.Windows.TimerWindow(item.RawContent.Trim());
                             tw.Show();
@@ -644,7 +641,7 @@ namespace FlyShelf.ViewModels
             return bmp;
         }
 
-        public BitmapImage? GetIcon(string filePath)
+        public BitmapSource? GetIcon(string filePath)
         {
             try
             {
@@ -666,20 +663,8 @@ namespace FlyShelf.ViewModels
                             Int32Rect.Empty,
                             BitmapSizeOptions.FromEmptyOptions());
                         
-                        var bitmapImage = new BitmapImage();
-                        using (var memStream = new System.IO.MemoryStream())
-                        {
-                            var encoder = new PngBitmapEncoder();
-                            encoder.Frames.Add(BitmapFrame.Create(bitmapSource));
-                            encoder.Save(memStream);
-                            
-                            bitmapImage.BeginInit();
-                            bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
-                            bitmapImage.StreamSource = memStream;
-                            bitmapImage.EndInit();
-                            bitmapImage.Freeze();
-                        }
-                        return bitmapImage;
+                        bitmapSource.Freeze();
+                        return bitmapSource;
                     }
                     finally
                     {

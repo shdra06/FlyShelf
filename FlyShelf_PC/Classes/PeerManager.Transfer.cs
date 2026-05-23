@@ -415,10 +415,10 @@ namespace FlyShelf.Classes
             string sessionId = Guid.NewGuid().ToString("N");
             string baseUrl = peer.ActiveUrl.TrimEnd('/');
 
-            byte[] fileBytes = await File.ReadAllBytesAsync(filePath);
-            int totalChunks = (int)Math.Ceiling((double)fileBytes.Length / CHUNK_SIZE);
+            long fileSize = new FileInfo(filePath).Length;
+            int totalChunks = (int)Math.Ceiling((double)fileSize / CHUNK_SIZE);
 
-            Logger.LogAction("PEER", $"⚡ CF chunked: {fileName} ({fileBytes.Length / 1024}KB) → {totalChunks} chunks × {CHUNK_SIZE / 1024}KB, {MAX_PARALLEL_CHUNKS} parallel");
+            Logger.LogAction("PEER", $"⚡ CF chunked (streamed): {fileName} ({fileSize / 1024}KB) → {totalChunks} chunks × {CHUNK_SIZE / 1024}KB, {MAX_PARALLEL_CHUNKS} parallel");
 
             // Upload chunks in parallel batches
             var semaphore = new SemaphoreSlim(MAX_PARALLEL_CHUNKS);
@@ -427,8 +427,8 @@ namespace FlyShelf.Classes
             for (int i = 0; i < totalChunks; i++)
             {
                 int chunkIndex = i;
-                int offset = chunkIndex * CHUNK_SIZE;
-                int length = Math.Min(CHUNK_SIZE, fileBytes.Length - offset);
+                long offset = (long)chunkIndex * CHUNK_SIZE;
+                int length = (int)Math.Min(CHUNK_SIZE, fileSize - offset);
 
                 tasks.Add(Task.Run(async () =>
                 {
@@ -440,14 +440,31 @@ namespace FlyShelf.Classes
                         req.Headers.TryAddWithoutValidation("X-Upload-Session", sessionId);
                         req.Headers.TryAddWithoutValidation("X-Chunk-Index", chunkIndex.ToString());
 
+                        // Read exactly 'length' bytes from the file stream on demand to protect LOH memory
                         var chunkData = new byte[length];
-                        Buffer.BlockCopy(fileBytes, offset, chunkData, 0, length);
+                        using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, FileOptions.Asynchronous))
+                        {
+                            fs.Seek(offset, SeekOrigin.Begin);
+                            int readBytes = 0;
+                            while (readBytes < length)
+                            {
+                                int r = await fs.ReadAsync(chunkData, readBytes, length - readBytes);
+                                if (r == 0) break;
+                                readBytes += r;
+                            }
+                        }
+
                         req.Content = new ByteArrayContent(chunkData);
                         req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
                         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
                         var resp = await _sharedClient.SendAsync(req, cts.Token);
                         return resp.IsSuccessStatusCode;
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("PEER_CHUNK_ERROR", $"Chunk {chunkIndex} upload failed: {ex.Message}");
+                        return false;
                     }
                     finally { semaphore.Release(); }
                 }));
@@ -480,7 +497,7 @@ namespace FlyShelf.Classes
             {
                 peer.LastSeen = DateTime.UtcNow;
                 peer.ConsecutiveFailures = 0;
-                double speed = fileBytes.Length / 1024.0 / (sw.ElapsedMilliseconds / 1000.0);
+                double speed = fileSize / 1024.0 / (sw.ElapsedMilliseconds / 1000.0);
                 Logger.LogAction("PEER", $"→ File '{title}' to {peer.DeviceName} via CF chunked ({sw.ElapsedMilliseconds}ms, {speed:F0} KB/s)");
                 return true;
             }

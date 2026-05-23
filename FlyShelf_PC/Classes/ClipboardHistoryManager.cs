@@ -29,7 +29,7 @@ namespace FlyShelf.Classes
         private static int _journalEntryCount = 0;
 
         /// <summary>Maximum items to retain in history. Oldest items are evicted beyond this cap.</summary>
-        private const int MAX_HISTORY_ITEMS = 1000;
+        private const int MAX_HISTORY_ITEMS = 500;
         /// <summary>Compact after this many journal entries to prevent unbounded file growth.</summary>
         private const int COMPACTION_THRESHOLD = 100;
 
@@ -116,7 +116,7 @@ namespace FlyShelf.Classes
                     _ = System.Threading.Tasks.Task.Run(() =>
                     {
                         try { CompactNow(itemsCopy); }
-                        catch { }
+                        catch (Exception ex) { Logger.LogAction("HISTORY_COMPACT", $"Auto-compact on load failed: {ex.Message}"); }
                     });
                 }
 
@@ -173,7 +173,7 @@ namespace FlyShelf.Classes
                     _journalEntryCount++;
                 }
             }
-            catch { }
+            catch (Exception ex) { Logger.LogAction("HISTORY_JOURNAL", $"Failed to write delete entry: {ex.Message}"); }
         }
 
         /// <summary>
@@ -280,7 +280,7 @@ namespace FlyShelf.Classes
                     if (items.Count > 0)
                         CompactNow(items);
                 }
-                catch { }
+                catch (Exception ex) { Logger.LogAction("HISTORY_COMPACT", $"Scheduled compaction failed: {ex.Message}"); }
             }, null, 5000, Timeout.Infinite);
         }
 
@@ -311,7 +311,7 @@ namespace FlyShelf.Classes
                         else if (entry?.Action == "clear")
                             items.Clear();
                     }
-                    catch { }
+                    catch (Exception ex) { Logger.LogAction("HISTORY_JOURNAL", $"Failed to parse journal line: {ex.Message}"); }
                 }
             }
             return items.Take(MAX_HISTORY_ITEMS).ToList();
@@ -346,7 +346,7 @@ namespace FlyShelf.Classes
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { Logger.LogAction("HISTORY_DELETE", $"Failed to delete persistent image: {ex.Message}"); }
         }
 
         /// <summary>
@@ -396,7 +396,11 @@ namespace FlyShelf.Classes
         /// </summary>
         private static string GetItemId(ViewModels.ClipboardItem item)
         {
-            return $"{item.ItemType}_{item.DateCopied.Ticks}_{item.GetHashCode():X4}";
+            // Use a deterministic hash based on content, NOT object.GetHashCode()
+            // which is randomized per-process in .NET 6+ and non-stable across restarts.
+            string contentKey = item.RawContent ?? item.FileName ?? item.FilePath ?? "";
+            int stableHash = contentKey.GetHashCode(StringComparison.Ordinal);
+            return $"{item.ItemType}_{item.DateCopied.Ticks}_{stableHash:X8}";
         }
 
         /// <summary>Journal entry for append-only log.</summary>

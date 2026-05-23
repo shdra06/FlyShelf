@@ -13,6 +13,8 @@
                 <mica:ThemeDictionary Theme="Dark"/>
                 <mica:ControlsDictionary />
                 <ResourceDictionary Source="pack://application:,,,/Resources/Styles/CustomSlider.xaml"/>
+                <ResourceDictionary Source="pack://application:,,,/Resources/Styles/GlobalScrollBar.xaml"/>
+                <ResourceDictionary Source="pack://application:,,,/Resources/Styles/ImagePlaceholder.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
             <!-- Premium UI Gradients — Muted, sophisticated darks -->
@@ -48,6 +50,36 @@
             <SolidColorBrush x:Key="AccentViolet" Color="#8B5CF6" />
             <SolidColorBrush x:Key="AccentAmber" Color="#F59E0B" />
             <SolidColorBrush x:Key="AccentEmerald" Color="#10B981" />
+
+            <!-- ═══ Floating Action Bar — Default Theme Tokens ═══ -->
+            <!-- Merge button (blue accent) — overridden per theme via DynamicResource -->
+            <SolidColorBrush x:Key="FloatingMergeAccentBg"          Color="#303B82F6"/>
+            <SolidColorBrush x:Key="FloatingMergeAccentBgHover"     Color="#503B82F6"/>
+            <SolidColorBrush x:Key="FloatingMergeAccentBgPressed"   Color="#253B82F6"/>
+            <SolidColorBrush x:Key="FloatingMergeAccentBorder"      Color="#503B82F6"/>
+            <SolidColorBrush x:Key="FloatingMergeAccentBorderHover" Color="#703B82F6"/>
+            <SolidColorBrush x:Key="FloatingMergeAccentIcon"        Color="#60A5FA"/>
+            <SolidColorBrush x:Key="FloatingMergeAccentText"        Color="#E0E7FF"/>
+            <!-- Unpin button (amber) — overridden per theme via DynamicResource -->
+            <SolidColorBrush x:Key="FloatingUnpinBg"          Color="#25F59E0B"/>
+            <SolidColorBrush x:Key="FloatingUnpinBgHover"     Color="#40F59E0B"/>
+            <SolidColorBrush x:Key="FloatingUnpinBgPressed"   Color="#20F59E0B"/>
+            <SolidColorBrush x:Key="FloatingUnpinBorder"      Color="#40F59E0B"/>
+            <SolidColorBrush x:Key="FloatingUnpinBorderHover" Color="#60F59E0B"/>
+            <SolidColorBrush x:Key="FloatingUnpinIcon"        Color="#FBBF24"/>
+            <SolidColorBrush x:Key="FloatingUnpinText"        Color="#FDE68A"/>
+
+            <!-- ═══ Card & UI Element — Default Theme Tokens ═══ -->
+            <!-- Selection highlight (violet default — overridden by wallpaper dominant color at runtime) -->
+            <SolidColorBrush x:Key="ShelfCardSelectionBorder"  Color="#60A78BFA"/>
+            <SolidColorBrush x:Key="ShelfCardSelectionBg"      Color="#10A78BFA"/>
+            <SolidColorBrush x:Key="ShelfCardFocusBorder"      Color="#80A78BFA"/>
+            <!-- Action pill backgrounds (dark neutral) -->
+            <SolidColorBrush x:Key="ActionPillBg"              Color="#CC1F1F23"/>
+            <SolidColorBrush x:Key="ActionPillBorder"          Color="#22FFFFFF"/>
+            <!-- Expand/collapse chevron -->
+            <SolidColorBrush x:Key="ChevronBg"                 Color="#CC202024"/>
+            <SolidColorBrush x:Key="ChevronBorder"             Color="#33FFFFFF"/>
 
             <!-- Unified Hover Elevation Card Animation Template -->
             <Style x:Key="DashboardCardStyle" TargetType="Border">
@@ -92,58 +124,7 @@
                 </Style.Triggers>
             </Style>
 
-            <!-- Ultra-Slim Glass Scrollbar -->
-            <Style x:Key="SlimScrollBarThumb" TargetType="Thumb">
-                <Setter Property="OverridesDefaultStyle" Value="True" />
-                <Setter Property="IsTabStop" Value="False" />
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="Thumb">
-                            <Border Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" CornerRadius="2" Margin="0,2" />
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-            </Style>
-
-            <Style x:Key="SlimScrollBarStyle" TargetType="ScrollBar">
-                <Setter Property="OverridesDefaultStyle" Value="True" />
-                <Setter Property="SnapsToDevicePixels" Value="True" />
-                <Setter Property="Template">
-                    <Setter.Value>
-                        <ControlTemplate TargetType="ScrollBar">
-                            <Grid Width="5" Background="Transparent" Margin="0,4,2,4">
-                                <Track Name="PART_Track" IsDirectionReversed="True">
-                                    <Track.Thumb>
-                                        <Thumb Style="{StaticResource SlimScrollBarThumb}" />
-                                    </Track.Thumb>
-                                </Track>
-                            </Grid>
-                            <ControlTemplate.Triggers>
-                                <Trigger Property="Orientation" Value="Horizontal">
-                                    <Setter TargetName="PART_Track" Property="IsDirectionReversed" Value="False" />
-                                </Trigger>
-                            </ControlTemplate.Triggers>
-                        </ControlTemplate>
-                    </Setter.Value>
-                </Setter>
-                <Style.Triggers>
-                    <Trigger Property="Orientation" Value="Horizontal">
-                        <Setter Property="Template">
-                            <Setter.Value>
-                                <ControlTemplate TargetType="ScrollBar">
-                                    <Grid Height="5" Background="Transparent" Margin="4,0,4,2">
-                                        <Track Name="PART_Track" IsDirectionReversed="False">
-                                            <Track.Thumb>
-                                                <Thumb Style="{StaticResource SlimScrollBarThumb}" />
-                                            </Track.Thumb>
-                                        </Track>
-                                    </Grid>
-                                </ControlTemplate>
-                            </Setter.Value>
-                        </Setter>
-                    </Trigger>
-                </Style.Triggers>
-            </Style>
+            <!-- Scrollbar styles now in Resources/Styles/GlobalScrollBar.xaml (implicit, auto-applied) -->
 
             <!-- Native pixel-based scrolling — same as settings tab -->
             <Style TargetType="ScrollViewer">
