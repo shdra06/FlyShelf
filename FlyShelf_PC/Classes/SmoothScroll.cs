@@ -14,10 +14,10 @@ namespace FlyShelf.Classes
     /// </summary>
     public class ScrollProfile
     {
-        public double MouseEase { get; set; } = 0.12;           // premium butter LERP (down from 0.18)
-        public double MouseScrollStep { get; set; } = 80.0;     // highly controlled step (down from 96.0)
-        public double TouchpadEase { get; set; } = 0.22;        // 120 FPS smooth LERP (down from 1.0)
-        public double TouchpadMultiplier { get; set; } = 0.70;   // precise tactile scaling
+        public double MouseEase { get; set; } = 0.18;
+        public double MouseScrollStep { get; set; } = 96.0;
+        public double TouchpadEase { get; set; } = 1.0;         // 1.0 = direct response (zero artificial LERP lag)
+        public double TouchpadMultiplier { get; set; } = 0.85;
     }
 
     /// <summary>
@@ -34,9 +34,9 @@ namespace FlyShelf.Classes
         /// </summary>
         public static readonly ScrollProfile ClipboardProfile = new()
         {
-            MouseEase = 0.12,             // Premium butter sweeping glide
-            MouseScrollStep = 80.0,       // Controlled step
-            TouchpadEase = 0.22,          // Mac-like 120 FPS smooth LERP
+            MouseEase = 0.28,             // Snappy, quick-stopping, non-floaty LERP (Win+V style)
+            MouseScrollStep = 72.0,       // Controlled responsive notch step
+            TouchpadEase = 0.48,          // Snappy touchpad LERP (absorbs micro-jitters, zero runaway)
             TouchpadMultiplier = 0.70
         };
 
@@ -45,10 +45,10 @@ namespace FlyShelf.Classes
         /// </summary>
         public static readonly ScrollProfile PCAppProfile = new()
         {
-            MouseEase = 0.08,             // Ultra-luxurious sweeping glide
-            MouseScrollStep = 100.0,      // Deeper notch steps for tall settings/logs pages
-            TouchpadEase = 0.22,          // Butter trackpad LERP
-            TouchpadMultiplier = 0.70
+            MouseEase = 0.11,             // Luxurious long glide (restored to perfect committed state)
+            MouseScrollStep = 120.0,      // Deeper notch steps for tall settings/logs pages
+            TouchpadEase = 1.0,           // Direct trackpad input
+            TouchpadMultiplier = 0.85
         };
 
         private static readonly ScrollProfile _defaultProfile = new();
@@ -179,22 +179,51 @@ namespace FlyShelf.Classes
             state.IsTouchpad = isTouchpad;
             state.Profile = profile;
 
-            if (state.IsTouchpad)
+            double maxOvershoot = sv.ActualHeight > 50 ? (sv.ActualHeight * 0.8) : 400.0;
+
+            if (profile == ClipboardProfile)
             {
-                double scrollAmount = -delta * profile.TouchpadMultiplier;
-                state.TargetOffset += scrollAmount;
+                if (state.IsTouchpad)
+                {
+                    double scrollAmount = -delta * profile.TouchpadMultiplier;
+                    state.TargetOffset = Math.Clamp(state.TargetOffset + scrollAmount, 
+                                                    sv.VerticalOffset - maxOvershoot, 
+                                                    sv.VerticalOffset + maxOvershoot);
+                }
+                else
+                {
+                    double scrollAmount = -(delta / 120.0) * profile.MouseScrollStep;
+                    
+                    // Snap starting target if starting a fresh scroll or reversing direction
+                    if (!state.IsAnimating || Math.Sign(scrollAmount) != Math.Sign(state.TargetOffset - sv.VerticalOffset))
+                    {
+                        state.TargetOffset = sv.VerticalOffset;
+                    }
+                    
+                    state.TargetOffset = Math.Clamp(state.TargetOffset + scrollAmount, 
+                                                    sv.VerticalOffset - (maxOvershoot * 1.2), 
+                                                    sv.VerticalOffset + (maxOvershoot * 1.2));
+                }
             }
             else
             {
-                double scrollAmount = -(delta / 120.0) * profile.MouseScrollStep;
-                
-                // Snap starting target if starting a fresh scroll or reversing direction
-                if (!state.IsAnimating || Math.Sign(scrollAmount) != Math.Sign(state.TargetOffset - sv.VerticalOffset))
+                if (state.IsTouchpad)
                 {
-                    state.TargetOffset = sv.VerticalOffset;
+                    double scrollAmount = -delta * profile.TouchpadMultiplier;
+                    state.TargetOffset += scrollAmount;
                 }
-                
-                state.TargetOffset += scrollAmount;
+                else
+                {
+                    double scrollAmount = -(delta / 120.0) * profile.MouseScrollStep;
+                    
+                    // Snap starting target if starting a fresh scroll or reversing direction
+                    if (!state.IsAnimating || Math.Sign(scrollAmount) != Math.Sign(state.TargetOffset - sv.VerticalOffset))
+                    {
+                        state.TargetOffset = sv.VerticalOffset;
+                    }
+                    
+                    state.TargetOffset += scrollAmount;
+                }
             }
 
             state.TargetOffset = Math.Clamp(state.TargetOffset, 0, sv.ScrollableHeight);
@@ -240,7 +269,8 @@ namespace FlyShelf.Classes
                 double currentOffset = sv.VerticalOffset;
                 double diff = state.TargetOffset - currentOffset;
 
-                if (Math.Abs(diff) < 0.15)
+                double snapThreshold = (state.Profile == ClipboardProfile) ? 0.35 : 0.01;
+                if (Math.Abs(diff) < snapThreshold)
                 {
                     sv.ScrollToVerticalOffset(state.TargetOffset);
                     state.IsAnimating = false;
