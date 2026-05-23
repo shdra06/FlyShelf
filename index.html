@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FlyShelf - Premium Cross-Device Clipboard & Productivity Ecosystem</title>
+  
+  <!-- SEO Meta Tags -->
+  <meta name="description" content="FlyShelf is an ultra-premium, real-time cross-device clipboard manager and file sharing ecosystem for Windows and Android. Built with P2P direct routing, Cloudflare tunnels, and smart productivity tools.">
+  <meta name="keywords" content="clipboard, cross-device sync, productivity, file transfer, P2P clipboard, Windows clipboard, Android clipboard, PDF merge, Gemini OCR">
+  <meta name="author" content="Shivendra">
+  
+  <!-- Open Graph / Social Media -->
+  <meta property="og:title" content="FlyShelf - Premium Cross-Device Clipboard & Productivity Hub">
+  <meta property="og:description" content="Copy on one device. Paste anywhere. Instantly. Secured with peer-to-peer pipelines. Supports Windows PC and Android.">
+  <meta property="og:type" content="website">
+  
+  <!-- Favicon / Styling CSS -->
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Ionicons for Modern Clean Icons -->
+  <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+  <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+</head>
+<body>
+
+  <!-- Background Fluid Mesh Gradients -->
+  <div class="bg-mesh">
+    <div class="blob-fluid blob-cyan"></div>
+    <div class="blob-fluid blob-purple"></div>
+    <div class="blob-fluid blob-emerald"></div>
+  </div>
+  <div class="grid-bg"></div>
+
+  <!-- Premium Glass Navigation Bar -->
+  <nav class="navbar glass" id="main-nav">
+    <div class="nav-brand">
+      <div class="brand-icon">⚡</div>
+      <span>FlyShelf</span>
+    </div>
+    <ul class="nav-links">
+      <li><a href="#simulator">Sync Space</a></li>
+      <li><a href="#summon">Shake Summon</a></li>
+      <li><a href="#smart-actions">Smart Tools</a></li>
+      <li><a href="#architecture">Architecture</a></li>
+      <li><a href="#features">Features</a></li>
+    </ul>
+    <a href="#download" class="btn-premium btn-cyan" style="padding: 10px 20px; font-size: 0.85rem;">Download</a>
+  </nav>
+
+  <!-- Hero Section -->
+  <header class="hero" id="hero-header">
+    <div class="hero-tag scroll-reveal">
+      <span></span> Ecosystem Version 6.0.1 is Live
+    </div>
+    <h1 class="scroll-reveal">
+      Your Clipboard.<br>
+      <span class="gradient-text-cyan-purple">Everywhere. Instantly.</span>
+    </h1>
+    <p class="lead scroll-reveal">
+      An ultra-premium, zero-friction clipboard synchronization and productivity platform. Copy text, links, code blocks, screenshots, or files on one device and watch them globally appear in milliseconds.
+    </p>
+    <div class="hero-ctas scroll-reveal">
+      <a href="https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf.exe" class="btn-premium btn-cyan" id="btn-hero-download-exe">
+        <ion-icon name="logo-windows"></ion-icon>
+        Download for Windows
+      </a>
+      <a href="https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf_Mobile.apk" class="btn-premium btn-outline" id="btn-hero-download-apk">
+        <ion-icon name="logo-android"></ion-icon>
+        Get Android APK
+      </a>
+    </div>
+    
+    <!-- Platform Status Badges -->
+    <div class="platform-row scroll-reveal">
+      <div class="platform-card win">
+        <div class="platform-icon"><ion-icon name="logo-windows"></ion-icon></div>
+        <div class="platform-info">
+          <div class="platform-name">Windows PC</div>
+          <div class="platform-ver">v6.0.1 | .NET 10 WPF</div>
+        </div>
+      </div>
+      <div class="platform-card android">
+        <div class="platform-icon"><ion-icon name="logo-android"></ion-icon></div>
+        <div class="platform-info">
+          <div class="platform-name">Android Mobile</div>
+          <div class="platform-ver">v6.0.1 | Native Kotlin</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- SECTION 1: THE SYNC SPACE (UNIVERSAL PIPELINE SIMULATOR) -->
+  <section class="sync-space-section scroll-reveal" id="simulator">
+    <div class="section-header">
+      <span class="badge badge-cyan">Real-time Sandbox</span>
+      <h2>The Universal Sync Space</h2>
+      <p>Click any clipboard item on the Windows PC on the left to see it instantly sync along the selected pipeline to your Android phone.</p>
+    </div>
+    
+    <div class="sync-container glass">
+      <!-- Windows PC Mockup -->
+      <div class="device-wrapper">
+        <div class="badge badge-cyan" style="margin-bottom: 8px;">PC clipboard</div>
+        <div class="mockup-pc">
+          <div class="mockup-titlebar">
+            <div class="titlebar-dots">
+              <span class="titlebar-dot"></span>
+              <span class="titlebar-dot"></span>
+              <span class="titlebar-dot"></span>
+            </div>
+            <div style="font-size: 0.65rem; color: var(--text-muted); font-family: monospace;">WinSumo Dashboard</div>
+            <div></div>
+          </div>
+          <div class="mockup-body" id="pc-clipboard-items">
+            <!-- Simulated Clipboard Items -->
+            <div class="sync-card" data-content="npm i -g @flyshelf/cli" data-type="Code (Terminal)" data-badge="TERM">
+              <div class="sync-card-left">
+                <div class="sync-card-icon"><ion-icon name="terminal-outline"></ion-icon></div>
+                <div class="sync-card-text">
+                  <div class="sync-card-title">npm install CLI command</div>
+                  <div class="sync-card-subtitle">Terminal command copied</div>
+                </div>
+              </div>
+              <span class="badge badge-cyan">TERM</span>
+            </div>
+            
+            <div class="sync-card" data-content="https://flyshelf.app/docs/pairing-guide" data-type="URL" data-badge="LINK">
+              <div class="sync-card-left">
+                <div class="sync-card-icon"><ion-icon name="link-outline"></ion-icon></div>
+                <div class="sync-card-text">
+                  <div class="sync-card-title">FlyShelf Pairing Docs</div>
+                  <div class="sync-card-subtitle">https://flyshelf.app/docs/pairing-guide</div>
+                </div>
+              </div>
+              <span class="badge badge-purple">LINK</span>
+            </div>
+            
+            <div class="sync-card" data-content="invoice_report_q1.pdf" data-type="File (PDF)" data-badge="PDF">
+              <div class="sync-card-left">
+                <div class="sync-card-icon"><ion-icon name="document-text-outline"></ion-icon></div>
+                <div class="sync-card-text">
+                  <div class="sync-card-title">invoice_report_q1.pdf</div>
+                  <div class="sync-card-subtitle">Local PDF File (1.2 MB)</div>
+                </div>
+              </div>
+              <span class="badge badge-amber">PDF</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Middle Pipeline SVG & Pathway Selectors -->
+      <div class="sync-pathway">
+        <svg class="pipeline-svg" viewBox="0 0 200 100">
+          <!-- Flow Line Paths -->
+          <path id="flow-path" class="flow-line active-lane lane-lan" d="M 0 50 Q 100 0 200 50" />
+          <circle id="flow-particle" class="flow-packet" r="6" cx="0" cy="50" />
+        </svg>
+        
+        <div class="pathway-selectors">
+          <div class="selector-pill lan-pill active" data-path="lan" id="path-lan">
+            <span>Direct P2P LAN</span>
+            <div class="pill-dot"></div>
+          </div>
+          <div class="selector-pill cloud-pill" data-path="cloud" id="path-cloud">
+            <span>Cloudflare Tunnel</span>
+            <div class="pill-dot"></div>
+          </div>
+          <div class="selector-pill fb-pill" data-path="firebase" id="path-firebase">
+            <span>Firebase RTDB</span>
+            <div class="pill-dot"></div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Android Mobile Mockup -->
+      <div class="device-wrapper">
+        <div class="badge badge-emerald" style="margin-bottom: 8px;">Android Feed</div>
+        <div class="mockup-phone">
+          <div class="phone-speaker"></div>
+          <div class="phone-screen" id="mobile-feed">
+            <div class="floating-ball"></div>
+            <div class="phone-card empty-feed" id="empty-state-notice">
+              <ion-icon name="clipboard-outline" style="font-size: 2rem; margin-bottom: 10px; opacity: 0.5;"></ion-icon>
+              <div>Waiting for clipboard sync...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 2: "MOUSE SHAKE" GESTURE SUMMON DEMO -->
+  <section class="summon-section scroll-reveal" id="summon">
+    <div class="section-header">
+      <span class="badge badge-purple">Summon gesture</span>
+      <h2>Shake to Summon WinSumo</h2>
+      <p>FlyShelf registers a low-level physical summon. Hold down your left-click in the sandbox below and shake your mouse rapidly left-and-right to open the Glassmorphic Dashboard!</p>
+    </div>
+    
+    <div class="summon-box glass" id="gesture-sandbox">
+      <div id="gesture-instruction-box">
+        <div class="shake-icon"><ion-icon name="hand-left-outline"></ion-icon></div>
+        <div class="shake-hint">Click & Shake Here</div>
+        <div class="shake-gauge-bg">
+          <div class="shake-gauge-fill" id="shake-gauge"></div>
+        </div>
+      </div>
+      
+      <!-- Hidden glass dashboard elements -->
+      <div class="sumo-overlay glass" id="win-sumo-overlay">
+        <div class="sumo-header">
+          <div class="sumo-title"><span style="color: var(--color-cyan);">⚡</span> FlyShelf Workspace</div>
+          <button class="sumo-close" id="btn-close-sumo"><ion-icon name="close-outline"></ion-icon></button>
+        </div>
+        <div class="sumo-body">
+          <div class="sumo-card">
+            <div class="badge badge-cyan" style="font-size: 0.6rem; margin-bottom: 5px;">Text</div>
+            <div style="font-weight: 700; color: #fff;">Setup design brief</div>
+            <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 5px;">Copied from Teams</div>
+          </div>
+          <div class="sumo-card">
+            <div class="badge badge-emerald" style="font-size: 0.6rem; margin-bottom: 5px;">Image</div>
+            <div style="font-weight: 700; color: #fff;">DesignMockup.png</div>
+            <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 5px;">OCR extracted text available</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 3: ADVANCED SMART ACTIONS MODULES -->
+  <section class="smart-actions-section scroll-reveal" id="smart-actions">
+    <div class="section-header">
+      <span class="badge badge-emerald">Productivity Powerhouses</span>
+      <h2>Functional Smart Utilities</h2>
+      <p>Try out FlyShelf's intelligent context-aware processors directly in your browser. Fully interactive modules engineered for speed.</p>
+    </div>
+    
+    <div class="smart-widgets-grid">
+      <!-- WIDGET A: DRAG-AND-REORDER PDF MERGER -->
+      <div class="widget-card glass">
+        <div class="widget-card-header">
+          <div>
+            <h3 class="widget-title">📦 Premium PDF Merger</h3>
+            <p class="widget-desc">Arrange PDF sequences and merge them in a click.</p>
+          </div>
+          <span class="badge badge-purple">Visuals only</span>
+        </div>
+        <div class="widget-body">
+          <div class="pdf-merger-box">
+            
+            <!-- File Queue Simulator -->
+            <div class="pdf-queue" id="pdf-file-queue">
+              <div class="pdf-item" data-index="0">
+                <div class="pdf-item-left">
+                  <ion-icon name="document-outline" class="pdf-file-icon"></ion-icon>
+                  <span class="pdf-file-name">invoice_may_2026.pdf</span>
+                </div>
+                <div class="pdf-controls">
+                  <button class="pdf-ctrl-btn move-up" title="Move Up"><ion-icon name="arrow-up-outline"></ion-icon></button>
+                  <button class="pdf-ctrl-btn move-down" title="Move Down"><ion-icon name="arrow-down-outline"></ion-icon></button>
+                </div>
+              </div>
+              
+              <div class="pdf-item" data-index="1">
+                <div class="pdf-item-left">
+                  <ion-icon name="document-outline" class="pdf-file-icon"></ion-icon>
+                  <span class="pdf-file-name">design_requirements_draft.pdf</span>
+                </div>
+                <div class="pdf-controls">
+                  <button class="pdf-ctrl-btn move-up" title="Move Up"><ion-icon name="arrow-up-outline"></ion-icon></button>
+                  <button class="pdf-ctrl-btn move-down" title="Move Down"><ion-icon name="arrow-down-outline"></ion-icon></button>
+                </div>
+              </div>
+              
+              <div class="pdf-item" data-index="2">
+                <div class="pdf-item-left">
+                  <ion-icon name="document-outline" class="pdf-file-icon"></ion-icon>
+                  <span class="pdf-file-name">receipt_cloudflare_pro.pdf</span>
+                </div>
+                <div class="pdf-controls">
+                  <button class="pdf-ctrl-btn move-up" title="Move Up"><ion-icon name="arrow-up-outline"></ion-icon></button>
+                  <button class="pdf-ctrl-btn move-down" title="Move Down"><ion-icon name="arrow-down-outline"></ion-icon></button>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Action buttons and loading states -->
+            <div class="pdf-merge-action-bar" id="pdf-action-block">
+              <div class="pdf-status-log" id="pdf-status-console">Ready to stitch...</div>
+              <button class="btn-merge-action" id="btn-trigger-merge">Stitch Files</button>
+            </div>
+            
+            <!-- Dynamic Spinner Overlay -->
+            <div class="pdf-merger-loader" id="pdf-merge-loading-overlay">
+              <div class="loader-spinner"></div>
+              <div class="pdf-status-log" id="pdf-live-progress-msg" style="color: var(--color-purple); font-size: 0.8rem;">Stitching document buffers...</div>
+            </div>
+            
+            <!-- Output document card -->
+            <div class="pdf-output-card" id="pdf-output-success-card">
+              <div class="pdf-item-left">
+                <ion-icon name="file-tray-full-outline" style="color: var(--color-purple); font-size: 1.5rem;"></ion-icon>
+                <div class="output-meta">
+                  <div class="output-title">flyshelf_merged_pkg.pdf</div>
+                  <div class="output-size">3 PDF Files Combined • 2.6 MB</div>
+                </div>
+              </div>
+              <button class="btn-output-dl" id="btn-reset-pdf-merger">Stitch Again</button>
+            </div>
+            
+          </div>
+        </div>
+      </div>
+      
+      <!-- COLUMN 2: SECURED ACTIONS -->
+      <div style="display: flex; flex-direction: column; gap: 30px;">
+        
+        <!-- WIDGET B: COUNTDOWN SPEED TIMER -->
+        <div class="widget-card glass">
+          <div class="widget-card-header">
+            <div>
+              <h3 class="widget-title">⏱️ Speed Countdown Command</h3>
+              <p class="widget-desc">Type '/10s' or '/5s' to trigger high-glow countdown visualizer.</p>
+            </div>
+            <span class="badge badge-cyan">Interactive</span>
+          </div>
+          <div class="widget-body">
+            <div class="timer-widget-box">
+              <div class="timer-input-group">
+                <input type="text" class="timer-field" id="timer-cmd-input" placeholder="/10s" value="/10s">
+                <button class="btn-timer-trigger" id="btn-timer-run"><ion-icon name="play-outline"></ion-icon></button>
+              </div>
+              <div class="timer-display">
+                <svg class="timer-circle-svg" viewBox="0 0 120 120">
+                  <circle class="timer-circle-bg" cx="60" cy="60" r="54"></circle>
+                  <circle class="timer-circle-progress" id="timer-progress-ring" cx="60" cy="60" r="54"></circle>
+                </svg>
+                <div class="timer-text" id="timer-count-label">--</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- WIDGET C: COLOR PREVIEW & SWATCH -->
+        <div class="widget-card glass">
+          <div class="widget-card-header">
+            <div>
+              <h3 class="widget-title">🎨 Context Color Picker</h3>
+              <p class="widget-desc">Type any HSL, RGB, or HEX code to preview and convert.</p>
+            </div>
+            <span class="badge badge-emerald">Interactive</span>
+          </div>
+          <div class="widget-body">
+            <div class="color-widget-box">
+              <div class="color-swatch-box" id="live-color-swatch"></div>
+              <input type="text" class="color-input-field" id="color-code-field" value="#00d2ff">
+              <div class="color-pills-row">
+                <button class="color-pill-btn" id="btn-copy-hex">HEX</button>
+                <button class="color-pill-btn" id="btn-copy-rgb">RGB</button>
+                <button class="color-pill-btn" id="btn-copy-hsl">HSL</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- WIDGET D: UTM LINK TRACKER SCRUBBER -->
+        <div class="widget-card glass">
+          <div class="widget-card-header">
+            <div>
+              <h3 class="widget-title">🔍 URL Tracking Sanitizer</h3>
+              <p class="widget-desc">Strip UTM & analytics query markers instantly.</p>
+            </div>
+            <span class="badge badge-amber">Interactive</span>
+          </div>
+          <div class="widget-body">
+            <div class="utm-widget-box">
+              <div class="utm-input-container">
+                <textarea class="utm-input-area" id="utm-url-input">https://flyshelf.app/docs?utm_source=newsletter&utm_medium=email&utm_campaign=launch_v6&fbclid=ab12cd34ef56</textarea>
+              </div>
+              <div class="utm-action-row">
+                <button class="btn-utm-scrub" id="btn-utm-scrub-trigger">Sanitize Link</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 4: TECHNICAL ARCHITECTURE DIAGRAM -->
+  <section class="arch-section scroll-reveal" id="architecture">
+    <div class="arch-card glass">
+      <div class="arch-header">
+        <span class="badge badge-cyan">Under the Hood</span>
+        <h2 style="font-size: 2.2rem; font-weight: 800; margin-top: 10px;">Three-Tier Dynamic Routing</h2>
+        <p style="color: var(--text-secondary); max-width: 600px; margin: 10px auto 0 auto; font-size: 0.95rem;">
+          FlyShelf auto-detects active network environments to securely dispatch files and text down the path of lowest latency.
+        </p>
+      </div>
+      
+      <div class="arch-grid">
+        <div class="arch-node cyan">
+          <div class="arch-node-icon"><ion-icon name="wifi-outline" style="color: var(--color-cyan);"></ion-icon></div>
+          <h3 class="arch-node-title">Layer 1: Local LAN P2P</h3>
+          <p class="arch-node-desc">Transfers massive files, documents, and screenshots directly over local WiFi/Ethernet channels at speeds exceeding 100+ Mbps. Completely offline.</p>
+        </div>
+        
+        <div class="arch-node purple">
+          <div class="arch-node-icon"><ion-icon name="git-merge-outline" style="color: var(--color-purple);"></ion-icon></div>
+          <h3 class="arch-node-title">Layer 2: Cloudflare Tunnel</h3>
+          <p class="arch-node-desc">Leverages integrated Cloudflare Daemons to bypass strict firewalls and corporate NATs. Safely share folders between home and office without manual port forwarding.</p>
+        </div>
+        
+        <div class="arch-node amber">
+          <div class="arch-node-icon"><ion-icon name="cloud-done-outline" style="color: var(--color-amber);"></ion-icon></div>
+          <h3 class="arch-node-title">Layer 3: Firebase RTDB</h3>
+          <p class="arch-node-desc">High-speed, sub-millisecond cloud relay for short clipboard strings, links, and signaling payloads. Auto-purges logs every 5 minutes for absolute data confidentiality.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 5: DETAILED PRODUCT FEATURES -->
+  <section class="features-section scroll-reveal" id="features">
+    <div class="section-header">
+      <span class="badge badge-cyan">Feature Deep-Dive</span>
+      <h2>Engineered for Power Users</h2>
+      <p>Every corner is engineered to eliminate friction, optimize speed, and enhance your digital clipboard flow.</p>
+    </div>
+    
+    <div class="features-grid">
+      <div class="feature-card glass">
+        <div class="feature-icon-box"><ion-icon name="scan-outline"></ion-icon></div>
+        <h3>Mica Sumner Overlay</h3>
+        <p>A Windows desktop summoning hub using beautiful Windows 11 Mica blur and Acrylic backdrops. Out of sight, summonable instantly via <code>Win + Shift + V</code>.</p>
+      </div>
+      
+      <div class="feature-card glass">
+        <div class="feature-icon-box"><ion-icon name="phone-portrait-outline"></ion-icon></div>
+        <h3>Kotlin Foreground Service</h3>
+        <p>The Android companion uses a secure, energy-efficient native foreground service ensuring background clip listeners stay alive even under strict screen locks.</p>
+      </div>
+      
+      <div class="feature-card glass">
+        <div class="feature-icon-box"><ion-icon name="eye-outline"></ion-icon></div>
+        <h3>Spacebar QuickLook</h3>
+        <p>Preview any document, image, or zip archive in seconds. Simply select any card on the shelf and tap Spacebar, exactly like macOS QuickLook.</p>
+      </div>
+      
+      <div class="feature-card glass">
+        <div class="feature-icon-box"><ion-icon name="flash-outline"></ion-icon></div>
+        <h3>Auto-Classification Badges</h3>
+        <p>Smart regex engines analyze text and files, marking them with tags (JSON, C++, PYTHON, LINK, TERM) for structured context-sorting.</p>
+      </div>
+      
+      <div class="feature-card glass">
+        <div class="feature-icon-box"><ion-icon name="pin-outline"></ion-icon></div>
+        <h3>Atomic Pin History</h3>
+        <p>Items marked as pinned survive bulk logs cleanup. Saves are fully debounced to avoid disk thrashing and written atomically via temporary buffers.</p>
+      </div>
+      
+      <div class="feature-card glass">
+        <div class="feature-icon-box"><ion-icon name="apps-outline"></ion-icon></div>
+        <h3>Taskbar Mini Widget</h3>
+        <p>Keep a minimal, glassmorphic card pinned directly to your Windows Taskbar for real-time tracking of active inputs.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION 6: PRIVACY SHIELD BANNER -->
+  <section class="privacy-section scroll-reveal">
+    <div class="privacy-banner glass">
+      <div class="privacy-shield-icon">
+        <ion-icon name="shield-checkmark-outline"></ion-icon>
+      </div>
+      <div class="privacy-content">
+        <h3>Privacy First. No Clouds Retained.</h3>
+        <p>
+          Unlike modern SaaS tools, FlyShelf keeps your data yours. Large files and credentials transfer entirely peer-to-peer over your local networks. Cloud storage channels are reserved solely for signaling relays and are set with 5-minute auto-purge timeouts. No telemetry tracking, no ads, no databases.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD FOOTER SECTION -->
+  <section id="download" style="padding: 100px 20px; text-align: center; max-width: 800px; margin: 0 auto;" class="scroll-reveal">
+    <h2 style="font-size: 2.5rem; font-weight: 800; margin-bottom: 15px;">Ready to Elevate Your Flow?</h2>
+    <p style="color: var(--text-secondary); margin-bottom: 40px; font-size: 1.1rem;">
+      Download the latest stable client binaries below. Fully self-contained, portable, zero installation needed.
+    </p>
+    <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+      <a href="https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf.exe" class="btn-premium btn-cyan" style="padding: 16px 32px; font-size: 1.05rem;" id="btn-footer-download-exe">
+        <ion-icon name="logo-windows"></ion-icon>
+        Windows Executable (v6.0.1)
+      </a>
+      <a href="https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf_Mobile.apk" class="btn-premium btn-outline" style="padding: 16px 32px; font-size: 1.05rem;" id="btn-footer-download-apk">
+        <ion-icon name="logo-android"></ion-icon>
+        Android APK Build (v6.0.1)
+      </a>
+    </div>
+  </section>
+
+  <!-- Premium Footer -->
+  <footer>
+    <div class="footer-container">
+      <div class="footer-brand-col">
+        <div class="nav-brand">
+          <div class="brand-icon">⚡</div>
+          <span>FlyShelf</span>
+        </div>
+        <p class="footer-desc">
+          FlyShelf is an open-source, ultra-premium, cross-device clipboard sync and productivity platform designed for power developers and creators.
+        </p>
+      </div>
+      
+      <div class="footer-nav-col">
+        <h4>Ecosystem</h4>
+        <ul class="footer-links">
+          <li><a href="#simulator">Sync Space</a></li>
+          <li><a href="#summon">Shake Summon</a></li>
+          <li><a href="#smart-actions">Smart Tools</a></li>
+          <li><a href="#architecture">Architecture</a></li>
+        </ul>
+      </div>
+      
+      <div class="footer-nav-col">
+        <h4>Productivity</h4>
+        <ul class="footer-links">
+          <li><a href="https://github.com/shdra06/FlyShelf/releases">Stable Releases</a></li>
+          <li><a href="https://github.com/shdra06/FlyShelf/issues">Report Gaps</a></li>
+          <li><a href="https://github.com/shdra06/FlyShelf/blob/main/LICENSE">License Core</a></li>
+        </ul>
+      </div>
+    </div>
+    
+    <div class="footer-bottom">
+      <div>© 2026 FlyShelf Ecosystem. Built by Shivendra. All Rights Reserved.</div>
+      <div style="display: flex; gap: 15px;">
+        <span>v6.0.1 Release Build</span>
+        <span>•</span>
+        <span>Secure P2P Protocol</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Script logic hook -->
+  <script src="app.js"></script>
+</body>
+</html>
