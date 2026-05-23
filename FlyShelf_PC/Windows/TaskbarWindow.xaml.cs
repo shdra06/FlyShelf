@@ -1,4 +1,4 @@
-﻿using FlyShelf.Classes;
+using FlyShelf.Classes;
 using FlyShelf.Classes.Utils;
 using System;
 using System.Collections.Generic;
@@ -110,7 +110,7 @@ namespace FlyShelf.Windows
         protected override void OnActivated(EventArgs e)
         {
             base.OnActivated(e);
-            int colorNone = DWMWA_COLOR_NONE;
+            int colorNone = DWMWA_COLOR_DARK_GRAY;
             DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, DWMWA_BORDER_COLOR, ref colorNone, Marshal.SizeOf<int>());
         }
 

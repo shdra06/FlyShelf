@@ -72,8 +72,11 @@ namespace FlyShelf.Controls
         /// </summary>
         public void PlayAnimation(string filePath, int width = 0, int height = 0, bool loop = true)
         {
+            Logger.LogAction("MASCOT", $"PlayAnimation called: file='{filePath}', w={width}, h={height}, loop={loop}");
+
             if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
             {
+                Logger.LogAction("MASCOT", $"ABORT: file missing or empty. IsNull={string.IsNullOrEmpty(filePath)}, Exists={(!string.IsNullOrEmpty(filePath) && File.Exists(filePath))}");
                 StopAnimation();
                 return;
             }
@@ -81,6 +84,7 @@ namespace FlyShelf.Controls
             if (filePath == _currentFilePath && (SpriteImage.Source != null || AnimationBehavior.GetSourceUri(SpriteImage) != null))
             {
                 // Already playing/loaded this animation, just ensure it's playing and visible
+                Logger.LogAction("MASCOT", $"Already loaded '{Path.GetFileName(filePath)}' — resuming playback");
                 ResumePlayback();
                 AnimatorRoot.Visibility = Visibility.Visible;
                 return;
@@ -98,6 +102,8 @@ namespace FlyShelf.Controls
                 {
                     // Use XamlAnimatedGif for GIF playback
                     var uri = new Uri(filePath, UriKind.Absolute);
+                    Logger.LogAction("MASCOT", $"Setting GIF URI: {uri}");
+                    
                     AnimationBehavior.SetSourceUri(SpriteImage, uri);
                     AnimationBehavior.SetRepeatBehavior(SpriteImage,
                         loop ? System.Windows.Media.Animation.RepeatBehavior.Forever
@@ -124,6 +130,7 @@ namespace FlyShelf.Controls
 
                 _currentFilePath = filePath;
                 AnimatorRoot.Visibility = Visibility.Visible;
+                Logger.LogAction("MASCOT", $"✅ Animation loaded: '{Path.GetFileName(filePath)}', Visibility={AnimatorRoot.Visibility}, ActualW={this.ActualWidth}, ActualH={this.ActualHeight}, SpriteW={SpriteWidth}, SpriteH={SpriteHeight}");
             }
             catch (Exception ex)
             {
@@ -179,6 +186,7 @@ namespace FlyShelf.Controls
         {
             try
             {
+                Logger.LogAction("MASCOT", $"StopAnimation called (was: '{Path.GetFileName(_currentFilePath)}')");
                 AnimationBehavior.SetSourceUri(SpriteImage, null);
                 SpriteImage.Source = null;
                 AnimatorRoot.Visibility = Visibility.Collapsed;

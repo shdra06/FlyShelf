@@ -53,7 +53,7 @@ namespace FlyShelf.Classes
         /// <summary>Fires whenever a device is successfully paired. UI can subscribe to auto-refresh.</summary>
         public static event Action<string> OnDevicePaired;
         private static readonly HttpClient _httpClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
-        private const string FIREBASE_BASE = "https://advance-sync-default-rtdb.firebaseio.com";
+        private static string FIREBASE_BASE => FirebaseAuthManager.FirebaseDatabaseUrl;
 
         /// <summary>Maximum number of paired devices allowed. Remove existing devices to pair new ones.</summary>
         public const int MAX_PAIRED_DEVICES = 10;

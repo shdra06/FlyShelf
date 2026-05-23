@@ -382,7 +382,15 @@ namespace FlyShelf
                     _didDragOut = false;
                 });
                 
-                _viewModel.RemoveItem(item);
+                try
+                {
+                    IsDeletingItem = true;
+                    _viewModel.RemoveItem(item);
+                }
+                finally
+                {
+                    IsDeletingItem = false;
+                }
                 
                 e.Handled = true;
             }
@@ -566,7 +574,7 @@ namespace FlyShelf
                         {
                             string targetPdf = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(item.FilePath) ?? System.IO.Path.GetTempPath(), System.IO.Path.GetFileNameWithoutExtension(item.FilePath) + "_Converted.pdf");
                             string script = $"$word = New-Object -ComObject Word.Application; $doc = $word.Documents.Open('{item.FilePath}'); $doc.SaveAs([ref]'{targetPdf}', [ref]17); $doc.Close(); $word.Quit();";
-                            var p = new System.Diagnostics.ProcessStartInfo { FileName = "powershell.exe", Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{script}\"", CreateNoWindow = true, UseShellExecute = false };
+                            var p = new System.Diagnostics.ProcessStartInfo { FileName = "powershell.exe", Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -Command \"{script}\"", CreateNoWindow = true, UseShellExecute = false };
                             System.Diagnostics.Process.Start(p)?.WaitForExit();
                             
                             if (System.IO.File.Exists(targetPdf))
@@ -626,9 +634,17 @@ namespace FlyShelf
             if (e.Key == Key.Delete && ShelfListView.SelectedItems.Count > 0)
             {
                 var itemsToRemove = ShelfListView.SelectedItems.Cast<ClipboardItem>().ToList();
-                foreach (var item in itemsToRemove)
+                try
                 {
-                    _viewModel.RemoveItem(item);
+                    IsDeletingItem = true;
+                    foreach (var item in itemsToRemove)
+                    {
+                        _viewModel.RemoveItem(item);
+                    }
+                }
+                finally
+                {
+                    IsDeletingItem = false;
                 }
                 e.Handled = true;
             }

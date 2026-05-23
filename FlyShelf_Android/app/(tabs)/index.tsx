@@ -7,7 +7,7 @@ import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { useSettings } from '../../context/SettingsContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { database, ensureFirebaseAuth, getFirebaseIdToken } from '../../firebaseConfig';
+import { database, ensureFirebaseAuth, getFirebaseIdToken, firebaseDatabaseUrl } from '../../firebaseConfig';
 import { syncLog } from '../../utils/debugLog';
 import { ref, push, set, get, onValue, query, limitToLast, orderByChild, update, remove } from 'firebase/database';
 import * as DocumentPicker from 'expo-document-picker';
@@ -2210,7 +2210,7 @@ export default function SyncScreen() {
     if (Platform.OS === 'android') ToastAndroid.show('Looking up code...', ToastAndroid.SHORT);
     try {
       const _authToken = await getFirebaseIdToken();
-      const res = await fetch(`https://advance-sync-default-rtdb.firebaseio.com/pairing_codes/${code.toUpperCase().trim()}.json${_authToken ? `?auth=${_authToken}` : ''}`);
+      const res = await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code.toUpperCase().trim()}.json${_authToken ? `?auth=${_authToken}` : ''}`);
       const data = await res.json();
       if (!data) { setIsPairing(false); Alert.alert('Code Not Found', 'No device found with this code.\nMake sure the code is correct and the other device is online.'); return; }
 
@@ -2253,7 +2253,7 @@ export default function SyncScreen() {
         timestamp: Date.now(),
       };
       const _pubToken = await getFirebaseIdToken();
-      await fetch(`https://advance-sync-default-rtdb.firebaseio.com/pairing_codes/${code}.json${_pubToken ? `?auth=${_pubToken}` : ''}`, {
+      await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_pubToken ? `?auth=${_pubToken}` : ''}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
@@ -2271,7 +2271,7 @@ export default function SyncScreen() {
         try {
           const pk = pairingKeyRef.current;
           const _pollToken = await getFirebaseIdToken();
-          const devicesRes = await fetch(`https://advance-sync-default-rtdb.firebaseio.com/active_devices/${pk}.json${_pollToken ? `?auth=${_pollToken}` : ''}`);
+          const devicesRes = await fetch(`${firebaseDatabaseUrl}/active_devices/${pk}.json${_pollToken ? `?auth=${_pollToken}` : ''}`);
           const devices = await devicesRes.json();
           if (!devices) return;
 
@@ -2309,7 +2309,7 @@ export default function SyncScreen() {
                 }
                 setMyPairingCode(null);
                 // Clean up the pairing code from Firebase
-                try { const _delToken = await getFirebaseIdToken(); await fetch(`https://advance-sync-default-rtdb.firebaseio.com/pairing_codes/${code}.json${_delToken ? `?auth=${_delToken}` : ''}`, { method: 'DELETE' }); } catch {}
+                try { const _delToken = await getFirebaseIdToken(); await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_delToken ? `?auth=${_delToken}` : ''}`, { method: 'DELETE' }); } catch {}
                 break;
               }
             }
@@ -2323,7 +2323,7 @@ export default function SyncScreen() {
         clearInterval(pollForConnection);
         connectionPollRef.current = null;
         connectionTimeoutRef.current = null;
-        try { const _expToken = await getFirebaseIdToken(); await fetch(`https://advance-sync-default-rtdb.firebaseio.com/pairing_codes/${code}.json${_expToken ? `?auth=${_expToken}` : ''}`, { method: 'DELETE' }); } catch {}
+        try { const _expToken = await getFirebaseIdToken(); await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_expToken ? `?auth=${_expToken}` : ''}`, { method: 'DELETE' }); } catch {}
         if (myPairingCode === code) setMyPairingCode(null);
       }, 5 * 60 * 1000);
     } catch { Alert.alert('Error', 'Could not generate code.'); }

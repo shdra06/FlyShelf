@@ -214,7 +214,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                Console.WriteLine($"[TELEMETRY] Sandbox Launch Failed: {ex.Message}");
+                FlyShelf.Classes.Logger.LogAction("DEBUG", $"Sandbox Launch Failed: {ex.Message}");
 
 
 
@@ -231,6 +231,10 @@ namespace FlyShelf.ViewModels
 
 
         {
+#if MSIX_STORE
+            FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Terminal execution is not available in the Store version.");
+            return;
+#else
 
 
 
@@ -418,11 +422,12 @@ namespace FlyShelf.ViewModels
 
 
 
-                Console.WriteLine($"[TELEMETRY] Terminal Hook Failed: {ex.Message}");
+                FlyShelf.Classes.Logger.LogAction("DEBUG", $"Terminal Hook Failed: {ex.Message}");
 
 
 
             }
+#endif
 
 
 
@@ -466,7 +471,7 @@ namespace FlyShelf.ViewModels
 
 
 
-            catch (Exception ex) { Console.WriteLine($"Browser Hook Failed: {ex.Message}"); }
+            catch (Exception ex) { FlyShelf.Classes.Logger.LogAction("DEBUG", $"Browser Hook Failed: {ex.Message}"); }
 
 
 
@@ -479,6 +484,10 @@ namespace FlyShelf.ViewModels
 
 
         {
+#if MSIX_STORE
+            FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Elevated terminal is not available in the Store version.");
+            return;
+#else
 
 
 
@@ -506,7 +515,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                    Arguments = Extension == ".PS1" ? $"-NoExit -ExecutionPolicy Bypass -File \"{FilePath}\"" : $"/k \"{FilePath}\"",
+                    Arguments = Extension == ".PS1" ? $"-NoExit -ExecutionPolicy RemoteSigned -File \"{FilePath}\"" : $"/k \"{FilePath}\"",
 
 
 
@@ -543,6 +552,7 @@ namespace FlyShelf.ViewModels
 
 
             }
+#endif
 
 
 
@@ -555,6 +565,10 @@ namespace FlyShelf.ViewModels
 
 
         {
+#if MSIX_STORE
+            FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Code compilation is not available in the Store version.");
+            return;
+#else
 
 
 
@@ -651,6 +665,7 @@ namespace FlyShelf.ViewModels
 
 
             catch (Exception ex) { System.Windows.MessageBox.Show(ex.Message, "Hardware Compiler Error"); }
+#endif
 
 
 
@@ -734,7 +749,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                        Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{script}\"",
+                        Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -Command \"{script}\"",
 
 
 
@@ -2459,7 +2474,7 @@ $word.Quit();
 
 
 
-                        Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{script}\"",
+                        Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -Command \"{script}\"",
 
 
 

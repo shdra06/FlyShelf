@@ -475,10 +475,13 @@ namespace FlyShelf.Classes
                 Logger.LogAction("NETWORK", $"✅ Web server launched on {ServerUrl} (port {CurrentPort}, mode: {bindMode})");
                 NetworkActivityLog.Instance.ServerStatus = "Online";
 
-                // Natively trigger Cloudflare alongside HTTP Socket unconditionally
+                // Natively trigger Cloudflare alongside HTTP Socket conditionally
                 // If we used a TCP proxy, Cloudflare tunnels to publicPort which the TcpProxy handles.
                 // If we bound directly, Cloudflare tunnels to publicPort which HttpListener handles.
-                _ = _cfDaemon.StartAsync(CurrentPort);
+                if (SettingsManager.Current.EnableGlobalCloudflare)
+                {
+                    _ = _cfDaemon.StartAsync(CurrentPort);
+                }
                 _ = CloudDiscoveryManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl);
 
                 // Heartbeat: reduced from 60s to 300s — Firebase writes are now throttled

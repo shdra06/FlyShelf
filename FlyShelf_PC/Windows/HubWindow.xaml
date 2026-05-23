@@ -2361,9 +2361,35 @@
                                 </Border>
                             </Grid>
 
+                            <!-- Run at Startup -->
+                            <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,12,0,12">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                            <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                        <GradientStop Color="#10B981" Offset="0"/>
+                                                        <GradientStop Color="#34D399" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <ui:SymbolIcon Symbol="Play24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock Text="Run at Startup" FontWeight="Bold" FontSize="14" Foreground="#34D399" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <TextBlock Text="Launch FlyShelf automatically when you log into Windows." 
+                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                    </StackPanel>
+                                    <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=AutoStartEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </Grid>
+                            </Border>
 
                             <!-- Shake to Open -->
-                            <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,12,0,12">
+                            <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="*" />

@@ -1,0 +1,47 @@
+{
+  "rules": {
+    "pairing_codes": {
+      // Allows devices to look up or clean up 6-character pairing codes
+      ".read": "auth != null",
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        ".validate": "newData.hasChildren(['deviceId', 'deviceName', 'deviceType', 'pairingKey'])"
+      }
+    },
+    "pairing_handshake": {
+      // Temporary exchange channel during active device pairing handshakes
+      "$pairingKey": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "clipboard": {
+      // Multi-device cloud sync clipboard feed scoped per pairingKey
+      "$pairingKey": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    "active_devices": {
+      // Paired nodes announce local IPs/URLs for fast peer-to-peer LAN sync
+      "$pairingKey": {
+        ".read": "auth != null",
+        ".write": "auth != null",
+        "$deviceId": {
+          ".validate": "newData.hasChildren(['DeviceName', 'LocalIp'])"
+        }
+      }
+    },
+    "forced_sync": {
+      // Push-to-device clipboard event notifications
+      "$deviceId": {
+        ".read": "auth != null",
+        ".write": "auth != null"
+      }
+    },
+    // Strict default-deny rule to secure the rest of the database
+    ".read": false,
+    ".write": false
+  }
+}

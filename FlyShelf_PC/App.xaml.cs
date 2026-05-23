@@ -121,25 +121,27 @@ public partial class App : Application
         // Protects against wrong system clock causing auth failures and dead heartbeats
         _ = FlyShelf.Classes.NetworkClock.InitializeAsync();
         
-        try 
+        // Initialize Auto-Start status asynchronously based on stored setting (non-blocking)
+        _ = System.Threading.Tasks.Task.Run(async () =>
         {
-            using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
+            try
             {
-                if (key != null)
-                {
-                    if (FlyShelf.Classes.SettingsManager.Current.AutoStartEnabled)
-                    {
-                        // Environment.ProcessPath guarantees absolute pathing even for self-contained SingleFile bundles 
-                        key.SetValue("FlyShelf", Environment.ProcessPath ?? System.IO.Path.Combine(AppContext.BaseDirectory, "FlyShelf.exe"));
-                    }
-                    else
-                    {
-                        key.DeleteValue("FlyShelf", false);
-                    }
-                }
+                await FlyShelf.Classes.StartupHelper.SetRunAtStartupAsync(FlyShelf.Classes.SettingsManager.Current.AutoStartEnabled);
             }
-        }
-        catch (Exception) { /* Swallow permission constraint exceptions gracefully */ }
+            catch (Exception ex)
+            {
+                FlyShelf.Classes.Logger.LogAction("STARTUP_INIT_ERROR", ex.Message);
+            }
+        });
+
+        // Listen for setting changes during the app session to update instantly
+        FlyShelf.Classes.SettingsManager.Current.PropertyChanged += async (s, ev) =>
+        {
+            if (ev.PropertyName == nameof(FlyShelf.Classes.AdvanceSettings.AutoStartEnabled))
+            {
+                await FlyShelf.Classes.StartupHelper.SetRunAtStartupAsync(FlyShelf.Classes.SettingsManager.Current.AutoStartEnabled);
+            }
+        };
         
         _instance = this;
         StartShakePolling();

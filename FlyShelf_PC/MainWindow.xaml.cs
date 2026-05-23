@@ -30,6 +30,8 @@ namespace FlyShelf
         }
 
         private bool _didDragOut = false;
+        public bool IsDeletingItem { get; set; } = false;
+        private bool _isClosed = false;
         private double _lockedBottomEdge = 0;
         private bool _isEdgeLocked = false;
         private Windows.TaskbarWindow? _taskbarWidget;
@@ -69,6 +71,7 @@ namespace FlyShelf
         public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
         public const int DWMWA_BORDER_COLOR = 34;
         public const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
+        public const int DWMWA_COLOR_DARK_GRAY = 0x002D2D2D;
 
         private const int GWL_EXSTYLE = -20;
         private const int WS_EX_NOACTIVATE = 0x08000000;
@@ -298,7 +301,7 @@ namespace FlyShelf
                     {
                         if (new WindowInteropHelper(this).Handle != IntPtr.Zero)
                         {
-                            int colorNone = DWMWA_COLOR_NONE;
+                            int colorNone = DWMWA_COLOR_DARK_GRAY;
                             DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, DWMWA_BORDER_COLOR, ref colorNone, Marshal.SizeOf<int>());
                         }
                     });
@@ -435,24 +438,27 @@ namespace FlyShelf
 
                             if (anim != null)
                             {
+                                Classes.Logger.LogAction("MASCOT", $"Handler routing trigger='{e.TriggerName}' → file='{anim.ResolvedFilePath}'");
                                 MascotIdle.PlayAnimation(anim);
+                            }
+                            else
+                            {
+                                Classes.Logger.LogAction("MASCOT", $"Handler: no animation resolved for trigger='{e.TriggerName}'");
                             }
                         });
                     };
                     Classes.AnimationTriggerService.Instance.AnimationRequested += _mascotAnimationRequestedHandler;
 
-                    // ═══ Theme Wallpaper Auto-Loading ═══
-                    // Load wallpaper from theme when it activates or changes
+                    // ═══ Theme Display Mode Handler ═══
+                    // Handles three modes: "mica" (system blur), "desktop" (Windows wallpaper), "theme" (custom theme)
                     _themeChangedHandler = (theme) =>
                     {
                         Dispatcher.InvokeAsync(() =>
                         {
                             try
                             {
-                                // STEP 1: Always stop/clear the old mascot animation first
+                                // STEP 1: Always stop/clear the old mascot + wallpaper first
                                 MascotIdle.StopAnimation();
-
-                                // STEP 2: Always clear old wallpaper first
                                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
                                 WallpaperBg.Source = null;
                                 WallpaperBg.Visibility = Visibility.Collapsed;
@@ -460,46 +466,112 @@ namespace FlyShelf
                                 WallpaperFrostHeader.Visibility = Visibility.Collapsed;
                                 _currentLoadedWallpaperPath = "";
 
-                                if (theme == null)
+                                string displayMode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica";
+
+                                if (displayMode == "mica")
                                 {
+                                    // ═══ MICA BLUR MODE ═══
+                                    // Pure system Acrylic/Mica blur — no wallpaper, no mascot
                                     Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
-                                    // Themes disabled entirely — reset to clean gradient
-                                    ApplyPopupBackground();
-                                    Classes.Logger.LogAction("THEME", "Theme disabled — cleared wallpaper and mascot");
-                                    return;
+                                    RestoreMicaBlur();
+                                    Classes.Logger.LogAction("THEME", "Mode: Mica Blur — pure system backdrop");
                                 }
-
-                                // STEP 3: Apply new theme's wallpaper (if it has one)
-                                string? themeWp = Classes.ThemeManager.Instance.GetWallpaperPath();
-                                if (!string.IsNullOrEmpty(themeWp) && System.IO.File.Exists(themeWp))
+                                else if (displayMode == "desktop")
                                 {
-                                    Classes.SettingsManager.Current.ClipboardWallpaperPath = themeWp;
-                                    Classes.Logger.LogAction("THEME", $"Applied theme wallpaper: {themeWp}");
+                                    // ═══ FLYSHELF (DESKTOP WALLPAPER) MODE ═══
+                                    // Clipboard gets the user's Windows desktop wallpaper
+                                    string desktopWp = GetDesktopWallpaperPath();
+                                    if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
+                                    {
+                                        Classes.SettingsManager.Current.ClipboardWallpaperPath = desktopWp;
+                                        ApplyWallpaper();
+                                        Classes.Logger.LogAction("THEME", $"Mode: FlyShelf — desktop wallpaper: {desktopWp}");
+                                    }
+                                    else
+                                    {
+                                        // No desktop wallpaper found — fall back to Mica blur
+                                        Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                                        RestoreMicaBlur();
+                                        Classes.Logger.LogAction("THEME", "Mode: FlyShelf — no desktop wallpaper found, using Mica blur fallback");
+                                    }
                                 }
-                                else
+                                else // displayMode == "theme"
                                 {
-                                    // Theme has no wallpaper — use clean gradient
-                                    ApplyPopupBackground();
-                                    Classes.Logger.LogAction("THEME", $"Theme '{theme.Name}' has no wallpaper — using default background");
-                                }
+                                    // ═══ CUSTOM THEME MODE ═══
+                                    // Clipboard gets theme wallpaper + mascot animation
+                                    if (theme == null)
+                                    {
+                                        // Theme was cleared but mode is still "theme" — restore Mica
+                                        Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                                        RestoreMicaBlur();
+                                        Classes.Logger.LogAction("THEME", "Mode: Theme — but no theme active, falling back to Mica");
+                                        return;
+                                    }
 
-                                // STEP 4: Start idle animation for the new theme (if it has sprites)
-                                Classes.AnimationTriggerService.Instance.StartIdleAnimation();
+                                    string? themeWp = Classes.ThemeManager.Instance.GetWallpaperPath();
+                                    if (!string.IsNullOrEmpty(themeWp) && System.IO.File.Exists(themeWp))
+                                    {
+                                        Classes.SettingsManager.Current.ClipboardWallpaperPath = themeWp;
+                                        ApplyWallpaper();
+                                        Classes.Logger.LogAction("THEME", $"Mode: Theme '{theme.Name}' — wallpaper: {themeWp}");
+                                    }
+                                    else
+                                    {
+                                        // Theme has no wallpaper — keep Mica blur
+                                        Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                                        RestoreMicaBlur();
+                                        Classes.Logger.LogAction("THEME", $"Mode: Theme '{theme.Name}' — no wallpaper, using Mica blur");
+                                    }
+
+                                    // Start mascot idle animation
+                                    Classes.AnimationTriggerService.Instance.StartIdleAnimation();
+                                }
                             }
                             catch (Exception ex) { Classes.Logger.LogAction("THEME", $"Theme switch error: {ex.Message}"); }
                         });
                     };
                     Classes.ThemeManager.Instance.ActiveThemeChanged += _themeChangedHandler;
 
-                    // Apply wallpaper from current active theme on startup
-                    string? startupWp = Classes.ThemeManager.Instance.GetWallpaperPath();
-                    if (!string.IsNullOrEmpty(startupWp) && System.IO.File.Exists(startupWp))
+                    // ═══ Startup: Apply correct mode ═══
+                    string startupMode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                    if (startupMode == "desktop")
                     {
-                        Classes.SettingsManager.Current.ClipboardWallpaperPath = startupWp;
-                        ApplyWallpaper();
+                        // Desktop wallpaper mode
+                        _cachedDesktopWallpaperPath = null; // Force re-read
+                        string desktopWp = GetDesktopWallpaperPath();
+                        if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
+                        {
+                            Classes.SettingsManager.Current.ClipboardWallpaperPath = desktopWp;
+                            ApplyWallpaper();
+                        }
+                    }
+                    else if (startupMode == "theme")
+                    {
+                        // Custom theme mode — apply theme wallpaper
+                        string? startupWp = Classes.ThemeManager.Instance.GetWallpaperPath();
+                        if (!string.IsNullOrEmpty(startupWp) && System.IO.File.Exists(startupWp))
+                        {
+                            Classes.SettingsManager.Current.ClipboardWallpaperPath = startupWp;
+                            ApplyWallpaper();
+                        }
+                    }
+                    else
+                    {
+                        // "mica" mode — ensure clean slate: no wallpaper, just system blur or grey
+                        Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                        RestoreMicaBlur();
                     }
 
-                    Classes.Logger.LogAction("THEME", "Mascot overlays wired to trigger service");
+                    // ═══ START MASCOT IDLE ANIMATION ═══
+                    // Must happen AFTER _mascotAnimationRequestedHandler is wired (line above).
+                    // AnimationTriggerService.Initialize() fires StartIdleAnimation() too early
+                    // (before the handler exists), so the event is lost. This is the real startup trigger.
+                    if (Classes.ThemeManager.Instance.ActiveTheme != null && Classes.SettingsManager.Current.ThemeAnimationsEnabled)
+                    {
+                        Classes.AnimationTriggerService.Instance.StartIdleAnimation();
+                    }
+
+                    Classes.Logger.LogAction("THEME", $"Mascot overlays wired. Startup mode: {startupMode}");
                 }
                 catch (Exception ex)
                 {
@@ -509,22 +581,66 @@ namespace FlyShelf
         }
 
         /// <summary>
-        /// Applies the dark gradient background for the popup clipboard (solid fallback for no-blur).
+        /// Restores the system Mica/Acrylic blur backdrop on the clipboard window.
+        /// Sets Background = Transparent so the system backdrop effect is visible.
+        /// Falls back to solid gradient when system doesn't support blur.
+        /// </summary>
+        private void RestoreMicaBlur()
+        {
+            // ═══ COMPREHENSIVE CLEANUP: Clear ALL wallpaper/theme visual layers ═══
+            // Without this, switching from a theme with a wallpaper back to Mica leaves
+            // residual wallpaper images, overlays, or frost tints visible.
+            try
+            {
+                // Clear animated GIF source (XamlAnimatedGif holds onto frames)
+                XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
+                WallpaperBg.Source = null;
+                WallpaperBg.Visibility = Visibility.Collapsed;
+
+                // Clear the radial gradient theme overlay
+                WallpaperThemeOverlay.Visibility = Visibility.Collapsed;
+
+                // Clear the frosted glass header + its image source
+                WallpaperFrostImg.Source = null;
+                WallpaperFrostHeader.Visibility = Visibility.Collapsed;
+                WallpaperFrostTint.Background = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromArgb(0x25, 0, 0, 0)); // Reset to default neutral tint
+
+                // Stop mascot
+                MascotIdle.StopAnimation();
+
+                // Reset tracking
+                _currentLoadedWallpaperPath = "";
+            }
+            catch { }
+
+            // ═══ RESTORE MICA/ACRYLIC BLUR ═══
+            if (Classes.SettingsManager.Current.EnableBlurBehind && Classes.NativeMethods.ShouldUseBlur())
+            {
+                this.Background = System.Windows.Media.Brushes.Transparent;
+                if (RootContent != null)
+                    RootContent.Background = new System.Windows.Media.SolidColorBrush(
+                        System.Windows.Media.Color.FromArgb(1, 0, 0, 0)); // Near-transparent for hit testing
+                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Acrylic;
+            }
+            else
+            {
+                ApplyPopupBackground(); // Solid gradient fallback when blur is disabled/unsupported
+            }
+        }
+
+        /// <summary>
+        /// Applies a neutral dark grey background for the popup clipboard
+        /// (solid fallback when system blur is disabled or unsupported).
         /// </summary>
         private void ApplyPopupBackground()
         {
-            var gradient = new System.Windows.Media.LinearGradientBrush();
-            gradient.StartPoint = new System.Windows.Point(0.5, 0);
-            gradient.EndPoint = new System.Windows.Point(0.5, 1);
-            gradient.GradientStops.Add(new System.Windows.Media.GradientStop(
-                System.Windows.Media.Color.FromRgb(32, 32, 48), 0));    // #202030 soft indigo
-            gradient.GradientStops.Add(new System.Windows.Media.GradientStop(
-                System.Windows.Media.Color.FromRgb(28, 28, 42), 0.5));  // #1C1C2A mid tone
-            gradient.GradientStops.Add(new System.Windows.Media.GradientStop(
-                System.Windows.Media.Color.FromRgb(24, 24, 38), 1));    // #181826 base
-            gradient.Freeze();
-            this.Background = gradient;
-            if (RootContent != null) RootContent.Background = gradient;
+            // Clean neutral dark grey — no blue/indigo tint
+            var grey = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(36, 36, 36)); // #242424 — Windows 11 dark surface
+            grey.Freeze();
+            this.Background = grey;
+            if (RootContent != null) RootContent.Background = grey;
         }
 
         /// <summary>
@@ -554,36 +670,11 @@ namespace FlyShelf
         private void ApplyWallpaper()
         {
             string path = Classes.SettingsManager.Current.ClipboardWallpaperPath;
-            bool themeApplied = Classes.ThemeManager.Instance.ActiveTheme != null;
 
-            // If no custom wallpaper set and no theme is applied, skip heavy desktop wallpaper
-            // registry query, image load, decoding, and blur operations entirely.
-            if (!themeApplied && string.IsNullOrEmpty(path))
-            {
-                XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
-                WallpaperBg.Source = null;
-                WallpaperBg.Visibility = Visibility.Collapsed;
-                WallpaperThemeOverlay.Visibility = Visibility.Collapsed;
-                WallpaperFrostHeader.Visibility = Visibility.Collapsed;
-                return;
-            }
-
-            // If no custom wallpaper set, use the current Windows desktop wallpaper
+            // If no wallpaper path set, clear all layers
             if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
             {
-                try
-                {
-                    string desktopWp = GetDesktopWallpaperPath();
-                    if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
-                        path = desktopWp;
-                }
-                catch { }
-            }
-
-            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
-            {
-                if (_currentLoadedWallpaperPath == "") return; // Already cleared
-                // No wallpaper at all — hide all layers
+                if (_currentLoadedWallpaperPath == "" && WallpaperBg.Visibility == Visibility.Collapsed) return;
                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
                 WallpaperBg.Source = null;
                 WallpaperBg.Visibility = Visibility.Collapsed;
@@ -592,6 +683,7 @@ namespace FlyShelf
                 _currentLoadedWallpaperPath = "";
                 return;
             }
+
 
             if (path == _currentLoadedWallpaperPath)
             {
@@ -735,6 +827,7 @@ namespace FlyShelf
 
         protected override void OnClosed(EventArgs e)
         {
+            _isClosed = true;
             try
             {
                 if (_foregroundHook != IntPtr.Zero)
@@ -845,7 +938,24 @@ namespace FlyShelf
             else if (msg == Classes.NativeMethods.WM_SETTINGCHANGE)
             {
                 _cachedDesktopWallpaperPath = null;
-                Dispatcher.InvokeAsync(() => { try { ApplyWallpaper(); } catch { } });
+                // Only re-apply if we're in FlyShelf desktop wallpaper mode
+                if ((Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica") == "desktop")
+                {
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        try
+                        {
+                            string desktopWp = GetDesktopWallpaperPath();
+                            if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
+                            {
+                                Classes.SettingsManager.Current.ClipboardWallpaperPath = desktopWp;
+                                _currentLoadedWallpaperPath = ""; // Force reload
+                                ApplyWallpaper();
+                            }
+                        }
+                        catch { }
+                    });
+                }
             }
             else if (msg == WM_CLIPBOARDUPDATE)
             {

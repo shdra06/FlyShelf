@@ -233,10 +233,11 @@
 
         <!-- ═══ MASCOT THEME OVERLAYS ═══ -->
         <!-- Header Mascot: beside the search icon (top-right of toolbar) -->
-        <local:SpriteAnimator x:Name="MascotIdle" Grid.Row="0" 
-                              HorizontalAlignment="Left" VerticalAlignment="Top" 
-                              Margin="8,6,0,0" Panel.ZIndex="20"
-                              SpriteWidth="42" SpriteHeight="42"/>
+        <Canvas Grid.Row="0" HorizontalAlignment="Left" VerticalAlignment="Top" Width="42" Height="42" Margin="8,6,0,0" Panel.ZIndex="20" IsHitTestVisible="False">
+            <local:SpriteAnimator x:Name="MascotIdle" 
+                                  SpriteWidth="42" SpriteHeight="42"
+                                  Width="42" Height="42"/>
+        </Canvas>
 
         <ListView Name="ShelfListView" Grid.Row="1" ItemsSource="{Binding DroppedItems}" Background="#01000000" BorderThickness="0" Margin="12,0,12,12"
                   Focusable="True" KeyboardNavigation.DirectionalNavigation="Contained"

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -15,7 +15,7 @@ namespace FlyShelf.Classes
         // Separate clients: SSE stream needs infinite timeout, forced sync polls use short timeout
         private static readonly HttpClient _streamClient = new HttpClient() { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
         private static readonly HttpClient _pollClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
-        private const string FIREBASE_BASE = "https://advance-sync-default-rtdb.firebaseio.com";
+        private static string FIREBASE_BASE => FirebaseAuthManager.FirebaseDatabaseUrl;
         
         /// <summary>Wraps a Firebase REST URL with auth token.</summary>
         private static async Task<string> AuthUrl(string path)

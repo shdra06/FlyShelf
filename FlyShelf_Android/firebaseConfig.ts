@@ -5,15 +5,21 @@ import { initializeAuth, getAuth, getReactNativePersistence, signInAnonymously, 
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA52ZXmxx1auJshsv-uuayQRHD22D7zdwk",
-  authDomain: "advance-sync.firebaseapp.com",
-  projectId: "advance-sync",
-  storageBucket: "advance-sync.firebasestorage.app",
-  messagingSenderId: "49241495533",
-  appId: "1:49241495533:web:a774fec697271c1b81f9e4",
-  measurementId: "G-FHVL9ESM85",
-  databaseURL: "https://advance-sync-default-rtdb.firebaseio.com"
+  apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "",
+  authDomain: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN || "",
+  projectId: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID || "",
+  storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
+  messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
+  appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "",
+  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID || "",
+  databaseURL: process.env.EXPO_PUBLIC_FIREBASE_DATABASE_URL || ""
 };
+
+export const firebaseDatabaseUrl = firebaseConfig.databaseURL || "https://advance-sync-default-rtdb.firebaseio.com";
+
+if (!firebaseConfig.apiKey) {
+  console.warn("[FirebaseConfig] Warning: EXPO_PUBLIC_FIREBASE_API_KEY environment variable is not defined!");
+}
 
 const app = initializeApp(firebaseConfig);
 export const database = getDatabase(app);

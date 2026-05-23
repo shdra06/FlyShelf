@@ -305,7 +305,7 @@ namespace FlyShelf.Windows
                 var hwnd = new WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
-                    int colorNone = DWMWA_COLOR_NONE;
+                    int colorNone = DWMWA_COLOR_DARK_GRAY;
                     DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref colorNone, Marshal.SizeOf<int>());
                 }
             }

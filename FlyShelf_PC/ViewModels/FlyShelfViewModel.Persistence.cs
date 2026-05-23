@@ -574,9 +574,9 @@ namespace FlyShelf.ViewModels
                 }
 
                 // No LAN success and no Cloudflare tunnel available
-                FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"'{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) \u2014 no active LAN peers or Cloudflare tunnel available");
+                FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"'{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) — no active LAN peers or Cloudflare tunnel available");
                 Application.Current.Dispatcher.InvokeAsync(() =>
-                    FlyShelf.Windows.ToastWindow.ShowToast($"\u26a0\ufe0f {Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) \u2014 no active LAN peers or Cloudflare tunnel"));
+                    FlyShelf.Windows.ToastWindow.ShowToast($"\u26a0\ufe0f {Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) — no active LAN peers or Cloudflare tunnel"));
             }
             catch (Exception ex)
             {
@@ -584,25 +584,26 @@ namespace FlyShelf.ViewModels
             }
         }
 
-        private const int MAX_UNPINNED_ITEMS = 1000;
-        private const int WARNING_THRESHOLD = 500;
+        private const int MAX_UNPINNED_ITEMS = 500;
+        private const int WARNING_THRESHOLD = 100;
 
         /// <summary>
         /// Prunes oldest unpinned items beyond the cap to prevent unbounded memory growth.
-        /// Warning toast at 500 items, hard cap at 1000.
+        /// Warning toast at 100 items, hard cap at 500.
         /// </summary>
         public void PruneOldItems()
         {
-            // Show warning at 500 items (but don't prune yet)
+            // Show warning starting at 100 items (but don't prune yet)
             if (DroppedItems.Count >= WARNING_THRESHOLD && DroppedItems.Count <= MAX_UNPINNED_ITEMS)
             {
                 int unpinnedCount = DroppedItems.Count(i => !i.IsPinned);
                 if (unpinnedCount >= WARNING_THRESHOLD && unpinnedCount < MAX_UNPINNED_ITEMS)
                 {
-                    // Only warn once per threshold crossing (every 100 items)
-                    if (unpinnedCount % 100 == 0)
+                    // Warn every 50 items to give frequent heads-up
+                    if (unpinnedCount % 50 == 0)
                     {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"\u26a0\ufe0f Clipboard has {unpinnedCount} items. Max is {MAX_UNPINNED_ITEMS}.");
+                        int remaining = MAX_UNPINNED_ITEMS - unpinnedCount;
+                        FlyShelf.Windows.ToastWindow.ShowToast($"\u26a0\ufe0f Clipboard has {unpinnedCount} items. {remaining} slots remaining (max {MAX_UNPINNED_ITEMS}).");
                     }
                 }
             }

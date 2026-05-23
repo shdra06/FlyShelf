@@ -1,4 +1,4 @@
-﻿// Copyright © 2024-2026 The FlyShelf Authors
+// Copyright © 2024-2026 The FlyShelf Authors
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 using System.Runtime.InteropServices;
@@ -40,6 +40,7 @@ public static partial class NativeMethods
     internal const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
     internal const int DWMWA_BORDER_COLOR = 34;
     internal const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
+    internal const int DWMWA_COLOR_DARK_GRAY = 0x002D2D2D;
     internal const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
 
     // Keyboard Hook
@@ -451,6 +452,10 @@ public static partial class NativeMethods
                     int colorDefault = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE = transparent for Mica
                     DwmSetWindowAttribute(hwnd, 35, ref colorDefault, sizeof(int));
                 }
+
+                // Override active window border color to prevent red accent bleeding
+                int borderColor = DWMWA_COLOR_DARK_GRAY;
+                DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
             }
         }
         catch { }
@@ -481,6 +486,27 @@ public static partial class NativeMethods
                 System.Windows.Media.Color.FromRgb(18, 18, 26));
             window.Background = bgBrush;
             if (rootGrid != null) rootGrid.Background = bgBrush;
+        }
+
+        // Hook window activation to prevent Windows 11 DWM from resetting our custom dark gray border to active system accent
+        window.Activated -= Window_Activated_BorderResetHandler;
+        window.Activated += Window_Activated_BorderResetHandler;
+    }
+
+    private static void Window_Activated_BorderResetHandler(object? sender, EventArgs e)
+    {
+        if (sender is System.Windows.Window window)
+        {
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    int borderColor = DWMWA_COLOR_DARK_GRAY;
+                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
+                }
+            }
+            catch { }
         }
     }
 

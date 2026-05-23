@@ -386,6 +386,8 @@ namespace FlyShelf
 
         private void ShelfListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            if (IsDeletingItem) return;
+
             // Only manage the Unpin button here. Merge bar is controlled by checkbox toggles.
             if (ShelfListView.SelectedItems.Count > 1)
             {
@@ -528,7 +530,19 @@ namespace FlyShelf
                 DismissMergeState();
                 var win = new FlyShelf.Windows.PdfMergeWindow(allPdfs, _viewModel);
                 App.ActiveMergeWindow = win;
-                win.Closed += (_, __) => { App.ActiveMergeWindow = null; this.Show(); this.Activate(); };
+                win.Closed += (_, __) =>
+                {
+                    App.ActiveMergeWindow = null;
+                    try
+                    {
+                        if (!_isClosed && this.IsLoaded)
+                        {
+                            this.Show();
+                            this.Activate();
+                        }
+                    }
+                    catch { }
+                };
                 win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
                 win.Topmost = true;
                 win.Show();
@@ -620,10 +634,13 @@ namespace FlyShelf
             MergePdfToolbarBtn.Visibility = Visibility.Collapsed;
             UpdateToolbarButtonsVisibility();
 
-            // Uncheck all IsCheckedForMerge
-            foreach (var item in _viewModel.DroppedItems)
+            // Uncheck all IsCheckedForMerge (fast-path optimization to avoid triggering PropertyChanged notify loops)
+            if (_viewModel.DroppedItems != null && _viewModel.DroppedItems.Any(i => i.IsCheckedForMerge))
             {
-                if (item.IsCheckedForMerge) item.IsCheckedForMerge = false;
+                foreach (var item in _viewModel.DroppedItems)
+                {
+                    if (item.IsCheckedForMerge) item.IsCheckedForMerge = false;
+                }
             }
         }
 
@@ -688,7 +705,7 @@ $word.Quit()
                         var psi = new System.Diagnostics.ProcessStartInfo
                         {
                             FileName = "powershell.exe",
-                            Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -Command \"{script}\"",
+                            Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -Command \"{script}\"",
                             CreateNoWindow = true,
                             UseShellExecute = false
                         };

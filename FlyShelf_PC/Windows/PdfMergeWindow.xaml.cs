@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
@@ -251,6 +251,34 @@ namespace FlyShelf.Windows
         // ═══════════════════════════════════════════════════════════════
         // ACTIONS
         // ═══════════════════════════════════════════════════════════════
+
+        private void MoveUp_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is PdfMergeItem item)
+            {
+                int idx = MergeItems.IndexOf(item);
+                if (idx > 0)
+                {
+                    MergeItems.Move(idx, idx - 1);
+                    UpdateSummary();
+                }
+            }
+            e.Handled = true;
+        }
+
+        private void MoveDown_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.Tag is PdfMergeItem item)
+            {
+                int idx = MergeItems.IndexOf(item);
+                if (idx >= 0 && idx < MergeItems.Count - 1)
+                {
+                    MergeItems.Move(idx, idx + 1);
+                    UpdateSummary();
+                }
+            }
+            e.Handled = true;
+        }
 
         private void Remove_Click(object sender, RoutedEventArgs e)
         {

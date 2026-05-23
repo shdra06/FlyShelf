@@ -23,7 +23,18 @@ namespace FlyShelf
             if (System.Windows.Application.Current.Windows.OfType<Window>()
                 .Any(w => w is FlyShelf.Windows.QuickLookWindow && w.IsActive)) return;
             this.Opacity = 1.0;
-            // PERF: DWM border color is now set once via _borderColorSet in ShowNearPosition
+            
+            // Explicitly set DWM border color on activation to prevent DWM/MicaWindow from resetting it to system accent
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    int cn = DWMWA_COLOR_DARK_GRAY;
+                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                }
+            }
+            catch { }
         }
 
 
@@ -404,7 +415,7 @@ namespace FlyShelf
             // PERF: Cache DWM border attribute — only set once, never changes
             if (!_borderColorSet)
             {
-                int cn = DWMWA_COLOR_NONE;
+                int cn = DWMWA_COLOR_DARK_GRAY;
                 DwmSetWindowAttribute(new System.Windows.Interop.WindowInteropHelper(this).Handle, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                 _borderColorSet = true;
             }

@@ -13,7 +13,7 @@ namespace FlyShelf.Classes
     public partial class CloudDiscoveryManager
     {
         private static readonly HttpClient _client = new HttpClient();
-        private const string FIREBASE_BASE = "https://advance-sync-default-rtdb.firebaseio.com";
+        private static string FIREBASE_BASE => FirebaseAuthManager.FirebaseDatabaseUrl;
         
         /// <summary>
         /// Wraps a Firebase REST URL with the auth token. ALL Firebase calls must use this.

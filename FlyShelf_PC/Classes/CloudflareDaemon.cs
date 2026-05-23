@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
@@ -19,7 +19,7 @@ namespace FlyShelf.Classes
         private System.Timers.Timer _healthTimer;      // Periodic tunnel health monitor
         private int _quicErrorCount = 0;                 // Track consecutive QUIC/datagram failures for fast auto-restart
 
-        public string GlobalUrl { get; private set; } = "Initializing...";
+        public string GlobalUrl { get; private set; } = "Offline";
         /// <summary>Previous tunnel URL — used to purge stale file entries from Firebase when URL changes.</summary>
         public string PreviousGlobalUrl { get; private set; } = "";
         /// <summary>
@@ -48,7 +48,7 @@ namespace FlyShelf.Classes
                 Directory.CreateDirectory(agentDir);
                 string exePath = Path.Combine(agentDir, "cloudflared.exe");
 
-                // Download cloudflared.exe if missing or corrupted (too small = partial download)
+                // Download cloudflared.exe if missing or corrupted (too small)
                 if (!File.Exists(exePath) || new FileInfo(exePath).Length < MIN_EXE_SIZE)
                 {
                     try { if (File.Exists(exePath)) File.Delete(exePath); } catch { }

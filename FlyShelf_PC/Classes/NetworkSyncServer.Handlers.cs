@@ -1,4 +1,4 @@
-﻿// ---------------------------------------------------------------
+// ---------------------------------------------------------------
 // NetworkSyncServer ï¿½ HTTP Request Handlers
 // ServeHtml, ClipboardData, TextUpload, FileUpload,
 // ArchiveUpload, RelayUpload
@@ -644,7 +644,7 @@ namespace FlyShelf.Classes
                     string json = System.Text.Json.JsonSerializer.Serialize(payload);
                     var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
                     var fbRes = await _httpClient.PostAsync(
-                        await FirebaseAuthManager.AuthenticateUrl("https://advance-sync-default-rtdb.firebaseio.com/clipboard.json"), content);
+                        await FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/clipboard.json"), content);
 
                     if (fbRes.IsSuccessStatusCode)
                     {
@@ -657,7 +657,7 @@ namespace FlyShelf.Classes
                                 _ = Task.Run(async () =>
                                 {
                                     await Task.Delay(24 * 60 * 60_000);
-                                    try { await _httpClient.DeleteAsync(await FirebaseAuthManager.AuthenticateUrl($"https://advance-sync-default-rtdb.firebaseio.com/clipboard/{entryKey}.json")); } catch { }
+                                    try { await _httpClient.DeleteAsync(await FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/clipboard/{entryKey}.json")); } catch { }
                                 });
                             }
                         }

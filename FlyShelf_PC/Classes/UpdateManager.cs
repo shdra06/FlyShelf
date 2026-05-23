@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Diagnostics;
 using System.IO;
 using System.Net.Http;
@@ -43,6 +43,11 @@ namespace FlyShelf.Classes
         /// </summary>
         public async Task<bool> CheckForUpdateAsync()
         {
+#if MSIX_STORE
+            StatusChanged?.Invoke("Updates are managed by the Microsoft Store.");
+            UpdateCheckCompleted?.Invoke(false);
+            return false;
+#else
             try
             {
                 StatusChanged?.Invoke("Checking for updates...");
@@ -169,6 +174,7 @@ namespace FlyShelf.Classes
                 UpdateCheckCompleted?.Invoke(false);
                 return false;
             }
+#endif
         }
 
         /// <summary>
@@ -176,6 +182,10 @@ namespace FlyShelf.Classes
         /// </summary>
         public async Task<bool> DownloadAndApplyUpdateAsync()
         {
+#if MSIX_STORE
+            StatusChanged?.Invoke("Updates are managed by the Microsoft Store.");
+            return false;
+#else
             if (string.IsNullOrEmpty(DownloadUrl))
             {
                 StatusChanged?.Invoke("No download URL available.");
@@ -291,6 +301,7 @@ namespace FlyShelf.Classes
                 StatusChanged?.Invoke($"Download failed: {ex.Message}");
                 return false;
             }
+#endif
         }
 
         /// <summary>
@@ -408,6 +419,10 @@ namespace FlyShelf.Classes
         /// </summary>
         public void ApplyUpdateAndRestart()
         {
+#if MSIX_STORE
+            StatusChanged?.Invoke("Updates are managed by the Microsoft Store.");
+            return;
+#else
             string tempDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Update");
             string tempExePath = Path.Combine(tempDir, "FlyShelf_new.exe");
 
@@ -494,6 +509,7 @@ del ""%~f0"" 2>nul
             {
                 System.Windows.Application.Current.Shutdown();
             });
+#endif
         }
     }
 }

@@ -24,6 +24,11 @@
     <Description>FlyShelf syncs your clipboard, files, and screenshots across all your devices in real-time via secure peer-to-peer connections.</Description>
   </PropertyGroup>
 
+  <!-- Microsoft Store build: pass /p:StorePublish=true to define MSIX_STORE -->
+  <PropertyGroup Condition="'$(StorePublish)' == 'true'">
+    <DefineConstants>$(DefineConstants);MSIX_STORE</DefineConstants>
+  </PropertyGroup>
+
   <!-- Prevent process crash from unobserved async Task exceptions -->
   <ItemGroup>
     <RuntimeHostConfigurationOption Include="System.Threading.Tasks.TaskScheduler.ThrowUnobservedTaskExceptions" Value="false" />
@@ -48,6 +53,16 @@
     <Resource Include="Resources\**\*.png" />
     <Resource Include="Resources\**\*.ico" />
   </ItemGroup>
+
+  <Target Name="GenerateFirebaseSecrets" BeforeTargets="BeforeBuild">
+    <PropertyGroup>
+      <SecretsFile>Classes\FirebaseSecrets.cs</SecretsFile>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(SecretsFile)" 
+                      Lines="namespace FlyShelf.Classes;%0D%0A%0D%0Apublic static class FirebaseSecrets%0D%0A{%0D%0A    public const string ApiKey = &quot;&quot;;%0D%0A    public const string DatabaseUrl = &quot;https://advance-sync-default-rtdb.firebaseio.com&quot;;%0D%0A}" 
+                      Overwrite="true" 
+                      Condition="!Exists('$(SecretsFile)')" />
+  </Target>
 
   <Target Name="ZipPayloads" BeforeTargets="BeforeBuild">
     <Message Text="Zipping WebClient into Native Embedded Resources..." Importance="high" />

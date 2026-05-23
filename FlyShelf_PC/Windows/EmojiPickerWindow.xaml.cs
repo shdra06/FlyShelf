@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -56,7 +56,7 @@ namespace FlyShelf.Windows
                 var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
-                    int colorNone = FlyShelf.Classes.NativeMethods.DWMWA_COLOR_NONE;
+                    int colorNone = FlyShelf.Classes.NativeMethods.DWMWA_COLOR_DARK_GRAY;
                     FlyShelf.Classes.NativeMethods.DwmSetWindowAttribute(hwnd, FlyShelf.Classes.NativeMethods.DWMWA_BORDER_COLOR, ref colorNone, sizeof(int));
                 }
             }

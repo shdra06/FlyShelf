@@ -459,7 +459,7 @@ namespace FlyShelf.ViewModels
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Failed to execute drop item: {ex.Message}");
+                FlyShelf.Classes.Logger.LogAction("DEBUG", $"Failed to execute drop item: {ex.Message}");
             }
         }
 

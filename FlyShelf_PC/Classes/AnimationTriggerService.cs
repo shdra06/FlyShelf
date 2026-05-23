@@ -151,10 +151,14 @@ namespace FlyShelf.Classes
         /// </summary>
         public void StartIdleAnimation()
         {
-            if (!IsThemeActive()) return;
+            bool themeActive = IsThemeActive();
+            Logger.LogAction("MASCOT", $"StartIdleAnimation: themeActive={themeActive}, animEnabled={SettingsManager.Current.ThemeAnimationsEnabled}, activeTheme='{ThemeManager.Instance.ActiveTheme?.Name ?? "null"}', searchActive={_searchActive}");
+            
+            if (!themeActive) return;
             if (_searchActive) return; // Don't override search animation
 
             var anim = ThemeManager.Instance.GetAnimation("idle");
+            Logger.LogAction("MASCOT", $"StartIdleAnimation: idle anim={(anim != null ? "found" : "NULL")}, resolvedPath='{anim?.ResolvedFilePath ?? "N/A"}'");
             if (anim == null || string.IsNullOrEmpty(anim.ResolvedFilePath)) return;
 
             FireAnimation("idle", anim);

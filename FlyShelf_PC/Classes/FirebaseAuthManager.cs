@@ -15,8 +15,10 @@ namespace FlyShelf.Classes
     {
         private static readonly HttpClient _authClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(15) };
         
-        // Firebase Web API Key (same as in firebaseConfig.js)
-        private const string FIREBASE_API_KEY = "AIzaSyA52ZXmxx1auJshsv-uuayQRHD22D7zdwk";
+        // Firebase Web API Key (same as in firebaseConfig.ts)
+        private static string FIREBASE_API_KEY => FirebaseSecrets.ApiKey;
+        
+        public static string FirebaseDatabaseUrl => FirebaseSecrets.DatabaseUrl;
         
         // Cached token state
         private static string _idToken = "";

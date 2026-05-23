@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
@@ -246,7 +246,7 @@ namespace FlyShelf.Classes
                 try
                 {
                     using var client = new System.Net.Http.HttpClient() { Timeout = TimeSpan.FromSeconds(5) };
-                    var authUrl = FirebaseAuthManager.AuthenticateUrl("https://advance-sync-default-rtdb.firebaseio.com/.json?shallow=true").Result;
+                    var authUrl = FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/.json?shallow=true").Result;
                     var t = client.GetAsync(authUrl).Result;
                     sb.AppendLine($"  Firebase RTDB:     HTTP {(int)t.StatusCode} {(t.IsSuccessStatusCode ? "✓" : "✗")}");
                 }

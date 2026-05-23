@@ -416,20 +416,34 @@ namespace FlyShelf.Windows
                 if (ThemeCombo == null) return;
                 ThemeCombo.Items.Clear();
 
-                // Option 1: Classic look — no mascot, uses desktop wallpaper
-                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "FlyShelf (Classic)", Tag = "" });
+                // Mode 1: Mica Blur — pure system blur, no wallpaper, no mascot
+                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "Mica Blur", Tag = "__mica__" });
 
-                // Option 2: The first valid installed mascot theme (if any)
+                // Mode 2: FlyShelf — desktop wallpaper on clipboard, Mica blur on hub
+                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "FlyShelf", Tag = "__desktop__" });
+
+                // Mode 3+: Custom mascot themes (skip skeleton templates with no sprite files)
                 var themes = ThemeManager.Instance.GetInstalledThemes();
                 int selectedIdx = 0;
+                string savedMode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
                 string activeTheme = SettingsManager.Current.ActiveThemeName ?? "";
 
-                if (themes.Count > 0)
+                // Determine which item should be pre-selected
+                if (savedMode == "desktop")
+                    selectedIdx = 1;
+
+                foreach (var theme in themes)
                 {
-                    var firstTheme = themes[0];
-                    ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = firstTheme.Name, Tag = firstTheme.Name });
-                    if (firstTheme.Name.Equals(activeTheme, System.StringComparison.OrdinalIgnoreCase))
-                        selectedIdx = 1;
+                    // Skip themes with no resolved animation files (e.g. "FlyShelf Default" template)
+                    bool hasRealSprites = theme.Animations.Values.Any(a => 
+                        !string.IsNullOrEmpty(a.ResolvedFilePath) && System.IO.File.Exists(a.ResolvedFilePath));
+                    if (!hasRealSprites) continue;
+
+                    int idx = ThemeCombo.Items.Count;
+                    ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = theme.Name, Tag = theme.Name });
+
+                    if (savedMode == "theme" && theme.Name.Equals(activeTheme, System.StringComparison.OrdinalIgnoreCase))
+                        selectedIdx = idx;
                 }
 
                 ThemeCombo.SelectedIndex = selectedIdx;
@@ -444,9 +458,86 @@ namespace FlyShelf.Windows
         {
             if (ThemeCombo.SelectedItem is System.Windows.Controls.ComboBoxItem selected)
             {
-                string themeName = selected.Tag?.ToString() ?? "";
-                ThemeManager.Instance.SetActiveTheme(themeName);
+                string tag = selected.Tag?.ToString() ?? "__mica__";
+
+                if (tag == "__mica__")
+                {
+                    // Mica Blur mode — pure system blur, no wallpaper, no mascot
+                    SettingsManager.Current.ThemeDisplayMode = "mica";
+                    ThemeManager.Instance.SetActiveTheme(null);
+                }
+                else if (tag == "__desktop__")
+                {
+                    // FlyShelf mode — desktop wallpaper on clipboard, no mascot
+                    SettingsManager.Current.ThemeDisplayMode = "desktop";
+                    ThemeManager.Instance.SetActiveTheme(null);
+                }
+                else
+                {
+                    // Custom theme — theme wallpaper + mascot
+                    SettingsManager.Current.ThemeDisplayMode = "theme";
+                    ThemeManager.Instance.SetActiveTheme(tag);
+                }
+
+                SettingsManager.Save();
+
+                // Refresh wallpaper preview after a short delay so the 
+                // _themeChangedHandler's Dispatcher.InvokeAsync has time to update ClipboardWallpaperPath
+                Dispatcher.InvokeAsync(async () =>
+                {
+                    await System.Threading.Tasks.Task.Delay(200);
+                    RefreshWallpaperPreview();
+                });
             }
+        }
+
+        /// <summary>
+        /// Updates the wallpaper preview thumbnail in the Theme & Appearance section
+        /// to reflect the current ClipboardWallpaperPath.
+        /// </summary>
+        private void RefreshWallpaperPreview()
+        {
+            try
+            {
+                string wp = SettingsManager.Current.ClipboardWallpaperPath;
+                if (string.IsNullOrEmpty(wp) || !System.IO.File.Exists(wp))
+                {
+                    WallpaperPreviewImg.Source = null;
+                    NoWallpaperText.Visibility = Visibility.Visible;
+                }
+                else
+                {
+                    // Load preview on background thread to avoid UI stutter
+                    System.Threading.Tasks.Task.Run(() =>
+                    {
+                        try
+                        {
+                            var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                            bmp.BeginInit();
+                            bmp.UriSource = new Uri(wp, UriKind.Absolute);
+                            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                            bmp.DecodePixelWidth = 300;
+                            bmp.EndInit();
+                            bmp.Freeze();
+
+                            Dispatcher.InvokeAsync(() =>
+                            {
+                                WallpaperPreviewImg.Source = bmp;
+                                NoWallpaperText.Visibility = Visibility.Collapsed;
+                            });
+                        }
+                        catch
+                        {
+                            Dispatcher.InvokeAsync(() =>
+                            {
+                                WallpaperPreviewImg.Source = null;
+                                NoWallpaperText.Visibility = Visibility.Visible;
+                            });
+                        }
+                    });
+                }
+            }
+            catch { }
         }
 
         private void OpenThemesFolder_Click(object sender, MouseButtonEventArgs e)
