@@ -14,10 +14,10 @@ namespace FlyShelf.Classes
     /// </summary>
     public class ScrollProfile
     {
-        public double MouseEase { get; set; } = 0.18;
-        public double MouseScrollStep { get; set; } = 96.0;
-        public double TouchpadEase { get; set; } = 1.0; // 1.0 = direct response (zero artificial LERP lag)
-        public double TouchpadMultiplier { get; set; } = 0.85;
+        public double MouseEase { get; set; } = 0.12;           // premium butter LERP (down from 0.18)
+        public double MouseScrollStep { get; set; } = 80.0;     // highly controlled step (down from 96.0)
+        public double TouchpadEase { get; set; } = 0.22;        // 120 FPS smooth LERP (down from 1.0)
+        public double TouchpadMultiplier { get; set; } = 0.70;   // precise tactile scaling
     }
 
     /// <summary>
@@ -34,10 +34,10 @@ namespace FlyShelf.Classes
         /// </summary>
         public static readonly ScrollProfile ClipboardProfile = new()
         {
-            MouseEase = 0.20,
-            MouseScrollStep = 90.0,
-            TouchpadEase = 1.0,           // Direct trackpad input
-            TouchpadMultiplier = 0.85
+            MouseEase = 0.12,             // Premium butter sweeping glide
+            MouseScrollStep = 80.0,       // Controlled step
+            TouchpadEase = 0.22,          // Mac-like 120 FPS smooth LERP
+            TouchpadMultiplier = 0.70
         };
 
         /// <summary>
@@ -45,10 +45,10 @@ namespace FlyShelf.Classes
         /// </summary>
         public static readonly ScrollProfile PCAppProfile = new()
         {
-            MouseEase = 0.11,             // Luxurious long glide
-            MouseScrollStep = 120.0,      // Deeper notch steps for tall settings/logs pages
-            TouchpadEase = 1.0,           // Direct trackpad input
-            TouchpadMultiplier = 0.85
+            MouseEase = 0.08,             // Ultra-luxurious sweeping glide
+            MouseScrollStep = 100.0,      // Deeper notch steps for tall settings/logs pages
+            TouchpadEase = 0.22,          // Butter trackpad LERP
+            TouchpadMultiplier = 0.70
         };
 
         private static readonly ScrollProfile _defaultProfile = new();
@@ -240,7 +240,7 @@ namespace FlyShelf.Classes
                 double currentOffset = sv.VerticalOffset;
                 double diff = state.TargetOffset - currentOffset;
 
-                if (Math.Abs(diff) < 0.01)
+                if (Math.Abs(diff) < 0.15)
                 {
                     sv.ScrollToVerticalOffset(state.TargetOffset);
                     state.IsAnimating = false;
