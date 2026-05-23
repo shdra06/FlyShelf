@@ -598,7 +598,7 @@ namespace FlyShelf
                 {
                     Classes.Logger.LogAction("THEME", $"Theme init failed (non-fatal): {ex.Message}");
                 }
-            }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         /// <summary>
@@ -689,7 +689,7 @@ namespace FlyShelf
             var grey = new System.Windows.Media.SolidColorBrush(
                 System.Windows.Media.Color.FromRgb(36, 36, 36)); // #242424 — Windows 11 dark surface
             grey.Freeze();
-            this.Background = grey;
+            this.Background = System.Windows.Media.Brushes.Transparent;
             if (RootContent != null) RootContent.Background = grey;
         }
 

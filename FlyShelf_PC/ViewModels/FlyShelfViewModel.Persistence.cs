@@ -313,71 +313,16 @@ namespace FlyShelf.ViewModels
         /// </summary>
         public async Task LoadNextPageAsync()
         {
-            // No pagination needed — all 200 items are loaded at startup
-            await System.Threading.Tasks.Task.CompletedTask;
-            return;
-            
-            if (_isPaginating || IsSearchActive) return;
+            if (_isPaginating || _deferredItems == null || _deferredItems.Count == 0) return;
 
             _isPaginating = true;
             try
             {
-                // Dead code — kept for compilation only
-                var nextItems = new List<ClipboardItem>();
-                if (nextItems.Count == 0) return;
-
-                var existingKeys = new HashSet<string>(DroppedItems.Select(GetDeduplicationKey).Where(k => !string.IsNullOrEmpty(k)));
-                var itemsNeedingIcons = new List<ClipboardItem>();
-
-                await Application.Current.Dispatcher.InvokeAsync(() =>
+                var batch = _deferredItems.Take(30).ToList();
+                _deferredItems.RemoveRange(0, batch.Count);
+                if (batch.Count > 0)
                 {
-                    foreach (var item in nextItems)
-                    {
-                        string itemKey = GetDeduplicationKey(item);
-                        if (!string.IsNullOrEmpty(itemKey) && !existingKeys.Add(itemKey))
-                            continue;
-                        if (IsEffectivelyEmpty(item)) continue;
-                        if (string.IsNullOrWhiteSpace(item.FileName) && !string.IsNullOrWhiteSpace(item.RawContent))
-                            item.FileName = item.RawContent.Length > 800 ? item.RawContent.Substring(0, 800) + "..." : item.RawContent;
-                        item.EvaluateSmartActions();
-                        DroppedItems.Add(item);
-                        bool needsIcon = (item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
-                            && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath);
-                        bool needsFileIcon = !needsIcon && (item.ItemType == ClipboardItemType.File || item.ItemType == ClipboardItemType.Document ||
-                            item.ItemType == ClipboardItemType.Pdf || item.ItemType == ClipboardItemType.Archive ||
-                            item.ItemType == ClipboardItemType.Video || item.ItemType == ClipboardItemType.Audio ||
-                            item.ItemType == ClipboardItemType.Presentation) && !string.IsNullOrEmpty(item.FilePath);
-                        if (needsIcon || needsFileIcon) itemsNeedingIcons.Add(item);
-                    }
-                });
-
-                if (itemsNeedingIcons.Count > 0)
-                {
-                    _ = System.Threading.Tasks.Task.Run(async () =>
-                    {
-                        foreach (var item in itemsNeedingIcons)
-                        {
-                            await _iconDecodeSemaphore.WaitAsync();
-                            try
-                            {
-                                if ((item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
-                                    && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath))
-                                {
-                                    var icon = LoadImageThumbnail(item.FilePath);
-                                    if (icon != null)
-                                        await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
-                                }
-                                else if (!string.IsNullOrEmpty(item.FilePath))
-                                {
-                                    var icon = GetIcon(item.FilePath);
-                                    if (icon != null)
-                                        await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
-                                }
-                            }
-                            catch { }
-                            finally { _iconDecodeSemaphore.Release(); }
-                        }
-                    });
+                    await Application.Current.Dispatcher.InvokeAsync(() => DroppedItems.AddRange(batch));
                 }
             }
             catch (Exception ex)
@@ -387,6 +332,7 @@ namespace FlyShelf.ViewModels
             finally
             {
                 _isPaginating = false;
+                OnPropertyChanged(nameof(ShelfVisibility));
             }
         }
 

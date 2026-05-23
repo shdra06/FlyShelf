@@ -79,6 +79,8 @@ namespace FlyShelf.ViewModels
         private const int INITIAL_LOAD_COUNT = 30;
         private List<ClipboardItem>? _deferredItems = null;
 
+        public bool HasDeferredItems => _deferredItems != null && _deferredItems.Count > 0;
+
         public async Task LoadPersistedHistoryAsync()
         {
             await LoadPinnedItemsAsync();
@@ -194,11 +196,7 @@ namespace FlyShelf.ViewModels
                     });
                 }
 
-                // PERF: Load deferred items in background after 500ms so UI is ready first
-                if (_deferredItems != null && _deferredItems.Count > 0)
-                {
-                    _ = LoadDeferredItemsAsync();
-                }
+                // PERF: Remaining items will be loaded incrementally on scroll or instantly on search
             }
             finally
             {
@@ -207,26 +205,19 @@ namespace FlyShelf.ViewModels
         }
 
         /// <summary>
-        /// Loads remaining items in batches of 30 with small delays to avoid UI stutter.
+        /// Synchronously loads all remaining deferred items. Crucial for search.
         /// </summary>
-        private async Task LoadDeferredItemsAsync()
+        public void LoadAllDeferredItems()
         {
-            await System.Threading.Tasks.Task.Delay(500); // Let UI settle first
             if (_deferredItems == null || _deferredItems.Count == 0) return;
-
             var deferred = _deferredItems;
             _deferredItems = null;
-
             _isPaginating = true;
             try
             {
-                for (int offset = 0; offset < deferred.Count; offset += 30)
-                {
-                    var batch = deferred.Skip(offset).Take(30).ToList();
-                    await Application.Current.Dispatcher.InvokeAsync(() => DroppedItems.AddRange(batch));
-                    await System.Threading.Tasks.Task.Delay(50); // Small yield between batches
-                }
+                Application.Current.Dispatcher.Invoke(() => DroppedItems.AddRange(deferred));
             }
+            catch { }
             finally
             {
                 _isPaginating = false;
