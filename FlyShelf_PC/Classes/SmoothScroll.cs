@@ -238,6 +238,14 @@ namespace FlyShelf.Classes
             {
                 CompositionTarget.Rendering += OnRendering;
                 _renderingAttached = true;
+
+                // Suspend theme animations to free up 100% UI thread budget for buttery smooth scrolling!
+                try
+                {
+                    var parentWin = Window.GetWindow(sv) as MainWindow;
+                    parentWin?.SuspendThemeAnimations();
+                }
+                catch { }
             }
         }
 
@@ -310,6 +318,14 @@ namespace FlyShelf.Classes
             {
                 CompositionTarget.Rendering -= OnRendering;
                 _renderingAttached = false;
+
+                // Resume theme animations now that scrolling has stopped
+                try
+                {
+                    var mainWin = Application.Current.MainWindow as MainWindow;
+                    mainWin?.ResumeThemeAnimations();
+                }
+                catch { }
             }
         }
 

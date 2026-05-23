@@ -18,7 +18,7 @@
                             Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"
                             CornerRadius="2"
                             Margin="0,2"
-                            Opacity="0.4">
+                            Opacity="0.6">
                         <Border.CacheMode>
                             <BitmapCache EnableClearType="True" RenderAtScale="1"/>
                         </Border.CacheMode>
@@ -45,7 +45,7 @@
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ScrollBar">
-                    <Grid x:Name="ScrollTrack" Width="4" Background="Transparent" Margin="0,4,2,4">
+                    <Grid x:Name="ScrollTrack" Width="6" Background="Transparent" Margin="0,4,4,4">
                         <Track Name="PART_Track" IsDirectionReversed="True">
                             <Track.Thumb>
                                 <Thumb Style="{StaticResource Win11ScrollBarThumb}"/>
@@ -55,7 +55,7 @@
                     <ControlTemplate.Triggers>
                         <!-- Expand on hover for easier grab targeting -->
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="ScrollTrack" Property="Width" Value="6"/>
+                            <Setter TargetName="ScrollTrack" Property="Width" Value="8"/>
                         </Trigger>
                         <!-- Horizontal orientation override -->
                         <Trigger Property="Orientation" Value="Horizontal">

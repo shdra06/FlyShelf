@@ -243,6 +243,25 @@ namespace FlyShelf.Classes
             {
                 try
                 {
+                    // SAFETY: Refuse to overwrite a larger database with a smaller one
+                    // This prevents data loss from race conditions where a stale snapshot
+                    // (e.g. from before deferred items loaded) would overwrite the full DB.
+                    if (File.Exists(_historyPath))
+                    {
+                        try
+                        {
+                            var existingJson = File.ReadAllText(_historyPath);
+                            var existingItems = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(existingJson);
+                            if (existingItems != null && items.Count < existingItems.Count * 0.5 && existingItems.Count > 10)
+                            {
+                                // New snapshot has less than 50% of existing items — likely a stale/partial snapshot
+                                Logger.LogAction("HISTORY_COMPACT_ABORT", $"Refusing to compact: new={items.Count} vs existing={existingItems.Count}. Possible stale snapshot.");
+                                return;
+                            }
+                        }
+                        catch { /* Can't read existing — proceed with write */ }
+                    }
+
                     var options = new JsonSerializerOptions { WriteIndented = false };
                     var json = JsonSerializer.Serialize(items, options);
 

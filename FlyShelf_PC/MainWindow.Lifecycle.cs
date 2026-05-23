@@ -835,5 +835,35 @@ namespace FlyShelf
             }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
+        private bool _themeAnimationsSuspended = false;
+
+        public void SuspendThemeAnimations()
+        {
+            if (_themeAnimationsSuspended) return;
+            _themeAnimationsSuspended = true;
+            try
+            {
+                MascotIdle.PausePlayback();
+                var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
+                animator?.Pause();
+            }
+            catch { }
+        }
+
+        public void ResumeThemeAnimations()
+        {
+            if (!_themeAnimationsSuspended) return;
+            _themeAnimationsSuspended = false;
+            try
+            {
+                if (this.IsVisible && !_isAnimatingHide && Classes.SettingsManager.Current.ThemeAnimationsEnabled)
+                {
+                    MascotIdle.ResumePlayback();
+                    var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
+                    animator?.Play();
+                }
+            }
+            catch { }
+        }
     }
 }

@@ -195,9 +195,14 @@ namespace FlyShelf.ViewModels
                 }
 
                 // PERF: Load deferred items in background after 500ms so UI is ready first
+                // CRITICAL: Keep _isPaginating = true until deferred loading completes!
+                // Otherwise CollectionChanged fires during batch loading → SaveHistoryDebounced
+                // → CompactNow writes a snapshot with only 30 items, destroying the full database.
                 if (_deferredItems != null && _deferredItems.Count > 0)
                 {
+                    // _isPaginating stays TRUE — LoadDeferredItemsAsync sets it false when done
                     _ = LoadDeferredItemsAsync();
+                    return; // Don't fall through to _isPaginating = false
                 }
             }
             finally
