@@ -76,7 +76,7 @@ namespace FlyShelf.Classes
         private string _deviceName = System.Environment.MachineName;
         public string DeviceName { get => _deviceName; set => SetProperty(ref _deviceName, value); }
         
-        private string _deviceId = $"PC_{System.Environment.MachineName}_{System.Environment.UserName}".Replace(" ", "_");
+        private string _deviceId = $"PC_{Guid.NewGuid().ToString("N").Substring(0, 12)}";
         public string DeviceId { get => _deviceId; set => SetProperty(ref _deviceId, value); }
 
         private bool _enableQuickPasteHotkeys = true;
@@ -123,6 +123,9 @@ namespace FlyShelf.Classes
 
         private bool _themeAnimationsEnabled = true;
         public bool ThemeAnimationsEnabled { get => _themeAnimationsEnabled; set => SetProperty(ref _themeAnimationsEnabled, value); }
+
+        private bool _enableSummonAnimations = true;
+        public bool EnableSummonAnimations { get => _enableSummonAnimations; set => SetProperty(ref _enableSummonAnimations, value); }
 
         // Auto-Start on Windows Boot
         private bool _autoStartEnabled = true;

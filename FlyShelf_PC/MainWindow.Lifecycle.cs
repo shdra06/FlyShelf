@@ -38,6 +38,54 @@ namespace FlyShelf
         }
 
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern short GetAsyncKeyState(int vKey);
+        private const int VK_LBUTTON = 0x01;
+        private const int VK_RBUTTON = 0x02;
+
+        private System.Windows.Threading.DispatcherTimer? _dragActiveDismissTimer;
+
+        private void StartDragActiveDismissTimer()
+        {
+            if (_dragActiveDismissTimer == null)
+            {
+                _dragActiveDismissTimer = new System.Windows.Threading.DispatcherTimer();
+                _dragActiveDismissTimer.Interval = TimeSpan.FromMilliseconds(100);
+                _dragActiveDismissTimer.Tick += DragActiveDismissTimer_Tick;
+            }
+            _dragActiveDismissTimer.Start();
+        }
+
+        private void StopDragActiveDismissTimer()
+        {
+            _dragActiveDismissTimer?.Stop();
+        }
+
+        private void DragActiveDismissTimer_Tick(object? sender, EventArgs e)
+        {
+            // Check if left or right mouse button is physically held down
+            bool isMouseDown = ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0) || ((GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0);
+            if (isMouseDown)
+            {
+                // Mid-drag, keep clipboard alive
+                return;
+            }
+
+            // Drag/click released!
+            StopDragActiveDismissTimer();
+
+            // Only hide if the window is not currently active and mouse is not hovering over the window
+            if (this.IsActive || _isDragHovering)
+            {
+                return;
+            }
+
+            if (this.IsVisible && !_isAnimatingHide && !_isPersistentMode)
+            {
+                AnimateAndHide();
+            }
+        }
+
         /// <summary>
         /// Auto-hide the clipboard shelf when user clicks elsewhere (e.g. to type in another app).
         /// Respects persistent mode and prevents accidental dismissal during the first 400ms after spawn.
@@ -52,6 +100,15 @@ namespace FlyShelf
 
             // Don't dismiss while user is mid-drag
             if (_isDragHovering) return;
+
+            // If mouse button is held down (user might be mid-drag from another app),
+            // defer deactivation hide until the button is released.
+            bool isMouseDown = ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0) || ((GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0);
+            if (isMouseDown)
+            {
+                StartDragActiveDismissTimer();
+                return;
+            }
 
             // Don't dismiss if focus went to our own QuickLook window
             if (System.Windows.Application.Current.Windows.OfType<Window>()
@@ -101,6 +158,15 @@ namespace FlyShelf
 
             if (_isDragHovering) return;
 
+            // If mouse button is held down (user might be mid-drag from another app),
+            // defer foreground hide until the button is released.
+            bool isMouseDown = ((GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0) || ((GetAsyncKeyState(VK_RBUTTON) & 0x8000) != 0);
+            if (isMouseDown)
+            {
+                StartDragActiveDismissTimer();
+                return;
+            }
+
             // Get thread/process ID of the new foreground window
             GetWindowThreadProcessId(hwnd, out uint focusedProcessId);
             uint currentProcessId = (uint)System.Environment.ProcessId;
@@ -121,6 +187,13 @@ namespace FlyShelf
         private bool _isAnimatingHide = false;
 
         /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
+        // PERF: Cached animation objects — avoid GC pressure from allocating new ones on every show
+        private static readonly TimeSpan _showAnimDuration = TimeSpan.FromMilliseconds(200);
+        private static readonly System.Windows.Media.Animation.CubicEase _showEaseOut = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
+        private static readonly System.Windows.Media.Animation.DoubleAnimation _fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, _showAnimDuration) { EasingFunction = _showEaseOut };
+        private static readonly System.Windows.Media.Animation.DoubleAnimation _scaleIn = new System.Windows.Media.Animation.DoubleAnimation(0.97, 1, _showAnimDuration) { EasingFunction = _showEaseOut };
+        private static readonly System.Windows.Media.Animation.DoubleAnimation _slideIn = new System.Windows.Media.Animation.DoubleAnimation(6, 0, _showAnimDuration) { EasingFunction = _showEaseOut };
+
         private void PlayShowAnimation()
         {
             RootContent.RenderTransformOrigin = new Point(0.5, 1);
@@ -130,50 +203,61 @@ namespace FlyShelf
             };
             RootContent.Opacity = 0;
 
-            // GPU Optimization: Cache the visual tree as a flat texture during the animation
-            // to bypass expensive re-rasterization of frosted glass and heavy card rendering.
-            RootContent.CacheMode = new BitmapCache { EnableClearType = false, RenderAtScale = 1.0 };
-
-            var showEaseOut = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
-            var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(200)) { EasingFunction = showEaseOut };
-            var scaleIn = new System.Windows.Media.Animation.DoubleAnimation(0.97, 1, TimeSpan.FromMilliseconds(200)) { EasingFunction = showEaseOut };
-            var slideIn = new System.Windows.Media.Animation.DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(200)) { EasingFunction = showEaseOut };
-
-            fadeIn.Completed += (s, e) =>
-            {
-                RootContent.CacheMode = null; // Restore crisp Cleartype rendering on visual completion
-            };
-
-            RootContent.BeginAnimation(OpacityProperty, fadeIn);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, scaleIn);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, scaleIn);
-            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, slideIn);
+            RootContent.BeginAnimation(OpacityProperty, _fadeIn);
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, _scaleIn);
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, _scaleIn);
+            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, _slideIn);
         }
 
         /// <summary>Fast dismiss animation on inner content, then hides window.</summary>
+        // PERF: Cached hide animation objects — avoid GC pressure from allocating new ones on every dismiss
         private static readonly TimeSpan _hideAnimDuration = TimeSpan.FromMilliseconds(100);
         private static readonly System.Windows.Media.Animation.CubicEase _hideEaseIn = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn };
+        private static readonly System.Windows.Media.Animation.DoubleAnimation _scaleOutX = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, _hideAnimDuration) { EasingFunction = _hideEaseIn };
+        private static readonly System.Windows.Media.Animation.DoubleAnimation _scaleOutY = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, _hideAnimDuration) { EasingFunction = _hideEaseIn };
+        private static readonly System.Windows.Media.Animation.DoubleAnimation _slideOut = new System.Windows.Media.Animation.DoubleAnimation(0, 5, _hideAnimDuration) { EasingFunction = _hideEaseIn };
 
         // PERF: Deferred mascot/GIF resume timer — mascot starts 1s after spawn, not during spawn
         private System.Windows.Threading.DispatcherTimer? _mascotDelayTimer;
 
         private void AnimateAndHide()
         {
+            StopDragActiveDismissTimer();
             if (_isAnimatingHide || !this.IsVisible) return;
-            _isAnimatingHide = true;
-            _lastActualHeight = this.ActualHeight;
 
-            // PERF: Cancel any pending mascot delay so it doesn't fire after hide
+            // PERF: Cancel any pending mascot timer
             _mascotDelayTimer?.Stop();
 
-            // PERF: Immediately STOP (not pause) mascot and wallpaper GIF to drop CPU/GPU to zero instantly
-            try
+            if (!Classes.SettingsManager.Current.EnableSummonAnimations)
             {
-                MascotIdle.StopAnimation();
-                var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
-                animator?.Pause();
+                DismissMergeState();
+                CloseSearch();
+
+                try
+                {
+                    this.Hide();
+                    RootContent.BeginAnimation(OpacityProperty, null);
+                    RootContent.Opacity = 1;
+                    RootContent.RenderTransform = null;
+                }
+                catch { }
+
+                // PERF: Pause mascot/GIF at Background priority — just freeze frames, don't destroy/reload
+                Dispatcher.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        MascotIdle.PausePlayback();
+                        var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
+                        animator?.Pause();
+                    }
+                    catch { }
+                }, System.Windows.Threading.DispatcherPriority.Background);
+                return;
             }
-            catch { }
+
+            _isAnimatingHide = true;
+            _lastActualHeight = this.ActualHeight;
 
             // Clear PDF merge selections so they don't persist on reopen
             DismissMergeState();
@@ -185,13 +269,6 @@ namespace FlyShelf
                 Children = { new ScaleTransform(1, 1), new TranslateTransform(0, 0) }
             };
 
-            // GPU Optimization: Cache the visual tree as a flat texture during the dismiss animation
-            RootContent.CacheMode = new BitmapCache { EnableClearType = false, RenderAtScale = 1.0 };
-
-            var scaleOutX = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, _hideAnimDuration) { EasingFunction = _hideEaseIn };
-            var scaleOutY = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, _hideAnimDuration) { EasingFunction = _hideEaseIn };
-            var slideOut = new System.Windows.Media.Animation.DoubleAnimation(0, 5, _hideAnimDuration) { EasingFunction = _hideEaseIn };
-
             var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, _hideAnimDuration) { EasingFunction = _hideEaseIn };
             fadeOut.Completed += (s, e) =>
             {
@@ -201,16 +278,27 @@ namespace FlyShelf
                     RootContent.BeginAnimation(OpacityProperty, null);
                     RootContent.Opacity = 1;
                     RootContent.RenderTransform = null;
-                    RootContent.CacheMode = null;
                 }
                 catch { }
                 _isAnimatingHide = false;
+
+                // PERF: Pause mascot/GIF at Background priority — just freeze frames, don't destroy/reload
+                Dispatcher.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        MascotIdle.PausePlayback();
+                        var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
+                        animator?.Pause();
+                    }
+                    catch { }
+                }, System.Windows.Threading.DispatcherPriority.Background);
             };
 
             RootContent.BeginAnimation(OpacityProperty, fadeOut);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, scaleOutX);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, scaleOutY);
-            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, slideOut);
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, _scaleOutX);
+            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, _scaleOutY);
+            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, _slideOut);
         }
         private DateTime _spawnTime = DateTime.MinValue;
         private IntPtr _previousForegroundWindow = IntPtr.Zero;
@@ -329,6 +417,7 @@ namespace FlyShelf
 
         public void ShowNearPosition(double targetX, double targetY, int mode = 0, bool isPersistent = false, bool stealFocus = true)
         {
+            Classes.Logger.LogAction("TELEMETRY", $"ShowNearPosition entered, mode={mode}, isPersistent={isPersistent}, stealFocus={stealFocus}");
             CloseSearch();
             CloseEmojiPicker();
             // PERF: Use cached foreground window — avoids expensive EnumWindows P/Invoke scan
@@ -367,17 +456,15 @@ namespace FlyShelf
             this.MaxHeight = _viewModel.CurrentFlyShelfMaxHeight;
             this.Width = _viewModel.CurrentFlyShelfWidth;
 
-            // Always reset selection to the first item when showing/opening the shelf
-            if (_viewModel.DroppedItems.Count > 0)
+            // PERF: Defer selection reset and scroll-to-top to Background priority
+            // so they don't block the Show() call with layout/event-handler overhead
+            Dispatcher.InvokeAsync(() =>
             {
-                ShelfListView.SelectedIndex = 0;
-            }
-
-            // Always scroll to the very top so the shelf never opens at a previous scroll offset
-            {
+                if (_viewModel.DroppedItems.Count > 0 && ShelfListView.SelectedIndex != 0)
+                    ShelfListView.SelectedIndex = 0;
                 var sv = GetShelfScrollViewer();
                 sv?.ScrollToTop();
-            }
+            }, System.Windows.Threading.DispatcherPriority.Background);
 
             // Force a deterministic height so the window doesn't bounce around with SizeToContent
             if (mode == 0)
@@ -419,9 +506,29 @@ namespace FlyShelf
             this.Top = _lockedBottomEdge - estimatedHeight - 20;
 
             this.ShowActivated = stealFocus;
-            RootContent.Opacity = 0;
+            if (Classes.SettingsManager.Current.EnableSummonAnimations)
+            {
+                // Start invisible — the show animation fade-in masks the initial UI layout
+                RootContent.Opacity = 0;
+            }
+            else
+            {
+                RootContent.Opacity = 1.0;
+                RootContent.RenderTransform = null;
+            }
             this.Show();
             if (stealFocus) this.Activate();
+
+            if (Classes.SettingsManager.Current.EnableSummonAnimations)
+            {
+                // Play the appear animation IMMEDIATELY — masks the initial UI layout/render.
+                PlayShowAnimation();
+            }
+            else
+            {
+                RootContent.Opacity = 1.0;
+                RootContent.RenderTransform = null;
+            }
 
             // PERF: Cache DWM border attribute — only set once, never changes
             if (!_borderColorSet)
@@ -434,6 +541,7 @@ namespace FlyShelf
             // Use Dispatcher callback to adjust position after the first layout pass completes.
             Dispatcher.InvokeAsync(() =>
             {
+                Classes.Logger.LogAction("TELEMETRY", "ShowNearPosition Loaded callback executed (Layout rendering complete)");
                 if (this.ActualHeight > 0 && Math.Abs(this.ActualHeight - estimatedHeight) > 1)
                 {
                     // Push it 20px dynamically upward to completely avoid taskbar z-index clipping!
@@ -444,10 +552,6 @@ namespace FlyShelf
                         this.Top = workArea.Top + 20;
                     }
                 }
-
-                // Play the appear animation ONLY after the window is perfectly settled at its final position.
-                // This eliminates the position shift glitch during the fade/scale animation.
-                PlayShowAnimation();
 
                 // PERF: Do NOT resume mascot/GIF immediately — let the clipboard spawn lag-free first.
                 // Defer mascot + wallpaper GIF start by 1 second so old laptops don't stutter on spawn.

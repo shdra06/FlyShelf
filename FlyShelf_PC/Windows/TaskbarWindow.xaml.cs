@@ -38,6 +38,10 @@ namespace FlyShelf.Windows
         private int _lastWidgetH = -1;
         private Rect _lastWidgetRect = Rect.Empty;
 
+        // Caching for Taskbar HWND to avoid heavy EnumWindows P/Invoke queries
+        private IntPtr _cachedTaskbarHandle = IntPtr.Zero;
+        private bool _cachedIsMainTaskbarSelected = true;
+
         public TaskbarWindow()
         {
             InitializeComponent();
@@ -148,16 +152,30 @@ namespace FlyShelf.Windows
 
         private IntPtr GetSelectedTaskbarHandle(out bool isMainTaskbarSelected)
         {
+            if (_cachedTaskbarHandle != IntPtr.Zero && IsWindow(_cachedTaskbarHandle))
+            {
+                isMainTaskbarSelected = _cachedIsMainTaskbarSelected;
+                return _cachedTaskbarHandle;
+            }
+
             var monitors = MonitorUtil.GetMonitors();
             var selectedMonitor = MonitorUtil.GetSelectedMonitor();
             isMainTaskbarSelected = true;
 
             var mainHwnd = FindWindow("Shell_TrayWnd", null);
             if (MonitorUtil.GetMonitor(mainHwnd).deviceId == selectedMonitor.deviceId)
+            {
+                _cachedTaskbarHandle = mainHwnd;
+                _cachedIsMainTaskbarSelected = true;
                 return mainHwnd;
+            }
 
             if (monitors.Count == 1)
+            {
+                _cachedTaskbarHandle = mainHwnd;
+                _cachedIsMainTaskbarSelected = true;
                 return mainHwnd;
+            }
 
             isMainTaskbarSelected = false;
             IntPtr secondHwnd = IntPtr.Zero;
@@ -182,7 +200,12 @@ namespace FlyShelf.Windows
                     if (secondHwnd != IntPtr.Zero) return false;
                     return true;
                 }, IntPtr.Zero);
-                if (secondHwnd != IntPtr.Zero) return secondHwnd;
+                if (secondHwnd != IntPtr.Zero)
+                {
+                    _cachedTaskbarHandle = secondHwnd;
+                    _cachedIsMainTaskbarSelected = false;
+                    return secondHwnd;
+                }
             }
 
             EnumWindows((wnd, param) =>
@@ -192,9 +215,16 @@ namespace FlyShelf.Windows
                 return true;
             }, IntPtr.Zero);
 
-            if (secondHwnd != IntPtr.Zero) return secondHwnd;
+            if (secondHwnd != IntPtr.Zero)
+            {
+                _cachedTaskbarHandle = secondHwnd;
+                _cachedIsMainTaskbarSelected = false;
+                return secondHwnd;
+            }
 
             isMainTaskbarSelected = true;
+            _cachedTaskbarHandle = mainHwnd;
+            _cachedIsMainTaskbarSelected = true;
             return mainHwnd;
         }
 
@@ -449,6 +479,10 @@ namespace FlyShelf.Windows
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool IsWindowVisible(IntPtr hWnd);
 
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool IsWindow(IntPtr hWnd);
+
         private Rect PositionWidget(IntPtr taskbarHandle, RECT taskbarRect, double dpiScale, bool isSizeChanged)
         {
             var (logicalWidth, logicalHeight) = Widget.CalculateSize(dpiScale);
@@ -502,7 +536,9 @@ namespace FlyShelf.Windows
             {
                 var interop = new WindowInteropHelper(this);
                 IntPtr taskbarWindowHandle = interop.Handle;
-                IntPtr taskbarHandle = GetSelectedTaskbarHandle(out _);
+                IntPtr taskbarHandle = _cachedTaskbarHandle != IntPtr.Zero && IsWindow(_cachedTaskbarHandle)
+                    ? _cachedTaskbarHandle
+                    : GetSelectedTaskbarHandle(out _);
                 if (taskbarHandle != IntPtr.Zero && taskbarWindowHandle != IntPtr.Zero)
                 {
                     double dpiScale = GetDpiForWindow(taskbarHandle) / 96.0;

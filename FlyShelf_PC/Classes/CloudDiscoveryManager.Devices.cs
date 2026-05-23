@@ -202,6 +202,15 @@ namespace FlyShelf.Classes
                     // Auto-retry on 401: invalidate token and try once more
                     if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized && attempt == 0)
                     {
+                        if (response.Content != null)
+                        {
+                            string body = await response.Content.ReadAsStringAsync();
+                            if (body != null && body.Contains("Permission denied", StringComparison.OrdinalIgnoreCase))
+                            {
+                                Logger.LogAction("FIREBASE", "Permission denied by security rules for GetActiveDevices — token is valid but access is rejected. Skipping invalidation.");
+                                break;
+                            }
+                        }
                         FirebaseAuthManager.InvalidateToken();
                         continue;
                     }
@@ -315,6 +324,15 @@ namespace FlyShelf.Classes
                     // Auto-retry on 401: invalidate token and try once more
                     if (httpResponse.StatusCode == System.Net.HttpStatusCode.Unauthorized && attempt == 0)
                     {
+                        if (httpResponse.Content != null)
+                        {
+                            string body = await httpResponse.Content.ReadAsStringAsync();
+                            if (body != null && body.Contains("Permission denied", StringComparison.OrdinalIgnoreCase))
+                            {
+                                Logger.LogAction("FIREBASE", "Permission denied by security rules for GetDeviceGroups — token is valid but access is rejected. Skipping invalidation.");
+                                break;
+                            }
+                        }
                         FirebaseAuthManager.InvalidateToken();
                         continue;
                     }

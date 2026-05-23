@@ -144,7 +144,6 @@ namespace FlyShelf.Classes
 
                 res.StatusCode = 200;
                 res.ContentType = "application/json";
-                res.AddHeader("Access-Control-Allow-Origin", "*");
                 res.ContentLength64 = json.Length;
                 res.OutputStream.Write(json, 0, json.Length);
             }
@@ -167,7 +166,6 @@ namespace FlyShelf.Classes
             res.ContentType = "text/event-stream";
             res.AddHeader("Cache-Control", "no-cache");
             res.AddHeader("Connection", "keep-alive");
-            res.AddHeader("Access-Control-Allow-Origin", "*");
 
             // Send initial burst of recent logs
             string recent = Logger.GetRecentNetworkLogs(50);

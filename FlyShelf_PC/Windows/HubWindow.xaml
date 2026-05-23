@@ -12,7 +12,8 @@
         MinWidth="300" MinHeight="400"
         WindowStartupLocation="CenterScreen"
         SystemBackdropType="Mica"
-        Background="Transparent">
+        Background="Transparent"
+        AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver">
     
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="44" ResizeBorderThickness="6" CornerRadius="8" GlassFrameThickness="-1" />
@@ -2598,6 +2599,21 @@
                                                 <TextBlock Text="Show animated characters on your clipboard that react to your actions" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap" Margin="0,2,12,0"/>
                                             </StackPanel>
                                             <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=ThemeAnimationsEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Summon Animations Toggle -->
+                                    <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="14,10" Margin="0,0,0,10">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                <TextBlock Text="Enable Summon Animations" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                <TextBlock Text="Play smooth fade-in and scale animations when opening and closing the clipboard (uncheck for instant 0ms response)" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap" Margin="0,2,12,0"/>
+                                            </StackPanel>
+                                            <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableSummonAnimations, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                         </Grid>
                                     </Border>
 

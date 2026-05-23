@@ -409,18 +409,23 @@ namespace FlyShelf
 
         private FlyShelf.Windows.QuickLookWindow _activeQuickLook;
 
+        internal void ShowQuickLookForItem(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null)
+        {
+            try { _activeQuickLook?.Close(); } catch { }
+            _activeQuickLook = null;
+
+            var qLook = new FlyShelf.Windows.QuickLookWindow(item, preLoadedOcr);
+            qLook.Closed += (s, args) => { if (_activeQuickLook == s) _activeQuickLook = null; };
+            _activeQuickLook = qLook;
+            qLook.Show();
+            try { qLook.Activate(); } catch { }
+        }
+
         private void QuickLookSpecific_Click(object sender, MouseButtonEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
             {
-                // Close existing Quick Look window first
-                try { _activeQuickLook?.Close(); } catch { }
-                _activeQuickLook = null;
-
-                var qLook = new FlyShelf.Windows.QuickLookWindow(item);
-                qLook.Closed += (s, args) => { if (_activeQuickLook == s) _activeQuickLook = null; };
-                _activeQuickLook = qLook;
-                qLook.Show();
+                ShowQuickLookForItem(item);
                 e.Handled = true;
             }
         }

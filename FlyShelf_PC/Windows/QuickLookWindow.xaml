@@ -34,6 +34,18 @@
                                    Visibility="Collapsed">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
+                        <!-- OCR Button (image only) -->
+                        <ui:Button x:Name="OcrBtn" Click="OcrButton_Click" Appearance="Transparent" 
+                                   Foreground="#888888" Padding="5,3" Margin="0,0,2,0" ToolTip="Extract &amp; Select Text (OCR)"
+                                   Visibility="Collapsed">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="TextDescription24" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
+                        <!-- Copy All OCR Text Button -->
+                        <ui:Button x:Name="CopyAllOcrBtn" Click="CopyAllOcrButton_Click" Appearance="Transparent" 
+                                   Foreground="#A855F7" Padding="5,3" Margin="0,0,2,0" ToolTip="Copy all detected text"
+                                   Visibility="Collapsed">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Copy24" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
                         <!-- Pin Button (toggle always on top) -->
                         <ui:Button x:Name="PinBtn" Click="PinButton_Click" Appearance="Transparent" 
                                    Foreground="#F59E0B" Padding="5,3" Margin="0,0,2,0" ToolTip="Pin on top">
@@ -48,8 +60,11 @@
 
                 <Grid Grid.Row="1" Background="#20000000">
                     <ProgressBar IsIndeterminate="True" x:Name="LoadingProgress" VerticalAlignment="Top" Height="3" Background="Transparent" Foreground="#60A5FA" BorderThickness="0" Visibility="Collapsed" Panel.ZIndex="10" />
-                    <!-- Image Mode -->
-                    <Image x:Name="PreviewImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
+                    <!-- Image Mode Grid -->
+                    <Grid x:Name="ImageModeGrid" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                        <Image x:Name="PreviewImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
+                        <Canvas x:Name="OcrOverlayCanvas" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Visibility="Collapsed" ClipToBounds="True"/>
+                    </Grid>
                     
                     <!-- Dynamic Document Mode (PDF/HTML) -->
                     <WebBrowser x:Name="WebPreview" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />

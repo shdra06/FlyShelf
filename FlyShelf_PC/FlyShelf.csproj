@@ -9,6 +9,7 @@
     <Nullable>disable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <!-- Required by LibraryImport source generator (NativeMethods.cs P/Invoke marshalling) -->
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <ApplicationIcon>Resources\FlyShelfLogo.ico</ApplicationIcon>

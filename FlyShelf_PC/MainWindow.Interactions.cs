@@ -178,6 +178,11 @@ namespace FlyShelf
             _dragStartPoint = e.GetPosition(null);
             _didDragOut = false;
 
+            // GUARD: Don't select items when clicking/dragging the scrollbar
+            if (e.OriginalSource is DependencyObject src &&
+                FindVisualParent<System.Windows.Controls.Primitives.ScrollBar>(src) != null)
+                return;
+
             if (e.OriginalSource is DependencyObject sourceElement)
             {
                 // PDF merge toggle: toggle state here and fully consume
@@ -235,6 +240,10 @@ namespace FlyShelf
 
             if (e.LeftButton == MouseButtonState.Pressed)
             {
+                // GUARD: Don't start drag-out when dragging the scrollbar
+                if (e.OriginalSource is DependencyObject dragSrc &&
+                    FindVisualParent<System.Windows.Controls.Primitives.ScrollBar>(dragSrc) != null)
+                    return;
                 Point position = e.GetPosition(null);
                 Vector diff = _dragStartPoint - position;
 
@@ -337,7 +346,7 @@ namespace FlyShelf
         public void ToggleMainClipboard()
         {
             // If the overlay is already visible and in Mode 1, hide it
-            if (this.IsVisible && _viewModel.CurrentMode == 1)
+            if (this.IsVisible && _viewModel.CurrentMode == 1 && !_isAnimatingHide)
             {
                 AnimateAndHide();
             }

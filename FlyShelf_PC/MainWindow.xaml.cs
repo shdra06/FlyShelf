@@ -278,8 +278,13 @@ namespace FlyShelf
 
         private const int WM_CLIPBOARDUPDATE = 0x031D;
 
+        private bool _isLoadedInitialized = false;
+
         private void MicaWindow_Loaded(object sender, RoutedEventArgs e)
         {
+            if (_isLoadedInitialized) return;
+            _isLoadedInitialized = true;
+
             // Setup global foreground window change listener to dismiss when clicking elsewhere (handles non-activated summons)
             try
             {
@@ -973,7 +978,7 @@ namespace FlyShelf
                 int hotkeyId = wParam.ToInt32();
                 if (hotkeyId == HOTKEY_ID)
                 {
-                    // Alt+C summons the Main Clipboard overlay (MainWindow in Medium Mode/Mode 1) at cursor
+                    Classes.Logger.LogAction("TELEMETRY", "Hotkey Alt+C received inside WndProc");
                     ToggleMainClipboard();
                     handled = true;
                 }
@@ -981,57 +986,61 @@ namespace FlyShelf
                 {
                     // Alt+1=item0, Alt+2=item1, ..., Alt+9=item8, Alt+0=item9
                     int index = hotkeyId == HOTKEY_QUICKPASTE_BASE + 10 ? 9 : (hotkeyId - HOTKEY_QUICKPASTE_BASE - 1);
-                    Classes.Logger.LogAction("HOTKEY", $"Alt+{(index + 1) % 10} fired, items={_viewModel.DroppedItems.Count}");
-                    if (index < _viewModel.DroppedItems.Count)
+                    // CRITICAL: Defer clipboard + focus work out of WndProc to avoid dispatcher suspension crash
+                    Dispatcher.InvokeAsync(() =>
                     {
-                        // Capture the target window â€” filter out our own window
-                        IntPtr targetWindow = GetTargetForegroundWindow();
-                        Classes.Logger.LogAction("HOTKEY", $"Target window: 0x{targetWindow:X}");
-                        var item = _viewModel.DroppedItems[index];
-                        
-                        // Set clipboard directly â€” guard against echo
-                        SetWritingClipboard(true);
-                        try
+                        Classes.Logger.LogAction("HOTKEY", $"Alt+{(index + 1) % 10} fired, items={_viewModel.DroppedItems.Count}");
+                        if (index < _viewModel.DroppedItems.Count)
                         {
-                            if (!string.IsNullOrEmpty(item.RawContent))
-                                System.Windows.Clipboard.SetText(item.RawContent);
-                            else if (!string.IsNullOrEmpty(item.FilePath))
+                            // Capture the target window — filter out our own window
+                            IntPtr targetWindow = GetTargetForegroundWindow();
+                            Classes.Logger.LogAction("HOTKEY", $"Target window: 0x{targetWindow:X}");
+                            var item = _viewModel.DroppedItems[index];
+                            
+                            // Set clipboard directly — guard against echo
+                            SetWritingClipboard(true);
+                            try
                             {
-                                var dropList = new System.Collections.Specialized.StringCollection();
-                                dropList.Add(item.FilePath);
-                                System.Windows.Clipboard.SetFileDropList(dropList);
+                                if (!string.IsNullOrEmpty(item.RawContent))
+                                    System.Windows.Clipboard.SetText(item.RawContent);
+                                else if (!string.IsNullOrEmpty(item.FilePath))
+                                {
+                                    var dropList = new System.Collections.Specialized.StringCollection();
+                                    dropList.Add(item.FilePath);
+                                    System.Windows.Clipboard.SetFileDropList(dropList);
+                                }
                             }
+                            catch { }
+
+                            // Force-restore focus using AttachThreadInput trick
+                            uint targetThreadId = GetWindowThreadProcessId(targetWindow, out _);
+                            uint ourThreadId = GetCurrentThreadId();
+                            if (targetThreadId != ourThreadId)
+                                AttachThreadInput(ourThreadId, targetThreadId, true);
+                            
+                            SetForegroundWindow(targetWindow);
+                            
+                            if (targetThreadId != ourThreadId)
+                                AttachThreadInput(ourThreadId, targetThreadId, false);
+
+                            // Release Alt key FIRST — user is still holding it from Alt+N,
+                            // otherwise the target app receives Alt+Ctrl+V instead of Ctrl+V
+                            keybd_event((byte)VK_MENU, 0, KEYEVENTF_KEYUP, 0);
+
+                            // Fire Ctrl+V after a short async pause for key state to propagate
+                            // Also clear the clipboard write guard after delay
+                            _ = Task.Run(async () =>
+                            {
+                                await Task.Delay(50);
+                                keybd_event((byte)VK_CONTROL, 0, 0, 0);
+                                keybd_event((byte)VK_V, 0, 0, 0);
+                                keybd_event((byte)VK_V, 0, KEYEVENTF_KEYUP, 0);
+                                keybd_event((byte)VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
+                                await Task.Delay(500); // Absorb WM_CLIPBOARDUPDATE
+                                SetWritingClipboard(false);
+                            });
                         }
-                        catch { }
-
-                        // Force-restore focus using AttachThreadInput trick
-                        uint targetThreadId = GetWindowThreadProcessId(targetWindow, out _);
-                        uint ourThreadId = GetCurrentThreadId();
-                        if (targetThreadId != ourThreadId)
-                            AttachThreadInput(ourThreadId, targetThreadId, true);
-                        
-                        SetForegroundWindow(targetWindow);
-                        
-                        if (targetThreadId != ourThreadId)
-                            AttachThreadInput(ourThreadId, targetThreadId, false);
-
-                        // Release Alt key FIRST â€” user is still holding it from Alt+N,
-                        // otherwise the target app receives Alt+Ctrl+V instead of Ctrl+V
-                        keybd_event((byte)VK_MENU, 0, KEYEVENTF_KEYUP, 0);
-
-                        // Fire Ctrl+V after a short async pause for key state to propagate
-                        // Also clear the clipboard write guard after delay
-                        _ = Task.Run(async () =>
-                        {
-                            await Task.Delay(50);
-                            keybd_event((byte)VK_CONTROL, 0, 0, 0);
-                            keybd_event((byte)VK_V, 0, 0, 0);
-                            keybd_event((byte)VK_V, 0, KEYEVENTF_KEYUP, 0);
-                            keybd_event((byte)VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
-                            await Task.Delay(500); // Absorb WM_CLIPBOARDUPDATE
-                            SetWritingClipboard(false);
-                        });
-                    }
+                    });
                     handled = true;
                 }
             }

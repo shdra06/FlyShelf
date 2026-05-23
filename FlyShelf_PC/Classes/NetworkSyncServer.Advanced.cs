@@ -457,7 +457,6 @@ namespace FlyShelf.Classes
                     ? $"inline; filename=\"{safeFileName}\""
                     : $"attachment; filename=\"{safeFileName}\"");
                 res.AddHeader("Cache-Control", "no-store");
-                res.AddHeader("Access-Control-Allow-Origin", "*");
                 res.AddHeader("Accept-Ranges", "bytes");
 
                 res.StatusCode = 200;

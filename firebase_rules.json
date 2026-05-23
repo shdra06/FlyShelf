@@ -55,8 +55,10 @@
       ".write": false
     },
     "device_groups": {
-      ".read": false,
-      ".write": false
+      ".read": "auth != null",
+      "$groupId": {
+        ".write": "auth != null"
+      }
     },
     "global_clipboard": {
       ".read": false,

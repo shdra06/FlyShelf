@@ -430,14 +430,14 @@ public partial class App : Application
                             int currentDirX = deltaX > 0 ? 1 : (deltaX < 0 ? -1 : 0);
                             int currentDirY = deltaY > 0 ? 1 : (deltaY < 0 ? -1 : 0);
 
-                            if (Math.Abs(deltaX) > 18)
+                            if (Math.Abs(deltaX) > 12)
                             {
                                 if (_lastShakeDirX != 0 && currentDirX != _lastShakeDirX) reversed = true;
                                 _lastShakeDirX = currentDirX;
                                 _lastShakeX = currentX;
                                 _lastShakeTime = currentTime;
                             }
-                            else if (Math.Abs(deltaY) > 18)
+                            else if (Math.Abs(deltaY) > 12)
                             {
                                 if (_lastShakeDirY != 0 && currentDirY != _lastShakeDirY) reversed = true;
                                 _lastShakeDirY = currentDirY;
@@ -449,7 +449,7 @@ public partial class App : Application
                             {
                                 _shakeCount++;
 
-                                if (_shakeCount >= 3)
+                                if (_shakeCount >= 5)
                                 {
                                     _shakeCount = 0; 
                                     int triggerX = currentX;

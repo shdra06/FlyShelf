@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
@@ -11,16 +11,29 @@ namespace FlyShelf.Windows
         private FlyShelf.ViewModels.ClipboardItem _item;
         private Point _startPoint;
         private bool _isImageLoaded = false;
+        private global::Windows.Media.Ocr.OcrResult _ocrResult = null;
+        private double _originalWidth = 0;
+        private double _originalHeight = 0;
 
-        public QuickLookWindow(FlyShelf.ViewModels.ClipboardItem item)
+        public QuickLookWindow(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null)
         {
             InitializeComponent();
             _item = item;
+            _ocrResult = preLoadedOcr;
 
             PreviewImage.Visibility = Visibility.Collapsed;
+            if (ImageModeGrid != null) ImageModeGrid.Visibility = Visibility.Collapsed;
             WebPreview.Visibility = Visibility.Collapsed;
             TextPreviewScroll.Visibility = Visibility.Collapsed;
             DocumentPanel.Visibility = Visibility.Collapsed;
+
+            PreviewImage.SizeChanged += (s, eArgs) =>
+            {
+                if (_ocrResult != null)
+                {
+                    RenderOcrOverlay();
+                }
+            };
         }
 
         private async void Window_Loaded(object sender, RoutedEventArgs e)
@@ -58,6 +71,8 @@ namespace FlyShelf.Windows
                     DocTitle.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x11, 0x11, 0x11));
                     DocSize.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x66, 0x66, 0x66));
                     RotateBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x55, 0x55, 0x55));
+                    OcrBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x55, 0x55, 0x55));
+                    CopyAllOcrBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x8B, 0x5C, 0xF6));
                     CloseBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x55, 0x55, 0x55));
                     PinBtn.Foreground = this.Topmost 
                         ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11))
@@ -81,6 +96,7 @@ namespace FlyShelf.Windows
                 if (_item.ItemType == FlyShelf.ViewModels.ClipboardItemType.Image)
                 {
                     PreviewImage.Visibility = Visibility.Visible;
+                    if (ImageModeGrid != null) ImageModeGrid.Visibility = Visibility.Visible;
                     
                     var bitmap = await System.Threading.Tasks.Task.Run(() =>
                     {
@@ -107,6 +123,8 @@ namespace FlyShelf.Windows
                     if (bitmap != null)
                     {
                         PreviewImage.Source = bitmap;
+                        _originalWidth = bitmap.PixelWidth;
+                        _originalHeight = bitmap.PixelHeight;
                         
                         // Pre-scale intelligently based on original image aspect ratio and dpi to eliminate black spaces
                         double dpiX = bitmap.DpiX > 0 ? bitmap.DpiX / 96.0 : 1.0;
@@ -154,6 +172,14 @@ namespace FlyShelf.Windows
                         
                         _isImageLoaded = true;
                         RotateBtn.Visibility = Visibility.Visible;
+                        if (OcrBtn != null) OcrBtn.Visibility = Visibility.Visible;
+
+                        if (_ocrResult != null)
+                        {
+                            if (OcrOverlayCanvas != null) OcrOverlayCanvas.Visibility = Visibility.Visible;
+                            if (CopyAllOcrBtn != null) CopyAllOcrBtn.Visibility = Visibility.Visible;
+                            RenderOcrOverlay();
+                        }
                     }
                 }
                 else if (ext == ".pdf" || ext == ".html" || ext == ".htm" || ext == ".xml")
@@ -313,6 +339,15 @@ namespace FlyShelf.Windows
 
                 if (fresh != null)
                 {
+                    // Clear the old OCR overlay since the image layout rotated 90 degrees!
+                    _ocrResult = null;
+                    if (OcrOverlayCanvas != null)
+                    {
+                        OcrOverlayCanvas.Children.Clear();
+                        OcrOverlayCanvas.Visibility = Visibility.Collapsed;
+                    }
+                    if (CopyAllOcrBtn != null) CopyAllOcrBtn.Visibility = Visibility.Collapsed;
+
                     PreviewImage.Source = fresh;
                     FlyShelf.Classes.Logger.LogAction("ROTATE", "Rotated 90°: " + Path.GetFileName(_item.FilePath));
                 }
@@ -420,6 +455,227 @@ namespace FlyShelf.Windows
             }
             catch { }
             base.OnClosed(e);
+        }
+
+        private async void OcrButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_item == null || string.IsNullOrEmpty(_item.FilePath) || !File.Exists(_item.FilePath)) return;
+
+            try
+            {
+                LoadingProgress.Visibility = Visibility.Visible;
+                OcrBtn.IsEnabled = false;
+
+                // Run OCR on background thread
+                var ocrResult = await System.Threading.Tasks.Task.Run(async () =>
+                {
+                    try
+                    {
+                        using (var stream = File.OpenRead(_item.FilePath))
+                        {
+                            var decoder = await global::Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream.AsRandomAccessStream());
+                            var softwareBitmap = await decoder.GetSoftwareBitmapAsync();
+
+                            var ocrEngine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new global::Windows.Globalization.Language("en-US"));
+                            if (ocrEngine == null)
+                            {
+                                ocrEngine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
+                            }
+
+                            if (ocrEngine != null)
+                            {
+                                return await ocrEngine.RecognizeAsync(softwareBitmap);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        FlyShelf.Classes.Logger.LogAction("QUICKLOOK_OCR_FAIL", ex.Message);
+                    }
+                    return null;
+                });
+
+                if (ocrResult != null && !string.IsNullOrWhiteSpace(ocrResult.Text))
+                {
+                    _ocrResult = ocrResult;
+                    OcrOverlayCanvas.Visibility = Visibility.Visible;
+                    CopyAllOcrBtn.Visibility = Visibility.Visible;
+                    RenderOcrOverlay();
+                    
+                    FlyShelf.Windows.ToastWindow.ShowToast("OCR Text Detection Complete! Select text to copy.");
+                }
+                else
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("No text detected in image.");
+                }
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast("OCR Failed: " + ex.Message);
+            }
+            finally
+            {
+                LoadingProgress.Visibility = Visibility.Collapsed;
+                OcrBtn.IsEnabled = true;
+            }
+        }
+
+        private void CopyAllOcrButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_ocrResult == null || string.IsNullOrWhiteSpace(_ocrResult.Text)) return;
+
+            try
+            {
+                FlyShelf.MainWindow.SetWritingClipboard(true);
+                System.Windows.Clipboard.SetText(_ocrResult.Text);
+                
+                _ = System.Threading.Tasks.Task.Run(async () =>
+                {
+                    await System.Threading.Tasks.Task.Delay(500);
+                    FlyShelf.MainWindow.SetWritingClipboard(false);
+                });
+
+                FlyShelf.Windows.ToastWindow.ShowToast("All Image Text Copied to Clipboard! 📋");
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast("Copy failed: " + ex.Message);
+            }
+        }
+
+        private Rect GetImageRenderRect(System.Windows.Controls.Image image)
+        {
+            if (image == null || image.Source == null || image.ActualWidth == 0 || image.ActualHeight == 0)
+                return new Rect();
+
+            var source = image.Source;
+            double srcWidth = source.Width;
+            double srcHeight = source.Height;
+
+            double scaleX = image.ActualWidth / srcWidth;
+            double scaleY = image.ActualHeight / srcHeight;
+
+            double scale = Math.Min(scaleX, scaleY);
+
+            double displayWidth = srcWidth * scale;
+            double displayHeight = srcHeight * scale;
+
+            double left = (image.ActualWidth - displayWidth) / 2.0;
+            double top = (image.ActualHeight - displayHeight) / 2.0;
+
+            return new Rect(left, top, displayWidth, displayHeight);
+        }
+
+        private void RenderOcrOverlay()
+        {
+            if (_ocrResult == null || _originalWidth == 0 || _originalHeight == 0) return;
+
+            OcrOverlayCanvas.Children.Clear();
+
+            Rect renderRect = GetImageRenderRect(PreviewImage);
+            if (renderRect.Width == 0 || renderRect.Height == 0) return;
+
+            foreach (var line in _ocrResult.Lines)
+            {
+                if (line.Words == null || line.Words.Count == 0) continue;
+
+                // Calculate the bounding box of the line by unioning all its words
+                double minX = double.MaxValue;
+                double minY = double.MaxValue;
+                double maxX = double.MinValue;
+                double maxY = double.MinValue;
+
+                foreach (var word in line.Words)
+                {
+                    var r = word.BoundingRect;
+                    if (r.X < minX) minX = r.X;
+                    if (r.Y < minY) minY = r.Y;
+                    if (r.X + r.Width > maxX) maxX = r.X + r.Width;
+                    if (r.Y + r.Height > maxY) maxY = r.Y + r.Height;
+                }
+
+                double lineW = maxX - minX;
+                double lineH = maxY - minY;
+
+                // Map to actual displayed coordinates
+                double scaledLeft = renderRect.Left + (minX / _originalWidth) * renderRect.Width;
+                double scaledTop = renderRect.Top + (minY / _originalHeight) * renderRect.Height;
+                double scaledWidth = (lineW / _originalWidth) * renderRect.Width;
+                double scaledHeight = (lineH / _originalHeight) * renderRect.Height;
+
+                // Ensure non-zero size
+                if (scaledWidth <= 0 || scaledHeight <= 0) continue;
+
+                // Create overlay grid container
+                var overlayGrid = new System.Windows.Controls.Grid
+                {
+                    Width = scaledWidth,
+                    Height = scaledHeight
+                };
+
+                // Semi-transparent highlight border that shows on hover
+                var highlightBorder = new System.Windows.Controls.Border
+                {
+                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x1A, 0x60, 0xA5, 0xFA)), // subtle transparent blue
+                    BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x3A, 0x60, 0xA5, 0xFA)),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(3),
+                    Visibility = Visibility.Collapsed
+                };
+
+                // Selectable text box
+                var textBox = new System.Windows.Controls.TextBox
+                {
+                    Text = line.Text,
+                    IsReadOnly = true,
+                    Background = System.Windows.Media.Brushes.Transparent,
+                    BorderThickness = new Thickness(0),
+                    Foreground = System.Windows.Media.Brushes.Transparent, // Invisible text so image shines through
+                    SelectionBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x60, 0x60, 0xA5, 0xFA)),
+                    CaretBrush = System.Windows.Media.Brushes.Transparent,
+                    FontFamily = new System.Windows.Media.FontFamily("Segoe UI"),
+                    FontSize = Math.Max(8, scaledHeight * 0.75), // Font size matching scaled height
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Padding = new Thickness(0),
+                    Margin = new Thickness(0),
+                    Cursor = System.Windows.Input.Cursors.IBeam,
+                    TextWrapping = TextWrapping.NoWrap,
+                    HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Hidden,
+                    VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Hidden
+                };
+
+                // Hover interactions
+                overlayGrid.MouseEnter += (s, e) => { highlightBorder.Visibility = Visibility.Visible; };
+                overlayGrid.MouseLeave += (s, e) => { highlightBorder.Visibility = Visibility.Collapsed; };
+
+                // Right click copy context menu
+                var menu = new System.Windows.Controls.ContextMenu();
+                var copySelect = new System.Windows.Controls.MenuItem { Header = "Copy Selection" };
+                copySelect.Click += (s, e) => 
+                {
+                    if (!string.IsNullOrEmpty(textBox.SelectedText))
+                    {
+                        try { System.Windows.Clipboard.SetText(textBox.SelectedText); } catch { }
+                    }
+                };
+                var copyAll = new System.Windows.Controls.MenuItem { Header = "Copy Full Line" };
+                copyAll.Click += (s, e) => 
+                {
+                    try { System.Windows.Clipboard.SetText(line.Text); } catch { }
+                };
+
+                menu.Items.Add(copySelect);
+                menu.Items.Add(copyAll);
+                textBox.ContextMenu = menu;
+
+                overlayGrid.Children.Add(highlightBorder);
+                overlayGrid.Children.Add(textBox);
+
+                // Position on Canvas
+                System.Windows.Controls.Canvas.SetLeft(overlayGrid, scaledLeft);
+                System.Windows.Controls.Canvas.SetTop(overlayGrid, scaledTop);
+                OcrOverlayCanvas.Children.Add(overlayGrid);
+            }
         }
     }
 }

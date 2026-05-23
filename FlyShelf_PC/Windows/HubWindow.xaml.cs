@@ -138,7 +138,26 @@ namespace FlyShelf.Windows
             // Auto-refresh device list every 30 seconds + on initial load
             _deviceRefreshTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
             _deviceRefreshTimer.Tick += (s, ev) => RefreshDevices_Click(null, null);
-            _deviceRefreshTimer.Start();
+
+            IsVisibleChanged += (s, ev) =>
+            {
+                if (IsVisible)
+                {
+                    _deviceRefreshTimer?.Start();
+                    RefreshDevices_Click(null, null);
+
+                    // Resume handshake timer if we are on Network tab
+                    if (NetworkGrid != null && NetworkGrid.Visibility == Visibility.Visible)
+                    {
+                        _pairingHandshakeTimer?.Start();
+                    }
+                }
+                else
+                {
+                    _deviceRefreshTimer?.Stop();
+                    _pairingHandshakeTimer?.Stop();
+                }
+            };
             Loaded += (s, ev) =>
             {
                 // Defer wiring and refreshing to background dispatcher frames so that
@@ -653,7 +672,7 @@ namespace FlyShelf.Windows
 
                 if (logLines.Count == 0)
                 {
-                    ToastWindow.ShowToast("âš ï¸ No network logs to send");
+                    ToastWindow.ShowToast("âš ï¸  No network logs to send");
                     SendLogsToDashboardBtn.IsEnabled = true;
                     return;
                 }
@@ -715,6 +734,50 @@ namespace FlyShelf.Windows
             {
                 SendLogsToDashboardBtn.IsEnabled = true;
             }
+        }
+
+        private void Window_Drop(object sender, DragEventArgs e)
+        {
+            try
+            {
+                _viewModel.HandleDrop(e.Data, true);
+                e.Handled = true;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("HUB_DROP_FAIL", $"Failed to process drop on HubWindow: {ex.Message}");
+            }
+        }
+
+        private void Window_DragEnter(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop) || 
+                e.Data.GetDataPresent("FileNameW") ||
+                e.Data.GetDataPresent("FileName") ||
+                e.Data.GetDataPresent("text/uri-list") ||
+                e.Data.GetDataPresent("application/vnd.code.tree.workspaceFiles") ||
+                e.Data.GetDataPresent(DataFormats.Bitmap) || 
+                e.Data.GetDataPresent(DataFormats.Dib) ||
+                e.Data.GetDataPresent(DataFormats.UnicodeText) || 
+                e.Data.GetDataPresent(DataFormats.StringFormat) ||
+                e.Data.GetDataPresent(DataFormats.Text))
+            {
+                e.Effects = DragDropEffects.Copy;
+            }
+            else
+            {
+                e.Effects = DragDropEffects.None;
+            }
+        }
+
+        private void Window_PreviewDragOver(object sender, DragEventArgs e)
+        {
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+        }
+
+        private void Window_DragLeave(object sender, DragEventArgs e)
+        {
         }
 
     }

@@ -40,6 +40,12 @@
         ".write": "auth != null"
       }
     },
+    "device_groups": {
+      ".read": "auth != null",
+      "$groupId": {
+        ".write": "auth != null"
+      }
+    },
     // Strict default-deny rule to secure the rest of the database
     ".read": false,
     ".write": false

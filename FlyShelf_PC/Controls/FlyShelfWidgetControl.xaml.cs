@@ -26,8 +26,22 @@ namespace FlyShelf.Controls
         {
             if (_mainWindow != null)
             {
-                // Widget click toggles the Main Clipboard overlay (MainWindow in Medium Mode/Mode 1) at cursor
-                _mainWindow.ToggleMainClipboard();
+                var point = PointToScreen(e.GetPosition(this));
+                FlyShelf.Classes.Logger.LogAction("TELEMETRY", $"Widget left click received, point=({point.X}, {point.Y})");
+                bool isMode1 = false;
+                if (_mainWindow.DataContext is FlyShelf.ViewModels.FlyShelfViewModel vm && vm.CurrentMode == 1)
+                {
+                    isMode1 = true;
+                }
+
+                if (_mainWindow.IsVisible && isMode1)
+                {
+                    _mainWindow.Hide();
+                }
+                else
+                {
+                    _mainWindow.ShowNearPosition(point.X, point.Y, 1, false);
+                }
             }
         }
     }

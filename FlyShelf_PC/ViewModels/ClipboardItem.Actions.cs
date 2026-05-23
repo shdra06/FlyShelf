@@ -1366,6 +1366,16 @@ namespace FlyShelf.ViewModels
 
                                     FlyShelf.Windows.ToastWindow.ShowToast("OCR Text Copied to Clipboard! 📋");
 
+                                    var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
+
+                                    if (mainWin != null)
+
+                                    {
+
+                                        mainWin.ShowQuickLookForItem(this, result);
+
+                                    }
+
                                 });
 
                             }
@@ -1529,6 +1539,7 @@ namespace FlyShelf.ViewModels
 
 
                 string finalJsonPayload = string.Empty;
+                string extractionMethod = string.Empty;
 
 
 
@@ -1712,11 +1723,13 @@ namespace FlyShelf.ViewModels
 
 
 
-                                        double avgHeight = sorted.Average(w => w.H);
+                                        // Use median height for outlier-resistant row detection
+                                        var heights = sorted.Select(w => w.H).OrderBy(h => h).ToList();
+                                        double medianHeight = heights[heights.Count / 2];
 
 
 
-                                        double rowThreshold = avgHeight * 0.7;
+                                        double rowThreshold = medianHeight * 0.7;
 
 
 
@@ -1900,7 +1913,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                                                .Where(s => allGaps.Count(g => Math.Abs(g.Center - s) < clusterDist) >= Math.Max(2, rows.Count * 0.3))
+                                                .Where(s => allGaps.Count(g => Math.Abs(g.Center - s) < clusterDist) >= Math.Max(2, rows.Count * 0.4))
 
 
 
@@ -1993,6 +2006,7 @@ namespace FlyShelf.ViewModels
 
 
                                                 finalJsonPayload = System.Text.Json.JsonSerializer.Serialize(jsonDict);
+                                                extractionMethod = "OCR";
 
 
 
@@ -2105,6 +2119,7 @@ namespace FlyShelf.ViewModels
 
 
                         finalJsonPayload = await FlyShelf.Classes.GeminiEngine.ExtractFormattedTableFromImageAsync(FilePath, apiKey);
+                        extractionMethod = "Gemini";
 
 
 
@@ -2128,6 +2143,8 @@ namespace FlyShelf.ViewModels
 
 
 
+                    string imgPath = FilePath;
+                    string method = extractionMethod;
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
 
 
@@ -2136,7 +2153,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                        var editor = new FlyShelf.Windows.TableEditorWindow(finalJsonPayload);
+                        var editor = new FlyShelf.Windows.TableEditorWindow(finalJsonPayload, imgPath, method);
 
 
 

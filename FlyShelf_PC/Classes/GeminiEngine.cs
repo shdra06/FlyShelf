@@ -9,7 +9,7 @@ namespace FlyShelf.Classes
 {
     public static class GeminiEngine
     {
-        private static readonly HttpClient _httpClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(30) };
+        private static readonly HttpClient _httpClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(45) };
 
         public static async Task<string> ExtractFormattedTableFromImageAsync(string imagePath, string apiKey)
         {
@@ -31,7 +31,13 @@ namespace FlyShelf.Classes
                     {
                         parts = new object[]
                         {
-                            new { text = "Extract tabular data from this image natively into a raw strict JSON coordinate array matching EXACTLY this pattern: { \"(row_integer,col_integer)\": { \"text\": \"Extracted String\", \"conf\": 1.0 } }. Never output HTML. Start row/col from 0. Example: {\"(0,0)\": {\"text\": \"ID\", \"conf\": 1.0}, \"(0,1)\": {\"text\": \"Name\", \"conf\": 1.0}}. Do not include markdown wraps." },
+                            new { text = "Extract ALL tabular data from this image into a raw strict JSON coordinate array. " +
+                                         "Format: { \"(row,col)\": { \"text\": \"Cell Value\", \"conf\": 1.0 } }. " +
+                                         "Rules: Start row/col from 0. Row 0 should be the header row if one exists. " +
+                                         "Include ALL cells even if empty (use empty string). " +
+                                         "Never output HTML, markdown, or explanations — ONLY raw JSON. " +
+                                         "Do not wrap in ```json blocks. " +
+                                         "Example: {\"(0,0)\": {\"text\": \"ID\", \"conf\": 1.0}, \"(0,1)\": {\"text\": \"Name\", \"conf\": 1.0}, \"(1,0)\": {\"text\": \"1\", \"conf\": 1.0}}" },
                             new { inline_data = new { mime_type = mimeType, data = base64Image } }
                         }
                     }
@@ -39,40 +45,58 @@ namespace FlyShelf.Classes
             };
 
             string jsonPayload = JsonSerializer.Serialize(payload);
-            var requestContent = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+            string endpoint = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={apiKey}";
 
-            string endpoint = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey}";
-            
-            var response = await _httpClient.PostAsync(endpoint, requestContent);
-            if (!response.IsSuccessStatusCode)
+            // Retry logic: up to 2 retries with 2-second delay on failure
+            Exception lastException = null;
+            for (int attempt = 0; attempt < 3; attempt++)
             {
-                string err = await response.Content.ReadAsStringAsync();
-                throw new Exception($"Gemini HTTP Engine Failure: {response.StatusCode} - {err}");
+                try
+                {
+                    var requestContent = new StringContent(jsonPayload, Encoding.UTF8, "application/json");
+                    var response = await _httpClient.PostAsync(endpoint, requestContent);
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        string err = await response.Content.ReadAsStringAsync();
+                        throw new Exception($"Gemini HTTP Engine Failure: {response.StatusCode} - {err}");
+                    }
+
+                    string responseJson = await response.Content.ReadAsStringAsync();
+
+                    using JsonDocument doc = JsonDocument.Parse(responseJson);
+                    var textObj = doc.RootElement
+                                     .GetProperty("candidates")[0]
+                                     .GetProperty("content")
+                                     .GetProperty("parts")[0]
+                                     .GetProperty("text");
+
+                    string rawExtraction = textObj.GetString() ?? string.Empty;
+                    // Pre-process any rogue markdown block wraps inserted by LLMs
+                    if (rawExtraction.StartsWith("```json")) rawExtraction = rawExtraction.Substring(7);
+                    if (rawExtraction.StartsWith("```")) rawExtraction = rawExtraction.Substring(3);
+                    if (rawExtraction.EndsWith("```")) rawExtraction = rawExtraction.Substring(0, rawExtraction.Length - 3);
+
+                    return rawExtraction.Trim();
+                }
+                catch (TaskCanceledException)
+                {
+                    lastException = new Exception("Gemini API request timed out after 45 seconds.");
+                    if (attempt < 2) await Task.Delay(2000);
+                }
+                catch (HttpRequestException ex)
+                {
+                    lastException = ex;
+                    if (attempt < 2) await Task.Delay(2000);
+                }
+                catch (Exception ex)
+                {
+                    // Non-retryable errors (parsing, auth failures) — throw immediately
+                    throw new Exception($"Gemini parsing fault! {ex.Message}");
+                }
             }
 
-            string responseJson = await response.Content.ReadAsStringAsync();
-            
-            try 
-            {
-                using JsonDocument doc = JsonDocument.Parse(responseJson);
-                var textObj = doc.RootElement
-                                 .GetProperty("candidates")[0]
-                                 .GetProperty("content")
-                                 .GetProperty("parts")[0]
-                                 .GetProperty("text");
-
-                string rawExtraction = textObj.GetString() ?? string.Empty;
-                // Pre-process any rogue markdown block wraps inserted by LLMs
-                if (rawExtraction.StartsWith("```json")) rawExtraction = rawExtraction.Substring(7);
-                if (rawExtraction.StartsWith("```")) rawExtraction = rawExtraction.Substring(3);
-                if (rawExtraction.EndsWith("```")) rawExtraction = rawExtraction.Substring(0, rawExtraction.Length - 3);
-
-                return rawExtraction.Trim();
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Gemini parsing fault! {ex.Message}");
-            }
+            throw lastException ?? new Exception("Gemini extraction failed after 3 attempts.");
         }
     }
 }
