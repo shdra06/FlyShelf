@@ -16,7 +16,7 @@ namespace FlyShelf.Classes
         private bool _useHttp2 = false; // Start with QUIC, fallback to HTTP/2 for restricted networks
         private bool _stopped = false;  // True when Stop() is called — prevents auto-retry
         private const long MIN_EXE_SIZE = 10_000_000; // cloudflared.exe should be >10MB
-        private const string TRUSTED_CF_HASH = "b3279f2186a1c3c438ad5865e802bbbec26090c5d3fdb4ac1113f1143a94837a";
+        private const string TRUSTED_CF_HASH = "c2f4a3c3ea4c62eed562ede027d586a6044d35517e335e642f4e9783e651e4a3";
         private System.Timers.Timer _healthTimer;      // Periodic tunnel health monitor
         private int _quicErrorCount = 0;                 // Track consecutive QUIC/datagram failures for fast auto-restart
 
