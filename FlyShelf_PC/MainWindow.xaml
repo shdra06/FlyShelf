@@ -26,9 +26,33 @@
             </ResourceDictionary.MergedDictionaries>
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
 
-            <!-- Named style for Sync Circular Arrows button evaluated at Window level -->
-            <Style x:Key="ToolbarSyncButtonStyle" TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+            <!-- Premium Glassmorphism Style for Header Toolbar Buttons -->
+            <Style x:Key="PremiumHeaderButtonStyle" TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                <Setter Property="Background" Value="#16FFFFFF"/>
+                <Setter Property="BorderBrush" Value="#20FFFFFF"/>
+                <Setter Property="BorderThickness" Value="1"/>
+                <Setter Property="Foreground" Value="#E5FFFFFF"/>
+                <Setter Property="Padding" Value="9,6"/>
+                <Setter Property="CornerRadius" Value="8"/>
+                <Setter Property="Height" Value="32"/>
+                <Setter Property="Width" Value="38"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
+                <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="Focusable" Value="False"/>
+                <Style.Resources>
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#2AFFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#40FFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FFFFFFFF"/>
+                    
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#12FFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#30FFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#DDFFFFFF"/>
+                </Style.Resources>
+            </Style>
+
+            <!-- Named style for Sync Circular Arrows button based on Premium Glassmorphism Style -->
+            <Style x:Key="ToolbarSyncButtonStyle" TargetType="ui:Button" BasedOn="{StaticResource PremiumHeaderButtonStyle}">
+                <Setter Property="Foreground" Value="#E5FFFFFF"/>
                 <Style.Triggers>
                     <DataTrigger Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableCloudDiscovery}" Value="True">
                         <Setter Property="Foreground" Value="#10B981"/>
@@ -258,84 +282,84 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
                     
                     <!-- Search Toggle -->
-                    <ui:Button x:Name="SearchToggleBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="SearchToggle_Click" ToolTip="Search Clipboard (Ctrl+F)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
+                    <ui:Button x:Name="SearchToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="SearchToggle_Click" ToolTip="Search Clipboard (Ctrl+F)" Margin="0,0,6,0">
                         <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" /></ui:Button.Icon>
                     </ui:Button>
-
-                    <!-- Bouncy Drag Drop Arrow Indicator — borderless, appears only when dragging -->
-                    <Grid Width="28" Height="28" Margin="0,0,6,0" VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <Grid.Style>
-                            <Style TargetType="Grid">
-                                <Setter Property="Visibility" Value="Collapsed"/>
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                        <Setter Property="Visibility" Value="Visible"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Grid.Style>
-                        <ui:SymbolIcon Symbol="ArrowDown24" Foreground="#10B981" RenderTransformOrigin="0.5,0.5" HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <ui:SymbolIcon.RenderTransform>
-                                <TranslateTransform x:Name="ArrowTranslate" Y="0"/>
-                            </ui:SymbolIcon.RenderTransform>
-                            <ui:SymbolIcon.Style>
-                                <Style TargetType="ui:SymbolIcon">
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                            <DataTrigger.EnterActions>
-                                                <BeginStoryboard x:Name="BounceArrowStory">
-                                                    <Storyboard RepeatBehavior="Forever">
-                                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                                                         From="-4" To="4" Duration="0:0:0.6" AutoReverse="True">
-                                                            <DoubleAnimation.EasingFunction>
-                                                                <SineEase EasingMode="EaseInOut"/>
-                                                            </DoubleAnimation.EasingFunction>
-                                                        </DoubleAnimation>
-                                                    </Storyboard>
-                                                </BeginStoryboard>
-                                            </DataTrigger.EnterActions>
-                                            <DataTrigger.ExitActions>
-                                                <StopStoryboard BeginStoryboardName="BounceArrowStory"/>
-                                            </DataTrigger.ExitActions>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </ui:SymbolIcon.Style>
-                        </ui:SymbolIcon>
-                    </Grid>
-
-                    <!-- Sort/Filter by Category -->
-                    <ui:Button x:Name="SortFilterBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="SortFilter_Click" ToolTip="Filter by Category" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                        <ui:Button.Icon><ui:SymbolIcon Symbol="Filter24" /></ui:Button.Icon>
-                    </ui:Button>
-
-                    <!-- Emoji Picker -->
-                    <ui:Button x:Name="EmojiBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                        <ui:Button.Icon><ui:SymbolIcon Symbol="Emoji24" /></ui:Button.Icon>
-                    </ui:Button>
-
-                    <!-- Merge PDF button — hidden by default, replaces emoji space when PDFs selected -->
-                    <ui:Button x:Name="MergePdfToolbarBtn" Focusable="False" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,6,0" Padding="8,6" CornerRadius="8" Background="#30EF4444" Foreground="#EF4444" BorderBrush="#50EF4444">
-                        <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24" Foreground="#EF4444"/></ui:Button.Icon>
-                    </ui:Button>
-                    
-                    <ui:Button x:Name="SyncToolbarBtn" Focusable="False" Appearance="Secondary" Style="{StaticResource ToolbarSyncButtonStyle}" Click="ToggleGlobalSync_Click" ToolTip="Toggle All Sync (LAN + Cloud)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                        <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowSync24" Filled="True"/></ui:Button.Icon>
-                    </ui:Button>
-
-                    <!-- Unpin toolbar button — hidden by default, replaces sync space when pinned items selected -->
-                    <ui:Button x:Name="UnpinToolbarBtn" Focusable="False" Visibility="Collapsed" Click="UnpinSelectedBtn_Click" ToolTip="Unpin Selected Items" Margin="0,0,6,0" Padding="8,6" CornerRadius="8" Background="#30F59E0B" Foreground="#F59E0B" BorderBrush="#50F59E0B">
-                        <ui:Button.Icon><ui:SymbolIcon Symbol="PinOff24" Foreground="#F59E0B"/></ui:Button.Icon>
-                    </ui:Button>
-
-                    <!-- Clear Shelf -->
-                    <ui:Button x:Name="ClearShelfBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="Clear_Click" ToolTip="Clear Shelf (keeps pinned)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                        <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" /></ui:Button.Icon>
-                    </ui:Button>
-                    
-                    <ui:Button Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="CloseWindow_Click" ToolTip="Hide (Esc)" Padding="8,6" CornerRadius="8">
-                        <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" Filled="True"/></ui:Button.Icon>
-                    </ui:Button>
+ 
+                     <!-- Bouncy Drag Drop Arrow Indicator — borderless, appears only when dragging -->
+                     <Grid Width="28" Height="28" Margin="0,0,6,0" VerticalAlignment="Center" HorizontalAlignment="Center">
+                         <Grid.Style>
+                             <Style TargetType="Grid">
+                                 <Setter Property="Visibility" Value="Collapsed"/>
+                                 <Style.Triggers>
+                                     <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                         <Setter Property="Visibility" Value="Visible"/>
+                                     </DataTrigger>
+                                 </Style.Triggers>
+                             </Style>
+                         </Grid.Style>
+                         <ui:SymbolIcon Symbol="ArrowDown24" Foreground="#10B981" RenderTransformOrigin="0.5,0.5" HorizontalAlignment="Center" VerticalAlignment="Center">
+                             <ui:SymbolIcon.RenderTransform>
+                                 <TranslateTransform x:Name="ArrowTranslate" Y="0"/>
+                             </ui:SymbolIcon.RenderTransform>
+                             <ui:SymbolIcon.Style>
+                                 <Style TargetType="ui:SymbolIcon">
+                                     <Style.Triggers>
+                                         <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                             <DataTrigger.EnterActions>
+                                                 <BeginStoryboard x:Name="BounceArrowStory">
+                                                     <Storyboard RepeatBehavior="Forever">
+                                                         <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                                          From="-4" To="4" Duration="0:0:0.6" AutoReverse="True">
+                                                             <DoubleAnimation.EasingFunction>
+                                                                 <SineEase EasingMode="EaseInOut"/>
+                                                             </DoubleAnimation.EasingFunction>
+                                                         </DoubleAnimation>
+                                                     </Storyboard>
+                                                 </BeginStoryboard>
+                                             </DataTrigger.EnterActions>
+                                             <DataTrigger.ExitActions>
+                                                 <StopStoryboard BeginStoryboardName="BounceArrowStory"/>
+                                             </DataTrigger.ExitActions>
+                                         </DataTrigger>
+                                     </Style.Triggers>
+                                 </Style>
+                             </ui:SymbolIcon.Style>
+                         </ui:SymbolIcon>
+                     </Grid>
+ 
+                     <!-- Sort/Filter by Category -->
+                     <ui:Button x:Name="SortFilterBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="SortFilter_Click" ToolTip="Filter by Category" Margin="0,0,6,0">
+                         <ui:Button.Icon><ui:SymbolIcon Symbol="Filter24" /></ui:Button.Icon>
+                     </ui:Button>
+ 
+                     <!-- Emoji Picker -->
+                     <ui:Button x:Name="EmojiBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,6,0">
+                         <ui:Button.Icon><ui:SymbolIcon Symbol="Emoji24" /></ui:Button.Icon>
+                     </ui:Button>
+ 
+                     <!-- Merge PDF button — hidden by default, replaces emoji space when PDFs selected -->
+                     <ui:Button x:Name="MergePdfToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,6,0" Background="#30EF4444" Foreground="#EF4444" BorderBrush="#50EF4444">
+                         <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24" Foreground="#EF4444"/></ui:Button.Icon>
+                     </ui:Button>
+                     
+                     <ui:Button x:Name="SyncToolbarBtn" Style="{StaticResource ToolbarSyncButtonStyle}" Click="ToggleGlobalSync_Click" ToolTip="Toggle All Sync (LAN + Cloud)" Margin="0,0,6,0">
+                         <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowSync24" Filled="True"/></ui:Button.Icon>
+                     </ui:Button>
+ 
+                     <!-- Unpin toolbar button — hidden by default, replaces sync space when pinned items selected -->
+                     <ui:Button x:Name="UnpinToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="UnpinSelectedBtn_Click" ToolTip="Unpin Selected Items" Margin="0,0,6,0" Background="#30F59E0B" Foreground="#F59E0B" BorderBrush="#50F59E0B">
+                         <ui:Button.Icon><ui:SymbolIcon Symbol="PinOff24" Foreground="#F59E0B"/></ui:Button.Icon>
+                     </ui:Button>
+ 
+                     <!-- Clear Shelf -->
+                     <ui:Button x:Name="ClearShelfBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="Clear_Click" ToolTip="Clear Shelf (keeps pinned)" Margin="0,0,6,0">
+                         <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" /></ui:Button.Icon>
+                     </ui:Button>
+                     
+                     <ui:Button Style="{StaticResource PremiumHeaderButtonStyle}" Click="CloseWindow_Click" ToolTip="Hide (Esc)">
+                         <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" Filled="True"/></ui:Button.Icon>
+                     </ui:Button>
                 </StackPanel>
             </Grid>
 

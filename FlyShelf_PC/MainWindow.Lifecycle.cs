@@ -167,9 +167,10 @@ namespace FlyShelf
         private void PlayShowAnimation()
         {
             RootContent.RenderTransform = new TranslateTransform(0, 16);
-            RootContent.Opacity = 0;
 
-            RootContent.BeginAnimation(OpacityProperty, _fadeIn);
+            // PERF: Animate window-level opacity (not RootContent) so the entire window
+            // including DWM Acrylic chrome fades in together — eliminates ghost frame.
+            this.BeginAnimation(OpacityProperty, _fadeIn);
             RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, _slideIn);
         }
 
@@ -198,7 +199,8 @@ namespace FlyShelf
                 try
                 {
                     HideWindowInternal();
-                    RootContent.BeginAnimation(OpacityProperty, null);
+                    this.BeginAnimation(OpacityProperty, null);
+                    this.Opacity = 1;
                     RootContent.Opacity = 1;
                     RootContent.RenderTransform = null;
                 }
@@ -233,8 +235,9 @@ namespace FlyShelf
                 try
                 {
                     HideWindowInternal();
-                    RootContent.BeginAnimation(OpacityProperty, null);
-                    RootContent.Opacity = 1;
+                    // Clear window-level animation and reset for next show
+                    this.BeginAnimation(OpacityProperty, null);
+                    this.Opacity = 1;
                     RootContent.RenderTransform = null;
                 }
                 catch { }
@@ -253,7 +256,8 @@ namespace FlyShelf
                 }, System.Windows.Threading.DispatcherPriority.Background);
             };
 
-            RootContent.BeginAnimation(OpacityProperty, fadeOut);
+            // PERF: Animate window-level opacity to fade out entire window including DWM chrome
+            this.BeginAnimation(OpacityProperty, fadeOut);
             RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, _slideOut);
         }
         private DateTime _spawnTime = DateTime.MinValue;

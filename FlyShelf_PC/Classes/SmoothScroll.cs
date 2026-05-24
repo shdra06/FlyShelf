@@ -10,55 +10,38 @@ using System.Windows.Threading;
 namespace FlyShelf.Classes
 {
     /// <summary>
-    /// Custom configuration profile for the smooth scroll engine.
+    /// Legacy profile stub for backward compatibility with MainWindow.xaml.cs compilation parameters.
     /// </summary>
     public class ScrollProfile
     {
-        public double MouseEase { get; set; } = 0.18;
-        public double MouseScrollStep { get; set; } = 96.0;
-        public double TouchpadEase { get; set; } = 1.0;         // 1.0 = direct response (zero artificial LERP lag)
-        public double TouchpadMultiplier { get; set; } = 0.85;
     }
 
     /// <summary>
-    /// Premium target-based smooth scroll engine for WPF.
-    /// Modeled after Windows 11 / Modern Web (Chrome, Edge) native scroll behaviors.
-    /// Supports modular scrolling profiles for Clipboard vs PC App windows.
+    /// Premium hardware-accelerated velocity-based physics scrolling engine.
+    /// Modeled after Windows 11 native clipboard overlay and premium web momentum curves.
+    /// Combines frame-time compensated physics, progressive touchpad scaling, and dynamic GPU canvas caching.
     /// </summary>
     public static class SmoothScroll
     {
-        // ═══ Global scrolling profiles ═══
-        
-        /// <summary>
-        /// Highly responsive, tactile profile designed for the floating Clipboard Overlay (snappy glides).
-        /// </summary>
-        public static readonly ScrollProfile ClipboardProfile = new()
-        {
-            MouseEase = 0.28,             // Snappy, quick-stopping, non-floaty LERP (Win+V style)
-            MouseScrollStep = 72.0,       // Controlled responsive notch step
-            TouchpadEase = 0.20,          // Buttery smooth LERP decay (enables smooth deceleration coasting)
-            TouchpadMultiplier = 0.70
-        };
+        // Compilation compatibility stub
+        public static readonly ScrollProfile ClipboardProfile = new();
 
-        /// <summary>
-        /// Silky smooth, modern web-like sweeping glide designed for the PC Dashboard application.
-        /// </summary>
-        public static readonly ScrollProfile PCAppProfile = new()
-        {
-            MouseEase = 0.18,             // Modern web sweeping LERP (Google style)
-            MouseScrollStep = 96.0,       // Standard notch step
-            TouchpadEase = 0.45,          // Silky smooth LERP trackpad ease (matches Python tuner's perfect feel!)
-            TouchpadMultiplier = 0.80
-        };
+        // ═══ Natural Velocity Physics Constants (Clipboard Specs) ═══
+        private const double ScrollFriction      = 0.92;   // Per-frame decay (higher = longer free coasting)
+        private const double MaxVelocity         = 90.0;   // Maximum speed cap in pixels/frame
+        private const double TouchpadMul         = 0.55;   // Touchpad micro-step scale multiplier
+        private const double MouseMul            = 0.65;   // Mouse wheel step scale multiplier
+        private const double MinImpulse          = 0.3;    // Minimum impulse threshold for micro-scrolls
+        private const double MinVelocity         = 0.05;   // Velocity below this → complete stop (prevents sub-pixel crawl)
+        private const double DeltaCapTouchpad    = 80.0;   // Clamps raw trackpad delta packets to absorb speed spikes
+        private const double DeltaCapMouse       = 280.0;  // Clamps raw mouse delta packets
+        private const double DirectionBrakeMul   = 0.2;    // Retained velocity on reversal (partial braking feels snappy)
+        private const double TargetFrameMs       = 16.667; // 60 FPS baseline
 
-        private static readonly ScrollProfile _defaultProfile = new();
-        private static readonly Dictionary<Window, ScrollProfile> _windowProfiles = new();
         private static readonly Dictionary<ScrollViewer, ScrollState> _states = new();
         private static readonly Dictionary<DependencyObject, ScrollViewer> _ancestorCache = new();
         
         private static bool _renderingAttached;
-        private static DispatcherTimer? _cleanupTimer;
-        private const double TargetFrameMs = 16.667; // 60 FPS standard baseline
 
         [System.Runtime.InteropServices.DllImport("winmm.dll", EntryPoint = "timeBeginPeriod", SetLastError = true)]
         private static extern uint TimeBeginPeriod(uint uMilliseconds);
@@ -88,16 +71,14 @@ namespace FlyShelf.Classes
 
         static SmoothScroll()
         {
-            // 1. Permanently elevate Windows scheduler timer resolution to 1ms to prevent dynamic LERP latency stutters
+            // 1. Elevate Windows scheduler timer resolution to 1ms to prevent rendering timer stutters
             try
             {
                 TimeBeginPeriod(1);
             }
             catch { }
 
-            // 2. Completely disable Windows 11 EcoQoS/Efficiency Mode (Power Throttling) for this process.
-            // This forces the Windows kernel to treat our transparent background window with active execution priority,
-            // bypassing background core-parking and delivering buttery-smooth 120Hz scrolling natively!
+            // 2. Disable Windows 11 EcoQoS (Power Throttling) for this process to force unthrottled thread execution
             try
             {
                 var hProcess = System.Diagnostics.Process.GetCurrentProcess().Handle;
@@ -115,13 +96,12 @@ namespace FlyShelf.Classes
 
         private class ScrollState
         {
-            public double TargetOffset;
+            public double Velocity;
             public bool IsAnimating;
             public bool IsTouchpad;
             public long LastFrameTick;
             public long LastInputTime;
-            public double AccumulatedTouchpadScrollAmount; // Coalesces and accumulates pre-boosted scroll distance
-            public ScrollProfile Profile = null!;
+            public double PendingImpulse;  // Coalesced impulse — drained once per render frame
         }
 
         private static void EnableStaticCanvas(ScrollViewer sv)
@@ -153,14 +133,12 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
-        /// Hook unified window-wide scroll logic at the Window level with a custom profile.
+        /// Hook window-wide scroll logic at the Window level.
         /// </summary>
         public static void AttachToWindow(Window window, ScrollProfile? profile = null)
         {
             window.PreviewMouseWheel -= OnWindowPreviewMouseWheel;
             window.PreviewMouseWheel += OnWindowPreviewMouseWheel;
-
-            _windowProfiles[window] = profile ?? _defaultProfile;
         }
 
         /// <summary>
@@ -169,7 +147,6 @@ namespace FlyShelf.Classes
         public static void DetachFromWindow(Window window)
         {
             window.PreviewMouseWheel -= OnWindowPreviewMouseWheel;
-            _windowProfiles.Remove(window);
             _ancestorCache.Clear();
 
             var toRemove = new List<ScrollViewer>();
@@ -189,7 +166,6 @@ namespace FlyShelf.Classes
 
             if (_states.Count == 0 && _renderingAttached)
             {
-                _cleanupTimer?.Stop();
                 CompositionTarget.Rendering -= OnRendering;
                 _renderingAttached = false;
             }
@@ -197,8 +173,6 @@ namespace FlyShelf.Classes
 
         /// <summary>
         /// Clears any in-flight smooth scroll animation state for the given ScrollViewer.
-        /// Call this before programmatically resetting the scroll offset so that a stale
-        /// TargetOffset from a previous scroll session doesn't fight the reset.
         /// </summary>
         public static void ResetScrollState(ScrollViewer? sv)
         {
@@ -223,18 +197,12 @@ namespace FlyShelf.Classes
             Window? window = sender as Window;
             if (window == null) return;
 
-            if (!_windowProfiles.TryGetValue(window, out var profile))
-            {
-                profile = _defaultProfile;
-            }
-
             DependencyObject? source = e.OriginalSource as DependencyObject;
             ScrollViewer? sv = FindScrollableScrollViewerAncestor(source);
 
             if (sv == null) return;
 
-            // Bubbling Boundary check: If we are already at the top/bottom physical limits,
-            // do not handle the event. Let it bubble naturally to parent ScrollViewers.
+            // Bubbling Boundary check: let events bubble if limits are already reached
             bool atTopBoundary = sv.VerticalOffset <= 0 && e.Delta > 0;
             bool atBottomBoundary = sv.VerticalOffset >= sv.ScrollableHeight && e.Delta < 0;
 
@@ -245,130 +213,52 @@ namespace FlyShelf.Classes
 
             // Intercept and handle scroll
             e.Handled = true;
-            ApplyScroll(sv, e.Delta, profile);
+            ApplyImpulse(sv, e.Delta);
         }
 
-        private static void ApplyScroll(ScrollViewer sv, int delta, ScrollProfile profile)
+        private static void ApplyImpulse(ScrollViewer sv, int delta)
         {
-            // Cancel cleanup timer since there is active scroll input
-            if (_cleanupTimer != null && _cleanupTimer.IsEnabled)
-            {
-                _cleanupTimer.Stop();
-            }
-
             // Distinguish Precision Touchpad (high frequency, small deltas) vs Mouse Wheel (discrete 120s)
             bool isTouchpad = (delta % 120 != 0) || (Math.Abs(delta) < 120);
 
-
-
             if (!_states.TryGetValue(sv, out var state))
             {
-                state = new ScrollState
-                {
-                    TargetOffset = sv.VerticalOffset
-                };
+                state = new ScrollState();
                 _states[sv] = state;
             }
 
             long now = Environment.TickCount64;
-            long timeSinceLastInput = now - state.LastInputTime;
+            state.IsTouchpad = isTouchpad;
             state.LastInputTime = now;
 
-            state.IsTouchpad = isTouchpad;
-            state.Profile = profile;
+            double rawDelta = delta;
+            double impulse;
 
-            // Calculate input packet velocity (delta units per millisecond)
-            double dt = timeSinceLastInput > 0 ? timeSinceLastInput : 1.0;
-            double inputVelocity = Math.Abs(delta) / dt;
-
-            // ═══ Kinetic Acceleration (Turbo Booster) ═══
-            // If the user scrolls with high velocity (a sudden quick burst),
-            // dynamically scale up the scroll distance to generate kinetic momentum.
-            double accelerationMultiplier = 1.0;
-            if (state.IsTouchpad && inputVelocity > 2.5)
+            if (state.IsTouchpad)
             {
-                accelerationMultiplier = Math.Min(2.5, 1.0 + (inputVelocity - 2.5) * 0.15);
-            }
+                // Progressive velocity scaling for touchpad flick acceleration
+                double capped = Math.Sign(rawDelta) * Math.Min(Math.Abs(rawDelta), DeltaCapTouchpad);
+                double speedFactor = Math.Min(Math.Abs(rawDelta) / 40.0, 1.0);
+                double progressiveMul = 0.30 + (0.45 * speedFactor); // Ranges 0.30 (gentle drag) to 0.75 (fast swipe)
+                impulse = capped * progressiveMul * TouchpadMul;
 
-            double scrollAmount = -delta * profile.TouchpadMultiplier * accelerationMultiplier;
-
-            // ═══ Touchpad Input Coalescing/Throttling (VSync-Lock Engine) ═══
-            // If the LERP animation is active, buffer incoming touchpad packets and process them 
-            // exactly once per frame tick in OnRendering (synchronized to screen VSync).
-            // Exception: If the user reverses scroll direction or a time gap (>250ms/350ms) occurs,
-            // we bypass buffering to instantly snap the animation and stay highly responsive.
-            if (state.IsTouchpad && state.IsAnimating)
-            {
-                bool isReversing = Math.Sign(scrollAmount) != Math.Sign(state.TargetOffset - sv.VerticalOffset);
-                long gapAllowance = (scrollAmount < 0) ? 350 : 250;
-
-                if (timeSinceLastInput <= gapAllowance && !isReversing)
+                if (Math.Abs(impulse) < MinImpulse && impulse != 0)
                 {
-                    state.AccumulatedTouchpadScrollAmount += scrollAmount;
-                    return;
-                }
-            }
-
-            double maxOvershoot = sv.ActualHeight > 50 ? (sv.ActualHeight * 0.8) : 400.0;
-
-            if (profile == ClipboardProfile)
-            {
-                if (state.IsTouchpad)
-                {
-                    // Snap target offset to current vertical offset if starting a fresh scroll,
-                    // changing scroll direction, or if there is a real time gap (>250ms) between events
-                    // (fingers lifted or gesture paused). This allows short driver-level inertia phases 
-                    // to unite perfectly with direct dragging without any visual stutters or breaks!
-                    bool isReversing = Math.Sign(scrollAmount) != Math.Sign(state.TargetOffset - sv.VerticalOffset);
-                    
-                    // Asymmetrical Merging Gap: Increase time allowance slightly when scrolling UP (350ms)
-                    // to perfectly accommodate the less linear finger-extension phase.
-                    long gapAllowance = (scrollAmount < 0) ? 350 : 250;
-                    if (!state.IsAnimating || timeSinceLastInput > gapAllowance || isReversing)
-                    {
-                        state.TargetOffset = sv.VerticalOffset;
-                    }
-
-                    state.TargetOffset = Math.Clamp(state.TargetOffset + scrollAmount, 
-                                                    sv.VerticalOffset - maxOvershoot, 
-                                                    sv.VerticalOffset + maxOvershoot);
-                }
-                else
-                {
-                    double mouseScrollAmount = -(delta / 120.0) * profile.MouseScrollStep;
-                    
-                    // Snap starting target if starting a fresh scroll or reversing direction
-                    if (!state.IsAnimating || Math.Sign(mouseScrollAmount) != Math.Sign(state.TargetOffset - sv.VerticalOffset))
-                    {
-                        state.TargetOffset = sv.VerticalOffset;
-                    }
-                    
-                    state.TargetOffset = Math.Clamp(state.TargetOffset + mouseScrollAmount, 
-                                                    sv.VerticalOffset - (maxOvershoot * 1.2), 
-                                                    sv.VerticalOffset + (maxOvershoot * 1.2));
+                    impulse = Math.Sign(impulse) * MinImpulse;
                 }
             }
             else
             {
-                if (state.IsTouchpad)
-                {
-                    state.TargetOffset += scrollAmount;
-                }
-                else
-                {
-                    double mouseScrollAmount = -(delta / 120.0) * profile.MouseScrollStep;
-                    
-                    // Snap starting target if starting a fresh scroll or reversing direction
-                    if (!state.IsAnimating || Math.Sign(mouseScrollAmount) != Math.Sign(state.TargetOffset - sv.VerticalOffset))
-                    {
-                        state.TargetOffset = sv.VerticalOffset;
-                    }
-                    
-                    state.TargetOffset += mouseScrollAmount;
-                }
+                double capped = Math.Sign(rawDelta) * Math.Min(Math.Abs(rawDelta), DeltaCapMouse);
+                impulse = capped * MouseMul;
             }
 
-            state.TargetOffset = Math.Clamp(state.TargetOffset, 0, sv.ScrollableHeight);
+            // ═══ COALESCE: Accumulate impulse for per-frame drain ═══
+            // Precision touchpads fire 200-500 Hz bursts between render frames.
+            // Applying each micro-impulse individually compounds velocity into
+            // visible "step jumps." Accumulating and draining once per render
+            // frame replicates the natural throttling a low-level input hook provides.
+            state.PendingImpulse += impulse;
 
             if (!state.IsAnimating)
             {
@@ -382,7 +272,7 @@ namespace FlyShelf.Classes
                 CompositionTarget.Rendering += OnRendering;
                 _renderingAttached = true;
 
-                // Suspend theme animations to free up 100% UI thread budget for buttery smooth scrolling!
+                // Suspend theme animations to free up 100% UI thread budget for buttery smooth scrolling
                 try
                 {
                     var parentWin = Window.GetWindow(sv) as MainWindow;
@@ -410,86 +300,59 @@ namespace FlyShelf.Classes
                     continue;
                 }
 
-                // Apply any deferred high-frequency touchpad input queued during this frame interval
-                if (state.IsTouchpad && state.AccumulatedTouchpadScrollAmount != 0)
+                // ═══ DRAIN COALESCED INPUT ═══
+                // Apply all accumulated impulse as a single velocity change per frame.
+                // This prevents burst touchpad events from compounding into visible jumps.
+                if (state.PendingImpulse != 0)
                 {
-                    double scrollAmount = state.AccumulatedTouchpadScrollAmount;
-                    state.AccumulatedTouchpadScrollAmount = 0; // Clear coalesced queue
-                    
-                    double maxOvershoot = sv.ActualHeight > 50 ? (sv.ActualHeight * 0.8) : 400.0;
-                    if (state.Profile == ClipboardProfile)
+                    double pending = state.PendingImpulse;
+                    state.PendingImpulse = 0;
+
+                    // Direction reversal: partially brake previous velocity
+                    if (state.Velocity != 0 && Math.Sign(state.Velocity) != Math.Sign(-pending))
                     {
-                        state.TargetOffset = Math.Clamp(state.TargetOffset + scrollAmount, 
-                                                        sv.VerticalOffset - maxOvershoot, 
-                                                        sv.VerticalOffset + maxOvershoot);
+                        state.Velocity *= DirectionBrakeMul;
                     }
-                    else
-                    {
-                        state.TargetOffset += scrollAmount;
-                    }
-                    state.TargetOffset = Math.Clamp(state.TargetOffset, 0, sv.ScrollableHeight);
+
+                    state.Velocity -= pending;
+                    state.Velocity = Math.Clamp(state.Velocity, -MaxVelocity, MaxVelocity);
                 }
 
+                // Frame-time compensation: normalize velocity against 60 FPS baseline (16.667ms)
                 long elapsed = now - state.LastFrameTick;
                 if (elapsed <= 0) elapsed = 1;
                 double timeScale = elapsed / TargetFrameMs;
                 
-                timeScale = Math.Min(timeScale, 4.0);
+                // Clamp time scale to avoid huge jumps on lag spikes
+                timeScale = Math.Min(timeScale, 3.0);
                 state.LastFrameTick = now;
 
-                double currentOffset = sv.VerticalOffset;
-                double diff = state.TargetOffset - currentOffset;
+                // Apply velocity vector with frame-time compensation
+                double displacement = state.Velocity * timeScale;
+                double newOffset = sv.VerticalOffset + displacement;
+                newOffset = Math.Clamp(newOffset, 0, sv.ScrollableHeight);
+                sv.ScrollToVerticalOffset(newOffset);
 
-                // Asymmetrical Snapping: Quiet threshold (0.01px) when scrolling UP to let slow coasting glides finish smoothly
-                double snapThreshold = (state.Profile == ClipboardProfile) 
-                    ? (diff < 0 ? 0.01 : 0.05) 
-                    : 0.01;
+                // Exponential deceleration (friction decay)
+                double friction = state.IsTouchpad 
+                    ? 0.86  // Natural touchpad coast — smooth deceleration over ~400ms
+                    : ScrollFriction; // Luxurious free coasting glide for mouse wheel sweeps
 
-                if (Math.Abs(diff) < snapThreshold)
+                state.Velocity *= Math.Pow(friction, timeScale);
+
+                // Stop if at boundary or velocity is negligible
+                bool atBound = (newOffset <= 0 && state.Velocity < 0) ||
+                               (newOffset >= sv.ScrollableHeight && state.Velocity > 0);
+
+                if (Math.Abs(state.Velocity) < MinVelocity || atBound)
                 {
-                    sv.ScrollToVerticalOffset(state.TargetOffset);
+                    state.Velocity = 0.0;
                     state.IsAnimating = false;
                     completed.Add(sv);
                 }
                 else
                 {
-                    // Asymmetrical LERP Friction: Apply slightly more fluid ease (0.16) when scrolling UP
-                    // (only for ClipboardProfile to perfectly balance physical finger extension dynamics).
-                    double baseEase = state.IsTouchpad 
-                        ? (state.Profile == ClipboardProfile && diff < 0 ? 0.16 : state.Profile.TouchpadEase) 
-                        : state.Profile.MouseEase;
-
-                    double ease = baseEase;
-                    if (state.IsTouchpad && baseEase < 1.0)
-                    {
-                        // ═══ Dynamic Friction (Variable Drag Curve) ═══
-                        // As we approach the target offset (diff gets small), we gradually decay the LERP ease constant.
-                        // This extends the tail of the coasting phase into an ultra-luxurious, whispers-soft, gradual slowing stop.
-                        // It completely prevents sudden stops or end-of-flick jerks, slowing down in a beautiful native glide!
-                        double distance = Math.Abs(diff);
-                        if (distance < 80.0) // 80px deceleration boundary window
-                        {
-                            double ratio = distance / 80.0;
-                            ease = 0.04 + (baseEase - 0.04) * ratio; // Decay ease down to a whisper-soft 0.04 at the tail
-                        }
-                    }
-
-                    double factor = 1.0 - Math.Pow(1.0 - ease, timeScale);
-                    double step = diff * factor;
-                    double nextOffset = currentOffset + step;
-                    
-                    nextOffset = Math.Clamp(nextOffset, 0, sv.ScrollableHeight);
-                    sv.ScrollToVerticalOffset(nextOffset);
-
-                    if (nextOffset <= 0 || nextOffset >= sv.ScrollableHeight)
-                    {
-                        state.IsAnimating = false;
-                        completed.Add(sv);
-                    }
-                    else
-                    {
-                        anyAnimating = true;
-                    }
+                    anyAnimating = true;
                 }
             }
 

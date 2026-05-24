@@ -144,13 +144,16 @@ namespace FlyShelf
             {
                 if (_isEdgeLocked && e.HeightChanged && this.ActualHeight > 0)
                 {
-                    this.Top = _lockedBottomEdge - this.ActualHeight;
+                    double newTop = _lockedBottomEdge - this.ActualHeight - 20;
                     
+                    // Full bounds clamp: keep entire window within the visible work area
                     var workArea = SystemParameters.WorkArea;
-                    if (this.Top < workArea.Top)
-                    {
-                        this.Top = workArea.Top + 16;
-                    }
+                    if (newTop < workArea.Top + 16)
+                        newTop = workArea.Top + 16;
+                    if (newTop + this.ActualHeight > workArea.Top + workArea.Height - 16)
+                        newTop = workArea.Top + workArea.Height - this.ActualHeight - 16;
+                    
+                    this.Top = newTop;
                 }
             };
 
@@ -175,9 +178,13 @@ namespace FlyShelf
                     
                     if (_isEdgeLocked && this.ActualHeight > 0)
                     {
-                        this.Top = _lockedBottomEdge - this.ActualHeight;
+                        double newTop = _lockedBottomEdge - this.ActualHeight - 20;
                         var workArea = SystemParameters.WorkArea;
-                        if (this.Top < workArea.Top) this.Top = workArea.Top + 16;
+                        if (newTop < workArea.Top + 16)
+                            newTop = workArea.Top + 16;
+                        if (newTop + this.ActualHeight > workArea.Top + workArea.Height - 16)
+                            newTop = workArea.Top + workArea.Height - this.ActualHeight - 16;
+                        this.Top = newTop;
                     }
                 }
                 else if (e.PropertyName == nameof(FlyShelfViewModel.CurrentMode))

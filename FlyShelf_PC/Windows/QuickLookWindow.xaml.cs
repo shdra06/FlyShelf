@@ -396,6 +396,9 @@ namespace FlyShelf.Windows
 
         private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
+            // Don't initiate window drag when user is interacting with OCR text overlays
+            if (IsOcrTextBoxSource(e.OriginalSource as DependencyObject)) return;
+
             if (e.OriginalSource is DependencyObject && !(e.OriginalSource is System.Windows.Controls.Primitives.ButtonBase))
             {
                 _startPoint = e.GetPosition(null);
@@ -416,6 +419,11 @@ namespace FlyShelf.Windows
 
         private void Window_MouseMove(object sender, MouseEventArgs e)
         {
+            // CRITICAL: Never initiate file drag-drop when the user is selecting OCR text.
+            // Doing so causes WPF dispatcher re-entrancy crash:
+            // "Dispatcher processing has been suspended, but messages are still being processed."
+            if (IsOcrTextBoxSource(e.OriginalSource as DependencyObject)) return;
+
             if (e.LeftButton == MouseButtonState.Pressed && _isImageLoaded)
             {
                 Point mousePos = e.GetPosition(null);
@@ -434,6 +442,35 @@ namespace FlyShelf.Windows
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Checks whether the given DependencyObject is (or is a child of) an OCR overlay TextBox.
+        /// This prevents DragDrop.DoDragDrop from being called while the user is selecting text,
+        /// which would cause a fatal WPF dispatcher re-entrancy crash.
+        /// </summary>
+        private bool IsOcrTextBoxSource(DependencyObject source)
+        {
+            if (source == null) return false;
+
+            // Walk up the visual tree to see if we hit an OCR TextBox inside the overlay canvas
+            DependencyObject current = source;
+            while (current != null)
+            {
+                if (current is System.Windows.Controls.TextBox)
+                {
+                    // Verify this TextBox lives inside the OCR overlay canvas
+                    DependencyObject parent = current;
+                    while (parent != null)
+                    {
+                        if (parent == OcrOverlayCanvas) return true;
+                        parent = System.Windows.Media.VisualTreeHelper.GetParent(parent);
+                    }
+                    return false;
+                }
+                current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+            }
+            return false;
         }
 
         private void Window_Deactivated(object sender, EventArgs e)
@@ -566,115 +603,313 @@ namespace FlyShelf.Windows
             return new Rect(left, top, displayWidth, displayHeight);
         }
 
+        /// <summary>
+        /// Tracks which word overlays are currently "selected" (highlighted) for multi-word Ctrl+C copy.
+        /// </summary>
+        private readonly System.Collections.Generic.List<System.Windows.Controls.Border> _selectedWordBorders = new();
+        private readonly System.Collections.Generic.List<string> _selectedWordTexts = new();
+
+        // Drag-to-select state
+        private bool _isDragSelecting = false;
+        private bool _ocrCanvasEventsAttached = false;
+
+        // Frozen brushes reused across render and drag-selection (initialized in RenderOcrOverlay)
+        private System.Windows.Media.SolidColorBrush _ocrHoverBg;
+        private System.Windows.Media.SolidColorBrush _ocrHoverBorder;
+        private System.Windows.Media.SolidColorBrush _ocrSelectedBg;
+        private System.Windows.Media.SolidColorBrush _ocrSelectedBorder;
+
         private void RenderOcrOverlay()
         {
             if (_ocrResult == null || _originalWidth == 0 || _originalHeight == 0) return;
 
             OcrOverlayCanvas.Children.Clear();
+            _selectedWordBorders.Clear();
+            _selectedWordTexts.Clear();
 
             Rect renderRect = GetImageRenderRect(PreviewImage);
             if (renderRect.Width == 0 || renderRect.Height == 0) return;
+
+            // Brushes reused across all words — store as fields for drag-selection reuse
+            _ocrHoverBg = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x18, 0x60, 0xA5, 0xFA));
+            _ocrHoverBorder = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x35, 0x60, 0xA5, 0xFA));
+            _ocrSelectedBg = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x50, 0x60, 0xA5, 0xFA));
+            _ocrSelectedBorder = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x80, 0x60, 0xA5, 0xFA));
+            _ocrHoverBg.Freeze(); _ocrHoverBorder.Freeze(); _ocrSelectedBg.Freeze(); _ocrSelectedBorder.Freeze();
+            var hoverBg = _ocrHoverBg;
+            var hoverBorder = _ocrHoverBorder;
+            var selectedBg = _ocrSelectedBg;
+            var selectedBorder = _ocrSelectedBorder;
+            var transparentBrush = System.Windows.Media.Brushes.Transparent;
 
             foreach (var line in _ocrResult.Lines)
             {
                 if (line.Words == null || line.Words.Count == 0) continue;
 
-                // Calculate the bounding box of the line by unioning all its words
-                double minX = double.MaxValue;
-                double minY = double.MaxValue;
-                double maxX = double.MinValue;
-                double maxY = double.MinValue;
+                string fullLineText = line.Text;
 
                 foreach (var word in line.Words)
                 {
-                    var r = word.BoundingRect;
-                    if (r.X < minX) minX = r.X;
-                    if (r.Y < minY) minY = r.Y;
-                    if (r.X + r.Width > maxX) maxX = r.X + r.Width;
-                    if (r.Y + r.Height > maxY) maxY = r.Y + r.Height;
-                }
+                    var rect = word.BoundingRect;
+                    if (rect.Width <= 0 || rect.Height <= 0) continue;
 
-                double lineW = maxX - minX;
-                double lineH = maxY - minY;
+                    string wordText = word.Text;
 
-                // Map to actual displayed coordinates
-                double scaledLeft = renderRect.Left + (minX / _originalWidth) * renderRect.Width;
-                double scaledTop = renderRect.Top + (minY / _originalHeight) * renderRect.Height;
-                double scaledWidth = (lineW / _originalWidth) * renderRect.Width;
-                double scaledHeight = (lineH / _originalHeight) * renderRect.Height;
+                    // Map word bounding rect to displayed image coordinates
+                    double scaledLeft = renderRect.Left + (rect.X / _originalWidth) * renderRect.Width;
+                    double scaledTop = renderRect.Top + (rect.Y / _originalHeight) * renderRect.Height;
+                    double scaledWidth = (rect.Width / _originalWidth) * renderRect.Width;
+                    double scaledHeight = (rect.Height / _originalHeight) * renderRect.Height;
 
-                // Ensure non-zero size
-                if (scaledWidth <= 0 || scaledHeight <= 0) continue;
+                    if (scaledWidth <= 0 || scaledHeight <= 0) continue;
 
-                // Create overlay grid container
-                var overlayGrid = new System.Windows.Controls.Grid
-                {
-                    Width = scaledWidth,
-                    Height = scaledHeight
-                };
-
-                // Semi-transparent highlight border that shows on hover
-                var highlightBorder = new System.Windows.Controls.Border
-                {
-                    Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x1A, 0x60, 0xA5, 0xFA)), // subtle transparent blue
-                    BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x3A, 0x60, 0xA5, 0xFA)),
-                    BorderThickness = new Thickness(1),
-                    CornerRadius = new CornerRadius(3),
-                    Visibility = Visibility.Collapsed
-                };
-
-                // Selectable text box
-                var textBox = new System.Windows.Controls.TextBox
-                {
-                    Text = line.Text,
-                    IsReadOnly = true,
-                    Background = System.Windows.Media.Brushes.Transparent,
-                    BorderThickness = new Thickness(0),
-                    Foreground = System.Windows.Media.Brushes.Transparent, // Invisible text so image shines through
-                    SelectionBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x60, 0x60, 0xA5, 0xFA)),
-                    CaretBrush = System.Windows.Media.Brushes.Transparent,
-                    FontFamily = new System.Windows.Media.FontFamily("Segoe UI"),
-                    FontSize = Math.Max(8, scaledHeight * 0.75), // Font size matching scaled height
-                    VerticalAlignment = VerticalAlignment.Center,
-                    Padding = new Thickness(0),
-                    Margin = new Thickness(0),
-                    Cursor = System.Windows.Input.Cursors.IBeam,
-                    TextWrapping = TextWrapping.NoWrap,
-                    HorizontalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Hidden,
-                    VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Hidden
-                };
-
-                // Hover interactions
-                overlayGrid.MouseEnter += (s, e) => { highlightBorder.Visibility = Visibility.Visible; };
-                overlayGrid.MouseLeave += (s, e) => { highlightBorder.Visibility = Visibility.Collapsed; };
-
-                // Right click copy context menu
-                var menu = new System.Windows.Controls.ContextMenu();
-                var copySelect = new System.Windows.Controls.MenuItem { Header = "Copy Selection" };
-                copySelect.Click += (s, e) => 
-                {
-                    if (!string.IsNullOrEmpty(textBox.SelectedText))
+                    // Word highlight border — the interactive overlay element
+                    var wordBorder = new System.Windows.Controls.Border
                     {
-                        try { System.Windows.Clipboard.SetText(textBox.SelectedText); } catch { }
+                        Width = scaledWidth,
+                        Height = scaledHeight,
+                        Background = transparentBrush,
+                        BorderBrush = transparentBrush,
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(3),
+                        Cursor = System.Windows.Input.Cursors.Hand,
+                        ToolTip = wordText,
+                        Focusable = true,
+                        Tag = wordText // store text in Tag for easy retrieval
+                    };
+
+
+                    // --- Click to select + start drag-to-select ---
+                    wordBorder.MouseLeftButtonDown += (s, ev) =>
+                    {
+                        var border = s as System.Windows.Controls.Border;
+                        if (border == null) return;
+
+                        // If Ctrl is NOT held, deselect all other words first
+                        bool ctrlHeld = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+                        if (!ctrlHeld)
+                        {
+                            DeselectAllOcrWords();
+                        }
+
+                        // Select this word
+                        SelectWordBorder(border);
+                        border.Focus();
+
+                        // Start drag-to-select: capture mouse on the canvas
+                        _isDragSelecting = true;
+                        OcrOverlayCanvas.CaptureMouse();
+                        ev.Handled = true;
+                    };
+
+                    // --- Hover effects (only when not selected) ---
+                    wordBorder.MouseEnter += (s, ev) =>
+                    {
+                        var border = s as System.Windows.Controls.Border;
+                        if (border != null && !_selectedWordBorders.Contains(border))
+                        {
+                            border.Background = hoverBg;
+                            border.BorderBrush = hoverBorder;
+                        }
+                    };
+                    wordBorder.MouseLeave += (s, ev) =>
+                    {
+                        var border = s as System.Windows.Controls.Border;
+                        if (border != null && !_selectedWordBorders.Contains(border))
+                        {
+                            border.Background = transparentBrush;
+                            border.BorderBrush = transparentBrush;
+                        }
+                    };
+
+                    // --- Ctrl+C keyboard handler ---
+                    wordBorder.KeyDown += (s, ev) =>
+                    {
+                        if (ev.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+                        {
+                            CopySelectedOcrWords();
+                            ev.Handled = true;
+                        }
+                        // Ctrl+A to select all words
+                        if (ev.Key == Key.A && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+                        {
+                            SelectAllOcrWords();
+                            ev.Handled = true;
+                        }
+                    };
+
+                    // --- Right-click context menu ---
+                    var menu = new System.Windows.Controls.ContextMenu();
+
+                    var copyWordItem = new System.Windows.Controls.MenuItem { Header = "Copy Word" };
+                    copyWordItem.Click += (s, ev) =>
+                    {
+                        try
+                        {
+                            FlyShelf.MainWindow.SetWritingClipboard(true);
+                            System.Windows.Clipboard.SetText(wordText);
+                            _ = System.Threading.Tasks.Task.Run(async () =>
+                            {
+                                await System.Threading.Tasks.Task.Delay(500);
+                                FlyShelf.MainWindow.SetWritingClipboard(false);
+                            });
+                            FlyShelf.Windows.ToastWindow.ShowToast($"Copied: {wordText}");
+                        }
+                        catch { }
+                    };
+
+                    var copySelectedItem = new System.Windows.Controls.MenuItem { Header = "Copy Selected Words" };
+                    copySelectedItem.Click += (s, ev) => { CopySelectedOcrWords(); };
+
+                    var copyLineItem = new System.Windows.Controls.MenuItem { Header = "Copy Full Line" };
+                    copyLineItem.Click += (s, ev) =>
+                    {
+                        try
+                        {
+                            FlyShelf.MainWindow.SetWritingClipboard(true);
+                            System.Windows.Clipboard.SetText(fullLineText);
+                            _ = System.Threading.Tasks.Task.Run(async () =>
+                            {
+                                await System.Threading.Tasks.Task.Delay(500);
+                                FlyShelf.MainWindow.SetWritingClipboard(false);
+                            });
+                            FlyShelf.Windows.ToastWindow.ShowToast("Copied full line");
+                        }
+                        catch { }
+                    };
+
+                    menu.Items.Add(copyWordItem);
+                    menu.Items.Add(copySelectedItem);
+                    menu.Items.Add(new System.Windows.Controls.Separator());
+                    menu.Items.Add(copyLineItem);
+                    wordBorder.ContextMenu = menu;
+
+                    // Position on Canvas
+                    System.Windows.Controls.Canvas.SetLeft(wordBorder, scaledLeft);
+                    System.Windows.Controls.Canvas.SetTop(wordBorder, scaledTop);
+                    OcrOverlayCanvas.Children.Add(wordBorder);
+                }
+            }
+
+            // Attach canvas-level mouse handlers for drag-to-select (only once)
+            if (!_ocrCanvasEventsAttached)
+            {
+                _ocrCanvasEventsAttached = true;
+
+                OcrOverlayCanvas.MouseMove += (s, ev) =>
+                {
+                    if (!_isDragSelecting || ev.LeftButton != MouseButtonState.Pressed) return;
+
+                    // Hit-test to find which word border is under the cursor
+                    Point pt = ev.GetPosition(OcrOverlayCanvas);
+                    var hit = FindWordBorderAtPoint(pt);
+                    if (hit != null)
+                    {
+                        SelectWordBorder(hit);
+                    }
+                    ev.Handled = true;
+                };
+
+                OcrOverlayCanvas.MouseLeftButtonUp += (s, ev) =>
+                {
+                    if (_isDragSelecting)
+                    {
+                        _isDragSelecting = false;
+                        OcrOverlayCanvas.ReleaseMouseCapture();
+                        ev.Handled = true;
                     }
                 };
-                var copyAll = new System.Windows.Controls.MenuItem { Header = "Copy Full Line" };
-                copyAll.Click += (s, e) => 
+            }
+        }
+
+        /// <summary>
+        /// Copies all currently selected OCR words to the clipboard, joined by spaces.
+        /// </summary>
+        private void CopySelectedOcrWords()
+        {
+            if (_selectedWordTexts.Count == 0) return;
+            try
+            {
+                string combined = string.Join(" ", _selectedWordTexts);
+                FlyShelf.MainWindow.SetWritingClipboard(true);
+                System.Windows.Clipboard.SetText(combined);
+                _ = System.Threading.Tasks.Task.Run(async () =>
                 {
-                    try { System.Windows.Clipboard.SetText(line.Text); } catch { }
-                };
+                    await System.Threading.Tasks.Task.Delay(500);
+                    FlyShelf.MainWindow.SetWritingClipboard(false);
+                });
+                FlyShelf.Windows.ToastWindow.ShowToast($"Copied {_selectedWordTexts.Count} word{(_selectedWordTexts.Count > 1 ? "s" : "")}");
+            }
+            catch { }
+        }
 
-                menu.Items.Add(copySelect);
-                menu.Items.Add(copyAll);
-                textBox.ContextMenu = menu;
+        /// <summary>
+        /// Selects a single word border (adds to selection if not already selected).
+        /// </summary>
+        private void SelectWordBorder(System.Windows.Controls.Border border)
+        {
+            if (border == null || _selectedWordBorders.Contains(border)) return;
+            border.Background = _ocrSelectedBg;
+            border.BorderBrush = _ocrSelectedBorder;
+            _selectedWordBorders.Add(border);
+            _selectedWordTexts.Add(border.Tag as string ?? "");
+        }
 
-                overlayGrid.Children.Add(highlightBorder);
-                overlayGrid.Children.Add(textBox);
+        /// <summary>
+        /// Finds the word Border element at the given point on the OcrOverlayCanvas using hit-testing.
+        /// </summary>
+        private System.Windows.Controls.Border FindWordBorderAtPoint(Point pt)
+        {
+            foreach (var child in OcrOverlayCanvas.Children)
+            {
+                if (child is System.Windows.Controls.Border border && border.Tag is string)
+                {
+                    double left = System.Windows.Controls.Canvas.GetLeft(border);
+                    double top = System.Windows.Controls.Canvas.GetTop(border);
+                    var rect = new Rect(left, top, border.Width, border.Height);
+                    if (rect.Contains(pt)) return border;
+                }
+            }
+            return null;
+        }
 
-                // Position on Canvas
-                System.Windows.Controls.Canvas.SetLeft(overlayGrid, scaledLeft);
-                System.Windows.Controls.Canvas.SetTop(overlayGrid, scaledTop);
-                OcrOverlayCanvas.Children.Add(overlayGrid);
+        /// <summary>
+        /// Deselects all currently selected OCR word overlays.
+        /// </summary>
+        private void DeselectAllOcrWords()
+        {
+            var transparent = System.Windows.Media.Brushes.Transparent;
+            foreach (var border in _selectedWordBorders)
+            {
+                border.Background = transparent;
+                border.BorderBrush = transparent;
+            }
+            _selectedWordBorders.Clear();
+            _selectedWordTexts.Clear();
+        }
+
+        /// <summary>
+        /// Selects all OCR word overlays on the canvas.
+        /// </summary>
+        private void SelectAllOcrWords()
+        {
+            _selectedWordBorders.Clear();
+            _selectedWordTexts.Clear();
+
+            foreach (var child in OcrOverlayCanvas.Children)
+            {
+                if (child is System.Windows.Controls.Border border && border.Tag is string text)
+                {
+                    border.Background = _ocrSelectedBg;
+                    border.BorderBrush = _ocrSelectedBorder;
+                    _selectedWordBorders.Add(border);
+                    _selectedWordTexts.Add(text);
+                }
+            }
+
+            if (_selectedWordBorders.Count > 0)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast($"Selected all {_selectedWordBorders.Count} words • Ctrl+C to copy");
             }
         }
     }

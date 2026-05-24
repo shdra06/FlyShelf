@@ -94,7 +94,7 @@ namespace FlyShelf
             var grey = new SolidColorBrush(
                 Color.FromRgb(36, 36, 36)); // #242424 — Windows 11 dark surface
             grey.Freeze();
-            this.Background = grey;
+            this.Background = Brushes.Transparent; // Maintain window chrome transparency for flawless fade compositing
             if (RootContent != null) RootContent.Background = grey;
         }
 

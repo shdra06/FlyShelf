@@ -38,12 +38,11 @@ namespace FlyShelf
                 _isAnimatingHide = false;
                 try
                 {
-                    RootContent.BeginAnimation(OpacityProperty, null);
-                    if (RootContent.RenderTransform is TransformGroup tg)
+                    // Cancel window-level opacity animation (used for fade-out)
+                    this.BeginAnimation(OpacityProperty, null);
+                    if (RootContent.RenderTransform is TranslateTransform tt)
                     {
-                        tg.Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, null);
-                        tg.Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, null);
-                        tg.Children[1].BeginAnimation(TranslateTransform.YProperty, null);
+                        tt.BeginAnimation(TranslateTransform.YProperty, null);
                     }
                 }
                 catch { }
@@ -89,34 +88,61 @@ namespace FlyShelf
                 rawX = workArea.Left + 16;
 
             double rawY = targetY - 16;
+            // Clamp bottom: window bottom edge must stay above the bottom of the work area
             if (rawY > workArea.Top + workArea.Height - 16)
                 rawY = workArea.Top + workArea.Height - 16;
-            
-            _lockedBottomEdge = rawY;
-            _isEdgeLocked = true;
 
-            this.Left = rawX;
             // PERF: Use hardcoded cached physical height on startup or already-resolved ActualHeight.
             // This completely eliminates dynamic spawning height calculations and spawning jumps!
             double realHeight = this.ActualHeight > 0 ? this.ActualHeight : 
                 (_lastActualHeight > 0 ? _lastActualHeight : 
                 (double.IsNaN(this.Height) ? FlyShelf.Classes.SettingsManager.Current.MiniFormHeight : this.Height));
-            this.Top = _lockedBottomEdge - realHeight - 20;
 
+            // SAFETY: If all height caches are empty/zero (e.g. very first summon before layout),
+            // use a sane default so the minBottomEdge clamp actually works.
+            if (realHeight <= 0 || double.IsNaN(realHeight))
+                realHeight = 400;
+
+            // CRITICAL FIX: Ensure the bottom edge is far enough down so the full window
+            // fits within the work area. Without this, shaking near the top of the screen
+            // pushes the window's Top above workArea.Top, rendering it half off-screen.
+            double minBottomEdge = workArea.Top + realHeight + 36; // 16px top margin + 20px bottom offset
+            // Also cap the bottom edge so the window doesn't extend below the work area
+            double maxBottomEdge = workArea.Top + workArea.Height - 16;
+            if (rawY < minBottomEdge)
+                rawY = minBottomEdge;
+            if (rawY > maxBottomEdge)
+                rawY = maxBottomEdge;
+
+            _lockedBottomEdge = rawY;
+            _isEdgeLocked = true;
+
+            // PERF: Set window-level opacity BEFORE moving to visible coords.
+            // This hides the entire window (including DWM Acrylic chrome) from the compositor,
+            // preventing the "ghost frame" — an empty grey rectangle that flashes before content renders.
             this.ShowActivated = stealFocus;
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
             {
-                // Start invisible — the show animation fade-in masks the initial UI layout
-                RootContent.Opacity = 0;
+                this.BeginAnimation(OpacityProperty, null);
+                this.Opacity = 0;
             }
             else
             {
+                this.BeginAnimation(OpacityProperty, null);
+                this.Opacity = 1.0;
                 RootContent.Opacity = 1.0;
                 RootContent.RenderTransform = null;
             }
+
             _isCurrentlySummoned = true;
             this.Left = rawX;
-            this.Top = _lockedBottomEdge - realHeight - 20;
+            double computedTop = _lockedBottomEdge - realHeight - 20;
+            // Full bounds clamp: keep entire window within the visible work area
+            if (computedTop < workArea.Top + 16)
+                computedTop = workArea.Top + 16;
+            if (computedTop + realHeight > workArea.Top + workArea.Height - 16)
+                computedTop = workArea.Top + workArea.Height - realHeight - 16;
+            this.Top = computedTop;
 
             // ═══ CRITICAL SCROLL RESET — must happen between Show() and Activate() ═══
             // ScrollToTop/ScrollToVerticalOffset are NO-OPS on a hidden window because the
@@ -148,11 +174,10 @@ namespace FlyShelf
             }
             catch { }
 
-            if (stealFocus) this.Activate();
-
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
             {
-                // Play the appear animation IMMEDIATELY — masks the initial UI layout/render.
+                // PERF: Start animation BEFORE Activate() to prevent OnActivated from
+                // overriding this.Opacity=0 and causing a ghost frame flash.
                 PlayShowAnimation();
             }
             else
@@ -160,6 +185,8 @@ namespace FlyShelf
                 RootContent.Opacity = 1.0;
                 RootContent.RenderTransform = null;
             }
+
+            if (stealFocus) this.Activate();
 
             // PERF: Removed completely redundant duplicate loaded-priority scroll-reset callback.
             // The exact same sequence is already handled natively by FocusFirstItemContainer() on Background priority.
@@ -178,17 +205,19 @@ namespace FlyShelf
                 Classes.Logger.LogAction("TELEMETRY", "ShowNearPosition Loaded callback executed (Layout rendering complete)");
                 if (this.ActualHeight > 0 && Math.Abs(this.ActualHeight - realHeight) > 1)
                 {
-                    // Push it 20px dynamically upward to completely avoid taskbar z-index clipping!
-                    this.Top = _lockedBottomEdge - this.ActualHeight - 20; 
+                    double newTop = _lockedBottomEdge - this.ActualHeight - 20;
                     
-                    if (this.Top < workArea.Top)
-                    {
-                        this.Top = workArea.Top + 20;
-                    }
+                    // Full bounds clamp: keep entire window within the visible work area
+                    if (newTop < workArea.Top + 16)
+                        newTop = workArea.Top + 16;
+                    if (newTop + this.ActualHeight > workArea.Top + workArea.Height - 16)
+                        newTop = workArea.Top + workArea.Height - this.ActualHeight - 16;
+                    
+                    this.Top = newTop;
                 }
 
                 // PERF: Do NOT resume mascot/GIF immediately — let the clipboard spawn lag-free first.
-                // Defer mascot + wallpaper GIF start by 1 second so old laptops don't stutter on spawn.
+                // Defer mascot + wallpaper GIF start to perfectly sync with the end of the 1000ms appear transition.
                 _mascotDelayTimer?.Stop();
                 if (_mascotDelayTimer == null)
                 {
@@ -212,12 +241,12 @@ namespace FlyShelf
                 }
                 _mascotDelayTimer.Start();
 
-                // Trigger visible high-quality render after 1s of opening
+                // Trigger visible high-quality render shortly after opening (500ms)
                 if (_scrollHighQualityTimer == null)
                 {
                     _scrollHighQualityTimer = new System.Windows.Threading.DispatcherTimer
                     {
-                        Interval = TimeSpan.FromMilliseconds(1000)
+                        Interval = TimeSpan.FromMilliseconds(500)
                     };
                     _scrollHighQualityTimer.Tick += (s, ev) =>
                     {
