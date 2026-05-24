@@ -87,7 +87,7 @@
                 
                 <!-- 0. DASHBOARD TAB -->
                 <Grid x:Name="DashboardGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
                         <StackPanel Margin="0,8,0,0">
 
                             <!-- TOP ROW: 3 Stat Cards  -->
@@ -377,11 +377,12 @@
                     
                     <ListView x:Name="HubListView" Grid.Row="2" ItemsSource="{Binding DroppedItems}" Background="Transparent" BorderThickness="0"
                               Margin="0,0,2,0"
+                              UseLayoutRounding="True" SnapsToDevicePixels="True"
                               ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                               ScrollViewer.CanContentScroll="True"
                               HorizontalContentAlignment="Stretch" 
                               VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling"
-                              VirtualizingPanel.ScrollUnit="Item" VirtualizingPanel.CacheLength="10,10" VirtualizingPanel.CacheLengthUnit="Item"
+                              VirtualizingPanel.ScrollUnit="Pixel" VirtualizingPanel.CacheLength="3,3" VirtualizingPanel.CacheLengthUnit="Page"
                               SelectionMode="Extended" SelectionChanged="HubListView_SelectionChanged">
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem">
@@ -454,7 +455,7 @@
 
                 <!-- 3. NETWORK SYNC TAB -->
                 <Grid x:Name="NetworkGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
                         <StackPanel>
                             <StackPanel Margin="0,0,0,6">
                                 <TextBlock Text="Wi-Fi Sync Server" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
@@ -1026,7 +1027,7 @@
 
                 <!-- 4. CORE SETTINGS TAB -->
                 <Grid x:Name="SettingsGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
                         <StackPanel>
                             <!-- Settings Meta -->
                             <StackPanel Margin="0,0,0,6">

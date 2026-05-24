@@ -116,10 +116,14 @@ namespace FlyShelf.Classes
                              ?? sv.Content as UIElement;
                 if (target != null)
                 {
+                    // Use DPI-aware scale to prevent blurry text on high-DPI displays
+                    double dpiScale = 1.0;
+                    try { dpiScale = VisualTreeHelper.GetDpi(sv).DpiScaleX; } catch { }
+
                     target.CacheMode = new BitmapCache
                     {
                         EnableClearType = true,
-                        RenderAtScale = 1.0
+                        RenderAtScale = dpiScale
                     };
                 }
             }
