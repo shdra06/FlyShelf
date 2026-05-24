@@ -27,12 +27,12 @@ namespace FlyShelf.Classes
         public static readonly ScrollProfile ClipboardProfile = new();
 
         // ═══ Natural Velocity Physics Constants (Clipboard Specs) ═══
-        private const double ScrollFriction      = 0.88;   // Per-frame decay (decreased slightly from 0.92 to reduce coast/momentum)
-        private const double MaxVelocity         = 90.0;   // Maximum speed cap in pixels/frame
+        private const double ScrollFriction      = 0.91;   // Per-frame decay (smooth luxurious glide for mouse wheel sweeps)
+        private const double MaxVelocity         = 45.0;   // Maximum speed cap in pixels/frame (reduced from 90.0 to force more drawing steps, stable scrolling, and prevent high-speed stroboscopic jumps)
         private const double TouchpadMul         = 0.33;   // Touchpad micro-step scale multiplier (decreased from 0.55 to reduce input gain)
         private const double MouseMul            = 0.45;   // Mouse wheel step scale multiplier (decreased from 0.65)
         private const double MinImpulse          = 0.3;    // Minimum impulse threshold for micro-scrolls
-        private const double MinVelocity         = 0.05;   // Velocity below this → complete stop (prevents sub-pixel crawl)
+        private const double MinVelocity         = 0.01;   // Decelerate down to extremely slow crawling before stopping (eliminates end-of-scroll start/stop jitter)
         private const double DeltaCapTouchpad    = 80.0;   // Clamps raw trackpad delta packets to absorb speed spikes
         private const double DeltaCapMouse       = 280.0;  // Clamps raw mouse delta packets
         private const double DirectionBrakeMul   = 0.2;    // Retained velocity on reversal (partial braking feels snappy)
@@ -228,27 +228,27 @@ namespace FlyShelf.Classes
                 if (rawAbs <= 5.0)
                 {
                     // Crawling: ultra-smooth, fine adjustments
-                    baseImpulse = 1.00;
+                    baseImpulse = 1.20;
                 }
                 else if (rawAbs <= 15.0)
                 {
                     // Micro-scroll: slow, controlled crawling
-                    baseImpulse = 2.50;
+                    baseImpulse = 2.60;
                 }
                 else if (rawAbs <= 32.0)
                 {
                     // Medium-slow scroll
-                    baseImpulse = 6.00;
+                    baseImpulse = 5.50;
                 }
                 else if (rawAbs <= 60.0)
                 {
                     // Medium swipe
-                    baseImpulse = 14.00;
+                    baseImpulse = 12.00;
                 }
                 else
                 {
                     // Fast flick
-                    baseImpulse = 28.00;
+                    baseImpulse = 22.00;
                 }
 
                 // Final impulse is scaled by the touchpad sensitivity dial TouchpadMul
@@ -349,7 +349,7 @@ namespace FlyShelf.Classes
 
                 // Exponential deceleration (friction decay)
                 double friction = state.IsTouchpad 
-                    ? 0.81  // Decays faster (decreased from 0.86) to reduce momentum coast
+                    ? 0.88  // Decays slower (increased from 0.81) to smoothly bridge the time gap between successive touchpad inputs, eliminating start-stop stutter.
                     : ScrollFriction; // Luxurious free coasting glide for mouse wheel sweeps
 
                 state.Velocity *= Math.Pow(friction, timeScale);
