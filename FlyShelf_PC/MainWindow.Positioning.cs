@@ -199,17 +199,21 @@ namespace FlyShelf
 
             if (stealFocus) this.Activate();
 
-            // Explicitly set DWM border color on each summon to prevent OS/MicaWPF composition resets
-            try
+            // Explicitly set DWM border color on each summon to prevent OS/MicaWPF composition resets.
+            // PERF: Defer to Background priority so it runs after the spawn animation is fully started and running.
+            Dispatcher.InvokeAsync(() =>
             {
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                if (hwnd != IntPtr.Zero)
+                try
                 {
-                    int cn = DWMWA_COLOR_DARK_GRAY;
-                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        int cn = DWMWA_COLOR_DARK_GRAY;
+                        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                    }
                 }
-            }
-            catch { }
+                catch { }
+            }, System.Windows.Threading.DispatcherPriority.Background);
 
             // CRITICAL: Start animation LAST — after ALL synchronous work (Activate, focus,
             // DWM border, layout) has completed. This ensures the animation clock starts

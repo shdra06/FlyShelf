@@ -25,17 +25,20 @@ namespace FlyShelf
                 .Any(w => w is FlyShelf.Windows.QuickLookWindow && w.IsActive)) return;
             this.Opacity = 1.0;
             
-            // Explicitly set DWM border color on activation to prevent DWM/MicaWindow from resetting it to system accent
-            try
+            // Defer DWM border color setting to Background priority to prevent blocking DWM frame synchronization on activation
+            Dispatcher.InvokeAsync(() =>
             {
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                if (hwnd != IntPtr.Zero)
+                try
                 {
-                    int cn = DWMWA_COLOR_DARK_GRAY;
-                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        int cn = DWMWA_COLOR_DARK_GRAY;
+                        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                    }
                 }
-            }
-            catch { }
+                catch { }
+            }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
 
@@ -97,17 +100,20 @@ namespace FlyShelf
             // Intentional no-op: clipboard stays visible when clicking elsewhere.
             // Dismiss only via explicit user action (close button, Alt+C, widget, desktop switch).
 
-            // Explicitly set DWM border color on deactivation to prevent DWM/MicaWindow from resetting it to system accent
-            try
+            // Defer DWM border color setting to Background priority to prevent blocking DWM frame synchronization on deactivation
+            Dispatcher.InvokeAsync(() =>
             {
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                if (hwnd != IntPtr.Zero)
+                try
                 {
-                    int cn = DWMWA_COLOR_DARK_GRAY;
-                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        int cn = DWMWA_COLOR_DARK_GRAY;
+                        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                    }
                 }
-            }
-            catch { }
+                catch { }
+            }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
         /// <summary>

@@ -96,6 +96,14 @@ namespace FlyShelf.Controls
                 if (width > 0) SpriteWidth = width;
                 if (height > 0) SpriteHeight = height;
 
+                // CRITICAL: Explicitly dispose old animator first to prevent CPU/decoding leak
+                try
+                {
+                    var oldAnimator = AnimationBehavior.GetAnimator(SpriteImage);
+                    oldAnimator?.Dispose();
+                }
+                catch { }
+
                 string ext = Path.GetExtension(filePath).ToLowerInvariant();
 
                 if (ext == ".gif")
@@ -187,6 +195,12 @@ namespace FlyShelf.Controls
             try
             {
                 Logger.LogAction("MASCOT", $"StopAnimation called (was: '{Path.GetFileName(_currentFilePath)}')");
+                var animator = AnimationBehavior.GetAnimator(SpriteImage);
+                animator?.Dispose();
+            }
+            catch { }
+            try
+            {
                 AnimationBehavior.SetSourceUri(SpriteImage, null);
                 SpriteImage.Source = null;
                 AnimatorRoot.Visibility = Visibility.Collapsed;

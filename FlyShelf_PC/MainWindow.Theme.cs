@@ -20,6 +20,12 @@ namespace FlyShelf
             try
             {
                 // Clear animated GIF source (XamlAnimatedGif holds onto frames)
+                try
+                {
+                    var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
+                    animator?.Dispose();
+                }
+                catch { }
                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
                 WallpaperBg.Source = null;
                 WallpaperBg.Visibility = Visibility.Collapsed;
@@ -173,6 +179,12 @@ namespace FlyShelf
             if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
             {
                 if (_currentLoadedWallpaperPath == "" && WallpaperBg.Visibility == Visibility.Collapsed) return;
+                try
+                {
+                    var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
+                    animator?.Dispose();
+                }
+                catch { }
                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
                 WallpaperBg.Source = null;
                 WallpaperBg.Visibility = Visibility.Collapsed;
@@ -197,6 +209,12 @@ namespace FlyShelf
                 if (isGif)
                 {
                     // ═══ LIVE WALLPAPER: Animated GIF via XamlAnimatedGif ═══
+                    try
+                    {
+                        var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
+                        animator?.Dispose();
+                    }
+                    catch { }
                     WallpaperBg.Source = null; // Clear static source
                     var uri = new Uri(path, UriKind.Absolute);
                     XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, uri);
@@ -218,6 +236,12 @@ namespace FlyShelf
                 else
                 {
                     // ═══ STATIC WALLPAPER: PNG/JPG via BitmapImage ═══
+                    try
+                    {
+                        var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
+                        animator?.Dispose();
+                    }
+                    catch { }
                     XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null); // Clear any GIF
 
                     var bmp = new System.Windows.Media.Imaging.BitmapImage();
@@ -283,6 +307,12 @@ namespace FlyShelf
             catch
             {
                 _currentLoadedWallpaperPath = "";
+                try
+                {
+                    var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
+                    animator?.Dispose();
+                }
+                catch { }
                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
                 WallpaperBg.Visibility = Visibility.Collapsed;
                 WallpaperThemeOverlay.Visibility = Visibility.Collapsed;

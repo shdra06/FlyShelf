@@ -498,6 +498,12 @@ namespace FlyShelf
                             {
                                 // STEP 1: Always stop/clear the old mascot + wallpaper first
                                 MascotIdle.StopAnimation();
+                                try
+                                {
+                                    var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
+                                    animator?.Dispose();
+                                }
+                                catch { }
                                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
                                 WallpaperBg.Source = null;
                                 WallpaperBg.Visibility = Visibility.Collapsed;
