@@ -27,10 +27,10 @@ namespace FlyShelf.Classes
         public static readonly ScrollProfile ClipboardProfile = new();
 
         // ═══ Natural Velocity Physics Constants (Clipboard Specs) ═══
-        private const double ScrollFriction      = 0.92;   // Per-frame decay (higher = longer free coasting)
+        private const double ScrollFriction      = 0.88;   // Per-frame decay (decreased slightly from 0.92 to reduce coast/momentum)
         private const double MaxVelocity         = 90.0;   // Maximum speed cap in pixels/frame
-        private const double TouchpadMul         = 0.55;   // Touchpad micro-step scale multiplier
-        private const double MouseMul            = 0.65;   // Mouse wheel step scale multiplier
+        private const double TouchpadMul         = 0.33;   // Touchpad micro-step scale multiplier (decreased from 0.55 to reduce input gain)
+        private const double MouseMul            = 0.45;   // Mouse wheel step scale multiplier (decreased from 0.65)
         private const double MinImpulse          = 0.3;    // Minimum impulse threshold for micro-scrolls
         private const double MinVelocity         = 0.05;   // Velocity below this → complete stop (prevents sub-pixel crawl)
         private const double DeltaCapTouchpad    = 80.0;   // Clamps raw trackpad delta packets to absorb speed spikes
@@ -354,7 +354,7 @@ namespace FlyShelf.Classes
 
                 // Exponential deceleration (friction decay)
                 double friction = state.IsTouchpad 
-                    ? 0.86  // Natural touchpad coast — smooth deceleration over ~400ms
+                    ? 0.81  // Decays faster (decreased from 0.86) to reduce momentum coast
                     : ScrollFriction; // Luxurious free coasting glide for mouse wheel sweeps
 
                 state.Velocity *= Math.Pow(friction, timeScale);

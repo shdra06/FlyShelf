@@ -118,88 +118,81 @@ namespace FlyShelf
             _isEdgeLocked = true;
 
             this.ShowActivated = stealFocus;
-            _isCurrentlySummoned = true;
 
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
             {
-                // PERF: Ghost frame elimination — two-phase show.
-                // Phase 1 (synchronous): Set Opacity=0 while window is STILL OFFSCREEN (-20000).
-                //   WPF defers Opacity changes to the render pass, but this.Left/Top trigger
-                //   IMMEDIATE Win32 SetWindowPos calls. If we move first, DWM renders the window
-                //   at visible coordinates with stale Opacity=1.0 — the "ghost frame" artifact.
+                // PERF: Ghost frame elimination via native Win32 per-window alpha.
+                //
+                // Problem: WPF defers this.Opacity changes to the render THREAD (async),
+                // but this.Left/Top trigger IMMEDIATE Win32 SetWindowPos calls on the UI thread.
+                // Without a synchronous alpha override, DWM renders the window at visible
+                // coordinates with stale Opacity=1.0 — the "ghost frame" artifact.
+                //
+                // Fix: SetLayeredWindowAttributes is a SYNCHRONOUS Win32 call that immediately
+                // sets the per-window alpha to 0. DWM picks this up before the next SetWindowPos
+                // from this.Left, so the window is invisible during the move. WPF's animation
+                // then takes over opacity management via BeginAnimation, which internally calls
+                // SetLayeredWindowAttributes on each render frame.
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                    if ((exStyle & WS_EX_LAYERED) == 0)
+                        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+                    SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA); // alpha=0, synchronous
+                }
+
+                // Set WPF opacity to match — WPF's render thread will manage from here
                 this.BeginAnimation(OpacityProperty, null);
                 this.Opacity = 0;
-
-                // Phase 2 (deferred): Move + animate at Loaded priority (6).
-                //   Loaded priority runs AFTER WPF's Render pass (priority 7), guaranteeing
-                //   the Opacity=0 has been committed to the compositor before the window moves.
-                //   When SetWindowPos fires from this.Left assignment, DWM sees Opacity=0 → invisible.
-                //   The fade-in animation then smoothly reveals the window from 0→1.
-                Dispatcher.InvokeAsync(() =>
-                {
-                    if (!_isCurrentlySummoned) return; // Dismissed before we could show
-
-                    this.Left = rawX;
-                    double computedTop = _lockedBottomEdge - realHeight - 20;
-                    if (computedTop < workArea.Top + 16)
-                        computedTop = workArea.Top + 16;
-                    if (computedTop + realHeight > workArea.Top + workArea.Height - 16)
-                        computedTop = workArea.Top + workArea.Height - realHeight - 16;
-                    this.Top = computedTop;
-
-                    // Scroll reset — visual tree is live (HideWindowInternal only moves offscreen)
-                    try
-                    {
-                        Classes.SmoothScroll.ResetScrollState(GetShelfScrollViewer());
-                        if (ShelfListView.Items.Count > 0)
-                            ShelfListView.SelectedIndex = 0;
-                        var sv = GetShelfScrollViewer();
-                        if (sv != null && sv.VerticalOffset > 0)
-                        {
-                            sv.ScrollToVerticalOffset(0);
-                            sv.ScrollToTop();
-                            sv.InvalidateArrange();
-                        }
-                    }
-                    catch { }
-
-                    PlayShowAnimation();
-                    if (stealFocus) this.Activate();
-                }, System.Windows.Threading.DispatcherPriority.Loaded);
             }
             else
             {
-                // Non-animated path: move immediately (no ghost frame risk since opacity is already 1)
                 this.BeginAnimation(OpacityProperty, null);
                 this.Opacity = 1.0;
                 RootContent.Opacity = 1.0;
                 RootContent.RenderTransform = null;
-
-                this.Left = rawX;
-                double computedTop = _lockedBottomEdge - realHeight - 20;
-                if (computedTop < workArea.Top + 16)
-                    computedTop = workArea.Top + 16;
-                if (computedTop + realHeight > workArea.Top + workArea.Height - 16)
-                    computedTop = workArea.Top + workArea.Height - realHeight - 16;
-                this.Top = computedTop;
-
-                try
-                {
-                    Classes.SmoothScroll.ResetScrollState(GetShelfScrollViewer());
-                    if (ShelfListView.Items.Count > 0)
-                        ShelfListView.SelectedIndex = 0;
-                    var sv = GetShelfScrollViewer();
-                    if (sv != null && sv.VerticalOffset > 0)
-                    {
-                        sv.ScrollToVerticalOffset(0);
-                        sv.ScrollToTop();
-                        sv.InvalidateArrange();
-                    }
-                }
-                catch { }
-
-                if (stealFocus) this.Activate();
             }
+
+            _isCurrentlySummoned = true;
+            this.Left = rawX;
+            double computedTop = _lockedBottomEdge - realHeight - 20;
+            // Full bounds clamp: keep entire window within the visible work area
+            if (computedTop < workArea.Top + 16)
+                computedTop = workArea.Top + 16;
+            if (computedTop + realHeight > workArea.Top + workArea.Height - 16)
+                computedTop = workArea.Top + workArea.Height - realHeight - 16;
+            this.Top = computedTop;
+
+            // ═══ SCROLL RESET ═══
+            try
+            {
+                Classes.SmoothScroll.ResetScrollState(GetShelfScrollViewer());
+                if (ShelfListView.Items.Count > 0)
+                    ShelfListView.SelectedIndex = 0;
+                var sv = GetShelfScrollViewer();
+                if (sv != null && sv.VerticalOffset > 0)
+                {
+                    sv.ScrollToVerticalOffset(0);
+                    sv.ScrollToTop();
+                    sv.InvalidateArrange();
+                }
+            }
+            catch { }
+
+            if (Classes.SettingsManager.Current.EnableSummonAnimations)
+            {
+                // Start animation BEFORE Activate() — the _isShowAnimating flag prevents
+                // OnActivated from overriding this.Opacity=0 with this.Opacity=1.0.
+                PlayShowAnimation();
+            }
+            else
+            {
+                RootContent.Opacity = 1.0;
+                RootContent.RenderTransform = null;
+            }
+
+            if (stealFocus) this.Activate();
 
             // PERF: Cache DWM border attribute — only set once, never changes
             if (!_borderColorSet)

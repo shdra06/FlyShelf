@@ -16,30 +16,21 @@ namespace FlyShelf.Classes
     /// </summary>
     public static class SmoothScrollPCApp
     {
-        // ═══ iOS-Inspired Exponential Decay Physics ═══
-        // v(t) = v₀ × e^(-t/τ)  where τ is the time constant in seconds
-        // ═══ iOS-Inspired Exponential Decay Physics ═══
-        // v(t) = v₀ × e^(-t/τ)  where τ is the time constant in seconds
-        private const double TimeConstantTrackpad = 0.200;    // Tighter desktop feel (200ms coast) — snappier than iOS 325ms
-        private const double TimeConstantMouse    = 0.160;    // Chrome-inspired: precise wheel with quick settle
-        private const double MaxVelocity          = 6000.0;   // pixels/second hard cap
-        private const double MinVelocity          = 0.5;      // pixels/second → complete stop
-        private const double DirectionBrakeFactor = 0.15;     // Retain 15% velocity on direction reversal
+        // ═══ VS Code target-based animation constants ═══
+        private const double TargetDurationMs     = 125.0;    // VS Code uses exactly 125ms duration
+        private const double PreAdvanceMs         = 10.0;     // VS Code pretends animation already started for 10ms for instant feel
 
         // ═══ Input Scaling ═══
-        // Touchpad deltas are treated as direct pixel displacement (like Chrome).
-        // Converted to velocity via: impulse = delta × scale / τ
-        private const double TouchpadScale        = 0.50;     // Sensitivity multiplier for trackpad deltas
+        private const double TouchpadScale        = 0.60;     // Sensitivity multiplier for trackpad deltas (flick & drag)
         private const double MouseStepPx          = 96.0;     // Pixels per mouse wheel notch (standard Windows)
-        private const double MouseImpulseBoost    = 2.0;      // Step distance → velocity burst multiplier
+        private const double MouseImpulseBoost    = 1.5;      // Mouse wheel step multiplier
         private const double DeltaCapTouchpad     = 60.0;     // Clamp raw trackpad delta to absorb driver spikes
         private const double DeltaCapMouse        = 360.0;    // Clamp raw mouse delta
 
         // ═══ Progressive Touchpad Acceleration ═══
-        // Slow drags → 1:1 linear. Fast swipes → up to 2× multiplier.
-        private const double ProgressiveFloor     = 0.50;     // Minimum multiplier (gentle drag)
-        private const double ProgressiveCeiling   = 1.00;     // Maximum multiplier (fast swipe)
-        private const double ProgressiveThreshold = 40.0;     // Delta magnitude for full acceleration
+        private const double ProgressiveFloor     = 0.50;
+        private const double ProgressiveCeiling   = 1.00;
+        private const double ProgressiveThreshold = 40.0;
 
         private static readonly Dictionary<ScrollViewer, ScrollState> _states = new();
         private static readonly Dictionary<DependencyObject, ScrollViewer> _ancestorCache = new();
@@ -92,52 +83,27 @@ namespace FlyShelf.Classes
 
         private class ScrollState
         {
-            public double Velocity;         // pixels/second (positive = scrolling down)
             public bool IsAnimating;
             public bool IsTouchpad;
-            public long LastFrameTick;       // Environment.TickCount64 of last render frame
+            
+            // VS Code target-based animation state
+            public double FromOffset;
+            public double ToOffset;
+            public long StartTimeMs;
+            public double DurationMs;
+            public double ViewportHeight;
+
+            public double PendingDelta;      // Coalesced target displacement
             public long LastInputTime;       // Environment.TickCount64 of last input event
-            public double PendingImpulse;    // Coalesced velocity impulse — drained once per render frame
-            public double TrueOffset;        // Sub-pixel precise scroll position (physics layer)
         }
 
-        // ═══ GPU Static Canvas Caching ═══
+        // ═══ GPU Caching — Disabled ═══
+        // BitmapCache degrades ClearType text quality during scroll, causing blurry text.
+        // With 3-page virtualization cache + UseLayoutRounding + SnapsToDevicePixels,
+        // items don't recycle during scroll, so BitmapCache is unnecessary.
 
-        private static void EnableStaticCanvas(ScrollViewer sv)
-        {
-            try
-            {
-                var target = FindDescendant<VirtualizingStackPanel>(sv) as UIElement
-                             ?? sv.Content as UIElement;
-                if (target != null)
-                {
-                    // Use DPI-aware scale to prevent blurry text on high-DPI displays
-                    double dpiScale = 1.0;
-                    try { dpiScale = VisualTreeHelper.GetDpi(sv).DpiScaleX; } catch { }
-
-                    target.CacheMode = new BitmapCache
-                    {
-                        EnableClearType = true,
-                        RenderAtScale = dpiScale
-                    };
-                }
-            }
-            catch { }
-        }
-
-        private static void DisableStaticCanvas(ScrollViewer sv)
-        {
-            try
-            {
-                var target = FindDescendant<VirtualizingStackPanel>(sv) as UIElement
-                             ?? sv.Content as UIElement;
-                if (target != null)
-                {
-                    target.CacheMode = null;
-                }
-            }
-            catch { }
-        }
+        private static void EnableStaticCanvas(ScrollViewer sv) { }
+        private static void DisableStaticCanvas(ScrollViewer sv) { }
 
         // ═══ Public API ═══
 
@@ -233,41 +199,35 @@ namespace FlyShelf.Classes
             state.IsTouchpad = isTouchpad;
             state.LastInputTime = now;
 
-            double impulse; // pixels/second to add to velocity
+            double displacement;
 
             if (isTouchpad)
             {
-                // ═══ Progressive Touchpad — Direct Pixel Displacement ═══
-                // Treat touchpad deltas as pixel offsets (like Chrome), not raw velocity.
-                // Convert displacement → velocity via: v = displacement / τ
-                // This ensures the exponential decay integrates to exactly the intended distance.
+                // Treat touchpad deltas as raw pixel displacement
                 double rawAbs = Math.Abs(delta);
                 double capped = Math.Min(rawAbs, DeltaCapTouchpad);
                 double speedRatio = Math.Min(capped / ProgressiveThreshold, 1.0);
                 double progressiveMul = ProgressiveFloor + (ProgressiveCeiling - ProgressiveFloor) * speedRatio;
 
-                double displacement = capped * progressiveMul * TouchpadScale;
-                impulse = -Math.Sign(delta) * displacement / TimeConstantTrackpad;
+                displacement = -Math.Sign(delta) * capped * progressiveMul * TouchpadScale;
             }
             else
             {
-                // ═══ Mouse Wheel: Discrete Notch → Velocity Burst ═══
+                // Mouse wheel notches
                 double notches = delta / 120.0;
                 double capped = Math.Sign(notches) * Math.Min(Math.Abs(notches), DeltaCapMouse / 120.0);
-                impulse = -capped * MouseStepPx * MouseImpulseBoost;
+                displacement = -capped * MouseStepPx * MouseImpulseBoost;
             }
 
-            // ═══ COALESCE: Accumulate impulse for per-frame drain ═══
-            // Precision touchpads fire 200-500 Hz bursts between render frames.
-            // Accumulating and draining once per frame prevents velocity compounding.
-            state.PendingImpulse += impulse;
+            // Coalesce incoming scroll deltas to prevent micro-stuttering
+            state.PendingDelta += displacement;
 
             if (!state.IsAnimating)
             {
-                state.IsAnimating = true;
-                state.LastFrameTick = Environment.TickCount64;
-                state.TrueOffset = sv.VerticalOffset;
-                EnableStaticCanvas(sv);
+                // Seed starting values
+                state.FromOffset = sv.VerticalOffset;
+                state.ToOffset = sv.VerticalOffset;
+                state.ViewportHeight = sv.ViewportHeight;
             }
 
             if (!_renderingAttached)
@@ -278,7 +238,7 @@ namespace FlyShelf.Classes
             }
         }
 
-        // ═══ Render Loop — iOS Exponential Decay Physics ═══
+        // ═══ Render Loop ═══
 
         private static void OnRendering(object? sender, EventArgs e)
         {
@@ -292,62 +252,64 @@ namespace FlyShelf.Classes
             {
                 if (!_states.TryGetValue(sv, out var state)) continue;
 
+                // ═══ DRAIN COALESCED INPUT ═══
+                if (state.PendingDelta != 0)
+                {
+                    double pending = state.PendingDelta;
+                    state.PendingDelta = 0;
+
+                    if (!state.IsAnimating)
+                    {
+                        // Start a new VS Code smooth scrolling operation
+                        state.FromOffset = sv.VerticalOffset;
+                        state.ToOffset = Math.Clamp(state.FromOffset + pending, 0.0, sv.ScrollableHeight);
+                        state.StartTimeMs = now - (long)PreAdvanceMs;
+                        state.DurationMs = TargetDurationMs + PreAdvanceMs;
+                        state.ViewportHeight = sv.ViewportHeight;
+                        state.IsAnimating = true;
+                    }
+                    else
+                    {
+                        // Retarget ongoing animation:
+                        // Calculate current animated position using the old animation at the current time
+                        long elapsed = now - state.StartTimeMs;
+                        double completion = state.DurationMs > 0 ? elapsed / state.DurationMs : 1.0;
+                        double currentOffset = GetPositionAtCompletion(state.FromOffset, state.ToOffset, state.ViewportHeight, completion);
+
+                        state.FromOffset = currentOffset;
+                        state.ToOffset = Math.Clamp(state.ToOffset + pending, 0.0, sv.ScrollableHeight);
+                        state.StartTimeMs = now - (long)PreAdvanceMs;
+                        state.DurationMs = TargetDurationMs + PreAdvanceMs;
+                        state.ViewportHeight = sv.ViewportHeight;
+                    }
+                }
+
                 if (!state.IsAnimating)
                 {
                     completed.Add(sv);
                     continue;
                 }
 
-                // ═══ DRAIN COALESCED INPUT ═══
-                if (state.PendingImpulse != 0)
+                // ═══ Calculate Animation Position ═══
+                long elapsedAnim = now - state.StartTimeMs;
+                double animCompletion = state.DurationMs > 0 ? (double)elapsedAnim / state.DurationMs : 1.0;
+
+                if (animCompletion >= 1.0)
                 {
-                    double pending = state.PendingImpulse;
-                    state.PendingImpulse = 0;
-
-                    // Direction reversal: partially brake previous velocity for snappy response
-                    if (state.Velocity != 0 && Math.Sign(state.Velocity) != Math.Sign(pending))
-                    {
-                        state.Velocity *= DirectionBrakeFactor;
-                    }
-
-                    state.Velocity += pending;
-                    state.Velocity = Math.Clamp(state.Velocity, -MaxVelocity, MaxVelocity);
-                }
-
-                // ═══ Frame-Time Compensation ═══
-                long elapsedMs = now - state.LastFrameTick;
-                if (elapsedMs <= 0) elapsedMs = 1;
-                double deltaTime = elapsedMs / 1000.0; // Convert to seconds
-                deltaTime = Math.Min(deltaTime, 0.050); // Cap at 50ms (20 FPS floor) to prevent huge jumps
-                state.LastFrameTick = now;
-
-                // ═══ Integrate Position ═══
-                // s += v × Δt  (basic Euler integration with real time)
-                state.TrueOffset += state.Velocity * deltaTime;
-                state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
-
-                // ═══ PIXEL-SNAP: Render at integer pixel for crisp text ═══
-                double snappedOffset = Math.Round(state.TrueOffset);
-                sv.ScrollToVerticalOffset(snappedOffset);
-
-                // ═══ iOS Exponential Decay ═══
-                // v(t+Δt) = v(t) × e^(-Δt/τ)
-                // τ = time constant: higher = longer coast
-                double tau = state.IsTouchpad ? TimeConstantTrackpad : TimeConstantMouse;
-                state.Velocity *= Math.Exp(-deltaTime / tau);
-
-                // ═══ Stop Conditions ═══
-                bool atBound = (state.TrueOffset <= 0 && state.Velocity < 0) ||
-                               (state.TrueOffset >= sv.ScrollableHeight && state.Velocity > 0);
-
-                if (Math.Abs(state.Velocity) < MinVelocity || atBound)
-                {
-                    state.Velocity = 0.0;
+                    // Snap exactly to final target
+                    double finalTarget = Math.Clamp(state.ToOffset, 0.0, sv.ScrollableHeight);
+                    sv.ScrollToVerticalOffset(Math.Round(finalTarget));
+                    
                     state.IsAnimating = false;
                     completed.Add(sv);
                 }
                 else
                 {
+                    double nextOffset = GetPositionAtCompletion(state.FromOffset, state.ToOffset, state.ViewportHeight, animCompletion);
+                    nextOffset = Math.Clamp(nextOffset, 0.0, sv.ScrollableHeight);
+                    
+                    // Snap to integer pixels to match VS Code (eliminates sub-pixel text shimmering)
+                    sv.ScrollToVerticalOffset(Math.Round(nextOffset));
                     anyAnimating = true;
                 }
             }
@@ -364,6 +326,52 @@ namespace FlyShelf.Classes
                 _renderingAttached = false;
                 RestoreUIThreadPriority();
             }
+        }
+
+        // ═══ VS Code Mathematical Interpolation with Huge Jump Composed Easing ═══
+
+        private static double GetPositionAtCompletion(double from, double to, double viewportSize, double completion)
+        {
+            completion = Math.Clamp(completion, 0.0, 1.0);
+            double delta = Math.Abs(from - to);
+            
+            // VS Code optimization for giant jumps: if delta > 2.5 * viewportSize, compose two easeOutCubic curves
+            if (viewportSize > 0 && delta > 2.5 * viewportSize)
+            {
+                double stop1, stop2;
+                if (from < to)
+                {
+                    // Scroll to 75% of the viewportSize
+                    stop1 = from + 0.75 * viewportSize;
+                    stop2 = to - 0.75 * viewportSize;
+                }
+                else
+                {
+                    stop1 = from - 0.75 * viewportSize;
+                    stop2 = to + 0.75 * viewportSize;
+                }
+
+                double cut = 0.33;
+                if (completion < cut)
+                {
+                    double localCompletion = completion / cut;
+                    return from + (stop1 - from) * EaseOutCubic(localCompletion);
+                }
+                else
+                {
+                    double localCompletion = (completion - cut) / (1.0 - cut);
+                    return stop2 + (to - stop2) * EaseOutCubic(localCompletion);
+                }
+            }
+            
+            // Standard easeOutCubic interpolation
+            return from + (to - from) * EaseOutCubic(completion);
+        }
+
+        private static double EaseOutCubic(double t)
+        {
+            t = Math.Clamp(t, 0.0, 1.0);
+            return 1.0 - Math.Pow(1.0 - t, 3);
         }
 
         // ═══ Thread Priority Management ═══

@@ -19,6 +19,7 @@ namespace FlyShelf
         {
             base.OnActivated(e);
             if (_isAnimatingHide) return;
+            if (_isShowAnimating) return; // Don't override opacity during show animation
             // Guard: don't fight QuickLook for focus
             if (System.Windows.Application.Current.Windows.OfType<Window>()
                 .Any(w => w is FlyShelf.Windows.QuickLookWindow && w.IsActive)) return;
@@ -156,6 +157,7 @@ namespace FlyShelf
         }
         private bool _isPersistentMode = false;
         private bool _isAnimatingHide = false;
+        private bool _isShowAnimating = false;
 
         /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
         // PERF: Cached animation objects — avoid GC pressure from allocating new ones on every show
@@ -166,12 +168,20 @@ namespace FlyShelf
 
         private void PlayShowAnimation()
         {
+            _isShowAnimating = true;
             RootContent.RenderTransform = new TranslateTransform(0, 16);
 
             // PERF: Animate window-level opacity (not RootContent) so the entire window
             // including DWM Acrylic chrome fades in together — eliminates ghost frame.
             this.BeginAnimation(OpacityProperty, _fadeIn);
             RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, _slideIn);
+
+            // Clear the show-animating flag after the fade completes
+            // so OnActivated can set Opacity=1.0 normally on future activations.
+            Dispatcher.InvokeAsync(() =>
+            {
+                _isShowAnimating = false;
+            }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
         /// <summary>Fast dismiss animation on inner content, then hides window.</summary>
