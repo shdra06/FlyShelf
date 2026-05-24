@@ -43,26 +43,16 @@ namespace FlyShelf
         }
 
         /// <summary>
-        /// Restores Mica/Acrylic blur — ONLY for "mica" display mode.
-        /// Clears all wallpaper layers, then enables the system acrylic backdrop.
+        /// Restores standard fallback solid background — system Acrylic/Mica blur is completely disabled
+        /// to ensure instant, lag-free summoning/spawning on all machines.
         /// </summary>
         private void RestoreMicaBlur()
         {
             ClearWallpaperLayers();
 
-            // ═══ RESTORE MICA/ACRYLIC BLUR ═══
-            if (Classes.SettingsManager.Current.EnableBlurBehind && Classes.NativeMethods.ShouldUseBlur())
-            {
-                this.Background = Brushes.Transparent;
-                if (RootContent != null)
-                    RootContent.Background = new SolidColorBrush(
-                        Color.FromArgb(1, 0, 0, 0)); // Near-transparent for hit testing
-                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Acrylic;
-            }
-            else
-            {
-                ApplyPopupBackground(); // Solid gradient fallback when blur is disabled/unsupported
-            }
+            // ═══ SYSTEM BLUR COMPLETELY DISABLED FOR HIGH PERFORMANCE ═══
+            this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+            ApplyPopupBackground();
 
             // Reset selection accent to default (violet)
             ResetSelectionAccent();

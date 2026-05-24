@@ -96,6 +96,18 @@ namespace FlyShelf
         {
             // Intentional no-op: clipboard stays visible when clicking elsewhere.
             // Dismiss only via explicit user action (close button, Alt+C, widget, desktop switch).
+
+            // Explicitly set DWM border color on deactivation to prevent DWM/MicaWindow from resetting it to system accent
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    int cn = DWMWA_COLOR_DARK_GRAY;
+                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                }
+            }
+            catch { }
         }
 
         /// <summary>
@@ -171,17 +183,24 @@ namespace FlyShelf
             _isShowAnimating = true;
             RootContent.RenderTransform = new TranslateTransform(0, 16);
 
-            // PERF: Animate window-level opacity (not RootContent) so the entire window
-            // including DWM Acrylic chrome fades in together — eliminates ghost frame.
-            this.BeginAnimation(OpacityProperty, _fadeIn);
-            RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, _slideIn);
-
-            // Clear the show-animating flag after the fade completes
-            // so OnActivated can set Opacity=1.0 normally on future activations.
-            Dispatcher.InvokeAsync(() =>
+            // Create local DoubleAnimation for fade-in to safely wire up a Completed handler
+            // that ONLY clears _isShowAnimating once the 200ms duration has fully elapsed.
+            var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, _showAnimDuration)
             {
+                EasingFunction = _showEaseOut
+            };
+
+            fadeIn.Completed += (s, e) =>
+            {
+                this.BeginAnimation(OpacityProperty, null); // Clear animation clock
+                this.Opacity = 1.0;
                 _isShowAnimating = false;
-            }, System.Windows.Threading.DispatcherPriority.Background);
+            };
+
+            // PERF: Animate window-level opacity (not RootContent) so the entire window
+            // fades in together — eliminates ghost frame.
+            this.BeginAnimation(OpacityProperty, fadeIn);
+            RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, _slideIn);
         }
 
         /// <summary>Fast dismiss animation on inner content, then hides window.</summary>
@@ -210,7 +229,7 @@ namespace FlyShelf
                 {
                     HideWindowInternal();
                     this.BeginAnimation(OpacityProperty, null);
-                    this.Opacity = 1;
+                    this.Opacity = 0; // Maintain absolute transparency offscreen
                     RootContent.Opacity = 1;
                     RootContent.RenderTransform = null;
                 }
@@ -247,7 +266,7 @@ namespace FlyShelf
                     HideWindowInternal();
                     // Clear window-level animation and reset for next show
                     this.BeginAnimation(OpacityProperty, null);
-                    this.Opacity = 1;
+                    this.Opacity = 0; // Maintain absolute transparency offscreen
                     RootContent.RenderTransform = null;
                 }
                 catch { }

@@ -456,6 +456,24 @@ public static partial class NativeMethods
                 // Override active window border color to prevent red accent bleeding
                 int borderColor = DWMWA_COLOR_DARK_GRAY;
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
+
+                // Safe deferred check to override MicaWPF async theme/backdrop change delays
+                System.Threading.Tasks.Task.Delay(50).ContinueWith(_ =>
+                {
+                    window.Dispatcher.InvokeAsync(() =>
+                    {
+                        try
+                        {
+                            var h = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                            if (h != IntPtr.Zero)
+                            {
+                                int bc = DWMWA_COLOR_DARK_GRAY;
+                                DwmSetWindowAttribute(h, DWMWA_BORDER_COLOR, ref bc, sizeof(int));
+                            }
+                        }
+                        catch { }
+                    });
+                });
             }
         }
         catch { }
@@ -488,12 +506,16 @@ public static partial class NativeMethods
             if (rootGrid != null) rootGrid.Background = bgBrush;
         }
 
-        // Hook window activation to prevent Windows 11 DWM from resetting our custom dark gray border to active system accent
-        window.Activated -= Window_Activated_BorderResetHandler;
-        window.Activated += Window_Activated_BorderResetHandler;
+        // Hook window activation, deactivation and state changes to prevent Windows 11 DWM from resetting our custom dark gray border
+        window.Activated -= Window_BorderResetHandler;
+        window.Activated += Window_BorderResetHandler;
+        window.Deactivated -= Window_BorderResetHandler;
+        window.Deactivated += Window_BorderResetHandler;
+        window.StateChanged -= Window_BorderResetHandler;
+        window.StateChanged += Window_BorderResetHandler;
     }
 
-    private static void Window_Activated_BorderResetHandler(object? sender, EventArgs e)
+    private static void Window_BorderResetHandler(object? sender, System.EventArgs e)
     {
         if (sender is System.Windows.Window window)
         {

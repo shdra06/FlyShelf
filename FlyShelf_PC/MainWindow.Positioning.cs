@@ -194,13 +194,17 @@ namespace FlyShelf
 
             if (stealFocus) this.Activate();
 
-            // PERF: Cache DWM border attribute — only set once, never changes
-            if (!_borderColorSet)
+            // Explicitly set DWM border color on each summon to prevent OS/MicaWPF composition resets
+            try
             {
-                int cn = DWMWA_COLOR_DARK_GRAY;
-                DwmSetWindowAttribute(new System.Windows.Interop.WindowInteropHelper(this).Handle, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
-                _borderColorSet = true;
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    int cn = DWMWA_COLOR_DARK_GRAY;
+                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                }
             }
+            catch { }
 
             // Use Dispatcher callback to adjust position after the first layout pass completes.
             Dispatcher.InvokeAsync(() =>

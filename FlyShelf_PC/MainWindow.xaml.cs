@@ -111,7 +111,11 @@ namespace FlyShelf
         {
             base.OnSourceInitialized(e);
             var helper = new WindowInteropHelper(this);
-            SetWindowLong(helper.Handle, GWL_EXSTYLE, GetWindowLong(helper.Handle, GWL_EXSTYLE) | WS_EX_NOACTIVATE);
+            if (helper.Handle != IntPtr.Zero)
+            {
+                int exStyle = GetWindowLong(helper.Handle, GWL_EXSTYLE);
+                SetWindowLong(helper.Handle, GWL_EXSTYLE, exStyle | WS_EX_NOACTIVATE | WS_EX_LAYERED);
+            }
         }
 
         public MainWindow()
@@ -325,6 +329,21 @@ namespace FlyShelf
                 });
             }
 
+            // Hook state changes to prevent DWM border leakage on minimize/maximize/restore/etc.
+            this.StateChanged += (s, ev) =>
+            {
+                try
+                {
+                    var hwnd = new WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        int cn = DWMWA_COLOR_DARK_GRAY;
+                        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                    }
+                }
+                catch { }
+            };
+
             // Launch the taskbar-embedded widget
             try
             {
@@ -345,18 +364,10 @@ namespace FlyShelf
             // Apply wallpaper is now handled by the deferred theme block at ApplicationIdle
             // (no more redundant early load that gets overwritten by theme init)
 
-            // Blur-off or system transparency disabled: solid dark gradient fallback
-            if (!Classes.SettingsManager.Current.EnableBlurBehind || !Classes.NativeMethods.ShouldUseBlur())
-            {
-                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
-                System.Threading.Tasks.Task.Delay(150).ContinueWith(_ =>
-                {
-                    Dispatcher.InvokeAsync(() =>
-                    {
-                        ApplyPopupBackground();
-                    });
-                });
-            }
+            // ═══ INITIALIZE HIGH-PERFORMANCE SOLID BACKGROUND ═══
+            // Completely disable DWM Acrylic backdrops to prevent summoning lag/ghost frames.
+            this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+            ApplyPopupBackground();
 
             // Pre-initialize the heavy Hub Window in the background when the system is truly idle
             // Priority: SystemIdle (lowest) — runs AFTER theme init to avoid competing for UI thread
@@ -558,6 +569,20 @@ namespace FlyShelf
                                 }
                             }
                             catch (Exception ex) { Classes.Logger.LogAction("THEME", $"Theme switch error: {ex.Message}"); }
+                            finally
+                            {
+                                // Re-apply DWM border color override after backdrop/theme changes to prevent system accent color leakage
+                                try
+                                {
+                                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                                    if (hwnd != IntPtr.Zero)
+                                    {
+                                        int cn = DWMWA_COLOR_DARK_GRAY;
+                                        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                                    }
+                                }
+                                catch { }
+                            }
                         });
                     };
                     Classes.ThemeManager.Instance.ActiveThemeChanged += _themeChangedHandler;
@@ -605,6 +630,18 @@ namespace FlyShelf
                         Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
                         RestoreMicaBlur();
                     }
+
+                    // Re-apply DWM border color override after startup theme setup
+                    try
+                    {
+                        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                        if (hwnd != IntPtr.Zero)
+                        {
+                            int cn = DWMWA_COLOR_DARK_GRAY;
+                            DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                        }
+                    }
+                    catch { }
 
                     // ═══ START MASCOT IDLE ANIMATION ═══
                     // Must happen AFTER _mascotAnimationRequestedHandler is wired (line above).

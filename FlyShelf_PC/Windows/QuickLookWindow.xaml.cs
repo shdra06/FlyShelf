@@ -56,6 +56,9 @@ namespace FlyShelf.Windows
                     {
                         int darkValue = isLight ? 0 : 1;
                         FlyShelf.Classes.NativeMethods.DwmSetWindowAttribute(hwnd, 20, ref darkValue, sizeof(int));
+
+                        int cn = FlyShelf.Classes.NativeMethods.DWMWA_COLOR_DARK_GRAY;
+                        FlyShelf.Classes.NativeMethods.DwmSetWindowAttribute(hwnd, FlyShelf.Classes.NativeMethods.DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                     }
                 }
                 catch { }

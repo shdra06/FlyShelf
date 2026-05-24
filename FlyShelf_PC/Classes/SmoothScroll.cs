@@ -107,41 +107,12 @@ namespace FlyShelf.Classes
 
         private static void EnableStaticCanvas(ScrollViewer sv)
         {
-            try
-            {
-                // Target the VirtualizingStackPanel directly — it holds all realized items.
-                // Caching this panel means the GPU rasterizes the entire item area once,
-                // then translates the texture during scroll. No per-frame text re-rendering.
-                var target = FindDescendant<VirtualizingStackPanel>(sv) as UIElement
-                             ?? sv.Content as UIElement;
-                if (target != null)
-                {
-                    // Use DPI-aware scale to prevent blurry text on high-DPI displays
-                    double dpiScale = 1.0;
-                    try { dpiScale = VisualTreeHelper.GetDpi(sv).DpiScaleX; } catch { }
-
-                    target.CacheMode = new BitmapCache
-                    {
-                        EnableClearType = true,
-                        RenderAtScale = dpiScale
-                    };
-                }
-            }
-            catch { }
+            // GPU BitmapCache is disabled to completely eliminate blurry text during scrolling.
         }
 
         private static void DisableStaticCanvas(ScrollViewer sv)
         {
-            try
-            {
-                var target = FindDescendant<VirtualizingStackPanel>(sv) as UIElement
-                             ?? sv.Content as UIElement;
-                if (target != null)
-                {
-                    target.CacheMode = null;
-                }
-            }
-            catch { }
+            // GPU BitmapCache is disabled to completely eliminate blurry text during scrolling.
         }
 
         /// <summary>
@@ -248,16 +219,40 @@ namespace FlyShelf.Classes
 
             if (state.IsTouchpad)
             {
-                // Progressive velocity scaling for touchpad flick acceleration
-                double capped = Math.Sign(rawDelta) * Math.Min(Math.Abs(rawDelta), DeltaCapTouchpad);
-                double speedFactor = Math.Min(Math.Abs(rawDelta) / 40.0, 1.0);
-                double progressiveMul = 0.30 + (0.45 * speedFactor); // Ranges 0.30 (gentle drag) to 0.75 (fast swipe)
-                impulse = capped * progressiveMul * TouchpadMul;
+                // Quantized range-mapped touchpad scrolling: 
+                // Classifies touchpad raw displacement into 5 discrete motion ranges to provide 
+                // highly consistent, controlled, and buttery-smooth movement, avoiding erratic delta spikes.
+                double rawAbs = Math.Abs(rawDelta);
+                double baseImpulse;
 
-                if (Math.Abs(impulse) < MinImpulse && impulse != 0)
+                if (rawAbs <= 5.0)
                 {
-                    impulse = Math.Sign(impulse) * MinImpulse;
+                    // Crawling: ultra-smooth, fine adjustments
+                    baseImpulse = 1.00;
                 }
+                else if (rawAbs <= 15.0)
+                {
+                    // Micro-scroll: slow, controlled crawling
+                    baseImpulse = 2.50;
+                }
+                else if (rawAbs <= 32.0)
+                {
+                    // Medium-slow scroll
+                    baseImpulse = 6.00;
+                }
+                else if (rawAbs <= 60.0)
+                {
+                    // Medium swipe
+                    baseImpulse = 14.00;
+                }
+                else
+                {
+                    // Fast flick
+                    baseImpulse = 28.00;
+                }
+
+                // Final impulse is scaled by the touchpad sensitivity dial TouchpadMul
+                impulse = Math.Sign(rawDelta) * baseImpulse * TouchpadMul;
             }
             else
             {
