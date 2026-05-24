@@ -102,15 +102,21 @@ namespace FlyShelf.Classes
             public long LastFrameTick;
             public long LastInputTime;
             public double PendingImpulse;  // Coalesced impulse — drained once per render frame
+            public double TrueOffset;      // Sub-pixel precise position (never sent to ScrollViewer)
         }
 
         private static void EnableStaticCanvas(ScrollViewer sv)
         {
             try
             {
-                if (sv.Content is UIElement element)
+                // Target the VirtualizingStackPanel directly — it holds all realized items.
+                // Caching this panel means the GPU rasterizes the entire item area once,
+                // then translates the texture during scroll. No per-frame text re-rendering.
+                var target = FindDescendant<VirtualizingStackPanel>(sv) as UIElement
+                             ?? sv.Content as UIElement;
+                if (target != null)
                 {
-                    element.CacheMode = new BitmapCache
+                    target.CacheMode = new BitmapCache
                     {
                         EnableClearType = true,
                         RenderAtScale = 1.0
@@ -124,9 +130,11 @@ namespace FlyShelf.Classes
         {
             try
             {
-                if (sv.Content is UIElement element)
+                var target = FindDescendant<VirtualizingStackPanel>(sv) as UIElement
+                             ?? sv.Content as UIElement;
+                if (target != null)
                 {
-                    element.CacheMode = null;
+                    target.CacheMode = null;
                 }
             }
             catch { }
@@ -264,6 +272,7 @@ namespace FlyShelf.Classes
             {
                 state.IsAnimating = true;
                 state.LastFrameTick = Environment.TickCount64;
+                state.TrueOffset = sv.VerticalOffset;  // Seed from current real position
                 EnableStaticCanvas(sv);
             }
 
@@ -329,9 +338,15 @@ namespace FlyShelf.Classes
 
                 // Apply velocity vector with frame-time compensation
                 double displacement = state.Velocity * timeScale;
-                double newOffset = sv.VerticalOffset + displacement;
-                newOffset = Math.Clamp(newOffset, 0, sv.ScrollableHeight);
-                sv.ScrollToVerticalOffset(newOffset);
+                state.TrueOffset += displacement;
+                state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
+
+                // ═══ PIXEL-SNAP: Render at integer pixel to eliminate sub-pixel text shimmer ═══
+                // TrueOffset tracks the real fractional position for smooth physics,
+                // but the ScrollViewer always receives a whole-pixel offset so ClearType
+                // glyph weights never fluctuate mid-scroll.
+                double snappedOffset = Math.Round(state.TrueOffset);
+                sv.ScrollToVerticalOffset(snappedOffset);
 
                 // Exponential deceleration (friction decay)
                 double friction = state.IsTouchpad 
@@ -341,8 +356,8 @@ namespace FlyShelf.Classes
                 state.Velocity *= Math.Pow(friction, timeScale);
 
                 // Stop if at boundary or velocity is negligible
-                bool atBound = (newOffset <= 0 && state.Velocity < 0) ||
-                               (newOffset >= sv.ScrollableHeight && state.Velocity > 0);
+                bool atBound = (state.TrueOffset <= 0 && state.Velocity < 0) ||
+                               (state.TrueOffset >= sv.ScrollableHeight && state.Velocity > 0);
 
                 if (Math.Abs(state.Velocity) < MinVelocity || atBound)
                 {
@@ -408,6 +423,22 @@ namespace FlyShelf.Classes
                 current = VisualTreeHelper.GetParent(current);
             }
             return false;
+        }
+        /// <summary>
+        /// Walks the visual tree downward to find the first descendant of type T.
+        /// Used to locate the VirtualizingStackPanel inside a ScrollViewer for GPU caching.
+        /// </summary>
+        private static T? FindDescendant<T>(DependencyObject parent) where T : DependencyObject
+        {
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                var child = VisualTreeHelper.GetChild(parent, i);
+                if (child is T result) return result;
+                var found = FindDescendant<T>(child);
+                if (found != null) return found;
+            }
+            return null;
         }
     }
 }

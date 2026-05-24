@@ -117,79 +117,89 @@ namespace FlyShelf
             _lockedBottomEdge = rawY;
             _isEdgeLocked = true;
 
-            // PERF: Set window-level opacity BEFORE moving to visible coords.
-            // This hides the entire window (including DWM Acrylic chrome) from the compositor,
-            // preventing the "ghost frame" — an empty grey rectangle that flashes before content renders.
             this.ShowActivated = stealFocus;
+            _isCurrentlySummoned = true;
+
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
             {
+                // PERF: Ghost frame elimination — two-phase show.
+                // Phase 1 (synchronous): Set Opacity=0 while window is STILL OFFSCREEN (-20000).
+                //   WPF defers Opacity changes to the render pass, but this.Left/Top trigger
+                //   IMMEDIATE Win32 SetWindowPos calls. If we move first, DWM renders the window
+                //   at visible coordinates with stale Opacity=1.0 — the "ghost frame" artifact.
                 this.BeginAnimation(OpacityProperty, null);
                 this.Opacity = 0;
+
+                // Phase 2 (deferred): Move + animate at Loaded priority (6).
+                //   Loaded priority runs AFTER WPF's Render pass (priority 7), guaranteeing
+                //   the Opacity=0 has been committed to the compositor before the window moves.
+                //   When SetWindowPos fires from this.Left assignment, DWM sees Opacity=0 → invisible.
+                //   The fade-in animation then smoothly reveals the window from 0→1.
+                Dispatcher.InvokeAsync(() =>
+                {
+                    if (!_isCurrentlySummoned) return; // Dismissed before we could show
+
+                    this.Left = rawX;
+                    double computedTop = _lockedBottomEdge - realHeight - 20;
+                    if (computedTop < workArea.Top + 16)
+                        computedTop = workArea.Top + 16;
+                    if (computedTop + realHeight > workArea.Top + workArea.Height - 16)
+                        computedTop = workArea.Top + workArea.Height - realHeight - 16;
+                    this.Top = computedTop;
+
+                    // Scroll reset — visual tree is live (HideWindowInternal only moves offscreen)
+                    try
+                    {
+                        Classes.SmoothScroll.ResetScrollState(GetShelfScrollViewer());
+                        if (ShelfListView.Items.Count > 0)
+                            ShelfListView.SelectedIndex = 0;
+                        var sv = GetShelfScrollViewer();
+                        if (sv != null && sv.VerticalOffset > 0)
+                        {
+                            sv.ScrollToVerticalOffset(0);
+                            sv.ScrollToTop();
+                            sv.InvalidateArrange();
+                        }
+                    }
+                    catch { }
+
+                    PlayShowAnimation();
+                    if (stealFocus) this.Activate();
+                }, System.Windows.Threading.DispatcherPriority.Loaded);
             }
             else
             {
+                // Non-animated path: move immediately (no ghost frame risk since opacity is already 1)
                 this.BeginAnimation(OpacityProperty, null);
                 this.Opacity = 1.0;
                 RootContent.Opacity = 1.0;
                 RootContent.RenderTransform = null;
-            }
 
-            _isCurrentlySummoned = true;
-            this.Left = rawX;
-            double computedTop = _lockedBottomEdge - realHeight - 20;
-            // Full bounds clamp: keep entire window within the visible work area
-            if (computedTop < workArea.Top + 16)
-                computedTop = workArea.Top + 16;
-            if (computedTop + realHeight > workArea.Top + workArea.Height - 16)
-                computedTop = workArea.Top + workArea.Height - realHeight - 16;
-            this.Top = computedTop;
+                this.Left = rawX;
+                double computedTop = _lockedBottomEdge - realHeight - 20;
+                if (computedTop < workArea.Top + 16)
+                    computedTop = workArea.Top + 16;
+                if (computedTop + realHeight > workArea.Top + workArea.Height - 16)
+                    computedTop = workArea.Top + workArea.Height - realHeight - 16;
+                this.Top = computedTop;
 
-            // ═══ CRITICAL SCROLL RESET — must happen between Show() and Activate() ═══
-            // ScrollToTop/ScrollToVerticalOffset are NO-OPS on a hidden window because the
-            // ScrollViewer's visual tree is not rendered and ignores offset commands.
-            // After Show(), the visual tree is live — we MUST force the layout and reset
-            // the scroll offset BEFORE Activate() fires the Activated event, which triggers
-            // FocusFirstItemContainer(). If the offset is still stale when FocusFirstItemContainer
-            // runs, ContainerFromIndex(0) returns null (index 0 is off-viewport), the else-branch
-            // calls ShelfListView.Focus(), and WPF's Selector.OnGotKeyboardFocus auto-scrolls
-            // to an unpredictable position.
-            try
-            {
-                // Clear any stale SmoothScroll animation target that would fight our reset
-                Classes.SmoothScroll.ResetScrollState(GetShelfScrollViewer());
-
-                if (ShelfListView.Items.Count > 0)
-                    ShelfListView.SelectedIndex = 0;
-
-                // PERF: Only reset scroll offsets if the view was actually scrolled (> 0).
-                // Unconditionally calling scroll-to-top dirties the layout tree and forces
-                // expensive WPF layout invalidation loops during the spawn transition.
-                var sv = GetShelfScrollViewer();
-                if (sv != null && sv.VerticalOffset > 0)
+                try
                 {
-                    sv.ScrollToVerticalOffset(0);
-                    sv.ScrollToTop();
-                    sv.InvalidateArrange();
+                    Classes.SmoothScroll.ResetScrollState(GetShelfScrollViewer());
+                    if (ShelfListView.Items.Count > 0)
+                        ShelfListView.SelectedIndex = 0;
+                    var sv = GetShelfScrollViewer();
+                    if (sv != null && sv.VerticalOffset > 0)
+                    {
+                        sv.ScrollToVerticalOffset(0);
+                        sv.ScrollToTop();
+                        sv.InvalidateArrange();
+                    }
                 }
-            }
-            catch { }
+                catch { }
 
-            if (Classes.SettingsManager.Current.EnableSummonAnimations)
-            {
-                // PERF: Start animation BEFORE Activate() to prevent OnActivated from
-                // overriding this.Opacity=0 and causing a ghost frame flash.
-                PlayShowAnimation();
+                if (stealFocus) this.Activate();
             }
-            else
-            {
-                RootContent.Opacity = 1.0;
-                RootContent.RenderTransform = null;
-            }
-
-            if (stealFocus) this.Activate();
-
-            // PERF: Removed completely redundant duplicate loaded-priority scroll-reset callback.
-            // The exact same sequence is already handled natively by FocusFirstItemContainer() on Background priority.
 
             // PERF: Cache DWM border attribute — only set once, never changes
             if (!_borderColorSet)
