@@ -1,0 +1,1 @@
+﻿"            </tray:NotifyIcon.Menu>\n        </tray:NotifyIcon>\n        \n        <StackPanel Grid.Row=\"0\" x:Name=\"HeaderAndFiltersStack\">\n            <Grid x:Name=\"TopHeaderGrid\" Margin=\"14,14,14,8\" Background=\"#01000000\" MouseLeftButtonDown=\"Header_MouseLeftButtonDown\">"

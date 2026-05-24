@@ -1,4 +1,4 @@
-// ---------------------------------------------------------------
+﻿// ---------------------------------------------------------------
 // NetworkSyncServer.Advanced — File Download, Pairing & Injection
 // Split from NetworkSyncServer.Advanced.cs for modularity
 // ---------------------------------------------------------------
@@ -232,7 +232,7 @@ namespace FlyShelf.Classes
                     catch { }
                     finally { MainWindow.SetWritingClipboard(false); }
                     
-                    FlyShelf.Windows.ToastWindow.ShowToast($"Saved: {System.IO.Path.GetFileName(filePath)} via {transferMethod} ðŸ“¥");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Saved: {System.IO.Path.GetFileName(filePath)} via {transferMethod} 📥");
                     // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
                     NotifyClipboardChanged("File", System.IO.Path.GetFileName(filePath));
                 }
@@ -389,7 +389,7 @@ namespace FlyShelf.Classes
                     catch { }
                     finally { MainWindow.SetWritingClipboard(false); }
                     
-                    FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport}! ðŸ“¥");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport}! 📥");
                     // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
                     NotifyClipboardChanged(clip.ItemType.ToString(), capturedText.Length > 40 ? capturedText.Substring(0, 40) : capturedText);
                 }

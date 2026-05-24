@@ -112,13 +112,13 @@ namespace FlyShelf.Classes
         public int ClipboardRetentionDays { get => _clipboardRetentionDays; set => SetProperty(ref _clipboardRetentionDays, value); }
 
         // ═══ Mascot Theme System ═══
-        private string _activeThemeName = "";
+        private string _activeThemeName = "FlyShelf Default";
         public string ActiveThemeName { get => _activeThemeName; set => SetProperty(ref _activeThemeName, value); }
 
         /// <summary>
         /// Controls clipboard background mode: "mica" (system blur), "desktop" (Windows wallpaper), or "theme" (custom theme).
         /// </summary>
-        private string _themeDisplayMode = "mica";
+        private string _themeDisplayMode = "theme";
         public string ThemeDisplayMode { get => _themeDisplayMode; set => SetProperty(ref _themeDisplayMode, value); }
 
         private bool _themeAnimationsEnabled = true;

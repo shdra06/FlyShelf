@@ -346,7 +346,7 @@ namespace FlyShelf
         public void ToggleMainClipboard()
         {
             // If the overlay is already visible and in Mode 1, hide it
-            if (this.IsVisible && _viewModel.CurrentMode == 1 && !_isAnimatingHide)
+            if (_isCurrentlySummoned && _viewModel.CurrentMode == 1 && !_isAnimatingHide)
             {
                 AnimateAndHide();
             }

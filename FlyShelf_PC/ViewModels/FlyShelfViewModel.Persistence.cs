@@ -351,30 +351,7 @@ namespace FlyShelf.ViewModels
             if (item != null) item.OpenSandbox();
         }
 
-        private string AutoFormatCode(string raw)
-        {
-            try
-            {
-                var lines = raw.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                var formatted = new System.Text.StringBuilder();
-                int indentLevel = 0;
-                string tab = "    ";
 
-                foreach (var line in lines)
-                {
-                    string cleanLine = line.Trim();
-                    if (string.IsNullOrEmpty(cleanLine)) continue;
-                    
-                    if (cleanLine.StartsWith("}")) indentLevel = Math.Max(0, indentLevel - 1);
-                    
-                    formatted.AppendLine(string.Concat(Enumerable.Repeat(tab, indentLevel)) + cleanLine);
-                    
-                    if (cleanLine.EndsWith("{")) indentLevel++;
-                }
-                return formatted.ToString().TrimEnd();
-            }
-            catch { return raw; }
-        }
 
         private static string FormatFileSize(long bytes)
         {

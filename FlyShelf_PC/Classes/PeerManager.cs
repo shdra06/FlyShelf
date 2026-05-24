@@ -16,10 +16,10 @@ using FlyShelf.ViewModels;
 namespace FlyShelf.Classes
 {
     /// <summary>
-    /// v5 PeerManager â€” Pure P2P engine.
+    /// v5 PeerManager — Pure P2P engine.
     /// 
     /// Firebase = phone book ONLY. Stores device URLs, never file data.
-    /// Flow: Discover â†’ Handshake â†’ Confirm tick â†’ Talk direct. URLs persist in Firebase as a "phone book".
+    /// Flow: Discover → Handshake → Confirm tick → Talk direct. URLs persist in Firebase as a "phone book".
     /// All text/files flow device-to-device via LAN or Cloudflare. 5s heartbeat.
     /// </summary>
     public partial class PeerManager
@@ -35,11 +35,11 @@ namespace FlyShelf.Classes
         private DateTime _lastUrlRequestTime = DateTime.MinValue; // Throttle urlRequest to max once per 60s
         private readonly HashSet<string> _prunedGhosts = new(StringComparer.OrdinalIgnoreCase);
 
-        // â•â•â• Local URL cache â€” survives app restart â•â•â•
+        // ═ ═ ═ Local URL cache — survives app restart ═ ═ ═
         private static readonly string _urlCacheFile = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "peer_urls.json");
 
-        // â•â•â• Config â•â•â•
+        // ═ ═ ═ Config ═ ═ ═
         private const int HEARTBEAT_MS = 5_000;            // 5s heartbeat (fast LAN detection)
         private const int HEARTBEAT_TIMEOUT_MS = 4_000;    // 4s timeout per ping
         private const int MAX_FAILURES = 3;                // 3 misses = dead (quick failover)
@@ -47,12 +47,12 @@ namespace FlyShelf.Classes
         private const int HANDSHAKE_TIMEOUT_LAN_MS = 5_000;   // 5s for LAN
         private const int HANDSHAKE_TIMEOUT_CF_MS = 8_000;    // 8s for Cloudflare tunnels
 
-        // â•â•â• Events â•â•â•
+        // ═ ═ ═ Events ═ ═ ═
         public event Action<string, string>? PeerConnected;     // (deviceId, transport)
         public event Action<string>? PeerDisconnected;          // (deviceId)
         public event Action<string, string>? TransportSwitched; // (deviceId, newTransport)
 
-        // â•â•â• Shared HttpClient â€” connection pooling eliminates TLS re-handshake per request â•â•â•
+        // ═ ═ ═ Shared HttpClient — connection pooling eliminates TLS re-handshake per request ═ ═ ═
         // Critical for Cloudflare: each new HttpClient = new TLS handshake (~800ms via tunnel).
         // Reusing connections saves that on every subsequent request.
         private static readonly SocketsHttpHandler _sharedHandler = new()
@@ -80,14 +80,14 @@ namespace FlyShelf.Classes
             _myPairingKey = DevicePairingManager.EnsurePairingKey();
             if (string.IsNullOrEmpty(_myPairingKey))
             {
-                Logger.LogAction("PEER", "No pairing key â€” PeerManager idle.");
+                Logger.LogAction("PEER", "No pairing key — PeerManager idle.");
                 return;
             }
 
             Logger.LogAction("PEER", $"v5 PeerManager starting [device={_myDeviceId}]");
             _cts = new CancellationTokenSource();
 
-            // â•â•â• FIX 1: Re-publish our own URLs to Firebase on startup â•â•â•
+            // ═ ═ ═ FIX 1: Re-publish our own URLs to Firebase on startup ═ ═ ═
             // Ensures peers can always find us, even if ConfirmAndCleanup deleted them last session.
             _ = Task.Run(async () =>
             {
@@ -99,13 +99,13 @@ namespace FlyShelf.Classes
                     if (!string.IsNullOrEmpty(globalUrl) || !string.IsNullOrEmpty(localUrl))
                     {
                         await CloudDiscoveryManager.PushTunnelUrl(globalUrl ?? "", true, localUrl, forceWrite: true);
-                        Logger.LogAction("PEER", $"ðŸ“¡ Startup: re-published URLs to Firebase (LAN={localUrl} CF={globalUrl})");
+                        Logger.LogAction("PEER", $"📡 Startup: re-published URLs to Firebase (LAN={localUrl} CF={globalUrl})");
                     }
                 }
                 catch (Exception ex) { Logger.LogAction("PEER", $"Startup URL publish error: {ex.Message}"); }
             });
 
-            // â•â•â• FIX 2: Try cached URLs first before Firebase â•â•â•
+            // ═ ═ ═ FIX 2: Try cached URLs first before Firebase ═ ═ ═
             // If we have locally cached URLs from last session, try them directly.
             // This provides instant reconnection even if Firebase URLs were cleaned.
             await TryCachedUrlsFirst();
@@ -115,7 +115,7 @@ namespace FlyShelf.Classes
             _ = Task.Run(() => HeartbeatLoop(_cts.Token));
             _ = Task.Run(() => DiscoveryLoop(_cts.Token));
 
-            Logger.LogAction("PEER", $"PeerManager running â€” {AliveCount}/{_peers.Count} peer(s) alive");
+            Logger.LogAction("PEER", $"PeerManager running — {AliveCount}/{_peers.Count} peer(s) alive");
         }
 
         /// <summary>
@@ -133,7 +133,7 @@ namespace FlyShelf.Classes
                 var cache = JsonSerializer.Deserialize<Dictionary<string, CachedPeerUrls>>(json);
                 if (cache == null || cache.Count == 0) return;
 
-                Logger.LogAction("PEER", $"ðŸ“‹ Loaded {cache.Count} cached peer URL(s) from last session");
+                Logger.LogAction("PEER", $"📋 Loaded {cache.Count} cached peer URL(s) from last session");
 
                 foreach (var (devId, urls) in cache)
                 {
@@ -150,7 +150,7 @@ namespace FlyShelf.Classes
 
                     if (!peer.IsAlive)
                     {
-                        Logger.LogAction("PEER", $"ðŸ“‹ Trying cached URLs for {peer.DeviceName}: LAN={peer.LanUrl} CF={peer.CloudflareUrl}");
+                        Logger.LogAction("PEER", $"📋 Trying cached URLs for {peer.DeviceName}: LAN={peer.LanUrl} CF={peer.CloudflareUrl}");
                         await Handshake(peer);
                     }
                 }
@@ -201,7 +201,7 @@ namespace FlyShelf.Classes
             Logger.LogAction("PEER", "PeerManager stopped.");
         }
 
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═
 
         private async Task DiscoverAndHandshake()
         {
@@ -237,7 +237,7 @@ namespace FlyShelf.Classes
                         // Only log + delete once per unknown device to avoid spam
                         if (_prunedGhosts.Add(devId))
                         {
-                            Logger.LogAction("PEER", $"â­ï¸ Skipping unpaired device in Firebase: {name} ({devId}) â€” not in local paired list");
+                            Logger.LogAction("PEER", $"⭐ Skipping unpaired device in Firebase: {name} ({devId}) — not in local paired list");
 
                             // Actively delete the ghost entry from Firebase
                             _ = Task.Run(async () =>
@@ -247,7 +247,7 @@ namespace FlyShelf.Classes
                                     string deleteUrl = await CloudDiscoveryManager.AuthUrlPublic($"active_devices/{_myPairingKey}/{prop.Name}.json");
                                     using var delClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
                                     await delClient.DeleteAsync(deleteUrl);
-                                    Logger.LogAction("PEER", $"ðŸ—‘ï¸ Deleted ghost device from Firebase: {name} ({prop.Name})");
+                                    Logger.LogAction("PEER", $"🗑️ Deleted ghost device from Firebase: {name} ({prop.Name})");
                                 }
                                 catch (Exception ex)
                                 {
@@ -284,7 +284,7 @@ namespace FlyShelf.Classes
                         if (!string.IsNullOrEmpty(lan)) existing.LanUrl = lan;
                         if (!string.IsNullOrEmpty(cf) && cf != existing.CloudflareUrl)
                         {
-                            Logger.LogAction("PEER", $"{name}: Cloudflare URL changed â†’ {cf}");
+                            Logger.LogAction("PEER", $"{name}: Cloudflare URL changed → {cf}");
                             existing.CloudflareUrl = cf;
                             if (existing.Transport == "Cloudflare") existing.ActiveUrl = cf;
                         }
@@ -304,8 +304,8 @@ namespace FlyShelf.Classes
                 var tasks = _peers.Values.Where(p => !p.IsAlive).Select(Handshake);
                 await Task.WhenAll(tasks);
 
-                // â•â•â• FIX 3: Send urlRequest whenever we have dead peers â•â•â•
-                // Don't gate on _urlRequestSent â€” re-send every 60s if peers are still dead.
+                // ═ ═ ═ FIX 3: Send urlRequest whenever we have dead peers ═ ═ ═
+                // Don't gate on _urlRequestSent — re-send every 60s if peers are still dead.
                 // This ensures recovery even if the first request was missed.
                 bool hasDeadPeers2 = _peers.Values.Any(p => !p.IsAlive);
                 if (hasDeadPeers2 && AliveCount == 0 && totalPeers > 0
@@ -341,8 +341,8 @@ namespace FlyShelf.Classes
             {
                 using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
 
-                // â•â•â• FIX 4: Write urlRequest under EACH dead peer's path â•â•â•
-                // Previously wrote under our OWN device path â€” the other PC's SSE watcher
+                // ═ ═ ═ FIX 4: Write urlRequest under EACH dead peer's path ═ ═ ═
+                // Previously wrote under our OWN device path — the other PC's SSE watcher
                 // was watching for changes to their OWN path, not ours. This fixes the signal.
                 foreach (var peer in _peers.Values.Where(p => !p.IsAlive))
                 {
@@ -371,7 +371,7 @@ namespace FlyShelf.Classes
 
                 _urlRequestSent = true;
                 _lastUrlRequestTime = DateTime.UtcNow;
-                Logger.LogAction("PEER", "ðŸ“¡ URL request signal sent + our URLs re-published");
+                Logger.LogAction("PEER", "📡 URL request signal sent + our URLs re-published");
             }
             catch (Exception ex)
             {
@@ -387,7 +387,7 @@ namespace FlyShelf.Classes
         {
             if (requestingDeviceId == _myDeviceId) return;
 
-            Logger.LogAction("PEER", $"ðŸ“¡ {requestingDeviceId} is requesting URLs â€” re-publishing ours...");
+            Logger.LogAction("PEER", $"📡 {requestingDeviceId} is requesting URLs — re-publishing ours...");
 
             string globalUrl = CloudDiscoveryManager.CachedGlobalUrl;
             string localUrl = CloudDiscoveryManager.CachedLocalUrl;
@@ -395,7 +395,7 @@ namespace FlyShelf.Classes
             {
                 _urlCleanedFromFirebase = false;
                 await CloudDiscoveryManager.PushTunnelUrl(globalUrl ?? "", true, localUrl, forceWrite: true);
-                Logger.LogAction("PEER", $"ðŸ“¡ Re-published encrypted URLs for {requestingDeviceId}");
+                Logger.LogAction("PEER", $"📡 Re-published encrypted URLs for {requestingDeviceId}");
             }
         }
 
@@ -433,7 +433,7 @@ namespace FlyShelf.Classes
                         return;
                 }
 
-                Logger.LogAction("PEER", $"â­ï¸ Skipping unpaired device URL update: {deviceName} ({deviceId})");
+                Logger.LogAction("PEER", $"⭐ Skipping unpaired device URL update: {deviceName} ({deviceId})");
                 // Actively delete the ghost entry from Firebase
                 _ = Task.Run(async () =>
                 {
@@ -442,14 +442,14 @@ namespace FlyShelf.Classes
                         string deleteUrl = await CloudDiscoveryManager.AuthUrlPublic($"active_devices/{_myPairingKey}/{deviceId}.json");
                         using var delClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
                         await delClient.DeleteAsync(deleteUrl);
-                        Logger.LogAction("PEER", $"ðŸ—‘ï¸ Deleted ghost device from Firebase: {deviceName} ({deviceId})");
+                        Logger.LogAction("PEER", $"🗑️ Deleted ghost device from Firebase: {deviceName} ({deviceId})");
                     }
                     catch { }
                 });
                 return;
             }
 
-            Logger.LogAction("PEER", $"ðŸ“¡ Target URL update for {deviceName}: LAN={lan} CF={cf}");
+            Logger.LogAction("PEER", $"📡 Target URL update for {deviceName}: LAN={lan} CF={cf}");
 
             PeerConnection peer;
             if (_peers.TryGetValue(deviceId, out var existing))

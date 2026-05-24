@@ -46,11 +46,11 @@ namespace FlyShelf.Classes
             finally { try { res.Close(); } catch { } }
         }
 
-        // â•â•â• RESPONSE CACHE: Avoid re-serializing on rapid polls â•â•â•
+        // ═ ═ ═ RESPONSE CACHE: Avoid re-serializing on rapid polls ═ ═ ═
         private byte[]? _cachedSyncJson = null;
         private long _cachedSyncTimestamp = 0;
         private int _cachedItemCount = 0;
-        private const int SYNC_CACHE_TTL_MS = 500; // Cache for 500ms â€” fast invalidation for real-time sync
+        private const int SYNC_CACHE_TTL_MS = 500; // Cache for 500ms — fast invalidation for real-time sync
 
         private void ServeClipboardData(HttpListenerResponse res)
         {
@@ -95,7 +95,7 @@ namespace FlyShelf.Classes
                         SourceDeviceType = x.Extension == "MOBILE" ? "Mobile" : "PC"
                     };
                     })
-                    // Sort by freshness â€” bumped items get DateCopied = Now, so they appear first
+                    // Sort by freshness — bumped items get DateCopied = Now, so they appear first
                     .OrderByDescending(x => x.Timestamp)
                     .ToList();
 
@@ -153,11 +153,11 @@ namespace FlyShelf.Classes
                 }
                 catch
                 {
-                    // Not valid JSON â€” treat entire body as plain text (legacy sender)
+                    // Not valid JSON — treat entire body as plain text (legacy sender)
                 }
             }
 
-            // Respond instantly â€” don't make Android wait for UI processing
+            // Respond instantly — don't make Android wait for UI processing
             res.StatusCode = 200;
             res.Close();
 
@@ -258,7 +258,7 @@ namespace FlyShelf.Classes
                 catch { }
                 finally { MainWindow.SetWritingClipboard(false); }
                 
-                FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport.transport}! ðŸ“±");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport.transport}! 📱");
                 // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
                 NotifyClipboardChanged(clip.ItemType.ToString(), capturedText.Length > 40 ? capturedText.Substring(0, 40) : capturedText);
             });
@@ -315,7 +315,7 @@ namespace FlyShelf.Classes
                 else
                 {
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {rawName} from {sourceDevice}... ðŸ“¥");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Receiving {rawName} from {sourceDevice}... 📥");
                     });
                 }
 
@@ -487,7 +487,7 @@ namespace FlyShelf.Classes
                 {
                     _lastArchiveToastTime = DateTime.Now;
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"Extracting batch data... ðŸ“¦");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Extracting batch data... 📦");
                     });
                 }
 
@@ -528,9 +528,9 @@ namespace FlyShelf.Classes
                             var fileList = new System.Collections.Specialized.StringCollection();
                             lock (batchList) { foreach (var f in batchList) fileList.Add(f); }
                             System.Windows.Clipboard.SetFileDropList(fileList);
-                            FlyShelf.Windows.ToastWindow.ShowToast($"ðŸ“‹ {rawName} copied to clipboard");
+                            FlyShelf.Windows.ToastWindow.ShowToast($"📋 {rawName} copied to clipboard");
                             
-                            // Insert proper file entry into FlyShelf (clickable â†’ opens in default app)
+                            // Insert proper file entry into FlyShelf (clickable → opens in default app)
                             var clip = new ClipboardItem
                             {
                                 RawContent = finalPath,
@@ -565,7 +565,7 @@ namespace FlyShelf.Classes
             }
         }
 
-        // â”€â”€â”€ Relay Upload: Android uploads file â†’ PC saves + pushes Cloudflare URL to Firebase â”€â”€â”€
+        // ─── Relay Upload: Android uploads file → PC saves + pushes Cloudflare URL to Firebase ───
         private async Task HandleRelayUpload(HttpListenerRequest req, HttpListenerResponse res)
         {
             try
@@ -674,7 +674,7 @@ namespace FlyShelf.Classes
 
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast($"ðŸ“¡ Relayed {rawName} ({sizeStr}) from {senderDevice}");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"📡 Relayed {rawName} ({sizeStr}) from {senderDevice}");
                 });
 
                 res.StatusCode = 200;

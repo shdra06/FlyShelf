@@ -27,6 +27,8 @@ namespace FlyShelf.Classes
         private static Timer? _compactionTimer;
         private static readonly object _lock = new object();
         private static int _journalEntryCount = 0;
+        private static volatile bool _isHistoryFullyLoaded = false;
+        private static int _maxLoadedItemCount = 0;
 
         /// <summary>Maximum items to retain in history. Oldest items are evicted beyond this cap.</summary>
         private const int MAX_HISTORY_ITEMS = 500;
@@ -91,7 +93,7 @@ namespace FlyShelf.Classes
                                     break;
                                 case "delete":
                                     if (!string.IsNullOrEmpty(entry.ItemId))
-                                        items.RemoveAll(i => GetItemId(i) == entry.ItemId);
+                                        items.RemoveAll(i => i.ItemId == entry.ItemId);
                                     break;
                                 case "clear":
                                     items.Clear();
@@ -106,6 +108,9 @@ namespace FlyShelf.Classes
                 // Enforce cap
                 if (items.Count > MAX_HISTORY_ITEMS)
                     items = items.Take(MAX_HISTORY_ITEMS).ToList();
+
+                _maxLoadedItemCount = items.Count;
+                _isHistoryFullyLoaded = true;
 
                 Logger.LogAction("HISTORY_LOAD", $"Loaded {items.Count} items (snapshot + {_journalEntryCount} journal entries)");
 
@@ -130,7 +135,7 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
-        /// Appends a new item to the journal (fast — single line append, no full rewrite).
+        /// Appends a new item to the journal (fast — async I/O, no blocking).
         /// </summary>
         public static void AppendToJournal(ViewModels.ClipboardItem item)
         {
@@ -139,26 +144,39 @@ namespace FlyShelf.Classes
                 Directory.CreateDirectory(_appDataDir);
                 var entry = new JournalEntry { Action = "add", Item = item, ItemId = GetItemId(item) };
                 var json = JsonSerializer.Serialize(entry);
-                lock (_lock)
-                {
-                    File.AppendAllText(_journalPath, json + "\n");
-                    _journalEntryCount++;
+                var line = json + "\n";
 
-                    // Auto-compact when journal gets large
-                    if (_journalEntryCount >= COMPACTION_THRESHOLD)
+                // Fire-and-forget async I/O — doesn't block caller
+                _ = System.Threading.Tasks.Task.Run(() =>
+                {
+                    lock (_lock)
                     {
-                        ScheduleCompaction();
+                        try
+                        {
+                            File.AppendAllText(_journalPath, line);
+                            _journalEntryCount++;
+
+                            // Auto-compact when journal gets large
+                            if (_journalEntryCount >= COMPACTION_THRESHOLD)
+                            {
+                                ScheduleCompaction();
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogAction("JOURNAL_WRITE_ERROR", $"Async journal write failed: {ex.Message}");
+                        }
                     }
-                }
+                });
             }
             catch (Exception ex)
             {
-                Logger.LogAction("JOURNAL_WRITE_ERROR", $"Failed to append journal: {ex.Message}");
+                Logger.LogAction("JOURNAL_WRITE_ERROR", $"Failed to prepare journal entry: {ex.Message}");
             }
         }
 
         /// <summary>
-        /// Appends a delete entry to the journal.
+        /// Appends a delete entry to the journal (async — non-blocking).
         /// </summary>
         public static void AppendDeleteToJournal(ViewModels.ClipboardItem item)
         {
@@ -167,24 +185,40 @@ namespace FlyShelf.Classes
                 Directory.CreateDirectory(_appDataDir);
                 var entry = new JournalEntry { Action = "delete", ItemId = GetItemId(item) };
                 var json = JsonSerializer.Serialize(entry);
-                lock (_lock)
+                var line = json + "\n";
+
+                _ = System.Threading.Tasks.Task.Run(() =>
                 {
-                    File.AppendAllText(_journalPath, json + "\n");
-                    _journalEntryCount++;
-                }
+                    lock (_lock)
+                    {
+                        try
+                        {
+                            File.AppendAllText(_journalPath, line);
+                            _journalEntryCount++;
+                        }
+                        catch (Exception ex) { Logger.LogAction("HISTORY_JOURNAL", $"Async delete write failed: {ex.Message}"); }
+                    }
+                });
             }
-            catch (Exception ex) { Logger.LogAction("HISTORY_JOURNAL", $"Failed to write delete entry: {ex.Message}"); }
+            catch (Exception ex) { Logger.LogAction("HISTORY_JOURNAL", $"Failed to prepare delete entry: {ex.Message}"); }
         }
 
         /// <summary>
-        /// Saves clipboard history to disk. Debounced — waits 500ms after last call to avoid disk thrashing.
+        /// Saves clipboard history to disk. Debounced — waits 1500ms after last call to avoid disk thrashing.
         /// This performs a FULL compaction (snapshot rewrite + journal clear).
         /// Accepts a copy of the list to avoid collection modified exceptions.
         /// </summary>
+        private static volatile int _saveGeneration;
+
         public static void SaveHistoryDebounced(List<ViewModels.ClipboardItem> items)
         {
+            int generation = System.Threading.Interlocked.Increment(ref _saveGeneration);
+
             var newTimer = new Timer(_ =>
             {
+                // Only run if no newer save was requested while we were waiting
+                if (generation != _saveGeneration) return;
+
                 try
                 {
                     var snapshot = items;
@@ -198,7 +232,7 @@ namespace FlyShelf.Classes
                 {
                     Logger.LogAction("HISTORY_SAVE_ERROR", $"Failed to save history: {ex.Message}");
                 }
-            }, null, 500, Timeout.Infinite);
+            }, null, 1500, Timeout.Infinite);
 
             var oldTimer = Interlocked.Exchange(ref _debounceTimer, newTimer);
             oldTimer?.Dispose();
@@ -217,21 +251,19 @@ namespace FlyShelf.Classes
                     // SAFETY: Refuse to overwrite a larger database with a smaller one
                     // This prevents data loss from race conditions where a stale snapshot
                     // (e.g. from before deferred items loaded) would overwrite the full DB.
-                    if (File.Exists(_historyPath))
+                    if (!_isHistoryFullyLoaded)
                     {
-                        try
-                        {
-                            var existingJson = File.ReadAllText(_historyPath);
-                            var existingItems = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(existingJson);
-                            if (existingItems != null && items.Count < existingItems.Count * 0.5 && existingItems.Count > 10)
-                            {
-                                // New snapshot has less than 50% of existing items — likely a stale/partial snapshot
-                                Logger.LogAction("HISTORY_COMPACT_ABORT", $"Refusing to compact: new={items.Count} vs existing={existingItems.Count}. Possible stale snapshot.");
-                                return;
-                            }
-                        }
-                        catch { /* Can't read existing — proceed with write */ }
+                        Logger.LogAction("HISTORY_COMPACT_ABORT", "Refusing to compact: history not fully loaded yet.");
+                        return;
                     }
+
+                    if (items.Count < _maxLoadedItemCount * 0.5 && _maxLoadedItemCount > 10)
+                    {
+                        Logger.LogAction("HISTORY_COMPACT_ABORT", $"Refusing to compact: new={items.Count} vs cached max={_maxLoadedItemCount}. Possible stale snapshot.");
+                        return;
+                    }
+
+                    _maxLoadedItemCount = Math.Max(_maxLoadedItemCount, items.Count);
 
                     var options = new JsonSerializerOptions { WriteIndented = false };
                     var json = JsonSerializer.Serialize(items, options);
@@ -297,7 +329,7 @@ namespace FlyShelf.Classes
                         if (entry?.Action == "add" && entry.Item != null)
                             items.Insert(0, entry.Item);
                         else if (entry?.Action == "delete" && entry.ItemId != null)
-                            items.RemoveAll(i => GetItemId(i) == entry.ItemId);
+                            items.RemoveAll(i => i.ItemId == entry.ItemId);
                         else if (entry?.Action == "clear")
                             items.Clear();
                     }

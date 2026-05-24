@@ -426,12 +426,12 @@ namespace FlyShelf.Windows
             view.Refresh();
         }
 
-        private void PinSpecific_Click(object sender, MouseButtonEventArgs e)
+        internal void PinSpecific_Click(object sender, MouseButtonEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item) { _viewModel.TogglePin(item); e.Handled = true; }
         }
 
-        private void DeleteSpecific_Click(object sender, MouseButtonEventArgs e)
+        internal void DeleteSpecific_Click(object sender, MouseButtonEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item) { _viewModel.RemoveItem(item); e.Handled = true; }
         }

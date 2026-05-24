@@ -122,19 +122,50 @@ namespace FlyShelf.ViewModels
                     catch { }
                 }
 
-                if (allItems.Count > 0)
+                // Combine the already loaded pinned items and newly loaded history items
+                var combinedItems = new List<ClipboardItem>();
+                await Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    await Application.Current.Dispatcher.InvokeAsync(() => DroppedItems.AddRange(allItems));
+                    combinedItems.AddRange(DroppedItems);
+                    DroppedItems.Clear();
+                });
+
+                combinedItems.AddRange(allItems);
+
+                // Sort by DateCopied descending to preserve chronological order across both pinned and normal items
+                var sortedItems = combinedItems.OrderByDescending(x => x.DateCopied).ToList();
+
+                if (sortedItems.Count > 0)
+                {
+                    // PERF: Load the first 40 items synchronously to make startup summon instantaneous
+                    var initialBatch = sortedItems.Take(40).ToList();
+                    await Application.Current.Dispatcher.InvokeAsync(() => DroppedItems.AddRange(initialBatch));
+
+                    // Stream the remaining items in background chunks to keep UI 100% responsive
+                    var remainingItems = sortedItems.Skip(40).ToList();
+                    if (remainingItems.Count > 0)
+                    {
+                        _ = System.Threading.Tasks.Task.Run(async () =>
+                        {
+                            const int chunkSize = 50;
+                            for (int i = 0; i < remainingItems.Count; i += chunkSize)
+                            {
+                                var chunk = remainingItems.Skip(i).Take(chunkSize).ToList();
+                                await System.Threading.Tasks.Task.Delay(50); // Yield UI thread budget
+                                await Application.Current.Dispatcher.InvokeAsync(() => DroppedItems.AddRange(chunk));
+                            }
+                        });
+                    }
                 }
 
                 OnPropertyChanged(nameof(ShelfVisibility));
 
-                // Auto-save on collection changes (debounced)
+                // Auto-save on collection changes (throttled — max once every 2s)
                 DroppedItems.CollectionChanged += (s, e) =>
                 {
                     if (!_isDatabaseWriteSuspended && !_isPaginating)
                     {
-                        PersistHistory();
+                        SchedulePersistHistory();
                     }
                 };
 
@@ -144,7 +175,7 @@ namespace FlyShelf.ViewModels
                 // Only decode icons for the first ~12 items (visible viewport) at startup.
                 // Off-screen items stay as placeholder cards — RenderVisibleThumbnails lazily
                 // loads their thumbnails when they scroll into view.
-                var visibleBatch = allItems.Take(12).ToList();
+                var visibleBatch = sortedItems.Take(12).ToList();
                 foreach (var item in visibleBatch)
                 {
                     bool needsIcon = (item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
@@ -208,8 +239,44 @@ namespace FlyShelf.ViewModels
             Classes.ClipboardHistoryManager.SaveHistoryDebounced(fullHistory);
         }
 
+        // ═══ PERF: Throttled persist — prevents serialization storms during rapid clipboard use ═══
+        private System.Threading.Timer? _persistThrottleTimer;
+        private volatile bool _persistScheduled;
+        private static readonly object _persistLock = new object();
+
         /// <summary>
-        /// Public wrapper for PersistHistory â€” used by MainWindow for bulk operations.
+        /// Schedules a PersistHistory call with a 2-second cooldown.
+        /// Multiple calls within the window are coalesced into a single persist.
+        /// The DroppedItems snapshot is taken at fire time (not call time) to capture
+        /// the latest state and avoid unnecessary intermediate snapshots.
+        /// </summary>
+        private void SchedulePersistHistory()
+        {
+            if (_persistScheduled) return; // Already scheduled — skip
+            _persistScheduled = true;
+
+            lock (_persistLock)
+            {
+                _persistThrottleTimer?.Dispose();
+                _persistThrottleTimer = new System.Threading.Timer(_ =>
+                {
+                    _persistScheduled = false;
+                    try
+                    {
+                        // Take snapshot on dispatcher, then save off-thread
+                        Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        {
+                            if (_isDatabaseWriteSuspended || _isPaginating) return;
+                            PersistHistory();
+                        });
+                    }
+                    catch { }
+                }, null, 2000, System.Threading.Timeout.Infinite);
+            }
+        }
+
+        /// <summary>
+        /// Public wrapper for PersistHistory — used by MainWindow for bulk operations.
         /// </summary>
         public void PersistHistoryPublic() => PersistHistory();
 
@@ -219,7 +286,7 @@ namespace FlyShelf.ViewModels
         /// </summary>
         private static bool IsEffectivelyEmpty(ClipboardItem item)
         {
-            // Images are never "empty" â€” even if the file is deleted, they had valid content when captured
+            // Images are never "empty" — even if the file is deleted, they had valid content when captured
             if (item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
                 return false;
             
@@ -245,7 +312,6 @@ namespace FlyShelf.ViewModels
         }
 
         // Pre-compiled regex patterns for text classification — avoids recompilation on every clipboard event
-        private static readonly Regex _rxTerminal = new Regex(@"(PS [A-Z]:\\|PS>|~\$|root@|\$\s*(npm|pip|git|docker|cd|ls|cat|mkdir|chmod|chown|curl|wget|ssh|scp|tar|make|cmake|gcc|javac|python|node)|C:\\.*>|npm (run|install|start|test|init)|git (clone|commit|push|pull|merge|checkout|branch|stash|log|status|diff|add|reset|rebase)|sudo |apt-get|apt |yum |brew |choco |winget |pip install|pip3 install|docker (run|build|pull|push|compose|exec|ps|logs|stop)|dotnet (run|build|publish|new|restore)|ipconfig|netstat|ping |tracert|nslookup|systeminfo|tasklist|taskkill|sfc |dism |powershell|cmd /|wmic |reg query|Get-Process|Get-Service|Get-ChildItem|Set-Location|New-Item|Remove-Item|Invoke-WebRequest|Select-String|Write-Host|ForEach-Object|Where-Object)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex _rxCode = new Regex(@"(#include\s*[<""]|<iostream>|<stdio\.h>|<stdlib\.h>|<string\.h>|<cstdlib>|<vector>|<map>|<algorithm>|std::|printf\s*\(|scanf\s*\(|malloc\s*\(|free\s*\(|sizeof\s*\(|typedef\s|struct\s+\w+|enum\s+\w+|public\s+class\s|private\s+(void|int|string|static)|protected\s|int\s+main\s*\(|void\s+main\s*\(|using\s+namespace\s|#define\s|#ifdef|#ifndef|#pragma|template\s*<|namespace\s+\w+|def\s+\w+\s*\(|class\s+\w+\s*[(:]\s|import\s+(os|sys|json|re|math|numpy|pandas|flask|django|requests|typing|collections|pathlib|subprocess|asyncio|datetime)|from\s+\w+\s+import|if\s+__name__\s*==|print\s*\(|lambda\s|self\.|__init__|@(staticmethod|classmethod|property|override|Deprecated)|public\s+static\s+(void|int)|System\.(out|in|err)\.|new\s+\w+\s*[(<\[]|throws\s|implements\s|extends\s|interface\s+\w+|abstract\s+class|Console\.\w+|=>\s*\{|=>\s*[^;]+;|\{""|var\s+\w+\s*=|let\s+\w+\s*=|const\s+\w+\s*=|<\/?(html|div|span|script|style|body|head|table|form)|function\s+\w+\s*\(|console\.(log|error|warn)\(|require\s*\(|module\.exports|export\s+(default|const|function|class)|async\s+function|await\s|try\s*\{|catch\s*\(|switch\s*\(|for\s*\(.*;\s*.*;\s*|while\s*\(|SELECT\s+.*\s+FROM|INSERT\s+INTO|UPDATE\s+\w+\s+SET|CREATE\s+TABLE)", RegexOptions.Compiled);
         private static readonly Regex _rxUtmClean = new Regex(@"(?<=&|\?)(utm_source|utm_medium|utm_campaign|utm_term|utm_content|gclid|fbclid|_gl|msclkid|mc_eid|ig_shid)=[^&]*&?", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex _rxCpp = new Regex(@"(cout|cin|endl|cerr)\s*<<", RegexOptions.Compiled);
@@ -365,7 +431,7 @@ namespace FlyShelf.ViewModels
                     string content = !string.IsNullOrEmpty(item.RawContent) ? item.RawContent : item.FileName;
                     if (!string.IsNullOrEmpty(content))
                         System.Windows.Clipboard.SetText(content);
-                    FlyShelf.Windows.ToastWindow.ShowToast("Copied to clipboard! ðŸ“‹");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Copied to clipboard! 📋");
                     try { Classes.AnimationTriggerService.Instance.OnCopy(); } catch { }
                 }
                 catch { }
@@ -414,7 +480,7 @@ namespace FlyShelf.ViewModels
                 }
                 else
                 {
-                    // File/folder doesn't exist â€” open parent folder instead
+                    // File/folder doesn't exist — open parent folder instead
                     string dir = System.IO.Path.GetDirectoryName(item.FilePath);
                     if (!string.IsNullOrEmpty(dir) && System.IO.Directory.Exists(dir))
                     {
@@ -439,19 +505,19 @@ namespace FlyShelf.ViewModels
                 }
                 else if (e.PropertyName == nameof(FlyShelf.Classes.AdvanceSettings.EnableLocalLAN))
                 {
-                    // LAN toggle changed â€” auto-manage the master server toggle
+                    // LAN toggle changed — auto-manage the master server toggle
                     bool lanOn = FlyShelf.Classes.SettingsManager.Current.EnableLocalLAN;
                     bool cfOn = FlyShelf.Classes.SettingsManager.Current.EnableGlobalCloudflare;
                     
                     if (lanOn || cfOn)
                     {
-                        // At least one transport active â€” ensure server is running
+                        // At least one transport active — ensure server is running
                         if (!FlyShelf.Classes.SettingsManager.Current.EnableLocalNetworkSync)
                             FlyShelf.Classes.SettingsManager.Current.EnableLocalNetworkSync = true;
                     }
                     else
                     {
-                        // Both transports off â€” stop the server
+                        // Both transports off — stop the server
                         FlyShelf.Classes.SettingsManager.Current.EnableLocalNetworkSync = false;
                     }
                     
@@ -540,13 +606,13 @@ namespace FlyShelf.ViewModels
         {
             var placeholder = new ClipboardItem
             {
-                FileName = $"â³ Receiving {fileName}...",
+                FileName = $"⏳ Receiving {fileName}...",
                 Extension = "DOWNLOADING",
                 ItemType = ClipboardItemType.File,
                 FormattedSize = FormatBytesStatic(totalBytes),
                 TransferProgress = 0.1,
                 TransferStatusText = $"Connecting to {sourceDevice}...",
-                RawContent = $"â³ Downloading from {sourceDevice}...",
+                RawContent = $"⏳ Downloading from {sourceDevice}...",
                 SourceDeviceName = sourceDevice,
                 SourceDeviceType = sourceDeviceType,
                 TransferMethod = transferMethod
@@ -575,7 +641,7 @@ namespace FlyShelf.ViewModels
                 }
                 else
                 {
-                    // Placeholder was removed (e.g. user deleted it) â€” insert at top
+                    // Placeholder was removed (e.g. user deleted it) — insert at top
                     DroppedItems.Insert(0, completed);
                 }
                 OnPropertyChanged(nameof(ShelfVisibility));

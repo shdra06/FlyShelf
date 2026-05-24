@@ -35,9 +35,9 @@ namespace FlyShelf.Windows
                 if (System.IO.File.Exists(logFile))
                 {
                     string activityLog = System.IO.File.ReadAllText(logFile);
-                    sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                    sb.AppendLine("════════════════════════════════════════════════════════════");
                     sb.AppendLine("  ACTIVITY LOG");
-                    sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                    sb.AppendLine("════════════════════════════════════════════════════════════");
                     sb.AppendLine(activityLog);
                 }
 
@@ -47,9 +47,9 @@ namespace FlyShelf.Windows
                 {
                     string netLog = System.IO.File.ReadAllText(netLogFile);
                     sb.AppendLine();
-                    sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                    sb.AppendLine("════════════════════════════════════════════════════════════");
                     sb.AppendLine("  NETWORK DIAGNOSTICS");
-                    sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                    sb.AppendLine("════════════════════════════════════════════════════════════");
                     sb.AppendLine(netLog);
                 }
 
@@ -58,9 +58,9 @@ namespace FlyShelf.Windows
                 if (!string.IsNullOrWhiteSpace(serverDiag) && !serverDiag.StartsWith("No"))
                 {
                     sb.AppendLine();
-                    sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                    sb.AppendLine("════════════════════════════════════════════════════════════");
                     sb.AppendLine("  SERVER TROUBLESHOOTING");
-                    sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                    sb.AppendLine("════════════════════════════════════════════════════════════");
                     sb.AppendLine(serverDiag);
                 }
 
@@ -118,7 +118,7 @@ namespace FlyShelf.Windows
                             // Flush previous repeat group
                             if (repeatCount > 2)
                             {
-                                dedupedLines.Add($"    â†‘â†‘â†‘ repeated {repeatCount}Ã— (collapsed)");
+                                dedupedLines.Add($"    ↑↑↑ repeated {repeatCount}× (collapsed)");
                             }
                             else if (repeatCount == 2)
                             {
@@ -134,14 +134,14 @@ namespace FlyShelf.Windows
                     // Flush final group
                     if (repeatCount > 2)
                     {
-                        dedupedLines.Add($"    â†‘â†‘â†‘ repeated {repeatCount}Ã— (collapsed)");
+                        dedupedLines.Add($"    ↑↑↑ repeated {repeatCount}× (collapsed)");
                     }
 
                     if (dedupedLines.Any())
                     {
-                        report.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                        report.AppendLine("════════════════════════════════════════════════════════════");
                         report.AppendLine("  ACTIVITY LOG");
-                        report.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                        report.AppendLine("════════════════════════════════════════════════════════════");
                         foreach (var line in dedupedLines) report.AppendLine(line);
                     }
                 }
@@ -154,9 +154,9 @@ namespace FlyShelf.Windows
                     if (lines.Any())
                     {
                         report.AppendLine();
-                        report.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                        report.AppendLine("════════════════════════════════════════════════════════════");
                         report.AppendLine("  NETWORK DIAGNOSTICS");
-                        report.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                        report.AppendLine("════════════════════════════════════════════════════════════");
                         foreach (var line in lines) report.AppendLine(line);
                     }
                 }
@@ -169,37 +169,37 @@ namespace FlyShelf.Windows
                     if (lines.Any())
                     {
                         report.AppendLine();
-                        report.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                        report.AppendLine("════════════════════════════════════════════════════════════");
                         report.AppendLine("  SERVER TROUBLESHOOTING");
-                        report.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                        report.AppendLine("════════════════════════════════════════════════════════════");
                         foreach (var line in lines) report.AppendLine(line.TrimEnd('\r'));
                     }
                 }
 
                 if (report.Length == 0)
                 {
-                    ToastWindow.ShowToast("âš ï¸ No logs to send");
+                    ToastWindow.ShowToast("⚠️  No logs to send");
                     return;
                 }
 
                 // Prepend system info header
                 var header = new System.Text.StringBuilder();
-                header.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                header.AppendLine("═════════════════════════════════════════════════════════════");
                 header.AppendLine($"  FlyShelf Full Diagnostic Report");
                 header.AppendLine($"  PC: {Environment.MachineName}");
                 header.AppendLine($"  OS: {Environment.OSVersion}");
                 header.AppendLine($"  Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                 header.AppendLine($"  Version: {UpdateManager.CurrentVersion}");
-                header.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                header.AppendLine("═════════════════════════════════════════════════════════════");
                 header.AppendLine();
                 header.Append(report);
 
                 Clipboard.SetText(header.ToString());
-                ToastWindow.ShowToast("ðŸ“‹ All logs copied to clipboard (health-check noise filtered) â€” paste and send!");
+                ToastWindow.ShowToast("📋 All logs copied to clipboard (health-check noise filtered) — paste and send!");
             }
             catch (Exception ex)
             {
-                ToastWindow.ShowToast($"âŒ Failed to copy: {ex.Message}");
+                ToastWindow.ShowToast($"❌ Failed to copy: {ex.Message}");
             }
         }
 
@@ -209,11 +209,11 @@ namespace FlyShelf.Windows
             {
                 string logs = Logger.GetRecentNetworkLogs(200);
                 Clipboard.SetText(logs);
-                ToastWindow.ShowToast("ðŸ“‹ Network logs copied to clipboard (last 200 lines)");
+                ToastWindow.ShowToast("📋 Network logs copied to clipboard (last 200 lines)");
             }
             catch (Exception ex)
             {
-                ToastWindow.ShowToast($"âŒ Failed to copy: {ex.Message}");
+                ToastWindow.ShowToast($"❌ Failed to copy: {ex.Message}");
             }
         }
         private async void SendLogsToDashboard_Click(object sender, RoutedEventArgs e)
@@ -233,12 +233,12 @@ namespace FlyShelf.Windows
 
                 if (logLines.Count == 0)
                 {
-                    ToastWindow.ShowToast("âš ï¸  No network logs to send");
+                    ToastWindow.ShowToast("⚠️  No network logs to send");
                     SendLogsToDashboardBtn.IsEnabled = true;
                     return;
                 }
 
-                // â”€â”€ Always save a local diagnostic file â”€â”€
+                // ── Always save a local diagnostic file ──
                 string logsDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
                 System.IO.Directory.CreateDirectory(logsDir);
                 string deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
@@ -248,20 +248,20 @@ namespace FlyShelf.Windows
                 string filePath = System.IO.Path.Combine(logsDir, fileName);
 
                 var sb = new System.Text.StringBuilder();
-                sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
-                sb.AppendLine($"  FlyShelf Diagnostic Log â€” {deviceName}");
+                sb.AppendLine("════════════════════════════════════════════════════════════════════════════════");
+                sb.AppendLine($"  FlyShelf Diagnostic Log — {deviceName}");
                 sb.AppendLine($"  Captured: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
                 sb.AppendLine($"  PC Host:  {Environment.MachineName}");
                 sb.AppendLine($"  OS:       {Environment.OSVersion}");
                 sb.AppendLine($"  Entries:  {logLines.Count}");
-                sb.AppendLine("â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•");
+                sb.AppendLine("════════════════════════════════════════════════════════════════════════════════");
                 sb.AppendLine();
                 foreach (var line in logLines)
                     sb.AppendLine(line);
 
                 await System.IO.File.WriteAllTextAsync(filePath, sb.ToString());
 
-                // â”€â”€ Also POST to dashboard if server is running â”€â”€
+                // ── Also POST to dashboard if server is running ──
                 bool dashboardSuccess = false;
                 if (vm?.LocalServer != null)
                 {
@@ -276,12 +276,12 @@ namespace FlyShelf.Windows
                         var res = await client.PostAsync($"{serverUrl}/api/logs", content);
                         dashboardSuccess = res.IsSuccessStatusCode;
                     }
-                    catch { /* Server POST failed â€” file is still saved */ }
+                    catch { /* Server POST failed — file is still saved */ }
                 }
 
-                string msg = $"âœ… {logLines.Count} entries saved â†’ {fileName}";
-                if (dashboardSuccess) msg += "\nðŸ“Š Also pushed to web dashboard";
-                msg += $"\nðŸ“ {logsDir}";
+                string msg = $"✅ {logLines.Count} entries saved → {fileName}";
+                if (dashboardSuccess) msg += "\n📊 Also pushed to web dashboard";
+                msg += $"\n📁  {logsDir}";
                 ToastWindow.ShowToast(msg);
 
                 // Open the Logs folder so user can grab the file
@@ -289,7 +289,7 @@ namespace FlyShelf.Windows
             }
             catch (Exception ex)
             {
-                ToastWindow.ShowToast($"âŒ Failed: {ex.Message}");
+                ToastWindow.ShowToast($"❌ Failed: {ex.Message}");
             }
             finally
             {

@@ -17,7 +17,7 @@ namespace FlyShelf.Windows
 {
     public partial class HubWindow
     {
-        private void SendToDevice_Click(object sender, MouseButtonEventArgs e)
+        internal void SendToDevice_Click(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
             if (sender is not FrameworkElement fe) return;
@@ -203,7 +203,7 @@ namespace FlyShelf.Windows
         /// <summary>
         /// Context menu wrapper for Send to Device — extracts the ClipboardItem from MenuItem.DataContext
         /// </summary>
-        private void ContextMenu_SendToDevice_Click(object sender, RoutedEventArgs e)
+        internal void ContextMenu_SendToDevice_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not FrameworkElement fe) return;
             var item = fe.DataContext as ClipboardItem;
@@ -229,7 +229,7 @@ namespace FlyShelf.Windows
         /// <summary>
         /// Extract a .zip archive to a user-chosen folder
         /// </summary>
-        private void ExtractArchive_Click(object sender, RoutedEventArgs e)
+        internal void ExtractArchive_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not FrameworkElement fe) return;
             var item = fe.DataContext as ClipboardItem;
@@ -269,7 +269,7 @@ namespace FlyShelf.Windows
             }
         }
 
-        private void ExpandToggleSpecific_Click(object sender, MouseButtonEventArgs e)
+        internal void ExpandToggleSpecific_Click(object sender, MouseButtonEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item) { item.IsExpanded = !item.IsExpanded; }
             e.Handled = true;
@@ -284,7 +284,7 @@ namespace FlyShelf.Windows
 
         private void HubListView_SelectionChanged(object sender, SelectionChangedEventArgs e) => UpdateMergeButton();
 
-        private void ItemCheckBox_Click(object sender, RoutedEventArgs e)
+        internal void ItemCheckBox_Click(object sender, RoutedEventArgs e)
         {
             Dispatcher.InvokeAsync(() => UpdateMergeButton(), System.Windows.Threading.DispatcherPriority.Background);
         }

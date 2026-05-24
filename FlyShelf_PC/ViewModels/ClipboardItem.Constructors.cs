@@ -88,23 +88,27 @@ namespace FlyShelf.ViewModels
             }
             else if ((ItemType == ClipboardItemType.Text || ItemType == ClipboardItemType.Code) && !string.IsNullOrEmpty(RawContent))
             {
-                if (_rxCppCheck.IsMatch(RawContent))
+                string smartActionSample = RawContent.Length > 10000 
+                    ? RawContent.Substring(0, 10000) 
+                    : RawContent;
+
+                if (_rxCppCheck.IsMatch(smartActionSample))
                 {
                     SmartActionName = "Run C/C++";
                     SmartActionIcon = "Play24";
                     SmartActionType = "CompileAndRun";
                     HasSmartAction = true;
                 }
-                else if (_rxTimeCheck.IsMatch(RawContent) || 
-                    _rxDurationCheck.IsMatch(RawContent) ||
-                    _rxSlashTimerCheck.IsMatch(RawContent.Trim()))
+                else if (_rxTimeCheck.IsMatch(smartActionSample) || 
+                    _rxDurationCheck.IsMatch(smartActionSample) ||
+                    _rxSlashTimerCheck.IsMatch(smartActionSample.Trim()))
                 {
                     SmartActionName = "Set Timer";
                     SmartActionIcon = "Clock24";
                     SmartActionType = "SetTimer";
                     HasSmartAction = true;
                 }
-                else if (_rxAddressCheck.IsMatch(RawContent))
+                else if (_rxAddressCheck.IsMatch(smartActionSample))
                 {
                     SmartActionName = "Open Maps";
                     SmartActionIcon = "Map24";
@@ -130,10 +134,12 @@ namespace FlyShelf.ViewModels
 
         public ClipboardItem(string[] files)
         {
+            _suppressPropertyNotifications = true; // PERF: No listeners yet
             ItemType = ClipboardItemType.Group;
             FileName = $"{files.Length} Files Grouped";
             Extension = "GROUP";
             RawContent = string.Join("\n", files);
+            _suppressPropertyNotifications = false;
             FormattedSize = "Calculating size...";
 
             // Dynamically calculate total size in background thread to prevent UI freezing
@@ -214,6 +220,7 @@ namespace FlyShelf.ViewModels
 
         public ClipboardItem(string path)
         {
+            _suppressPropertyNotifications = true; // PERF: No listeners yet
             if (!string.IsNullOrEmpty(path))
             {
                 try
@@ -282,6 +289,9 @@ namespace FlyShelf.ViewModels
             {
                 ItemType = ClipboardItemType.File;
             }
+
+            // Unblock notifications — item is about to be inserted into the visual tree
+            _suppressPropertyNotifications = false;
 
             FormattedSize = "Loading...";
 

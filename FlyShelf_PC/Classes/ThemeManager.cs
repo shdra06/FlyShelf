@@ -49,18 +49,24 @@ namespace FlyShelf.Classes
         /// </summary>
         public void Initialize()
         {
-            Logger.LogAction("THEME", $"Initializing theme engine. Themes dir: {_themesDir}");
-
-            // Create default theme if no themes exist
-            if (!Directory.GetDirectories(_themesDir).Any())
+            try
             {
-                CreateDefaultTheme();
-            }
+                Logger.LogAction("THEME", $"Initializing theme engine. Themes dir: {_themesDir}");
 
-            // Load active theme synchronously from settings first (highly optimized: only parses one directory/manifest)
-            string activeName = SettingsManager.Current.ActiveThemeName ?? "";
-            if (!string.IsNullOrEmpty(activeName))
-            {
+                // Create default theme if it does not exist
+                string defaultPath = Path.Combine(_themesDir, "flyshelf-default");
+                if (!Directory.Exists(defaultPath) || !Directory.GetDirectories(_themesDir).Any())
+                {
+                    CreateDefaultTheme();
+                }
+
+                // Load active theme synchronously from settings first (highly optimized: only parses one directory/manifest)
+                string activeName = SettingsManager.Current.ActiveThemeName ?? "";
+                if (string.IsNullOrEmpty(activeName))
+                {
+                    activeName = "FlyShelf Default";
+                }
+
                 try
                 {
                     foreach (var dir in Directory.GetDirectories(_themesDir))
@@ -89,15 +95,46 @@ namespace FlyShelf.Classes
                 {
                     Logger.LogAction("THEME", $"Error restoring active theme synchronously: {ex.Message}");
                 }
+
+                // Safe Fallback: if active theme is null or failed to load, load FlyShelf Default
+                if (_activeTheme == null)
+                {
+                    try
+                    {
+                        if (!Directory.Exists(defaultPath))
+                        {
+                            CreateDefaultTheme();
+                        }
+                        var theme = ThemePackage.LoadFromDirectory(defaultPath);
+                        if (theme.IsValid)
+                        {
+                            _activeTheme = theme;
+                            if (!AvailableThemes.Any(t => t.Name == theme.Name))
+                            {
+                                AvailableThemes.Add(theme);
+                            }
+                            SettingsManager.Current.ActiveThemeName = theme.Name;
+                            Logger.LogAction("THEME", "Gracefully fell back to active theme 'FlyShelf Default'");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("THEME", $"Fatal error loading default theme fallback: {ex.Message}");
+                    }
+                }
+
+                // Kick off the background theme scanning asynchronously
+                RefreshThemeList();
+
+                // Start filesystem watcher for hot-reload
+                StartWatcher();
+
+                Logger.LogAction("THEME", $"Theme engine ready. {AvailableThemes.Count} theme(s) found, active: '{_activeTheme?.Name ?? "none"}'");
             }
-
-            // Kick off the background theme scanning asynchronously
-            RefreshThemeList();
-
-            // Start filesystem watcher for hot-reload
-            StartWatcher();
-
-            Logger.LogAction("THEME", $"Theme engine ready. {AvailableThemes.Count} theme(s) found, active: '{_activeTheme?.Name ?? "none"}'");
+            catch (Exception ex)
+            {
+                Logger.LogAction("THEME_FATAL", $"Fatal unhandled crash in ThemeManager: {ex.Message}");
+            }
         }
 
         /// <summary>

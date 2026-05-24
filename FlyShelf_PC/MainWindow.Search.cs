@@ -14,12 +14,14 @@ namespace FlyShelf
     public partial class MainWindow
     {
         private bool _isSearchActive = false;
+        private bool _isFilterBarActive = false;
 
         private void SearchToggle_Click(object sender, RoutedEventArgs e)
         {
             _isSearchActive = !_isSearchActive;
             if (_isSearchActive)
             {
+                if (_isFilterBarActive) ToggleFilterBar(false);
                 // Activate the window so it receives keyboard input (normally it's a non-activating overlay)
                 this.Activate();
                 SearchBarContainer.Visibility = Visibility.Visible;
@@ -139,6 +141,14 @@ namespace FlyShelf
             if (view != null) view.Filter = null;
             _viewModel.IsSearchActive = false;
             
+            // Also clear any active category filter
+            _activeCategoryFilter = null;
+            if (_isFilterBarActive) ToggleFilterBar(false);
+            if (SortFilterBtn != null)
+            {
+                SortFilterBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
+            }
+
             // Move focus back to the list view
             ShelfListView.Focus();
 
@@ -173,6 +183,172 @@ namespace FlyShelf
                     return false;
                 };
             }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════
+        // CATEGORY FILTER — Inline Responsive Bar
+        // ═══════════════════════════════════════════════════════════════════
+
+        private string? _activeCategoryFilter = null;
+
+        private void SortFilter_Click(object sender, RoutedEventArgs e)
+        {
+            ToggleFilterBar(!_isFilterBarActive);
+        }
+
+        private void ToggleFilterBar(bool show)
+        {
+            if (SortFilterInlineBar == null) return;
+
+            _isFilterBarActive = show;
+
+            if (show)
+            {
+                // Close search if active
+                if (_isSearchActive) CloseSearch();
+
+                // Highlight buttons based on category
+                UpdateFilterButtonHighlight(FilterBtn_Images, "Images", "#F472B6");
+                UpdateFilterButtonHighlight(FilterBtn_Pinned, "Pinned", "#FBBF24");
+                UpdateFilterButtonHighlight(FilterBtn_Pdf, "PDF", "#EF4444");
+                UpdateFilterButtonHighlight(FilterBtn_Docs, "Docs", "#60A5FA");
+
+                SortFilterInlineBar.Visibility = Visibility.Visible;
+
+                // Smooth slide-down + fade-in animation
+                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(-8, 0, new Duration(TimeSpan.FromMilliseconds(150)))
+                {
+                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+                };
+                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(150)));
+
+                if (SortFilterInlineBar.RenderTransform is System.Windows.Media.TranslateTransform translate)
+                {
+                    translate.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, slideAnim);
+                }
+                SortFilterInlineBar.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+            }
+            else
+            {
+                // Smooth slide-up + fade-out animation
+                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(0, -8, new Duration(TimeSpan.FromMilliseconds(120)))
+                {
+                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn }
+                };
+                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(1, 0, new Duration(TimeSpan.FromMilliseconds(120)));
+
+                fadeAnim.Completed += (s, args) =>
+                {
+                    if (!_isFilterBarActive)
+                    {
+                        SortFilterInlineBar.Visibility = Visibility.Collapsed;
+                    }
+                };
+
+                if (SortFilterInlineBar.RenderTransform is System.Windows.Media.TranslateTransform translate)
+                {
+                    translate.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, slideAnim);
+                }
+                SortFilterInlineBar.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+            }
+        }
+
+        private void UpdateFilterButtonHighlight(System.Windows.Controls.Border btn, string category, string accentHex)
+        {
+            if (btn == null) return;
+            bool isActive = _activeCategoryFilter == category;
+            var accent = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(accentHex);
+            if (isActive)
+            {
+                btn.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x40, accent.R, accent.G, accent.B));
+                btn.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x70, accent.R, accent.G, accent.B));
+            }
+            else
+            {
+                btn.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x18, accent.R, accent.G, accent.B));
+                btn.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x30, accent.R, accent.G, accent.B));
+            }
+        }
+
+        private void FilterCategory_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Border border && border.Tag is string category)
+            {
+                // If clicking the same category again, toggle it off
+                if (_activeCategoryFilter == category)
+                {
+                    ClearCategoryFilter();
+                    ToggleFilterBar(false);
+                    return;
+                }
+
+                _activeCategoryFilter = category;
+
+                // Close any active text search first
+                if (_isSearchActive) CloseSearch();
+
+                var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
+                if (view == null) return;
+
+                view.Filter = obj =>
+                {
+                    if (obj is FlyShelf.ViewModels.ClipboardItem item)
+                    {
+                        return category switch
+                        {
+                            "Images" => item.IsImagePreview,
+                            "Pinned" => item.IsPinned,
+                            "PDF" => item.IsPdfPreview,
+                            "Docs" => item.IsDocPreview,
+                            _ => true
+                        };
+                    }
+                    return false;
+                };
+
+                _viewModel.IsSearchActive = true;
+
+                // Highlight the filter button to indicate active filter
+                SortFilterBtn.Foreground = new System.Windows.Media.SolidColorBrush(
+                    category switch
+                    {
+                        "Images" => System.Windows.Media.Color.FromRgb(0xF4, 0x72, 0xB6),
+                        "Pinned" => System.Windows.Media.Color.FromRgb(0xFB, 0xBF, 0x24),
+                        "PDF" => System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44),
+                        "Docs" => System.Windows.Media.Color.FromRgb(0x60, 0xA5, 0xFA),
+                        _ => System.Windows.Media.Color.FromRgb(0x14, 0xB8, 0xA6)
+                    });
+
+                // Update active state highlight on each button
+                UpdateFilterButtonHighlight(FilterBtn_Images, "Images", "#F472B6");
+                UpdateFilterButtonHighlight(FilterBtn_Pinned, "Pinned", "#FBBF24");
+                UpdateFilterButtonHighlight(FilterBtn_Pdf, "PDF", "#EF4444");
+                UpdateFilterButtonHighlight(FilterBtn_Docs, "Docs", "#60A5FA");
+            }
+        }
+
+        private void FilterClear_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            ClearCategoryFilter();
+            ToggleFilterBar(false);
+        }
+
+        private void ClearCategoryFilter()
+        {
+            _activeCategoryFilter = null;
+
+            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
+            if (view != null) view.Filter = null;
+            _viewModel.IsSearchActive = false;
+
+            // Reset button color
+            SortFilterBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
+
+            // Update active state highlight on each button (clearing active colors)
+            UpdateFilterButtonHighlight(FilterBtn_Images, "Images", "#F472B6");
+            UpdateFilterButtonHighlight(FilterBtn_Pinned, "Pinned", "#FBBF24");
+            UpdateFilterButtonHighlight(FilterBtn_Pdf, "PDF", "#EF4444");
+            UpdateFilterButtonHighlight(FilterBtn_Docs, "Docs", "#60A5FA");
         }
     }
 }

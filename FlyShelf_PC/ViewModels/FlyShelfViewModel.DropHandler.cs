@@ -89,7 +89,7 @@ namespace FlyShelf.ViewModels
                 HandleDropInternal(files, bitmap, text, forceClipboardSync, skipCloudSync));
         }
 
-        private void HandleDropInternal(string[]? files, BitmapSource? bitmap, string? text, bool forceClipboardSync, bool skipCloudSync)
+        internal void HandleDropInternal(string[]? files, BitmapSource? bitmap, string? text, bool forceClipboardSync, bool skipCloudSync)
         {
             if (files != null && files.Length > 0)
             {
@@ -127,6 +127,9 @@ namespace FlyShelf.ViewModels
                         PruneOldItems();
                         OnPropertyChanged(nameof(ShelfVisibility));
                     });
+
+                    // PERF: Journal the single item (fast append) instead of full serialize
+                    FlyShelf.Classes.ClipboardHistoryManager.AppendToJournal(groupItem);
 
                     FlyShelf.Classes.Logger.LogAction("DRAG IN", $"Grouped {files.Length} files into a single Group item.");
 
@@ -181,6 +184,12 @@ namespace FlyShelf.ViewModels
                     PruneOldItems();
                     OnPropertyChanged(nameof(ShelfVisibility));
                 });
+
+                // PERF: Journal each item individually (fast JSONL append)
+                foreach (var (item, _) in newItems)
+                {
+                    FlyShelf.Classes.ClipboardHistoryManager.AppendToJournal(item);
+                }
 
                 FlyShelf.Classes.Logger.LogAction("DRAG IN", $"Batch inserted {newItems.Count} files directly (no-dedup)");
 
@@ -290,10 +299,12 @@ namespace FlyShelf.ViewModels
                 FlyShelf.Classes.Logger.LogAction("DRAG IN", "Processing Bitmap image payload (no-dedup)");
                 
                 var item = new ClipboardItem();
+                item._suppressPropertyNotifications = true; // PERF: No listeners yet
                 item.ItemType = ClipboardItemType.Image;
                 item.FileName = $"Screenshot {DateTime.Now:yyyy-MM-dd HHmmss}";
                 item.Extension = "IMAGE";
                 item.FormattedSize = $"{bitmap.PixelWidth}x{bitmap.PixelHeight}";
+                item._suppressPropertyNotifications = false;
                 
                 item.EvaluateSmartActions();
 
@@ -324,9 +335,54 @@ namespace FlyShelf.ViewModels
                     PruneOldItems();
                 });
 
+                // PERF: Journal the bitmap item immediately (fast append)
+                FlyShelf.Classes.ClipboardHistoryManager.AppendToJournal(item);
+
                 // Write PNG to disk and do follow-up operations completely in background thread
                 System.Threading.Tasks.Task.Run(() =>
                 {
+                    // Transparency (Ghost) check: backend process that happens after a few seconds
+                    var capturedBmpToCheck = bitmap;
+                    var capturedItemToCheck = item;
+                    _ = System.Threading.Tasks.Task.Run(async () =>
+                    {
+                        await System.Threading.Tasks.Task.Delay(3000); // Wait 3 seconds
+                        bool isGhostImage = false;
+                        try
+                        {
+                            var converted = new FormatConvertedBitmap(capturedBmpToCheck, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+                            int w = converted.PixelWidth;
+                            int h = converted.PixelHeight;
+                            byte[] pixel = new byte[4];
+                            int transparentCount = 0;
+                            const int gridSize = 4;
+                            for (int gy = 0; gy < gridSize; gy++)
+                            {
+                                int y = (gy * 2 + 1) * h / (gridSize * 2);
+                                for (int gx = 0; gx < gridSize; gx++)
+                                {
+                                    int x = (gx * 2 + 1) * w / (gridSize * 2);
+                                    converted.CopyPixels(new System.Windows.Int32Rect(x, y, 1, 1), pixel, 4, 0);
+                                    if (pixel[3] < 10) transparentCount++;
+                                }
+                            }
+                            if (transparentCount >= 15)
+                            {
+                                isGhostImage = true;
+                                Classes.Logger.LogAction("CLIPBOARD", $"⛔ Detected ghost image ({w}x{h}) — {transparentCount}/16 samples transparent. Removing...");
+                            }
+                        }
+                        catch { }
+
+                        if (isGhostImage)
+                        {
+                            await Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                RemoveItem(capturedItemToCheck);
+                            });
+                        }
+                    });
+
                     string tempFile = Classes.ClipboardHistoryManager.GetPersistentImagePath();
                     
                     try
@@ -438,9 +494,12 @@ namespace FlyShelf.ViewModels
                 text = text.Trim().TrimEnd('\0');
                 if (string.IsNullOrWhiteSpace(text)) return;
 
-                string visibleCheck = System.Text.RegularExpressions.Regex.Replace(text, 
-                    @"[\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFE00-\uFE0F\uFEFF\u00AD]", "");
-                if (string.IsNullOrWhiteSpace(visibleCheck)) return;
+                if (text.Length < 10000)
+                {
+                    string visibleCheck = System.Text.RegularExpressions.Regex.Replace(text, 
+                        @"[\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFE00-\uFE0F\uFEFF\u00AD]", "");
+                    if (string.IsNullOrWhiteSpace(visibleCheck)) return;
+                }
 
                 FlyShelf.Classes.Logger.LogAction("DRAG IN", $"Processing Text payload length: {text.Length} (no-dedup)");
 
@@ -470,8 +529,13 @@ namespace FlyShelf.ViewModels
                     if (item == null)
                     {
                         item = new ClipboardItem();
+                        item._suppressPropertyNotifications = true; // PERF: suppress during construction
                         item.RawContent = capturedText;
                         item.FormattedSize = string.Empty;
+                    }
+                    else
+                    {
+                        item._suppressPropertyNotifications = true; // PERF: suppress during construction
                     }
 
                     if (Uri.TryCreate(capturedText, UriKind.Absolute, out Uri? uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps))
@@ -485,51 +549,50 @@ namespace FlyShelf.ViewModels
                     }
                     else
                     {
-                        bool isTerminal = _rxTerminal.IsMatch(capturedText);
-                        bool isCode = _rxCode.IsMatch(capturedText);
+                        string classificationSample = capturedText.Length > 10000 
+                            ? capturedText.Substring(0, 10000) 
+                            : capturedText;
+
+                        bool isCode = _rxCode.IsMatch(classificationSample);
                         
-                        if (isTerminal || isCode)
+                        if (isCode)
                         {
                             item.ItemType = ClipboardItemType.Code;
-                            item.RawContent = isTerminal ? capturedText : AutoFormatCode(capturedText);
+                            item.RawContent = capturedText;
                             
-                            if (isTerminal)
-                            {
-                                item.Extension = "TERM";
-                            }
-                            else if (capturedText.Contains("std::") || capturedText.Contains("<iostream>") || capturedText.Contains("<cstdlib>") || capturedText.Contains("<vector>") || capturedText.Contains("using namespace") || _rxCpp.IsMatch(capturedText))
+                            if (classificationSample.Contains("std::") || classificationSample.Contains("<iostream>") || classificationSample.Contains("<cstdlib>") || classificationSample.Contains("<vector>") || classificationSample.Contains("using namespace") || _rxCpp.IsMatch(classificationSample))
                             {
                                 item.Extension = "C++";
                             }
-                            else if (capturedText.Contains("<stdio.h>") || capturedText.Contains("<stdlib.h>") || capturedText.Contains("<string.h>") || _rxC.IsMatch(capturedText))
+                            else if (classificationSample.Contains("<stdio.h>") || classificationSample.Contains("<stdlib.h>") || classificationSample.Contains("<string.h>") || _rxC.IsMatch(classificationSample))
                             {
                                 item.Extension = "C";
                             }
-                            else if (_rxPython.IsMatch(capturedText))
+                            else if (classificationSample.Contains("def ") || classificationSample.Contains("import ") || classificationSample.Contains("self.") || _rxPython.IsMatch(classificationSample))
                             {
                                 item.Extension = "PYTHON";
                             }
-                            else if (_rxJava.IsMatch(capturedText))
+                            else if (classificationSample.Contains("public class") || classificationSample.Contains("System.out") || classificationSample.Contains("@Override") || _rxJava.IsMatch(classificationSample))
                             {
                                 item.Extension = "JAVA";
                             }
-                            else if (_rxJs.IsMatch(capturedText))
+                            else if (_rxJs.IsMatch(classificationSample))
                             {
                                 item.Extension = "JS";
                             }
-                            else if (capturedText.Contains("public class") || capturedText.Contains("private void") || capturedText.Contains("Console.") || capturedText.Contains("namespace ") || _rxCs.IsMatch(capturedText))
+                            else if (classificationSample.Contains("public class") || classificationSample.Contains("private void") || classificationSample.Contains("Console.") || classificationSample.Contains("namespace ") || _rxCs.IsMatch(classificationSample))
                             {
                                 item.Extension = "C#";
                             }
-                            else if (_rxSql.IsMatch(capturedText))
+                            else if (_rxSql.IsMatch(classificationSample))
                             {
                                 item.Extension = "SQL";
                             }
-                            else if (capturedText.TrimStart().StartsWith("{\"") || capturedText.TrimStart().StartsWith("[{\""))
+                            else if (classificationSample.TrimStart().StartsWith("{\"") || classificationSample.TrimStart().StartsWith("[{\""))
                             {
                                 item.Extension = "JSON";
                             }
-                            else if (_rxHtml.IsMatch(capturedText))
+                            else if (_rxHtml.IsMatch(classificationSample))
                             {
                                 item.Extension = "HTML";
                             }
@@ -548,6 +611,9 @@ namespace FlyShelf.ViewModels
                             item.FileName = displayText.Length > 800 ? displayText.Substring(0, 800) + "..." : displayText;
                         }
                     }
+
+                    // PERF: Un-suppress before insert — item is about to enter the visual tree
+                    item._suppressPropertyNotifications = false;
 
                     item.EvaluateSmartActions();
 
@@ -597,6 +663,9 @@ namespace FlyShelf.ViewModels
 
                         OnPropertyChanged(nameof(ShelfVisibility));
                     });
+
+                    // PERF: Journal the text item (fast JSONL append)
+                    FlyShelf.Classes.ClipboardHistoryManager.AppendToJournal(item);
                 });
             }
         }

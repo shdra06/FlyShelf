@@ -266,8 +266,8 @@ namespace FlyShelf
                             {
                                 try
                                 {
-                                    var centerColor = Color.FromArgb(40, dominantColor.R, dominantColor.G, dominantColor.B);
-                                    var edgeColor = Color.FromArgb(140, (byte)(dominantColor.R / 4), (byte)(dominantColor.G / 4), (byte)(dominantColor.B / 4));
+                                    var centerColor = Color.FromArgb(50, dominantColor.R, dominantColor.G, dominantColor.B);
+                                    var edgeColor = Color.FromArgb(140, (byte)(dominantColor.R / 1.8), (byte)(dominantColor.G / 1.8), (byte)(dominantColor.B / 1.8));
 
                                     WallpaperRadialBrush.GradientStops[0].Color = centerColor;
                                     WallpaperRadialBrush.GradientStops[1].Color = edgeColor;
@@ -275,7 +275,7 @@ namespace FlyShelf
 
                                     // Tint the frost header with the theme color
                                     WallpaperFrostTint.Background = new SolidColorBrush(
-                                        Color.FromArgb(90, dominantColor.R, dominantColor.G, dominantColor.B));
+                                        Color.FromArgb(60, dominantColor.R, dominantColor.G, dominantColor.B));
 
                                     // Inject wallpaper dominant color as selection accent
                                     ApplyDominantColorAccent(dominantColor);

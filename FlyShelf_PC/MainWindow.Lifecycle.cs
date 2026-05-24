@@ -80,7 +80,7 @@ namespace FlyShelf
                 return;
             }
 
-            if (this.IsVisible && !_isAnimatingHide)
+            if (_isCurrentlySummoned && !_isAnimatingHide)
             {
                 // No-op: clipboard no longer auto-dismisses on focus loss.
                 // Kept for drag-hover lifecycle tracking only.
@@ -129,7 +129,7 @@ namespace FlyShelf
 
             // Only auto-dismiss when the user switches virtual desktops.
             // All other focus changes (clicking another app, etc.) are ignored.
-            if (!this.IsVisible || _isAnimatingHide) return;
+            if (!_isCurrentlySummoned || _isAnimatingHide) return;
 
             // Check if our window is still on the current virtual desktop
             try
@@ -144,7 +144,7 @@ namespace FlyShelf
                         // User switched to a different virtual desktop — dismiss the clipboard
                         Application.Current.Dispatcher.InvokeAsync(() =>
                         {
-                            if (this.IsVisible && !_isAnimatingHide)
+                            if (_isCurrentlySummoned && !_isAnimatingHide)
                             {
                                 AnimateAndHide();
                             }
@@ -162,39 +162,30 @@ namespace FlyShelf
         private static readonly TimeSpan _showAnimDuration = TimeSpan.FromMilliseconds(200);
         private static readonly System.Windows.Media.Animation.CubicEase _showEaseOut = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
         private static readonly System.Windows.Media.Animation.DoubleAnimation _fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, _showAnimDuration) { EasingFunction = _showEaseOut };
-        private static readonly System.Windows.Media.Animation.DoubleAnimation _scaleIn = new System.Windows.Media.Animation.DoubleAnimation(0.97, 1, _showAnimDuration) { EasingFunction = _showEaseOut };
-        private static readonly System.Windows.Media.Animation.DoubleAnimation _slideIn = new System.Windows.Media.Animation.DoubleAnimation(6, 0, _showAnimDuration) { EasingFunction = _showEaseOut };
+        private static readonly System.Windows.Media.Animation.DoubleAnimation _slideIn = new System.Windows.Media.Animation.DoubleAnimation(16, 0, _showAnimDuration) { EasingFunction = _showEaseOut };
 
         private void PlayShowAnimation()
         {
-            RootContent.RenderTransformOrigin = new Point(0.5, 1);
-            RootContent.RenderTransform = new TransformGroup
-            {
-                Children = { new ScaleTransform(0.97, 0.97), new TranslateTransform(0, 6) }
-            };
+            RootContent.RenderTransform = new TranslateTransform(0, 16);
             RootContent.Opacity = 0;
 
             RootContent.BeginAnimation(OpacityProperty, _fadeIn);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, _scaleIn);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, _scaleIn);
-            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, _slideIn);
+            RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, _slideIn);
         }
 
         /// <summary>Fast dismiss animation on inner content, then hides window.</summary>
         // PERF: Cached hide animation objects — avoid GC pressure from allocating new ones on every dismiss
         private static readonly TimeSpan _hideAnimDuration = TimeSpan.FromMilliseconds(100);
         private static readonly System.Windows.Media.Animation.CubicEase _hideEaseIn = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn };
-        private static readonly System.Windows.Media.Animation.DoubleAnimation _scaleOutX = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, _hideAnimDuration) { EasingFunction = _hideEaseIn };
-        private static readonly System.Windows.Media.Animation.DoubleAnimation _scaleOutY = new System.Windows.Media.Animation.DoubleAnimation(1, 0.97, _hideAnimDuration) { EasingFunction = _hideEaseIn };
-        private static readonly System.Windows.Media.Animation.DoubleAnimation _slideOut = new System.Windows.Media.Animation.DoubleAnimation(0, 5, _hideAnimDuration) { EasingFunction = _hideEaseIn };
+        private static readonly System.Windows.Media.Animation.DoubleAnimation _slideOut = new System.Windows.Media.Animation.DoubleAnimation(0, 12, _hideAnimDuration) { EasingFunction = _hideEaseIn };
 
         // PERF: Deferred mascot/GIF resume timer — mascot starts 1s after spawn, not during spawn
         private System.Windows.Threading.DispatcherTimer? _mascotDelayTimer;
 
-        private void AnimateAndHide()
+        public void AnimateAndHide()
         {
             StopDragActiveDismissTimer();
-            if (_isAnimatingHide || !this.IsVisible) return;
+            if (_isAnimatingHide || !_isCurrentlySummoned) return;
 
             // PERF: Cancel any pending mascot timer
             _mascotDelayTimer?.Stop();
@@ -206,7 +197,7 @@ namespace FlyShelf
 
                 try
                 {
-                    this.Hide();
+                    HideWindowInternal();
                     RootContent.BeginAnimation(OpacityProperty, null);
                     RootContent.Opacity = 1;
                     RootContent.RenderTransform = null;
@@ -234,18 +225,14 @@ namespace FlyShelf
             DismissMergeState();
             CloseSearch();
 
-            RootContent.RenderTransformOrigin = new Point(0.5, 1);
-            RootContent.RenderTransform = new TransformGroup
-            {
-                Children = { new ScaleTransform(1, 1), new TranslateTransform(0, 0) }
-            };
+            RootContent.RenderTransform = new TranslateTransform(0, 0);
 
             var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, _hideAnimDuration) { EasingFunction = _hideEaseIn };
             fadeOut.Completed += (s, e) =>
             {
                 try
                 {
-                    this.Hide();
+                    HideWindowInternal();
                     RootContent.BeginAnimation(OpacityProperty, null);
                     RootContent.Opacity = 1;
                     RootContent.RenderTransform = null;
@@ -267,9 +254,7 @@ namespace FlyShelf
             };
 
             RootContent.BeginAnimation(OpacityProperty, fadeOut);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleXProperty, _scaleOutX);
-            ((TransformGroup)RootContent.RenderTransform).Children[0].BeginAnimation(ScaleTransform.ScaleYProperty, _scaleOutY);
-            ((TransformGroup)RootContent.RenderTransform).Children[1].BeginAnimation(TranslateTransform.YProperty, _slideOut);
+            RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, _slideOut);
         }
         private DateTime _spawnTime = DateTime.MinValue;
         private IntPtr _previousForegroundWindow = IntPtr.Zero;

@@ -35,6 +35,107 @@
                     </DataTrigger>
                 </Style.Triggers>
             </Style>
+
+            <!-- Shared ContextMenu cached at Window level to prevent duplicate MenuItem element allocations -->
+            <ContextMenu x:Key="CardContextMenu">
+                <ContextMenu.Resources>
+                    <Style TargetType="Separator">
+                        <Setter Property="Margin" Value="8,4"/>
+                        <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
+                    </Style>
+                    <Style TargetType="MenuItem">
+                        <Setter Property="Padding" Value="10,6"/>
+                        <Setter Property="FontSize" Value="12.5"/>
+                    </Style>
+                </ContextMenu.Resources>
+
+                <!-- ═══ Universal: Pin / Unpin ═══ -->
+                <MenuItem Header="{Binding PlacementTarget.DataContext.PinLabel, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          Command="{Binding PlacementTarget.Tag.TogglePinCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+
+                <!-- ═══ Universal: Copy Content ═══ -->
+                <MenuItem Header="Copy to Clipboard" 
+                          Command="{Binding PlacementTarget.Tag.CopyRawContentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+
+                <Separator />
+
+                <!-- ═══ TEXT / CODE Actions ═══ -->
+                <MenuItem Header="🔍 Search on Google" Click="GoogleSearch_Click" 
+                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                          Visibility="{Binding PlacementTarget.DataContext.IsTextPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                <!-- ═══ CODE: VS Code + Terminal ═══ -->
+                <MenuItem Header="Open in VS Code" 
+                          Command="{Binding PlacementTarget.Tag.LaunchSandboxCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          Visibility="{Binding PlacementTarget.DataContext.IsCodePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <MenuItem Header="Run in Terminal" 
+                          Command="{Binding PlacementTarget.Tag.LaunchTerminalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          Visibility="{Binding PlacementTarget.DataContext.IsCodePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <MenuItem Header="Compile C++ &amp; Run" 
+                          Command="{Binding PlacementTarget.Tag.CompileNativeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          Visibility="{Binding PlacementTarget.DataContext.IsCPlusPlusPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                <!-- ═══ IMAGE: OCR Extract + Gemini Table ═══ -->
+                <MenuItem Header="Extract Text (OCR)" 
+                          Command="{Binding PlacementTarget.Tag.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <MenuItem Header="📊 Extract Table Data (Gemini AI)" 
+                          Command="{Binding PlacementTarget.Tag.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                          Foreground="#A855F7"
+                          Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <MenuItem Header="Convert Image to PDF" 
+                          Command="{Binding PlacementTarget.Tag.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <MenuItem Header="Scan QR Code" 
+                          Command="{Binding PlacementTarget.Tag.ManualScanQRCodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          Foreground="#A855F7"
+                          Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                <!-- ═══ PDF: Open + Convert ═══ -->
+                <MenuItem Header="Open PDF in Browser" 
+                          Command="{Binding PlacementTarget.Tag.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          Visibility="{Binding PlacementTarget.DataContext.IsPdfPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <MenuItem Header="Convert PDF to Word" Click="ConvertPdfToWord_Click" 
+                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                          Visibility="{Binding PlacementTarget.DataContext.IsPdfPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                <!-- ═══ DOCUMENT: Convert to PDF ═══ -->
+                <MenuItem Header="Convert to PDF" 
+                          Command="{Binding PlacementTarget.Tag.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          Visibility="{Binding PlacementTarget.DataContext.IsDocPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                <!-- ═══ URL: Open in Browser ═══ -->
+                <MenuItem Header="Open in Browser" 
+                          Command="{Binding PlacementTarget.Tag.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          Visibility="{Binding PlacementTarget.DataContext.IsUrlPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                <Separator />
+
+                <!-- ═══ FILE-BACKED: Show in Explorer ═══ -->
+                <MenuItem Header="Show in Explorer" 
+                          Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                          Visibility="{Binding PlacementTarget.DataContext.CanShowInExplorer, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                <Separator />
+
+                <!-- ═══ Universal: Delete ═══ -->
+                <MenuItem Header="Delete" 
+                          Command="{Binding PlacementTarget.Tag.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
+                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Foreground="#EF4444"/>
+            </ContextMenu>
         </ResourceDictionary>
     </controls:MicaWindow.Resources>
 
@@ -49,7 +150,7 @@
 
         <!-- ═══ WALLPAPER LAYERS (hidden when no wallpaper set) ═══ -->
         <!-- Layer 1: Full background image (center, fills entire window) -->
-        <Image x:Name="WallpaperBg" Grid.RowSpan="2" Stretch="UniformToFill" Opacity="0.25"
+        <Image x:Name="WallpaperBg" Grid.RowSpan="2" Stretch="UniformToFill" Opacity="0.45"
                Visibility="Collapsed"
                HorizontalAlignment="Center" VerticalAlignment="Center"/>
         
@@ -101,140 +202,192 @@
             </tray:NotifyIcon.Menu>
         </tray:NotifyIcon>
         
-        <Grid Grid.Row="0" Margin="14,14,14,8" Background="#01000000" MouseLeftButtonDown="Header_MouseLeftButtonDown">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            
-            <!-- Search Bar — expands inline when toggled -->
-            <Border x:Name="SearchBarContainer" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,6,0" Visibility="Collapsed"
-                    Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="8" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" Padding="6,2"
-                    Panel.ZIndex="10" PreviewMouseLeftButtonDown="SearchBar_PreviewMouseDown"
+        <StackPanel Grid.Row="0" x:Name="HeaderAndFiltersStack">
+            <Grid x:Name="TopHeaderGrid" Margin="14,14,14,8" Background="#01000000" MouseLeftButtonDown="Header_MouseLeftButtonDown">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                
+                <!-- Search Bar — expands inline when toggled -->
+                <Border x:Name="SearchBarContainer" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,6,0" Visibility="Collapsed"
+                        Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="8" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" Padding="6,2"
+                        Panel.ZIndex="10" PreviewMouseLeftButtonDown="SearchBar_PreviewMouseDown"
+                        RenderTransformOrigin="0.5,0">
+                    <Border.RenderTransform>
+                        <TranslateTransform Y="0"/>
+                    </Border.RenderTransform>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid Grid.Column="0" Background="Transparent">
+                            <TextBlock x:Name="SearchPlaceholder" Text="Search" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" FontSize="12" IsHitTestVisible="False" Margin="10,0,0,0"/>
+                            <TextBox x:Name="SearchTextBox" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
+                                     FontSize="12" VerticalAlignment="Center" CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Padding="4,2" Margin="0"
+                                     HorizontalContentAlignment="Left"
+                                     TextChanged="SearchTextBox_TextChanged" PreviewKeyDown="SearchTextBox_PreviewKeyDown">
+                                <TextBox.Style>
+                                    <Style TargetType="TextBox">
+                                        <Setter Property="Background" Value="Transparent"/>
+                                        <Setter Property="BorderThickness" Value="0"/>
+                                        <Setter Property="Focusable" Value="True"/>
+                                        <Setter Property="Template">
+                                            <Setter.Value>
+                                                <ControlTemplate TargetType="TextBox">
+                                                    <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                                                        <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Style>
+                                </TextBox.Style>
+                            </TextBox>
+                        </Grid>
+                        <!-- Clear search button -->
+                        <ui:Button Grid.Column="1" Focusable="False" Appearance="Secondary" Foreground="#9CA3AF" Click="ClearSearch_Click" ToolTip="Clear Search" Margin="2,0,0,0" Padding="4,2" CornerRadius="6">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss12" FontSize="10"/></ui:Button.Icon>
+                        </ui:Button>
+                    </Grid>
+                </Border>
+                
+                <Border Grid.Column="0" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                
+                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                    
+                    <!-- Search Toggle -->
+                    <ui:Button x:Name="SearchToggleBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="SearchToggle_Click" ToolTip="Search Clipboard (Ctrl+F)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
+                        <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" /></ui:Button.Icon>
+                    </ui:Button>
+
+                    <!-- Bouncy Drag Drop Arrow Indicator — borderless, appears only when dragging -->
+                    <Grid Width="28" Height="28" Margin="0,0,6,0" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <Grid.Style>
+                            <Style TargetType="Grid">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Grid.Style>
+                        <ui:SymbolIcon Symbol="ArrowDown24" Foreground="#10B981" RenderTransformOrigin="0.5,0.5" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <ui:SymbolIcon.RenderTransform>
+                                <TranslateTransform x:Name="ArrowTranslate" Y="0"/>
+                            </ui:SymbolIcon.RenderTransform>
+                            <ui:SymbolIcon.Style>
+                                <Style TargetType="ui:SymbolIcon">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                            <DataTrigger.EnterActions>
+                                                <BeginStoryboard x:Name="BounceArrowStory">
+                                                    <Storyboard RepeatBehavior="Forever">
+                                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                                         From="-4" To="4" Duration="0:0:0.6" AutoReverse="True">
+                                                            <DoubleAnimation.EasingFunction>
+                                                                <SineEase EasingMode="EaseInOut"/>
+                                                            </DoubleAnimation.EasingFunction>
+                                                        </DoubleAnimation>
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.EnterActions>
+                                            <DataTrigger.ExitActions>
+                                                <StopStoryboard BeginStoryboardName="BounceArrowStory"/>
+                                            </DataTrigger.ExitActions>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ui:SymbolIcon.Style>
+                        </ui:SymbolIcon>
+                    </Grid>
+
+                    <!-- Sort/Filter by Category -->
+                    <ui:Button x:Name="SortFilterBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="SortFilter_Click" ToolTip="Filter by Category" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
+                        <ui:Button.Icon><ui:SymbolIcon Symbol="Filter24" /></ui:Button.Icon>
+                    </ui:Button>
+
+                    <!-- Emoji Picker -->
+                    <ui:Button x:Name="EmojiBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
+                        <ui:Button.Icon><ui:SymbolIcon Symbol="Emoji24" /></ui:Button.Icon>
+                    </ui:Button>
+
+                    <!-- Merge PDF button — hidden by default, replaces emoji space when PDFs selected -->
+                    <ui:Button x:Name="MergePdfToolbarBtn" Focusable="False" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,6,0" Padding="8,6" CornerRadius="8" Background="#30EF4444" Foreground="#EF4444" BorderBrush="#50EF4444">
+                        <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24" Foreground="#EF4444"/></ui:Button.Icon>
+                    </ui:Button>
+                    
+                    <ui:Button x:Name="SyncToolbarBtn" Focusable="False" Appearance="Secondary" Style="{StaticResource ToolbarSyncButtonStyle}" Click="ToggleGlobalSync_Click" ToolTip="Toggle All Sync (LAN + Cloud)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
+                        <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowSync24" Filled="True"/></ui:Button.Icon>
+                    </ui:Button>
+
+                    <!-- Unpin toolbar button — hidden by default, replaces sync space when pinned items selected -->
+                    <ui:Button x:Name="UnpinToolbarBtn" Focusable="False" Visibility="Collapsed" Click="UnpinSelectedBtn_Click" ToolTip="Unpin Selected Items" Margin="0,0,6,0" Padding="8,6" CornerRadius="8" Background="#30F59E0B" Foreground="#F59E0B" BorderBrush="#50F59E0B">
+                        <ui:Button.Icon><ui:SymbolIcon Symbol="PinOff24" Foreground="#F59E0B"/></ui:Button.Icon>
+                    </ui:Button>
+
+                    <!-- Clear Shelf -->
+                    <ui:Button x:Name="ClearShelfBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="Clear_Click" ToolTip="Clear Shelf (keeps pinned)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
+                        <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" /></ui:Button.Icon>
+                    </ui:Button>
+                    
+                    <ui:Button Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="CloseWindow_Click" ToolTip="Hide (Esc)" Padding="8,6" CornerRadius="8">
+                        <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" Filled="True"/></ui:Button.Icon>
+                    </ui:Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- Dynamic Inline Category Filter Panel -->
+            <Border x:Name="SortFilterInlineBar" Margin="14,0,14,8" Visibility="Collapsed" Opacity="0"
+                    CornerRadius="10" Padding="4"
+                    Background="{DynamicResource MicaWPF.Brushes.SmokeFillColorDefault}" 
+                    BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
                     RenderTransformOrigin="0.5,0">
                 <Border.RenderTransform>
                     <TranslateTransform Y="0"/>
                 </Border.RenderTransform>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <Grid Grid.Column="0" Background="Transparent">
-                        <TextBlock x:Name="SearchPlaceholder" Text="Search" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" FontSize="12" IsHitTestVisible="False" Margin="10,0,0,0"/>
-                        <TextBox x:Name="SearchTextBox" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
-                                 FontSize="12" VerticalAlignment="Center" CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Padding="4,2" Margin="0"
-                                 HorizontalContentAlignment="Left"
-                                 TextChanged="SearchTextBox_TextChanged" PreviewKeyDown="SearchTextBox_PreviewKeyDown">
-                            <TextBox.Style>
-                                <Style TargetType="TextBox">
-                                    <Setter Property="Background" Value="Transparent"/>
-                                    <Setter Property="BorderThickness" Value="0"/>
-                                    <Setter Property="Focusable" Value="True"/>
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="TextBox">
-                                                <Border Background="Transparent" Padding="{TemplateBinding Padding}">
-                                                    <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
-                                                </Border>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </TextBox.Style>
-                        </TextBox>
-                    </Grid>
-                    <!-- Clear search button -->
-                    <ui:Button Grid.Column="1" Focusable="False" Appearance="Secondary" Foreground="#9CA3AF" Click="ClearSearch_Click" ToolTip="Clear Search" Margin="2,0,0,0" Padding="4,2" CornerRadius="6">
-                        <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss12" FontSize="10"/></ui:Button.Icon>
-                    </ui:Button>
-                </Grid>
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.15" Color="#000000"/>
+                </Border.Effect>
+                <UniformGrid Rows="1" HorizontalAlignment="Center" MaxWidth="420" Width="{Binding ActualWidth, ElementName=TopHeaderGrid}">
+                    <Border x:Name="FilterBtn_Images" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="Images"
+                            Background="#18F472B6" BorderBrush="#30F472B6" BorderThickness="1" Padding="0,5">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <ui:SymbolIcon Symbol="Image24" Foreground="#F472B6" FontSize="13" Margin="0,0,4,0"/>
+                            <TextBlock Text="Img" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                    <Border x:Name="FilterBtn_Pinned" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="Pinned"
+                            Background="#18FBBF24" BorderBrush="#30FBBF24" BorderThickness="1" Padding="0,5">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <ui:SymbolIcon Symbol="Pin24" Foreground="#FBBF24" Filled="True" FontSize="13" Margin="0,0,4,0"/>
+                            <TextBlock Text="Pin" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                    <Border x:Name="FilterBtn_Pdf" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="PDF"
+                            Background="#18EF4444" BorderBrush="#30EF4444" BorderThickness="1" Padding="0,5">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="#EF4444" FontSize="13" Margin="0,0,4,0"/>
+                            <TextBlock Text="PDF" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                    <Border x:Name="FilterBtn_Docs" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="Docs"
+                            Background="#1860A5FA" BorderBrush="#3060A5FA" BorderThickness="1" Padding="0,5">
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <ui:SymbolIcon Symbol="Document24" Foreground="#60A5FA" FontSize="13" Margin="0,0,4,0"/>
+                            <TextBlock Text="Doc" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                    <Border CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterClear_Click"
+                            Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                            BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" Padding="0,5">
+                        <ui:SymbolIcon Symbol="Dismiss16" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" HorizontalAlignment="Center"/>
+                    </Border>
+                </UniformGrid>
             </Border>
-            
-            <Border Grid.Column="0" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
-            
-            <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-                
-                <!-- Search Toggle -->
-                <ui:Button x:Name="SearchToggleBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="SearchToggle_Click" ToolTip="Search Clipboard (Ctrl+F)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                    <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" /></ui:Button.Icon>
-                </ui:Button>
-
-                <!-- Bouncy Drag Drop Arrow Indicator — borderless, appears only when dragging -->
-                <Grid Width="28" Height="28" Margin="0,0,6,0" VerticalAlignment="Center" HorizontalAlignment="Center">
-                    <Grid.Style>
-                        <Style TargetType="Grid">
-                            <Setter Property="Visibility" Value="Collapsed"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Grid.Style>
-                    <ui:SymbolIcon Symbol="ArrowDown24" Foreground="#10B981" RenderTransformOrigin="0.5,0.5" HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <ui:SymbolIcon.RenderTransform>
-                            <TranslateTransform x:Name="ArrowTranslate" Y="0"/>
-                        </ui:SymbolIcon.RenderTransform>
-                        <ui:SymbolIcon.Style>
-                            <Style TargetType="ui:SymbolIcon">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                        <DataTrigger.EnterActions>
-                                            <BeginStoryboard x:Name="BounceArrowStory">
-                                                <Storyboard RepeatBehavior="Forever">
-                                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                                                     From="-4" To="4" Duration="0:0:0.6" AutoReverse="True">
-                                                        <DoubleAnimation.EasingFunction>
-                                                            <SineEase EasingMode="EaseInOut"/>
-                                                        </DoubleAnimation.EasingFunction>
-                                                    </DoubleAnimation>
-                                                </Storyboard>
-                                            </BeginStoryboard>
-                                        </DataTrigger.EnterActions>
-                                        <DataTrigger.ExitActions>
-                                            <StopStoryboard BeginStoryboardName="BounceArrowStory"/>
-                                        </DataTrigger.ExitActions>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ui:SymbolIcon.Style>
-                    </ui:SymbolIcon>
-                </Grid>
-
-                <ui:Button Name="ToggleExpandBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="OpenApp_Click" ToolTip="Open FlyShelf Hub" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                    <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowMaximize24" /></ui:Button.Icon>
-                </ui:Button>
-
-                <!-- Emoji Picker -->
-                <ui:Button x:Name="EmojiBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                    <ui:Button.Icon><ui:SymbolIcon Symbol="Emoji24" /></ui:Button.Icon>
-                </ui:Button>
-
-                <!-- Merge PDF button — hidden by default, replaces emoji space when PDFs selected -->
-                <ui:Button x:Name="MergePdfToolbarBtn" Focusable="False" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,6,0" Padding="8,6" CornerRadius="8" Background="#30EF4444" Foreground="#EF4444" BorderBrush="#50EF4444">
-                    <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24" Foreground="#EF4444"/></ui:Button.Icon>
-                </ui:Button>
-                
-                <ui:Button x:Name="SyncToolbarBtn" Focusable="False" Appearance="Secondary" Style="{StaticResource ToolbarSyncButtonStyle}" Click="ToggleGlobalSync_Click" ToolTip="Toggle All Sync (LAN + Cloud)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                    <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowSync24" Filled="True"/></ui:Button.Icon>
-                </ui:Button>
-
-                <!-- Unpin toolbar button — hidden by default, replaces sync space when pinned items selected -->
-                <ui:Button x:Name="UnpinToolbarBtn" Focusable="False" Visibility="Collapsed" Click="UnpinSelectedBtn_Click" ToolTip="Unpin Selected Items" Margin="0,0,6,0" Padding="8,6" CornerRadius="8" Background="#30F59E0B" Foreground="#F59E0B" BorderBrush="#50F59E0B">
-                    <ui:Button.Icon><ui:SymbolIcon Symbol="PinOff24" Foreground="#F59E0B"/></ui:Button.Icon>
-                </ui:Button>
-
-                <!-- Clear Shelf -->
-                <ui:Button x:Name="ClearShelfBtn" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="Clear_Click" ToolTip="Clear Shelf (keeps pinned)" Margin="0,0,6,0" Padding="8,6" CornerRadius="8">
-                    <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" /></ui:Button.Icon>
-                </ui:Button>
-                
-                <ui:Button Focusable="False" Appearance="Secondary" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Click="CloseWindow_Click" ToolTip="Hide (Esc)" Padding="8,6" CornerRadius="8">
-                    <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" Filled="True"/></ui:Button.Icon>
-                </ui:Button>
-            </StackPanel>
-        </Grid>
+        </StackPanel>
 
         <!-- ═══ MASCOT THEME OVERLAYS ═══ -->
         <!-- Header Mascot: beside the search icon (top-right of toolbar) -->
@@ -350,111 +503,8 @@
 
                         <!-- Inner highlight border for frosted glass effect -->
                         <Border Name="InnerHighlightBorder" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" CornerRadius="14" Padding="12">
-                        <Grid Name="ItemGrid" HorizontalAlignment="Stretch" Background="Transparent" Tag="{Binding DataContext, ElementName=ShelfListView}">
-                            <Grid.ContextMenu>
-                                <ContextMenu>
-                                    <ContextMenu.Resources>
-                                        <Style TargetType="Separator">
-                                            <Setter Property="Margin" Value="8,4"/>
-                                            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
-                                        </Style>
-                                        <Style TargetType="MenuItem">
-                                            <Setter Property="Padding" Value="10,6"/>
-                                            <Setter Property="FontSize" Value="12.5"/>
-                                        </Style>
-                                    </ContextMenu.Resources>
-
-                                    <!-- ═══ Universal: Pin / Unpin ═══ -->
-                                    <MenuItem Header="{Binding PlacementTarget.DataContext.PinLabel, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Command="{Binding PlacementTarget.Tag.TogglePinCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-
-                                    <!-- ═══ Universal: Copy Content ═══ -->
-                                    <MenuItem Header="Copy to Clipboard" 
-                                              Command="{Binding PlacementTarget.Tag.CopyRawContentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
-
-
-
-                                    <Separator />
-
-                                    <!-- ═══ TEXT / CODE Actions ═══ -->
-                                    <MenuItem Header="🔍 Search on Google" Click="GoogleSearch_Click" 
-                                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                              Visibility="{Binding PlacementTarget.DataContext.IsTextPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-
-                                    <!-- ═══ CODE: VS Code + Terminal ═══ -->
-                                    <MenuItem Header="Open in VS Code" 
-                                              Command="{Binding PlacementTarget.Tag.LaunchSandboxCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Visibility="{Binding PlacementTarget.DataContext.IsCodePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                    <MenuItem Header="Run in Terminal" 
-                                              Command="{Binding PlacementTarget.Tag.LaunchTerminalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Visibility="{Binding PlacementTarget.DataContext.IsCodePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                    <MenuItem Header="Compile C++ &amp; Run" 
-                                              Command="{Binding PlacementTarget.Tag.CompileNativeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Visibility="{Binding PlacementTarget.DataContext.IsCPlusPlusPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-
-                                    <!-- ═══ IMAGE: OCR Extract + Gemini Table ═══ -->
-                                    <MenuItem Header="Extract Text (OCR)" 
-                                              Command="{Binding PlacementTarget.Tag.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                    <MenuItem Header="📊 Extract Table Data (Gemini AI)" 
-                                              Command="{Binding PlacementTarget.Tag.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                              Foreground="#A855F7"
-                                              Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                    <MenuItem Header="Convert Image to PDF" 
-                                              Command="{Binding PlacementTarget.Tag.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                    <MenuItem Header="Scan QR Code" 
-                                              Command="{Binding PlacementTarget.Tag.ManualScanQRCodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Foreground="#A855F7"
-                                              Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-
-                                    <!-- ═══ PDF: Open + Convert ═══ -->
-                                    <MenuItem Header="Open PDF in Browser" 
-                                              Command="{Binding PlacementTarget.Tag.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Visibility="{Binding PlacementTarget.DataContext.IsPdfPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                    <MenuItem Header="Convert PDF to Word" Click="ConvertPdfToWord_Click" 
-                                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                              Visibility="{Binding PlacementTarget.DataContext.IsPdfPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-
-                                    <!-- ═══ DOCUMENT: Convert to PDF ═══ -->
-                                    <MenuItem Header="Convert to PDF" 
-                                              Command="{Binding PlacementTarget.Tag.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Visibility="{Binding PlacementTarget.DataContext.IsDocPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-
-                                    <!-- ═══ URL: Open in Browser ═══ -->
-                                    <MenuItem Header="Open in Browser" 
-                                              Command="{Binding PlacementTarget.Tag.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              Visibility="{Binding PlacementTarget.DataContext.IsUrlPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-
-                                    <Separator />
-
-                                    <!-- ═══ FILE-BACKED: Show in Explorer ═══ -->
-                                    <MenuItem Header="Show in Explorer" 
-                                              Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                                              Visibility="{Binding PlacementTarget.DataContext.CanShowInExplorer, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-
-                                    <Separator />
-
-                                    <!-- ═══ Universal: Delete ═══ -->
-                                    <MenuItem Header="Delete" 
-                                              Command="{Binding PlacementTarget.Tag.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                                              CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Foreground="#EF4444"/>
-                                </ContextMenu>
-                            </Grid.ContextMenu>
-                            <Grid.RowDefinitions>
+                            <Grid Name="ItemGrid" HorizontalAlignment="Stretch" Background="Transparent" Tag="{Binding DataContext, ElementName=ShelfListView}" ContextMenu="{StaticResource CardContextMenu}">
+                                <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>

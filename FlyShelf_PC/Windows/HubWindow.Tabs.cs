@@ -378,7 +378,7 @@ namespace FlyShelf.Windows
 
         // ═══ Color Copy Handlers ═══
 
-        private void CopyColorHex_Click(object sender, RoutedEventArgs e)
+        internal void CopyColorHex_Click(object sender, RoutedEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is ViewModels.ClipboardItem item && item.HasDetectedColor)
             {
@@ -387,7 +387,7 @@ namespace FlyShelf.Windows
             }
         }
 
-        private void CopyColorRgb_Click(object sender, RoutedEventArgs e)
+        internal void CopyColorRgb_Click(object sender, RoutedEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is ViewModels.ClipboardItem item && item.HasDetectedColor)
             {
@@ -397,7 +397,7 @@ namespace FlyShelf.Windows
             }
         }
 
-        private void CopyColorHsl_Click(object sender, RoutedEventArgs e)
+        internal void CopyColorHsl_Click(object sender, RoutedEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is ViewModels.ClipboardItem item && item.HasDetectedColor)
             {

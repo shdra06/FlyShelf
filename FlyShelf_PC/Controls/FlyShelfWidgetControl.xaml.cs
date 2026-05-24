@@ -34,9 +34,9 @@ namespace FlyShelf.Controls
                     isMode1 = true;
                 }
 
-                if (_mainWindow.IsVisible && isMode1)
+                if (_mainWindow.IsSummoned && isMode1)
                 {
-                    _mainWindow.Hide();
+                    _mainWindow.AnimateAndHide();
                 }
                 else
                 {

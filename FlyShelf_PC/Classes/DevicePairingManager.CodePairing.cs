@@ -1,4 +1,4 @@
-// ---------------------------------------------------------------
+﻿// ---------------------------------------------------------------
 // DevicePairingManager — Code-Based Pairing, Handshake & Persistence
 // ConnectByCode, WriteHandshakeToFirebase, CheckForHandshakes, Load, Save
 // Split from DevicePairingManager.cs for modularity
@@ -229,7 +229,7 @@ namespace FlyShelf.Classes
 
                         System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         {
-                            FlyShelf.Windows.ToastWindow.ShowToast($"Ã°Å¸â€â€” {devName} joined your sync group!");
+                            FlyShelf.Windows.ToastWindow.ShowToast($"Ã°Å¸â€— {devName} joined your sync group!");
                         });
                     }
 

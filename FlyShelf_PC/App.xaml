@@ -129,7 +129,7 @@
             <!-- Native pixel-based scrolling — same as settings tab -->
             <Style TargetType="ScrollViewer">
                 <Setter Property="CanContentScroll" Value="False"/>
-                <Setter Property="PanningMode" Value="VerticalOnly"/>
+                <Setter Property="PanningMode" Value="None"/>
             </Style>
 
         </ResourceDictionary>

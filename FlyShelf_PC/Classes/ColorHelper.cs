@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text.RegularExpressions;
 using System.Windows.Media;
 
@@ -28,7 +28,7 @@ namespace FlyShelf.Classes
             hexColor = "";
             r = g = b = 0;
 
-            if (string.IsNullOrWhiteSpace(text)) return false;
+            if (string.IsNullOrWhiteSpace(text) || text.Length > 200) return false;
 
             // Try hex first
             var hexMatch = HexPattern.Match(text);

@@ -139,6 +139,28 @@ namespace FlyShelf.ViewModels
             } 
         }
         
+        private string? _cachedId;
+        
+        [JsonIgnore]
+        public string ItemId
+        {
+            get
+            {
+                if (_cachedId == null)
+                {
+                    string contentKey = RawContent ?? FileName ?? FilePath ?? "";
+                    string hashInput = contentKey.Length > 1000 ? contentKey.Substring(0, 1000) : contentKey;
+                    int stableHash = hashInput.GetHashCode(StringComparison.Ordinal);
+                    _cachedId = $"{ItemType}_{DateCopied.Ticks}_{stableHash:X8}";
+                }
+                return _cachedId;
+            }
+        }
+
+        // PERF: Suppress notifications during construction — item isn't in visual tree yet
+        [JsonIgnore]
+        internal bool _suppressPropertyNotifications = false;
+
         private ClipboardItemType _itemType = ClipboardItemType.File;
         public ClipboardItemType ItemType
         {
@@ -148,6 +170,7 @@ namespace FlyShelf.ViewModels
                 if (_itemType != value)
                 {
                     _itemType = value;
+                    if (_suppressPropertyNotifications) return;
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ItemType)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLongText)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));

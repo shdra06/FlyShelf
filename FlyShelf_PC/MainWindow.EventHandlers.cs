@@ -185,7 +185,7 @@ namespace FlyShelf
 
         private void CloseWindow_Click(object sender, RoutedEventArgs e)
         {
-            this.Hide();
+            AnimateAndHide();
             _isDragHovering = false;
             IsDragHovering = false;
         }
@@ -487,7 +487,7 @@ namespace FlyShelf
                 }
                 else
                 {
-                    this.Hide();
+                    AnimateAndHide();
                 }
                 e.Handled = true;
             }
@@ -560,9 +560,9 @@ namespace FlyShelf
 
         private void nIcon_LeftClick(Wpf.Ui.Tray.Controls.NotifyIcon sender, RoutedEventArgs e)
         {
-            if (this.IsVisible && _viewModel.IsFullMode)
+            if (_isCurrentlySummoned && _viewModel.IsFullMode)
             {
-                this.Hide();
+                AnimateAndHide();
             }
             else
             {

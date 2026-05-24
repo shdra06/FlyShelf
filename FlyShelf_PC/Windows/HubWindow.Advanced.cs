@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------
-// HubWindow ï¿½ Advanced Features
+// HubWindow — Advanced Features
 // SnifferPaths, Device Management, Device Groups, Updates,
 // Kinetic Scroll, Theming, Wallpaper, QR Pairing, Color Tools
 // Split from HubWindow.xaml.cs for modularity
@@ -39,7 +39,7 @@ namespace FlyShelf.Windows
                     string myLocalUrl = _viewModel.LocalServer?.ServerUrl ?? "";
                     string myGlobalUrl = _viewModel.LocalServer?.GlobalUrl ?? "";
 
-                    // Always add self to LAN â€” this device IS a LAN device
+                    // Always add self to LAN — this device IS a LAN device
                     lanItems.Add(new DeviceDisplayItem
                     {
                         DeviceName = myName + " (You)",
@@ -51,9 +51,9 @@ namespace FlyShelf.Windows
                         GlobalUrl = myGlobalUrl
                     });
 
-                    // â•â•â• Use PeerManager's CONFIRMED connection data â•â•â•
+                    // ═ ═ ═ Use PeerManager's CONFIRMED connection data ═ ═ ═
                     // PeerManager has already handshaked with each peer and knows the exact transport.
-                    // This is the ground truth â€” no guessing needed.
+                    // This is the ground truth — no guessing needed.
                     var peerStatuses = PeerManager.Instance?.GetPeerStatuses() 
                         ?? new System.Collections.Generic.List<PeerStatusItem>();
                     var confirmedPeerIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -71,7 +71,7 @@ namespace FlyShelf.Windows
                                 DeviceType = "PC",
                                 IsOnline = true,
                                 ConnectionType = "Local",
-                                LastSeen = $"LAN active â€” {peer.ActiveUrl}",
+                                LastSeen = $"LAN active — {peer.ActiveUrl}",
                                 LocalIp = peer.LanUrl,
                                 GlobalUrl = peer.CloudflareUrl
                             });
@@ -106,7 +106,7 @@ namespace FlyShelf.Windows
                         }
                     }
 
-                    // â•â•â• Non-PeerManager devices (phones, other platforms from Firebase) â•â•â•
+                    // ═ ═ ═ Non-PeerManager devices (phones, other platforms from Firebase) ═ ═ ═
                     // These are devices we don't have a direct P2P handshake with.
                     // Classify by checking if they share our LAN subnet AND respond to a health check.
                     var pingTasks = devices
@@ -139,7 +139,7 @@ namespace FlyShelf.Windows
                         var d = c.Device;
                         if (c.IsLan)
                         {
-                            // Confirmed reachable on LAN â€” place in LAN column only
+                            // Confirmed reachable on LAN — place in LAN column only
                             lanItems.Add(new DeviceDisplayItem
                             {
                                 DeviceName = d.Name,
@@ -152,7 +152,7 @@ namespace FlyShelf.Windows
                         }
                         else if (d.IsOnline)
                         {
-                            // Online but NOT on LAN â€” Cloud only
+                            // Online but NOT on LAN — Cloud only
                             cloudItems.Add(new DeviceDisplayItem
                             {
                                 DeviceName = d.Name,
@@ -172,7 +172,7 @@ namespace FlyShelf.Windows
                 LanDevicesPanel.ItemsSource = result.LanItems;
                 CloudDevicesPanel.ItemsSource = result.CloudItems;
 
-                // Show/hide empty text â€” lanItems always has self, so "No LAN devices" means no OTHER LAN peers
+                // Show/hide empty text — lanItems always has self, so "No LAN devices" means no OTHER LAN peers
                 LanEmptyText.Visibility = result.LanItems.Count <= 1 ? Visibility.Visible : Visibility.Collapsed;
                 CloudEmptyText.Visibility = result.CloudItems.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
@@ -207,20 +207,20 @@ namespace FlyShelf.Windows
                 string copyUrl = !string.IsNullOrEmpty(device.GlobalUrl) ? device.GlobalUrl : device.LocalIp;
                 if (!string.IsNullOrEmpty(copyUrl))
                 {
-                    try { Clipboard.SetText(copyUrl); info += "\n\nâœ… URL copied to clipboard!"; } catch { }
+                    try { Clipboard.SetText(copyUrl); info += "\n\n✅ URL copied to clipboard!"; } catch { }
                 }
 
-                MessageBox.Show(info, $"Device Info â€” {device.DeviceName}", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(info, $"Device Info — {device.DeviceName}", MessageBoxButton.OK, MessageBoxImage.Information);
                 e.Handled = true;
             }
         }
 
         /// <summary>
-        /// Extracts the subnet prefix from an IP address (first 3 octets): "192.168.1.106" â†’ "192.168.1"
+        /// Extracts the subnet prefix from an IP address (first 3 octets): "192.168.1.106" → "192.168.1"
         /// </summary>
 
 
-        // â•â•â• Device Groups (Firebase-synced) â•â•â•
+        // ═ ═ ═ Device Groups (Firebase-synced) ═ ═ ═
 
         private async void RefreshGroups()
         {
@@ -303,7 +303,7 @@ namespace FlyShelf.Windows
                     for (int i = 0; i < deviceNames.Count; i++)
                     {
                         bool inGroup = (group.DeviceNames ?? new List<string>()).Contains(deviceNames[i]);
-                        prompt += $"  {i + 1}. {deviceNames[i]}{(inGroup ? " â˜…" : "")}\n";
+                        prompt += $"  {i + 1}. {deviceNames[i]}{(inGroup ? " ★" : "")}\n";
                         if (inGroup) preSelected.Add(i + 1);
                     }
 
@@ -337,7 +337,7 @@ namespace FlyShelf.Windows
         }
 
         /// <summary>
-        /// Pure WPF input dialog â€” no System.Windows.Forms dependency.
+        /// Pure WPF input dialog — no System.Windows.Forms dependency.
         /// </summary>
         private static string ShowInputDialog(string message, string title, string defaultValue)
         {
@@ -408,7 +408,7 @@ namespace FlyShelf.Windows
                 if (success)
                 {
                     UpdateBtn.Content = "Restarting...";
-                    UpdateStatusText.Text = "âœ… Update downloaded! Restarting now...";
+                    UpdateStatusText.Text = "✅ Update downloaded! Restarting now...";
                     await Task.Delay(1500);
                     _updateManager.ApplyUpdateAndRestart();
                 }
@@ -443,7 +443,7 @@ namespace FlyShelf.Windows
             {
                 RedownloadBtn.IsEnabled = false;
                 UpdateBtn.Content = "Restarting...";
-                UpdateStatusText.Text = $"âœ… v{UpdateManager.CurrentVersion} re-downloaded! Restarting now...";
+                UpdateStatusText.Text = $"✅ v{UpdateManager.CurrentVersion} re-downloaded! Restarting now...";
                 UpdatePctText.Text = "100%";
 
                 await Task.Delay(1500);
@@ -453,7 +453,7 @@ namespace FlyShelf.Windows
             {
                 RedownloadBtn.IsEnabled = true;
                 UpdateBtn.IsEnabled = true;
-                UpdateStatusText.Text = "â Œ Redownload failed â€” check your internet connection.";
+                UpdateStatusText.Text = "❌ Redownload failed — check your internet connection.";
             }
         }
 
@@ -468,6 +468,6 @@ namespace FlyShelf.Windows
         public string LastSeen { get; set; } = "";
         public string LocalIp { get; set; } = "";
         public string GlobalUrl { get; set; } = "";
-        public string ConnectionInfo => !string.IsNullOrEmpty(GlobalUrl) ? "ðŸŒ  Cloudflare Active" : !string.IsNullOrEmpty(LocalIp) ? "ðŸ“¡ LAN" : "";
+        public string ConnectionInfo => !string.IsNullOrEmpty(GlobalUrl) ? "🌐 Cloudflare Active" : !string.IsNullOrEmpty(LocalIp) ? "📡 LAN" : "";
     }
 }

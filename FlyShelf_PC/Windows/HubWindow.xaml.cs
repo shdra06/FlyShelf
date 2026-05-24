@@ -81,7 +81,7 @@ namespace FlyShelf.Windows
             {
                 if (hasUpdate)
                 {
-                    LatestVersionText.Text = $"â†’ v{_updateManager.LatestVersion} available!";
+                    LatestVersionText.Text = $"→ v{_updateManager.LatestVersion} available!";
                     ChangelogText.Text = _updateManager.Changelog;
                     ChangelogPanel.Visibility = Visibility.Visible;
                     UpdateBtn.Content = "Downloading...";
@@ -93,7 +93,7 @@ namespace FlyShelf.Windows
                     if (success)
                     {
                         UpdateBtn.Content = "Restarting...";
-                        UpdateStatusText.Text = "âœ… Update downloaded! Restarting now...";
+                        UpdateStatusText.Text = "✅ Update downloaded! Restarting now...";
                         UpdatePctText.Text = "100%";
 
                         // Auto-apply after a brief moment so user sees the status
@@ -108,7 +108,7 @@ namespace FlyShelf.Windows
                 }
                 else
                 {
-                    UpdateBtn.Content = "âœ“ Up to Date";
+                    UpdateBtn.Content = "✓ Up to Date";
                     UpdateBtn.IsEnabled = false;
                     UpdateProgressPanel.Visibility = Visibility.Collapsed;
 
@@ -119,7 +119,7 @@ namespace FlyShelf.Windows
                 }
             });
 
-            // No auto-update at startup â€” manual only via the button
+            // No auto-update at startup — manual only via the button
 
             // Active fast-polling timer for pairing handshakes (runs every 2 seconds when Network tab is visible)
             _pairingHandshakeTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
@@ -166,8 +166,8 @@ namespace FlyShelf.Windows
                 Dispatcher.InvokeAsync(() =>
                 {
                     RefreshDevices_Click(null, null);
-                    // Hook window-level smooth scrolling with elegant sweeping PCAppProfile
-                    Classes.SmoothScroll.AttachToWindow(this, Classes.SmoothScroll.PCAppProfile);
+                    // Hook window-level smooth scrolling with elegant dedicated SmoothScrollPCApp
+                    Classes.SmoothScrollPCApp.AttachToWindow(this);
 
                     // Initialize retention ComboBox from saved setting
                     if (RetentionCombo != null)
@@ -188,7 +188,7 @@ namespace FlyShelf.Windows
             Unloaded += (s, ev) =>
             {
                 // Detach window-level smooth scrolling to prevent memory leaks
-                Classes.SmoothScroll.DetachFromWindow(this);
+                Classes.SmoothScrollPCApp.DetachFromWindow(this);
 
                 // Stop auto-refresh device timer
                 if (_deviceRefreshTimer != null)
@@ -265,7 +265,7 @@ namespace FlyShelf.Windows
             int count = _viewModel.DroppedItems.Count;
             _viewModel.ClearShelf();
             UpdateEmptyState();
-            ToastWindow.ShowToast($"Cleared {count} items ðŸ—‘ï¸");
+            ToastWindow.ShowToast($"Cleared {count} items 🗑ï¸");
         }
 
         private bool _isApplicationShuttingDown = false;
@@ -431,7 +431,7 @@ namespace FlyShelf.Windows
         // Live Preview buttons
         private void PreviewClipboardSize_Click(object sender, RoutedEventArgs e)
         {
-            // The HubWindow itself IS the clipboard preview â€” just flash to show effect
+            // The HubWindow itself IS the clipboard preview — just flash to show effect
             this.Width = SettingsManager.Current.MediumFormWidth;
             this.Height = SettingsManager.Current.MediumFormHeight;
             this.WindowStartupLocation = WindowStartupLocation.CenterScreen;

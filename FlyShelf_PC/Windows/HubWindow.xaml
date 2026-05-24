@@ -6,6 +6,7 @@
         xmlns:vm="clr-namespace:FlyShelf.ViewModels"
         xmlns:settings="clr-namespace:FlyShelf.Classes"
         xmlns:gif="https://github.com/XamlAnimatedGif/XamlAnimatedGif"
+        xmlns:styles="clr-namespace:FlyShelf.Styles"
         Title="FlyShelf Ecosystem" 
         Height="650" 
         Width="900"
@@ -20,191 +21,12 @@
     </WindowChrome.WindowChrome>
 
     <Window.Resources>
-        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
-
-        <!-- Premium Theme-Aware Setting Card Style -->
-        <Style x:Key="PremiumSettingStyle" TargetType="Border">
-            <Setter Property="CacheMode">
-                <Setter.Value>
-                    <BitmapCache EnableClearType="True" RenderAtScale="1"/>
-                </Setter.Value>
-            </Setter>
-            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
-            <Setter Property="RenderTransform">
-                <Setter.Value>
-                    <TranslateTransform Y="0" />
-                </Setter.Value>
-            </Setter>
-            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" />
-            <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="16" />
-            <Setter Property="Padding" Value="24" />
-            <Setter Property="Margin" Value="0,0,0,20" />
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" />
-                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorSecondary}" />
-                    <Trigger.EnterActions>
-                        <BeginStoryboard>
-                            <Storyboard>
-                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="-2" Duration="0:0:0.2">
-                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
-                                </DoubleAnimation>
-                            </Storyboard>
-                        </BeginStoryboard>
-                    </Trigger.EnterActions>
-                    <Trigger.ExitActions>
-                        <BeginStoryboard>
-                            <Storyboard>
-                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="0" Duration="0:0:0.25">
-                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
-                                </DoubleAnimation>
-                            </Storyboard>
-                        </BeginStoryboard>
-                    </Trigger.ExitActions>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <!-- Smooth Pixel Scroll Style for ListViews -->
-        <Style x:Key="SmoothScrollViewer" TargetType="ScrollViewer">
-            <Setter Property="CanContentScroll" Value="False" />
-            <Setter Property="PanningMode" Value="VerticalOnly" />
-            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
-            <Setter Property="HorizontalScrollBarVisibility" Value="Disabled" />
-        </Style>
-
-        <!-- Premium Apple-like Primary Button Style -->
-        <Style x:Key="ApplePrimaryButtonStyle" TargetType="{x:Type ui:Button}">
-            <Setter Property="Background">
-                <Setter.Value>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                        <GradientStop Color="#0066FF" Offset="0"/>
-                        <GradientStop Color="#004DF0" Offset="1"/>
-                    </LinearGradientBrush>
-                </Setter.Value>
-            </Setter>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#15000000"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="16,8"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background">
-                        <Setter.Value>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                <GradientStop Color="#1A7BFF" Offset="0"/>
-                                <GradientStop Color="#005CFF" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Setter.Value>
-                    </Setter>
-                    <Setter Property="Effect">
-                        <Setter.Value>
-                            <DropShadowEffect BlurRadius="8" Color="#005CFF" Opacity="0.3" ShadowDepth="1" Direction="270"/>
-                        </Setter.Value>
-                    </Setter>
-                </Trigger>
-                <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background">
-                        <Setter.Value>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                <GradientStop Color="#0044DD" Offset="0"/>
-                                <GradientStop Color="#0033BB" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Setter.Value>
-                    </Setter>
-                    <Setter Property="Effect" Value="{x:Null}"/>
-                </Trigger>
-                <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}"/>
-                    <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorDisabled}"/>
-                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
-                    <Setter Property="Effect" Value="{x:Null}"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <!-- Premium Apple-like Destructive Button Style -->
-        <Style x:Key="AppleDestructiveButtonStyle" TargetType="{x:Type ui:Button}">
-            <Setter Property="Background">
-                <Setter.Value>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                        <GradientStop Color="#FF453A" Offset="0"/>
-                        <GradientStop Color="#D7261E" Offset="1"/>
-                    </LinearGradientBrush>
-                </Setter.Value>
-            </Setter>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="BorderBrush" Value="#15000000"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="16,8"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background">
-                        <Setter.Value>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                <GradientStop Color="#FF6961" Offset="0"/>
-                                <GradientStop Color="#E03229" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Setter.Value>
-                    </Setter>
-                    <Setter Property="Effect">
-                        <Setter.Value>
-                            <DropShadowEffect BlurRadius="8" Color="#FF453A" Opacity="0.3" ShadowDepth="1" Direction="270"/>
-                        </Setter.Value>
-                    </Setter>
-                </Trigger>
-                <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background">
-                        <Setter.Value>
-                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                <GradientStop Color="#C92C25" Offset="0"/>
-                                <GradientStop Color="#B32019" Offset="1"/>
-                            </LinearGradientBrush>
-                        </Setter.Value>
-                    </Setter>
-                    <Setter Property="Effect" Value="{x:Null}"/>
-                </Trigger>
-                <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}"/>
-                    <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorDisabled}"/>
-                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
-                    <Setter Property="Effect" Value="{x:Null}"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
-        <!-- Premium Apple-like Secondary Button Style -->
-        <Style x:Key="AppleSecondaryButtonStyle" TargetType="{x:Type ui:Button}">
-            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}"/>
-            <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="CornerRadius" Value="8"/>
-            <Setter Property="Padding" Value="16,8"/>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorSecondary}"/>
-                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorSecondary}"/>
-                </Trigger>
-                <Trigger Property="IsPressed" Value="True">
-                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorTertiary}"/>
-                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
-                </Trigger>
-                <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}"/>
-                    <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorDisabled}"/>
-                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Styles/HubWindowStyles.xaml"/>
+                <styles:HubClipboardItemTemplate />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
     </Window.Resources>
 
     <Grid x:Name="RootGrid">
@@ -265,7 +87,7 @@
                 
                 <!-- 0. DASHBOARD TAB -->
                 <Grid x:Name="DashboardGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="VerticalOnly">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None">
                         <StackPanel Margin="0,8,0,0">
 
                             <!-- TOP ROW: 3 Stat Cards  -->
@@ -481,208 +303,75 @@
                             </StackPanel>
                         </Grid>
                     </Grid>
-                    
-                    <!-- Filter Chips — Pill-shaped with gradients -->
+                                        <!-- Filter Chips — Compact horizontal icon pills -->
                     <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
-                        <RadioButton Content="All" IsChecked="True" Checked="Filter_Checked" Tag="All" Margin="0,0,5,0">
-                            <RadioButton.Style>
-                                <Style TargetType="RadioButton">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
-                                                    <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#156366F1"/>
-                                                        <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#406366F1"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#6366F1"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </RadioButton.Style>
+                        <StackPanel.Resources>
+                            <Style x:Key="FilterChipStyle" TargetType="RadioButton">
+                                <Setter Property="Margin" Value="0,0,4,0"/>
+                                <Setter Property="Cursor" Value="Hand"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="RadioButton">
+                                            <Border x:Name="ChipBorder" CornerRadius="8" Padding="10,6" 
+                                                    Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                                                    BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
+                                                <ContentPresenter x:Name="ChipContent" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </StackPanel.Resources>
+
+                        <RadioButton IsChecked="True" Checked="Filter_Checked" Tag="All" Style="{StaticResource FilterChipStyle}">
+                            <TextBlock Text="All" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
                         </RadioButton>
-                        <RadioButton Content="📝 Text" Checked="Filter_Checked" Tag="Text" Margin="0,0,5,0">
-                            <RadioButton.Style>
-                                <Style TargetType="RadioButton">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
-                                                    <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#158B5CF6"/>
-                                                        <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#408B5CF6"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#8B5CF6"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </RadioButton.Style>
+                        <RadioButton Checked="Filter_Checked" Tag="Text" Style="{StaticResource FilterChipStyle}">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="TextDescription24" Foreground="#8B5CF6" FontSize="13" Margin="0,0,5,0"/>
+                                <TextBlock Text="Text" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                            </StackPanel>
                         </RadioButton>
-                        <RadioButton Content="⟩ Code" Checked="Filter_Checked" Tag="Code" Margin="0,0,5,0">
-                            <RadioButton.Style>
-                                <Style TargetType="RadioButton">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
-                                                    <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#1510B981"/>
-                                                        <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#4010B981"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#10B981"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </RadioButton.Style>
+                        <RadioButton Checked="Filter_Checked" Tag="Code" Style="{StaticResource FilterChipStyle}">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Code24" Foreground="#10B981" FontSize="13" Margin="0,0,5,0"/>
+                                <TextBlock Text="Code" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                            </StackPanel>
                         </RadioButton>
-                        <RadioButton Content="🖼 Images" Checked="Filter_Checked" Tag="Image" Margin="0,0,5,0">
-                            <RadioButton.Style>
-                                <Style TargetType="RadioButton">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
-                                                    <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#15EC4899"/>
-                                                        <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#40EC4899"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#EC4899"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </RadioButton.Style>
+                        <RadioButton Checked="Filter_Checked" Tag="Image" Style="{StaticResource FilterChipStyle}">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Image24" Foreground="#F472B6" FontSize="13" Margin="0,0,5,0"/>
+                                <TextBlock Text="Images" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                            </StackPanel>
                         </RadioButton>
-                        <RadioButton Content="📄 PDFs" Checked="Filter_Checked" Tag="Pdf" Margin="0,0,5,0">
-                            <RadioButton.Style>
-                                <Style TargetType="RadioButton">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
-                                                    <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#15EF4444"/>
-                                                        <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#40EF4444"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#EF4444"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </RadioButton.Style>
+                        <RadioButton Checked="Filter_Checked" Tag="Pdf" Style="{StaticResource FilterChipStyle}">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="#EF4444" FontSize="13" Margin="0,0,5,0"/>
+                                <TextBlock Text="PDFs" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                            </StackPanel>
                         </RadioButton>
-                        <RadioButton Content="📎 Docs" Checked="Filter_Checked" Tag="Document" Margin="0,0,5,0">
-                            <RadioButton.Style>
-                                <Style TargetType="RadioButton">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
-                                                    <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#153B82F6"/>
-                                                        <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#403B82F6"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#3B82F6"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </RadioButton.Style>
+                        <RadioButton Checked="Filter_Checked" Tag="Document" Style="{StaticResource FilterChipStyle}">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Document24" Foreground="#60A5FA" FontSize="13" Margin="0,0,5,0"/>
+                                <TextBlock Text="Docs" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                            </StackPanel>
                         </RadioButton>
-                        <RadioButton Content="🔗 Links" Checked="Filter_Checked" Tag="Url" Margin="0,0,5,0">
-                            <RadioButton.Style>
-                                <Style TargetType="RadioButton">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
-                                                    <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#150EA5E9"/>
-                                                        <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#400EA5E9"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#0EA5E9"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </RadioButton.Style>
+                        <RadioButton Checked="Filter_Checked" Tag="Url" Style="{StaticResource FilterChipStyle}">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Link24" Foreground="#0EA5E9" FontSize="13" Margin="0,0,5,0"/>
+                                <TextBlock Text="Links" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                            </StackPanel>
                         </RadioButton>
-                        <RadioButton Content="🎬 Videos" Checked="Filter_Checked" Tag="Video" Margin="0,0,0,0">
-                            <RadioButton.Style>
-                                <Style TargetType="RadioButton">
-                                    <Setter Property="Template">
-                                        <Setter.Value>
-                                            <ControlTemplate TargetType="RadioButton">
-                                                <Border x:Name="ChipBorder" CornerRadius="14" Padding="14,6" Cursor="Hand" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
-                                                    <TextBlock x:Name="ChipText" Text="{TemplateBinding Content}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                    <Trigger Property="IsChecked" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="#15D97706"/>
-                                                        <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#40D97706"/>
-                                                        <Setter TargetName="ChipText" Property="Foreground" Value="#D97706"/>
-                                                    </Trigger>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
-                                                    </Trigger>
-                                                </ControlTemplate.Triggers>
-                                            </ControlTemplate>
-                                        </Setter.Value>
-                                    </Setter>
-                                </Style>
-                            </RadioButton.Style>
+                        <RadioButton Checked="Filter_Checked" Tag="Video" Style="{StaticResource FilterChipStyle}">
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Video24" Foreground="#F59E0B" FontSize="13" Margin="0,0,5,0"/>
+                                <TextBlock Text="Videos" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                            </StackPanel>
                         </RadioButton>
                     </StackPanel>
                     
@@ -692,7 +381,7 @@
                               ScrollViewer.CanContentScroll="True"
                               HorizontalContentAlignment="Stretch" 
                               VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling"
-                              VirtualizingPanel.ScrollUnit="Pixel" VirtualizingPanel.CacheLength="10,10" VirtualizingPanel.CacheLengthUnit="Item"
+                              VirtualizingPanel.ScrollUnit="Item" VirtualizingPanel.CacheLength="10,10" VirtualizingPanel.CacheLengthUnit="Item"
                               SelectionMode="Extended" SelectionChanged="HubListView_SelectionChanged">
                         <ListView.ItemContainerStyle>
                             <Style TargetType="ListViewItem">
@@ -711,746 +400,7 @@
                             </Style>
                         </ListView.ItemContainerStyle>
                         <ListView.ItemTemplate>
-                            <DataTemplate>
-                                <Border Margin="0,0,18,6" Padding="0" ClipToBounds="True" CornerRadius="12" Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Setter Property="CacheMode">
-                                                <Setter.Value>
-                                                    <BitmapCache EnableClearType="True" RenderAtScale="1"/>
-                                                </Setter.Value>
-                                            </Setter>
-                                            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" />
-                                            <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" />
-                                            <Setter Property="BorderThickness" Value="1" />
-                                            <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
-                                            <Setter Property="RenderTransform">
-                                                <Setter.Value>
-                                                    <TranslateTransform Y="0" />
-                                                </Setter.Value>
-                                            </Setter>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding IsCheckedForMerge}" Value="True">
-                                                    <Setter Property="Background" Value="#156366F1" />
-                                                    <Setter Property="BorderBrush" Value="#406366F1" />
-                                                </DataTrigger>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" />
-                                                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorSecondary}" />
-                                                    <Trigger.EnterActions>
-                                                        <BeginStoryboard>
-                                                            <Storyboard>
-                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="-1.5" Duration="0:0:0.15">
-                                                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
-                                                                </DoubleAnimation>
-                                                            </Storyboard>
-                                                        </BeginStoryboard>
-                                                    </Trigger.EnterActions>
-                                                    <Trigger.ExitActions>
-                                                        <BeginStoryboard>
-                                                            <Storyboard>
-                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="0" Duration="0:0:0.2">
-                                                                    <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
-                                                                </DoubleAnimation>
-                                                            </Storyboard>
-                                                        </BeginStoryboard>
-                                                    </Trigger.ExitActions>
-                                                </Trigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <Border.ContextMenu>
-                                        <ContextMenu>
-                                            <!-- Universal Actions -->
-                                            <ui:MenuItem Header="Copy Content" Icon="{ui:SymbolIcon Copy24}" Command="{Binding PlacementTarget.Tag.CopyRawContentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
-                                            <ui:MenuItem Header="Pin / Unpin" Icon="{ui:SymbolIcon Pin24}" Command="{Binding PlacementTarget.Tag.TogglePinCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
-                                            <ui:MenuItem Header="Show in Explorer" Icon="{ui:SymbolIcon FolderOpen24}" Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
-                                            <Separator />
-                                            
-                                            <!-- Image Actions -->
-                                            <ui:MenuItem Header="Extract Text from Image (OCR)" Icon="{ui:SymbolIcon TextDescription24}" Foreground="#A855F7" Command="{Binding PlacementTarget.Tag.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Extract Table Data (Gemini AI)" Icon="{ui:SymbolIcon Table24}" Foreground="#A855F7" Command="{Binding PlacementTarget.Tag.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Convert Image to PDF" Icon="{ui:SymbolIcon Document24}" Foreground="#F59E0B" Command="{Binding PlacementTarget.Tag.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Scan QR Code" Icon="{ui:SymbolIcon QrCode24}" Foreground="#A855F7" Command="{Binding PlacementTarget.Tag.ManualScanQRCodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            
-                                            <!-- QR Code Actions -->
-                                            <ui:MenuItem Header="Extract QR Text &amp; Copy" Icon="{ui:SymbolIcon QrCode24}" Foreground="#8B5CF6" Command="{Binding PlacementTarget.Tag.CopyRawContentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsQRCodePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            
-                                            <!-- URL Actions -->
-                                            <ui:MenuItem Header="Open URL in Browser" Icon="{ui:SymbolIcon Earth24}" Foreground="#0EA5E9" Command="{Binding PlacementTarget.Tag.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsUrlPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            
-                                            <!-- PDF Actions -->
-                                            <ui:MenuItem Header="Open PDF" Icon="{ui:SymbolIcon Open24}" Command="{Binding PlacementTarget.Tag.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsPdfPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Convert PDF to Word" Icon="{ui:SymbolIcon Document24}" Foreground="#3B82F6" Command="{Binding PlacementTarget.Tag.ConvertPdfToWordCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsPdfPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Merge Selected PDFs" Icon="{ui:SymbolIcon DocumentCopy24}" Foreground="#EF4444" Command="{Binding PlacementTarget.Tag.MergeSelectedPdfsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Visibility="{Binding IsPdfPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            
-                                            <!-- Document Actions -->
-                                            <ui:MenuItem Header="Convert Word to PDF" Icon="{ui:SymbolIcon Document24}" Foreground="#3B82F6" Command="{Binding PlacementTarget.Tag.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsDocPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            
-                                            <!-- Code Actions -->
-                                            <ui:MenuItem Header="Run in Terminal" Icon="{ui:SymbolIcon Play24}" Foreground="#10B981" Command="{Binding PlacementTarget.Tag.LaunchTerminalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsCodePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Open in VS Code" Icon="{ui:SymbolIcon Code24}" Foreground="#60A5FA" Command="{Binding PlacementTarget.Tag.LaunchSandboxCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsCodePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Compile C++ &amp; Run" Icon="{ui:SymbolIcon Code24}" Foreground="#10B981" Command="{Binding PlacementTarget.Tag.CompileNativeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsCPlusPlusPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Run as Administrator" Icon="{ui:SymbolIcon Shield24}" Foreground="#EF4444" Command="{Binding PlacementTarget.Tag.RunAdminTerminalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsTerminalPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            
-                                            <Separator />
-                                            
-                                            <!-- Color Actions -->
-                                            <ui:MenuItem Header="Copy as Hex" Icon="{ui:SymbolIcon Color24}" Foreground="#EAB308" Click="CopyColorHex_Click" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Copy as RGB" Icon="{ui:SymbolIcon Color24}" Foreground="#F472B6" Click="CopyColorRgb_Click" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Copy as HSL" Icon="{ui:SymbolIcon Color24}" Foreground="#38BDF8" Click="CopyColorHsl_Click" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            
-                                            
-                                            <!-- Group / Archive / Folder Actions -->
-                                            <ui:MenuItem Header="Send to Device" Icon="{ui:SymbolIcon Send24}" Foreground="#6366F1" Click="ContextMenu_SendToDevice_Click" Visibility="{Binding IsGroupPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Send to Device" Icon="{ui:SymbolIcon Send24}" Foreground="#6366F1" Click="ContextMenu_SendToDevice_Click" Visibility="{Binding IsArchivePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Send to Device" Icon="{ui:SymbolIcon Send24}" Foreground="#6366F1" Click="ContextMenu_SendToDevice_Click" Visibility="{Binding IsFolderPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            
-                                            <ui:MenuItem Header="Extract Archive" Icon="{ui:SymbolIcon FolderZip24}" Foreground="#F59E0B" Click="ExtractArchive_Click" Visibility="{Binding IsArchivePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-
-                                            <Separator />
-                                            <ui:MenuItem Header="Delete" Icon="{ui:SymbolIcon Delete24}" Foreground="#EF4444" Command="{Binding PlacementTarget.Tag.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}"/>
-                                        </ContextMenu>
-                                    </Border.ContextMenu>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="4" />
-                                            <ColumnDefinition Width="8" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="Auto" />
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-
-                                        <!-- Left accent bar (outermost) -->
-                                        <Border Grid.Column="0" CornerRadius="2">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="#6366F1" />
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsCodePreview}" Value="True">
-                                                            <Setter Property="Background" Value="#10B981"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsUrlPreview}" Value="True">
-                                                            <Setter Property="Background" Value="#0EA5E9"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
-                                                            <Setter Property="Background" Value="#F472B6"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsPdfPreview}" Value="True">
-                                                            <Setter Property="Background" Value="#EF4444"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsDocPreview}" Value="True">
-                                                            <Setter Property="Background" Value="#3B82F6"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsTextPreview}" Value="True">
-                                                            <Setter Property="Background" Value="#8B5CF6"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsGroupPreview}" Value="True">
-                                                            <Setter Property="Background" Value="#A78BFA"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsArchivePreview}" Value="True">
-                                                            <Setter Property="Background" Value="#F59E0B"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsFolderPreview}" Value="True">
-                                                            <Setter Property="Background" Value="#8B5CF6"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                        </Border>
-
-                                        <!-- CheckBox (after gap) -->
-                                        <CheckBox Grid.Column="2" IsChecked="{Binding IsCheckedForMerge, Mode=TwoWay}" VerticalAlignment="Center" Margin="6,0,0,0" Click="ItemCheckBox_Click" />
-
-                                        <!-- File Type Icon Badge -->
-                                        <Border Grid.Column="3" Width="44" Height="44" CornerRadius="10" ClipToBounds="True" Margin="12,10,12,10">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
-                                                            <Setter Property="Background" Value="Transparent"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                            <Grid>
-                                                <!-- Static image thumbnail (non-GIF) -->
-                                                <Image Source="{Binding Icon}" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="Fant" CacheMode="BitmapCache" Visibility="{Binding IsStaticImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
-                                                <!-- Animated GIF thumbnail -->
-                                                <Image gif:AnimationBehavior.SourceUri="{Binding GifFilePath}" gif:AnimationBehavior.RepeatBehavior="Forever" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="Fant" CacheMode="BitmapCache" Visibility="{Binding IsGifPreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
-
-                                                <!-- System file-association icon (e.g. PDF reader, Word, etc.) — shown when Icon is available for file types -->
-                                                <Image Source="{Binding Icon}" Stretch="Uniform" RenderOptions.BitmapScalingMode="Fant" CacheMode="BitmapCache"
-                                                       HorizontalAlignment="Center" VerticalAlignment="Center" Width="36" Height="36">
-                                                    <Image.Style>
-                                                        <Style TargetType="Image">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <!-- Show for file types that have a system icon (PDF, Doc, Video, Group, etc.) -->
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding IsPdfPreview}" Value="True"/>
-                                                                        <Condition Binding="{Binding IsImagePreview}" Value="False"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </MultiDataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding IsDocPreview}" Value="True"/>
-                                                                        <Condition Binding="{Binding IsImagePreview}" Value="False"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </MultiDataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding IsVideoPreview}" Value="True"/>
-                                                                        <Condition Binding="{Binding IsImagePreview}" Value="False"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </MultiDataTrigger>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding IsGroupPreview}" Value="True"/>
-                                                                        <Condition Binding="{Binding IsImagePreview}" Value="False"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </MultiDataTrigger>
-                                                                <!-- Hide when Icon is null (will fall through to gradient fallbacks below) -->
-                                                                <DataTrigger Binding="{Binding Icon}" Value="{x:Null}">
-                                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Image.Style>
-                                                </Image>
-
-                                                <!-- Text icon -->
-                                                <Border>
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding IsTextPreview}" Value="True"/>
-                                                                        <Condition Binding="{Binding HasDetectedColor}" Value="False"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </MultiDataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                    <Border.Background>
-                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                            <GradientStop Color="#7C3AED" Offset="0"/>
-                                                            <GradientStop Color="#A78BFA" Offset="1"/>
-                                                        </LinearGradientBrush>
-                                                    </Border.Background>
-                                                    <ui:SymbolIcon Symbol="TextDescription24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-
-                                                <!-- Code icon -->
-                                                <Border>
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding IsCodePreview}" Value="True"/>
-                                                                        <Condition Binding="{Binding HasDetectedColor}" Value="False"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </MultiDataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                    <Border.Background>
-                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                            <GradientStop Color="#059669" Offset="0"/>
-                                                            <GradientStop Color="#34D399" Offset="1"/>
-                                                        </LinearGradientBrush>
-                                                    </Border.Background>
-                                                    <ui:SymbolIcon Symbol="Code24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-
-                                                <!-- URL icon -->
-                                                <Border>
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding IsUrlPreview}" Value="True"/>
-                                                                        <Condition Binding="{Binding HasDetectedColor}" Value="False"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </MultiDataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                    <Border.Background>
-                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                            <GradientStop Color="#0284C7" Offset="0"/>
-                                                            <GradientStop Color="#38BDF8" Offset="1"/>
-                                                        </LinearGradientBrush>
-                                                    </Border.Background>
-                                                    <ui:SymbolIcon Symbol="Globe24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-
-                                                <!-- Color Swatch Premium Preview — shown when a HEX, RGB, or HSL color is detected -->
-                                                <Border CornerRadius="10" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1.5"
-                                                        Background="{Binding DetectedColorBrush}">
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding HasDetectedColor}" Value="True">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                    <ui:SymbolIcon Symbol="Color24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-
-                                                <!-- PDF icon FALLBACK (only when no system Icon available) -->
-                                                <Border>
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding IsPdfPreview}" Value="True"/>
-                                                                        <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </MultiDataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                    <Border.Background>
-                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                            <GradientStop Color="#DC2626" Offset="0"/>
-                                                            <GradientStop Color="#F87171" Offset="1"/>
-                                                        </LinearGradientBrush>
-                                                    </Border.Background>
-                                                    <TextBlock Text="PDF" FontSize="13" FontWeight="ExtraBold" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-
-                                                <!-- Document icon FALLBACK (only when no system Icon available) -->
-                                                <Border>
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding IsDocPreview}" Value="True"/>
-                                                                        <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </MultiDataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                    <Border.Background>
-                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                            <GradientStop Color="#1D4ED8" Offset="0"/>
-                                                            <GradientStop Color="#60A5FA" Offset="1"/>
-                                                        </LinearGradientBrush>
-                                                    </Border.Background>
-                                                    <ui:SymbolIcon Symbol="Document24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-
-                                                <!-- Group icon (no system icon overlap issue) -->
-                                                <Border>
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding IsGroupPreview}" Value="True"/>
-                                                                        <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </MultiDataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                    <Border.Background>
-                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                            <GradientStop Color="#7C3AED" Offset="0"/>
-                                                            <GradientStop Color="#C084FC" Offset="1"/>
-                                                        </LinearGradientBrush>
-                                                    </Border.Background>
-                                                    <ui:SymbolIcon Symbol="FolderMultiple24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-
-                                                <!-- Archive icon FALLBACK (only when no system Icon available) -->
-                                                <Border>
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding IsArchivePreview}" Value="True"/>
-                                                                        <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </MultiDataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                    <Border.Background>
-                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                            <GradientStop Color="#D97706" Offset="0"/>
-                                                            <GradientStop Color="#FBBF24" Offset="1"/>
-                                                        </LinearGradientBrush>
-                                                    </Border.Background>
-                                                    <ui:SymbolIcon Symbol="FolderZip24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-
-                                                <!-- Video icon FALLBACK (only when no system Icon available) -->
-                                                <Border>
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <MultiDataTrigger>
-                                                                    <MultiDataTrigger.Conditions>
-                                                                        <Condition Binding="{Binding IsVideoPreview}" Value="True"/>
-                                                                        <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
-                                                                    </MultiDataTrigger.Conditions>
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </MultiDataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                    <Border.Background>
-                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                            <GradientStop Color="#D97706" Offset="0"/>
-                                                            <GradientStop Color="#FBBF24" Offset="1"/>
-                                                        </LinearGradientBrush>
-                                                    </Border.Background>
-                                                    <ui:SymbolIcon Symbol="Video24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                            </Grid>
-                                        </Border>
-
-                                        <!-- Content Block -->
-                                        <StackPanel Grid.Column="4" VerticalAlignment="Center" Margin="0,12,0,12">
-                                            <StackPanel Orientation="Horizontal">
-                                                <!-- Color detection dot -->
-                                                <Border Width="12" Height="12" CornerRadius="6" Margin="0,0,6,0" VerticalAlignment="Center" Background="{Binding DetectedColorBrush}" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}" BorderBrush="{Binding DetectedColorBrush}" BorderThickness="1.5"/>
-                                                <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextTrimming="CharacterEllipsis">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsLongText}" Value="True">
-                                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
-                                            </StackPanel>
-                                            <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
-                                                <Border CornerRadius="4" Padding="6,2" Margin="0,0,6,0">
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" />
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsCodePreview}" Value="True">
-                                                                    <Setter Property="Background" Value="#1A10B981" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding IsPdfPreview}" Value="True">
-                                                                    <Setter Property="Background" Value="#1AEF4444" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
-                                                                    <Setter Property="Background" Value="#1AF472B6" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding IsUrlPreview}" Value="True">
-                                                                    <Setter Property="Background" Value="#1A0EA5E9" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding IsGroupPreview}" Value="True">
-                                                                    <Setter Property="Background" Value="#1AA78BFA" />
-                                                                </DataTrigger>
-                                                                <DataTrigger Binding="{Binding IsArchivePreview}" Value="True">
-                                                                    <Setter Property="Background" Value="#1AF59E0B" />
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                    <TextBlock Text="{Binding FormatIdentifier}" FontSize="10" FontWeight="SemiBold">
-                                                        <TextBlock.Style>
-                                                            <Style TargetType="TextBlock">
-                                                                <Setter Property="Foreground" Value="#60A5FA" />
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsCodePreview}" Value="True">
-                                                                        <Setter Property="Foreground" Value="#10B981" />
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding IsPdfPreview}" Value="True">
-                                                                        <Setter Property="Foreground" Value="#EF4444" />
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
-                                                                        <Setter Property="Foreground" Value="#F472B6" />
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding IsUrlPreview}" Value="True">
-                                                                        <Setter Property="Foreground" Value="#0EA5E9" />
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding IsGroupPreview}" Value="True">
-                                                                        <Setter Property="Foreground" Value="#A78BFA" />
-                                                                    </DataTrigger>
-                                                                    <DataTrigger Binding="{Binding IsArchivePreview}" Value="True">
-                                                                        <Setter Property="Foreground" Value="#F59E0B" />
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </TextBlock.Style>
-                                                    </TextBlock>
-                                                </Border>
-                                                <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="4" Padding="6,2" Margin="0,0,6,0" Visibility="{Binding FormattedSize, Converter={StaticResource StringToVisibilityConverter}}">
-                                                    <TextBlock Text="{Binding FormattedSize}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" />
-                                                </Border>
-                                                <TextBlock Text="{Binding DateCopied, StringFormat='{}{0:HH:mm}'}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" Opacity="0.6"/>
-
-                                                <!-- Color swatch preview -->
-                                                <Border Width="28" Height="14" CornerRadius="3" Margin="6,0,0,0" Background="{Binding DetectedColorBrush}" Visibility="{Binding HasDetectedColor, Converter={StaticResource BooleanToVisibilityConverter}}" ToolTip="{Binding DetectedColor}">
-                                                    <Border.Effect>
-                                                        <DropShadowEffect BlurRadius="4" ShadowDepth="0" Opacity="0.3"/>
-                                                    </Border.Effect>
-                                                </Border>
-                                            </StackPanel>
-                                            <TextBlock Text="{Binding RawContent}" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" MaxHeight="{Binding CollapsedMaxHeight}" TextTrimming="CharacterEllipsis" TextWrapping="Wrap" Margin="0,4,0,0"/>
-                                            
-                                            <!-- Circular Expand/Collapse Chevron Toggle Button for Long Text / Code cards -->
-                                            <Button PreviewMouseLeftButtonDown="ExpandToggleSpecific_Click"
-                                                    HorizontalAlignment="Left"
-                                                    Margin="0,4,0,0"
-                                                    Focusable="False">
-                                                <Button.Style>
-                                                    <Style TargetType="Button">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Setter Property="Cursor" Value="Hand"/>
-                                                        <Setter Property="OverridesDefaultStyle" Value="True"/>
-                                                        <Setter Property="Template">
-                                                            <Setter.Value>
-                                                                <ControlTemplate TargetType="Button">
-                                                                    <Grid Width="26" Height="26" Background="Transparent">
-                                                                        <Border x:Name="CircleBorder" Width="22" Height="22" CornerRadius="11"
-                                                                                Background="#CC202024" BorderBrush="#33FFFFFF" BorderThickness="1.5">
-                                                                            <Border.Effect>
-                                                                                <DropShadowEffect BlurRadius="6" Color="#000000" Opacity="0.45" ShadowDepth="1.2" Direction="270" />
-                                                                            </Border.Effect>
-                                                                            <ui:SymbolIcon x:Name="ChevronIcon" Symbol="ChevronDown24" FontSize="13" Foreground="#3B82F6"
-                                                                                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0.5,0,0"/>
-                                                                        </Border>
-                                                                    </Grid>
-                                                                    <ControlTemplate.Triggers>
-                                                                        <DataTrigger Binding="{Binding IsExpanded}" Value="True">
-                                                                            <Setter TargetName="ChevronIcon" Property="Symbol" Value="ChevronUp24"/>
-                                                                            <Setter TargetName="ChevronIcon" Property="Foreground" Value="#EF4444"/>
-                                                                        </DataTrigger>
-                                                                        <Trigger Property="IsMouseOver" Value="True">
-                                                                            <Setter TargetName="CircleBorder" Property="Background" Value="#E62C2C32"/>
-                                                                            <Setter TargetName="CircleBorder" Property="BorderBrush" Value="#66FFFFFF"/>
-                                                                        </Trigger>
-                                                                    </ControlTemplate.Triggers>
-                                                                </ControlTemplate>
-                                                            </Setter.Value>
-                                                        </Setter>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsLongText}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </Button.Style>
-                                            </Button>
-                                            
-                                            <!-- P2P Transfer Progress Bar -->
-                                            <StackPanel Margin="0,4,0,0" Visibility="{Binding IsTransferring, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                                <ProgressBar Value="{Binding TransferProgress}" Minimum="0" Maximum="100" Height="3" Foreground="#7C7CFF" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}"/>
-                                                <TextBlock Text="{Binding TransferStatusText}" FontSize="10" Foreground="#9C9CFF" Margin="0,2,0,0" Opacity="0.9"/>
-                                            </StackPanel>
-
-                                        </StackPanel>
-
-                                        <!-- Actions -->
-                                        <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,10,0">
-                                            <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Open in Browser" Command="{Binding DataContext.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Globe24" FontSize="14" /></ui:Button.Icon>
-                                                <ui:Button.Style>
-                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsUrlPreview}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </ui:Button.Style>
-                                            </ui:Button>
-                                            <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Run Script" Command="{Binding DataContext.LaunchTerminalCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Play24" Filled="True" FontSize="14" Foreground="#10B981" /></ui:Button.Icon>
-                                                <ui:Button.Style>
-                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsCodePreview}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </ui:Button.Style>
-                                            </ui:Button>
-
-                                            <!-- Extract Text (OCR) -->
-                                            <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Extract Text (OCR)" Command="{Binding DataContext.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="TextDescription24" FontSize="14" Foreground="#A855F7" /></ui:Button.Icon>
-                                                <ui:Button.Style>
-                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </ui:Button.Style>
-                                            </ui:Button>
-
-                                            <!-- Extract Table Data (Gemini) -->
-                                            <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Extract Table Data (Gemini)" Command="{Binding DataContext.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Table24" FontSize="14" Foreground="#8B5CF6" /></ui:Button.Icon>
-                                                <ui:Button.Style>
-                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </ui:Button.Style>
-                                            </ui:Button>
-
-                                            <!-- Convert Image to PDF -->
-                                            <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Convert Image to PDF" Command="{Binding DataContext.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" FontSize="14" Foreground="#EF4444" /></ui:Button.Icon>
-                                                <ui:Button.Style>
-                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </ui:Button.Style>
-                                            </ui:Button>
-
-
-                                            <!-- Convert PDF to Word -->
-                                            <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Convert PDF to Word" Command="{Binding DataContext.ConvertPdfToWordCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Document24" FontSize="14" Foreground="#3B82F6" /></ui:Button.Icon>
-                                                <ui:Button.Style>
-                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsPdfPreview}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </ui:Button.Style>
-                                            </ui:Button>
-
-                                            <!-- Convert Word to PDF -->
-                                            <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Convert Word to PDF" Command="{Binding DataContext.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" FontSize="14" Foreground="#EF4444" /></ui:Button.Icon>
-                                                <ui:Button.Style>
-                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsDocPreview}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </ui:Button.Style>
-                                            </ui:Button>
-
-                                            <!-- Search Google -->
-                                            <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Search on Google" Command="{Binding DataContext.GoogleSearchCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" FontSize="14" Foreground="#10B981" /></ui:Button.Icon>
-                                                <ui:Button.Style>
-                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsTextPreview}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </ui:Button.Style>
-                                            </ui:Button>
-
-                                            <!-- Send to Device (Group/Archive/Folder) -->
-                                            <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Send to Device" PreviewMouseLeftButtonDown="SendToDevice_Click">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Send24" FontSize="14" Foreground="#6366F1" /></ui:Button.Icon>
-                                                <ui:Button.Style>
-                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsGroupPreview}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding IsArchivePreview}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding IsFolderPreview}" Value="True">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </ui:Button.Style>
-                                            </ui:Button>
-
-                                            <ui:Button Appearance="Transparent" Padding="5,4" Margin="0,0,3,0" ToolTip="Pin" PreviewMouseLeftButtonDown="PinSpecific_Click">
-                                                <ui:Button.Icon>
-                                                    <ui:SymbolIcon FontSize="14">
-                                                        <ui:SymbolIcon.Style>
-                                                            <Style TargetType="ui:SymbolIcon">
-                                                                <Setter Property="Symbol" Value="Pin24"/>
-                                                                <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" />
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding IsPinned}" Value="True">
-                                                                        <Setter Property="Foreground" Value="#F59E0B"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </ui:SymbolIcon.Style>
-                                                    </ui:SymbolIcon>
-                                                </ui:Button.Icon>
-                                            </ui:Button>
-
-                                            <ui:Button Appearance="Transparent" Padding="5,4" ToolTip="Delete" PreviewMouseLeftButtonDown="DeleteSpecific_Click">
-                                                <ui:Button.Icon>
-                                                    <ui:SymbolIcon Symbol="Delete24" FontSize="14" Foreground="#EF4444" />
-                                                </ui:Button.Icon>
-                                            </ui:Button>
-                                        </StackPanel>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
+                            <StaticResource ResourceKey="HubClipboardItemTemplate"/>
                         </ListView.ItemTemplate>
                     </ListView>
 
@@ -1504,7 +454,7 @@
 
                 <!-- 3. NETWORK SYNC TAB -->
                 <Grid x:Name="NetworkGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="VerticalOnly">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None">
                         <StackPanel>
                             <StackPanel Margin="0,0,0,6">
                                 <TextBlock Text="Wi-Fi Sync Server" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
@@ -1672,7 +622,7 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <!-- ═══ LIVE P2P PEER STATUS ═══ -->
+                                    <!-- ═ ═ ═ LIVE P2P PEER STATUS ═ ═ ═ -->
                                     <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,4,0,14" />
 
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
@@ -2076,7 +1026,7 @@
 
                 <!-- 4. CORE SETTINGS TAB -->
                 <Grid x:Name="SettingsGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="VerticalOnly">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None">
                         <StackPanel>
                             <!-- Settings Meta -->
                             <StackPanel Margin="0,0,0,6">
@@ -2626,7 +1576,7 @@
                                 </StackPanel>
                             </Border>
 
-                            <!-- ═══ MASCOT THEMES ═══ -->
+                            <!-- ═ ═ ═ MASCOT THEMES ═ ═ ═ -->
                             <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,20">
                                 <StackPanel>
                                     <!-- Header -->
@@ -2645,6 +1595,26 @@
                                             <TextBlock Text="Community-powered animated companions" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
                                         </StackPanel>
                                     </StackPanel>
+
+                                    <!-- Mascot Preview -->
+                                    <Border CornerRadius="14" Padding="20,16" Margin="0,0,0,14" HorizontalAlignment="Stretch"
+                                            Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                                            BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
+                                        <Grid HorizontalAlignment="Center">
+                                            <!-- Glow behind mascot -->
+                                            <Border Width="110" Height="110" CornerRadius="55" Opacity="0.25" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <Border.Background>
+                                                    <RadialGradientBrush>
+                                                        <GradientStop Color="#8B5CF6" Offset="0"/>
+                                                        <GradientStop Color="#D946EF" Offset="0.6"/>
+                                                        <GradientStop Color="Transparent" Offset="1"/>
+                                                    </RadialGradientBrush>
+                                                </Border.Background>
+                                            </Border>
+                                            <!-- Mascot image -->
+                                            <Image Source="/Resources/FlyShelfMascot.png" Width="88" Height="88" RenderOptions.BitmapScalingMode="HighQuality" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
 
                                     <!-- Enable/Disable Toggle -->
                                     <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="14,10" Margin="0,0,0,10">

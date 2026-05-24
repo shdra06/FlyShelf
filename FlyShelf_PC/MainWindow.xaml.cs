@@ -95,7 +95,7 @@ namespace FlyShelf
         private const uint MOD_NOREPEAT = 0x4000;
         private const int WM_HOTKEY = 0x0312;
 
-        // Hover preview popup state (DISABLED â€” replaced by expand/collapse chevron button)
+        // Hover preview popup state (DISABLED — replaced by expand/collapse chevron button)
 #pragma warning disable CS0649
         private System.Windows.Threading.DispatcherTimer? _hoverPreviewTimer;
         private ClipboardItem? _hoveredItem;
@@ -116,7 +116,7 @@ namespace FlyShelf
             _viewModel = vm;
             InitializeComponent();
 
-            // Register global hotkeys EAGERLY in constructor â€” do NOT wait for Loaded event.
+            // Register global hotkeys EAGERLY in constructor — do NOT wait for Loaded event.
             // EnsureHandle() forces HWND creation so hotkeys work immediately on app start.
             var interop = new WindowInteropHelper(this);
             interop.EnsureHandle();
@@ -157,7 +157,7 @@ namespace FlyShelf
             // Restore keyboard focus to ListView after window is moved/repositioned
             this.Activated += (s, e) =>
             {
-                // Skip re-focus if a topmost child window (QuickLook) is active â€” prevents infinite activation loop
+                // Skip re-focus if a topmost child window (QuickLook) is active — prevents infinite activation loop
                 if (System.Windows.Application.Current.Windows.OfType<Window>().Any(w => w.Topmost && w != this && w.IsActive)) return;
                 // Debounce: only re-focus if the ListView isn't already keyboard-focused
                 if (!ShelfListView.IsKeyboardFocusWithin)
@@ -296,7 +296,7 @@ namespace FlyShelf
                 Classes.Logger.LogAction("HOOK_FAIL", $"Failed to setup foreground win event hook: {ex.Message}");
             }
 
-            // DWM border styling â€” must happen after window is shown
+            // DWM border styling — must happen after window is shown
             var handle = new WindowInteropHelper(this).Handle;
             if (handle != IntPtr.Zero)
             {
@@ -518,18 +518,18 @@ namespace FlyShelf
                                 else // displayMode == "theme"
                                 {
                                     // ═══ CUSTOM THEME MODE ═══
-                                    // Clipboard gets theme wallpaper + mascot animation, NO system blur
-                                    ApplyNonMicaBackground();
                                     if (theme == null)
                                     {
                                         Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
-                                        Classes.Logger.LogAction("THEME", "Mode: Theme — but no theme active, solid dark bg");
+                                        RestoreMicaBlur(); // Safe fallback to Acrylic blur
+                                        Classes.Logger.LogAction("THEME", "Mode: Theme — but no theme active, falling back to Acrylic blur");
                                         return;
                                     }
 
                                     string? themeWp = Classes.ThemeManager.Instance.GetWallpaperPath();
                                     if (!string.IsNullOrEmpty(themeWp) && System.IO.File.Exists(themeWp))
                                     {
+                                        ApplyNonMicaBackground(); // Disable system blur for custom wallpaper
                                         Classes.SettingsManager.Current.ClipboardWallpaperPath = themeWp;
                                         ApplyWallpaper();
                                         Classes.Logger.LogAction("THEME", $"Mode: Theme '{theme.Name}' — wallpaper: {themeWp}");
@@ -537,7 +537,8 @@ namespace FlyShelf
                                     else
                                     {
                                         Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
-                                        Classes.Logger.LogAction("THEME", $"Mode: Theme '{theme.Name}' — no wallpaper, solid dark bg");
+                                        RestoreMicaBlur(); // No custom wallpaper: preserve system Acrylic blur!
+                                        Classes.Logger.LogAction("THEME", $"Mode: Theme '{theme.Name}' — no custom wallpaper, keeping Acrylic blur active");
                                     }
 
                                     // Start mascot idle animation
@@ -572,13 +573,18 @@ namespace FlyShelf
                     }
                     else if (startupMode == "theme")
                     {
-                        // Custom theme mode — no system blur
-                        ApplyNonMicaBackground();
+                        // Custom theme mode
                         string? startupWp = Classes.ThemeManager.Instance.GetWallpaperPath();
                         if (!string.IsNullOrEmpty(startupWp) && System.IO.File.Exists(startupWp))
                         {
+                            ApplyNonMicaBackground();
                             Classes.SettingsManager.Current.ClipboardWallpaperPath = startupWp;
                             ApplyWallpaper();
+                        }
+                        else
+                        {
+                            Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                            RestoreMicaBlur(); // No custom wallpaper: keep system Acrylic blur active!
                         }
                     }
                     else
@@ -604,6 +610,16 @@ namespace FlyShelf
                     Classes.Logger.LogAction("THEME", $"Theme init failed (non-fatal): {ex.Message}");
                 }
             }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+
+            // Pre-cache/hardcode actual height on startup so spawning is instant and doesn't jump
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (this.ActualHeight > 0)
+                {
+                    _lastActualHeight = this.ActualHeight;
+                    Classes.Logger.LogAction("TELEMETRY", $"Startup height hardcoded to cache: {_lastActualHeight}");
+                }
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         // ═══ Theme/Wallpaper/Backdrop methods moved to MainWindow.Theme.cs ═══
@@ -647,6 +663,16 @@ namespace FlyShelf
         }
 
         // ═══ HwndHook (Hotkeys, Clipboard, Settings) moved to MainWindow.WndProc.cs ═══
+
+        private bool _isCurrentlySummoned = false;
+        public bool IsSummoned => _isCurrentlySummoned;
+
+        public void HideWindowInternal()
+        {
+            _isCurrentlySummoned = false;
+            this.Left = -20000;
+            this.Top = -20000;
+        }
 
     }
 }

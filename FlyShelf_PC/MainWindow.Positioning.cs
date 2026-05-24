@@ -49,9 +49,9 @@ namespace FlyShelf
                 catch { }
             }
 
-            if (this.IsVisible)
+            if (_isCurrentlySummoned)
             {
-                this.Hide(); 
+                HideWindowInternal(); 
             }
 
             // PERF: Removed ShowInTaskbar toggle — it destroys/recreates the Win32 HWND (200-500ms penalty)
@@ -64,14 +64,18 @@ namespace FlyShelf
             if (mode == 0)
             {
                 // Mini mode: let content drive height, capped by MaxHeight
-                this.SizeToContent = SizeToContent.Height;
-                this.Height = double.NaN;
+                if (this.SizeToContent != SizeToContent.Height)
+                    this.SizeToContent = SizeToContent.Height;
+                if (!double.IsNaN(this.Height))
+                    this.Height = double.NaN;
             }
             else
             {
                 // Mode 1/2: use the stored height exactly — no content-driven fluctuation
-                this.SizeToContent = SizeToContent.Manual;
-                this.Height = _viewModel.CurrentFlyShelfMaxHeight;
+                if (this.SizeToContent != SizeToContent.Manual)
+                    this.SizeToContent = SizeToContent.Manual;
+                if (this.Height != _viewModel.CurrentFlyShelfMaxHeight)
+                    this.Height = _viewModel.CurrentFlyShelfMaxHeight;
             }
 
             var workArea = SystemParameters.WorkArea;
@@ -92,12 +96,12 @@ namespace FlyShelf
             _isEdgeLocked = true;
 
             this.Left = rawX;
-            // PERF: Use estimated height — removed expensive this.Measure() that forced full visual tree layout (300-800ms)
-            // The Dispatcher callback below adjusts position after ActualHeight resolves naturally
-            double estimatedHeight = mode == 0 
-                ? (_lastActualHeight > 0 ? _lastActualHeight : (double.IsNaN(this.Height) ? FlyShelf.Classes.SettingsManager.Current.MiniFormHeight : this.Height)) 
-                : _viewModel.CurrentFlyShelfMaxHeight;
-            this.Top = _lockedBottomEdge - estimatedHeight - 20;
+            // PERF: Use hardcoded cached physical height on startup or already-resolved ActualHeight.
+            // This completely eliminates dynamic spawning height calculations and spawning jumps!
+            double realHeight = this.ActualHeight > 0 ? this.ActualHeight : 
+                (_lastActualHeight > 0 ? _lastActualHeight : 
+                (double.IsNaN(this.Height) ? FlyShelf.Classes.SettingsManager.Current.MiniFormHeight : this.Height));
+            this.Top = _lockedBottomEdge - realHeight - 20;
 
             this.ShowActivated = stealFocus;
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
@@ -110,7 +114,9 @@ namespace FlyShelf
                 RootContent.Opacity = 1.0;
                 RootContent.RenderTransform = null;
             }
-            this.Show();
+            _isCurrentlySummoned = true;
+            this.Left = rawX;
+            this.Top = _lockedBottomEdge - realHeight - 20;
 
             // ═══ CRITICAL SCROLL RESET — must happen between Show() and Activate() ═══
             // ScrollToTop/ScrollToVerticalOffset are NO-OPS on a hidden window because the
@@ -129,13 +135,11 @@ namespace FlyShelf
                 if (ShelfListView.Items.Count > 0)
                     ShelfListView.SelectedIndex = 0;
 
-                // PERF: Use InvalidateArrange instead of UpdateLayout.
-                // UpdateLayout forces a SYNCHRONOUS full-tree layout pass (300-500ms with 500 items).
-                // InvalidateArrange just marks the tree dirty — the next render tick does the layout
-                // asynchronously. ScrollToVerticalOffset(0) sets the pending offset which takes effect
-                // when the layout happens naturally.
+                // PERF: Only reset scroll offsets if the view was actually scrolled (> 0).
+                // Unconditionally calling scroll-to-top dirties the layout tree and forces
+                // expensive WPF layout invalidation loops during the spawn transition.
                 var sv = GetShelfScrollViewer();
-                if (sv != null)
+                if (sv != null && sv.VerticalOffset > 0)
                 {
                     sv.ScrollToVerticalOffset(0);
                     sv.ScrollToTop();
@@ -157,33 +161,8 @@ namespace FlyShelf
                 RootContent.RenderTransform = null;
             }
 
-            // Final safety-net: after all async layout passes complete, force scroll to top one more time
-            Dispatcher.InvokeAsync(() =>
-            {
-                try
-                {
-                    var sv = GetShelfScrollViewer();
-                    if (sv != null)
-                    {
-                        sv.ScrollToVerticalOffset(0);
-                        sv.ScrollToTop();
-                    }
-
-                    if (ShelfListView.Items.Count > 0)
-                    {
-                        ShelfListView.SelectedIndex = 0;
-
-                        // Focus the first container if already generated
-                        var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(0) as ListViewItem;
-                        if (container != null)
-                        {
-                            container.Focus();
-                            Keyboard.Focus(container);
-                        }
-                    }
-                }
-                catch { }
-            }, System.Windows.Threading.DispatcherPriority.Loaded);
+            // PERF: Removed completely redundant duplicate loaded-priority scroll-reset callback.
+            // The exact same sequence is already handled natively by FocusFirstItemContainer() on Background priority.
 
             // PERF: Cache DWM border attribute — only set once, never changes
             if (!_borderColorSet)
@@ -197,7 +176,7 @@ namespace FlyShelf
             Dispatcher.InvokeAsync(() =>
             {
                 Classes.Logger.LogAction("TELEMETRY", "ShowNearPosition Loaded callback executed (Layout rendering complete)");
-                if (this.ActualHeight > 0 && Math.Abs(this.ActualHeight - estimatedHeight) > 1)
+                if (this.ActualHeight > 0 && Math.Abs(this.ActualHeight - realHeight) > 1)
                 {
                     // Push it 20px dynamically upward to completely avoid taskbar z-index clipping!
                     this.Top = _lockedBottomEdge - this.ActualHeight - 20; 
@@ -220,7 +199,7 @@ namespace FlyShelf
                     _mascotDelayTimer.Tick += (s, ev) =>
                     {
                         _mascotDelayTimer.Stop();
-                        if (!this.IsVisible || _isAnimatingHide) return; // Window was dismissed before timer fired
+                        if (!_isCurrentlySummoned || _isAnimatingHide) return; // Window was dismissed before timer fired
                         try
                         {
                             var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
@@ -527,7 +506,7 @@ namespace FlyShelf
             _themeAnimationsSuspended = false;
             try
             {
-                if (this.IsVisible && !_isAnimatingHide && Classes.SettingsManager.Current.ThemeAnimationsEnabled)
+                if (_isCurrentlySummoned && !_isAnimatingHide && Classes.SettingsManager.Current.ThemeAnimationsEnabled)
                 {
                     MascotIdle.ResumePlayback();
                     var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);

@@ -348,7 +348,7 @@ public partial class App : Application
                     // enough time to register before hiding. The WPF-UI tray:NotifyIcon
                     // registers in the Loaded event — hiding immediately kills the registration.
                     await System.Threading.Tasks.Task.Delay(500);
-                    MainWindow.Hide();
+                    _mainWinInstance.HideWindowInternal();
                 }
                 catch (Exception ex)
                 {
