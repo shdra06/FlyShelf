@@ -252,26 +252,30 @@ namespace FlyShelf
                         if (t.Status == System.Threading.Tasks.TaskStatus.RanToCompletion)
                         {
                             var dominantColor = t.Result;
-                            Dispatcher.InvokeAsync(() =>
-                            {
-                                try
-                                {
-                                    var centerColor = Color.FromArgb(50, dominantColor.R, dominantColor.G, dominantColor.B);
-                                    var edgeColor = Color.FromArgb(140, (byte)(dominantColor.R / 1.8), (byte)(dominantColor.G / 1.8), (byte)(dominantColor.B / 1.8));
+                             Dispatcher.InvokeAsync(() =>
+                             {
+                                 try
+                                 {
+                                     // GUARD: If the window is no longer summoned or is currently dismissing,
+                                     // do NOT apply the wallpaper theme updates!
+                                     if (!_isCurrentlySummoned || _isAnimatingHide) return;
 
-                                    WallpaperRadialBrush.GradientStops[0].Color = centerColor;
-                                    WallpaperRadialBrush.GradientStops[1].Color = edgeColor;
-                                    WallpaperThemeOverlay.Visibility = Visibility.Visible;
-
-                                    // Tint the frost header with the theme color
-                                    WallpaperFrostTint.Background = new SolidColorBrush(
-                                        Color.FromArgb(60, dominantColor.R, dominantColor.G, dominantColor.B));
-
-                                    // Inject wallpaper dominant color as selection accent
-                                    ApplyDominantColorAccent(dominantColor);
-                                }
-                                catch { }
-                            });
+                                     var centerColor = Color.FromArgb(50, dominantColor.R, dominantColor.G, dominantColor.B);
+                                     var edgeColor = Color.FromArgb(140, (byte)(dominantColor.R / 1.8), (byte)(dominantColor.G / 1.8), (byte)(dominantColor.B / 1.8));
+ 
+                                     WallpaperRadialBrush.GradientStops[0].Color = centerColor;
+                                     WallpaperRadialBrush.GradientStops[1].Color = edgeColor;
+                                     WallpaperThemeOverlay.Visibility = Visibility.Visible;
+ 
+                                     // Tint the frost header with the theme color
+                                     WallpaperFrostTint.Background = new SolidColorBrush(
+                                         Color.FromArgb(60, dominantColor.R, dominantColor.G, dominantColor.B));
+ 
+                                     // Inject wallpaper dominant color as selection accent
+                                     ApplyDominantColorAccent(dominantColor);
+                                 }
+                                 catch { }
+                             });
                         }
                     });
                 }

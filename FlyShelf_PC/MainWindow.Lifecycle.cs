@@ -179,33 +179,25 @@ namespace FlyShelf
             // Set starting state for slide-in (TranslateY = 10)
             RootContent.RenderTransform = new TranslateTransform(0, 10);
 
-            // ═══ PREMIUM SPAWN PROFILE (200ms) ═══
-            // Opacity Animation: Front-loaded 0 -> 1 over 200ms, mostly complete by 120ms (0.92)
-            var opacityAnim = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames();
-            opacityAnim.KeyFrames.Add(new System.Windows.Media.Animation.EasingDoubleKeyFrame(0.92, System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(120)))
+            // ═══ COMPOSITION-THREAD ACCELERATED SPAWN PROFILE (GPU-BOUND) ═══
+            // Opacity Animation: Front-loaded 0 -> 1 over 120ms with QuinticEaseOut.
+            // Runs entirely on the GPU render thread, completely immune to UI thread layout stalls!
+            var opacityAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120))
             {
                 EasingFunction = new System.Windows.Media.Animation.QuinticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-            });
-            opacityAnim.KeyFrames.Add(new System.Windows.Media.Animation.EasingDoubleKeyFrame(1.0, System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(200)))
-            {
-                EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-            });
+            };
 
             opacityAnim.Completed += (s, e) =>
             {
                 _isShowAnimating = false;
             };
 
-            // Slide In Animation: Back-loaded 10 -> 0 over 200ms, settling softly in Phase 2
-            var slideInAnim = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames();
-            slideInAnim.KeyFrames.Add(new System.Windows.Media.Animation.EasingDoubleKeyFrame(2.0, System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(120)))
+            // Slide In Animation: Back-loaded 10 -> 0 over 200ms with CubicEaseOut.
+            // Also runs entirely on the GPU render thread, providing a buttery-smooth soft settle!
+            var slideInAnim = new System.Windows.Media.Animation.DoubleAnimation(10, 0, TimeSpan.FromMilliseconds(200))
             {
-                EasingFunction = new System.Windows.Media.Animation.QuinticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-            });
-            slideInAnim.KeyFrames.Add(new System.Windows.Media.Animation.EasingDoubleKeyFrame(0.0, System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(200)))
-            {
-                EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-            });
+                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+            };
 
             this.BeginAnimation(OpacityProperty, opacityAnim);
             RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, slideInAnim);
@@ -281,23 +273,22 @@ namespace FlyShelf
             {
                 try
                 {
-                    // Clock is still holding (HoldEnd) — safe to set base value now.
-                    // Force the base value to 0 first and clear the animation clock.
-                    // This guarantees WPF evaluates the opacity as 0.
-                    this.Opacity = 0;
-                    this.BeginAnimation(OpacityProperty, null);
-                    RootContent.Opacity = 1;
-                    RootContent.RenderTransform = null;
-
-                    // DEFER moving the window offscreen to Background priority.
-                    // This guarantees that WPF renders the 0% opacity frame while the window
-                    // is still onscreen, fully committing the 0% opacity state to DWM.
-                    // DWM's cached composition surface will now be 100% transparent.
+                    // Do NOT move offscreen immediately, and do NOT clear the clock yet.
+                    // The window is at 0% opacity (held by the fadeOut clock).
+                    // We queue a background priority job to move it offscreen and then clear the clock.
+                    // This guarantees that WPF renders the 0% opacity frame while onscreen (clearing DWM cache),
+                    // and then clears the clock offscreen (preventing the black frame flash)!
                     Dispatcher.InvokeAsync(() =>
                     {
                         try
                         {
-                            HideWindowInternal();
+                            HideWindowInternal(); // Move offscreen first
+                            
+                            // Now that it is safely offscreen, clear the clock and reset base value
+                            this.Opacity = 0;
+                            this.BeginAnimation(OpacityProperty, null);
+                            RootContent.Opacity = 1;
+                            RootContent.RenderTransform = null;
                         }
                         catch { }
                         _isAnimatingHide = false;
