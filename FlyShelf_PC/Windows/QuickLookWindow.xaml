@@ -27,34 +27,47 @@
                     <TextBlock x:Name="HeaderTitle" Text="Quick Look" Foreground="#888888" VerticalAlignment="Center" Margin="14,0,0,0" FontWeight="Medium" FontSize="11.5" IsHitTestVisible="False"/>
                     
                     <!-- Action Buttons (right side) -->
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,6,0">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
                         <!-- Rotate Button (image only) -->
-                        <ui:Button x:Name="RotateBtn" Click="RotateButton_Click" Appearance="Transparent" 
-                                   Foreground="#888888" Padding="5,3" Margin="0,0,2,0" ToolTip="Rotate 90° clockwise"
-                                   Visibility="Collapsed">
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="14"/></ui:Button.Icon>
-                        </ui:Button>
+                        <Border CornerRadius="6" Background="#CC1F1F23" BorderBrush="#22FFFFFF" BorderThickness="1" Margin="0,0,4,0" Padding="0"
+                                Visibility="{Binding ElementName=RotateBtn, Path=Visibility}">
+                            <ui:Button x:Name="RotateBtn" Click="RotateButton_Click" Appearance="Secondary" 
+                                       Foreground="#60A5FA" Padding="5,3" ToolTip="Rotate 90° clockwise"
+                                       Visibility="Collapsed">
+                                <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowRotateClockwise24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                            </ui:Button>
+                        </Border>
                         <!-- OCR Button (image only) -->
-                        <ui:Button x:Name="OcrBtn" Click="OcrButton_Click" Appearance="Transparent" 
-                                   Foreground="#888888" Padding="5,3" Margin="0,0,2,0" ToolTip="Extract &amp; Select Text (OCR)"
-                                   Visibility="Collapsed">
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="TextDescription24" FontSize="14"/></ui:Button.Icon>
-                        </ui:Button>
+                        <Border CornerRadius="6" Background="#CC1F1F23" BorderBrush="#22FFFFFF" BorderThickness="1" Margin="0,0,4,0" Padding="0"
+                                Visibility="{Binding ElementName=OcrBtn, Path=Visibility}">
+                            <ui:Button x:Name="OcrBtn" Click="OcrButton_Click" Appearance="Secondary" 
+                                       Foreground="#34D399" Padding="5,3" ToolTip="Extract &amp; Select Text (OCR)"
+                                       Visibility="Collapsed">
+                                <ui:Button.Icon><ui:SymbolIcon Symbol="TextDescription24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                            </ui:Button>
+                        </Border>
                         <!-- Copy All OCR Text Button -->
-                        <ui:Button x:Name="CopyAllOcrBtn" Click="CopyAllOcrButton_Click" Appearance="Transparent" 
-                                   Foreground="#A855F7" Padding="5,3" Margin="0,0,2,0" ToolTip="Copy all detected text"
-                                   Visibility="Collapsed">
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="Copy24" FontSize="14"/></ui:Button.Icon>
-                        </ui:Button>
+                        <Border CornerRadius="6" Background="#CC1F1F23" BorderBrush="#22FFFFFF" BorderThickness="1" Margin="0,0,4,0" Padding="0"
+                                Visibility="{Binding ElementName=CopyAllOcrBtn, Path=Visibility}">
+                            <ui:Button x:Name="CopyAllOcrBtn" Click="CopyAllOcrButton_Click" Appearance="Secondary" 
+                                       Foreground="#A855F7" Padding="5,3" ToolTip="Copy all detected text"
+                                       Visibility="Collapsed">
+                                <ui:Button.Icon><ui:SymbolIcon Symbol="Copy24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                            </ui:Button>
+                        </Border>
                         <!-- Pin Button (toggle always on top) -->
-                        <ui:Button x:Name="PinBtn" Click="PinButton_Click" Appearance="Transparent" 
-                                   Foreground="#F59E0B" Padding="5,3" Margin="0,0,2,0" ToolTip="Pin on top">
-                            <ui:Button.Icon><ui:SymbolIcon x:Name="PinIcon" Symbol="Pin24" FontSize="14"/></ui:Button.Icon>
-                        </ui:Button>
+                        <Border CornerRadius="6" Background="#CC1F1F23" BorderBrush="#22FFFFFF" BorderThickness="1" Margin="0,0,4,0" Padding="0">
+                            <ui:Button x:Name="PinBtn" Click="PinButton_Click" Appearance="Secondary" 
+                                       Foreground="#F59E0B" Padding="5,3" ToolTip="Pin on top">
+                                <ui:Button.Icon><ui:SymbolIcon x:Name="PinIcon" Symbol="Pin24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                            </ui:Button>
+                        </Border>
                         <!-- Close -->
-                        <ui:Button x:Name="CloseBtn" Click="CloseButton_Click" Appearance="Transparent" Foreground="#888888" Padding="5,3">
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" FontSize="14"/></ui:Button.Icon>
-                        </ui:Button>
+                        <Border CornerRadius="6" Background="#CC1F1F23" BorderBrush="#22FFFFFF" BorderThickness="1" Padding="0">
+                            <ui:Button x:Name="CloseBtn" Click="CloseButton_Click" Appearance="Secondary" Foreground="#EF4444" Padding="5,3" ToolTip="Close">
+                                <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                            </ui:Button>
+                        </Border>
                     </StackPanel>
                 </Grid>
 

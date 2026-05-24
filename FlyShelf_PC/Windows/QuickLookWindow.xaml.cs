@@ -14,6 +14,10 @@ namespace FlyShelf.Windows
         private global::Windows.Media.Ocr.OcrResult _ocrResult = null;
         private double _originalWidth = 0;
         private double _originalHeight = 0;
+        // The pixel dimensions of the bitmap that was passed to the OCR engine.
+        // May differ from _originalWidth/_originalHeight if the image was upscaled for better OCR.
+        private double _ocrBitmapWidth = 0;
+        private double _ocrBitmapHeight = 0;
 
         public QuickLookWindow(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null)
         {
@@ -73,13 +77,13 @@ namespace FlyShelf.Windows
                     TextPreview.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x11, 0x11, 0x11));
                     DocTitle.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x11, 0x11, 0x11));
                     DocSize.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x66, 0x66, 0x66));
-                    RotateBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x55, 0x55, 0x55));
-                    OcrBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x55, 0x55, 0x55));
-                    CopyAllOcrBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x8B, 0x5C, 0xF6));
-                    CloseBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x55, 0x55, 0x55));
+                    RotateBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x37, 0x7C, 0xF6)); // Blue
+                    OcrBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x10, 0x96, 0x6C)); // Green
+                    CopyAllOcrBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x7C, 0x3A, 0xED)); // Purple
+                    CloseBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xDC, 0x26, 0x26)); // Red
                     PinBtn.Foreground = this.Topmost 
-                        ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11))
-                        : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x55, 0x55, 0x55));
+                        ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(217, 119, 6))  // Amber
+                        : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x6B, 0x72, 0x80)); // Gray
                     HelperText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x80, 0x11, 0x11, 0x11));
                 }
             }
@@ -507,7 +511,7 @@ namespace FlyShelf.Windows
                 OcrBtn.IsEnabled = false;
 
                 // Run OCR on background thread
-                var ocrResult = await System.Threading.Tasks.Task.Run(async () =>
+                var ocrResultTuple = await System.Threading.Tasks.Task.Run(async () =>
                 {
                     try
                     {
@@ -516,15 +520,72 @@ namespace FlyShelf.Windows
                             var decoder = await global::Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream.AsRandomAccessStream());
                             var softwareBitmap = await decoder.GetSoftwareBitmapAsync();
 
-                            var ocrEngine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new global::Windows.Globalization.Language("en-US"));
+                            // CRITICAL: Convert to Bgra8/Premultiplied — the OCR engine requires this
+                            // pixel format for reliable recognition. Without conversion, many images
+                            // return empty or garbled results.
+                            if (softwareBitmap.BitmapPixelFormat != global::Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8 ||
+                                softwareBitmap.BitmapAlphaMode != global::Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied)
+                            {
+                                softwareBitmap = global::Windows.Graphics.Imaging.SoftwareBitmap.Convert(
+                                    softwareBitmap,
+                                    global::Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
+                                    global::Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
+                            }
+
+                            // Store the actual OCR bitmap pixel dimensions for coordinate mapping.
+                            uint ocrW = (uint)softwareBitmap.PixelWidth;
+                            uint ocrH = (uint)softwareBitmap.PixelHeight;
+
+                            // For small images, upscale 2x for better OCR text detection.
+                            // The OCR engine struggles with text smaller than ~12px.
+                            if (ocrW < 1500 && ocrH < 1500)
+                            {
+                                try
+                                {
+                                    uint newW = ocrW * 2;
+                                    uint newH = ocrH * 2;
+                                    // Cap at 4000px (OCR engine max)
+                                    if (newW > 4000) { newW = 4000; newH = (uint)(ocrH * (4000.0 / ocrW)); }
+                                    if (newH > 4000) { newH = 4000; newW = (uint)(ocrW * (4000.0 / ocrH)); }
+
+                                    // Encode original → InMemoryStream with BitmapTransform scaling → Decode back
+                                    var inMemStream = new global::Windows.Storage.Streams.InMemoryRandomAccessStream();
+                                    var encoder = await global::Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(
+                                        global::Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId, inMemStream);
+                                    encoder.SetSoftwareBitmap(softwareBitmap);
+                                    encoder.BitmapTransform.ScaledWidth = newW;
+                                    encoder.BitmapTransform.ScaledHeight = newH;
+                                    encoder.BitmapTransform.InterpolationMode = global::Windows.Graphics.Imaging.BitmapInterpolationMode.Fant;
+                                    await encoder.FlushAsync();
+
+                                    inMemStream.Seek(0);
+                                    var dec2 = await global::Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(inMemStream);
+                                    var scaledBitmap = await dec2.GetSoftwareBitmapAsync(
+                                        global::Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
+                                        global::Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
+
+                                    softwareBitmap = scaledBitmap;
+                                    ocrW = (uint)softwareBitmap.PixelWidth;
+                                    ocrH = (uint)softwareBitmap.PixelHeight;
+                                }
+                                catch (Exception upscaleEx)
+                                {
+                                    FlyShelf.Classes.Logger.LogAction("OCR_UPSCALE", $"Upscale failed (using original): {upscaleEx.Message}");
+                                    // Continue with original bitmap — upscale is best-effort
+                                }
+                            }
+
+                            // Try user profile languages first (more likely to match), then en-US fallback
+                            var ocrEngine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
                             if (ocrEngine == null)
                             {
-                                ocrEngine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
+                                ocrEngine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new global::Windows.Globalization.Language("en-US"));
                             }
 
                             if (ocrEngine != null)
                             {
-                                return await ocrEngine.RecognizeAsync(softwareBitmap);
+                                var result = await ocrEngine.RecognizeAsync(softwareBitmap);
+                                return (result, (double)ocrW, (double)ocrH);
                             }
                         }
                     }
@@ -532,17 +593,20 @@ namespace FlyShelf.Windows
                     {
                         FlyShelf.Classes.Logger.LogAction("QUICKLOOK_OCR_FAIL", ex.Message);
                     }
-                    return null;
+                    return (null, 0.0, 0.0);
                 });
 
+                var ocrResult = ocrResultTuple.result;
                 if (ocrResult != null && !string.IsNullOrWhiteSpace(ocrResult.Text))
                 {
                     _ocrResult = ocrResult;
+                    _ocrBitmapWidth = ocrResultTuple.Item2;
+                    _ocrBitmapHeight = ocrResultTuple.Item3;
                     OcrOverlayCanvas.Visibility = Visibility.Visible;
                     CopyAllOcrBtn.Visibility = Visibility.Visible;
                     RenderOcrOverlay();
                     
-                    FlyShelf.Windows.ToastWindow.ShowToast("OCR Text Detection Complete! Select text to copy.");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"OCR Complete! {ocrResult.Lines.Count} lines detected. Select text to copy.");
                 }
                 else
                 {
@@ -647,6 +711,11 @@ namespace FlyShelf.Windows
             Rect renderRect = GetImageRenderRect(PreviewImage);
             if (renderRect.Width == 0 || renderRect.Height == 0) return;
 
+            // Use the OCR bitmap dimensions for coordinate mapping.
+            // These may differ from _originalWidth/_originalHeight if upscaling was applied.
+            double ocrW = _ocrBitmapWidth > 0 ? _ocrBitmapWidth : _originalWidth;
+            double ocrH = _ocrBitmapHeight > 0 ? _ocrBitmapHeight : _originalHeight;
+
             // Brushes reused across all words — store as fields for drag-selection reuse
             _ocrHoverBg = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x18, 0x60, 0xA5, 0xFA));
             _ocrHoverBorder = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x35, 0x60, 0xA5, 0xFA));
@@ -673,10 +742,11 @@ namespace FlyShelf.Windows
                     string wordText = word.Text;
 
                     // Map word bounding rect to displayed image coordinates
-                    double scaledLeft = renderRect.Left + (rect.X / _originalWidth) * renderRect.Width;
-                    double scaledTop = renderRect.Top + (rect.Y / _originalHeight) * renderRect.Height;
-                    double scaledWidth = (rect.Width / _originalWidth) * renderRect.Width;
-                    double scaledHeight = (rect.Height / _originalHeight) * renderRect.Height;
+                    // OCR coords are in the OCR bitmap's pixel space (ocrW x ocrH)
+                    double scaledLeft = renderRect.Left + (rect.X / ocrW) * renderRect.Width;
+                    double scaledTop = renderRect.Top + (rect.Y / ocrH) * renderRect.Height;
+                    double scaledWidth = (rect.Width / ocrW) * renderRect.Width;
+                    double scaledHeight = (rect.Height / ocrH) * renderRect.Height;
 
                     if (scaledWidth <= 0 || scaledHeight <= 0) continue;
 
