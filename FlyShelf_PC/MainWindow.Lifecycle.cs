@@ -172,41 +172,49 @@ namespace FlyShelf
         private bool _isShowAnimating = false;
 
         /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
-        // PERF: Cached animation objects — avoid GC pressure from allocating new ones on every show
-        private static readonly TimeSpan _showAnimDuration = TimeSpan.FromMilliseconds(200);
-        private static readonly System.Windows.Media.Animation.CubicEase _showEaseOut = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
-        private static readonly System.Windows.Media.Animation.DoubleAnimation _fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, _showAnimDuration) { EasingFunction = _showEaseOut };
-        private static readonly System.Windows.Media.Animation.DoubleAnimation _slideIn = new System.Windows.Media.Animation.DoubleAnimation(16, 0, _showAnimDuration) { EasingFunction = _showEaseOut };
-
         private void PlayShowAnimation()
         {
             _isShowAnimating = true;
 
-            RootContent.RenderTransform = new TranslateTransform(0, 16);
+            // Set starting state for slide-in (TranslateY = 10)
+            RootContent.RenderTransform = new TranslateTransform(0, 10);
 
-            var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, _showAnimDuration)
+            // ═══ PREMIUM SPAWN PROFILE (200ms) ═══
+            // Opacity Animation: Front-loaded 0 -> 1 over 200ms, mostly complete by 120ms (0.92)
+            var opacityAnim = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames();
+            opacityAnim.KeyFrames.Add(new System.Windows.Media.Animation.EasingDoubleKeyFrame(0.92, System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(120)))
             {
-                EasingFunction = _showEaseOut
-            };
+                EasingFunction = new System.Windows.Media.Animation.QuinticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+            });
+            opacityAnim.KeyFrames.Add(new System.Windows.Media.Animation.EasingDoubleKeyFrame(1.0, System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(200)))
+            {
+                EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+            });
 
-            fadeIn.Completed += (s, e) =>
+            opacityAnim.Completed += (s, e) =>
             {
                 _isShowAnimating = false;
             };
 
-            this.BeginAnimation(OpacityProperty, fadeIn);
-            RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, _slideIn);
-        }
+            // Slide In Animation: Back-loaded 10 -> 0 over 200ms, settling softly in Phase 2
+            var slideInAnim = new System.Windows.Media.Animation.DoubleAnimationUsingKeyFrames();
+            slideInAnim.KeyFrames.Add(new System.Windows.Media.Animation.EasingDoubleKeyFrame(2.0, System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(120)))
+            {
+                EasingFunction = new System.Windows.Media.Animation.QuinticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+            });
+            slideInAnim.KeyFrames.Add(new System.Windows.Media.Animation.EasingDoubleKeyFrame(0.0, System.Windows.Media.Animation.KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(200)))
+            {
+                EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+            });
 
-        /// <summary>Fast dismiss animation on inner content, then hides window.</summary>
-        // PERF: Cached hide animation objects — avoid GC pressure from allocating new ones on every dismiss
-        private static readonly TimeSpan _hideAnimDuration = TimeSpan.FromMilliseconds(100);
-        private static readonly System.Windows.Media.Animation.CubicEase _hideEaseIn = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn };
-        private static readonly System.Windows.Media.Animation.DoubleAnimation _slideOut = new System.Windows.Media.Animation.DoubleAnimation(0, 12, _hideAnimDuration) { EasingFunction = _hideEaseIn };
+            this.BeginAnimation(OpacityProperty, opacityAnim);
+            RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, slideInAnim);
+        }
 
         // PERF: Deferred mascot/GIF resume timer — mascot starts 1s after spawn, not during spawn
         private System.Windows.Threading.DispatcherTimer? _mascotDelayTimer;
 
+        /// <summary>Fast dismiss animation on inner content, then hides window.</summary>
         public void AnimateAndHide()
         {
             StopDragActiveDismissTimer();
@@ -253,11 +261,23 @@ namespace FlyShelf
 
             RootContent.RenderTransform = new TranslateTransform(0, 0);
 
-            var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, _hideAnimDuration)
+            // ═══ PERFECT UNSPAWN PROFILE (150ms) ═══
+            // Opacity: Front-loaded fade out (1 -> 0 over 100ms)
+            var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(100))
             {
-                EasingFunction = _hideEaseIn
+                EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn }
             };
-            fadeOut.Completed += (s, e) =>
+
+            // Slide Out: Soft downward drift (0 -> 6 over 150ms)
+            var slideOut = new System.Windows.Media.Animation.DoubleAnimation(0, 6, TimeSpan.FromMilliseconds(150))
+            {
+                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+            };
+
+            // We attach the Completed handler to the longer (150ms) slideOut animation.
+            // This ensures that the window is completely transparent (at 100ms) BEFORE
+            // it moves offscreen (at 150ms), creating depth and atmospheric disappearance!
+            slideOut.Completed += (s, e) =>
             {
                 try
                 {
@@ -302,7 +322,7 @@ namespace FlyShelf
             };
 
             this.BeginAnimation(OpacityProperty, fadeOut);
-            RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, _slideOut);
+            RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, slideOut);
         }
         private DateTime _spawnTime = DateTime.MinValue;
         private IntPtr _previousForegroundWindow = IntPtr.Zero;
