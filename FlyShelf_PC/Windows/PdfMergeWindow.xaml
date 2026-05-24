@@ -233,7 +233,7 @@
                                     <ui:Button Appearance="Transparent" Tag="{Binding}" Click="ReorderPages_Click" 
                                                ToolTip="Visual page reorder" Padding="5,4" Margin="0,0,2,0"
                                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowSort24" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentMultiple24" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
 
                                     <!-- Save single -->

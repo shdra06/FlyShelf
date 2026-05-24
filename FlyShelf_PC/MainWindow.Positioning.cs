@@ -449,11 +449,11 @@ namespace FlyShelf
                     if (viewportHeight <= 0 || viewportWidth <= 0) return;
 
                     Rect viewportRect = new Rect(0, 0, viewportWidth, viewportHeight);
-                    int count = _viewModel.DroppedItems.Count;
+                    int count = ShelfListView.Items.Count;
 
                     for (int i = 0; i < count; i++)
                     {
-                        var item = _viewModel.DroppedItems[i];
+                        var item = ShelfListView.Items[i] as ClipboardItem;
                         if (item == null) continue;
 
                         // Only process image items that have not loaded high quality and are not currently loading

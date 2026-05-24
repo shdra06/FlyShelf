@@ -88,12 +88,12 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
-        /// Re-scans Firebase every DISCOVERY_MS (15s) looking for new peers or 
+        /// Re-scans Firebase every DISCOVERY_MS (30s) looking for new peers or 
         /// reconnecting dead ones. Only does full discovery if there are dead peers.
         /// </summary>
         private async Task DiscoveryLoop(CancellationToken ct)
         {
-            Logger.LogAction("PEER", "🔍 Discovery loop started (15s interval)");
+            Logger.LogAction("PEER", "🔍 Discovery loop started (30s interval)");
             while (!ct.IsCancellationRequested)
             {
                 try

@@ -154,6 +154,9 @@ namespace FlyShelf
 
             // Stop mascot search animation
             try { Classes.AnimationTriggerService.Instance.OnSearchToggle(false); } catch { }
+
+            // Render newly visible thumbnails immediately
+            RenderVisibleThumbnails();
         }
 
         private void ApplySearchFilter(string query)
@@ -183,6 +186,9 @@ namespace FlyShelf
                     return false;
                 };
             }
+
+            // Render newly visible thumbnails immediately
+            RenderVisibleThumbnails();
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -324,6 +330,9 @@ namespace FlyShelf
                 UpdateFilterButtonHighlight(FilterBtn_Pinned, "Pinned", "#FBBF24");
                 UpdateFilterButtonHighlight(FilterBtn_Pdf, "PDF", "#EF4444");
                 UpdateFilterButtonHighlight(FilterBtn_Docs, "Docs", "#60A5FA");
+
+                // Render newly visible thumbnails immediately
+                RenderVisibleThumbnails();
             }
         }
 
@@ -349,6 +358,9 @@ namespace FlyShelf
             UpdateFilterButtonHighlight(FilterBtn_Pinned, "Pinned", "#FBBF24");
             UpdateFilterButtonHighlight(FilterBtn_Pdf, "PDF", "#EF4444");
             UpdateFilterButtonHighlight(FilterBtn_Docs, "Docs", "#60A5FA");
+
+            // Render newly visible thumbnails immediately
+            RenderVisibleThumbnails();
         }
     }
 }

@@ -416,6 +416,17 @@
         <!-- ═══ MASCOT THEME OVERLAYS ═══ -->
         <!-- Header Mascot: beside the search icon (top-right of toolbar) -->
         <Canvas Grid.Row="0" HorizontalAlignment="Left" VerticalAlignment="Top" Width="42" Height="42" Margin="8,6,0,0" Panel.ZIndex="20" IsHitTestVisible="False">
+            <Canvas.Style>
+                <Style TargetType="Canvas">
+                    <Setter Property="Visibility" Value="Visible"/>
+                    <Style.Triggers>
+                        <!-- Hide mascot when search bar is visible -->
+                        <DataTrigger Binding="{Binding ElementName=SearchBarContainer, Path=Visibility}" Value="Visible">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                        </DataTrigger>
+                    </Style.Triggers>
+                </Style>
+            </Canvas.Style>
             <local:SpriteAnimator x:Name="MascotIdle" 
                                   SpriteWidth="42" SpriteHeight="42"
                                   Width="42" Height="42"/>
@@ -462,11 +473,11 @@
                                 </Border>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsSelected" Value="True">
-                                        <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#60A78BFA"/>
-                                        <Setter TargetName="ItemBorder" Property="Background" Value="#10A78BFA"/>
+                                        <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{DynamicResource ShelfCardSelectionBorder}"/>
+                                        <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource ShelfCardSelectionBg}"/>
                                     </Trigger>
                                     <Trigger Property="IsKeyboardFocused" Value="True">
-                                        <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#80A78BFA"/>
+                                        <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{DynamicResource ShelfCardFocusBorder}"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -521,8 +532,31 @@
                             </TransformGroup>
                         </Border.RenderTransform>
 
-                        <!-- Inner highlight border for frosted glass effect -->
-                        <Border Name="InnerHighlightBorder" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" CornerRadius="14" Padding="12">
+                        <Grid>
+                            <!-- Canvas wrapper with 0 desired size to prevent layout feedback growth -->
+                            <Canvas HorizontalAlignment="Stretch" VerticalAlignment="Stretch" IsHitTestVisible="False">
+                                <!-- Premium Frosted Glass / Acrylic Backdrop Blur for Selected Cards -->
+                                <Border x:Name="SelectedBlurBg" CornerRadius="14" ClipToBounds="True" Visibility="Collapsed" IsHitTestVisible="False"
+                                        Width="{Binding ElementName=InnerHighlightBorder, Path=ActualWidth}"
+                                        Height="{Binding ElementName=InnerHighlightBorder, Path=ActualHeight}">
+                                    <Grid>
+                                        <!-- Blurred wallpaper image matching the window background -->
+                                        <Image Source="{Binding ElementName=WallpaperBg, Path=Source}" 
+                                               Stretch="UniformToFill" 
+                                               Opacity="0.75" 
+                                               RenderOptions.BitmapScalingMode="HighQuality">
+                                            <Image.Effect>
+                                                <BlurEffect Radius="18" KernelType="Gaussian"/>
+                                            </Image.Effect>
+                                        </Image>
+                                        <!-- Sleek theme-colored tint overlay -->
+                                        <Border Background="{DynamicResource ShelfCardSelectionBg}" CornerRadius="14"/>
+                                    </Grid>
+                                </Border>
+                            </Canvas>
+
+                            <!-- Inner highlight border for frosted glass effect -->
+                            <Border Name="InnerHighlightBorder" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" CornerRadius="14" Padding="12">
                             <Grid Name="ItemGrid" HorizontalAlignment="Stretch" Background="Transparent" Tag="{Binding DataContext, ElementName=ShelfListView}" ContextMenu="{StaticResource CardContextMenu}">
                                 <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto"/>
@@ -1249,6 +1283,7 @@
 
                         </Grid>
                         </Border>
+                        </Grid>
                     </Border>
                     <DataTemplate.Triggers>
                         <!-- Dynamic sizing for Large Images vs Standard Files -->
@@ -1288,6 +1323,20 @@
                             <Setter TargetName="CardBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
                             <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorSecondary}"/>
                         </Trigger>
+
+                        <!-- Selected State Trigger for Highlight Border -->
+                        <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True">
+                            <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource ShelfCardSelectionBorder}"/>
+                        </DataTrigger>
+
+                        <!-- Selected State Trigger for Frosted Glass Backdrop Blur (requires Settings EnableBlurBehind) -->
+                        <MultiDataTrigger>
+                            <MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True"/>
+                                <Condition Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableBlurBehind}" Value="True"/>
+                            </MultiDataTrigger.Conditions>
+                            <Setter TargetName="SelectedBlurBg" Property="Visibility" Value="Visible"/>
+                        </MultiDataTrigger>
                     </DataTemplate.Triggers>
                 </DataTemplate>
             </ListView.ItemTemplate>

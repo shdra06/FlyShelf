@@ -43,7 +43,7 @@ namespace FlyShelf.Classes
         private const int HEARTBEAT_MS = 5_000;            // 5s heartbeat (fast LAN detection)
         private const int HEARTBEAT_TIMEOUT_MS = 4_000;    // 4s timeout per ping
         private const int MAX_FAILURES = 3;                // 3 misses = dead (quick failover)
-        private const int DISCOVERY_MS = 600_000;          // Re-scan Firebase every 10m (safety fallback only - real-time updates use SSE)
+        private const int DISCOVERY_MS = 30_000;           // Re-scan Firebase every 30s when peers are offline (safety fallback + slow DNS retry)
         private const int HANDSHAKE_TIMEOUT_LAN_MS = 5_000;   // 5s for LAN
         private const int HANDSHAKE_TIMEOUT_CF_MS = 8_000;    // 8s for Cloudflare tunnels
 
