@@ -145,9 +145,73 @@ namespace FlyShelf
             FlyShelf.Classes.SettingsManager.Save();
         }
 
-        private void Clear_Click(object sender, RoutedEventArgs e)
+        private bool _isClearConfirmActive = false;
+
+        private void ClearShelf_ShowConfirm(object sender, RoutedEventArgs e)
         {
+            ToggleClearConfirmPanel(!_isClearConfirmActive);
+        }
+
+        private void ClearShelf_Confirm(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            ToggleClearConfirmPanel(false);
             _viewModel.ClearShelf();
+        }
+
+        private void ClearShelf_Cancel(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            ToggleClearConfirmPanel(false);
+        }
+
+        private void ToggleClearConfirmPanel(bool show)
+        {
+            if (ClearConfirmPanel == null) return;
+
+            _isClearConfirmActive = show;
+
+            if (show)
+            {
+                // Close filter bar if active
+                if (_isFilterBarActive) ToggleFilterBar(false);
+
+                ClearConfirmPanel.Visibility = Visibility.Visible;
+
+                // Slide-down + fade-in (same animation as ToggleFilterBar)
+                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(-8, 0, new Duration(TimeSpan.FromMilliseconds(150)))
+                {
+                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+                };
+                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(150)));
+
+                if (ClearConfirmPanel.RenderTransform is System.Windows.Media.TranslateTransform translate)
+                {
+                    translate.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, slideAnim);
+                }
+                ClearConfirmPanel.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+            }
+            else
+            {
+                // Slide-up + fade-out
+                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(0, -8, new Duration(TimeSpan.FromMilliseconds(120)))
+                {
+                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn }
+                };
+                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(1, 0, new Duration(TimeSpan.FromMilliseconds(120)));
+
+                fadeAnim.Completed += (s, args) =>
+                {
+                    if (!_isClearConfirmActive)
+                    {
+                        ClearConfirmPanel.Visibility = Visibility.Collapsed;
+                    }
+                };
+
+                if (ClearConfirmPanel.RenderTransform is System.Windows.Media.TranslateTransform translate)
+                {
+                    translate.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, slideAnim);
+                }
+                ClearConfirmPanel.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+            }
         }
 
         private FlyShelf.Windows.EmojiPickerWindow? _emojiPickerInstance;
@@ -545,6 +609,49 @@ namespace FlyShelf
                 {
                     var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(newIdx) as ListViewItem;
                     container?.Focus();
+                }, System.Windows.Threading.DispatcherPriority.Input);
+                e.Handled = true;
+            }
+        }
+
+        private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Up || e.Key == Key.Down)
+            {
+                // Let the TextBox (SearchTextBox) handle its own cursor navigation/Enter/Down keys.
+                if (Keyboard.FocusedElement is TextBox)
+                {
+                    return;
+                }
+
+                int count = _viewModel.DroppedItems.Count;
+                if (count == 0) { e.Handled = true; return; }
+
+                int currentIdx = ShelfListView.SelectedIndex;
+                int newIdx;
+                if (currentIdx < 0)
+                {
+                    newIdx = 0; // Nothing selected — force select first item
+                }
+                else
+                {
+                    newIdx = e.Key == Key.Down
+                        ? Math.Min(currentIdx + 1, count - 1)
+                        : Math.Max(currentIdx - 1, 0);
+                }
+
+                ShelfListView.SelectedIndex = newIdx;
+                // ScrollIntoView MUST come first — it forces the virtualizer to create the container
+                ShelfListView.ScrollIntoView(ShelfListView.Items[newIdx]);
+                // Dispatch focus to next frame so the container is fully realized
+                Dispatcher.InvokeAsync(() =>
+                {
+                    var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(newIdx) as ListViewItem;
+                    if (container != null)
+                    {
+                        container.Focus();
+                        Keyboard.Focus(container);
+                    }
                 }, System.Windows.Threading.DispatcherPriority.Input);
                 e.Handled = true;
             }

@@ -125,6 +125,8 @@ namespace FlyShelf
             _viewModel = vm;
             InitializeComponent();
 
+            this.PreviewKeyDown += Window_PreviewKeyDown;
+
             // Register global hotkeys EAGERLY in constructor — do NOT wait for Loaded event.
             // EnsureHandle() forces HWND creation so hotkeys work immediately on app start.
             var interop = new WindowInteropHelper(this);

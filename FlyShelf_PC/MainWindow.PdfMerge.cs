@@ -10,6 +10,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
 
 namespace FlyShelf
 {
@@ -139,6 +141,17 @@ namespace FlyShelf
             {
                 item.IsCheckedForMerge = !item.IsCheckedForMerge;
                 UpdatePdfMergeToolbar();
+
+                // Select this item in the ListView
+                ShelfListView.SelectedItem = item;
+
+                // Focus the container
+                var container = ShelfListView.ItemContainerGenerator.ContainerFromItem(item) as ListViewItem;
+                if (container != null)
+                {
+                    container.Focus();
+                    Keyboard.Focus(container);
+                }
             }
         }
 

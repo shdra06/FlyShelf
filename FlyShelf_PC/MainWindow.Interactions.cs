@@ -197,6 +197,13 @@ namespace FlyShelf
                         {
                             item.IsCheckedForMerge = !item.IsCheckedForMerge;
                             UpdatePdfMergeToolbar();
+
+                            // Select this item in the ListView
+                            ShelfListView.SelectedItem = item;
+
+                            // Focus the container
+                            toggleContainer.Focus();
+                            Keyboard.Focus(toggleContainer);
                         }
                     }
                     e.Handled = true;
