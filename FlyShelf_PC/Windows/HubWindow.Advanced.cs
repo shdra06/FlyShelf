@@ -468,6 +468,20 @@ namespace FlyShelf.Windows
         public string LastSeen { get; set; } = "";
         public string LocalIp { get; set; } = "";
         public string GlobalUrl { get; set; } = "";
-        public string ConnectionInfo => !string.IsNullOrEmpty(GlobalUrl) ? "🌐 Cloudflare Active" : !string.IsNullOrEmpty(LocalIp) ? "📡 LAN" : "";
+        public string ConnectionInfo
+        {
+            get
+            {
+                if (DeviceName.Contains("(You)"))
+                {
+                    return "💻 Local Host";
+                }
+                if (!IsOnline)
+                {
+                    return "❌ Offline";
+                }
+                return ConnectionType == "Cloud" ? "🌐 Cloudflare Active" : "📡 LAN Active";
+            }
+        }
     }
 }
