@@ -32,7 +32,7 @@ namespace FlyShelf.Classes
         private const double TouchpadMul         = 0.33;   // Touchpad micro-step scale multiplier (decreased from 0.55 to reduce input gain)
         private const double MouseMul            = 0.45;   // Mouse wheel step scale multiplier (decreased from 0.65)
         private const double MinImpulse          = 0.3;    // Minimum impulse threshold for micro-scrolls
-        private const double MinVelocity         = 0.01;   // Decelerate down to extremely slow crawling before stopping (eliminates end-of-scroll start/stop jitter)
+        private const double MinVelocity         = 0.05;   // Velocity below this → complete stop (prevents sub-pixel crawl and end-of-scroll micro jitter)
         private const double DeltaCapTouchpad    = 80.0;   // Clamps raw trackpad delta packets to absorb speed spikes
         private const double DeltaCapMouse       = 280.0;  // Clamps raw mouse delta packets
         private const double DirectionBrakeMul   = 0.2;    // Retained velocity on reversal (partial braking feels snappy)
@@ -351,6 +351,14 @@ namespace FlyShelf.Classes
                 double friction = state.IsTouchpad 
                     ? 0.88  // Decays slower (increased from 0.81) to smoothly bridge the time gap between successive touchpad inputs, eliminating start-stop stutter.
                     : ScrollFriction; // Luxurious free coasting glide for mouse wheel sweeps
+
+                // Progressive Settling: when velocity is extremely slow, apply aggressive decay
+                // to quickly bring it to zero. This prevents the long sub-pixel crawl that
+                // crosses rounding boundaries and causes a 1px end-of-scroll micro jitter.
+                if (Math.Abs(state.Velocity) < 0.6)
+                {
+                    friction = state.IsTouchpad ? 0.60 : 0.65;
+                }
 
                 state.Velocity *= Math.Pow(friction, timeScale);
 

@@ -181,10 +181,9 @@ namespace FlyShelf
         private void PlayShowAnimation()
         {
             _isShowAnimating = true;
+
             RootContent.RenderTransform = new TranslateTransform(0, 16);
 
-            // Create local DoubleAnimation for fade-in to safely wire up a Completed handler
-            // that ONLY clears _isShowAnimating once the 200ms duration has fully elapsed.
             var fadeIn = new System.Windows.Media.Animation.DoubleAnimation(0, 1, _showAnimDuration)
             {
                 EasingFunction = _showEaseOut
@@ -192,13 +191,9 @@ namespace FlyShelf
 
             fadeIn.Completed += (s, e) =>
             {
-                this.BeginAnimation(OpacityProperty, null); // Clear animation clock
-                this.Opacity = 1.0;
                 _isShowAnimating = false;
             };
 
-            // PERF: Animate window-level opacity (not RootContent) so the entire window
-            // fades in together — eliminates ghost frame.
             this.BeginAnimation(OpacityProperty, fadeIn);
             RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, _slideIn);
         }
@@ -228,8 +223,8 @@ namespace FlyShelf
                 try
                 {
                     HideWindowInternal();
+                    this.Opacity = 0;
                     this.BeginAnimation(OpacityProperty, null);
-                    this.Opacity = 0; // Maintain absolute transparency offscreen
                     RootContent.Opacity = 1;
                     RootContent.RenderTransform = null;
                 }
@@ -258,19 +253,40 @@ namespace FlyShelf
 
             RootContent.RenderTransform = new TranslateTransform(0, 0);
 
-            var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, _hideAnimDuration) { EasingFunction = _hideEaseIn };
+            var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, _hideAnimDuration)
+            {
+                EasingFunction = _hideEaseIn
+            };
             fadeOut.Completed += (s, e) =>
             {
                 try
                 {
-                    HideWindowInternal();
-                    // Clear window-level animation and reset for next show
+                    // Clock is still holding (HoldEnd) — safe to set base value now.
+                    // Force the base value to 0 first and clear the animation clock.
+                    // This guarantees WPF evaluates the opacity as 0.
+                    this.Opacity = 0;
                     this.BeginAnimation(OpacityProperty, null);
-                    this.Opacity = 0; // Maintain absolute transparency offscreen
+                    RootContent.Opacity = 1;
                     RootContent.RenderTransform = null;
+
+                    // DEFER moving the window offscreen to Background priority.
+                    // This guarantees that WPF renders the 0% opacity frame while the window
+                    // is still onscreen, fully committing the 0% opacity state to DWM.
+                    // DWM's cached composition surface will now be 100% transparent.
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        try
+                        {
+                            HideWindowInternal();
+                        }
+                        catch { }
+                        _isAnimatingHide = false;
+                    }, System.Windows.Threading.DispatcherPriority.Background);
                 }
-                catch { }
-                _isAnimatingHide = false;
+                catch 
+                { 
+                    _isAnimatingHide = false; 
+                }
 
                 // PERF: Pause mascot/GIF at Background priority — just freeze frames, don't destroy/reload
                 Dispatcher.InvokeAsync(() =>
@@ -285,7 +301,6 @@ namespace FlyShelf
                 }, System.Windows.Threading.DispatcherPriority.Background);
             };
 
-            // PERF: Animate window-level opacity to fade out entire window including DWM chrome
             this.BeginAnimation(OpacityProperty, fadeOut);
             RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, _slideOut);
         }

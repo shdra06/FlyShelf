@@ -350,29 +350,36 @@ namespace FlyShelf.ViewModels
                         bool isGhostImage = false;
                         try
                         {
-                            var converted = new FormatConvertedBitmap(capturedBmpToCheck, System.Windows.Media.PixelFormats.Bgra32, null, 0);
-                            int w = converted.PixelWidth;
-                            int h = converted.PixelHeight;
-                            byte[] pixel = new byte[4];
-                            int transparentCount = 0;
-                            const int gridSize = 4;
-                            for (int gy = 0; gy < gridSize; gy++)
+                            isGhostImage = Application.Current.Dispatcher.Invoke(() =>
                             {
-                                int y = (gy * 2 + 1) * h / (gridSize * 2);
-                                for (int gx = 0; gx < gridSize; gx++)
+                                var converted = new FormatConvertedBitmap(capturedBmpToCheck, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+                                int w = converted.PixelWidth;
+                                int h = converted.PixelHeight;
+                                byte[] pixel = new byte[4];
+                                int transparentCount = 0;
+                                const int gridSize = 4;
+                                for (int gy = 0; gy < gridSize; gy++)
                                 {
-                                    int x = (gx * 2 + 1) * w / (gridSize * 2);
-                                    converted.CopyPixels(new System.Windows.Int32Rect(x, y, 1, 1), pixel, 4, 0);
-                                    if (pixel[3] < 10) transparentCount++;
+                                    int y = (gy * 2 + 1) * h / (gridSize * 2);
+                                    for (int gx = 0; gx < gridSize; gx++)
+                                    {
+                                        int x = (gx * 2 + 1) * w / (gridSize * 2);
+                                        converted.CopyPixels(new System.Windows.Int32Rect(x, y, 1, 1), pixel, 4, 0);
+                                        if (pixel[3] < 10) transparentCount++;
+                                    }
                                 }
-                            }
-                            if (transparentCount >= 15)
-                            {
-                                isGhostImage = true;
-                                Classes.Logger.LogAction("CLIPBOARD", $"⛔ Detected ghost image ({w}x{h}) — {transparentCount}/16 samples transparent. Removing...");
-                            }
+                                if (transparentCount >= 15)
+                                {
+                                    Classes.Logger.LogAction("CLIPBOARD", $"⛔ Detected ghost image ({w}x{h}) — {transparentCount}/16 samples transparent. Removing...");
+                                    return true;
+                                }
+                                return false;
+                            });
                         }
-                        catch { }
+                        catch (Exception ex)
+                        {
+                            Classes.Logger.LogAction("CLIPBOARD", $"⚠️ Ghost image check error: {ex.Message}");
+                        }
 
                         if (isGhostImage)
                         {
@@ -385,17 +392,30 @@ namespace FlyShelf.ViewModels
 
                     string tempFile = Classes.ClipboardHistoryManager.GetPersistentImagePath();
                     
+                    FormatConvertedBitmap? convertedBmp = null;
                     try
                     {
-                        var convertedBmp = new FormatConvertedBitmap(bitmap, System.Windows.Media.PixelFormats.Bgra32, null, 0);
-                        convertedBmp.Freeze();
-                        
-                        using (var fs = new FileStream(tempFile, FileMode.Create))
+                        Application.Current.Dispatcher.Invoke(() =>
                         {
-                            var encoder = new PngBitmapEncoder();
-                            encoder.Frames.Add(BitmapFrame.Create(convertedBmp));
-                            encoder.Save(fs);
-                        }
+                            convertedBmp = new FormatConvertedBitmap(bitmap, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+                            convertedBmp.Freeze();
+                        });
+                    }
+                    catch (Exception convEx)
+                    {
+                        Classes.Logger.LogAction("CLIPBOARD", $"⚠️ FormatConvertedBitmap conversion failed: {convEx.Message}");
+                    }
+
+                    if (convertedBmp != null)
+                    {
+                        try
+                        {
+                            using (var fs = new FileStream(tempFile, FileMode.Create))
+                            {
+                                var encoder = new PngBitmapEncoder();
+                                encoder.Frames.Add(BitmapFrame.Create(convertedBmp));
+                                encoder.Save(fs);
+                            }
 
                         // Load thumbnail image
                         BitmapImage? bitmapImage = null;
@@ -487,6 +507,7 @@ namespace FlyShelf.ViewModels
                             OnPropertyChanged(nameof(ShelfVisibility));
                         });
                     }
+                }
                 });
             }
             else if (!string.IsNullOrWhiteSpace(text))

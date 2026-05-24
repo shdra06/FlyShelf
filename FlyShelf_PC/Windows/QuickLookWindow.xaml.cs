@@ -588,9 +588,22 @@ namespace FlyShelf.Windows
             if (image == null || image.Source == null || image.ActualWidth == 0 || image.ActualHeight == 0)
                 return new Rect();
 
-            var source = image.Source;
-            double srcWidth = source.Width;
-            double srcHeight = source.Height;
+            // CRITICAL: Use PixelWidth/PixelHeight for coordinate mapping,
+            // since OCR bounding rects are in pixel coordinates.
+            // source.Width/Height are in DIPs and cause misalignment on non-96 DPI images.
+            double srcWidth, srcHeight;
+            if (image.Source is BitmapSource bmpSrc)
+            {
+                double dpiScaleX = bmpSrc.DpiX > 0 ? bmpSrc.DpiX / 96.0 : 1.0;
+                double dpiScaleY = bmpSrc.DpiY > 0 ? bmpSrc.DpiY / 96.0 : 1.0;
+                srcWidth = bmpSrc.PixelWidth / dpiScaleX;
+                srcHeight = bmpSrc.PixelHeight / dpiScaleY;
+            }
+            else
+            {
+                srcWidth = image.Source.Width;
+                srcHeight = image.Source.Height;
+            }
 
             double scaleX = image.ActualWidth / srcWidth;
             double scaleY = image.ActualHeight / srcHeight;
@@ -615,6 +628,7 @@ namespace FlyShelf.Windows
         // Drag-to-select state
         private bool _isDragSelecting = false;
         private bool _ocrCanvasEventsAttached = false;
+        private Point _dragStartPoint;
 
         // Frozen brushes reused across render and drag-selection (initialized in RenderOcrOverlay)
         private System.Windows.Media.SolidColorBrush _ocrHoverBg;
@@ -666,16 +680,20 @@ namespace FlyShelf.Windows
 
                     if (scaledWidth <= 0 || scaledHeight <= 0) continue;
 
+                    // Add horizontal padding to fill gaps between words (makes drag selection smoother)
+                    double hPad = Math.Max(3, scaledWidth * 0.12);
+                    double vPad = Math.Max(1, scaledHeight * 0.08);
+
                     // Word highlight border — the interactive overlay element
                     var wordBorder = new System.Windows.Controls.Border
                     {
-                        Width = scaledWidth,
-                        Height = scaledHeight,
+                        Width = scaledWidth + hPad * 2,
+                        Height = scaledHeight + vPad * 2,
                         Background = transparentBrush,
                         BorderBrush = transparentBrush,
-                        BorderThickness = new Thickness(1),
-                        CornerRadius = new CornerRadius(3),
-                        Cursor = System.Windows.Input.Cursors.Hand,
+                        BorderThickness = new Thickness(0),
+                        CornerRadius = new CornerRadius(2),
+                        Cursor = System.Windows.Input.Cursors.IBeam,
                         ToolTip = wordText,
                         Focusable = true,
                         Tag = wordText // store text in Tag for easy retrieval
@@ -699,8 +717,9 @@ namespace FlyShelf.Windows
                         SelectWordBorder(border);
                         border.Focus();
 
-                        // Start drag-to-select: capture mouse on the canvas
+                        // Start drag-to-select: capture mouse on the canvas, store start
                         _isDragSelecting = true;
+                        _dragStartPoint = ev.GetPosition(OcrOverlayCanvas);
                         OcrOverlayCanvas.CaptureMouse();
                         ev.Handled = true;
                     };
@@ -787,9 +806,9 @@ namespace FlyShelf.Windows
                     menu.Items.Add(copyLineItem);
                     wordBorder.ContextMenu = menu;
 
-                    // Position on Canvas
-                    System.Windows.Controls.Canvas.SetLeft(wordBorder, scaledLeft);
-                    System.Windows.Controls.Canvas.SetTop(wordBorder, scaledTop);
+                    // Position on Canvas (offset by padding so the visible highlight centers on the word)
+                    System.Windows.Controls.Canvas.SetLeft(wordBorder, scaledLeft - hPad);
+                    System.Windows.Controls.Canvas.SetTop(wordBorder, scaledTop - vPad);
                     OcrOverlayCanvas.Children.Add(wordBorder);
                 }
             }
@@ -803,12 +822,30 @@ namespace FlyShelf.Windows
                 {
                     if (!_isDragSelecting || ev.LeftButton != MouseButtonState.Pressed) return;
 
-                    // Hit-test to find which word border is under the cursor
-                    Point pt = ev.GetPosition(OcrOverlayCanvas);
-                    var hit = FindWordBorderAtPoint(pt);
-                    if (hit != null)
+                    // Rectangle-sweep selection: select all words whose bounds intersect
+                    // the rectangle formed by drag start → current mouse position.
+                    Point currentPt = ev.GetPosition(OcrOverlayCanvas);
+                    Rect sweepRect = new Rect(_dragStartPoint, currentPt);
+
+                    // Expand sweep vertically to be more forgiving (catch words on the same line)
+                    double vExpand = 6;
+                    sweepRect = new Rect(
+                        sweepRect.Left, sweepRect.Top - vExpand,
+                        sweepRect.Width, sweepRect.Height + vExpand * 2);
+
+                    foreach (var child in OcrOverlayCanvas.Children)
                     {
-                        SelectWordBorder(hit);
+                        if (child is System.Windows.Controls.Border border && border.Tag is string)
+                        {
+                            double bLeft = System.Windows.Controls.Canvas.GetLeft(border);
+                            double bTop = System.Windows.Controls.Canvas.GetTop(border);
+                            var bRect = new Rect(bLeft, bTop, border.Width, border.Height);
+
+                            if (sweepRect.IntersectsWith(bRect))
+                            {
+                                SelectWordBorder(border);
+                            }
+                        }
                     }
                     ev.Handled = true;
                 };
@@ -819,6 +856,19 @@ namespace FlyShelf.Windows
                     {
                         _isDragSelecting = false;
                         OcrOverlayCanvas.ReleaseMouseCapture();
+                        ev.Handled = true;
+                    }
+                };
+
+                // Also allow starting drag from empty canvas space (between words)
+                OcrOverlayCanvas.MouseLeftButtonDown += (s, ev) =>
+                {
+                    if (ev.OriginalSource == OcrOverlayCanvas)
+                    {
+                        DeselectAllOcrWords();
+                        _isDragSelecting = true;
+                        _dragStartPoint = ev.GetPosition(OcrOverlayCanvas);
+                        OcrOverlayCanvas.CaptureMouse();
                         ev.Handled = true;
                     }
                 };
@@ -854,26 +904,9 @@ namespace FlyShelf.Windows
             if (border == null || _selectedWordBorders.Contains(border)) return;
             border.Background = _ocrSelectedBg;
             border.BorderBrush = _ocrSelectedBorder;
+            border.BorderThickness = new Thickness(1);
             _selectedWordBorders.Add(border);
             _selectedWordTexts.Add(border.Tag as string ?? "");
-        }
-
-        /// <summary>
-        /// Finds the word Border element at the given point on the OcrOverlayCanvas using hit-testing.
-        /// </summary>
-        private System.Windows.Controls.Border FindWordBorderAtPoint(Point pt)
-        {
-            foreach (var child in OcrOverlayCanvas.Children)
-            {
-                if (child is System.Windows.Controls.Border border && border.Tag is string)
-                {
-                    double left = System.Windows.Controls.Canvas.GetLeft(border);
-                    double top = System.Windows.Controls.Canvas.GetTop(border);
-                    var rect = new Rect(left, top, border.Width, border.Height);
-                    if (rect.Contains(pt)) return border;
-                }
-            }
-            return null;
         }
 
         /// <summary>
@@ -886,6 +919,7 @@ namespace FlyShelf.Windows
             {
                 border.Background = transparent;
                 border.BorderBrush = transparent;
+                border.BorderThickness = new Thickness(0);
             }
             _selectedWordBorders.Clear();
             _selectedWordTexts.Clear();

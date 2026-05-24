@@ -32,26 +32,63 @@ namespace FlyShelf
             _spawnTime = DateTime.Now;
             _isPersistentMode = isPersistent;
 
+            bool needsDefer = false;
+
             // Abort hide animation if one is actively running
             if (_isAnimatingHide)
             {
                 _isAnimatingHide = false;
+                needsDefer = true;
                 try
                 {
-                    // Cancel window-level opacity animation (used for fade-out)
+                    // Set base opacity to 0 and clear animation clocks immediately.
+                    // This forces WPF to evaluate the opacity as 0.
+                    this.Opacity = 0;
                     this.BeginAnimation(OpacityProperty, null);
                     if (RootContent.RenderTransform is TranslateTransform tt)
                     {
                         tt.BeginAnimation(TranslateTransform.YProperty, null);
                     }
+                    RootContent.Opacity = 1;
+                    RootContent.RenderTransform = null;
+
+                    // Move offscreen immediately to hide from the DWM composition surface
+                    HideWindowInternal();
                 }
                 catch { }
             }
 
             if (_isCurrentlySummoned)
             {
+                needsDefer = true;
+                this.Opacity = 0;
+                this.BeginAnimation(OpacityProperty, null);
+                RootContent.Opacity = 1;
+                RootContent.RenderTransform = null;
+                
+                // Move offscreen immediately to hide from the DWM composition surface
                 HideWindowInternal(); 
             }
+
+            if (needsDefer)
+            {
+                // DEFER the positioning, activation, and summon animation to Background priority.
+                // This guarantees that WPF renders the 0% opacity frame offscreen, fully committing 
+                // the 0% transparent state to DWM, BEFORE the window is positioned back onscreen.
+                // This completely eliminates any repositioning or rapid re-summon flashes/double-spawns!
+                Dispatcher.InvokeAsync(() =>
+                {
+                    ShowNearPositionInternal(targetX, targetY, mode, isPersistent, stealFocus);
+                }, System.Windows.Threading.DispatcherPriority.Background);
+            }
+            else
+            {
+                ShowNearPositionInternal(targetX, targetY, mode, isPersistent, stealFocus);
+            }
+        }
+
+        private void ShowNearPositionInternal(double targetX, double targetY, int mode, bool isPersistent, bool stealFocus)
+        {
 
             // PERF: Removed ShowInTaskbar toggle — it destroys/recreates the Win32 HWND (200-500ms penalty)
 
@@ -119,42 +156,17 @@ namespace FlyShelf
 
             this.ShowActivated = stealFocus;
 
-            if (Classes.SettingsManager.Current.EnableSummonAnimations)
-            {
-                // PERF: Ghost frame elimination via native Win32 per-window alpha.
-                //
-                // Problem: WPF defers this.Opacity changes to the render THREAD (async),
-                // but this.Left/Top trigger IMMEDIATE Win32 SetWindowPos calls on the UI thread.
-                // Without a synchronous alpha override, DWM renders the window at visible
-                // coordinates with stale Opacity=1.0 — the "ghost frame" artifact.
-                //
-                // Fix: SetLayeredWindowAttributes is a SYNCHRONOUS Win32 call that immediately
-                // sets the per-window alpha to 0. DWM picks this up before the next SetWindowPos
-                // from this.Left, so the window is invisible during the move. WPF's animation
-                // then takes over opacity management via BeginAnimation, which internally calls
-                // SetLayeredWindowAttributes on each render frame.
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                if (hwnd != IntPtr.Zero)
-                {
-                    int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-                    if ((exStyle & WS_EX_LAYERED) == 0)
-                        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
-                    SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA); // alpha=0, synchronous
-                }
-
-                // Set WPF opacity to match — WPF's render thread will manage from here
-                this.BeginAnimation(OpacityProperty, null);
-                this.Opacity = 0;
-            }
-            else
-            {
-                this.BeginAnimation(OpacityProperty, null);
-                this.Opacity = 1.0;
-                RootContent.Opacity = 1.0;
-                RootContent.RenderTransform = null;
-            }
+            // Pure WPF opacity — NO native Win32 alpha. Single opacity system = no race conditions.
+            // this.Opacity was already set to 0 when the window was last hidden, and the render
+            // thread has committed it during the idle period. DWM sees opacity=0 before SetWindowPos.
+            this.Opacity = 0;
+            this.BeginAnimation(OpacityProperty, null);
+            RootContent.Opacity = 1;
+            RootContent.RenderTransform = null;
 
             _isCurrentlySummoned = true;
+            if (Classes.SettingsManager.Current.EnableSummonAnimations)
+                _isShowAnimating = true; // Guard BEFORE move — prevents OnActivated from flashing opacity to 1.0
             this.Left = rawX;
             double computedTop = _lockedBottomEdge - realHeight - 20;
             // Full bounds clamp: keep entire window within the visible work area
@@ -180,16 +192,9 @@ namespace FlyShelf
             }
             catch { }
 
-            if (Classes.SettingsManager.Current.EnableSummonAnimations)
+            if (!Classes.SettingsManager.Current.EnableSummonAnimations)
             {
-                // Start animation BEFORE Activate() — the _isShowAnimating flag prevents
-                // OnActivated from overriding this.Opacity=0 with this.Opacity=1.0.
-                PlayShowAnimation();
-            }
-            else
-            {
-                RootContent.Opacity = 1.0;
-                RootContent.RenderTransform = null;
+                this.Opacity = 1.0;
             }
 
             if (stealFocus) this.Activate();
@@ -205,6 +210,16 @@ namespace FlyShelf
                 }
             }
             catch { }
+
+            // CRITICAL: Start animation LAST — after ALL synchronous work (Activate, focus,
+            // DWM border, layout) has completed. This ensures the animation clock starts
+            // ticking only after layout stalls have resolved, so the first rendered frame
+            // shows the animation at its true starting value (near 0%) rather than at 50-60%
+            // where the clock ticked to during the stall.
+            if (Classes.SettingsManager.Current.EnableSummonAnimations)
+            {
+                PlayShowAnimation();
+            }
 
             // Use Dispatcher callback to adjust position after the first layout pass completes.
             Dispatcher.InvokeAsync(() =>

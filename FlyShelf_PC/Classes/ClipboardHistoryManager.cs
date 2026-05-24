@@ -60,77 +60,102 @@ namespace FlyShelf.Classes
         /// </summary>
         public static List<ViewModels.ClipboardItem> LoadHistory()
         {
-            try
+            lock (_lock)
             {
-                var items = new List<ViewModels.ClipboardItem>();
-
-                // Step 1: Load compacted snapshot
-                if (File.Exists(_historyPath))
+                try
                 {
-                    var json = File.ReadAllText(_historyPath);
-                    var snapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(json);
-                    if (snapshot != null)
-                        items.AddRange(snapshot);
-                }
+                    var items = new List<ViewModels.ClipboardItem>();
 
-                // Step 2: Replay journal entries on top of snapshot
-                if (File.Exists(_journalPath))
-                {
-                    var lines = File.ReadAllLines(_journalPath);
-                    foreach (var line in lines)
+                    // Step 1: Load compacted snapshot
+                    if (File.Exists(_historyPath))
                     {
-                        if (string.IsNullOrWhiteSpace(line)) continue;
                         try
                         {
-                            var entry = JsonSerializer.Deserialize<JournalEntry>(line);
-                            if (entry == null) continue;
-
-                            switch (entry.Action)
+                            var json = File.ReadAllText(_historyPath);
+                            var snapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(json);
+                            if (snapshot != null)
+                                items.AddRange(snapshot);
+                        }
+                        catch (JsonException jsonEx)
+                        {
+                            Logger.LogAction("HISTORY_LOAD_ERROR", $"Primary snapshot failed to deserialize: {jsonEx.Message}. Attempting backup recovery...");
+                            string backupPath = _historyPath + ".bak";
+                            if (File.Exists(backupPath))
                             {
-                                case "add":
-                                    if (entry.Item != null)
-                                        items.Insert(0, entry.Item);
-                                    break;
-                                case "delete":
-                                    if (!string.IsNullOrEmpty(entry.ItemId))
-                                        items.RemoveAll(i => i.ItemId == entry.ItemId);
-                                    break;
-                                case "clear":
-                                    items.Clear();
-                                    break;
+                                var backupJson = File.ReadAllText(backupPath);
+                                var backupSnapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(backupJson);
+                                if (backupSnapshot != null)
+                                {
+                                    items.AddRange(backupSnapshot);
+                                    Logger.LogAction("HISTORY_RECOVERY", $"Successfully recovered {items.Count} items from backup database!");
+                                }
+                            }
+                            else
+                            {
+                                throw; // Re-throw to fall through if no backup exists
                             }
                         }
-                        catch { /* Skip malformed journal entries */ }
                     }
-                    _journalEntryCount = lines.Length;
-                }
 
-                // Enforce cap
-                if (items.Count > MAX_HISTORY_ITEMS)
-                    items = items.Take(MAX_HISTORY_ITEMS).ToList();
-
-                _maxLoadedItemCount = items.Count;
-                _isHistoryFullyLoaded = true;
-
-                Logger.LogAction("HISTORY_LOAD", $"Loaded {items.Count} items (snapshot + {_journalEntryCount} journal entries)");
-
-                // If journal was large, auto-compact on load
-                if (_journalEntryCount > 0)
-                {
-                    var itemsCopy = new List<ViewModels.ClipboardItem>(items);
-                    _ = System.Threading.Tasks.Task.Run(() =>
+                    // Step 2: Replay journal entries on top of snapshot
+                    if (File.Exists(_journalPath))
                     {
-                        try { CompactNow(itemsCopy); }
-                        catch (Exception ex) { Logger.LogAction("HISTORY_COMPACT", $"Auto-compact on load failed: {ex.Message}"); }
-                    });
-                }
+                        var lines = File.ReadAllLines(_journalPath);
+                        foreach (var line in lines)
+                        {
+                            if (string.IsNullOrWhiteSpace(line)) continue;
+                            try
+                            {
+                                var entry = JsonSerializer.Deserialize<JournalEntry>(line);
+                                if (entry == null) continue;
 
-                return items;
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("HISTORY_LOAD_ERROR", $"Failed to load history: {ex.Message}");
-                return new List<ViewModels.ClipboardItem>();
+                                switch (entry.Action)
+                                {
+                                    case "add":
+                                        if (entry.Item != null)
+                                            items.Insert(0, entry.Item);
+                                        break;
+                                    case "delete":
+                                        if (!string.IsNullOrEmpty(entry.ItemId))
+                                            items.RemoveAll(i => i.ItemId == entry.ItemId);
+                                        break;
+                                    case "clear":
+                                        items.Clear();
+                                        break;
+                                }
+                            }
+                            catch { /* Skip malformed journal entries */ }
+                        }
+                        _journalEntryCount = lines.Length;
+                    }
+
+                    // Enforce cap
+                    if (items.Count > MAX_HISTORY_ITEMS)
+                        items = items.Take(MAX_HISTORY_ITEMS).ToList();
+
+                    _maxLoadedItemCount = items.Count;
+                    _isHistoryFullyLoaded = true;
+
+                    Logger.LogAction("HISTORY_LOAD", $"Loaded {items.Count} items (snapshot + {_journalEntryCount} journal entries)");
+
+                    // If journal was large, auto-compact on load
+                    if (_journalEntryCount > 0)
+                    {
+                        var itemsCopy = new List<ViewModels.ClipboardItem>(items);
+                        _ = System.Threading.Tasks.Task.Run(() =>
+                        {
+                            try { CompactNow(itemsCopy); }
+                            catch (Exception ex) { Logger.LogAction("HISTORY_COMPACT", $"Auto-compact on load failed: {ex.Message}"); }
+                        });
+                    }
+
+                    return items;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("HISTORY_LOAD_ERROR", $"Failed to load history: {ex.Message}");
+                    return new List<ViewModels.ClipboardItem>();
+                }
             }
         }
 
@@ -271,6 +296,17 @@ namespace FlyShelf.Classes
                     // Write to temp file first, then atomic rename for safety
                     var tempPath = _historyPath + ".tmp";
                     File.WriteAllText(tempPath, json);
+
+                    // Create a backup copy before moving the temp file to historyPath
+                    if (File.Exists(_historyPath))
+                    {
+                        try
+                        {
+                            File.Copy(_historyPath, _historyPath + ".bak", true);
+                        }
+                        catch { }
+                    }
+
                     File.Move(tempPath, _historyPath, true);
 
                     // Clear journal
@@ -311,32 +347,43 @@ namespace FlyShelf.Classes
         /// </summary>
         private static List<ViewModels.ClipboardItem> LoadHistoryRaw()
         {
-            var items = new List<ViewModels.ClipboardItem>();
-            if (File.Exists(_historyPath))
+            lock (_lock)
             {
-                var json = File.ReadAllText(_historyPath);
-                var snapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(json);
-                if (snapshot != null) items.AddRange(snapshot);
-            }
-            if (File.Exists(_journalPath))
-            {
-                foreach (var line in File.ReadAllLines(_journalPath))
+                var items = new List<ViewModels.ClipboardItem>();
+                if (File.Exists(_historyPath))
                 {
-                    if (string.IsNullOrWhiteSpace(line)) continue;
                     try
                     {
-                        var entry = JsonSerializer.Deserialize<JournalEntry>(line);
-                        if (entry?.Action == "add" && entry.Item != null)
-                            items.Insert(0, entry.Item);
-                        else if (entry?.Action == "delete" && entry.ItemId != null)
-                            items.RemoveAll(i => i.ItemId == entry.ItemId);
-                        else if (entry?.Action == "clear")
-                            items.Clear();
+                        var json = File.ReadAllText(_historyPath);
+                        var snapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(json);
+                        if (snapshot != null) items.AddRange(snapshot);
                     }
-                    catch (Exception ex) { Logger.LogAction("HISTORY_JOURNAL", $"Failed to parse journal line: {ex.Message}"); }
+                    catch { }
                 }
+                if (File.Exists(_journalPath))
+                {
+                    try
+                    {
+                        foreach (var line in File.ReadAllLines(_journalPath))
+                        {
+                            if (string.IsNullOrWhiteSpace(line)) continue;
+                            try
+                            {
+                                var entry = JsonSerializer.Deserialize<JournalEntry>(line);
+                                if (entry?.Action == "add" && entry.Item != null)
+                                    items.Insert(0, entry.Item);
+                                else if (entry?.Action == "delete" && entry.ItemId != null)
+                                    items.RemoveAll(i => i.ItemId == entry.ItemId);
+                                else if (entry?.Action == "clear")
+                                    items.Clear();
+                            }
+                            catch (Exception ex) { Logger.LogAction("HISTORY_JOURNAL", $"Failed to parse journal line: {ex.Message}"); }
+                        }
+                    }
+                    catch { }
+                }
+                return items.Take(MAX_HISTORY_ITEMS).ToList();
             }
-            return items.Take(MAX_HISTORY_ITEMS).ToList();
         }
 
         /// <summary>

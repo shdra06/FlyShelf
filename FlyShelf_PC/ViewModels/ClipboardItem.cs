@@ -203,8 +203,8 @@ namespace FlyShelf.ViewModels
             get => _rawContent;
             set
             {
-                // Cap at 10K chars to prevent unbounded memory growth at 1000-item scale
-                string capped = value?.Length > 10_000 ? value.Substring(0, 10_000) : value;
+                // Cap at 2M chars to prevent unbounded memory growth while supporting up to 50K lines of developer code
+                string capped = value?.Length > 2_000_000 ? value.Substring(0, 2_000_000) : value;
                 if (_rawContent != capped)
                 {
                     _rawContent = capped;

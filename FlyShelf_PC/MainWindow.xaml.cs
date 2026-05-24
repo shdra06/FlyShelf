@@ -436,6 +436,14 @@ namespace FlyShelf
                     {
                         Dispatcher.InvokeAsync(() =>
                         {
+                            // If the current display mode is NOT custom "theme", we should absolutely ignore all mascot animations and ensure the mascot is stopped/hidden!
+                            string displayMode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                            if (displayMode != "theme")
+                            {
+                                MascotIdle.StopAnimation();
+                                return;
+                            }
+
                             if (e.IsStop)
                             {
                                 // Return to idle state when a looping action stops (e.g. search ended)
@@ -647,7 +655,7 @@ namespace FlyShelf
                     // Must happen AFTER _mascotAnimationRequestedHandler is wired (line above).
                     // AnimationTriggerService.Initialize() fires StartIdleAnimation() too early
                     // (before the handler exists), so the event is lost. This is the real startup trigger.
-                    if (Classes.ThemeManager.Instance.ActiveTheme != null && Classes.SettingsManager.Current.ThemeAnimationsEnabled)
+                    if (startupMode == "theme" && Classes.ThemeManager.Instance.ActiveTheme != null && Classes.SettingsManager.Current.ThemeAnimationsEnabled)
                     {
                         Classes.AnimationTriggerService.Instance.StartIdleAnimation();
                     }

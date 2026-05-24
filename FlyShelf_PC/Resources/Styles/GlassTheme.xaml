@@ -2,6 +2,7 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                     xmlns:options="http://schemas.microsoft.com/winfx/2006/xaml/presentation/options"
+                    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                     mc:Ignorable="options">
 
     <!-- ═══════════════════════════════════════════════════════════════════
@@ -44,6 +45,10 @@
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="SnapsToDevicePixels" Value="True"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="MinWidth" Value="32"/>
+        <Setter Property="MinHeight" Value="32"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -202,8 +207,6 @@
 
     <!-- ═══════════════════════════════════════════════════════════════
          GlassPopupButtonStyle — For popup dialog buttons
-         (PDF Merge, Page Reorder, etc.)
-         Slightly larger padding, semibold text
          ═══════════════════════════════════════════════════════════════ -->
     <Style x:Key="GlassPopupButtonStyle" TargetType="Button" BasedOn="{StaticResource GlassButtonStyle}">
         <Setter Property="Padding" Value="14,8"/>
@@ -233,12 +236,19 @@
         <Setter Property="Padding" Value="12"/>
     </Style>
 
-    <!-- ═══════════════════════════════════════════════════════════════
-         Implicit ui:Button Override — Auto-applies glassmorphism to
-         all Wpf.Ui.Controls.Button when this dictionary is loaded.
-         Restores default WPF-UI styles when dictionary is removed.
-         ═══════════════════════════════════════════════════════════════ -->
-    <Style TargetType="{x:Type ui:Button}" xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+    <!-- ═══════════════════════════════════════════════════════════════════
+         CRITICAL FIX: Implicit ui:Button Override
+         
+         This template properly renders BOTH the Icon property AND Content.
+         WPF-UI's Button has an Icon dependency property (type IconElement)
+         that the default template renders via a special internal layout.
+         Our glass template must replicate this by including a ContentControl
+         bound to the Icon property alongside the ContentPresenter.
+         
+         Without this, icon-only buttons (which is the majority in FlyShelf)
+         render as empty dots since ContentPresenter has nothing to show.
+         ═══════════════════════════════════════════════════════════════════ -->
+    <Style TargetType="{x:Type ui:Button}">
         <Setter Property="Cursor" Value="Hand"/>
         <Setter Property="CornerRadius" Value="10"/>
         <Setter Property="FontSize" Value="12"/>
@@ -246,9 +256,14 @@
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="BorderBrush" Value="{StaticResource GlassBorder}"/>
         <Setter Property="Background" Value="{StaticResource GlassBg}"/>
+        <Setter Property="Padding" Value="6,4"/>
+        <Setter Property="MinWidth" Value="32"/>
+        <Setter Property="MinHeight" Value="32"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="VerticalContentAlignment" Value="Center"/>
         <Setter Property="Template">
             <Setter.Value>
-                <ControlTemplate TargetType="{x:Type ui:Button}" xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml">
+                <ControlTemplate TargetType="{x:Type ui:Button}">
                     <Border x:Name="GlassRoot"
                             Background="{TemplateBinding Background}"
                             BorderBrush="{TemplateBinding BorderBrush}"
@@ -259,29 +274,60 @@
                         <Border.CacheMode>
                             <BitmapCache EnableClearType="True" RenderAtScale="1"/>
                         </Border.CacheMode>
-                        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                          RecognizesAccessKey="True"/>
+                        <!-- Layout: Icon (left) + Content (right), centered -->
+                        <StackPanel Orientation="Horizontal"
+                                    HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                    VerticalAlignment="{TemplateBinding VerticalContentAlignment}">
+                            <!-- Icon element — renders the ui:Button.Icon property -->
+                            <ContentControl x:Name="IconHost"
+                                            Content="{TemplateBinding Icon}"
+                                            Focusable="False"
+                                            IsTabStop="False"
+                                            Foreground="{TemplateBinding Foreground}"
+                                            VerticalAlignment="Center"
+                                            IsHitTestVisible="False"/>
+                            <!-- Content element — renders text or child content -->
+                            <ContentPresenter x:Name="ContentHost"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              RecognizesAccessKey="True"
+                                              Margin="0"/>
+                        </StackPanel>
                     </Border>
                     <ControlTemplate.Triggers>
-                        <!-- Appearance=Primary → Accent Glass -->
+                        <!-- Hide IconHost when no Icon is set -->
+                        <Trigger Property="Icon" Value="{x:Null}">
+                            <Setter TargetName="IconHost" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
+                        <!-- Add spacing between icon and content when both exist -->
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="HasContent" Value="True"/>
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="ContentHost" Property="Margin" Value="6,0,0,0"/>
+                        </MultiTrigger>
+                        <!-- Hide content host when no content -->
+                        <Trigger Property="HasContent" Value="False">
+                            <Setter TargetName="ContentHost" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
+
+                        <!-- ═══ Appearance Variants ═══ -->
                         <Trigger Property="Appearance" Value="Primary">
                             <Setter TargetName="GlassRoot" Property="Background" Value="{StaticResource GlassAccentBg}"/>
                             <Setter TargetName="GlassRoot" Property="BorderBrush" Value="{StaticResource GlassAccentBorder}"/>
                             <Setter Property="Foreground" Value="White"/>
                         </Trigger>
-                        <!-- Appearance=Danger → Destructive Glass -->
                         <Trigger Property="Appearance" Value="Danger">
                             <Setter TargetName="GlassRoot" Property="Background" Value="{StaticResource GlassDestructiveBg}"/>
                             <Setter TargetName="GlassRoot" Property="BorderBrush" Value="{StaticResource GlassDestructiveBorder}"/>
                             <Setter Property="Foreground" Value="#EF4444"/>
                         </Trigger>
-                        <!-- Appearance=Transparent → Subtle Glass -->
                         <Trigger Property="Appearance" Value="Transparent">
                             <Setter TargetName="GlassRoot" Property="Background" Value="Transparent"/>
                             <Setter TargetName="GlassRoot" Property="BorderBrush" Value="Transparent"/>
                         </Trigger>
-                        <!-- Hover states -->
+
+                        <!-- ═══ Hover States ═══ -->
                         <MultiTrigger>
                             <MultiTrigger.Conditions>
                                 <Condition Property="IsMouseOver" Value="True"/>
@@ -315,6 +361,16 @@
                             <Setter TargetName="GlassRoot" Property="Background" Value="{StaticResource GlassBgHover}"/>
                             <Setter TargetName="GlassRoot" Property="BorderBrush" Value="{StaticResource GlassBorder}"/>
                         </MultiTrigger>
+                        <!-- Default hover (when Appearance not specified — treats as Secondary) -->
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsMouseOver" Value="True"/>
+                                <Condition Property="Appearance" Value="Info"/>
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="GlassRoot" Property="Background" Value="{StaticResource GlassBgHover}"/>
+                            <Setter TargetName="GlassRoot" Property="BorderBrush" Value="{StaticResource GlassBorderHover}"/>
+                        </MultiTrigger>
+
                         <!-- Pressed state -->
                         <Trigger Property="IsPressed" Value="True">
                             <Setter TargetName="GlassRoot" Property="Background" Value="{StaticResource GlassBgPressed}"/>
@@ -328,6 +384,204 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Glass CheckBox — Frosted translucent check indicator
+         ═══════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="GlassCheckBoxStyle" TargetType="CheckBox">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="Foreground" Value="{StaticResource GlassTextPrimary}"/>
+        <Setter Property="Background" Value="#12FFFFFF"/>
+        <Setter Property="BorderBrush" Value="#35FFFFFF"/>
+        <Setter Property="BorderThickness" Value="1.5"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="CheckBox">
+                    <Grid Background="Transparent">
+                        <Border x:Name="CheckBorder"
+                                Width="18" Height="18"
+                                CornerRadius="5"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                VerticalAlignment="Center" HorizontalAlignment="Center"
+                                SnapsToDevicePixels="True">
+                            <Border.CacheMode>
+                                <BitmapCache EnableClearType="True" RenderAtScale="1"/>
+                            </Border.CacheMode>
+                            <!-- Checkmark glyph -->
+                            <TextBlock x:Name="CheckGlyph" Text="✓" FontSize="12" FontWeight="Bold"
+                                       Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                       Visibility="Collapsed" Margin="0,-1,0,0"/>
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="CheckBorder" Property="Background" Value="#60A78BFA"/>
+                            <Setter TargetName="CheckBorder" Property="BorderBrush" Value="#80A78BFA"/>
+                            <Setter TargetName="CheckGlyph" Property="Visibility" Value="Visible"/>
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="CheckBorder" Property="BorderBrush" Value="#60FFFFFF"/>
+                            <Setter TargetName="CheckBorder" Property="Background" Value="#20FFFFFF"/>
+                        </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsMouseOver" Value="True"/>
+                                <Condition Property="IsChecked" Value="True"/>
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="CheckBorder" Property="Background" Value="#70A78BFA"/>
+                            <Setter TargetName="CheckBorder" Property="BorderBrush" Value="#90A78BFA"/>
+                        </MultiTrigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter TargetName="CheckBorder" Property="Opacity" Value="0.4"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Glass ToolTip — Frosted translucent tooltip popup
+         ═══════════════════════════════════════════════════════════════════ -->
+    <Style TargetType="ToolTip">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="Foreground" Value="{StaticResource GlassTextPrimary}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="HasDropShadow" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <Border Background="#E0181818" BorderBrush="#40FFFFFF" BorderThickness="1"
+                            CornerRadius="8" Padding="10,6" SnapsToDevicePixels="True">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="12" Color="#000000" Opacity="0.4" ShadowDepth="2" Direction="270"/>
+                        </Border.Effect>
+                        <ContentPresenter/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Glass ContextMenu — Frosted translucent popup menu
+         ═══════════════════════════════════════════════════════════════════ -->
+    <Style TargetType="ContextMenu">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="Foreground" Value="{StaticResource GlassTextPrimary}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ContextMenu">
+                    <Border Background="#E8181818" BorderBrush="#35FFFFFF" BorderThickness="1"
+                            CornerRadius="10" Padding="4,6" SnapsToDevicePixels="True">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="16" Color="#000000" Opacity="0.5" ShadowDepth="4" Direction="270"/>
+                        </Border.Effect>
+                        <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Glass MenuItem — Frosted hover effect for menu items -->
+    <Style TargetType="MenuItem">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="Foreground" Value="{StaticResource GlassTextPrimary}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Padding" Value="10,7"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="MenuItem">
+                    <Border x:Name="MenuBg" Background="Transparent" CornerRadius="6" Margin="2,1"
+                            Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                        <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"
+                                          VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsHighlighted" Value="True">
+                            <Setter TargetName="MenuBg" Property="Background" Value="#25FFFFFF"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Foreground" Value="#50FFFFFF"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ═══════════════════════════════════════════════════════════════════
+         Glass ScrollBar — Thin frosted translucent scrollbar
+         ═══════════════════════════════════════════════════════════════════ -->
+    <Style x:Key="GlassScrollBarThumbStyle" TargetType="Thumb">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="ThumbBorder" Background="#30FFFFFF" CornerRadius="3"
+                            SnapsToDevicePixels="True" Margin="1"/>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#50FFFFFF"/>
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#60A78BFA"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style TargetType="ScrollBar">
+        <Setter Property="SnapsToDevicePixels" Value="True"/>
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Style.Triggers>
+            <Trigger Property="Orientation" Value="Vertical">
+                <Setter Property="Width" Value="8"/>
+                <Setter Property="MinWidth" Value="8"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Border Background="Transparent" CornerRadius="4">
+                                <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                    <Track.Thumb>
+                                        <Thumb Style="{StaticResource GlassScrollBarThumbStyle}"/>
+                                    </Track.Thumb>
+                                </Track>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+            <Trigger Property="Orientation" Value="Horizontal">
+                <Setter Property="Height" Value="8"/>
+                <Setter Property="MinHeight" Value="8"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Border Background="Transparent" CornerRadius="4">
+                                <Track x:Name="PART_Track">
+                                    <Track.Thumb>
+                                        <Thumb Style="{StaticResource GlassScrollBarThumbStyle}"/>
+                                    </Track.Thumb>
+                                </Track>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
     <!-- ═══════════════════════════════════════════════════════════════
@@ -347,7 +601,6 @@
 
     <!-- ═══════════════════════════════════════════════════════════════
          Floating Action Bar — Glass Theme Overrides
-         Frosted violet accent for Merge, warm amber for Unpin
          ═══════════════════════════════════════════════════════════════ -->
     <!-- Merge button — frosted violet glass -->
     <SolidColorBrush x:Key="FloatingMergeAccentBg"          Color="#30A78BFA" options:Freeze="True"/>
