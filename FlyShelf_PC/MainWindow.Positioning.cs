@@ -332,12 +332,12 @@ namespace FlyShelf
                 }
                 _mascotDelayTimer.Start();
 
-                // Trigger visible high-quality render shortly after opening (100ms)
+                // Trigger visible high-quality render almost instantly after opening (20ms)
                 if (_scrollHighQualityTimer == null)
                 {
                     _scrollHighQualityTimer = new System.Windows.Threading.DispatcherTimer
                     {
-                        Interval = TimeSpan.FromMilliseconds(100)
+                        Interval = TimeSpan.FromMilliseconds(20)
                     };
                     _scrollHighQualityTimer.Tick += (s, ev) =>
                     {
@@ -473,12 +473,20 @@ namespace FlyShelf
 
             _scrollDecayTimer.Start();
 
-            // Start or reset the 150ms stoppage timer to load visible high-quality thumbnails
+            // Active Scrolling Throttling: trigger prefetch rendering every 80ms while actively scrolling
+            // so incoming images in the 300px prefetch buffer are loaded long before they hit the screen!
+            if ((DateTime.Now - _lastScrollRenderTime).TotalMilliseconds >= 80)
+            {
+                _lastScrollRenderTime = DateTime.Now;
+                RenderVisibleThumbnails();
+            }
+
+            // Start or reset the snappier 30ms stoppage timer to load visible high-quality thumbnails instantly when scroll stops
             if (_scrollHighQualityTimer == null)
             {
                 _scrollHighQualityTimer = new System.Windows.Threading.DispatcherTimer
                 {
-                    Interval = TimeSpan.FromMilliseconds(150)
+                    Interval = TimeSpan.FromMilliseconds(30)
                 };
                 _scrollHighQualityTimer.Tick += (s, ev) =>
                 {
@@ -506,6 +514,29 @@ namespace FlyShelf
             {
                 try
                 {
+                    if (!this.IsVisible) return;
+
+                    // Guard: Ensure containers are fully generated before evaluating visibility or eviction
+                    if (ShelfListView.ItemContainerGenerator.Status != System.Windows.Controls.Primitives.GeneratorStatus.ContainersGenerated)
+                    {
+                        return;
+                    }
+
+                    // Start the 1-second periodic eviction background timer if not already running
+                    if (_evictionBackgroundTimer == null)
+                    {
+                        _evictionBackgroundTimer = new System.Windows.Threading.DispatcherTimer
+                        {
+                            Interval = TimeSpan.FromSeconds(1)
+                        };
+                        _evictionBackgroundTimer.Tick += (s, ev) =>
+                        {
+                            if (!this.IsVisible) return;
+                            RenderVisibleThumbnails();
+                        };
+                        _evictionBackgroundTimer.Start();
+                    }
+
                     var sv = GetShelfScrollViewer();
                     if (sv == null) return;
 
@@ -513,33 +544,52 @@ namespace FlyShelf
                     double viewportHeight = sv.ViewportHeight;
                     if (viewportHeight <= 0 || viewportWidth <= 0) return;
 
-                    Rect viewportRect = new Rect(0, 0, viewportWidth, viewportHeight);
+                    // Prefetch overdraw: expand viewport vertically by 300px on top and bottom to proactively load adjacent images before they scroll into view
+                    Rect viewportRect = new Rect(0, -300, viewportWidth, viewportHeight + 600);
                     int count = ShelfListView.Items.Count;
+
+                    int imageCount = 0;
+                    bool anyEvicted = false;
 
                     for (int i = 0; i < count; i++)
                     {
                         var item = ShelfListView.Items[i] as ClipboardItem;
                         if (item == null) continue;
 
-                        // Only process image items that have not loaded high quality and are not currently loading
-                        if (item.ItemType != ClipboardItemType.Image) continue;
-                        if (item.IsLoadedHighQuality || item.IsLoadingHighQuality) continue;
+                        // Only process image and QR code items
+                        if (item.ItemType != ClipboardItemType.Image && item.ItemType != ClipboardItemType.QRCode) continue;
+
+                        imageCount++;
+                        bool isFirst10Images = imageCount <= 10;
 
                         var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(i) as FrameworkElement;
-                        if (container == null || !container.IsLoaded) continue;
+                        bool isVisible = false;
 
-                        int currentIndex = i;
-
-                        try
+                        if (container != null && container.IsLoaded)
                         {
-                            GeneralTransform transform = container.TransformToAncestor(sv);
-                            Rect bounds = transform.TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
-
-                            if (viewportRect.IntersectsWith(bounds))
+                            try
                             {
-                                // Trigger high-quality 300px thumbnail rendering
+                                GeneralTransform transform = container.TransformToAncestor(sv);
+                                Rect bounds = transform.TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
+                                isVisible = viewportRect.IntersectsWith(bounds);
+                            }
+                            catch
+                            {
+                                // Soft fail if transform fails (e.g. not fully in visual tree yet)
+                            }
+                        }
+
+                        if (isVisible)
+                        {
+                            // On-Screen / Visible / Prefetch Zone: Reset eviction timer
+                            item.LeftViewportTime = null;
+
+                            // Load 300px thumbnail if not loaded/loading
+                            if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality)
+                            {
                                 item.IsLoadingHighQuality = true;
                                 string filePath = item.FilePath;
+                                int currentIndex = i;
 
                                 _ = System.Threading.Tasks.Task.Run(() =>
                                 {
@@ -550,6 +600,9 @@ namespace FlyShelf
                                         {
                                             Dispatcher.InvokeAsync(() =>
                                             {
+                                                // Coalesce / discard if it was evicted or cancelled in the meantime
+                                                if (!item.IsLoadingHighQuality) return;
+
                                                 item.Icon = bmp;
                                                 item.IsLoadedHighQuality = true;
                                                 item.IsLoadingHighQuality = false;
@@ -592,10 +645,47 @@ namespace FlyShelf
                                 });
                             }
                         }
-                        catch
+                        else
                         {
-                            // Soft fail if coordinates transformation fails during rapid UI updates
+                            // Off-Screen / Scrolled Out: Skip eviction if pinned OR is one of the first 10 images
+                            if (item.IsPinned || isFirst10Images)
+                            {
+                                item.LeftViewportTime = null;
+                                continue;
+                            }
+
+                            // Evict thumbnail ONLY after it has stayed offscreen for at least 10 seconds
+                            if (item.Icon != null || item.IsLoadedHighQuality || item.IsLoadingHighQuality)
+                            {
+                                if (item.LeftViewportTime == null)
+                                {
+                                    // Record the timestamp when the item first left the viewport
+                                    item.LeftViewportTime = DateTime.Now;
+                                }
+                                else if ((DateTime.Now - item.LeftViewportTime.Value).TotalSeconds >= 10)
+                                {
+                                    // 10 seconds have elapsed offscreen — actively evict to free RAM
+                                    item.Icon = null;
+                                    item.IsLoadedHighQuality = false;
+                                    item.IsLoadingHighQuality = false;
+                                    item.LeftViewportTime = null;
+                                    anyEvicted = true;
+                                }
+                            }
+                            else
+                            {
+                                item.LeftViewportTime = null;
+                            }
                         }
+                    }
+
+                    if (anyEvicted)
+                    {
+                        // Force a non-blocking background Gen 2 Garbage Collection to immediately reclaim unmanaged bitmap memory and return it to the OS
+                        System.Threading.Tasks.Task.Run(() =>
+                        {
+                            System.GC.Collect(2, System.GCCollectionMode.Forced, false);
+                        });
                     }
                 }
                 catch (Exception ex)

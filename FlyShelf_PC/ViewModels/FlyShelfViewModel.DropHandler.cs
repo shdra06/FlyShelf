@@ -796,7 +796,7 @@ namespace FlyShelf.ViewModels
                 return null;
 
             var bmp = new BitmapImage();
-            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, FileOptions.SequentialScan))
             {
                 bmp.BeginInit();
                 bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;

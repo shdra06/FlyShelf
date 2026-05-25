@@ -185,17 +185,22 @@ namespace FlyShelf
         {
             _dragStartPoint = e.GetPosition(null);
             _didDragOut = false;
+            _shouldPreventDrag = false;
 
             // GUARD: Don't select items when clicking/dragging the scrollbar
             if (e.OriginalSource is DependencyObject src &&
                 FindVisualParent<System.Windows.Controls.Primitives.ScrollBar>(src) != null)
+            {
+                _shouldPreventDrag = true;
                 return;
+            }
 
             if (e.OriginalSource is DependencyObject sourceElement)
             {
                 // PDF merge toggle: toggle state here and fully consume
                 if (HasAncestorTag(sourceElement, "PdfMergeToggle"))
                 {
+                    _shouldPreventDrag = true;
                     // Debounce: ignore rapid-fire from held mouse button
                     if ((DateTime.Now - _lastMergeToggleTime).TotalMilliseconds > 300)
                     {
@@ -221,7 +226,10 @@ namespace FlyShelf
                 // Don't interfere with other button clicks
                 if (sourceElement is System.Windows.Controls.Primitives.ButtonBase ||
                     FindVisualParent<System.Windows.Controls.Primitives.ButtonBase>(sourceElement) != null)
+                {
+                    _shouldPreventDrag = true;
                     return;
+                }
 
                 var itemContainer = ItemsControl.ContainerFromElement(ShelfListView, sourceElement) as ListViewItem;
                 if (itemContainer != null && itemContainer.DataContext is ClipboardItem)
@@ -255,6 +263,9 @@ namespace FlyShelf
 
             if (e.LeftButton == MouseButtonState.Pressed)
             {
+                if (_shouldPreventDrag)
+                    return;
+
                 // GUARD: Don't start drag-out when dragging the scrollbar
                 if (e.OriginalSource is DependencyObject dragSrc &&
                     FindVisualParent<System.Windows.Controls.Primitives.ScrollBar>(dragSrc) != null)

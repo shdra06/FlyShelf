@@ -19,6 +19,7 @@ namespace FlyShelf
         private readonly FlyShelfViewModel _viewModel;
         private int _spawnToken = 0;
         private bool _isDragHovering = false;
+        private bool _shouldPreventDrag = false;
 
         public static readonly DependencyProperty IsDragHoveringProperty =
             DependencyProperty.Register("IsDragHovering", typeof(bool), typeof(MainWindow), new PropertyMetadata(false));
@@ -38,6 +39,8 @@ namespace FlyShelf
         private System.Windows.Threading.DispatcherTimer? _clipboardDebounceTimer;
         private System.Windows.Threading.DispatcherTimer? _scrollDecayTimer;
         private System.Windows.Threading.DispatcherTimer? _scrollHighQualityTimer;
+        private DateTime _lastScrollRenderTime = DateTime.MinValue;
+        private System.Windows.Threading.DispatcherTimer? _evictionBackgroundTimer;
         private DateTime _lastMergeToggleTime = DateTime.MinValue;
         private IntPtr _lastActiveExternalWindow = IntPtr.Zero;
         private DateTime _lastScrollTime = DateTime.MinValue;
@@ -245,8 +248,7 @@ namespace FlyShelf
             _viewModel.DroppedItems.CollectionChanged += (s, e) =>
             {
                 if (e.Action == NotifyCollectionChangedAction.Add ||
-                    e.Action == NotifyCollectionChangedAction.Reset ||
-                    e.Action == NotifyCollectionChangedAction.Remove)
+                    e.Action == NotifyCollectionChangedAction.Reset)
                 {
                     Dispatcher.InvokeAsync(() =>
                     {
@@ -255,8 +257,19 @@ namespace FlyShelf
                             DismissMergeState();
                         }
 
-                        // Robustness fix: Reapply active filters (category/search) so they don't get cleared on item addition/deletion
+                        // Robustness fix: Reapply active filters only when new items are added, to keep UI stable
                         ReapplyActiveFilters();
+                    }, System.Windows.Threading.DispatcherPriority.Background);
+                }
+                else if (e.Action == NotifyCollectionChangedAction.Remove)
+                {
+                    // For removals, just auto-dismiss merge state if needed, but do NOT refresh the view to allow smooth native WPF slide transitions!
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        if (MergePdfToolbarBtn.Visibility == Visibility.Visible)
+                        {
+                            DismissMergeState();
+                        }
                     }, System.Windows.Threading.DispatcherPriority.Background);
                 }
             };
@@ -754,6 +767,9 @@ namespace FlyShelf
 
                 // Detach smooth scroll window hooks
                 Classes.SmoothScroll.DetachFromWindow(this);
+
+                _evictionBackgroundTimer?.Stop();
+                _evictionBackgroundTimer = null;
             }
             catch { /* Window already destroyed — nothing to clean up */ }
             base.OnClosed(e);
@@ -772,21 +788,6 @@ namespace FlyShelf
             this.Top = -20000;
         }
 
-        private void Card_Loaded(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
-            {
-                item.IsVisibleInViewport = true;
-            }
-        }
-
-        private void Card_Unloaded(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
-            {
-                item.IsVisibleInViewport = false;
-            }
-        }
 
     }
 }

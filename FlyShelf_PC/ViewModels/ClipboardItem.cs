@@ -126,51 +126,6 @@ namespace FlyShelf.ViewModels
             }
         }
 
-        private bool _isVisibleInViewport;
-        [JsonIgnore]
-        public bool IsVisibleInViewport
-        {
-            get => _isVisibleInViewport;
-            set
-            {
-                if (_isVisibleInViewport != value)
-                {
-                    _isVisibleInViewport = value;
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsVisibleInViewport)));
-                    EvaluateViewportVisibility();
-                }
-            }
-        }
-
-        private void EvaluateViewportVisibility()
-        {
-            if (_isVisibleInViewport)
-            {
-                if (_icon == null && !string.IsNullOrEmpty(FilePath) && File.Exists(FilePath))
-                {
-                    System.Threading.Tasks.Task.Run(() =>
-                    {
-                        try
-                        {
-                            var bmp = FlyShelfViewModel.LoadImageThumbnail(FilePath, 300);
-                            if (bmp != null)
-                            {
-                                System.Windows.Application.Current.Dispatcher.Invoke(() => Icon = bmp);
-                            }
-                        }
-                        catch { }
-                    });
-                }
-            }
-            else
-            {
-                if (_icon != null && !IsPinned && (ItemType == ClipboardItemType.Image || ItemType == ClipboardItemType.QRCode || ItemType == ClipboardItemType.Pdf))
-                {
-                    _icon = null;
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Icon)));
-                }
-            }
-        }
         private string _formattedSize = string.Empty;
         public string FormattedSize 
         { 
@@ -534,6 +489,9 @@ namespace FlyShelf.ViewModels
                 }
             }
         }
+
+        [JsonIgnore]
+        public DateTime? LeftViewportTime { get; set; }
 
         public event PropertyChangedEventHandler? PropertyChanged;
         

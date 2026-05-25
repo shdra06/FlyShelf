@@ -545,7 +545,7 @@
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate>
-                    <Border Name="CardBorder" Loaded="Card_Loaded" Unloaded="Card_Unloaded" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1,0.5,1,1" CornerRadius="14" Margin="0" Padding="0" RenderTransformOrigin="0.5,0.5">
+                    <Border Name="CardBorder" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1,0.5,1,1" CornerRadius="14" Margin="0" Padding="0" RenderTransformOrigin="0.5,0.5">
                         <Border.OpacityMask>
                             <VisualBrush>
                                 <VisualBrush.Visual>

@@ -23,6 +23,10 @@
     <Authors>Shivendra</Authors>
     <Copyright>© 2024-2026 Shivendra. All rights reserved.</Copyright>
     <Description>FlyShelf syncs your clipboard, files, and screenshots across all your devices in real-time via secure peer-to-peer connections.</Description>
+    <!-- Optimizations for extremely low desktop memory footprint -->
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <RetainVM>false</RetainVM>
   </PropertyGroup>
 
   <!-- Microsoft Store build: pass /p:StorePublish=true to define MSIX_STORE -->
