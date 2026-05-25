@@ -1,8 +1,8 @@
 {
-  "pc_version": "7.1.0",
-  "pc_changelog": "v7.1.0 — Flawless Transitions & Premium Card Deletion\n\n• Fixed: Complete elimination of the 1-frame solid background flash during summon or re-summon.\n• Fixed: Elimination of the card deletion visual jerk and layout shift. Upper cards now remain perfectly anchored.",
-  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf.exe",
-  "pc_sha256": "d089074e428e6856cf1796b1bb534e16d3134c88b6a14defd688d2cef3f4f788",
+  "pc_version": "7.5.0",
+  "pc_changelog": "v7.5.0 — UI Polish & Rendering Stability\n\n• Fixed: Pixel-snap scrolling eliminates ClearType text shimmer during scroll.\n• Fixed: QuickLookWindow half-render resolved with opaque background.\n• Fixed: Dropdown chevron white box artifacts removed.\n• Fixed: Layout rounding and device pixel snapping re-enabled across all views.\n• New: Uninstall feature — Danger Zone in Hub Logs tab.",
+  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v7.5.0/FlyShelf.exe",
+  "pc_sha256": "cbce4c9cedf09edd29ca8a4500ebe7801a766de3b0fe769663b6d397378ad8ee",
   "android_version": "7.1.0",
   "android_changelog": "v7.1.0 — Version Sync\n\n• Bumped version to sync with Desktop client release.",
   "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"
