@@ -159,11 +159,16 @@ namespace FlyShelf
 
             this.SizeChanged += (s, e) =>
             {
-                // CRITICAL: Don't re-anchor the window position during item deletion.
-                // In Mode 0 (SizeToContent.Height), removing a card shrinks the content → WPF shrinks the window →
-                // this handler would recompute Top from _lockedBottomEdge, moving the window upward and causing
-                // all visible cards to visually "teleport" upward. Suppressing this keeps the window stable.
-                if (IsDeletingItem) return;
+                if (IsDeletingItem)
+                {
+                    // Update the locked bottom edge to sync with the new shrunken bottom of the window.
+                    // This prevents the window from suddenly snapping back or jumping when IsDeletingItem becomes false!
+                    if (this.ActualHeight > 0)
+                    {
+                        _lockedBottomEdge = this.Top + this.ActualHeight + 20;
+                    }
+                    return;
+                }
 
                 if (_isEdgeLocked && this.ActualWidth > 0 && this.ActualHeight > 0)
                 {
