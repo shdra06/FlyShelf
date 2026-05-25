@@ -98,6 +98,9 @@ namespace FlyShelf
         private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             if (_isSuppressingSizeSync) return;
+            // Don't persist the shrunken height caused by card deletion — it would corrupt
+            // the stored MiniFormHeight, making future summons spawn at the wrong size.
+            if (IsDeletingItem) return;
 
             if (e.NewSize.Width > 100 && e.NewSize.Height > 100)
             {
@@ -275,17 +278,31 @@ namespace FlyShelf
             {
                 // Set flag to suppress the subsequent MouseUp paste-and-close
                 _justDeletedAnItem = true;
-                
+
+                // Save scroll position before removal so the viewport doesn't jump.
+                // Without this, VirtualizingStackPanel recalculates pixel offsets after Remove()
+                // and visible items shift by the height of the removed card.
+                var sv = GetShelfScrollViewer();
+                double savedOffset = sv?.VerticalOffset ?? 0;
+
                 try
                 {
                     IsDeletingItem = true;
+                    _isSuppressingSizeSync = true; // Prevent PropertyChanged → Height persistence during deletion
                     _viewModel.RemoveItem(item);
                 }
                 finally
                 {
+                    _isSuppressingSizeSync = false;
                     IsDeletingItem = false;
                 }
-                
+
+                // Restore scroll offset to keep viewport visually stable
+                if (sv != null)
+                {
+                    sv.ScrollToVerticalOffset(Math.Max(0, savedOffset));
+                }
+
                 e.Handled = true;
             }
         }
@@ -501,9 +518,15 @@ namespace FlyShelf
             if (e.Key == Key.Delete && ShelfListView.SelectedItems.Count > 0)
             {
                 var itemsToRemove = ShelfListView.SelectedItems.Cast<ClipboardItem>().ToList();
+
+                // Save scroll position to prevent viewport jumping (same as DeleteSpecific_Click)
+                var sv = GetShelfScrollViewer();
+                double savedOffset = sv?.VerticalOffset ?? 0;
+
                 try
                 {
                     IsDeletingItem = true;
+                    _isSuppressingSizeSync = true;
                     foreach (var item in itemsToRemove)
                     {
                         _viewModel.RemoveItem(item);
@@ -511,8 +534,16 @@ namespace FlyShelf
                 }
                 finally
                 {
+                    _isSuppressingSizeSync = false;
                     IsDeletingItem = false;
                 }
+
+                // Restore scroll offset to keep viewport visually stable
+                if (sv != null)
+                {
+                    sv.ScrollToVerticalOffset(Math.Max(0, savedOffset));
+                }
+
                 e.Handled = true;
             }
             else if (e.Key == Key.Enter && ShelfListView.SelectedItem is ClipboardItem selected)
