@@ -196,9 +196,17 @@ namespace FlyShelf
 
             this.ShowActivated = stealFocus;
 
-            // Pure WPF opacity — NO native Win32 alpha. Single opacity system = no race conditions.
-            // this.Opacity was already set to 0 when the window was last hidden, and the render
-            // thread has committed it during the idle period. DWM sees opacity=0 before SetWindowPos.
+            // ═══ CRITICAL: ANTI-BLACK-BOX SPAWN SEQUENCE ═══
+            // DWM renders the raw HWND surface (black rectangle) independently of WPF content.
+            // If we move the window onscreen BEFORE the opacity animation starts, DWM shows
+            // 1-3 frames of black before WPF's opacity transitions from 0→1.
+            //
+            // Solution: Keep the window OFFSCREEN during all prep work, start the opacity
+            // animation while still offscreen, then move onscreen as the very last step.
+            // This way the first DWM-visible frame already has the animation clock running
+            // at ~0% opacity (invisible), and the content gracefully fades in.
+
+            // 1. Reset opacity and animation clocks while still offscreen
             this.Opacity = 0;
             this.BeginAnimation(OpacityProperty, null);
             RootContent.Opacity = 1;
@@ -207,16 +215,8 @@ namespace FlyShelf
             _isCurrentlySummoned = true;
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
                 _isShowAnimating = true; // Guard BEFORE move — prevents OnActivated from flashing opacity to 1.0
-            this.Left = rawX;
-            double computedTop = _lockedBottomEdge - realHeight - 20;
-            // Full bounds clamp: keep entire window within the visible work area
-            if (computedTop < workArea.Top + 16)
-                computedTop = workArea.Top + 16;
-            if (computedTop + realHeight > workArea.Top + workArea.Height - 16)
-                computedTop = workArea.Top + workArea.Height - realHeight - 16;
-            this.Top = computedTop;
 
-            // ═══ SCROLL RESET ═══
+            // 2. Scroll reset while still offscreen (no visual impact)
             try
             {
                 Classes.SmoothScroll.ResetScrollState(GetShelfScrollViewer());
@@ -232,15 +232,35 @@ namespace FlyShelf
             }
             catch { }
 
-            if (!Classes.SettingsManager.Current.EnableSummonAnimations)
+            // 3. Activate while still offscreen — this is the slow Win32 call that causes
+            //    layout stalls. Doing it offscreen means the stall is invisible.
+            if (stealFocus) this.Activate();
+
+            // 4. Start the opacity animation BEFORE moving onscreen.
+            //    The animation clock starts ticking from opacity=0. When we move the window
+            //    onscreen in step 5, the first DWM-composited frame will already be at ~0% opacity.
+            if (Classes.SettingsManager.Current.EnableSummonAnimations)
+            {
+                PlayShowAnimation();
+            }
+            else
             {
                 this.Opacity = 1.0;
             }
 
-            if (stealFocus) this.Activate();
+            // 5. LAST STEP: Move onscreen. By now the animation is running at near-0% opacity,
+            //    so DWM will composite a fully transparent frame — no black box flash.
+            this.Left = rawX;
+            double computedTop = _lockedBottomEdge - realHeight - 20;
+            // Full bounds clamp: keep entire window within the visible work area
+            if (computedTop < workArea.Top + 16)
+                computedTop = workArea.Top + 16;
+            if (computedTop + realHeight > workArea.Top + workArea.Height - 16)
+                computedTop = workArea.Top + workArea.Height - realHeight - 16;
+            this.Top = computedTop;
 
             // Explicitly set DWM border color on each summon to prevent OS/MicaWPF composition resets.
-            // PERF: Defer to Background priority so it runs after the spawn animation is fully started and running.
+            // PERF: Defer to Background priority so it runs after the spawn animation is fully started.
             Dispatcher.InvokeAsync(() =>
             {
                 try
@@ -254,16 +274,6 @@ namespace FlyShelf
                 }
                 catch { }
             }, System.Windows.Threading.DispatcherPriority.Background);
-
-            // CRITICAL: Start animation LAST — after ALL synchronous work (Activate, focus,
-            // DWM border, layout) has completed. This ensures the animation clock starts
-            // ticking only after layout stalls have resolved, so the first rendered frame
-            // shows the animation at its true starting value (near 0%) rather than at 50-60%
-            // where the clock ticked to during the stall.
-            if (Classes.SettingsManager.Current.EnableSummonAnimations)
-            {
-                PlayShowAnimation();
-            }
 
             // Use Dispatcher callback to adjust position after the first layout pass completes.
             Dispatcher.InvokeAsync(() =>
