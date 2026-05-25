@@ -435,6 +435,40 @@ namespace FlyShelf.Windows
         {
             if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item) { _viewModel.RemoveItem(item); e.Handled = true; }
         }
+
+        private void UninstallFlyShelf_Click(object sender, RoutedEventArgs e)
+        {
+            var result = MessageBox.Show(
+                "⚠️ Are you sure you want to uninstall FlyShelf?\n\n" +
+                "This will permanently delete:\n" +
+                "  • All clipboard history & images\n" +
+                "  • All settings & preferences\n" +
+                "  • All synced files\n" +
+                "  • All paired device data\n" +
+                "  • All logs & certificates\n" +
+                "  • Auto-start registry entry\n\n" +
+                "This action cannot be undone.",
+                "Uninstall FlyShelf",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Warning,
+                MessageBoxResult.No);
+
+            if (result == MessageBoxResult.Yes)
+            {
+                var confirm = MessageBox.Show(
+                    "Final confirmation: ALL FlyShelf data will be deleted and the app will close.\n\nProceed?",
+                    "Confirm Uninstall",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Stop,
+                    MessageBoxResult.No);
+
+                if (confirm == MessageBoxResult.Yes)
+                {
+                    SettingsManager.PerformFullUninstall();
+                }
+            }
+        }
+
         // ═══ Device Send, Archive, Merge & Selection moved to HubWindow.SettingsHandlers.cs ═══
     }
 }

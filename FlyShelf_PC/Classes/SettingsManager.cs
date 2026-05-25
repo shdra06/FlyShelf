@@ -269,5 +269,79 @@ namespace FlyShelf.Classes
                 Logger.LogAction("SETTINGS_SAVE", $"Failed to serialize config: {ex.Message}");
             }
         }
+
+        /// <summary>
+        /// Performs a full uninstall: removes auto-start registry entry,
+        /// deletes the entire %AppData%\FlyShelf\ directory, and terminates the application.
+        /// </summary>
+        public static void PerformFullUninstall()
+        {
+            // 1. Remove auto-start registry entry
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
+                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
+                {
+                    key?.DeleteValue("FlyShelf", throwOnMissingValue: false);
+                }
+                Logger.LogAction("UNINSTALL", "Removed auto-start registry entry.");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("UNINSTALL", $"Failed to remove registry entry: {ex.Message}");
+            }
+
+            // 2. Delete the entire %AppData%\FlyShelf\ directory
+            string appDataDir = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf");
+            try
+            {
+                if (Directory.Exists(appDataDir))
+                {
+                    Directory.Delete(appDataDir, recursive: true);
+                    Logger.LogAction("UNINSTALL", $"Deleted app data directory: {appDataDir}");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Some files may be locked; attempt individual cleanup
+                Logger.LogAction("UNINSTALL", $"Failed to delete app data directory: {ex.Message}");
+                try
+                {
+                    foreach (var dir in Directory.GetDirectories(appDataDir))
+                    {
+                        try { Directory.Delete(dir, true); } catch { }
+                    }
+                    foreach (var file in Directory.GetFiles(appDataDir))
+                    {
+                        try { File.Delete(file); } catch { }
+                    }
+                }
+                catch { }
+            }
+
+            // 3. Delete sandbox temp directory if it exists
+            try
+            {
+                string sandboxDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Sandbox");
+                if (Directory.Exists(sandboxDir))
+                    Directory.Delete(sandboxDir, recursive: true);
+            }
+            catch { }
+
+            // 4. Shut down the application
+            try
+            {
+                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    System.Windows.Application.Current.Shutdown();
+                });
+            }
+            catch
+            {
+                Environment.Exit(0);
+            }
+        }
     }
 }
+

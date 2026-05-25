@@ -627,7 +627,7 @@ namespace FlyShelf.ViewModels
 
         /// <summary>
         /// Replaces a progress placeholder with the completed ClipboardItem at the same position.
-        /// Writes the file to OS clipboard and persists to SQLite.
+        /// Writes the file to OS clipboard and persists to JSON history.
         /// </summary>
         public void SwapPlaceholderWithCompleted(ClipboardItem placeholder, ClipboardItem completed)
         {
