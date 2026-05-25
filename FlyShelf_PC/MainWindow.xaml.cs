@@ -50,6 +50,7 @@ namespace FlyShelf
         private EventHandler<Classes.AnimationRequestEventArgs>? _mascotAnimationRequestedHandler;
         private Action<Classes.ThemePackage?>? _themeChangedHandler;
         private System.ComponentModel.PropertyChangedEventHandler? _settingsChangedHandler;
+        private bool _isSuppressingSizeSync = false;
 
         private ScrollViewer? GetShelfScrollViewer()
         {
@@ -154,18 +155,35 @@ namespace FlyShelf
 
             this.SizeChanged += (s, e) =>
             {
-                if (_isEdgeLocked && e.HeightChanged && this.ActualHeight > 0)
+                if (_isEdgeLocked && this.ActualWidth > 0 && this.ActualHeight > 0)
                 {
-                    double newTop = _lockedBottomEdge - this.ActualHeight - 20;
-                    
-                    // Full bounds clamp: keep entire window within the visible work area
                     var workArea = SystemParameters.WorkArea;
-                    if (newTop < workArea.Top + 16)
-                        newTop = workArea.Top + 16;
-                    if (newTop + this.ActualHeight > workArea.Top + workArea.Height - 16)
-                        newTop = workArea.Top + workArea.Height - this.ActualHeight - 16;
-                    
-                    this.Top = newTop;
+
+                    if (e.WidthChanged && e.PreviousSize.Width > 0)
+                    {
+                        double newLeft = this.Left + (e.PreviousSize.Width / 2.0) - (this.ActualWidth / 2.0);
+                        
+                        // Full bounds clamp: keep within visible work area
+                        if (newLeft + this.ActualWidth > workArea.Left + workArea.Width - 16)
+                            newLeft = workArea.Left + workArea.Width - this.ActualWidth - 16;
+                        if (newLeft < workArea.Left + 16)
+                            newLeft = workArea.Left + 16;
+
+                        this.Left = newLeft;
+                    }
+
+                    if (e.HeightChanged)
+                    {
+                        double newTop = _lockedBottomEdge - this.ActualHeight - 20;
+                        
+                        // Full bounds clamp: keep within visible work area
+                        if (newTop < workArea.Top + 16)
+                            newTop = workArea.Top + 16;
+                        if (newTop + this.ActualHeight > workArea.Top + workArea.Height - 16)
+                            newTop = workArea.Top + workArea.Height - this.ActualHeight - 16;
+                        
+                        this.Top = newTop;
+                    }
                 }
             };
 
@@ -183,9 +201,15 @@ namespace FlyShelf
 
             _viewModel.PropertyChanged += (s, e) =>
             {
+                if (_isSuppressingSizeSync) return;
+
                 if (e.PropertyName == nameof(FlyShelfViewModel.CurrentFlyShelfMaxHeight))
                 {
                     this.MaxHeight = _viewModel.CurrentFlyShelfMaxHeight;
+                    if (_viewModel.CurrentMode != 0)
+                    {
+                        this.Height = _viewModel.CurrentFlyShelfMaxHeight;
+                    }
                     this.UpdateLayout();
                     
                     if (_isEdgeLocked && this.ActualHeight > 0)
@@ -740,6 +764,7 @@ namespace FlyShelf
         public void HideWindowInternal()
         {
             _isCurrentlySummoned = false;
+            _isEdgeLocked = false;
             this.Left = -20000;
             this.Top = -20000;
         }

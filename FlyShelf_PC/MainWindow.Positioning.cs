@@ -72,6 +72,35 @@ namespace FlyShelf
 
             if (needsDefer)
             {
+                // CRITICAL: Pre-apply the target mode's width and layout mode BEFORE deferring.
+                // This ensures WPF processes the size change while the window is still offscreen,
+                // preventing the "half-rendered" flash where the window appears at the old mode's width.
+                _isSuppressingSizeSync = true;
+                try
+                {
+                    _viewModel.CurrentMode = mode;
+                    this.Width = _viewModel.CurrentFlyShelfWidth;
+                    this.MaxHeight = _viewModel.CurrentFlyShelfMaxHeight;
+                    if (mode == 0)
+                    {
+                        if (this.SizeToContent != SizeToContent.Height)
+                            this.SizeToContent = SizeToContent.Height;
+                        if (!double.IsNaN(this.Height))
+                            this.Height = double.NaN;
+                    }
+                    else
+                    {
+                        if (this.SizeToContent != SizeToContent.Manual)
+                            this.SizeToContent = SizeToContent.Manual;
+                        this.Height = _viewModel.CurrentFlyShelfMaxHeight;
+                    }
+                    this.UpdateLayout();
+                }
+                finally
+                {
+                    _isSuppressingSizeSync = false;
+                }
+
                 // DEFER the positioning, activation, and summon animation to Background priority.
                 // This guarantees that WPF renders the 0% opacity frame offscreen, fully committing 
                 // the 0% transparent state to DWM, BEFORE the window is positioned back onscreen.
@@ -92,26 +121,37 @@ namespace FlyShelf
 
             // PERF: Removed ShowInTaskbar toggle — it destroys/recreates the Win32 HWND (200-500ms penalty)
 
-            _viewModel.CurrentMode = mode;
-            this.MaxHeight = _viewModel.CurrentFlyShelfMaxHeight;
-            this.Width = _viewModel.CurrentFlyShelfWidth;
+            _isSuppressingSizeSync = true;
+            try
+            {
+                _viewModel.CurrentMode = mode;
+                this.MaxHeight = _viewModel.CurrentFlyShelfMaxHeight;
+                this.Width = _viewModel.CurrentFlyShelfWidth;
 
-            // Force a deterministic height so the window doesn't bounce around with SizeToContent
-            if (mode == 0)
-            {
-                // Mini mode: let content drive height, capped by MaxHeight
-                if (this.SizeToContent != SizeToContent.Height)
-                    this.SizeToContent = SizeToContent.Height;
-                if (!double.IsNaN(this.Height))
-                    this.Height = double.NaN;
+                // Force a deterministic height so the window doesn't bounce around with SizeToContent
+                if (mode == 0)
+                {
+                    // Mini mode: let content drive height, capped by MaxHeight
+                    if (this.SizeToContent != SizeToContent.Height)
+                        this.SizeToContent = SizeToContent.Height;
+                    if (!double.IsNaN(this.Height))
+                        this.Height = double.NaN;
+                }
+                else
+                {
+                    // Mode 1/2: use the stored height exactly — no content-driven fluctuation
+                    if (this.SizeToContent != SizeToContent.Manual)
+                        this.SizeToContent = SizeToContent.Manual;
+                    if (this.Height != (double)_viewModel.CurrentFlyShelfMaxHeight)
+                        this.Height = _viewModel.CurrentFlyShelfMaxHeight;
+                }
+
+                UpdateToolbarButtonsVisibility();
+                this.UpdateLayout();
             }
-            else
+            finally
             {
-                // Mode 1/2: use the stored height exactly — no content-driven fluctuation
-                if (this.SizeToContent != SizeToContent.Manual)
-                    this.SizeToContent = SizeToContent.Manual;
-                if (this.Height != _viewModel.CurrentFlyShelfMaxHeight)
-                    this.Height = _viewModel.CurrentFlyShelfMaxHeight;
+                _isSuppressingSizeSync = false;
             }
 
             var workArea = SystemParameters.WorkArea;
