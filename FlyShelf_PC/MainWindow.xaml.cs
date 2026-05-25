@@ -20,6 +20,7 @@ namespace FlyShelf
         private int _spawnToken = 0;
         private bool _isDragHovering = false;
         private bool _shouldPreventDrag = false;
+        private bool _justDeletedAnItem = false;
 
         public static readonly DependencyProperty IsDragHoveringProperty =
             DependencyProperty.Register("IsDragHovering", typeof(bool), typeof(MainWindow), new PropertyMetadata(false));

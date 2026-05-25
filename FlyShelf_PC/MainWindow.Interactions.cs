@@ -22,6 +22,13 @@ namespace FlyShelf
     {
         private async void ShelfListView_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
+            if (_justDeletedAnItem)
+            {
+                _justDeletedAnItem = false;
+                e.Handled = true;
+                return;
+            }
+
             if (_didDragOut)
             {
                 _didDragOut = false;
@@ -186,6 +193,7 @@ namespace FlyShelf
             _dragStartPoint = e.GetPosition(null);
             _didDragOut = false;
             _shouldPreventDrag = false;
+            _justDeletedAnItem = false;
 
             // GUARD: Don't select items when clicking/dragging the scrollbar
             if (e.OriginalSource is DependencyObject src &&

@@ -274,15 +274,7 @@ namespace FlyShelf
             if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
             {
                 // Set flag to suppress the subsequent MouseUp paste-and-close
-                _didDragOut = true;
-                
-                // PERF FIX: Auto-reset after 100ms so rapid-fire delete clicks
-                // on sequential items don't get swallowed by a stale flag
-                Dispatcher.InvokeAsync(async () =>
-                {
-                    await System.Threading.Tasks.Task.Delay(100);
-                    _didDragOut = false;
-                });
+                _justDeletedAnItem = true;
                 
                 try
                 {
