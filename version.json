@@ -1,9 +1,9 @@
 {
-  "pc_version": "6.0.1",
-  "pc_changelog": "v6.0.1 — Premium Circular Expand Button & UI Optimization\n\n• Added: Premium Circular Expand/Collapse Chevron Toggle Button positioned symmetrically at the top-left of long text/code cards\n• Fixed: Small low-visibility 'Read More' arrow text button at the bottom of the card is now removed",
-  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf.exe",
-  "pc_sha256": "230c90885e956489f04e03507d2133340dfa896b9720e51cc18c268cf509b750",
-  "android_version": "6.0.1",
-  "android_changelog": "v6.0.1 — Version Sync\n\n• Bumped version to sync with Desktop client release.",
-  "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf_Mobile.apk"
+  "pc_version": "7.1.0",
+  "pc_changelog": "v7.1.0 — Flawless Transitions & Premium Card Deletion\n\n• Fixed: Complete elimination of the 1-frame solid background flash during summon or re-summon.\n• Fixed: Elimination of the card deletion visual jerk and layout shift. Upper cards now remain perfectly anchored.",
+  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf.exe",
+  "pc_sha256": "55b7ad2cc472dd8abf889d4c78add26a2322b6eae4218d8c6fd50d614eb58f1d",
+  "android_version": "7.1.0",
+  "android_changelog": "v7.1.0 — Version Sync\n\n• Bumped version to sync with Desktop client release.",
+  "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"
 }
