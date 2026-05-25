@@ -92,8 +92,16 @@ namespace FlyShelf
                     var dropList = new System.Collections.Specialized.StringCollection();
                     dropList.Add(clipboardObj.FilePath);
                     dataObj.SetFileDropList(dropList);
-                    dataObj.SetData(DataFormats.StringFormat, clipboardObj.FilePath);
-                    dataObj.SetData(DataFormats.Text, clipboardObj.FilePath);
+                    if (!string.IsNullOrEmpty(clipboardObj.RawContent))
+                    {
+                        dataObj.SetData(DataFormats.Text, clipboardObj.RawContent);
+                        dataObj.SetData(DataFormats.UnicodeText, clipboardObj.RawContent);
+                    }
+                    else
+                    {
+                        dataObj.SetData(DataFormats.StringFormat, clipboardObj.FilePath);
+                        dataObj.SetData(DataFormats.Text, clipboardObj.FilePath);
+                    }
                     dataObj.SetData("FileNameW", new string[] { clipboardObj.FilePath });
                     dataObj.SetData("FileName", new string[] { clipboardObj.FilePath });
                     try { dataObj.SetData("text/uri-list", "file:///" + clipboardObj.FilePath.Replace("\\", "/")); } catch { }
@@ -269,6 +277,12 @@ namespace FlyShelf
                             dataObj.SetData("FileNameW", new string[] { firstItem.FilePath });
                             dataObj.SetData("FileName", new string[] { firstItem.FilePath });
                             try { dataObj.SetData("text/uri-list", "file:///" + firstItem.FilePath.Replace("\\", "/")); } catch { }
+
+                            if (!string.IsNullOrEmpty(firstItem.RawContent))
+                            {
+                                dataObj.SetData(DataFormats.UnicodeText, firstItem.RawContent);
+                                dataObj.SetData(DataFormats.Text, firstItem.RawContent);
+                            }
 
                             if (firstItem.ItemType == ClipboardItemType.Image)
                             {

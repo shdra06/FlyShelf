@@ -282,7 +282,7 @@ namespace FlyShelf.ViewModels
         public bool IsGifPreview => IsImagePreview && !string.IsNullOrEmpty(FilePath) && FilePath.EndsWith(".gif", StringComparison.OrdinalIgnoreCase);
         public bool IsStaticImagePreview => IsImagePreview && !IsGifPreview;
         public string GifFilePath => IsGifPreview ? FilePath : "";
-        public bool IsDocPreview => ItemType == ClipboardItemType.Document && (Extension == ".DOCX" || Extension == ".DOC" || Extension == ".TXT");
+        public bool IsDocPreview => ItemType == ClipboardItemType.Document && (Extension == ".DOCX" || Extension == ".DOC" || Extension == ".TXT" || Extension == ".MD");
         public bool IsPdfPreview => ItemType == ClipboardItemType.Pdf;
         public bool IsUrlPreview => ItemType == ClipboardItemType.Url;
         public bool IsCodePreview => ItemType == ClipboardItemType.Code;

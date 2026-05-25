@@ -45,7 +45,7 @@ namespace FlyShelf.ViewModels
             }
             else if (ItemType == ClipboardItemType.Document)
             {
-                if (Extension == ".DOCX" || Extension == ".DOC")
+                if (Extension == ".DOCX" || Extension == ".DOC" || Extension == ".TXT" || Extension == ".MD")
                 {
                     SmartActionName = "Convert to PDF";
                     SmartActionIcon = "DocumentPdf24";
@@ -256,7 +256,7 @@ namespace FlyShelf.ViewModels
             {
                 ItemType = ClipboardItemType.Pdf;
             }
-            else if (ext == ".doc" || ext == ".docx" || ext == ".txt")
+            else if (ext == ".doc" || ext == ".docx" || ext == ".txt" || ext == ".md")
             {
                 ItemType = ClipboardItemType.Document;
             }

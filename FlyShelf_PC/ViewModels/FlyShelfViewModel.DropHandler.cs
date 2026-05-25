@@ -574,7 +574,7 @@ namespace FlyShelf.ViewModels
                             ? capturedText.Substring(0, 10000) 
                             : capturedText;
 
-                        bool isCode = _rxCode.IsMatch(classificationSample);
+                        bool isCode = IsProperCode(classificationSample);
                         
                         if (isCode)
                         {
@@ -809,6 +809,107 @@ namespace FlyShelf.ViewModels
         {
             FlyShelf.Classes.SettingsManager.Save();
             FlyShelf.Windows.ToastWindow.ShowToast("System Configuration Saved ✅");
+        }
+
+        /// <summary>
+        /// Highly robust code classification algorithm to prevent plain text documents,
+        /// dictionary definitions or scraped web pages from being classified as code snippets.
+        /// First prioritizes strong function calling or int main signatures.
+        /// </summary>
+        private static bool IsProperCode(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            text = text.Trim();
+
+            // 1. Minimum character threshold verification
+            // Activate code classification ONLY when the sample meets a minimum length (e.g. 15 characters)
+            if (text.Length < 15) return false;
+
+            // 2. 1st Priority: Strong Entry Points & Function Calling / Signature Detections
+            // If the text contains these explicit identifiers, we prioritize marking it as code immediately.
+            bool hasEntryPoint = text.Contains("int main") || 
+                                 text.Contains("void main") || 
+                                 text.Contains("public static void main") ||
+                                 text.Contains("using namespace std") ||
+                                 text.Contains("#include <") ||
+                                 text.Contains("System.Console.WriteLine") ||
+                                 text.Contains("Console.WriteLine") ||
+                                 text.Contains("System.out.println") ||
+                                 text.Contains("console.log(");
+
+            if (hasEntryPoint) return true;
+
+            // Regex checking standard function definition or function call signatures (e.g. "myFunc(args)", "void foo()")
+            // Matches optional return keyword, function name, parentheses block, and an ending marker (brace, semicolon, arrow)
+            try
+            {
+                var rxFunction = new System.Text.RegularExpressions.Regex(
+                    @"\b(void|int|string|double|float|bool|var|let|const)?\s*\w+\s*\([^)]*\)\s*({|;|=>)", 
+                    System.Text.RegularExpressions.RegexOptions.Compiled);
+                
+                if (rxFunction.IsMatch(text)) return true;
+            }
+            catch { }
+
+            // 3. Fallback: Structural & Punctuation Constraints
+            var lines = text.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length == 0) return false;
+
+            // 3a. Very short contents (1 or 2 lines)
+            if (lines.Length <= 2)
+            {
+                if (!_rxCode.IsMatch(text)) return false;
+
+                // For single-line or double-line, require high confidence code syntax indicators
+                bool hasCodePunctuation = text.Contains(";") || text.Contains("{") || text.Contains("}") || text.Contains("=>") || text.Contains("/*") || text.Contains("*/") || text.Contains("//");
+                bool hasCodeStructure = text.Contains("(") && text.Contains(")");
+                bool hasCommonStart = text.StartsWith("#include") || text.StartsWith("import ") || text.StartsWith("def ") || text.StartsWith("from ") || text.StartsWith("using ");
+
+                return hasCodePunctuation || hasCodeStructure || hasCommonStart;
+            }
+
+            // 3b. Multi-line documents (3 or more lines)
+            // Prevent webpage copy-pastes (like GitHub repos, lists, or articles) from being marked as code
+            int codeLineCount = 0;
+            int nonCodeLineCount = 0;
+
+            foreach (var rawLine in lines)
+            {
+                string line = rawLine.Trim();
+                if (string.IsNullOrEmpty(line)) continue;
+
+                // Parts of code structure like solo brackets/commas
+                if (line == "{" || line == "}" || line == "[" || line == "]" || line == "(" || line == ")" || line == "};" || line == "];" || line == ",")
+                {
+                    codeLineCount++;
+                    continue;
+                }
+
+                bool lineMatchesCode = _rxCode.IsMatch(line);
+                bool hasCodeSuffix = line.EndsWith(";") || line.EndsWith("{") || line.EndsWith("}") || line.EndsWith(",") || line.EndsWith(":") || line.StartsWith("//") || line.StartsWith("/*") || line.StartsWith("*") || line.StartsWith("#") || line.StartsWith("import ") || line.StartsWith("export ");
+
+                if (lineMatchesCode || hasCodeSuffix)
+                {
+                    codeLineCount++;
+                }
+                else
+                {
+                    nonCodeLineCount++;
+                }
+            }
+
+            int totalValuableLines = codeLineCount + nonCodeLineCount;
+            if (totalValuableLines == 0) return false;
+
+            double codeDensity = (double)codeLineCount / totalValuableLines;
+
+            // Must contain some basic code punctuation overall
+            bool hasAbsoluteIndicators = text.Contains(";") || text.Contains("{") || text.Contains("}") || text.Contains("=>") || text.Contains("</") || text.Contains("/>") || text.Contains("/*") || text.Contains("*/") || text.Contains("//") || text.Contains("def ") || text.Contains("import ") || text.Contains("#include");
+
+            if (!hasAbsoluteIndicators) return false;
+
+            // Proper code must have at least 35% code line density
+            return codeDensity >= 0.35;
         }
     }
 

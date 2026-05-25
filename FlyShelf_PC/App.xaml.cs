@@ -18,8 +18,8 @@ public partial class App : Application
 
     // Shake Detection State
     private static int _shakeCount = 0;
-    private static int _lastShakeDirX = 0; 
-    private static int _lastShakeDirY = 0; 
+    private static int _lastSigDirX = 0; 
+    private static int _lastSigDirY = 0; 
     private static int _lastShakeX = 0;
     private static int _lastShakeY = 0;
     private static long _lastShakeTime = 0;
@@ -418,8 +418,8 @@ public partial class App : Application
                         if (currentTime - _lastShakeTime > 500)
                         {
                             _shakeCount = 0;
-                            _lastShakeDirX = 0;
-                            _lastShakeDirY = 0;
+                            _lastSigDirX = 0;
+                            _lastSigDirY = 0;
                             _lastShakeX = currentX;
                             _lastShakeY = currentY;
                             _lastShakeTime = currentTime;
@@ -428,47 +428,59 @@ public partial class App : Application
                         {
                             int deltaX = currentX - _lastShakeX;
                             int deltaY = currentY - _lastShakeY;
-                            
-                            bool reversed = false;
-                            int currentDirX = deltaX > 0 ? 1 : (deltaX < 0 ? -1 : 0);
-                            int currentDirY = deltaY > 0 ? 1 : (deltaY < 0 ? -1 : 0);
+                            double distSq = (double)(deltaX * deltaX + deltaY * deltaY);
 
-                            if (Math.Abs(deltaX) > 12)
+                            // Highly sensitive displacement threshold (9px within 40ms = effortless natural trigger)
+                            if (distSq >= 81)
                             {
-                                if (_lastShakeDirX != 0 && currentDirX != _lastShakeDirX) reversed = true;
-                                _lastShakeDirX = currentDirX;
+                                bool reversed = false;
+
+                                // Dot product of current direction vector and last direction vector.
+                                // If dot product < 0, it means the angle between vectors is > 90 degrees,
+                                // which perfectly and robustly signifies a diagonal, horizontal, or vertical reversal!
+                                if (_lastSigDirX != 0 || _lastSigDirY != 0)
+                                {
+                                    double dot = (double)(deltaX * _lastSigDirX + deltaY * _lastSigDirY);
+                                    if (dot < 0)
+                                    {
+                                        reversed = true;
+                                    }
+                                }
+
+                                // Update the active shaking direction vector
+                                _lastSigDirX = deltaX;
+                                _lastSigDirY = deltaY;
                                 _lastShakeX = currentX;
-                                _lastShakeTime = currentTime;
-                            }
-                            else if (Math.Abs(deltaY) > 12)
-                            {
-                                if (_lastShakeDirY != 0 && currentDirY != _lastShakeDirY) reversed = true;
-                                _lastShakeDirY = currentDirY;
                                 _lastShakeY = currentY;
                                 _lastShakeTime = currentTime;
-                            }
 
-                            if (reversed)
-                            {
-                                _shakeCount++;
-
-                                if (_shakeCount >= 5)
+                                if (reversed)
                                 {
-                                    _shakeCount = 0; 
-                                    int triggerX = currentX;
-                                    int triggerY = currentY;
+                                    _shakeCount++;
 
-                                    int netDriftY = triggerY - _shakeStartY;
-                                    if (netDriftY > 150) return;
-
-                                    _lastClipboardLaunchTime = Environment.TickCount64;
-
-                                    _instance?.Dispatcher.InvokeAsync(async () => 
+                                    // Effortless and natural trigger after 4 reversals
+                                    if (_shakeCount >= 4)
                                     {
-                                        await System.Threading.Tasks.Task.Delay(300);
-                                        if (ActiveMergeWindow != null && ActiveMergeWindow.IsActive) return;
-                                        _instance.LaunchClipboardManager(triggerX, triggerY, false, 0, false);
-                                    }, System.Windows.Threading.DispatcherPriority.Background);
+                                        _shakeCount = 0;
+                                        _lastSigDirX = 0;
+                                        _lastSigDirY = 0;
+
+                                        int triggerX = currentX;
+                                        int triggerY = currentY;
+
+                                        // Clamping check to prevent triggering during normal long downward drag-and-drops
+                                        int netDriftY = triggerY - _shakeStartY;
+                                        if (netDriftY > 180) return;
+
+                                        _lastClipboardLaunchTime = Environment.TickCount64;
+
+                                        _instance?.Dispatcher.InvokeAsync(async () => 
+                                        {
+                                            await System.Threading.Tasks.Task.Delay(300);
+                                            if (ActiveMergeWindow != null && ActiveMergeWindow.IsActive) return;
+                                            _instance.LaunchClipboardManager(triggerX, triggerY, false, 0, false);
+                                        }, System.Windows.Threading.DispatcherPriority.Background);
+                                    }
                                 }
                             }
                         }

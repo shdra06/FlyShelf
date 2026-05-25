@@ -1,4 +1,4 @@
-﻿<ResourceDictionary x:Class="FlyShelf.Styles.HubClipboardItemTemplate"
+<ResourceDictionary x:Class="FlyShelf.Styles.HubClipboardItemTemplate"
                     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
@@ -80,7 +80,7 @@
                                             <ui:MenuItem Header="Merge Selected PDFs" Icon="{ui:SymbolIcon DocumentCopy24}" Foreground="#EF4444" Command="{Binding PlacementTarget.Tag.MergeSelectedPdfsCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Visibility="{Binding IsPdfPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             
                                             <!-- Document Actions -->
-                                            <ui:MenuItem Header="Convert Word to PDF" Icon="{ui:SymbolIcon Document24}" Foreground="#3B82F6" Command="{Binding PlacementTarget.Tag.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsDocPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                            <ui:MenuItem Header="Convert to PDF" Icon="{ui:SymbolIcon Document24}" Foreground="#3B82F6" Command="{Binding PlacementTarget.Tag.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsDocPreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             
                                             <!-- Code Actions -->
                                             <ui:MenuItem Header="Run in Terminal" Icon="{ui:SymbolIcon Play24}" Foreground="#10B981" Command="{Binding PlacementTarget.Tag.LaunchTerminalCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsCodePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
@@ -668,8 +668,8 @@
                                                 </ui:Button.Style>
                                             </ui:Button>
 
-                                            <!-- Convert Word to PDF -->
-                                            <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Convert Word to PDF" Command="{Binding DataContext.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
+                                            <!-- Convert to PDF -->
+                                            <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Convert to PDF" Command="{Binding DataContext.ConvertDocumentCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
                                                 <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" FontSize="14" Foreground="#EF4444" /></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">

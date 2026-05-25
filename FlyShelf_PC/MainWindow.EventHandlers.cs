@@ -97,6 +97,8 @@ namespace FlyShelf
 
         private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
         {
+            if (_isSuppressingSizeSync) return;
+
             if (e.NewSize.Width > 100 && e.NewSize.Height > 100)
             {
                 // Only persist size changes for the CURRENT mode — prevents mode 1
@@ -471,24 +473,7 @@ namespace FlyShelf
                 }
                 else if (item.SmartActionType == "ConvertToPdf")
                 {
-                    System.Threading.Tasks.Task.Run(() => 
-                    {
-                        try 
-                        {
-                            string targetPdf = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(item.FilePath) ?? System.IO.Path.GetTempPath(), System.IO.Path.GetFileNameWithoutExtension(item.FilePath) + "_Converted.pdf");
-                            string script = $"$word = New-Object -ComObject Word.Application; $doc = $word.Documents.Open('{item.FilePath}'); $doc.SaveAs([ref]'{targetPdf}', [ref]17); $doc.Close(); $word.Quit();";
-                            var p = new System.Diagnostics.ProcessStartInfo { FileName = "powershell.exe", Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -Command \"{script}\"", CreateNoWindow = true, UseShellExecute = false };
-                            System.Diagnostics.Process.Start(p)?.WaitForExit();
-                            
-                            if (System.IO.File.Exists(targetPdf))
-                            {
-                                Dispatcher.InvokeAsync(() => {
-                                    var dropList = new System.Collections.Specialized.StringCollection(); dropList.Add(targetPdf);
-                                    System.Windows.Clipboard.SetFileDropList(dropList);
-                                });
-                            }
-                        } catch { } // Sandbox fail softly if Microsoft Word isn't installed
-                    });
+                    item.ConvertDocumentTask();
                 }
                 else if (item.SmartActionType == "SetTimer")
                 {
