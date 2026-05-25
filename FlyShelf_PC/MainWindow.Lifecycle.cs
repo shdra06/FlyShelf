@@ -250,6 +250,7 @@ namespace FlyShelf
                 return;
             }
 
+            int tokenAtStart = _spawnToken;
             _isAnimatingHide = true;
             _lastActualHeight = this.ActualHeight;
 
@@ -286,6 +287,14 @@ namespace FlyShelf
                     // and then clears the clock offscreen (preventing the black frame flash)!
                     Dispatcher.InvokeAsync(() =>
                     {
+                        // Verify this hide task hasn't been superseded or cancelled by a newer summon in the meantime.
+                        // If token changed, a new summon has already taken over, so we must protect it and skip this obsolete hide routine!
+                        if (_spawnToken != tokenAtStart)
+                        {
+                            Classes.Logger.LogAction("TELEMETRY", $"AnimateAndHide deferred completed callback bypassed: new summon active (hide token: {tokenAtStart}, current token: {_spawnToken})");
+                            return;
+                        }
+
                         try
                         {
                             HideWindowInternal(); // Move offscreen first

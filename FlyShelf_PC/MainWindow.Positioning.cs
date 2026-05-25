@@ -24,6 +24,10 @@ namespace FlyShelf
             CloseSearch();
             CloseEmojiPicker();
 
+            // Increment spawn token at the very beginning of the summon sequence.
+            // This immediately invalidates any active or pending dismiss/hide animation callbacks.
+            int currentToken = ++_spawnToken;
+
             // PERF: Use cached foreground window — avoids expensive EnumWindows P/Invoke scan
             _previousForegroundWindow = _lastActiveExternalWindow != IntPtr.Zero && IsWindow(_lastActiveExternalWindow)
                 ? _lastActiveExternalWindow
@@ -32,13 +36,10 @@ namespace FlyShelf
             _spawnTime = DateTime.Now;
             _isPersistentMode = isPersistent;
 
-            bool needsDefer = false;
-
             // Abort hide animation if one is actively running
             if (_isAnimatingHide)
             {
                 _isAnimatingHide = false;
-                needsDefer = true;
                 try
                 {
                     // Set base opacity to 0 and clear animation clocks immediately.
@@ -60,7 +61,6 @@ namespace FlyShelf
 
             if (_isCurrentlySummoned)
             {
-                needsDefer = true;
                 this.Opacity = 0;
                 this.BeginAnimation(OpacityProperty, null);
                 RootContent.Opacity = 1;
@@ -70,50 +70,50 @@ namespace FlyShelf
                 HideWindowInternal(); 
             }
 
-            if (needsDefer)
+            // CRITICAL: Always pre-apply the target mode's width and layout mode offscreen.
+            // This ensures WPF processes the size change while the window is still offscreen,
+            // preventing the "half-rendered" flash where the window appears at the old mode's width.
+            _isSuppressingSizeSync = true;
+            try
             {
-                // CRITICAL: Pre-apply the target mode's width and layout mode BEFORE deferring.
-                // This ensures WPF processes the size change while the window is still offscreen,
-                // preventing the "half-rendered" flash where the window appears at the old mode's width.
-                _isSuppressingSizeSync = true;
-                try
+                _viewModel.CurrentMode = mode;
+                this.Width = _viewModel.CurrentFlyShelfWidth;
+                this.MaxHeight = _viewModel.CurrentFlyShelfMaxHeight;
+                if (mode == 0)
                 {
-                    _viewModel.CurrentMode = mode;
-                    this.Width = _viewModel.CurrentFlyShelfWidth;
-                    this.MaxHeight = _viewModel.CurrentFlyShelfMaxHeight;
-                    if (mode == 0)
-                    {
-                        if (this.SizeToContent != SizeToContent.Height)
-                            this.SizeToContent = SizeToContent.Height;
-                        if (!double.IsNaN(this.Height))
-                            this.Height = double.NaN;
-                    }
-                    else
-                    {
-                        if (this.SizeToContent != SizeToContent.Manual)
-                            this.SizeToContent = SizeToContent.Manual;
-                        this.Height = _viewModel.CurrentFlyShelfMaxHeight;
-                    }
-                    this.UpdateLayout();
+                    if (this.SizeToContent != SizeToContent.Height)
+                        this.SizeToContent = SizeToContent.Height;
+                    if (!double.IsNaN(this.Height))
+                        this.Height = double.NaN;
                 }
-                finally
+                else
                 {
-                    _isSuppressingSizeSync = false;
+                    if (this.SizeToContent != SizeToContent.Manual)
+                        this.SizeToContent = SizeToContent.Manual;
+                    this.Height = _viewModel.CurrentFlyShelfMaxHeight;
+                }
+                this.UpdateLayout();
+            }
+            finally
+            {
+                _isSuppressingSizeSync = false;
+            }
+
+            // ALWAYS defer the positioning, activation, and summon animation to Background priority.
+            // This guarantees that WPF renders the 0% opacity frame offscreen, fully committing 
+            // the 0% transparent state to DWM, BEFORE the window is positioned back onscreen.
+            // This completely eliminates any repositioning or rapid re-summon flashes/double-spawns!
+            Dispatcher.InvokeAsync(() =>
+            {
+                // Verify this summon hasn't been superseded by a newer summon in the meantime
+                if (_spawnToken != currentToken)
+                {
+                    Classes.Logger.LogAction("TELEMETRY", $"ShowNearPosition deferred callback bypassed: token changed ({currentToken} -> {_spawnToken})");
+                    return;
                 }
 
-                // DEFER the positioning, activation, and summon animation to Background priority.
-                // This guarantees that WPF renders the 0% opacity frame offscreen, fully committing 
-                // the 0% transparent state to DWM, BEFORE the window is positioned back onscreen.
-                // This completely eliminates any repositioning or rapid re-summon flashes/double-spawns!
-                Dispatcher.InvokeAsync(() =>
-                {
-                    ShowNearPositionInternal(targetX, targetY, mode, isPersistent, stealFocus);
-                }, System.Windows.Threading.DispatcherPriority.Background);
-            }
-            else
-            {
                 ShowNearPositionInternal(targetX, targetY, mode, isPersistent, stealFocus);
-            }
+            }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
         private void ShowNearPositionInternal(double targetX, double targetY, int mode, bool isPersistent, bool stealFocus)
@@ -192,7 +192,7 @@ namespace FlyShelf
                 rawY = maxBottomEdge;
 
             _lockedBottomEdge = rawY;
-            _isEdgeLocked = true;
+            _isEdgeLocked = false; // Lock the edge AFTER all positioning has been completed at the end of the method!
 
             this.ShowActivated = stealFocus;
 
@@ -211,6 +211,19 @@ namespace FlyShelf
             this.BeginAnimation(OpacityProperty, null);
             RootContent.Opacity = 1;
             RootContent.RenderTransform = null;
+
+            // Synchronously force the HWND opacity to 0 at the OS level using Win32.
+            // This guarantees that the DWM redirection buffer is completely invisible,
+            // preventing the black box flash even if DWM recreates the buffer.
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
+                }
+            }
+            catch { }
 
             _isCurrentlySummoned = true;
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
@@ -258,6 +271,8 @@ namespace FlyShelf
             if (computedTop + realHeight > workArea.Top + workArea.Height - 16)
                 computedTop = workArea.Top + workArea.Height - realHeight - 16;
             this.Top = computedTop;
+
+            _isEdgeLocked = true; // Lock the edge AFTER all positioning has been completed!
 
             // Explicitly set DWM border color on each summon to prevent OS/MicaWPF composition resets.
             // PERF: Defer to Background priority so it runs after the spawn animation is fully started.
