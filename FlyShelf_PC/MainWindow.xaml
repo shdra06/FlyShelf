@@ -353,9 +353,9 @@
                          <ui:Button.Icon><ui:SymbolIcon Symbol="PinOff24" Foreground="#F59E0B"/></ui:Button.Icon>
                      </ui:Button>
  
-                     <!-- Clear Shelf -->
-                     <ui:Button x:Name="ClearShelfBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ClearShelf_ShowConfirm" ToolTip="Clear Shelf (keeps pinned)" Margin="0,0,6,0">
-                         <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" /></ui:Button.Icon>
+                     <!-- Open Settings Hub -->
+                     <ui:Button x:Name="OpenSettingsBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="OpenApp_Click" ToolTip="Open PC Hub (Settings)" Margin="0,0,6,0">
+                         <ui:Button.Icon><ui:SymbolIcon Symbol="Settings24" /></ui:Button.Icon>
                      </ui:Button>
                      
                      <ui:Button Style="{StaticResource PremiumHeaderButtonStyle}" Click="CloseWindow_Click" ToolTip="Hide (Esc)">

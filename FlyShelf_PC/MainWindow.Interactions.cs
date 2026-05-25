@@ -605,9 +605,9 @@ namespace FlyShelf
                 SearchToggleBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
             }
             
-            if (ClearShelfBtn != null)
+            if (OpenSettingsBtn != null)
             {
-                ClearShelfBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
+                OpenSettingsBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
             }
             
             // Emoji → Merge PDF swap (existing behavior)
