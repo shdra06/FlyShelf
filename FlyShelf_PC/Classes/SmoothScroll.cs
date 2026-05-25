@@ -340,24 +340,21 @@ namespace FlyShelf.Classes
                 state.TrueOffset += displacement;
                 state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
 
-                // ═══ PIXEL-SNAP: Render at integer pixel to eliminate sub-pixel text shimmer ═══
-                // TrueOffset tracks the real fractional position for smooth physics,
-                // but the ScrollViewer always receives a whole-pixel offset so ClearType
-                // glyph weights never fluctuate mid-scroll.
-                double snappedOffset = Math.Round(state.TrueOffset);
-                sv.ScrollToVerticalOffset(snappedOffset);
+                // ═══ SUB-PIXEL PRECISION: Scroll directly to the fractional offset for infinite smoothness ═══
+                // Enabled by setting TextOptions.TextFormattingMode="Ideal" and UseLayoutRounding="False"
+                // on the ListView to eliminate sub-pixel text shimmer and allow butter-smooth continuous glide.
+                sv.ScrollToVerticalOffset(state.TrueOffset);
 
                 // Exponential deceleration (friction decay)
                 double friction = state.IsTouchpad 
-                    ? 0.88  // Decays slower (increased from 0.81) to smoothly bridge the time gap between successive touchpad inputs, eliminating start-stop stutter.
+                    ? 0.90  // Decays slower to smoothly bridge the time gap between successive touchpad inputs, eliminating start-stop stutter.
                     : ScrollFriction; // Luxurious free coasting glide for mouse wheel sweeps
 
-                // Progressive Settling: when velocity is extremely slow, apply aggressive decay
-                // to quickly bring it to zero. This prevents the long sub-pixel crawl that
-                // crosses rounding boundaries and causes a 1px end-of-scroll micro jitter.
-                if (Math.Abs(state.Velocity) < 0.6)
+                // Organic Settling: Since layout rounding is disabled and sub-pixel precision is active,
+                // we don't have rounding boundaries and can let the scroll glide to a beautiful, organic halt.
+                if (Math.Abs(state.Velocity) < 0.15)
                 {
-                    friction = state.IsTouchpad ? 0.60 : 0.65;
+                    friction = 0.75;
                 }
 
                 state.Velocity *= Math.Pow(friction, timeScale);

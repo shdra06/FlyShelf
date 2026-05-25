@@ -298,7 +298,7 @@ namespace FlyShelf.Classes
                 {
                     // Snap exactly to final target
                     double finalTarget = Math.Clamp(state.ToOffset, 0.0, sv.ScrollableHeight);
-                    sv.ScrollToVerticalOffset(Math.Round(finalTarget));
+                    sv.ScrollToVerticalOffset(finalTarget);
                     
                     state.IsAnimating = false;
                     completed.Add(sv);
@@ -308,8 +308,8 @@ namespace FlyShelf.Classes
                     double nextOffset = GetPositionAtCompletion(state.FromOffset, state.ToOffset, state.ViewportHeight, animCompletion);
                     nextOffset = Math.Clamp(nextOffset, 0.0, sv.ScrollableHeight);
                     
-                    // Snap to integer pixels to match VS Code (eliminates sub-pixel text shimmering)
-                    sv.ScrollToVerticalOffset(Math.Round(nextOffset));
+                    // Scroll directly to the fractional offset for infinite scrolling smoothness
+                    sv.ScrollToVerticalOffset(nextOffset);
                     anyAnimating = true;
                 }
             }
