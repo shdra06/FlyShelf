@@ -9,7 +9,7 @@
         xmlns:emoji="clr-namespace:Emoji.Wpf;assembly=Emoji.Wpf"
         xmlns:local="clr-namespace:FlyShelf.Controls"
         Title="FlyShelf" 
-        Width="360" 
+        Width="368" 
         Opacity="0"
         MaxHeight="300" SizeToContent="Manual" MinHeight="100" BorderThickness="0"
         WindowStyle="None" ResizeMode="NoResize" Background="Transparent" SystemBackdropType="None"
