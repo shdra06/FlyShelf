@@ -404,8 +404,8 @@ namespace FlyShelf.Windows
 
         private void ResetClipboardSize_Click(object sender, RoutedEventArgs e)
         {
-            SettingsManager.Current.MediumFormWidth = 368;
-            SettingsManager.Current.MediumFormHeight = 528;
+            SettingsManager.Current.MediumFormWidth = 360;
+            SettingsManager.Current.MediumFormHeight = 380;
             SettingsManager.Save();
         }
 

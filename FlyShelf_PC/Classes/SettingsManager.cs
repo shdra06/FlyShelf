@@ -27,10 +27,10 @@ namespace FlyShelf.Classes
             set => _geminiApiKey = string.IsNullOrEmpty(value) ? "" : SecureStorage.Decrypt(value);
         }
 
-        private int _mediumFormWidth = 368;
+        private int _mediumFormWidth = 360;
         public int MediumFormWidth { get => _mediumFormWidth; set => SetProperty(ref _mediumFormWidth, value); }
 
-        private int _mediumFormHeight = 528;
+        private int _mediumFormHeight = 380;
         public int MediumFormHeight { get => _mediumFormHeight; set => SetProperty(ref _mediumFormHeight, value); }
 
         private int _miniFormWidth = 260;
