@@ -8,6 +8,7 @@
 
 [![Windows](https://img.shields.io/badge/Windows_Desktop-v7.0.0-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v7.0.0/FlyShelf.exe)
 [![Android](https://img.shields.io/badge/Android_Mobile-v7.0.0-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v7.0.0/FlyShelf_Mobile.apk)
+[![Privacy](https://img.shields.io/badge/Privacy_First-Zero_Telemetry-10B981?style=for-the-badge&logo=shield&logoColor=white)](PRIVACY_POLICY.md)
 
 ---
 
@@ -88,7 +89,7 @@ FlyShelf/
 │   ├── ViewModels/              # Core MVVM binders and drag-drop structures
 │   ├── Resources/               # Web client components, icons, and themes
 │   ├── Scripts/                 # Native deployment scripts
-│   └── AdvanceClip.csproj       # Performance-tuned build configuration
+│   └── FlyShelf.csproj          # Performance-tuned build configuration
 │
 ├── FlyShelf_Android/            # Android companion (React Native + Kotlin)
 │   ├── app/(tabs)/              # React Native view screens & feeds
@@ -96,6 +97,11 @@ FlyShelf/
 │   ├── context/                 # System configuration persistence
 │   └── package.json             # Mobile app dependencies
 │
+├── flyshelf-web/                # Next.js website (GitHub Pages)
+│   ├── app/                     # Pages: home, features, download, privacy
+│   └── deploy.ps1               # Deployment script for gh-pages
+│
+├── PRIVACY_POLICY.md            # Full privacy policy
 ├── version.json                 # Auto-update version metadata
 └── README.md
 ```
@@ -124,7 +130,7 @@ cd FlyShelf_PC
 #### Android Client (Expo / Native Kotlin)
 Run a custom native device compilation:
 ```powershell
-cd FlyShelf_PC
+cd FlyShelf_Android
 # Cleans workspace, configures SDK paths, and compiles arm64-only APK natively
 .\Build_Android_Device.bat
 ```
@@ -141,9 +147,42 @@ Configure the companion apps within their respective Settings dashboards:
 ---
 
 ## 🛡️ Security & Privacy First
-- **No Cloud Data Retained**: Transferred files stream entirely peer-to-peer.
-- **Zero Third-Party Storage**: Clipboard historical content is only cached locally in RAM/disk on your own machines.
-- **Spyware-Free Passive Tracking**: Background shake-summoning uses passive accelerometer events without monitoring location or keystrokes.
+
+FlyShelf is designed with a **privacy-first architecture**:
+
+- **No Cloud Data Retained**: Clipboard content is **never** stored in any cloud service. All sync is peer-to-peer.
+- **Zero Telemetry**: No analytics, no tracking, no usage data collection whatsoever.
+- **End-to-End Encryption**: All data in transit is encrypted using **AES-256-GCM** with PBKDF2-SHA256 derived keys.
+- **Local-Only Storage**: All clipboard history is stored as JSON files in `%AppData%\FlyShelf\` on your machine.
+- **No Account Required**: Anonymous Firebase auth for signaling only — no email, no password.
+
+📄 **[Read the full Privacy Policy →](PRIVACY_POLICY.md)**  
+🌐 **[View Privacy Policy on our website →](https://shdra06.github.io/FlyShelf/privacy)**
+
+---
+
+## 🗑️ Uninstall & Data Deletion
+
+FlyShelf stores all data locally in `%AppData%\FlyShelf\`. You have complete control over your data.
+
+### In-App Uninstall
+Open the Hub dashboard → navigate to the **Logs** tab → scroll to the **Danger Zone** section → click **"Uninstall FlyShelf & Remove All Data"**. This will:
+- Delete all clipboard history, images, and synced files
+- Remove all settings, paired devices, and certificates
+- Remove the auto-start registry entry
+- Close the application
+
+### Manual Removal
+```powershell
+# Delete all FlyShelf data
+Remove-Item -Recurse -Force "$env:APPDATA\FlyShelf"
+
+# Remove auto-start (if enabled)
+Remove-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" -Name "FlyShelf" -ErrorAction SilentlyContinue
+
+# Delete the executable
+Remove-Item "path\to\FlyShelf.exe"
+```
 
 ---
 
