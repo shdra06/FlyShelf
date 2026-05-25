@@ -53,8 +53,8 @@ namespace FlyShelf
                     RootContent.Opacity = 1;
                     RootContent.RenderTransform = null;
 
-                    // Move offscreen immediately to hide from the DWM composition surface
-                    HideWindowInternal();
+                    // Defer offscreen move to let WPF commit the 0% opacity frame onscreen first
+                    Dispatcher.InvokeAsync(() => HideWindowInternal(), System.Windows.Threading.DispatcherPriority.Background);
                 }
                 catch { }
             }
@@ -66,8 +66,8 @@ namespace FlyShelf
                 RootContent.Opacity = 1;
                 RootContent.RenderTransform = null;
                 
-                // Move offscreen immediately to hide from the DWM composition surface
-                HideWindowInternal(); 
+                // Defer offscreen move to let WPF commit the 0% opacity frame onscreen first
+                Dispatcher.InvokeAsync(() => HideWindowInternal(), System.Windows.Threading.DispatcherPriority.Background);
             }
 
             // CRITICAL: Always pre-apply the target mode's width and layout mode offscreen.
@@ -211,19 +211,6 @@ namespace FlyShelf
             this.BeginAnimation(OpacityProperty, null);
             RootContent.Opacity = 1;
             RootContent.RenderTransform = null;
-
-            // Synchronously force the HWND opacity to 0 at the OS level using Win32.
-            // This guarantees that the DWM redirection buffer is completely invisible,
-            // preventing the black box flash even if DWM recreates the buffer.
-            try
-            {
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                if (hwnd != IntPtr.Zero)
-                {
-                    SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
-                }
-            }
-            catch { }
 
             _isCurrentlySummoned = true;
             if (Classes.SettingsManager.Current.EnableSummonAnimations)

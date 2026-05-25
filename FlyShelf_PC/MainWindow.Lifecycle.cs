@@ -212,123 +212,55 @@ namespace FlyShelf
         // PERF: Deferred mascot/GIF resume timer — mascot starts 1s after spawn, not during spawn
         private System.Windows.Threading.DispatcherTimer? _mascotDelayTimer;
 
-        /// <summary>Fast dismiss animation on inner content, then hides window.</summary>
+        /// <summary>Instant dismiss of FlyShelf window with zero latency or animations.</summary>
         public void AnimateAndHide()
         {
             StopDragActiveDismissTimer();
-            if (_isAnimatingHide || !_isCurrentlySummoned) return;
+            if (!_isCurrentlySummoned) return;
 
-            // PERF: Cancel any pending mascot timer
+            // Cancel any pending mascot timers
             _mascotDelayTimer?.Stop();
 
-            if (!Classes.SettingsManager.Current.EnableSummonAnimations)
-            {
-                DismissMergeState();
-                CloseSearch();
-
-                try
-                {
-                    HideWindowInternal();
-                    this.Opacity = 0;
-                    this.BeginAnimation(OpacityProperty, null);
-                    RootContent.Opacity = 1;
-                    RootContent.RenderTransform = null;
-                }
-                catch { }
-
-                // PERF: Pause mascot/GIF at Background priority — just freeze frames, don't destroy/reload
-                Dispatcher.InvokeAsync(() =>
-                {
-                    try
-                    {
-                        MascotIdle.PausePlayback();
-                        var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
-                        animator?.Pause();
-                    }
-                    catch { }
-                }, System.Windows.Threading.DispatcherPriority.Background);
-                return;
-            }
-
-            int tokenAtStart = _spawnToken;
-            _isAnimatingHide = true;
+            _isAnimatingHide = false;
             _lastActualHeight = this.ActualHeight;
 
-            // Clear PDF merge selections so they don't persist on reopen
+            // Clear merge state & close search instantly
             DismissMergeState();
             CloseSearch();
 
-            RootContent.RenderTransform = new TranslateTransform(0, 0);
-
-            // ═══ PERFECT UNSPAWN PROFILE (150ms) ═══
-            // Opacity: Front-loaded fade out (1 -> 0 over 100ms)
-            var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1, 0, TimeSpan.FromMilliseconds(100))
+            try
             {
-                EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn }
-            };
-
-            // Slide Out: Soft downward drift (0 -> 6 over 150ms)
-            var slideOut = new System.Windows.Media.Animation.DoubleAnimation(0, 6, TimeSpan.FromMilliseconds(150))
-            {
-                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-            };
-
-            // We attach the Completed handler to the longer (150ms) slideOut animation.
-            // This ensures that the window is completely transparent (at 100ms) BEFORE
-            // it moves offscreen (at 150ms), creating depth and atmospheric disappearance!
-            slideOut.Completed += (s, e) =>
-            {
-                try
+                // Reset window opacity to 0 and clear any active animations immediately onscreen.
+                // This makes the window instantly invisible to the user on the screen.
+                this.Opacity = 0;
+                this.BeginAnimation(OpacityProperty, null);
+                RootContent.Opacity = 1;
+                
+                // Clear any active translation offsets
+                if (RootContent.RenderTransform is TranslateTransform tt)
                 {
-                    // Do NOT move offscreen immediately, and do NOT clear the clock yet.
-                    // The window is at 0% opacity (held by the fadeOut clock).
-                    // We queue a background priority job to move it offscreen and then clear the clock.
-                    // This guarantees that WPF renders the 0% opacity frame while onscreen (clearing DWM cache),
-                    // and then clears the clock offscreen (preventing the black frame flash)!
-                    Dispatcher.InvokeAsync(() =>
-                    {
-                        // Verify this hide task hasn't been superseded or cancelled by a newer summon in the meantime.
-                        // If token changed, a new summon has already taken over, so we must protect it and skip this obsolete hide routine!
-                        if (_spawnToken != tokenAtStart)
-                        {
-                            Classes.Logger.LogAction("TELEMETRY", $"AnimateAndHide deferred completed callback bypassed: new summon active (hide token: {tokenAtStart}, current token: {_spawnToken})");
-                            return;
-                        }
-
-                        try
-                        {
-                            HideWindowInternal(); // Move offscreen first
-                            
-                            // Now that it is safely offscreen, clear the clock and reset base value
-                            this.Opacity = 0;
-                            this.BeginAnimation(OpacityProperty, null);
-                            RootContent.Opacity = 1;
-                            RootContent.RenderTransform = null;
-                        }
-                        catch { }
-                        _isAnimatingHide = false;
-                    }, System.Windows.Threading.DispatcherPriority.Background);
+                    tt.BeginAnimation(TranslateTransform.YProperty, null);
                 }
-                catch 
-                { 
-                    _isAnimatingHide = false; 
-                }
+                RootContent.RenderTransform = null;
 
-                // PERF: Pause mascot/GIF at Background priority — just freeze frames, don't destroy/reload
+                // Defer the offscreen move to Background priority.
+                // This ensures WPF has rendered and committed a 0% opacity frame to DWM first,
+                // clearing the composition cache before the window is translated offscreen.
                 Dispatcher.InvokeAsync(() =>
                 {
-                    try
-                    {
-                        MascotIdle.PausePlayback();
-                        var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
-                        animator?.Pause();
-                    }
-                    catch { }
+                    HideWindowInternal();
                 }, System.Windows.Threading.DispatcherPriority.Background);
-            };
+            }
+            catch { }
 
-            this.BeginAnimation(OpacityProperty, fadeOut);
-            RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, slideOut);
+            // Pause all GIF mascot and wallpaper decoding loops immediately
+            try
+            {
+                MascotIdle.PausePlayback();
+                var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
+                animator?.Pause();
+            }
+            catch { }
         }
         private DateTime _spawnTime = DateTime.MinValue;
         private IntPtr _previousForegroundWindow = IntPtr.Zero;

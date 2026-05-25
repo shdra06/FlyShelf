@@ -611,9 +611,23 @@
                                                Stretch="UniformToFill" 
                                                Opacity="0.75" 
                                                RenderOptions.BitmapScalingMode="HighQuality">
-                                            <Image.Effect>
-                                                <BlurEffect Radius="18" KernelType="Gaussian"/>
-                                            </Image.Effect>
+                                            <Image.Style>
+                                                <Style TargetType="Image">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                    <Setter Property="Effect">
+                                                        <Setter.Value>
+                                                            <BlurEffect Radius="18" KernelType="Gaussian"/>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                    <Style.Triggers>
+                                                        <!-- If Source is null (mascot, live wallpaper, solid theme), disable blur to prevent GPU stalls & black card glitch -->
+                                                        <Trigger Property="Source" Value="{x:Null}">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Setter Property="Effect" Value="{x:Null}"/>
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Image.Style>
                                         </Image>
                                         <!-- Sleek theme-colored tint overlay -->
                                         <Border Background="{DynamicResource ShelfCardSelectionBg}" CornerRadius="14"/>

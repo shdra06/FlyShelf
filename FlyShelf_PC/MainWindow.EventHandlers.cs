@@ -285,11 +285,15 @@ namespace FlyShelf
                     _isSuppressingSizeSync = true; // Prevent PropertyChanged → Height persistence during deletion
                     _viewModel.RemoveItem(item);
                 }
-                finally
+                catch { }
+
+                // Defer resetting the deletion flags until after layout/size changes have completed.
+                // Doing this at Loaded priority ensures it runs after WPF has completed the layout/size pass.
+                Dispatcher.InvokeAsync(() =>
                 {
                     _isSuppressingSizeSync = false;
                     IsDeletingItem = false;
-                }
+                }, System.Windows.Threading.DispatcherPriority.Loaded);
 
                 e.Handled = true;
             }
@@ -515,11 +519,16 @@ namespace FlyShelf
                         _viewModel.RemoveItem(item);
                     }
                 }
-                finally
+                catch { }
+
+                // Defer resetting the deletion flags until after layout/size changes have completed.
+                // Doing this at Loaded priority ensures it runs after WPF has completed the layout/size pass.
+                Dispatcher.InvokeAsync(() =>
                 {
                     _isSuppressingSizeSync = false;
                     IsDeletingItem = false;
-                }
+                }, System.Windows.Threading.DispatcherPriority.Loaded);
+
                 e.Handled = true;
             }
             else if (e.Key == Key.Enter && ShelfListView.SelectedItem is ClipboardItem selected)
