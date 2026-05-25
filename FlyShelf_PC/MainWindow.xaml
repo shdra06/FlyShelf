@@ -175,7 +175,7 @@
 
         <!-- ═══ WALLPAPER LAYERS (hidden when no wallpaper set) ═══ -->
         <!-- Layer 1: Full background image (center, fills entire window) -->
-        <Image x:Name="WallpaperBg" Grid.RowSpan="2" Stretch="UniformToFill" Opacity="0.38"
+        <Image x:Name="WallpaperBg" Grid.RowSpan="2" Stretch="UniformToFill" Opacity="0.55"
                Visibility="Collapsed"
                HorizontalAlignment="Center" VerticalAlignment="Center"/>
         

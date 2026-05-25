@@ -285,7 +285,7 @@ namespace FlyShelf
                                      if (!_isCurrentlySummoned || _isAnimatingHide) return;
 
                                      var centerColor = Color.FromArgb(50, dominantColor.R, dominantColor.G, dominantColor.B);
-                                     var edgeColor = Color.FromArgb(140, (byte)(dominantColor.R / 1.8), (byte)(dominantColor.G / 1.8), (byte)(dominantColor.B / 1.8));
+                                     var edgeColor = Color.FromArgb(105, (byte)(dominantColor.R / 1.3), (byte)(dominantColor.G / 1.3), (byte)(dominantColor.B / 1.3));
  
                                      WallpaperRadialBrush.GradientStops[0].Color = centerColor;
                                      WallpaperRadialBrush.GradientStops[1].Color = edgeColor;
