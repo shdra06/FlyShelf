@@ -722,6 +722,7 @@ namespace FlyShelf.ViewModels
             using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
                 bmp.BeginInit();
+                bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
                 bmp.CacheOption = BitmapCacheOption.OnLoad;
                 bmp.DecodePixelWidth = decodeWidth;
                 bmp.StreamSource = fs;
@@ -733,15 +734,47 @@ namespace FlyShelf.ViewModels
 
         public BitmapSource? GetIcon(string filePath)
         {
+            const uint SHGFI_ICON = 0x100;
+            const uint SHGFI_LARGEICON = 0x0;
+            const uint SHGFI_USEFILEATTRIBUTES = 0x10;
+            const uint FILE_ATTRIBUTE_NORMAL = 0x80;
+
+            // PRIORITY 1: If the file exists on disk, query the shell without
+            // SHGFI_USEFILEATTRIBUTES. This returns the icon of the actual default
+            // application (e.g. VLC's cone for .mp4) rather than a generic type icon.
+            if (!string.IsNullOrEmpty(filePath) && System.IO.File.Exists(filePath))
+            {
+                try
+                {
+                    SHFILEINFO shinfo = new SHFILEINFO();
+                    IntPtr res = SHGetFileInfo(filePath, 0, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON);
+
+                    if (res != IntPtr.Zero && shinfo.hIcon != IntPtr.Zero)
+                    {
+                        try
+                        {
+                            var bitmapSource = Imaging.CreateBitmapSourceFromHIcon(
+                                shinfo.hIcon,
+                                Int32Rect.Empty,
+                                BitmapSizeOptions.FromEmptyOptions());
+
+                            bitmapSource.Freeze();
+                            return bitmapSource;
+                        }
+                        finally
+                        {
+                            DestroyIcon(shinfo.hIcon);
+                        }
+                    }
+                }
+                catch { }
+            }
+
+            // FALLBACK: File missing or first call failed — use extension-based lookup.
+            // SHGFI_USEFILEATTRIBUTES returns a generic icon for the file type.
             try
             {
-                const uint SHGFI_ICON = 0x100;
-                const uint SHGFI_LARGEICON = 0x0;
-                const uint SHGFI_USEFILEATTRIBUTES = 0x10;
-                const uint FILE_ATTRIBUTE_NORMAL = 0x80;
-
                 SHFILEINFO shinfo = new SHFILEINFO();
-                // SHGFI_USEFILEATTRIBUTES: icon from extension even if file is missing
                 IntPtr res = SHGetFileInfo(filePath, FILE_ATTRIBUTE_NORMAL, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
 
                 if (res != IntPtr.Zero && shinfo.hIcon != IntPtr.Zero)
@@ -752,7 +785,7 @@ namespace FlyShelf.ViewModels
                             shinfo.hIcon,
                             Int32Rect.Empty,
                             BitmapSizeOptions.FromEmptyOptions());
-                        
+
                         bitmapSource.Freeze();
                         return bitmapSource;
                     }

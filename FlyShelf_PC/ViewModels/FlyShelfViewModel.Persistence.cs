@@ -36,21 +36,14 @@ namespace FlyShelf.ViewModels
 
                 DroppedItems.Remove(item);
 
-                // PERF: Debounce ShelfVisibility — batch rapid deletes into one notification
-                if (_shelfVisibilityDebounce == null)
+                // PERF: Only notify ShelfVisibility when the list actually becomes empty
+                // (that's the only time the computed property changes). Skipping this for
+                // non-empty → non-empty transitions avoids a redundant layout pass that
+                // caused a visible "double refresh" animation on each delete.
+                if (DroppedItems.Count == 0)
                 {
-                    _shelfVisibilityDebounce = new System.Windows.Threading.DispatcherTimer
-                    {
-                        Interval = TimeSpan.FromMilliseconds(100)
-                    };
-                    _shelfVisibilityDebounce.Tick += (s, e) =>
-                    {
-                        _shelfVisibilityDebounce.Stop();
-                        OnPropertyChanged(nameof(ShelfVisibility));
-                    };
+                    OnPropertyChanged(nameof(ShelfVisibility));
                 }
-                _shelfVisibilityDebounce.Stop();
-                _shelfVisibilityDebounce.Start();
 
                 // PERF: Mascot animation cooldown — skip if fired within 300ms to avoid UI thread stalls
                 if ((DateTime.Now - _lastDeleteAnimTime).TotalMilliseconds > 300)
@@ -252,15 +245,19 @@ namespace FlyShelf.ViewModels
                             if (!string.IsNullOrEmpty(key) && !seenKeys.Add(key))
                                 continue;
 
-                            if (!string.IsNullOrEmpty(d.FilePath))
+                            bool isFileBased = d.ItemType == ClipboardItemType.Image || d.ItemType == ClipboardItemType.QRCode ||
+                                d.ItemType == ClipboardItemType.File || d.ItemType == ClipboardItemType.Document ||
+                                d.ItemType == ClipboardItemType.Pdf || d.ItemType == ClipboardItemType.Archive ||
+                                d.ItemType == ClipboardItemType.Video || d.ItemType == ClipboardItemType.Audio ||
+                                d.ItemType == ClipboardItemType.Presentation;
+
+                            if (isFileBased)
                             {
-                                bool isFileBased = d.ItemType == ClipboardItemType.Image || d.ItemType == ClipboardItemType.QRCode ||
-                                    d.ItemType == ClipboardItemType.File || d.ItemType == ClipboardItemType.Document ||
-                                    d.ItemType == ClipboardItemType.Pdf || d.ItemType == ClipboardItemType.Archive ||
-                                    d.ItemType == ClipboardItemType.Video || d.ItemType == ClipboardItemType.Audio ||
-                                    d.ItemType == ClipboardItemType.Presentation;
-                                if (isFileBased && !File.Exists(d.FilePath) && !Directory.Exists(d.FilePath))
-                                    continue;
+                                if (string.IsNullOrEmpty(d.FilePath) || (!File.Exists(d.FilePath) && !Directory.Exists(d.FilePath)))
+                                {
+                                    Classes.Logger.LogAction("PINNED_CLEANUP", $"Pruned dead/deleted pinned item: {d.FileName ?? d.RawContent}");
+                                    continue; // Skip loading dead/deleted file entries
+                                }
                             }
 
                             if (IsEffectivelyEmpty(d)) continue;

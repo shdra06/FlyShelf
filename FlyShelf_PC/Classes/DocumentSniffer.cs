@@ -183,7 +183,17 @@ namespace FlyShelf.Classes
                     dataObj.SetFileDropList(dropList);
                     _viewModel.HandleDrop(dataObj, true);
                     
-                    FlyShelf.Windows.ToastWindow.ShowToast($"Sniffed Document: {Path.GetFileName(targetPath)} 📄");
+                    string sizeStr = "";
+                    try
+                    {
+                        if (File.Exists(targetPath))
+                        {
+                            sizeStr = $" ({FlyShelf.Classes.FormatHelper.FormatSize(new FileInfo(targetPath).Length)})";
+                        }
+                    }
+                    catch { }
+                    string friendlyType = FlyShelf.Classes.FormatHelper.GetFileTypeFriendly(targetPath);
+                    FlyShelf.Windows.ToastWindow.ShowToast($"{friendlyType} sniffed{sizeStr} 📄");
                 });
             }
             catch 

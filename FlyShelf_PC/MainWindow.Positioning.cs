@@ -267,12 +267,12 @@ namespace FlyShelf
                 }
                 _mascotDelayTimer.Start();
 
-                // Trigger visible high-quality render shortly after opening (500ms)
+                // Trigger visible high-quality render shortly after opening (100ms)
                 if (_scrollHighQualityTimer == null)
                 {
                     _scrollHighQualityTimer = new System.Windows.Threading.DispatcherTimer
                     {
-                        Interval = TimeSpan.FromMilliseconds(500)
+                        Interval = TimeSpan.FromMilliseconds(100)
                     };
                     _scrollHighQualityTimer.Tick += (s, ev) =>
                     {
@@ -408,12 +408,12 @@ namespace FlyShelf
 
             _scrollDecayTimer.Start();
 
-            // Start or reset the 1s stoppage timer to load visible high-quality thumbnails
+            // Start or reset the 150ms stoppage timer to load visible high-quality thumbnails
             if (_scrollHighQualityTimer == null)
             {
                 _scrollHighQualityTimer = new System.Windows.Threading.DispatcherTimer
                 {
-                    Interval = TimeSpan.FromMilliseconds(1000)
+                    Interval = TimeSpan.FromMilliseconds(150)
                 };
                 _scrollHighQualityTimer.Tick += (s, ev) =>
                 {
@@ -489,7 +489,7 @@ namespace FlyShelf
                                                 item.IsLoadedHighQuality = true;
                                                 item.IsLoadingHighQuality = false;
 
-                                                // Smooth cubic ease-out fade-in transition
+                                                // Smooth cubic ease-out fade-in transition (150ms for ultra-responsive feel)
                                                 var element = ShelfListView.ItemContainerGenerator.ContainerFromIndex(currentIndex) as FrameworkElement;
                                                 if (element != null && element.IsLoaded)
                                                 {
@@ -500,13 +500,13 @@ namespace FlyShelf
                                                         {
                                                             From = 0.2,
                                                             To = 1.0,
-                                                            Duration = TimeSpan.FromMilliseconds(400),
+                                                            Duration = TimeSpan.FromMilliseconds(150),
                                                             EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
                                                         };
                                                         img.BeginAnimation(UIElement.OpacityProperty, anim);
                                                     }
                                                 }
-                                            }, System.Windows.Threading.DispatcherPriority.Background);
+                                            }, System.Windows.Threading.DispatcherPriority.Normal);
                                         }
                                         else
                                         {
@@ -537,7 +537,7 @@ namespace FlyShelf
                 {
                     Classes.Logger.LogAction("SCROLL_LOAD_ERR", $"Error in RenderVisibleThumbnails: {ex.Message}");
                 }
-            }, System.Windows.Threading.DispatcherPriority.Background);
+            }, System.Windows.Threading.DispatcherPriority.Normal);
         }
 
         private bool _themeAnimationsSuspended = false;

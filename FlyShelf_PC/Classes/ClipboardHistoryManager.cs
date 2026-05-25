@@ -74,7 +74,15 @@ namespace FlyShelf.Classes
                             var json = File.ReadAllText(_historyPath);
                             var snapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(json);
                             if (snapshot != null)
-                                items.AddRange(snapshot);
+                            {
+                                foreach (var snapshotItem in snapshot)
+                                {
+                                    if (IsValidClipboardItem(snapshotItem))
+                                        items.Add(snapshotItem);
+                                    else
+                                        Logger.LogAction("HISTORY_CLEANUP", $"Pruned dead/deleted snapshot item: {snapshotItem.FileName ?? snapshotItem.RawContent}");
+                                }
+                            }
                         }
                         catch (JsonException jsonEx)
                         {
@@ -86,8 +94,16 @@ namespace FlyShelf.Classes
                                 var backupSnapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(backupJson);
                                 if (backupSnapshot != null)
                                 {
-                                    items.AddRange(backupSnapshot);
-                                    Logger.LogAction("HISTORY_RECOVERY", $"Successfully recovered {items.Count} items from backup database!");
+                                    int recoveredCount = 0;
+                                    foreach (var snapshotItem in backupSnapshot)
+                                    {
+                                        if (IsValidClipboardItem(snapshotItem))
+                                        {
+                                            items.Add(snapshotItem);
+                                            recoveredCount++;
+                                        }
+                                    }
+                                    Logger.LogAction("HISTORY_RECOVERY", $"Successfully recovered {recoveredCount} valid items from backup database!");
                                 }
                             }
                             else
@@ -113,7 +129,12 @@ namespace FlyShelf.Classes
                                 {
                                     case "add":
                                         if (entry.Item != null)
-                                            items.Insert(0, entry.Item);
+                                        {
+                                            if (IsValidClipboardItem(entry.Item))
+                                                items.Insert(0, entry.Item);
+                                            else
+                                                Logger.LogAction("HISTORY_CLEANUP", $"Pruned dead/deleted item from journal: {entry.Item.FileName ?? entry.Item.RawContent}");
+                                        }
                                         break;
                                     case "delete":
                                         if (!string.IsNullOrEmpty(entry.ItemId))
@@ -356,7 +377,14 @@ namespace FlyShelf.Classes
                     {
                         var json = File.ReadAllText(_historyPath);
                         var snapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(json);
-                        if (snapshot != null) items.AddRange(snapshot);
+                        if (snapshot != null)
+                        {
+                            foreach (var snapshotItem in snapshot)
+                            {
+                                if (IsValidClipboardItem(snapshotItem))
+                                    items.Add(snapshotItem);
+                            }
+                        }
                     }
                     catch { }
                 }
@@ -371,7 +399,10 @@ namespace FlyShelf.Classes
                             {
                                 var entry = JsonSerializer.Deserialize<JournalEntry>(line);
                                 if (entry?.Action == "add" && entry.Item != null)
-                                    items.Insert(0, entry.Item);
+                                {
+                                    if (IsValidClipboardItem(entry.Item))
+                                        items.Insert(0, entry.Item);
+                                }
                                 else if (entry?.Action == "delete" && entry.ItemId != null)
                                     items.RemoveAll(i => i.ItemId == entry.ItemId);
                                 else if (entry?.Action == "clear")
@@ -458,6 +489,33 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("SANDBOX_SCAVENGE_ERR", $"Scavenge failed: {ex.Message}");
             }
+        }
+
+        /// <summary>
+        /// Validates if a clipboard item is valid (removes dead/deleted file entries immediately).
+        /// </summary>
+        private static bool IsValidClipboardItem(ViewModels.ClipboardItem item)
+        {
+            if (item == null) return false;
+
+            bool isFileBased = item.ItemType == ViewModels.ClipboardItemType.Image ||
+                               item.ItemType == ViewModels.ClipboardItemType.QRCode ||
+                               item.ItemType == ViewModels.ClipboardItemType.File ||
+                               item.ItemType == ViewModels.ClipboardItemType.Document ||
+                               item.ItemType == ViewModels.ClipboardItemType.Pdf ||
+                               item.ItemType == ViewModels.ClipboardItemType.Archive ||
+                               item.ItemType == ViewModels.ClipboardItemType.Video ||
+                               item.ItemType == ViewModels.ClipboardItemType.Audio ||
+                               item.ItemType == ViewModels.ClipboardItemType.Presentation;
+
+            if (isFileBased)
+            {
+                if (string.IsNullOrEmpty(item.FilePath) || (!File.Exists(item.FilePath) && !Directory.Exists(item.FilePath)))
+                {
+                    return false; // Skip dead or deleted file entries
+                }
+            }
+            return true;
         }
 
         /// <summary>

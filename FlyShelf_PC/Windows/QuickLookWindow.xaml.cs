@@ -485,6 +485,33 @@ namespace FlyShelf.Windows
             // Do nothing. Let the user keep it floating on their other monitor while they work!
         }
 
+        protected override void OnPreviewKeyDown(System.Windows.Input.KeyEventArgs e)
+        {
+            base.OnPreviewKeyDown(e);
+
+            if (e.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                if (_selectedWordTexts.Count > 0)
+                {
+                    CopySelectedOcrWords();
+                    e.Handled = true;
+                }
+            }
+            else if (e.Key == Key.A && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            {
+                if (OcrOverlayCanvas.Visibility == Visibility.Visible)
+                {
+                    SelectAllOcrWords();
+                    e.Handled = true;
+                }
+            }
+            else if (e.Key == Key.Escape)
+            {
+                this.Close();
+                e.Handled = true;
+            }
+        }
+
         protected override void OnClosed(EventArgs e)
         {
             if (_isImageLoaded)
@@ -630,15 +657,7 @@ namespace FlyShelf.Windows
 
             try
             {
-                FlyShelf.MainWindow.SetWritingClipboard(true);
                 System.Windows.Clipboard.SetText(_ocrResult.Text);
-                
-                _ = System.Threading.Tasks.Task.Run(async () =>
-                {
-                    await System.Threading.Tasks.Task.Delay(500);
-                    FlyShelf.MainWindow.SetWritingClipboard(false);
-                });
-
                 FlyShelf.Windows.ToastWindow.ShowToast("All Image Text Copied to Clipboard! 📋");
             }
             catch (Exception ex)
@@ -814,22 +833,6 @@ namespace FlyShelf.Windows
                         }
                     };
 
-                    // --- Ctrl+C keyboard handler ---
-                    wordBorder.KeyDown += (s, ev) =>
-                    {
-                        if (ev.Key == Key.C && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
-                        {
-                            CopySelectedOcrWords();
-                            ev.Handled = true;
-                        }
-                        // Ctrl+A to select all words
-                        if (ev.Key == Key.A && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
-                        {
-                            SelectAllOcrWords();
-                            ev.Handled = true;
-                        }
-                    };
-
                     // --- Right-click context menu ---
                     var menu = new System.Windows.Controls.ContextMenu();
 
@@ -838,13 +841,7 @@ namespace FlyShelf.Windows
                     {
                         try
                         {
-                            FlyShelf.MainWindow.SetWritingClipboard(true);
                             System.Windows.Clipboard.SetText(wordText);
-                            _ = System.Threading.Tasks.Task.Run(async () =>
-                            {
-                                await System.Threading.Tasks.Task.Delay(500);
-                                FlyShelf.MainWindow.SetWritingClipboard(false);
-                            });
                             FlyShelf.Windows.ToastWindow.ShowToast($"Copied: {wordText}");
                         }
                         catch { }
@@ -858,13 +855,7 @@ namespace FlyShelf.Windows
                     {
                         try
                         {
-                            FlyShelf.MainWindow.SetWritingClipboard(true);
                             System.Windows.Clipboard.SetText(fullLineText);
-                            _ = System.Threading.Tasks.Task.Run(async () =>
-                            {
-                                await System.Threading.Tasks.Task.Delay(500);
-                                FlyShelf.MainWindow.SetWritingClipboard(false);
-                            });
                             FlyShelf.Windows.ToastWindow.ShowToast("Copied full line");
                         }
                         catch { }
@@ -954,13 +945,7 @@ namespace FlyShelf.Windows
             try
             {
                 string combined = string.Join(" ", _selectedWordTexts);
-                FlyShelf.MainWindow.SetWritingClipboard(true);
                 System.Windows.Clipboard.SetText(combined);
-                _ = System.Threading.Tasks.Task.Run(async () =>
-                {
-                    await System.Threading.Tasks.Task.Delay(500);
-                    FlyShelf.MainWindow.SetWritingClipboard(false);
-                });
                 FlyShelf.Windows.ToastWindow.ShowToast($"Copied {_selectedWordTexts.Count} word{(_selectedWordTexts.Count > 1 ? "s" : "")}");
             }
             catch { }

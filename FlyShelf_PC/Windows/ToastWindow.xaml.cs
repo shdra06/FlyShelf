@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows;
@@ -157,6 +157,7 @@ namespace FlyShelf.Windows
         
         public static void ShowToast(string message)
         {
+            string smartMessage = MakeMessageSmart(message);
             Application.Current.Dispatcher.InvokeAsync(() => 
             {
                 lock (_toastLock)
@@ -173,10 +174,79 @@ namespace FlyShelf.Windows
                     }
                 }
 
-                var toast = new ToastWindow(message);
+                var toast = new ToastWindow(smartMessage);
                 toast.Show();
                 toast.StartDismissTimer();
             });
+        }
+
+        public static string FormatSize(long bytes) => FlyShelf.Classes.FormatHelper.FormatSize(bytes);
+
+        public static string GetFileTypeFriendly(string fileName) => FlyShelf.Classes.FormatHelper.GetFileTypeFriendly(fileName);
+
+        public static string MakeMessageSmart(string message)
+        {
+            if (string.IsNullOrEmpty(message)) return message;
+
+            // 1. Detect any full filenames and swap them with friendly type names
+            string[] extensions = { ".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".pdf", ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt", ".zip", ".rar", ".7z", ".mp3", ".wav", ".m4a", ".mp4", ".mkv", ".apk" };
+            foreach (var ext in extensions)
+            {
+                int extIdx = message.IndexOf(ext, StringComparison.OrdinalIgnoreCase);
+                if (extIdx >= 0)
+                {
+                    // Scan backward for start of the filename
+                    int startIdx = extIdx;
+                    while (startIdx > 0 && message[startIdx - 1] != ' ' && message[startIdx - 1] != ':' && message[startIdx - 1] != '\\' && message[startIdx - 1] != '/' && message[startIdx - 1] != '"' && message[startIdx - 1] != '\'')
+                    {
+                        startIdx--;
+                    }
+                    string fullFileName = message.Substring(startIdx, extIdx + ext.Length - startIdx);
+                    
+                    // Avoid replacing already friendly type words or short descriptors
+                    if (fullFileName.Length > ext.Length)
+                    {
+                        string friendlyType = GetFileTypeFriendly(fullFileName);
+                        message = message.Replace(fullFileName, friendlyType);
+                    }
+                }
+            }
+
+            // 2. Condense common verbose phrases to make notifications extremely clean & compact
+            // - Redundant copy-to-clipboard mentions
+            message = message.Replace("copied to clipboard", "Copied");
+            message = message.Replace("copied to Clipboard", "Copied");
+            message = message.Replace("copied to your clipboard", "Copied");
+            
+            // - Store version terminal / compilation notices
+            message = message.Replace("Terminal execution is not available in the Store version.", "Terminal unavailable in Store version");
+            message = message.Replace("Elevated terminal is not available in the Store version.", "Elevated terminal unavailable");
+            message = message.Replace("Code compilation is not available in the Store version.", "Compilation unavailable");
+            
+            // - File transfers
+            message = message.Replace("paired successfully!", "paired!");
+            message = message.Replace("paired successfully", "paired");
+            message = message.Replace("joined your sync group!", "joined group!");
+            
+            message = message.Replace("Assembling ", "Receiving ");
+            message = message.Replace(" (via WS)... 📥", "... 📥");
+            
+            message = message.Replace("Text from ", "Text received: ");
+            message = message.Replace(" via WebSocket!", "!");
+            message = message.Replace(" via LAN!", "!");
+            message = message.Replace(" via Cloudflare!", "!");
+
+            // Clean up double-spaces
+            while (message.Contains("  "))
+            {
+                message = message.Replace("  ", " ");
+            }
+
+            // Remove trailing spaces / colons/ periods where unnecessary
+            message = message.Trim();
+            if (message.EndsWith("! !")) message = message.Substring(0, message.Length - 2) + "!";
+
+            return message;
         }
     }
 }

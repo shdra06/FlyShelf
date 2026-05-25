@@ -124,6 +124,7 @@ namespace FlyShelf
             this.DataContext = vm;
             _viewModel = vm;
             InitializeComponent();
+            this.Width = _viewModel.CurrentFlyShelfWidth;
 
             this.PreviewKeyDown += Window_PreviewKeyDown;
 
@@ -197,6 +198,10 @@ namespace FlyShelf
                             newTop = workArea.Top + workArea.Height - this.ActualHeight - 16;
                         this.Top = newTop;
                     }
+                }
+                else if (e.PropertyName == nameof(FlyShelfViewModel.CurrentFlyShelfWidth))
+                {
+                    this.Width = _viewModel.CurrentFlyShelfWidth;
                 }
                 else if (e.PropertyName == nameof(FlyShelfViewModel.CurrentMode))
                 {

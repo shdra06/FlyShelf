@@ -1,4 +1,4 @@
-﻿// ---------------------------------------------------------------
+// ---------------------------------------------------------------
 // NetworkSyncServer.Advanced — File Download, Pairing & Injection
 // Split from NetworkSyncServer.Advanced.cs for modularity
 // ---------------------------------------------------------------
@@ -232,7 +232,17 @@ namespace FlyShelf.Classes
                     catch { }
                     finally { MainWindow.SetWritingClipboard(false); }
                     
-                    FlyShelf.Windows.ToastWindow.ShowToast($"Saved: {System.IO.Path.GetFileName(filePath)} via {transferMethod} 📥");
+                    string sizeStr = "";
+                    try
+                    {
+                        if (File.Exists(filePath))
+                        {
+                            sizeStr = $" ({FlyShelf.Classes.FormatHelper.FormatSize(new FileInfo(filePath).Length)})";
+                        }
+                    }
+                    catch { }
+                    string friendlyType = FlyShelf.Classes.FormatHelper.GetFileTypeFriendly(filePath);
+                    FlyShelf.Windows.ToastWindow.ShowToast($"{friendlyType} received{sizeStr} via {transferMethod} 📥");
                     // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
                     NotifyClipboardChanged("File", System.IO.Path.GetFileName(filePath));
                 }

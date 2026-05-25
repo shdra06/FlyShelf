@@ -329,14 +329,11 @@ namespace FlyShelf.Classes
                     {
                         try
                         {
-                            var bmp = new System.Windows.Media.Imaging.BitmapImage();
-                            bmp.BeginInit();
-                            bmp.UriSource = new Uri(filePath);
-                            bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                            bmp.DecodePixelWidth = 300;
-                            bmp.EndInit();
-                            bmp.Freeze();
-                            clip.Icon = bmp;
+                            var bmp = ViewModels.FlyShelfViewModel.LoadImageThumbnail(filePath, 300);
+                            if (bmp != null)
+                            {
+                                clip.Icon = bmp;
+                            }
                         }
                         catch (Exception imgEx)
                         {
