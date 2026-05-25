@@ -491,10 +491,9 @@
 
         <ListView Name="ShelfListView" Grid.Row="1" ItemsSource="{Binding DroppedItems}" Background="#01000000" BorderThickness="0" Margin="12,0,2,12"
                   Focusable="True" KeyboardNavigation.DirectionalNavigation="Contained"
-                  UseLayoutRounding="False" SnapsToDevicePixels="False"
-                  TextOptions.TextFormattingMode="Ideal"
+                  UseLayoutRounding="True" SnapsToDevicePixels="True"
                   ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
-                  ScrollViewer.CanContentScroll="False"
+                  ScrollViewer.CanContentScroll="True"
                   VirtualizingStackPanel.IsVirtualizing="True"
                   VirtualizingStackPanel.VirtualizationMode="Recycling"
                   VirtualizingPanel.ScrollUnit="Pixel"

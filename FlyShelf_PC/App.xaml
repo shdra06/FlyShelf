@@ -17,19 +17,7 @@
                 <ResourceDictionary Source="pack://application:,,,/Resources/Styles/ImagePlaceholder.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- Global Premium Typography — Targeted to preserve control template icon glyphs (like ComboBox chevrons) -->
-            <Style TargetType="{x:Type TextBlock}">
-                <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI, Arial, sans-serif"/>
-            </Style>
-            <Style TargetType="{x:Type TextBox}">
-                <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI, Arial, sans-serif"/>
-            </Style>
-            <Style TargetType="{x:Type ui:TextBox}">
-                <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI, Arial, sans-serif"/>
-            </Style>
-            <Style TargetType="{x:Type ui:PasswordBox}">
-                <Setter Property="FontFamily" Value="Segoe UI Variable Text, Segoe UI, Arial, sans-serif"/>
-            </Style>
+
 
             <!-- Premium UI Gradients — Muted, sophisticated darks -->
             <LinearGradientBrush x:Key="PremiumGradientNetwork" StartPoint="0,0" EndPoint="1,1">

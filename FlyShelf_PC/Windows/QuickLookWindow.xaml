@@ -3,19 +3,16 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Quick Look" Height="500" Width="400"
-        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        WindowStyle="None" AllowsTransparency="False" Background="#1C1C1C"
         Topmost="True" ResizeMode="CanResizeWithGrip"
         WindowStartupLocation="CenterScreen" 
         MouseLeftButtonDown="Window_MouseLeftButtonDown"
         MouseDoubleClick="Window_MouseDoubleClick"
         MouseMove="Window_MouseMove" Deactivated="Window_Deactivated"
         Loaded="Window_Loaded">
-    <Window.Effect>
-        <DropShadowEffect Color="Black" BlurRadius="25" Opacity="0.5" Direction="270" ShadowDepth="10" />
-    </Window.Effect>
     <Grid>
         <!-- Dynamic Frame -->
-        <Border x:Name="OuterBorder" CornerRadius="12" Background="#801C1C1C" BorderBrush="#30FFFFFF" BorderThickness="1" ClipToBounds="True">
+        <Border x:Name="OuterBorder" CornerRadius="12" Background="#1C1C1C" BorderBrush="#30FFFFFF" BorderThickness="1" ClipToBounds="True">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="40" />
