@@ -241,7 +241,7 @@ namespace FlyShelf
             };
             Classes.SettingsManager.Current.PropertyChanged += _settingsChangedHandler;
 
-            // Auto-dismiss merge state when new items arrive on the shelf
+            // Auto-dismiss merge state when new items arrive on the shelf + Reapply active category/search filters to keep UI state robust
             _viewModel.DroppedItems.CollectionChanged += (s, e) =>
             {
                 if (e.Action == NotifyCollectionChangedAction.Add ||
@@ -254,6 +254,9 @@ namespace FlyShelf
                         {
                             DismissMergeState();
                         }
+
+                        // Robustness fix: Reapply active filters (category/search) so they don't get cleared on item addition/deletion
+                        ReapplyActiveFilters();
                     }, System.Windows.Threading.DispatcherPriority.Background);
                 }
             };
@@ -767,6 +770,22 @@ namespace FlyShelf
             _isEdgeLocked = false;
             this.Left = -20000;
             this.Top = -20000;
+        }
+
+        private void Card_Loaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
+            {
+                item.IsVisibleInViewport = true;
+            }
+        }
+
+        private void Card_Unloaded(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is ClipboardItem item)
+            {
+                item.IsVisibleInViewport = false;
+            }
         }
 
     }

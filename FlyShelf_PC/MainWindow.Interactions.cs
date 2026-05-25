@@ -273,15 +273,25 @@ namespace FlyShelf
                         DataObject dataObj = new DataObject();
                         if (!string.IsNullOrEmpty(firstItem.FilePath))
                         {
-                            dataObj.SetData(DataFormats.FileDrop, new string[] { firstItem.FilePath });
-                            dataObj.SetData("FileNameW", new string[] { firstItem.FilePath });
-                            dataObj.SetData("FileName", new string[] { firstItem.FilePath });
-                            try { dataObj.SetData("text/uri-list", "file:///" + firstItem.FilePath.Replace("\\", "/")); } catch { }
+                            bool isTextDrag = !string.IsNullOrEmpty(firstItem.RawContent) && (firstItem.Extension == ".MD" || firstItem.Extension == ".TXT");
 
-                            if (!string.IsNullOrEmpty(firstItem.RawContent))
+                            if (isTextDrag)
                             {
                                 dataObj.SetData(DataFormats.UnicodeText, firstItem.RawContent);
                                 dataObj.SetData(DataFormats.Text, firstItem.RawContent);
+                            }
+                            else
+                            {
+                                dataObj.SetData(DataFormats.FileDrop, new string[] { firstItem.FilePath });
+                                dataObj.SetData("FileNameW", new string[] { firstItem.FilePath });
+                                dataObj.SetData("FileName", new string[] { firstItem.FilePath });
+                                try { dataObj.SetData("text/uri-list", "file:///" + firstItem.FilePath.Replace("\\", "/")); } catch { }
+
+                                if (!string.IsNullOrEmpty(firstItem.RawContent))
+                                {
+                                    dataObj.SetData(DataFormats.UnicodeText, firstItem.RawContent);
+                                    dataObj.SetData(DataFormats.Text, firstItem.RawContent);
+                                }
                             }
 
                             if (firstItem.ItemType == ClipboardItemType.Image)

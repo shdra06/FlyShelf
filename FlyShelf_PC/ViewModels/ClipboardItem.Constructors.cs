@@ -259,6 +259,10 @@ namespace FlyShelf.ViewModels
             else if (ext == ".doc" || ext == ".docx" || ext == ".txt" || ext == ".md")
             {
                 ItemType = ClipboardItemType.Document;
+                if (ext == ".md")
+                {
+                    GenerateMarkdownIcon();
+                }
             }
             else if (ext == ".cpp" || ext == ".c" || ext == ".bat" || ext == ".cmd" || ext == ".ps1" || ext == ".js" || ext == ".py" || ext == ".cs")
             {
@@ -462,7 +466,14 @@ namespace FlyShelf.ViewModels
 
                 string target = string.Empty;
                 if (!string.IsNullOrEmpty(FilePath))
+                {
+                    if (Extension == ".MD")
+                    {
+                        if (TryLaunchInCodeEditor(FilePath))
+                            return;
+                    }
                     target = FilePath;
+                }
                 else if (ItemType == ClipboardItemType.Url)
                     target = RawContent; // URL
                 else if (ItemType == ClipboardItemType.Text || ItemType == ClipboardItemType.Code)
@@ -638,6 +649,178 @@ namespace FlyShelf.ViewModels
                 string entryName = Path.Combine(entryPrefix, relativePath);
                 archive.CreateEntryFromFile(file, entryName, CompressionLevel.Fastest);
             }
+        }
+
+        internal void GenerateMarkdownIcon()
+        {
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    var visual = new System.Windows.Media.DrawingVisual();
+                    using (var dc = visual.RenderOpen())
+                    {
+                        // 1. Draw soft drop shadow behind the card
+                        dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(38, 0, 0, 0)), null, new Rect(14, 14, 68, 68), 12, 12);
+                        dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(15, 0, 0, 0)), null, new Rect(16, 16, 68, 68), 12, 12);
+
+                        // 2. Draw card background (Fluent Dark Grey)
+                        var bgBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 30, 30));
+                        var borderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60));
+                        dc.DrawRoundedRectangle(bgBrush, new System.Windows.Media.Pen(borderBrush, 1.5), new Rect(12, 12, 68, 68), 12, 12);
+
+                        // 3. Draw text elements ("M" and "↓")
+                        var typeface = new System.Windows.Media.Typeface(new System.Windows.Media.FontFamily("Consolas, Segoe UI, Arial"), System.Windows.FontStyles.Normal, System.Windows.FontWeights.Bold, System.Windows.FontStretches.Normal);
+                        
+                        var formattedM = new System.Windows.Media.FormattedText(
+                            "M",
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            System.Windows.FlowDirection.LeftToRight,
+                            typeface,
+                            28,
+                            System.Windows.Media.Brushes.White,
+                            1.0); // 1.0 pixelsPerDip
+
+                        var formattedArrow = new System.Windows.Media.FormattedText(
+                            "↓",
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            System.Windows.FlowDirection.LeftToRight,
+                            typeface,
+                            28,
+                            new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(14, 165, 233)), // Fluent Cyan/Blue
+                            1.0); // 1.0 pixelsPerDip
+
+                        dc.DrawText(formattedM, new Point(24, 28));
+                        dc.DrawText(formattedArrow, new Point(54, 28));
+                    }
+
+                    var rtb = new RenderTargetBitmap(96, 96, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                    rtb.Render(visual);
+                    rtb.Freeze();
+                    Icon = rtb;
+                }
+                catch (Exception ex)
+                {
+                    Classes.Logger.LogAction("MD ICON ERR", ex.Message);
+                }
+            });
+        }
+
+        internal void GeneratePasswordIcon()
+        {
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    var visual = new System.Windows.Media.DrawingVisual();
+                    using (var dc = visual.RenderOpen())
+                    {
+                        // 1. Draw soft drop shadow behind the card
+                        dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(38, 0, 0, 0)), null, new Rect(14, 14, 68, 68), 12, 12);
+                        dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(15, 0, 0, 0)), null, new Rect(16, 16, 68, 68), 12, 12);
+
+                        // 2. Draw card background (Fluent Charcoal)
+                        var bgBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 25, 25));
+                        var borderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8)); // Gold yellow border
+                        dc.DrawRoundedRectangle(bgBrush, new System.Windows.Media.Pen(borderBrush, 1.5), new Rect(12, 12, 68, 68), 12, 12);
+
+                        // 3. Draw a modern lock shape!
+                        // Lock base: rounded rect at the bottom
+                        var lockBodyBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8)); // Yellow/Amber
+                        dc.DrawRoundedRectangle(lockBodyBrush, null, new Rect(28, 44, 36, 26), 6, 6);
+
+                        // Lock shackle
+                        var shacklePen = new System.Windows.Media.Pen(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(200, 200, 200)), 4.5);
+                        shacklePen.StartLineCap = System.Windows.Media.PenLineCap.Round;
+                        shacklePen.EndLineCap = System.Windows.Media.PenLineCap.Round;
+                        
+                        var pathGeometry = new System.Windows.Media.PathGeometry();
+                        var pathFigure = new System.Windows.Media.PathFigure();
+                        pathFigure.StartPoint = new Point(36, 44);
+                        pathFigure.Segments.Add(new System.Windows.Media.LineSegment(new Point(36, 33), true));
+                        pathFigure.Segments.Add(new System.Windows.Media.ArcSegment(new Point(56, 33), new Size(10, 10), 0, false, System.Windows.Media.SweepDirection.Clockwise, true));
+                        pathFigure.Segments.Add(new System.Windows.Media.LineSegment(new Point(56, 44), true));
+                        pathGeometry.Figures.Add(pathFigure);
+                        dc.DrawGeometry(null, shacklePen, pathGeometry);
+
+                        // Lock keyhole
+                        dc.DrawEllipse(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 25, 25)), null, new Point(46, 52), 3, 3);
+                        dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 25, 25)), null, new Rect(44.5, 53, 3, 7), 1, 1);
+                    }
+
+                    var rtb = new RenderTargetBitmap(96, 96, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                    rtb.Render(visual);
+                    rtb.Freeze();
+                    Icon = rtb;
+                }
+                catch (Exception ex)
+                {
+                    Classes.Logger.LogAction("PASS ICON ERR", ex.Message);
+                }
+            });
+        }
+
+        private static bool TryLaunchInCodeEditor(string filePath)
+        {
+            // 1. Try VS Code (usually registered in PATH as 'code')
+            try
+            {
+                var p = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "code",
+                    Arguments = $"\"{filePath}\"",
+                    UseShellExecute = true,
+                    CreateNoWindow = true
+                });
+                if (p != null) return true;
+            }
+            catch { }
+
+            // 2. Try Notepad++ (standard 64-bit location)
+            string npp64 = @"C:\Program Files\Notepad++\notepad++.exe";
+            if (File.Exists(npp64))
+            {
+                try
+                {
+                    Process.Start(npp64, $"\"{filePath}\"");
+                    return true;
+                }
+                catch { }
+            }
+
+            // 3. Try Notepad++ (standard 32-bit location)
+            string npp32 = @"C:\Program Files (x86)\Notepad++\notepad++.exe";
+            if (File.Exists(npp32))
+            {
+                try
+                {
+                    Process.Start(npp32, $"\"{filePath}\"");
+                    return true;
+                }
+                catch { }
+            }
+
+            // 4. Try Sublime Text
+            string sublime = @"C:\Program Files\Sublime Text\sublime_text.exe";
+            if (File.Exists(sublime))
+            {
+                try
+                {
+                    Process.Start(sublime, $"\"{filePath}\"");
+                    return true;
+                }
+                catch { }
+            }
+
+            // 5. Fallback to Notepad (present on all Windows systems)
+            try
+            {
+                Process.Start("notepad.exe", $"\"{filePath}\"");
+                return true;
+            }
+            catch { }
+
+            return false;
         }
     }
 }

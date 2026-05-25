@@ -58,8 +58,6 @@ namespace FlyShelf.Windows
             // Apply
             ToastIcon.Symbol = symbol;
             ToastIcon.Foreground = new SolidColorBrush(accentColor);
-            AccentGlowStart.Color = accentColor;
-            AccentGlowEnd.Color = accentEnd;
 
             // Subtle accent-colored outer glow
             ToastShadow.Color = accentColor;

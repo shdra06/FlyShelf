@@ -1,4 +1,4 @@
-﻿<Window x:Class="FlyShelf.Windows.ToastWindow"
+<Window x:Class="FlyShelf.Windows.ToastWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
@@ -22,16 +22,7 @@
                 <!-- Subtle inner glow border for depth -->
                 <Border CornerRadius="24" BorderThickness="1" BorderBrush="#08FFFFFF" Margin="0"/>
                 
-                <!-- Left accent glow — subtle gradient pill edge -->
-                <Border x:Name="AccentGlow" CornerRadius="24" HorizontalAlignment="Left" Width="3" Margin="0,6,0,6"
-                        Opacity="0.85">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                            <GradientStop x:Name="AccentGlowStart" Color="#818CF8" Offset="0"/>
-                            <GradientStop x:Name="AccentGlowEnd" Color="#6366F1" Offset="1"/>
-                        </LinearGradientBrush>
-                    </Border.Background>
-                </Border>
+
                 
                 <!-- Content -->
                 <StackPanel Orientation="Horizontal" Margin="16,8,20,8" VerticalAlignment="Center">

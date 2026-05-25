@@ -316,7 +316,7 @@ namespace FlyShelf.Windows
             try
             {
                 double dpiScale = GetDpiForWindow(taskbarHandle) / 96.0;
-                if (dpiScale <= 0) return;
+                if (dpiScale <= 0) dpiScale = 1.0;
 
                 GetWindowRect(taskbarHandle, out RECT rawTaskbarRect);
                 int currentWidth = rawTaskbarRect.Right - rawTaskbarRect.Left;
@@ -350,31 +350,77 @@ namespace FlyShelf.Windows
                 int taskbarHeight = taskbarRect.Bottom - taskbarRect.Top;
                 int taskbarWidth = taskbarRect.Right - taskbarRect.Left;
 
-                POINT containerPos = new() { X = taskbarRect.Left, Y = taskbarRect.Top };
+                // Calculate the widget's physical dimensions
+                var (logicalWidth, logicalHeight) = Widget.CalculateSize(dpiScale);
+                int physicalWidth = (int)(logicalWidth * dpiScale * _scale);
+                int physicalHeight = (int)(logicalHeight * dpiScale);
+
+                // Get the exact monitor bounds and work area in physical pixels to calculate visible area
+                var monitor = MonitorUtil.GetMonitor(taskbarHandle);
+                Rect monitorArea = monitor.monitorArea;
+                Rect workArea = monitor.workArea;
+
+                double solidTop = monitorArea.Top;
+                double solidHeight = monitorArea.Height;
+
+                if (workArea.Top > monitorArea.Top) // Top taskbar
+                {
+                    solidHeight = workArea.Top - monitorArea.Top;
+                }
+                else if (workArea.Bottom < monitorArea.Bottom) // Bottom taskbar
+                {
+                    solidTop = workArea.Bottom;
+                    solidHeight = monitorArea.Bottom - workArea.Bottom;
+                }
+
+                // If orientation-based solid taskbar height is not detected or extremely small, fallback
+                if (solidHeight < 20)
+                {
+                    solidTop = rawTaskbarRect.Top;
+                    solidHeight = currentHeight;
+                }
+
+                // Position widget relative to the taskbar client area
+                var (widgetLeft, _) = FindTaskbarFreeZone(taskbarHandle, taskbarWidth, dpiScale, physicalWidth);
+
+                // Calculate screen Y coordinate to center the widget vertically inside the solid visible taskbar
+                double screenY = solidTop + (solidHeight - physicalHeight) / 2.0;
+
+                // Convert screen Y coordinate to taskbar window client coordinates
+                POINT containerPos = new() { X = 0, Y = (int)screenY };
                 ScreenToClient(taskbarHandle, ref containerPos);
+
+                // Set parent-local coordinates: X is from FindTaskbarFreeZone, Y is mapped client coordinate
+                containerPos.X = widgetLeft;
+
+                // Size the widget WPF controls to match exactly (to avoid WPF layout issues)
+                Widget.Width = physicalWidth / dpiScale;
+                Widget.Height = physicalHeight / dpiScale;
+                this.Width = physicalWidth / dpiScale;
+                this.Height = physicalHeight / dpiScale;
 
                 // Only call SetWindowPos if the container position/size actually changed — avoids flicker
                 if (containerPos.X != _lastWidgetLeft || containerPos.Y != _lastWidgetTop ||
-                    taskbarWidth != _lastWidgetW || taskbarHeight != _lastWidgetH)
+                    physicalWidth != _lastWidgetW || physicalHeight != _lastWidgetH)
                 {
                     SetWindowPos(taskbarWindowHandle, 0,
                              containerPos.X, containerPos.Y,
-                             taskbarWidth, taskbarHeight,
-                             SWP_NOZORDER | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS | SWP_SHOWWINDOW);
+                             physicalWidth, physicalHeight,
+                             SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS | SWP_SHOWWINDOW);
                     _lastWidgetLeft = containerPos.X;
                     _lastWidgetTop = containerPos.Y;
-                    _lastWidgetW = taskbarWidth;
-                    _lastWidgetH = taskbarHeight;
+                    _lastWidgetW = physicalWidth;
+                    _lastWidgetH = physicalHeight;
+                    Classes.Logger.LogAction("WIDGET", $"SetWindowPos (size/pos changed): containerPos.X={containerPos.X}, containerPos.Y={containerPos.Y}, physicalWidth={physicalWidth}, physicalHeight={physicalHeight}");
                 }
-
-                var wRect = PositionWidget(taskbarHandle, taskbarRect, dpiScale, isSizeChanged);
-
-                // Only update the clipping region if the widget rect actually moved
-                if (wRect != _lastWidgetRect)
+                else
                 {
-                    UpdateWindowRegion(taskbarWindowHandle, wRect);
-                    _lastWidgetRect = wRect;
+                    // Periodically force Z-order to top of taskbar siblings to prevent being buried
+                    SetWindowPos(taskbarWindowHandle, 0, 0, 0, 0, 0,
+                                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_ASYNCWINDOWPOS | SWP_SHOWWINDOW);
                 }
+
+                Visibility = Visibility.Visible;
             }
             finally
             {
@@ -389,7 +435,7 @@ namespace FlyShelf.Windows
         /// then places the widget in the remaining free space.
         /// Falls back to the user's alignment preference if detection fails.
         /// </summary>
-        private (int left, int width) FindTaskbarFreeZone(IntPtr taskbarHandle, int taskbarWidth, double dpiScale)
+        private (int left, int width) FindTaskbarFreeZone(IntPtr taskbarHandle, int taskbarWidth, double dpiScale, int physicalWidth)
         {
             // Cache for 5 seconds to avoid expensive enumeration every 500ms
             if (_cachedFreeZoneLeft >= 0 && (DateTime.Now - _lastFreeZoneScan).TotalSeconds < 5)
@@ -397,14 +443,45 @@ namespace FlyShelf.Windows
 
             try
             {
-                // Enumerate direct child windows of the taskbar to find occupied zones
+                IntPtr myHwnd = new WindowInteropHelper(this).Handle;
                 var occupiedZones = new List<(int left, int right)>();
                 
+                // Detect if Windows 11 taskbar icons are centered using the registry key
+                bool isTaskbarCentered = false;
+                try
+                {
+                    using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"))
+                    {
+                        var val = key?.GetValue("TaskbarAl");
+                        if (val != null && Convert.ToInt32(val) == 1)
+                        {
+                            isTaskbarCentered = true;
+                        }
+                    }
+                }
+                catch { }
+
+                // Protect the Start/Search area only if left-aligned taskbar is used to allow full-left placement when centered
+                if (!isTaskbarCentered)
+                {
+                    occupiedZones.Add((0, 180));
+                }
+
+                Classes.Logger.LogAction("WIDGET", $"FindTaskbarFreeZone: Scanning child windows of taskbarHandle={taskbarHandle}, taskbarWidth={taskbarWidth}");
+
                 EnumChildWindows(taskbarHandle, (hwnd, lParam) =>
                 {
-                    // Only consider visible, direct children
-                    if (!IsWindowVisible(hwnd) || GetParent(hwnd) != taskbarHandle)
+                    // Only consider visible
+                    if (!IsWindowVisible(hwnd))
                         return true;
+
+                    if (hwnd == myHwnd)
+                        return true;
+
+                    var parentHwnd = GetParent(hwnd);
+                    StringBuilder className = new(256);
+                    GetClassName(hwnd, className, className.Capacity);
+                    string clsName = className.ToString();
 
                     GetWindowRect(hwnd, out RECT childRect);
                     
@@ -412,10 +489,21 @@ namespace FlyShelf.Windows
                     POINT childPt = new() { X = childRect.Left, Y = childRect.Top };
                     ScreenToClient(taskbarHandle, ref childPt);
                     int childWidth = childRect.Right - childRect.Left;
+                    int childRight = childPt.X + childWidth;
                     
+                    // Skip containers spanning the entire taskbar (like DesktopWindowContentBridge)
+                    if (childWidth >= taskbarWidth - 50)
+                        return true;
+
+                    Classes.Logger.LogAction("WIDGET_ENUM", $"hwnd={hwnd}, class='{clsName}', parent={parentHwnd}, left={childPt.X}, width={childWidth}, right={childRight}");
+
                     if (childWidth > 5) // Skip tiny/invisible elements
                     {
-                        occupiedZones.Add((childPt.X, childPt.X + childWidth));
+                        // Record the occupied zone of the taskbar buttons or direct child windows
+                        if (clsName == "MSTaskSwWClass" || clsName == "ReBarWindow32" || parentHwnd == taskbarHandle)
+                        {
+                            occupiedZones.Add((childPt.X, childRight));
+                        }
                     }
                     return true;
                 }, IntPtr.Zero);
@@ -425,17 +513,34 @@ namespace FlyShelf.Windows
                     // Sort by left position
                     occupiedZones.Sort((a, b) => a.left.CompareTo(b.left));
 
-                    // Find the largest gap between occupied zones
-                    int bestGapLeft = 0, bestGapWidth = 0;
+                    // Merge overlapping zones to simplify gap detection
+                    var mergedZones = new List<(int left, int right)>();
+                    var current = occupiedZones[0];
+                    for (int i = 1; i < occupiedZones.Count; i++)
+                    {
+                        var next = occupiedZones[i];
+                        if (next.left <= current.right)
+                        {
+                            current.right = Math.Max(current.right, next.right);
+                        }
+                        else
+                        {
+                            mergedZones.Add(current);
+                            current = next;
+                        }
+                    }
+                    mergedZones.Add(current);
+
+                    // Find all gaps between merged zones that are wide enough to fit the widget
+                    var gaps = new List<(int left, int width)>();
                     int lastRight = 0;
                     
-                    foreach (var zone in occupiedZones)
+                    foreach (var zone in mergedZones)
                     {
                         int gapWidth = zone.left - lastRight;
-                        if (gapWidth > bestGapWidth)
+                        if (gapWidth >= physicalWidth + 16)
                         {
-                            bestGapWidth = gapWidth;
-                            bestGapLeft = lastRight;
+                            gaps.Add((lastRight, gapWidth));
                         }
                         if (zone.right > lastRight)
                             lastRight = zone.right;
@@ -443,18 +548,43 @@ namespace FlyShelf.Windows
                     
                     // Also check gap after last occupied zone to end of taskbar
                     int trailingGap = taskbarWidth - lastRight;
-                    if (trailingGap > bestGapWidth)
+                    if (trailingGap >= physicalWidth + 16)
                     {
-                        bestGapWidth = trailingGap;
-                        bestGapLeft = lastRight;
+                        gaps.Add((lastRight, trailingGap));
                     }
 
-                    if (bestGapWidth > 60) // Only use if there's meaningful space
+                    Classes.Logger.LogAction("WIDGET", $"FindTaskbarFreeZone: occupiedZones merged={mergedZones.Count}, gaps count={gaps.Count}");
+
+                    int align = SettingsManager.Current.WidgetTaskbarAlignment;
+                    
+                    if (gaps.Count > 0)
                     {
-                        _cachedFreeZoneLeft = bestGapLeft;
-                        _cachedFreeZoneWidth = bestGapWidth;
+                        (int left, int width) selectedGap;
+                        int widgetPos = 0;
+
+                        if (align == 0) // Left alignment: pick the leftmost gap
+                        {
+                            selectedGap = gaps[0];
+                            widgetPos = selectedGap.left + 8;
+                        }
+                        else if (align == 2) // Right alignment: pick the rightmost gap
+                        {
+                            selectedGap = gaps[gaps.Count - 1];
+                            widgetPos = selectedGap.left + selectedGap.width - physicalWidth - 8;
+                        }
+                        else // Center alignment: pick the largest gap and center in it
+                        {
+                            var sortedGaps = gaps.OrderByDescending(g => g.width).ToList();
+                            selectedGap = sortedGaps[0];
+                            widgetPos = selectedGap.left + (selectedGap.width - physicalWidth) / 2;
+                        }
+
+                        _cachedFreeZoneLeft = widgetPos;
+                        _cachedFreeZoneWidth = physicalWidth;
                         _lastFreeZoneScan = DateTime.Now;
-                        return (bestGapLeft, bestGapWidth);
+                        
+                        Classes.Logger.LogAction("WIDGET", $"FindTaskbarFreeZone: align={align}, selected widgetPos={widgetPos}");
+                        return (widgetPos, physicalWidth);
                     }
                 }
             }
@@ -464,10 +594,27 @@ namespace FlyShelf.Windows
             }
 
             // Fallback: full taskbar width with padding
-            _cachedFreeZoneLeft = 12;
-            _cachedFreeZoneWidth = taskbarWidth - 24;
+            int fallbackLeft = 12;
+            int fallbackWidth = taskbarWidth - 24;
+            int widgetLeft = 0;
+            int fallbackAlign = SettingsManager.Current.WidgetTaskbarAlignment;
+            if (fallbackAlign == 1) // Center
+            {
+                widgetLeft = fallbackLeft + (fallbackWidth - physicalWidth) / 2;
+            }
+            else if (fallbackAlign == 2) // Right
+            {
+                widgetLeft = fallbackLeft + fallbackWidth - physicalWidth - 8;
+            }
+            else // Left
+            {
+                widgetLeft = fallbackLeft + 8;
+            }
+
+            _cachedFreeZoneLeft = widgetLeft;
+            _cachedFreeZoneWidth = physicalWidth;
             _lastFreeZoneScan = DateTime.Now;
-            return (12, taskbarWidth - 24);
+            return (widgetLeft, physicalWidth);
         }
 
         [DllImport("user32.dll")]
@@ -483,53 +630,6 @@ namespace FlyShelf.Windows
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool IsWindow(IntPtr hWnd);
 
-        private Rect PositionWidget(IntPtr taskbarHandle, RECT taskbarRect, double dpiScale, bool isSizeChanged)
-        {
-            var (logicalWidth, logicalHeight) = Widget.CalculateSize(dpiScale);
-
-            int physicalWidth = (int)(logicalWidth * dpiScale * _scale);
-            int physicalHeight = (int)(logicalHeight * dpiScale);
-
-            int taskbarHeight = taskbarRect.Bottom - taskbarRect.Top;
-            int widgetTop = (taskbarHeight - physicalHeight) / 2;
-            
-            int taskbarWidth = taskbarRect.Right - taskbarRect.Left;
-            int align = SettingsManager.Current.WidgetTaskbarAlignment;
-
-            // Detect free zone on the taskbar (avoiding Windows widgets, system tray, etc.)
-            var (freeLeft, freeWidth) = FindTaskbarFreeZone(taskbarHandle, taskbarWidth, dpiScale);
-
-            int widgetLeft;
-            if (align == 1) // Centered in free zone
-            {
-                widgetLeft = freeLeft + (freeWidth - physicalWidth) / 2;
-            }
-            else if (align == 2) // Right side of free zone
-            {
-                widgetLeft = freeLeft + freeWidth - physicalWidth - 8;
-            }
-            else // Left side of free zone (default)
-            {
-                widgetLeft = freeLeft + 8;
-            }
-
-            // Clamp to valid range
-            if (widgetLeft < 4) widgetLeft = 4;
-            if (widgetLeft + physicalWidth > taskbarWidth - 4)
-                widgetLeft = taskbarWidth - physicalWidth - 4;
-
-            Canvas.SetLeft(Widget, widgetLeft / dpiScale);
-            Canvas.SetTop(Widget, widgetTop / dpiScale);
-            Widget.Width = physicalWidth / dpiScale;
-            Widget.Height = physicalHeight / dpiScale;
-
-            Visibility = Visibility.Visible;
-
-            return new Rect(Canvas.GetLeft(Widget) * dpiScale, Canvas.GetTop(Widget) * dpiScale, Widget.Width * dpiScale, Widget.Height * dpiScale);
-        }
-
-
-
         public Point GetWidgetScreenPosition()
         {
             try
@@ -544,24 +644,15 @@ namespace FlyShelf.Windows
                     double dpiScale = GetDpiForWindow(taskbarHandle) / 96.0;
                     if (dpiScale <= 0) dpiScale = 1.0;
 
-                    GetWindowRect(taskbarHandle, out RECT rawTaskbarRect);
+                    GetWindowRect(taskbarWindowHandle, out RECT rect);
                     
-                    double widgetLeftLogical = Canvas.GetLeft(Widget);
-                    double widgetTopLogical = Canvas.GetTop(Widget);
-                    double widgetWidthLogical = Widget.Width;
+                    double physicalWidth = rect.Right - rect.Left;
+                    double physicalCenterX = rect.Left + (physicalWidth / 2.0);
 
-                    if (double.IsNaN(widgetLeftLogical)) widgetLeftLogical = 0;
-                    if (double.IsNaN(widgetTopLogical)) widgetTopLogical = 0;
-                    if (double.IsNaN(widgetWidthLogical)) widgetWidthLogical = 80;
+                    double logicalCenterX = physicalCenterX / dpiScale;
+                    double logicalTopY = rect.Top / dpiScale;
 
-                    // Widget's absolute screen coordinates in logical pixels:
-                    double taskbarLeftLogical = rawTaskbarRect.Left / dpiScale;
-                    double widgetCenterXLogical = taskbarLeftLogical + widgetLeftLogical + (widgetWidthLogical / 2.0);
-
-                    // Compute the taskbar top Y (in logical pixels)
-                    double taskbarTopLogical = rawTaskbarRect.Top / dpiScale;
-
-                    return new Point(widgetCenterXLogical, taskbarTopLogical);
+                    return new Point(logicalCenterX, logicalTopY);
                 }
             }
             catch (Exception ex)

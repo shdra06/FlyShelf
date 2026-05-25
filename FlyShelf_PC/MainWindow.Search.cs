@@ -362,5 +362,48 @@ namespace FlyShelf
             // Render newly visible thumbnails immediately
             RenderVisibleThumbnails();
         }
+
+        internal void ReapplyActiveFilters()
+        {
+            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
+            if (view == null) return;
+
+            if (_activeCategoryFilter != null)
+            {
+                string category = _activeCategoryFilter;
+                view.Filter = obj =>
+                {
+                    if (obj is FlyShelf.ViewModels.ClipboardItem item)
+                    {
+                        return category switch
+                        {
+                            "Images" => item.IsImagePreview,
+                            "Pinned" => item.IsPinned,
+                            "PDF" => item.IsPdfPreview,
+                            "Docs" => item.IsDocPreview,
+                            _ => true
+                        };
+                    }
+                    return false;
+                };
+                view.Refresh();
+            }
+            else if (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox.Text))
+            {
+                string q = SearchTextBox.Text.Trim().ToLowerInvariant();
+                view.Filter = obj =>
+                {
+                    if (obj is FlyShelf.ViewModels.ClipboardItem item)
+                    {
+                        if (!string.IsNullOrEmpty(item.RawContent) && item.RawContent.ToLowerInvariant().Contains(q))
+                            return true;
+                        if (!string.IsNullOrEmpty(item.FileName) && item.FileName.ToLowerInvariant().Contains(q))
+                            return true;
+                    }
+                    return false;
+                };
+                view.Refresh();
+            }
+        }
     }
 }

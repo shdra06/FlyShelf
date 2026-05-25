@@ -125,6 +125,52 @@ namespace FlyShelf.ViewModels
                 }
             }
         }
+
+        private bool _isVisibleInViewport;
+        [JsonIgnore]
+        public bool IsVisibleInViewport
+        {
+            get => _isVisibleInViewport;
+            set
+            {
+                if (_isVisibleInViewport != value)
+                {
+                    _isVisibleInViewport = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsVisibleInViewport)));
+                    EvaluateViewportVisibility();
+                }
+            }
+        }
+
+        private void EvaluateViewportVisibility()
+        {
+            if (_isVisibleInViewport)
+            {
+                if (_icon == null && !string.IsNullOrEmpty(FilePath) && File.Exists(FilePath))
+                {
+                    System.Threading.Tasks.Task.Run(() =>
+                    {
+                        try
+                        {
+                            var bmp = FlyShelfViewModel.LoadImageThumbnail(FilePath, 300);
+                            if (bmp != null)
+                            {
+                                System.Windows.Application.Current.Dispatcher.Invoke(() => Icon = bmp);
+                            }
+                        }
+                        catch { }
+                    });
+                }
+            }
+            else
+            {
+                if (_icon != null && !IsPinned && (ItemType == ClipboardItemType.Image || ItemType == ClipboardItemType.QRCode || ItemType == ClipboardItemType.Pdf))
+                {
+                    _icon = null;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Icon)));
+                }
+            }
+        }
         private string _formattedSize = string.Empty;
         public string FormattedSize 
         { 
@@ -426,7 +472,37 @@ namespace FlyShelf.ViewModels
         [JsonIgnore] public byte ColorB => _colorB;
 
         [JsonIgnore]
-        public System.Windows.Media.SolidColorBrush DetectedColorBrush => HasDetectedColor ? FlyShelf.Classes.ColorHelper.ToBrush(_detectedColor) : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Transparent);
+        public System.Windows.Media.SolidColorBrush DetectedColorBrush => HasDetectedColor ? FlyShelf.Classes.ColorHelper.ToBrush(_detectedColor) : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Transparent);        // --- PASSWORD MANAGEMENT PROPERTIES ---
+        private bool _isPassword;
+        public bool IsPassword
+        {
+            get => _isPassword;
+            set
+            {
+                if (_isPassword != value)
+                {
+                    _isPassword = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsPassword)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CanConvertToPassword)));
+                }
+            }
+        }
+
+        [JsonIgnore]
+        public bool CanConvertToPassword
+        {
+            get
+            {
+                if (ItemType != ClipboardItemType.Text || IsPassword) return false;
+                if (string.IsNullOrEmpty(RawContent)) return false;
+                
+                string trimmed = RawContent.Trim();
+                if (trimmed.Length == 0) return false;
+                
+                int words = trimmed.Split(new[] { ' ', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+                return words >= 1 && words <= 2;
+            }
+        }
 
 
         private bool _isLoadedHighQuality;

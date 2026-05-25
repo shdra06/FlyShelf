@@ -61,7 +61,7 @@
             </Style>
 
             <!-- Shared ContextMenu cached at Window level to prevent duplicate MenuItem element allocations -->
-            <ContextMenu x:Key="CardContextMenu">
+            <ContextMenu x:Key="CardContextMenu" StaysOpen="True">
                 <ContextMenu.Resources>
                     <Style TargetType="Separator">
                         <Setter Property="Margin" Value="8,4"/>
@@ -89,6 +89,26 @@
                 <MenuItem Header="🔍 Search on Google" Click="GoogleSearch_Click" 
                           Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Visibility="{Binding PlacementTarget.DataContext.IsTextPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                <!-- 🔒 Mark as Password -->
+                <MenuItem Header="🔒 Mark as Password" Click="MarkAsPassword_Click"
+                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                          Visibility="{Binding PlacementTarget.DataContext.CanConvertToPassword, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                <!-- 🔑 View/Edit Password -->
+                <MenuItem Header="🔑 View/Edit Password" Click="ViewEditPassword_Click"
+                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                          Visibility="{Binding PlacementTarget.DataContext.IsPassword, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                <!-- ✏️ Rename Label -->
+                <MenuItem Header="✏️ Rename Label" Click="RenamePasswordLabel_Click"
+                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                          Visibility="{Binding PlacementTarget.DataContext.IsPassword, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
+                <!-- Revert to Normal Text -->
+                <MenuItem Header="Revert to Normal Text" Click="RevertToText_Click"
+                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                          Visibility="{Binding PlacementTarget.DataContext.IsPassword, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
                 <!-- ═══ CODE: VS Code + Terminal ═══ -->
                 <MenuItem Header="Open in VS Code" 
@@ -525,7 +545,7 @@
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate>
-                    <Border Name="CardBorder" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1,0.5,1,1" CornerRadius="14" Margin="0" Padding="0" RenderTransformOrigin="0.5,0.5">
+                    <Border Name="CardBorder" Loaded="Card_Loaded" Unloaded="Card_Unloaded" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1,0.5,1,1" CornerRadius="14" Margin="0" Padding="0" RenderTransformOrigin="0.5,0.5">
                         <Border.OpacityMask>
                             <VisualBrush>
                                 <VisualBrush.Visual>
@@ -829,7 +849,7 @@
                                                         <Setter Property="Foreground" Value="#F59E0B"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsPinned}" Value="True">
-                                                                <Setter Property="Symbol" Value="PinOff24"/>
+                                                <Setter Property="Symbol" Value="PinOff24"/>
                                                                 <Setter Property="Foreground" Value="#9CA3AF"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
@@ -837,6 +857,24 @@
                                                 </ui:SymbolIcon.Style>
                                             </ui:SymbolIcon>
                                         </ui:Button.Icon>
+                                    </ui:Button>
+                                </Border>
+
+                                <!-- ═══ Rename Password (Password Card only) ═══ -->
+                                <Border Margin="0,0,2,0" Padding="0">
+                                    <Border.Style>
+                                        <Style TargetType="Border" BasedOn="{StaticResource ActionPillStyle}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsPassword}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#F59E0B" ToolTip="Rename Password Label"
+                                               PreviewMouseLeftButtonDown="RenamePasswordSpecific_Click">
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Edit24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -856,9 +894,13 @@
                                     <Style TargetType="Border">
                                         <Setter Property="Visibility" Value="Visible"/>
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding ItemType}" Value="Text">
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding ItemType}" Value="Text"/>
+                                                    <Condition Binding="{Binding IsPassword}" Value="False"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Collapsed"/>
-                                            </DataTrigger>
+                                            </MultiDataTrigger>
                                             <DataTrigger Binding="{Binding ItemType}" Value="Url">
                                                 <Setter Property="Visibility" Value="Collapsed"/>
                                             </DataTrigger>

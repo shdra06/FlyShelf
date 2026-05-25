@@ -318,5 +318,62 @@ $word.Quit()
                 FlyShelf.Windows.ToastWindow.ShowToast($"❌ PDF to Word error: {ex.Message}");
             }
         }
+
+        private void MarkAsPassword_Click(object sender, RoutedEventArgs e)
+        {
+            var item = GetClipItemFromSender(sender);
+            if (item == null) return;
+            item.IsPassword = true;
+            item.Extension = "PASSWORD";
+            if (string.IsNullOrEmpty(item.FileName) || item.FileName == item.RawContent)
+            {
+                item.FileName = "Protected Password";
+            }
+            item.GeneratePasswordIcon();
+            FlyShelf.Windows.ToastWindow.ShowToast("Locked as password card! 🔒");
+
+            // Open the View/Edit dialog
+            OpenPasswordManagerWindow(item, false);
+        }
+
+        private void ViewEditPassword_Click(object sender, RoutedEventArgs e)
+        {
+            var item = GetClipItemFromSender(sender);
+            if (item == null) return;
+            OpenPasswordManagerWindow(item, false);
+        }
+
+        private void RenamePasswordLabel_Click(object sender, RoutedEventArgs e)
+        {
+            var item = GetClipItemFromSender(sender);
+            if (item == null) return;
+            OpenPasswordManagerWindow(item, true);
+        }
+
+        private void RevertToText_Click(object sender, RoutedEventArgs e)
+        {
+            var item = GetClipItemFromSender(sender);
+            if (item == null) return;
+            item.IsPassword = false;
+            item.Extension = "TEXT";
+            item.FileName = item.RawContent.Length > 800 ? item.RawContent.Substring(0, 800) + "..." : item.RawContent;
+            item.Icon = null; // Reverts back to standard text template
+            FlyShelf.Windows.ToastWindow.ShowToast("Reverted to normal text card! 📋");
+        }
+
+        private void RenamePasswordSpecific_Click(object sender, RoutedEventArgs e)
+        {
+            var item = GetClipItemFromSender(sender);
+            if (item == null) return;
+            OpenPasswordManagerWindow(item, true);
+        }
+
+        private void OpenPasswordManagerWindow(ClipboardItem item, bool focusLabel)
+        {
+            var win = new FlyShelf.Windows.PasswordWindow(item, focusLabel);
+            win.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            win.Topmost = true;
+            win.ShowDialog();
+        }
     }
 }

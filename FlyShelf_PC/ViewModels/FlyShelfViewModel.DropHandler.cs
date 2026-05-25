@@ -229,10 +229,20 @@ namespace FlyShelf.ViewModels
                                 }
                                 else
                                 {
-                                    var icon = GetIcon(filePath);
-                                    if (icon != null)
+                                    // Skip shell icon fetch for items that already have a custom vector icon
+                                    // (e.g. .md files which use GenerateMarkdownIcon())
+                                    if (item.Icon == null)
                                     {
-                                        Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
+                                        var icon = GetIcon(filePath);
+                                        if (icon != null)
+                                        {
+                                            Application.Current.Dispatcher.InvokeAsync(() =>
+                                            {
+                                                // Double-check: don't overwrite if custom icon was set in the meantime
+                                                if (item.Icon == null)
+                                                    item.Icon = icon;
+                                            });
+                                        }
                                     }
                                 }
                             }
@@ -534,10 +544,24 @@ namespace FlyShelf.ViewModels
                     try
                     {
                         string possiblePath = capturedText;
-                        if (possiblePath.StartsWith("file:///"))
+
+                        // Strip surrounding quotes (VS Code / terminals often wrap paths in quotes)
+                        if (possiblePath.Length >= 2 && possiblePath[0] == '"' && possiblePath[possiblePath.Length - 1] == '"')
+                            possiblePath = possiblePath.Substring(1, possiblePath.Length - 2);
+                        else if (possiblePath.Length >= 2 && possiblePath[0] == '\'' && possiblePath[possiblePath.Length - 1] == '\'')
+                            possiblePath = possiblePath.Substring(1, possiblePath.Length - 2);
+
+                        // Handle file:// and file:/// URI schemes with percent-encoded chars
+                        if (possiblePath.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
                         {
-                            possiblePath = new Uri(possiblePath).LocalPath;
+                            try { possiblePath = new Uri(possiblePath).LocalPath; } catch { }
                         }
+
+                        // Normalize path separators (VS Code on Windows sometimes uses forward slashes)
+                        possiblePath = possiblePath.Replace('/', '\\');
+
+                        // Trim trailing whitespace/newlines that may sneak in from drag payloads
+                        possiblePath = possiblePath.TrimEnd();
                         
                         if (File.Exists(possiblePath))
                         {
@@ -553,84 +577,137 @@ namespace FlyShelf.ViewModels
                         item._suppressPropertyNotifications = true; // PERF: suppress during construction
                         item.RawContent = capturedText;
                         item.FormattedSize = string.Empty;
+
+                        if (Uri.TryCreate(capturedText, UriKind.Absolute, out Uri? uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps))
+                        {
+                            string cleanUrl = _rxUtmClean.Replace(capturedText, string.Empty).TrimEnd('?', '&');
+                            
+                            item.RawContent = cleanUrl;
+                            item.ItemType = ClipboardItemType.Url;
+                            item.FileName = cleanUrl;
+                            item.Extension = "LINK";
+                        }
+                        else
+                        {
+                            bool classified = false;
+
+                            // ═══ FILE PATH FALLBACK ═══
+                            // If the text looks like a file path with a known document extension but
+                            // File.Exists() failed (e.g. stale path, network drive, VS Code workspace-relative),
+                            // still classify it as a proper document card instead of plain text.
+                            string trimmedText = capturedText.Trim();
+                            bool looksLikeFilePath = (trimmedText.Contains("\\") || trimmedText.Contains("/"))
+                                                     && !trimmedText.Contains("\n")
+                                                     && trimmedText.Length < 1000;
+                            if (looksLikeFilePath)
+                            {
+                                string lowTrimmed = trimmedText.ToLowerInvariant();
+                                if (lowTrimmed.EndsWith(".md") || lowTrimmed.EndsWith(".txt") || lowTrimmed.EndsWith(".doc") || lowTrimmed.EndsWith(".docx"))
+                                {
+                                    string pathExt = Path.GetExtension(trimmedText).ToUpperInvariant();
+                                    item.ItemType = ClipboardItemType.Document;
+                                    item.Extension = pathExt;
+                                    item.FileName = Path.GetFileName(trimmedText);
+                                    item.FilePath = trimmedText;
+                                    item.RawContent = capturedText;
+
+                                    if (pathExt == ".MD")
+                                    {
+                                        // Read file contents if the file actually exists (best-effort)
+                                        try { if (File.Exists(trimmedText)) item.RawContent = File.ReadAllText(trimmedText); } catch { }
+                                        item.GenerateMarkdownIcon();
+                                    }
+
+                                    classified = true;
+                                }
+                            }
+
+                            if (!classified)
+                            {
+                                string classificationSample = capturedText.Length > 10000 
+                                    ? capturedText.Substring(0, 10000) 
+                                    : capturedText;
+
+                                bool isCode = IsProperCode(classificationSample);
+                            
+                                if (isCode)
+                                {
+                                    item.ItemType = ClipboardItemType.Code;
+                                    item.RawContent = capturedText;
+                                
+                                    if (classificationSample.Contains("std::") || classificationSample.Contains("<iostream>") || classificationSample.Contains("<cstdlib>") || classificationSample.Contains("<vector>") || classificationSample.Contains("using namespace") || _rxCpp.IsMatch(classificationSample))
+                                    {
+                                        item.Extension = "C++";
+                                    }
+                                    else if (classificationSample.Contains("<stdio.h>") || classificationSample.Contains("<stdlib.h>") || classificationSample.Contains("<string.h>") || _rxC.IsMatch(classificationSample))
+                                    {
+                                        item.Extension = "C";
+                                    }
+                                    else if (classificationSample.Contains("def ") || classificationSample.Contains("import ") || classificationSample.Contains("self.") || _rxPython.IsMatch(classificationSample))
+                                    {
+                                        item.Extension = "PYTHON";
+                                    }
+                                    else if (classificationSample.Contains("public class") || classificationSample.Contains("System.out") || classificationSample.Contains("@Override") || _rxJava.IsMatch(classificationSample))
+                                    {
+                                        item.Extension = "JAVA";
+                                    }
+                                    else if (_rxJs.IsMatch(classificationSample))
+                                    {
+                                        item.Extension = "JS";
+                                    }
+                                    else if (classificationSample.Contains("public class") || classificationSample.Contains("private void") || classificationSample.Contains("Console.") || classificationSample.Contains("namespace ") || _rxCs.IsMatch(classificationSample))
+                                    {
+                                        item.Extension = "C#";
+                                    }
+                                    else if (_rxSql.IsMatch(classificationSample))
+                                    {
+                                        item.Extension = "SQL";
+                                    }
+                                    else if (classificationSample.TrimStart().StartsWith("{\"") || classificationSample.TrimStart().StartsWith("[{\""))
+                                    {
+                                        item.Extension = "JSON";
+                                    }
+                                    else if (_rxHtml.IsMatch(classificationSample))
+                                    {
+                                        item.Extension = "HTML";
+                                    }
+                                    else
+                                    {
+                                        item.Extension = "CODE";
+                                    }
+                                    string shortText = capturedText.Trim();
+                                    item.FileName = shortText.Length > 800 ? shortText.Substring(0, 800) + "..." : shortText;
+                                }
+                                else
+                                {
+                                    item.ItemType = ClipboardItemType.Text;
+                                    string displayText = capturedText.Trim();
+                                    if (DetectIfPasswordOrApiKey(displayText))
+                                    {
+                                        item.IsPassword = true;
+                                        item.Extension = "PASSWORD";
+                                        string label = "Protected Password";
+                                        string lower = displayText.ToLowerInvariant();
+                                        if (lower.StartsWith("sk-") || lower.StartsWith("pk-") || lower.StartsWith("ghp_") || 
+                                            lower.Contains("key") || lower.Contains("api") || lower.Contains("token") || lower.Contains("secret"))
+                                        {
+                                            label = "API Key";
+                                        }
+                                        item.FileName = label;
+                                        item.GeneratePasswordIcon();
+                                    }
+                                    else
+                                    {
+                                        item.Extension = "TEXT";
+                                        item.FileName = displayText.Length > 800 ? displayText.Substring(0, 800) + "..." : displayText;
+                                    }
+                                }
+                            }
+                        }
                     }
                     else
                     {
                         item._suppressPropertyNotifications = true; // PERF: suppress during construction
-                    }
-
-                    if (Uri.TryCreate(capturedText, UriKind.Absolute, out Uri? uriResult) && (uriResult.Scheme == Uri.UriSchemeHttp || uriResult.Scheme == Uri.UriSchemeHttps))
-                    {
-                        string cleanUrl = _rxUtmClean.Replace(capturedText, string.Empty).TrimEnd('?', '&');
-                        
-                        item.RawContent = cleanUrl;
-                        item.ItemType = ClipboardItemType.Url;
-                        item.FileName = cleanUrl;
-                        item.Extension = "LINK";
-                    }
-                    else
-                    {
-                        string classificationSample = capturedText.Length > 10000 
-                            ? capturedText.Substring(0, 10000) 
-                            : capturedText;
-
-                        bool isCode = IsProperCode(classificationSample);
-                        
-                        if (isCode)
-                        {
-                            item.ItemType = ClipboardItemType.Code;
-                            item.RawContent = capturedText;
-                            
-                            if (classificationSample.Contains("std::") || classificationSample.Contains("<iostream>") || classificationSample.Contains("<cstdlib>") || classificationSample.Contains("<vector>") || classificationSample.Contains("using namespace") || _rxCpp.IsMatch(classificationSample))
-                            {
-                                item.Extension = "C++";
-                            }
-                            else if (classificationSample.Contains("<stdio.h>") || classificationSample.Contains("<stdlib.h>") || classificationSample.Contains("<string.h>") || _rxC.IsMatch(classificationSample))
-                            {
-                                item.Extension = "C";
-                            }
-                            else if (classificationSample.Contains("def ") || classificationSample.Contains("import ") || classificationSample.Contains("self.") || _rxPython.IsMatch(classificationSample))
-                            {
-                                item.Extension = "PYTHON";
-                            }
-                            else if (classificationSample.Contains("public class") || classificationSample.Contains("System.out") || classificationSample.Contains("@Override") || _rxJava.IsMatch(classificationSample))
-                            {
-                                item.Extension = "JAVA";
-                            }
-                            else if (_rxJs.IsMatch(classificationSample))
-                            {
-                                item.Extension = "JS";
-                            }
-                            else if (classificationSample.Contains("public class") || classificationSample.Contains("private void") || classificationSample.Contains("Console.") || classificationSample.Contains("namespace ") || _rxCs.IsMatch(classificationSample))
-                            {
-                                item.Extension = "C#";
-                            }
-                            else if (_rxSql.IsMatch(classificationSample))
-                            {
-                                item.Extension = "SQL";
-                            }
-                            else if (classificationSample.TrimStart().StartsWith("{\"") || classificationSample.TrimStart().StartsWith("[{\""))
-                            {
-                                item.Extension = "JSON";
-                            }
-                            else if (_rxHtml.IsMatch(classificationSample))
-                            {
-                                item.Extension = "HTML";
-                            }
-                            else
-                            {
-                                item.Extension = "CODE";
-                            }
-                            string shortText = capturedText.Trim();
-                            item.FileName = shortText.Length > 800 ? shortText.Substring(0, 800) + "..." : shortText;
-                        }
-                        else
-                        {
-                            item.ItemType = ClipboardItemType.Text;
-                            item.Extension = "TEXT";
-                            string displayText = capturedText.Trim();
-                            item.FileName = displayText.Length > 800 ? displayText.Substring(0, 800) + "..." : displayText;
-                        }
                     }
 
                     // PERF: Un-suppress before insert — item is about to enter the visual tree
@@ -910,6 +987,59 @@ namespace FlyShelf.ViewModels
 
             // Proper code must have at least 35% code line density
             return codeDensity >= 0.35;
+        }
+
+        public static bool DetectIfPasswordOrApiKey(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return false;
+            string trimmed = text.Trim();
+            
+            // Limit length (passwords/keys are usually between 6 and 128 characters)
+            if (trimmed.Length < 6 || trimmed.Length > 128) return false;
+
+            // Cannot contain newlines
+            if (trimmed.Contains("\n") || trimmed.Contains("\r")) return false;
+
+            // Split into words
+            string[] words = trimmed.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length > 2) return false;
+
+            // If it's a known API key prefix
+            string lower = trimmed.ToLowerInvariant();
+            if (lower.StartsWith("sk-") || lower.StartsWith("pk-") || lower.StartsWith("ghp_") || 
+                lower.StartsWith("key_") || lower.StartsWith("api_") || lower.StartsWith("token_") || 
+                lower.StartsWith("secret_") || lower.StartsWith("pwd_") || lower.StartsWith("passwd_") ||
+                lower.StartsWith("auth_"))
+            {
+                return true;
+            }
+
+            // Test each word
+            foreach (var w in words)
+            {
+                // Basic entropy / password heuristics
+                bool hasUpper = w.Any(char.IsUpper);
+                bool hasLower = w.Any(char.IsLower);
+                bool hasDigit = w.Any(char.IsDigit);
+                bool hasSymbol = w.Any(c => !char.IsLetterOrDigit(c));
+
+                int charTypes = 0;
+                if (hasUpper) charTypes++;
+                if (hasLower) charTypes++;
+                if (hasDigit) charTypes++;
+                if (hasSymbol) charTypes++;
+
+                // If single word has at least 3 character types or mix of letters and digits and is reasonably long
+                if (charTypes >= 3 && w.Length >= 8) return true;
+
+                // Typical API key or token: high length (e.g. >= 16 characters) consisting of alphanumeric/base64 without spaces
+                if (w.Length >= 16 && (hasUpper || hasDigit) && w.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' || c == '.' || c == '/' || c == '+'))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 
