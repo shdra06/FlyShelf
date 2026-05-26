@@ -339,6 +339,21 @@ namespace FlyShelf.ViewModels
             }
         }
 
+        private bool _isFirstTenItem = false;
+        [JsonIgnore]
+        public bool IsFirstTenItem
+        {
+            get => _isFirstTenItem;
+            set
+            {
+                if (_isFirstTenItem != value)
+                {
+                    _isFirstTenItem = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsFirstTenItem)));
+                }
+            }
+        }
+
         private bool _isCheckedForMerge;
         [JsonIgnore]
         public bool IsCheckedForMerge

@@ -70,6 +70,53 @@ namespace FlyShelf.ViewModels
         }
 
         /// <summary>
+        /// Deletes multiple clipboard entries in a high-performance, thread-safe bulk operation.
+        /// Excludes pinned items automatically.
+        /// </summary>
+        public void BulkRemoveItems(IEnumerable<ClipboardItem> items)
+        {
+            if (items == null) return;
+            var itemList = items.Where(i => i != null && !i.IsPinned && DroppedItems.Contains(i)).ToList();
+            if (itemList.Count == 0) return;
+
+            // Stop active playback if any of these items are playing audio
+            foreach (var item in itemList)
+            {
+                if (item.IsAudioPlaying)
+                {
+                    ClipboardItem.StopActivePlayback();
+                    break;
+                }
+            }
+
+            // Perform bulk removal in memory
+            DroppedItems.RemoveRange(itemList);
+
+            if (DroppedItems.Count == 0)
+            {
+                OnPropertyChanged(nameof(ShelfVisibility));
+            }
+
+            // Perform off-thread scavenge & delete logging
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                foreach (var item in itemList)
+                {
+                    try
+                    {
+                        Classes.ClipboardHistoryManager.AppendDeleteToJournal(item);
+                        CleanupTempFile(item.FilePath);
+                        Classes.ClipboardHistoryManager.DeletePersistentImage(item.FilePath, item.ItemType);
+                    }
+                    catch { }
+                }
+            });
+
+            // Persist the updated history to disk
+            PersistHistory();
+        }
+
+        /// <summary>
         /// Deletes the backing file only if it resides inside the system temp directory or the app's synced files directory.
         /// User's real files (dragged from Explorer) are never touched.
         /// </summary>

@@ -223,6 +223,113 @@
                                 </Border>
                             </Grid>
 
+                            <!-- Clipboard Maintenance Header -->
+                            <TextBlock Text="Clipboard Maintenance" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Margin="0,28,0,16"/>
+
+                            <!-- MAINTENANCE ROW: 2 Cards -->
+                            <Grid Margin="0,0,0,16">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- Card A: Duplicate Sweeper -->
+                                <Border Grid.Column="0" Style="{StaticResource DashboardCardStyle}" CornerRadius="14" Padding="0" ClipToBounds="True" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#40F43F5E" BorderThickness="1">
+                                    <Grid>
+                                        <!-- Subtle gradient glow in background (AccentRose Color: #F43F5E) -->
+                                        <Border CornerRadius="14" Opacity="0.15" HorizontalAlignment="Right" VerticalAlignment="Top" Width="120" Height="120" Margin="-20,-20,0,0">
+                                            <Border.Background>
+                                                <RadialGradientBrush>
+                                                    <GradientStop Color="#F43F5E" Offset="0"/>
+                                                    <GradientStop Color="Transparent" Offset="1"/>
+                                                </RadialGradientBrush>
+                                            </Border.Background>
+                                        </Border>
+                                        <StackPanel Margin="24,22,24,22">
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                                <Border Width="40" Height="40" CornerRadius="12" Margin="0,0,14,0">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                            <GradientStop Color="#E11D48" Offset="0"/>
+                                                            <GradientStop Color="#F43F5E" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                    <ui:SymbolIcon Symbol="SquareMultiple24" Foreground="White" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="Duplicate Sweeper" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
+                                                    <TextBlock Text="Clean Duplicates" FontSize="11" Foreground="#F43F5E" FontWeight="SemiBold"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <TextBlock Text="Scans for duplicate texts, URLs, and file references. Keeps the single most recent item and purges older copies." FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap" LineHeight="18" Height="54"/>
+                                            
+                                            <!-- Action Button -->
+                                            <ui:Button x:Name="SweepDuplicatesBtn" Appearance="Secondary" Content="Scan &amp; Sweep Duplicates" Padding="14,8" CornerRadius="8" HorizontalAlignment="Stretch" Click="SweepDuplicates_Click" Margin="0,16,0,0">
+                                                <ui:Button.Icon>
+                                                    <ui:SymbolIcon Symbol="Delete24" FontSize="16"/>
+                                                </ui:Button.Icon>
+                                            </ui:Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+
+                                <!-- Card B: Smart History Cleanup -->
+                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" CornerRadius="14" Padding="0" ClipToBounds="True" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#4010B981" BorderThickness="1">
+                                    <Grid>
+                                        <!-- Subtle gradient glow in background (AccentEmerald Color: #10B981) -->
+                                        <Border CornerRadius="14" Opacity="0.12" HorizontalAlignment="Right" VerticalAlignment="Top" Width="120" Height="120" Margin="-20,-20,0,0">
+                                            <Border.Background>
+                                                <RadialGradientBrush>
+                                                    <GradientStop Color="#10B981" Offset="0"/>
+                                                    <GradientStop Color="Transparent" Offset="1"/>
+                                                </RadialGradientBrush>
+                                            </Border.Background>
+                                        </Border>
+                                        <StackPanel Margin="24,22,24,22">
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                                <Border Width="40" Height="40" CornerRadius="12" Margin="0,0,14,0">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                            <GradientStop Color="#059669" Offset="0"/>
+                                                            <GradientStop Color="#10B981" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                    <ui:SymbolIcon Symbol="History24" Foreground="White" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <StackPanel VerticalAlignment="Center">
+                                                    <TextBlock Text="Smart History Cleanup" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
+                                                    <TextBlock Text="Timeframe Purge" FontSize="11" Foreground="#10B981" FontWeight="SemiBold"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                            
+                                            <!-- Timeframe selector ComboBox and description -->
+                                            <Grid Margin="0,0,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Select a timeframe to purge unpinned clipboard history (just like Chrome cleanup)." FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap" LineHeight="18" VerticalAlignment="Center" Margin="0,0,8,0" Grid.Column="0" Height="54"/>
+                                                <ComboBox x:Name="CleanupTimeframeCombo" Grid.Column="1" VerticalAlignment="Center" MinWidth="110" SelectedIndex="0">
+                                                    <ComboBoxItem Content="Last 1 Hour" Tag="1h"/>
+                                                    <ComboBoxItem Content="Last 6 Hours" Tag="6h"/>
+                                                    <ComboBoxItem Content="Last 9 Hours" Tag="9h"/>
+                                                    <ComboBoxItem Content="Last 24 Hours" Tag="24h"/>
+                                                    <ComboBoxItem Content="Last 2 Days" Tag="2d"/>
+                                                </ComboBox>
+                                            </Grid>
+                                            
+                                            <!-- Action Button -->
+                                            <ui:Button x:Name="CleanHistoryBtn" Appearance="Secondary" Content="Clean Clipboard History" Padding="14,8" CornerRadius="8" HorizontalAlignment="Stretch" Click="CleanHistory_Click" Margin="0,16,0,0">
+                                                <ui:Button.Icon>
+                                                    <ui:SymbolIcon Symbol="Delete24" FontSize="16" Foreground="#EF4444"/>
+                                                </ui:Button.Icon>
+                                            </ui:Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>

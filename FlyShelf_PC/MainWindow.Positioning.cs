@@ -221,12 +221,7 @@ namespace FlyShelf
             {
                 Classes.SmoothScroll.ResetScrollState(GetShelfScrollViewer());
                 if (ShelfListView.Items.Count > 0)
-                {
-                    _isInitialSpawn = true;
-                    _viewModel.HideSelectionBgOnFirstItem = true;
                     ShelfListView.SelectedIndex = 0;
-                    _isInitialSpawn = false;
-                }
                 var sv = GetShelfScrollViewer();
                 if (sv != null && sv.VerticalOffset > 0)
                 {

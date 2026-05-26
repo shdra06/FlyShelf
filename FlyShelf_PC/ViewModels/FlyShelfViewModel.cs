@@ -71,19 +71,7 @@ namespace FlyShelf.ViewModels
             }
         }
 
-        private bool _hideSelectionBgOnFirstItem = false;
-        public bool HideSelectionBgOnFirstItem
-        {
-            get => _hideSelectionBgOnFirstItem;
-            set
-            {
-                if (_hideSelectionBgOnFirstItem != value)
-                {
-                    _hideSelectionBgOnFirstItem = value;
-                    OnPropertyChanged(nameof(HideSelectionBgOnFirstItem));
-                }
-            }
-        }
+
 
 
         /// <summary>
@@ -593,6 +581,23 @@ namespace FlyShelf.ViewModels
                     CloudListener.StartPolling();
                 }
             }, System.Windows.Threading.DispatcherPriority.Background);
+
+            DroppedItems.CollectionChanged += (s, e) =>
+            {
+                UpdateFirstTenFlags();
+            };
+        }
+
+        public void UpdateFirstTenFlags()
+        {
+            for (int i = 0; i < DroppedItems.Count; i++)
+            {
+                var item = DroppedItems[i];
+                if (item != null)
+                {
+                    item.IsFirstTenItem = i < 10;
+                }
+            }
         }
 
 

@@ -21,7 +21,6 @@ namespace FlyShelf
         private bool _isDragHovering = false;
         private bool _shouldPreventDrag = false;
         private bool _justDeletedAnItem = false;
-        private bool _isInitialSpawn = false;
 
         public static readonly DependencyProperty IsDragHoveringProperty =
             DependencyProperty.Register("IsDragHovering", typeof(bool), typeof(MainWindow), new PropertyMetadata(false));
@@ -133,7 +132,6 @@ namespace FlyShelf
             this.Width = _viewModel.CurrentFlyShelfWidth;
 
             this.PreviewKeyDown += Window_PreviewKeyDown;
-            this.PreviewMouseDown += MainWindow_PreviewMouseDown;
 
             // Register global hotkeys EAGERLY in constructor — do NOT wait for Loaded event.
             // EnsureHandle() forces HWND creation so hotkeys work immediately on app start.
@@ -806,14 +804,6 @@ namespace FlyShelf
             _isEdgeLocked = false;
             this.Left = -20000;
             this.Top = -20000;
-        }
-
-        private void MainWindow_PreviewMouseDown(object sender, MouseButtonEventArgs e)
-        {
-            if (_viewModel != null)
-            {
-                _viewModel.HideSelectionBgOnFirstItem = false;
-            }
         }
     }
 }
