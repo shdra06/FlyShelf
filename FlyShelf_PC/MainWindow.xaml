@@ -593,34 +593,29 @@
                         </Border.RenderTransform>
 
                         <Grid>
-                            <!-- Canvas wrapper with 0 desired size to prevent layout feedback growth -->
-                            <Canvas HorizontalAlignment="Stretch" VerticalAlignment="Stretch" IsHitTestVisible="False">
-                                <!-- Premium Frosted Glass / Acrylic Backdrop Blur for Selected Cards -->
-                                <Border x:Name="SelectedBlurBg" CornerRadius="14" ClipToBounds="True" Visibility="Collapsed" IsHitTestVisible="False"
-                                        Width="{Binding ElementName=InnerHighlightBorder, Path=ActualWidth}"
-                                        Height="{Binding ElementName=InnerHighlightBorder, Path=ActualHeight}">
-                                    <Grid>
-                                        <!-- Pre-blurred wallpaper cached on background thread — zero runtime GPU cost -->
-                                        <Image Source="{DynamicResource PreBlurredWallpaper}" 
-                                               Stretch="UniformToFill" 
-                                               Opacity="0.75" 
-                                               RenderOptions.BitmapScalingMode="LowQuality">
-                                            <Image.Style>
-                                                <Style TargetType="Image">
-                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                    <Style.Triggers>
-                                                        <Trigger Property="Source" Value="{x:Null}">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                        </Trigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Image.Style>
-                                        </Image>
-                                        <!-- Sleek theme-colored tint overlay -->
-                                        <Border Background="{DynamicResource ShelfCardSelectionBg}" CornerRadius="14"/>
-                                    </Grid>
-                                </Border>
-                            </Canvas>
+                            <!-- Premium Frosted Glass / Acrylic Backdrop Blur for Selected Cards -->
+                            <Border x:Name="SelectedBlurBg" CornerRadius="13" ClipToBounds="True" Visibility="Collapsed" IsHitTestVisible="False">
+                                <Grid>
+                                    <!-- Pre-blurred wallpaper cached on background thread — zero runtime GPU cost -->
+                                    <Image Source="{DynamicResource PreBlurredWallpaper}" 
+                                           Stretch="UniformToFill" 
+                                           Opacity="0.75" 
+                                           RenderOptions.BitmapScalingMode="LowQuality">
+                                        <Image.Style>
+                                            <Style TargetType="Image">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <Trigger Property="Source" Value="{x:Null}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Image.Style>
+                                    </Image>
+                                    <!-- Sleek theme-colored tint overlay -->
+                                    <Border Background="{DynamicResource ShelfCardSelectionBg}" CornerRadius="13"/>
+                                </Grid>
+                            </Border>
 
                             <!-- Inner highlight border for frosted glass effect -->
                             <Border Name="InnerHighlightBorder" BorderThickness="1" CornerRadius="14" Padding="12">
