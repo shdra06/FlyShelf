@@ -388,8 +388,7 @@ namespace FlyShelf
 
         private Windows.HubWindow? _hubWindowInstance;
 
-
-
+        public bool IsHubWindowOpen => _hubWindowInstance != null && _hubWindowInstance.IsVisible;
         /// <summary>
         /// Toggles or summons the Main Clipboard overlay (MainWindow in Medium Mode/Mode 1) at the cursor position.
         /// </summary>

@@ -388,6 +388,13 @@ public partial class App : Application
         {
             try
             {
+                // Temporarily disable the flyout clipboard's mouse shake summon gesture if the main clipboard window is open/in view
+                if (_mainWinInstance != null && _mainWinInstance.IsHubWindowOpen)
+                {
+                    _shakeCount = 0;
+                    return;
+                }
+
                 if (!FlyShelf.Classes.SettingsManager.Current.EnableShakeToOpen)
                 {
                     _shakeCount = 0;

@@ -296,12 +296,20 @@ namespace FlyShelf
             var log = new System.Collections.Generic.List<string>();
             log.Add($"═══ DELETE @ {DateTime.Now:HH:mm:ss.fff} ═══");
 
+            var sv = GetShelfScrollViewer();
+            var verticalScrollBar = sv != null ? FindVisualChild<System.Windows.Controls.Primitives.ScrollBar>(sv) : null;
+            var originalScrollBarVisibility = verticalScrollBar?.Visibility ?? Visibility.Visible;
+
             try
             {
                 IsDeletingItem = true;
                 _isSuppressingSizeSync = true;
 
-                var sv = GetShelfScrollViewer();
+                if (verticalScrollBar != null)
+                {
+                    verticalScrollBar.Visibility = Visibility.Hidden;
+                }
+
                 double savedOffset = sv?.VerticalOffset ?? 0;
 
                 log.Add($"  BEFORE: Offset={savedOffset:F2}  Extent={sv?.ExtentHeight:F2}  Viewport={sv?.ViewportHeight:F2}  ScrollableH={sv?.ScrollableHeight:F2}");
@@ -395,91 +403,97 @@ namespace FlyShelf
                     }
                 }
 
-                // RESTORE CACHE in deferred callback — any re-estimation from cache
-                // restoration happens AFTER our corrected frame is already displayed
+                // RESTORE CACHE SYNCHRONOUSLY — doing this in a deferred callback
+                // caused a visible "double refresh" (one frame without hover buttons,
+                // then another frame with them). By restoring cache in the same
+                // synchronous block, WPF renders only ONE frame with everything settled.
                 if (sv != null && correctedAnchorIndex >= 0)
                 {
                     int capturedIndex = correctedAnchorIndex;
                     double capturedTargetY = anchorOffsetInViewport;
 
-                    Dispatcher.InvokeAsync(() =>
+                    // Restore cache to normal
+                    VirtualizingPanel.SetCacheLength(ShelfListView, new VirtualizationCacheLength(3, 3));
+                    sv.UpdateLayout();
+                    log.Add($"  CACHE → 3,3  Offset={sv.VerticalOffset:F2}  Extent={sv.ExtentHeight:F2}");
+
+                    // Correct any drift from cache restoration
+                    if (capturedIndex >= 0 && capturedIndex < ShelfListView.Items.Count)
                     {
-                        try
+                        var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(capturedIndex) as ListViewItem;
+                        if (container != null)
                         {
-                            // Restore cache
-                            VirtualizingPanel.SetCacheLength(ShelfListView, new VirtualizationCacheLength(3, 3));
-                            sv.UpdateLayout();
-                            log.Add($"  CACHE → 3,3  Offset={sv.VerticalOffset:F2}  Extent={sv.ExtentHeight:F2}");
-
-                            // Correct any drift from cache restoration
-                            if (capturedIndex >= 0 && capturedIndex < ShelfListView.Items.Count)
+                            try
                             {
-                                var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(capturedIndex) as ListViewItem;
-                                if (container != null)
+                                var transform = container.TransformToAncestor(this);
+                                var currentPos = transform.Transform(new Point(0, 0));
+                                double drift = currentPos.Y - capturedTargetY;
+                                log.Add($"  POST-CACHE: anchorY={currentPos.Y:F1}  drift={drift:+0.0;-0.0}px");
+                                if (Math.Abs(drift) > 0.5)
                                 {
-                                    var transform = container.TransformToAncestor(this);
-                                    var currentPos = transform.Transform(new Point(0, 0));
-                                    double drift = currentPos.Y - capturedTargetY;
-                                    log.Add($"  POST-CACHE: anchorY={currentPos.Y:F1}  drift={drift:+0.0;-0.0}px");
-                                    if (Math.Abs(drift) > 0.5)
-                                    {
-                                        double correctedOffset = sv.VerticalOffset + drift;
-                                        correctedOffset = Math.Max(0, Math.Min(correctedOffset, sv.ScrollableHeight));
-                                        sv.ScrollToVerticalOffset(correctedOffset);
-                                        sv.UpdateLayout();
-                                        log.Add($"  POST-CACHE FIX: → {correctedOffset:F2}");
-                                    }
+                                    double correctedOffset = sv.VerticalOffset + drift;
+                                    correctedOffset = Math.Max(0, Math.Min(correctedOffset, sv.ScrollableHeight));
+                                    sv.ScrollToVerticalOffset(correctedOffset);
+                                    sv.UpdateLayout();
+                                    log.Add($"  POST-CACHE FIX: → {correctedOffset:F2}");
                                 }
                             }
-
-                            // Final drift check
-                            CaptureVisibleCardPositions(log, "FINAL");
-                            if (beforePositions != null)
-                            {
-                                var afterPositions = GetVisibleCardPositionMap();
-                                log.Add($"  POSITION DRIFT:");
-                                bool anyDrift = false;
-                                foreach (var kvp in beforePositions)
-                                {
-                                    if (afterPositions.TryGetValue(kvp.Key, out double afterY))
-                                    {
-                                        double d = afterY - kvp.Value;
-                                        if (Math.Abs(d) > 0.1) { log.Add($"    {kvp.Key}: {d:+0.0;-0.0}px"); anyDrift = true; }
-                                    }
-                                }
-                                if (!anyDrift) log.Add($"    (none — all cards stayed put!)");
-                            }
-
-                            // FORCE MOUSE RE-EVALUATION: After deletion, the next card slides
-                            // into the cursor's position but WPF doesn't fire MouseEnter because
-                            // the mouse didn't physically move. Inject a synthetic mouse move to
-                            // force WPF to re-evaluate IsMouseOver on the new card, making the
-                            // hover action buttons (delete, pin, etc.) appear immediately.
-                            ForceMouseReEvaluation();
+                            catch { }
                         }
-                        catch (Exception ex) { log.Add($"  DEFERRED ERROR: {ex.Message}"); }
+                    }
 
-                        log.Add("");
-                        try
+                    // Final drift check
+                    CaptureVisibleCardPositions(log, "FINAL");
+                    if (beforePositions != null)
+                    {
+                        var afterPositions = GetVisibleCardPositionMap();
+                        log.Add($"  POSITION DRIFT:");
+                        bool anyDrift = false;
+                        foreach (var kvp in beforePositions)
                         {
-                            string logPath = System.IO.Path.Combine(
-                                System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? ".",
-                                "deletion_debug.log");
-                            System.IO.File.AppendAllLines(logPath, log);
+                            if (afterPositions.TryGetValue(kvp.Key, out double afterY))
+                            {
+                                double d = afterY - kvp.Value;
+                                if (Math.Abs(d) > 0.1) { log.Add($"    {kvp.Key}: {d:+0.0;-0.0}px"); anyDrift = true; }
+                            }
                         }
-                        catch { }
-                    }, System.Windows.Threading.DispatcherPriority.Loaded);
+                        if (!anyDrift) log.Add($"    (none — all cards stayed put!)");
+                    }
+
+                    // FORCE MOUSE RE-EVALUATION synchronously — the next card has
+                    // already slid into position under the cursor, so re-set the cursor
+                    // to its own position to trigger IsMouseOver on the new card.
+                    ForceMouseReEvaluation();
                 }
                 else
                 {
                     // No anchor — just restore cache and force mouse re-evaluation
                     VirtualizingPanel.SetCacheLength(ShelfListView, new VirtualizationCacheLength(3, 3));
-                    Dispatcher.InvokeAsync(() => ForceMouseReEvaluation(), System.Windows.Threading.DispatcherPriority.Input);
+                    ForceMouseReEvaluation();
                 }
+
+                // Write diagnostic log in deferred callback (file I/O only, no layout changes)
+                Dispatcher.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        log.Add("");
+                        string logPath = System.IO.Path.Combine(
+                            System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? ".",
+                            "deletion_debug.log");
+                        System.IO.File.AppendAllLines(logPath, log);
+                    }
+                    catch { }
+                }, System.Windows.Threading.DispatcherPriority.Background);
             }
             catch { }
             finally
             {
+                if (verticalScrollBar != null)
+                {
+                    verticalScrollBar.Visibility = originalScrollBarVisibility;
+                }
+
                 _isDeletionScrollGuardActive = false;
                 _deletionLog = null;
                 _isSuppressingSizeSync = false;
