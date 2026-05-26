@@ -502,27 +502,44 @@ namespace FlyShelf.Windows
                 
                 // Detect if Windows 11 taskbar icons are centered using the registry key
                 bool isTaskbarCentered = false;
+                bool isWidgetsVisible = true;
                 try
                 {
                     using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"))
                     {
-                        var val = key?.GetValue("TaskbarAl");
-                        if (val != null && Convert.ToInt32(val) == 1)
+                        if (key != null)
                         {
-                            isTaskbarCentered = true;
+                            var valAl = key.GetValue("TaskbarAl");
+                            if (valAl != null && Convert.ToInt32(valAl) == 1)
+                            {
+                                isTaskbarCentered = true;
+                            }
+
+                            var valDa = key.GetValue("TaskbarDa");
+                            if (valDa != null && Convert.ToInt32(valDa) == 0)
+                            {
+                                isWidgetsVisible = false;
+                            }
                         }
                     }
                 }
                 catch { }
 
-                // Protect the Start/Search area if left-aligned, or the Widgets corner if centered
+                // Protect the Start/Search area if left-aligned, or the Widgets corner if centered (only if Widgets button is visible)
                 if (!isTaskbarCentered)
                 {
                     occupiedZones.Add((0, 180));
                 }
                 else
                 {
-                    occupiedZones.Add((0, 200)); // Protect the Widgets area on the far left corner on Win11 (expanded to 200 to clear dynamic weather text)
+                    if (isWidgetsVisible)
+                    {
+                        occupiedZones.Add((0, 200)); // Protect the Widgets area on the far left corner on Win11 (expanded to 200 to clear dynamic weather text)
+                    }
+                    else
+                    {
+                        occupiedZones.Add((0, 12)); // Just protect the leftmost margin if Widgets is disabled
+                    }
                 }
 
                 Classes.Logger.LogAction("WIDGET", $"FindTaskbarFreeZone: Scanning child windows of taskbarHandle={taskbarHandle}, taskbarWidth={taskbarWidth}");
