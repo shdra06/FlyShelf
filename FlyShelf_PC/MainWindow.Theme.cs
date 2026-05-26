@@ -166,14 +166,34 @@ namespace FlyShelf
                 var app = Application.Current;
                 if (app == null) return;
 
+                byte borderAlpha = 0x90;
+                byte bgAlpha = 0x22;
+                byte focusAlpha = 0xB0;
+
+                // Clamp/blend dominant color to ensure it is always highly visible as an accent
+                double luma = 0.299 * dominant.R + 0.587 * dominant.G + 0.114 * dominant.B;
+                if (luma < 160)
+                {
+                    // For darker wallpapers, we need much higher vibrancy and opacity to guarantee visibility
+                    // Blend 85% violet (#A78BFA) and 15% dominant color to create a beautiful custom glowing theme accent
+                    byte r = (byte)Math.Min(255, (dominant.R * 0.15) + (167 * 0.85));
+                    byte g = (byte)Math.Min(255, (dominant.G * 0.15) + (139 * 0.85));
+                    byte b = (byte)Math.Min(255, (dominant.B * 0.15) + (250 * 0.85));
+                    dominant = Color.FromRgb(r, g, b);
+
+                    borderAlpha = 0xD5; // Sharp glowing high-contrast border
+                    bgAlpha = 0x3C;     // Richer semi-transparent selection box fill
+                    focusAlpha = 0xE5;  // Highly visible focus outline
+                }
+
                 var selBorder = new SolidColorBrush(
-                    Color.FromArgb(0x60, dominant.R, dominant.G, dominant.B));
+                    Color.FromArgb(borderAlpha, dominant.R, dominant.G, dominant.B));
                 selBorder.Freeze();
                 var selBg = new SolidColorBrush(
-                    Color.FromArgb(0x10, dominant.R, dominant.G, dominant.B));
+                    Color.FromArgb(bgAlpha, dominant.R, dominant.G, dominant.B));
                 selBg.Freeze();
                 var focusBorder = new SolidColorBrush(
-                    Color.FromArgb(0x80, dominant.R, dominant.G, dominant.B));
+                    Color.FromArgb(focusAlpha, dominant.R, dominant.G, dominant.B));
                 focusBorder.Freeze();
 
                 app.Resources["ShelfCardSelectionBorder"] = selBorder;
@@ -195,13 +215,13 @@ namespace FlyShelf
                 if (app == null) return;
 
                 var selBorder = new SolidColorBrush(
-                    Color.FromArgb(0x60, 0xA7, 0x8B, 0xFA)); // #60A78BFA
+                    Color.FromArgb(0x90, 0xA7, 0x8B, 0xFA)); // #90A78BFA (was 0x60)
                 selBorder.Freeze();
                 var selBg = new SolidColorBrush(
-                    Color.FromArgb(0x10, 0xA7, 0x8B, 0xFA)); // #10A78BFA
+                    Color.FromArgb(0x25, 0xA7, 0x8B, 0xFA)); // #25A78BFA (was 0x10)
                 selBg.Freeze();
                 var focusBorder = new SolidColorBrush(
-                    Color.FromArgb(0x80, 0xA7, 0x8B, 0xFA)); // #80A78BFA
+                    Color.FromArgb(0xB0, 0xA7, 0x8B, 0xFA)); // #B0A78BFA (was 0x80)
                 focusBorder.Freeze();
 
                 app.Resources["ShelfCardSelectionBorder"] = selBorder;
