@@ -15,7 +15,7 @@
         WindowStyle="None" ResizeMode="NoResize" Background="Transparent" SystemBackdropType="Tabbed"
         ShowInTaskbar="False" Margin="0" Topmost="True" ShowActivated="False"
         AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver"
-        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Display" TextOptions.TextHintingMode="Animated" UseLayoutRounding="True"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Animated" UseLayoutRounding="True"
         Loaded="MicaWindow_Loaded" Deactivated="MicaWindow_Deactivated">
 
     <controls:MicaWindow.Resources>
@@ -546,7 +546,7 @@
                             </VisualBrush>
                         </Border.OpacityMask>
                         <Border.Background>
-                            <SolidColorBrush Color="{DynamicResource MicaWPF.Colors.SubtleFillColorSecondary}" />
+                            <SolidColorBrush Color="{DynamicResource MicaWPF.Colors.SubtleFillColorSecondary}" Opacity="0.55" />
                         </Border.Background>
                         <Border.Style>
                             <Style TargetType="Border">
@@ -774,12 +774,27 @@
                                                 <DataTrigger Binding="{Binding ItemType}" Value="Audio"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                                                 <DataTrigger Binding="{Binding ItemType}" Value="Presentation"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                                                 <DataTrigger Binding="{Binding ItemType}" Value="File"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
-                                                <DataTrigger Binding="{Binding ItemType}" Value="Folder"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                                                 <DataTrigger Binding="{Binding ItemType}" Value="Group"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#FBBF24" ToolTip="Show in Explorer"
+                                               Command="{Binding DataContext.OpenFileLocationCommand, ElementName=ShelfListView}" CommandParameter="{Binding}">
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                    </ui:Button>
+                                </Border>
+
+                                <!-- ═══ Open Folder (Folder only) ═══ -->
+                                <Border Margin="0,0,2,0" Padding="0">
+                                    <Border.Style>
+                                        <Style TargetType="Border" BasedOn="{StaticResource ActionPillStyle}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding ItemType}" Value="Folder"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#FBBF24" ToolTip="Open Folder"
                                                Command="{Binding DataContext.OpenFileLocationCommand, ElementName=ShelfListView}" CommandParameter="{Binding}">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1179,6 +1194,13 @@
                                                 </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
                                             </MultiDataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                    <Condition Binding="{Binding ItemType}" Value="Folder"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </MultiDataTrigger>
                                             
                                             <!-- Hide generic fallback icon if color is detected -->
                                             <DataTrigger Binding="{Binding HasDetectedColor}" Value="True">
@@ -1228,6 +1250,10 @@
                                                 <DataTrigger Binding="{Binding ItemType}" Value="Audio">
                                                     <Setter Property="Symbol" Value="MusicNote124"/>
                                                     <Setter Property="Foreground" Value="#EC4899"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding ItemType}" Value="Folder">
+                                                    <Setter Property="Symbol" Value="Folder24"/>
+                                                    <Setter Property="Foreground" Value="#EAB308"/>
                                                 </DataTrigger>
                                             </Style.Triggers>
                                         </Style>

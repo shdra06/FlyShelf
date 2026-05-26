@@ -284,10 +284,11 @@ namespace FlyShelf.ViewModels
             {
                 ItemType = ClipboardItemType.Audio;
             }
-            else if (path != null && (path.EndsWith("\\") || path.EndsWith("/")))
+            else if (path != null && (path.EndsWith("\\") || path.EndsWith("/") || Directory.Exists(path)))
             {
                 ItemType = ClipboardItemType.Folder;
                 Extension = "FOLDER";
+                GenerateFolderIcon();
             }
             else
             {
@@ -374,6 +375,7 @@ namespace FlyShelf.ViewModels
                         // Folder copied — process content enumeration and zipping in background
                         ItemType = ClipboardItemType.Folder;
                         Extension = "FOLDER";
+                        GenerateFolderIcon();
                         
                         try
                         {
@@ -756,6 +758,59 @@ namespace FlyShelf.ViewModels
                 catch (Exception ex)
                 {
                     Classes.Logger.LogAction("PASS ICON ERR", ex.Message);
+                }
+            });
+        }
+
+        internal void GenerateFolderIcon()
+        {
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    var visual = new System.Windows.Media.DrawingVisual();
+                    using (var dc = visual.RenderOpen())
+                    {
+                        // 1. Draw soft drop shadow behind the card
+                        dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(38, 0, 0, 0)), null, new Rect(14, 14, 68, 68), 12, 12);
+                        dc.DrawRoundedRectangle(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(15, 0, 0, 0)), null, new Rect(16, 16, 68, 68), 12, 12);
+
+                        // 2. Draw card background (Fluent Dark Grey / Charcoal)
+                        var bgBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(28, 28, 28));
+                        var borderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8)); // Gold yellow border
+                        dc.DrawRoundedRectangle(bgBrush, new System.Windows.Media.Pen(borderBrush, 1.5), new Rect(12, 12, 68, 68), 12, 12);
+
+                        // 3. Draw a modern Fluent folder shape inside the card!
+                        // Yellow folder body colors
+                        var backFolderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(202, 138, 4)); // Darker yellow/amber
+                        var frontFolderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(234, 179, 8)); // Main bright yellow/amber
+                        var folderPen = new System.Windows.Media.Pen(new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(250, 204, 21)), 1.0); // Highlight yellow
+
+                        // Draw Folder Back Flap with Tab
+                        var backGeometry = new System.Windows.Media.PathGeometry();
+                        var backFigure = new System.Windows.Media.PathFigure();
+                        backFigure.StartPoint = new Point(24, 62); // Bottom-left
+                        backFigure.Segments.Add(new System.Windows.Media.LineSegment(new Point(24, 34), true)); // Up to tab start
+                        backFigure.Segments.Add(new System.Windows.Media.LineSegment(new Point(38, 34), true)); // Tab top-left
+                        backFigure.Segments.Add(new System.Windows.Media.LineSegment(new Point(44, 40), true)); // Tab slope down
+                        backFigure.Segments.Add(new System.Windows.Media.LineSegment(new Point(68, 40), true)); // Right-top
+                        backFigure.Segments.Add(new System.Windows.Media.LineSegment(new Point(68, 62), true)); // Right-bottom
+                        backFigure.IsClosed = true;
+                        backGeometry.Figures.Add(backFigure);
+                        dc.DrawGeometry(backFolderBrush, null, backGeometry);
+
+                        // Draw Folder Front Flap (slightly smaller, overlapping)
+                        dc.DrawRoundedRectangle(frontFolderBrush, folderPen, new Rect(24, 40, 44, 22), 4, 4);
+                    }
+
+                    var rtb = new RenderTargetBitmap(96, 96, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                    rtb.Render(visual);
+                    rtb.Freeze();
+                    Icon = rtb;
+                }
+                catch (Exception ex)
+                {
+                    Classes.Logger.LogAction("FOLDER ICON ERR", ex.Message);
                 }
             });
         }

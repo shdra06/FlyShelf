@@ -86,10 +86,16 @@ namespace FlyShelf
                                && Classes.NativeMethods.ShouldUseBlur();
             if (blurEnabled)
             {
-                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Acrylic;
+                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
                 this.Background = Brushes.Transparent;
                 if (RootContent != null)
                     RootContent.Background = new SolidColorBrush(Color.FromArgb(0x01, 0, 0, 0)); // Near-transparent for hit-testing
+
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    Classes.NativeMethods.EnableCustomAcrylic(hwnd, 0x22242424);
+                }
             }
             else
             {

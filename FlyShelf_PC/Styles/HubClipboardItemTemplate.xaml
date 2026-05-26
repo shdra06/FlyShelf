@@ -212,6 +212,13 @@
                                                                     </MultiDataTrigger.Conditions>
                                                                     <Setter Property="Visibility" Value="Visible"/>
                                                                 </MultiDataTrigger>
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsFolderPreview}" Value="True"/>
+                                                                        <Condition Binding="{Binding IsImagePreview}" Value="False"/>
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </MultiDataTrigger>
                                                                 <!-- Hide when Icon is null (will fall through to gradient fallbacks below) -->
                                                                 <DataTrigger Binding="{Binding Icon}" Value="{x:Null}">
                                                                     <Setter Property="Visibility" Value="Collapsed"/>
@@ -435,6 +442,31 @@
                                                         </LinearGradientBrush>
                                                     </Border.Background>
                                                     <ui:SymbolIcon Symbol="Video24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+
+                                                <!-- Folder icon FALLBACK (only when no system Icon available) -->
+                                                <Border>
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding IsFolderPreview}" Value="True"/>
+                                                                        <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </MultiDataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                            <GradientStop Color="#D97706" Offset="0"/>
+                                                            <GradientStop Color="#FBBF24" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                    <ui:SymbolIcon Symbol="Folder24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
                                             </Grid>
                                         </Border>

@@ -12,7 +12,7 @@
         Width="900"
         MinWidth="300" MinHeight="400"
         WindowStartupLocation="CenterScreen"
-        SystemBackdropType="Tabbed"
+        SystemBackdropType="Mica"
         Background="Transparent"
         AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver">
     

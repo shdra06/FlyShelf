@@ -88,6 +88,12 @@ namespace FlyShelf
         {
             try
             {
+                _viewModel.MoveItemToTop(clipboardObj);
+            }
+            catch { }
+
+            try
+            {
                 // Use the safety-timer version so the flag stays true until the clipboard
                 // change notification has been processed (prevents duplicate-to-top reorder)
                 SetWritingClipboard(true);

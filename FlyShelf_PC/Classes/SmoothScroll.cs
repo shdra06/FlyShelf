@@ -27,12 +27,12 @@ namespace FlyShelf.Classes
         public static readonly ScrollProfile ClipboardProfile = new();
 
         // ═══ Natural Velocity Physics Constants (Clipboard Specs) ═══
-        private const double ScrollFriction      = 0.91;   // Per-frame decay (smooth luxurious glide for mouse wheel sweeps)
+        private const double ScrollFriction      = 0.94;   // Per-frame decay (smooth luxurious glide for mouse wheel sweeps)
         private const double MaxVelocity         = 45.0;   // Maximum speed cap in pixels/frame (reduced from 90.0 to force more drawing steps, stable scrolling, and prevent high-speed stroboscopic jumps)
         private const double TouchpadMul         = 0.33;   // Touchpad micro-step scale multiplier (decreased from 0.55 to reduce input gain)
         private const double MouseMul            = 0.45;   // Mouse wheel step scale multiplier (decreased from 0.65)
         private const double MinImpulse          = 0.3;    // Minimum impulse threshold for micro-scrolls
-        private const double MinVelocity         = 0.05;   // Velocity below this → complete stop (prevents sub-pixel crawl and end-of-scroll micro jitter)
+        private const double MinVelocity         = 0.25;   // Velocity below this → complete stop (prevents sub-pixel crawl and end-of-scroll micro jitter)
         private const double DeltaCapTouchpad    = 80.0;   // Clamps raw trackpad delta packets to absorb speed spikes
         private const double DeltaCapMouse       = 280.0;  // Clamps raw mouse delta packets
         private const double DirectionBrakeMul   = 0.2;    // Retained velocity on reversal (partial braking feels snappy)
@@ -107,12 +107,15 @@ namespace FlyShelf.Classes
 
         private static void EnableStaticCanvas(ScrollViewer sv)
         {
-            // GPU BitmapCache is disabled to completely eliminate blurry text during scrolling.
+            // Set text rendering to Grayscale during active scrolling to eliminate ClearType sub-pixel color fringing/rainbow shimmer,
+            // giving the text a clean, premium, and solid macOS-like texture during motion.
+            TextOptions.SetTextRenderingMode(sv, TextRenderingMode.Grayscale);
         }
 
         private static void DisableStaticCanvas(ScrollViewer sv)
         {
-            // GPU BitmapCache is disabled to completely eliminate blurry text during scrolling.
+            // Restore text rendering to ClearType when scrolling stops, providing maximum static sharpness.
+            TextOptions.SetTextRenderingMode(sv, TextRenderingMode.ClearType);
         }
 
         /// <summary>
@@ -340,24 +343,22 @@ namespace FlyShelf.Classes
                 state.TrueOffset += displacement;
                 state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
 
-                // ═══ PIXEL-SNAP: Render at integer pixel to eliminate sub-pixel text shimmer ═══
-                // TrueOffset tracks the real fractional position for smooth physics,
-                // but the ScrollViewer always receives a whole-pixel offset so ClearType
-                // glyph weights never fluctuate mid-scroll.
-                double snappedOffset = Math.Round(state.TrueOffset);
-                sv.ScrollToVerticalOffset(snappedOffset);
+                // ═══ SUB-PIXEL SCROLLING ═══
+                // With Ideal text formatting and Dynamic Grayscale rendering active during scroll,
+                // we can scroll with perfect sub-pixel precision. This completely eliminates low-velocity
+                // frame-skipping and stutter, rendering at the screen's maximum high-FPS.
+                sv.ScrollToVerticalOffset(state.TrueOffset);
 
                 // Exponential deceleration (friction decay)
                 double friction = state.IsTouchpad 
-                    ? 0.88  // Decays slower (increased from 0.81) to smoothly bridge the time gap between successive touchpad inputs, eliminating start-stop stutter.
+                    ? 0.88  // Decays slower to bridge trackpad input gaps
                     : ScrollFriction; // Luxurious free coasting glide for mouse wheel sweeps
 
-                // Progressive Settling: when velocity is extremely slow, apply aggressive decay
-                // to quickly bring it to zero. This prevents the long sub-pixel crawl that
-                // crosses rounding boundaries and causes a 1px end-of-scroll micro jitter.
-                if (Math.Abs(state.Velocity) < 0.6)
+                // Progressive Settling: when velocity is extremely slow, apply a gentle decay
+                // to bring it to zero smoothly.
+                if (Math.Abs(state.Velocity) < 0.3)
                 {
-                    friction = state.IsTouchpad ? 0.60 : 0.65;
+                    friction = state.IsTouchpad ? 0.75 : 0.80;
                 }
 
                 state.Velocity *= Math.Pow(friction, timeScale);
@@ -371,6 +372,13 @@ namespace FlyShelf.Classes
                     state.Velocity = 0.0;
                     state.IsAnimating = false;
                     completed.Add(sv);
+
+                    // ═══ FINAL PIXEL SNAP ═══
+                    // Snap to the nearest integer pixel upon complete stop to ensure
+                    // that static text is pixel-perfect and uses razor-sharp ClearType.
+                    double finalOffset = Math.Round(state.TrueOffset);
+                    sv.ScrollToVerticalOffset(finalOffset);
+                    state.TrueOffset = finalOffset;
                 }
                 else
                 {

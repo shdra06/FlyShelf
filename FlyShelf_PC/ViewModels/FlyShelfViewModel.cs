@@ -466,12 +466,19 @@ namespace FlyShelf.ViewModels
                 {
                     try
                     {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        if (item.ItemType == ClipboardItemType.Folder)
                         {
-                            FileName = "explorer.exe",
-                            Arguments = $"/select,\"{item.FilePath}\"",
-                            UseShellExecute = true
-                        });
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(item.FilePath) { UseShellExecute = true });
+                        }
+                        else
+                        {
+                            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                            {
+                                FileName = "explorer.exe",
+                                Arguments = $"/select,\"{item.FilePath}\"",
+                                UseShellExecute = true
+                            });
+                        }
                     }
                     catch (Exception ex)
                     {

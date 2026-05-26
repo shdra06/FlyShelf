@@ -100,7 +100,7 @@ namespace FlyShelf.Windows
 
                 if (blurEnabled && mode == "mica")
                 {
-                    this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Tabbed;
+                    this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
                     this.Background = System.Windows.Media.Brushes.Transparent;
                     if (RootGrid != null) RootGrid.Background = null;
                     // Reset caption to default (transparent for Mica)

@@ -430,6 +430,33 @@ public static partial class NativeMethods
         return true; // Default to true if anything fails
     }
 
+    public static void EnableCustomAcrylic(IntPtr hwnd, uint tintColor)
+    {
+        var accent = new AccentPolicy
+        {
+            AccentState = AccentState.ACCENT_ENABLE_ACRYLICBLURBEHIND,
+            GradientColor = tintColor // Format: AABBGGRR
+        };
+
+        int size = Marshal.SizeOf(accent);
+        IntPtr buffer = Marshal.AllocHGlobal(size);
+        try
+        {
+            Marshal.StructureToPtr(accent, buffer, false);
+            var data = new WindowCompositionAttributeData
+            {
+                Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
+                Data = buffer,
+                SizeOfData = size
+            };
+            SetWindowCompositionAttribute(hwnd, ref data);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
     public static void ApplyWindowBackdropAndBackground(System.Windows.Window window, System.Windows.Controls.Grid? rootGrid = null)
     {
         if (window == null) return;
@@ -494,15 +521,37 @@ public static partial class NativeMethods
 
             if (blurEnabled && mode == "mica")
             {
-                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Tabbed;
+                if (window is MainWindow)
+                {
+                    micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Tabbed;
+                }
+                else
+                {
+                    micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
+                }
                 micaWin.Background = System.Windows.Media.Brushes.Transparent;
                 if (rootGrid != null) rootGrid.Background = null;
             }
             else if (blurEnabled && mode == "glass")
             {
-                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Acrylic;
-                micaWin.Background = System.Windows.Media.Brushes.Transparent;
-                if (rootGrid != null) rootGrid.Background = null;
+                if (window is MainWindow)
+                {
+                    micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+                    micaWin.Background = System.Windows.Media.Brushes.Transparent;
+                    if (rootGrid != null) rootGrid.Background = null;
+
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        EnableCustomAcrylic(hwnd, 0x22242424);
+                    }
+                }
+                else
+                {
+                    micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
+                    micaWin.Background = System.Windows.Media.Brushes.Transparent;
+                    if (rootGrid != null) rootGrid.Background = null;
+                }
             }
             else
             {
