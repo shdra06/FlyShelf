@@ -256,6 +256,7 @@
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="BorderBrush" Value="{StaticResource GlassBorder}"/>
         <Setter Property="Background" Value="{StaticResource GlassBg}"/>
+        <Setter Property="Foreground" Value="{StaticResource GlassTextPrimary}"/>
         <Setter Property="Padding" Value="6,4"/>
         <Setter Property="MinWidth" Value="32"/>
         <Setter Property="MinHeight" Value="32"/>

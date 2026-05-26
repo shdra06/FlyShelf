@@ -14,6 +14,7 @@
         WindowStartupLocation="CenterScreen"
         SystemBackdropType="Mica"
         Background="Transparent"
+        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
         AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver">
     
     <WindowChrome.WindowChrome>
@@ -1302,7 +1303,7 @@
                                         </Grid.ColumnDefinitions>
                                         <!-- Save Config -->
                                         <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                            <ui:Button Appearance="Primary" Click="SaveSettings_Click" HorizontalAlignment="Stretch" Content="Save Configuration" Padding="10,8" CornerRadius="8" FontWeight="SemiBold"/>
+                                            <ui:Button Style="{StaticResource ApplePrimaryButtonStyle}" Click="SaveSettings_Click" HorizontalAlignment="Stretch" Content="Save Configuration" Padding="10,8" CornerRadius="8" FontWeight="SemiBold"/>
                                         </StackPanel>
                                         <!-- Update Section -->
                                         <StackPanel Grid.Column="2">
@@ -1332,13 +1333,13 @@
                                                     </StackPanel>
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <ui:Button x:Name="RedownloadBtn" Appearance="Secondary" Padding="8,5" CornerRadius="8" Click="RedownloadBtn_Click" Margin="0,0,6,0" ToolTip="Re-download current version from GitHub (repair install)">
+                                                    <ui:Button x:Name="RedownloadBtn" Style="{StaticResource AppleSecondaryButtonStyle}" Padding="8,5" CornerRadius="8" Click="RedownloadBtn_Click" Margin="0,0,6,0" ToolTip="Re-download current version from GitHub (repair install)">
                                                         <StackPanel Orientation="Horizontal">
                                                             <ui:SymbolIcon Symbol="ArrowSync24" FontSize="12" Margin="0,0,5,0"/>
                                                             <TextBlock Text="Repair" FontSize="11" FontWeight="SemiBold"/>
                                                         </StackPanel>
                                                     </ui:Button>
-                                                    <ui:Button x:Name="UpdateBtn" Appearance="Primary" Content="Check for Updates" Padding="10,5" CornerRadius="8" FontWeight="SemiBold" Click="UpdateBtn_Click"/>
+                                                    <ui:Button x:Name="UpdateBtn" Style="{StaticResource ApplePrimaryButtonStyle}" Content="Check for Updates" Padding="10,5" CornerRadius="8" FontWeight="SemiBold" Click="UpdateBtn_Click"/>
                                                 </StackPanel>
                                             </Grid>
                                             <Border x:Name="UpdateProgressPanel" Visibility="Collapsed" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,0,6">
