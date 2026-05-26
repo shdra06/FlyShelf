@@ -215,16 +215,17 @@ namespace FlyShelf
                 var app = Application.Current;
                 if (app == null) return;
 
-                // For Mica and Acrylic blur modes, use the premium Indigo (#6366F1) palette
-                // to match the global active control highlight color beautifully!
+                // For Mica and Acrylic blur modes, use a stunning, light pastel Lavender/Indigo (#A5B4FC)
+                // which matches the Indigo control highlight family but is very bright, so it glows 
+                // cleanly without looking dark or muddy on dark Mica window backdrops.
                 var selBorder = new SolidColorBrush(
-                    Color.FromArgb(0x95, 0x63, 0x66, 0xF1)); // #956366F1
+                    Color.FromArgb(0x80, 0xA5, 0xB4, 0xFC)); // High-contrast crisp pastel border (approx 50% opacity)
                 selBorder.Freeze();
                 var selBg = new SolidColorBrush(
-                    Color.FromArgb(0x25, 0x63, 0x66, 0xF1)); // #256366F1
+                    Color.FromArgb(0x18, 0xA5, 0xB4, 0xFC)); // Soft glowing pastel overlay (approx 9% opacity)
                 selBg.Freeze();
                 var focusBorder = new SolidColorBrush(
-                    Color.FromArgb(0xB5, 0x63, 0x66, 0xF1)); // #B56366F1
+                    Color.FromArgb(0xA0, 0xA5, 0xB4, 0xFC));
                 focusBorder.Freeze();
 
                 app.Resources["ShelfCardSelectionBorder"] = selBorder;
