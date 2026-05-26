@@ -15,6 +15,7 @@ namespace FlyShelf.Windows
         public PasswordWindow(ClipboardItem item, bool focusLabel)
         {
             InitializeComponent();
+            FlyShelf.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             _item = item;
 
             // Load data

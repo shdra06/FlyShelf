@@ -30,6 +30,7 @@ namespace FlyShelf.Windows
         private int _cachedFreeZoneLeft = -1;
         private int _cachedFreeZoneWidth = -1;
         private DateTime _lastFreeZoneScan = DateTime.MinValue;
+        private bool _isClosed = false;
 
         // Position stability — avoid redundant SetWindowPos calls that cause flicker
         private int _lastWidgetLeft = -1;
@@ -57,6 +58,7 @@ namespace FlyShelf.Windows
                 {
                     Dispatcher.Invoke(() =>
                     {
+                        if (_isClosed) return;
                         if (SettingsManager.Current.EnableTaskbarWidget)
                         {
                             Show();
@@ -79,31 +81,39 @@ namespace FlyShelf.Windows
             {
                 Dispatcher.BeginInvoke(async () =>
                 {
-                    // Wait for the full WPF layout pass + MainWindow initialization to finish
-                    await Task.Delay(1200);
-                    if (!SettingsManager.Current.EnableTaskbarWidget) return;
-
-                    Show();
-                    _timer.Start();
-
-                    // Retry SetupWindow up to 3 times — taskbar HWND may not be ready on first try
-                    for (int attempt = 1; attempt <= 3; attempt++)
+                    try
                     {
-                        try
+                        // Wait for the full WPF layout pass + MainWindow initialization to finish
+                        await Task.Delay(1200);
+                        if (_isClosed || !SettingsManager.Current.EnableTaskbarWidget) return;
+
+                        Show();
+                        _timer.Start();
+
+                        // Retry SetupWindow up to 3 times — taskbar HWND may not be ready on first try
+                        for (int attempt = 1; attempt <= 3; attempt++)
                         {
-                            SetupWindow();
-                            var interop = new System.Windows.Interop.WindowInteropHelper(this);
-                            if (interop.Handle != IntPtr.Zero && NativeMethods.GetParent(interop.Handle) != IntPtr.Zero)
+                            if (_isClosed || !SettingsManager.Current.EnableTaskbarWidget) return;
+                            try
                             {
-                                Classes.Logger.LogAction("WIDGET", $"Startup embed succeeded on attempt {attempt}");
-                                break;
+                                SetupWindow();
+                                var interop = new System.Windows.Interop.WindowInteropHelper(this);
+                                if (interop.Handle != IntPtr.Zero && NativeMethods.GetParent(interop.Handle) != IntPtr.Zero)
+                                {
+                                    Classes.Logger.LogAction("WIDGET", $"Startup embed succeeded on attempt {attempt}");
+                                    break;
+                                }
                             }
+                            catch (Exception ex)
+                            {
+                                Classes.Logger.LogAction("WIDGET", $"Startup embed attempt {attempt} failed: {ex.Message}");
+                            }
+                            await Task.Delay(800);
                         }
-                        catch (Exception ex)
-                        {
-                            Classes.Logger.LogAction("WIDGET", $"Startup embed attempt {attempt} failed: {ex.Message}");
-                        }
-                        await Task.Delay(800);
+                    }
+                    catch (Exception ex)
+                    {
+                        Classes.Logger.LogAction("WIDGET", $"Startup embed thread failed: {ex.Message}");
                     }
                 }, DispatcherPriority.Background);
             }
@@ -111,18 +121,39 @@ namespace FlyShelf.Windows
             Classes.Logger.LogAction("WIDGET", "TaskbarWindow constructor completed");
         }
 
+        protected override void OnClosed(EventArgs e)
+        {
+            _isClosed = true;
+            try { _timer?.Stop(); } catch { }
+            base.OnClosed(e);
+        }
+
         protected override void OnActivated(EventArgs e)
         {
             base.OnActivated(e);
-            int colorNone = DWMWA_COLOR_DARK_GRAY;
-            DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, DWMWA_BORDER_COLOR, ref colorNone, Marshal.SizeOf<int>());
+            if (_isClosed) return;
+            try
+            {
+                var handle = new WindowInteropHelper(this).Handle;
+                if (handle != IntPtr.Zero)
+                {
+                    int colorNone = DWMWA_COLOR_DARK_GRAY;
+                    DwmSetWindowAttribute(handle, DWMWA_BORDER_COLOR, ref colorNone, Marshal.SizeOf<int>());
+                }
+            }
+            catch { }
         }
 
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
-            HwndSource source = (HwndSource)PresentationSource.FromDependencyObject(this);
-            source.AddHook(WindowProc);
+            if (_isClosed) return;
+            try
+            {
+                HwndSource source = (HwndSource)PresentationSource.FromDependencyObject(this);
+                source?.AddHook(WindowProc);
+            }
+            catch { }
         }
 
         private static IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -140,14 +171,18 @@ namespace FlyShelf.Windows
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
+            if (_isClosed) return;
             if (!SettingsManager.Current.EnableTaskbarWidget)
             {
                 Visibility = Visibility.Hidden;
                 return;
             }
             SetupWindow();
-            _mainWindow = (MainWindow)Application.Current.MainWindow;
-            Widget.SetMainWindow(_mainWindow);
+            _mainWindow = Application.Current.MainWindow as MainWindow;
+            if (_mainWindow != null)
+            {
+                Widget.SetMainWindow(_mainWindow);
+            }
         }
 
         private IntPtr GetSelectedTaskbarHandle(out bool isMainTaskbarSelected)
@@ -230,12 +265,18 @@ namespace FlyShelf.Windows
 
         private void SetupWindow()
         {
+            if (_isClosed) return;
             try
             {
                 var interop = new WindowInteropHelper(this);
                 IntPtr taskbarWindowHandle = interop.Handle;
-                IntPtr taskbarHandle = GetSelectedTaskbarHandle(out bool isMainTaskbarSelected);
+                if (taskbarWindowHandle == IntPtr.Zero)
+                {
+                    Classes.Logger.LogAction("WIDGET", "SetupWindow: taskbarWindowHandle is Zero");
+                    return;
+                }
 
+                IntPtr taskbarHandle = GetSelectedTaskbarHandle(out bool isMainTaskbarSelected);
                 Classes.Logger.LogAction("WIDGET", $"SetupWindow: widgetHwnd={taskbarWindowHandle}, taskbarHwnd={taskbarHandle}, isMain={isMainTaskbarSelected}");
 
                 if (taskbarHandle == IntPtr.Zero)
@@ -265,22 +306,28 @@ namespace FlyShelf.Windows
 
         private void UpdateWindowRegion(IntPtr windowHandle, params Rect[] rects)
         {
-            IntPtr rgn = CreateRectRgn(0, 0, 0, 0);
-            foreach (var r in rects)
+            if (_isClosed) return;
+            try
             {
-                if (r == Rect.Empty) continue;
-                IntPtr newRgn = CreateRectRgn((int)r.Left, (int)r.Top, (int)r.Right, (int)r.Bottom);
-                if (newRgn != IntPtr.Zero)
+                IntPtr rgn = CreateRectRgn(0, 0, 0, 0);
+                foreach (var r in rects)
                 {
-                    CombineRgn(rgn, rgn, newRgn, 2);
-                    DeleteObject(newRgn);
+                    if (r == Rect.Empty) continue;
+                    IntPtr newRgn = CreateRectRgn((int)r.Left, (int)r.Top, (int)r.Right, (int)r.Bottom);
+                    if (newRgn != IntPtr.Zero)
+                    {
+                        CombineRgn(rgn, rgn, newRgn, 2);
+                        DeleteObject(newRgn);
+                    }
                 }
+                SetWindowRgn(windowHandle, rgn, true);
             }
-            SetWindowRgn(windowHandle, rgn, true);
+            catch { }
         }
 
         private void UpdatePosition()
         {
+            if (_isClosed) return;
             if (!SettingsManager.Current.EnableTaskbarWidget)
             {
                 if (Visibility != Visibility.Hidden)
@@ -310,6 +357,7 @@ namespace FlyShelf.Windows
 
         private void CalculateAndSetPosition(IntPtr taskbarHandle, IntPtr taskbarWindowHandle)
         {
+            if (_isClosed) return;
             if (_positionUpdateInProgress) return;
             _positionUpdateInProgress = true;
 
@@ -393,11 +441,16 @@ namespace FlyShelf.Windows
                 // Set parent-local coordinates: X is from FindTaskbarFreeZone, Y is mapped client coordinate
                 containerPos.X = widgetLeft;
 
-                // Size the widget WPF controls to match exactly (to avoid WPF layout issues)
+                // Size the widget WPF controls to match exactly (to avoid WPF layout loops)
                 Widget.Width = physicalWidth / dpiScale;
                 Widget.Height = physicalHeight / dpiScale;
-                this.Width = physicalWidth / dpiScale;
-                this.Height = physicalHeight / dpiScale;
+                
+                double targetLogicalWidth = physicalWidth / dpiScale;
+                double targetLogicalHeight = physicalHeight / dpiScale;
+                if (Math.Abs(this.Width - targetLogicalWidth) > 0.01)
+                    this.Width = targetLogicalWidth;
+                if (Math.Abs(this.Height - targetLogicalHeight) > 0.01)
+                    this.Height = targetLogicalHeight;
 
                 // Only call SetWindowPos if the container position/size actually changed — avoids flicker
                 if (containerPos.X != _lastWidgetLeft || containerPos.Y != _lastWidgetTop ||
@@ -422,6 +475,7 @@ namespace FlyShelf.Windows
 
                 Visibility = Visibility.Visible;
             }
+            catch { }
             finally
             {
                 _positionUpdateInProgress = false;
@@ -461,10 +515,14 @@ namespace FlyShelf.Windows
                 }
                 catch { }
 
-                // Protect the Start/Search area only if left-aligned taskbar is used to allow full-left placement when centered
+                // Protect the Start/Search area if left-aligned, or the Widgets corner if centered
                 if (!isTaskbarCentered)
                 {
                     occupiedZones.Add((0, 180));
+                }
+                else
+                {
+                    occupiedZones.Add((0, 80)); // Protect the Widgets area on the far left corner on Win11
                 }
 
                 Classes.Logger.LogAction("WIDGET", $"FindTaskbarFreeZone: Scanning child windows of taskbarHandle={taskbarHandle}, taskbarWidth={taskbarWidth}");
@@ -500,7 +558,15 @@ namespace FlyShelf.Windows
                     if (childWidth > 5) // Skip tiny/invisible elements
                     {
                         // Record the occupied zone of the taskbar buttons or direct child windows
-                        if (clsName == "MSTaskSwWClass" || clsName == "ReBarWindow32" || parentHwnd == taskbarHandle)
+                        if (clsName == "MSTaskSwWClass" || 
+                            clsName == "MSTaskListWClass" || 
+                            clsName == "ReBarWindow32" || 
+                            clsName == "TrayNotifyWnd" ||
+                            clsName == "Button" ||
+                            clsName == "TrayButton" ||
+                            clsName.Contains("Search") ||
+                            clsName.Contains("DesktopWindowContentBridge") ||
+                            parentHwnd == taskbarHandle)
                         {
                             occupiedZones.Add((childPt.X, childRight));
                         }
@@ -632,13 +698,14 @@ namespace FlyShelf.Windows
 
         public Point GetWidgetScreenPosition()
         {
+            if (_isClosed) return new Point(-1, -1);
             try
             {
                 var interop = new WindowInteropHelper(this);
                 IntPtr taskbarWindowHandle = interop.Handle;
                 IntPtr taskbarHandle = _cachedTaskbarHandle != IntPtr.Zero && IsWindow(_cachedTaskbarHandle)
-                    ? _cachedTaskbarHandle
-                    : GetSelectedTaskbarHandle(out _);
+                     ? _cachedTaskbarHandle
+                     : GetSelectedTaskbarHandle(out _);
                 if (taskbarHandle != IntPtr.Zero && taskbarWindowHandle != IntPtr.Zero)
                 {
                     double dpiScale = GetDpiForWindow(taskbarHandle) / 96.0;

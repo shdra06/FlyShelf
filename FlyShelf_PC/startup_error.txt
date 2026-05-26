@@ -1,0 +1,13 @@
+[MainWindow Startup Failed] System.Windows.Markup.XamlParseException: 'Set connectionId threw an exception.' Line number '1532' and line position '18'.
+ ---> System.InvalidCastException: Unable to cast object of type 'System.Windows.Controls.Button' to type 'System.Windows.Controls.StackPanel'.
+   at FlyShelf.MainWindow.System.Windows.Markup.IComponentConnector.Connect(Int32 connectionId, Object target) in E:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:line 1532
+   at MS.Internal.Xaml.Runtime.ClrObjectRuntime.SetConnectionId(Object root, Int32 connectionId, Object instance)
+   --- End of inner exception stack trace ---
+   at System.Windows.Markup.XamlReader.RewrapException(Exception e, IXamlLineInfo lineInfo, Uri baseUri)
+   at System.Windows.Markup.WpfXamlLoader.Load(XamlReader xamlReader, IXamlObjectWriterFactory writerFactory, Boolean skipJournaledProperties, Object rootObject, XamlObjectWriterSettings settings, Uri baseUri)
+   at System.Windows.Markup.WpfXamlLoader.LoadBaml(XamlReader xamlReader, Boolean skipJournaledProperties, Object rootObject, XamlAccessLevel accessLevel, Uri baseUri)
+   at System.Windows.Markup.XamlReader.LoadBaml(Stream stream, ParserContext parserContext, Object parent, Boolean closeStream)
+   at System.Windows.Application.LoadComponent(Object component, Uri resourceLocator)
+   at FlyShelf.MainWindow.InitializeComponent() in E:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:line 1
+   at FlyShelf.MainWindow..ctor() in E:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:line 127
+   at FlyShelf.App.<OnStartup>b__22_6() in E:\exeapps\FlyShelf\FlyShelf_PC\App.xaml.cs:line 326

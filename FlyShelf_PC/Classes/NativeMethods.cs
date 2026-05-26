@@ -430,80 +430,14 @@ public static partial class NativeMethods
     {
         if (window == null) return;
 
-        bool enableBlur = SettingsManager.Current.EnableBlurBehind && ShouldUseBlur();
-
-        // Apply DWM Immersive Dark Mode attribute — always dark
-        try
+        // Defer DWM attribute application to SourceInitialized or Loaded when HWND is guaranteed to be valid
+        if (new System.Windows.Interop.WindowInteropHelper(window).Handle == IntPtr.Zero)
         {
-            var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-            if (hwnd != IntPtr.Zero)
-            {
-                int darkValue = 1;
-                DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkValue, sizeof(int));
-
-                if (!enableBlur)
-                {
-                    // Solid dark title bar when blur is off
-                    int dwmColor = (26 << 16) | (18 << 8) | 18;
-                    DwmSetWindowAttribute(hwnd, 35, ref dwmColor, sizeof(int)); // DWMWA_CAPTION_COLOR
-                }
-                else
-                {
-                    int colorDefault = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE = transparent for Mica
-                    DwmSetWindowAttribute(hwnd, 35, ref colorDefault, sizeof(int));
-                }
-
-                // Override active window border color to prevent red accent bleeding
-                int borderColor = DWMWA_COLOR_DARK_GRAY;
-                DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
-
-                // Safe deferred check to override MicaWPF async theme/backdrop change delays
-                System.Threading.Tasks.Task.Delay(50).ContinueWith(_ =>
-                {
-                    window.Dispatcher.InvokeAsync(() =>
-                    {
-                        try
-                        {
-                            var h = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-                            if (h != IntPtr.Zero)
-                            {
-                                int bc = DWMWA_COLOR_DARK_GRAY;
-                                DwmSetWindowAttribute(h, DWMWA_BORDER_COLOR, ref bc, sizeof(int));
-                            }
-                        }
-                        catch { }
-                    });
-                });
-            }
-        }
-        catch { }
-
-        if (window is MicaWPF.Controls.MicaWindow micaWin)
-        {
-            if (enableBlur)
-            {
-                // Dark Mode + Blur: Mica looks great
-                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
-                micaWin.Background = System.Windows.Media.Brushes.Transparent;
-                if (rootGrid != null) rootGrid.Background = null;
-            }
-            else
-            {
-                // Dark Mode + No Blur: solid dark background
-                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
-                var darkBg = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(18, 18, 26));
-                micaWin.Background = darkBg;
-                if (rootGrid != null) rootGrid.Background = darkBg;
-            }
+            window.SourceInitialized += (s, ev) => ApplyWindowBackdropAndBackgroundInternal(window, rootGrid);
         }
         else
         {
-            // Standard WPF window — solid dark
-            var bgBrush = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(18, 18, 26));
-            window.Background = bgBrush;
-            if (rootGrid != null) rootGrid.Background = bgBrush;
+            ApplyWindowBackdropAndBackgroundInternal(window, rootGrid);
         }
 
         // Hook window activation, deactivation and state changes to prevent Windows 11 DWM from resetting our custom dark gray border
@@ -515,20 +449,95 @@ public static partial class NativeMethods
         window.StateChanged += Window_BorderResetHandler;
     }
 
+    private static void ApplyWindowBackdropAndBackgroundInternal(System.Windows.Window window, System.Windows.Controls.Grid? rootGrid)
+    {
+        bool enableBlur = SettingsManager.Current.EnableBlurBehind && ShouldUseBlur();
+        bool isLight = SettingsManager.Current.ColorScheme == 1;
+
+        // Apply DWM Immersive Dark Mode attribute — adapt to light/dark ColorScheme
+        try
+        {
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                int darkValue = isLight ? 0 : 1;
+                DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkValue, sizeof(int));
+
+                if (!enableBlur)
+                {
+                    // Solid dark/light title bar when blur is off
+                    int dwmColor = isLight ? ((245 << 16) | (246 << 8) | 248) : ((26 << 16) | (18 << 8) | 18);
+                    DwmSetWindowAttribute(hwnd, 35, ref dwmColor, sizeof(int)); // DWMWA_CAPTION_COLOR
+                }
+                else
+                {
+                    int colorDefault = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE = transparent for Mica
+                    DwmSetWindowAttribute(hwnd, 35, ref colorDefault, sizeof(int));
+                }
+
+                // Override active window border color
+                int borderColor = DWMWA_COLOR_DARK_GRAY;
+                DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
+            }
+        }
+        catch { }
+
+        // Set backdrop and background based on active theme and blur setting
+        if (window is MicaWPF.Controls.MicaWindow micaWin)
+        {
+            string mode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
+            bool blurEnabled = SettingsManager.Current.EnableBlurBehind && ShouldUseBlur();
+
+            if (blurEnabled && mode == "mica")
+            {
+                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
+                micaWin.Background = System.Windows.Media.Brushes.Transparent;
+                if (rootGrid != null) rootGrid.Background = null;
+            }
+            else if (blurEnabled && mode == "glass")
+            {
+                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Acrylic;
+                micaWin.Background = System.Windows.Media.Brushes.Transparent;
+                if (rootGrid != null) rootGrid.Background = null;
+            }
+            else
+            {
+                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+                var bgColor = isLight ? System.Windows.Media.Color.FromRgb(245, 246, 248) : System.Windows.Media.Color.FromRgb(18, 18, 26);
+                var darkBg = new System.Windows.Media.SolidColorBrush(bgColor);
+                darkBg.Freeze();
+                micaWin.Background = darkBg;
+                if (rootGrid != null) rootGrid.Background = darkBg;
+            }
+        }
+        else
+        {
+            var bgColor = isLight ? System.Windows.Media.Color.FromRgb(245, 246, 248) : System.Windows.Media.Color.FromRgb(18, 18, 26);
+            var bgBrush = new System.Windows.Media.SolidColorBrush(bgColor);
+            bgBrush.Freeze();
+            window.Background = bgBrush;
+            if (rootGrid != null) rootGrid.Background = bgBrush;
+        }
+    }
+
     private static void Window_BorderResetHandler(object? sender, System.EventArgs e)
     {
         if (sender is System.Windows.Window window)
         {
-            try
+            // Defer DWM border color setting to Background priority to prevent DWM from overriding it during activation
+            window.Dispatcher.InvokeAsync(() =>
             {
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-                if (hwnd != IntPtr.Zero)
+                try
                 {
-                    int borderColor = DWMWA_COLOR_DARK_GRAY;
-                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        int borderColor = DWMWA_COLOR_DARK_GRAY;
+                        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
+                    }
                 }
-            }
-            catch { }
+                catch { }
+            }, System.Windows.Threading.DispatcherPriority.Background);
         }
     }
 

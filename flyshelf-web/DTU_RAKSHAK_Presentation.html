@@ -1,0 +1,2817 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DTU RAKSHAK — Advanced AI-Powered Vehicle Sighting System</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js for Slide 9 Interactive Chart -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* ==========================================
+           1. CORE DESIGN SYSTEM & CUSTOM STYLES
+           ========================================== */
+        :root {
+            --bg-deep: #070919;
+            --bg-surface: rgba(18, 22, 48, 0.6);
+            --bg-surface-opaque: #0f132e;
+            --border-glass: rgba(99, 102, 241, 0.22);
+            --border-glow: rgba(6, 182, 212, 0.45);
+            
+            /* Theme Colors */
+            --cyan: #06b6d4;
+            --cyan-glow: rgba(6, 182, 212, 0.45);
+            --emerald: #10b981;
+            --emerald-glow: rgba(16, 185, 129, 0.45);
+            --amber: #f59e0b;
+            --amber-glow: rgba(245, 158, 11, 0.45);
+            --crimson: #ef4444;
+            --crimson-glow: rgba(239, 68, 68, 0.45);
+            
+            --text-primary: #f8fafc;
+            --text-secondary: #cbd5e1;
+            --text-muted: #94a3b8;
+            
+            --transition-smooth: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            --transition-slide: all 0.6s cubic-bezier(0.77, 0, 0.175, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background: radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.22) 0%, transparent 45%),
+                        radial-gradient(circle at 85% 85%, rgba(6, 182, 212, 0.2) 0%, transparent 45%),
+                        radial-gradient(circle at 50% 50%, rgba(236, 72, 153, 0.08) 0%, transparent 55%),
+                        linear-gradient(135deg, #090a1e 0%, #0d122e 45%, #15102a 80%, #060613 100%);
+            color: var(--text-primary);
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            position: relative;
+        }
+
+        h1, h2, h3, .heading-tech {
+            font-family: 'Space Grotesk', sans-serif;
+            letter-spacing: -0.02em;
+        }
+
+        /* Ambient Background Pattern */
+        .bg-grid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: 
+                linear-gradient(rgba(99, 102, 241, 0.07) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(99, 102, 241, 0.07) 1px, transparent 1px);
+            background-size: 50px 50px;
+            z-index: 2;
+            pointer-events: none;
+            mask-image: radial-gradient(circle at 50% 50%, black 50%, transparent 95%);
+            -webkit-mask-image: radial-gradient(circle at 50% 50%, black 50%, transparent 95%);
+        }
+        
+        .bg-glow-1 {
+            position: absolute;
+            top: -10%;
+            left: -10%;
+            width: 50%;
+            height: 50%;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.28) 0%, rgba(6, 182, 212, 0.12) 50%, transparent 70%);
+            z-index: 1;
+            pointer-events: none;
+            filter: blur(100px);
+            animation: pulseGlow 12s infinite alternate ease-in-out;
+        }
+
+        .bg-glow-2 {
+            position: absolute;
+            bottom: -10%;
+            right: -10%;
+            width: 50%;
+            height: 50%;
+            background: radial-gradient(circle, rgba(236, 72, 153, 0.22) 0%, rgba(16, 185, 129, 0.08) 50%, transparent 70%);
+            z-index: 1;
+            pointer-events: none;
+            filter: blur(100px);
+            animation: pulseGlow 16s infinite alternate-reverse ease-in-out;
+        }
+
+        @keyframes pulseGlow {
+            0% { transform: scale(1) translate(0, 0); opacity: 0.8; }
+            50% { transform: scale(1.15) translate(30px, -20px); opacity: 1; }
+            100% { transform: scale(0.9) translate(-15px, 15px); opacity: 0.7; }
+        }
+
+        /* Glassmorphism Container styling */
+        .glass-card {
+            background: rgba(18, 22, 48, 0.55);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(99, 102, 241, 0.22);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.35), inset 0 1px 1px rgba(255, 255, 255, 0.06);
+            transition: var(--transition-smooth);
+        }
+
+        .glass-card:hover {
+            border-color: rgba(6, 182, 212, 0.45);
+            box-shadow: 0 12px 40px 0 rgba(6, 182, 212, 0.18), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+            transform: translateY(-3px);
+        }
+
+        /* ==========================================
+           2. SLIDE DECK LAYOUT & TRANSITIONS
+           ========================================== */
+        #deck-container {
+            flex-grow: 1;
+            width: 100vw;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 10;
+        }
+
+        .slide {
+            position: absolute;
+            width: 90%;
+            max-width: 1300px;
+            height: 80%;
+            max-height: 720px;
+            opacity: 0;
+            visibility: hidden;
+            transform: scale(0.96) translateY(20px);
+            transition: var(--transition-slide);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 40px;
+        }
+
+        .slide.active {
+            opacity: 1;
+            visibility: visible;
+            transform: scale(1) translateY(0);
+        }
+
+        .slide-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-glass);
+            padding-bottom: 12px;
+            margin-bottom: 16px;
+        }
+
+        .slide-title-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .slide-tag {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: #818cf8;
+            font-weight: 700;
+            text-shadow: 0 0 10px rgba(129, 140, 248, 0.35);
+        }
+
+        .slide-title {
+            font-size: 2.1rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ffffff 10%, #a5f3fc 50%, #818cf8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 30px rgba(99, 102, 241, 0.15);
+        }
+
+        .slide-subtitle {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            max-width: 75%;
+        }
+
+        .slide-content {
+            flex-grow: 1;
+            display: flex;
+            gap: 32px;
+            align-items: stretch;
+            min-height: 0; /* Important for flex child scrolling */
+        }
+
+        /* Left/Right splitting in slides */
+        .content-panel-left {
+            flex: 1.1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 20px;
+        }
+
+        .content-panel-right {
+            flex: 0.9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        /* ==========================================
+           3. UI CONTROLS & NAVIGATION BAR
+           ========================================== */
+        /* Floating Navigation Controls */
+        #nav-controls {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            padding: 12px 28px;
+            border-radius: 40px;
+            background: rgba(13, 20, 38, 0.7);
+            border: 1px solid var(--border-glass);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+            backdrop-filter: blur(20px);
+            transition: var(--transition-smooth);
+        }
+
+        #nav-controls:hover {
+            border-color: rgba(6, 182, 212, 0.4);
+            box-shadow: 0 10px 40px rgba(6, 182, 212, 0.15);
+        }
+
+        .nav-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition-smooth);
+        }
+
+        .nav-btn:hover:not(:disabled) {
+            background: rgba(255, 255, 255, 0.08);
+            color: var(--cyan);
+            transform: scale(1.1);
+        }
+
+        .nav-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+
+        .slide-indicator {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            min-width: 60px;
+            text-align: center;
+        }
+
+        .autoplay-badge {
+            font-size: 0.7rem;
+            padding: 4px 8px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.05);
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .autoplay-badge.active {
+            background: rgba(6, 182, 212, 0.15);
+            color: var(--cyan);
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+
+        /* Top Progress Line */
+        #progress-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: rgba(255,255,255,0.05);
+            z-index: 100;
+        }
+
+        #progress-bar {
+            width: 10%;
+            height: 100%;
+            background: linear-gradient(90deg, var(--cyan), var(--emerald));
+            box-shadow: 0 0 12px var(--cyan);
+            transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* Side Navigation Drawer */
+        #menu-trigger {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            z-index: 100;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-glass);
+            color: var(--text-primary);
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            backdrop-filter: blur(8px);
+            transition: var(--transition-smooth);
+        }
+
+        #menu-trigger:hover {
+            color: var(--cyan);
+            border-color: var(--cyan);
+            transform: translateY(-2px);
+        }
+
+        #side-drawer {
+            position: absolute;
+            top: 0;
+            left: -320px;
+            width: 320px;
+            height: 100%;
+            background: rgba(8, 12, 24, 0.95);
+            border-right: 1px solid var(--border-glass);
+            z-index: 200;
+            backdrop-filter: blur(20px);
+            transition: left 0.5s cubic-bezier(0.77, 0, 0.175, 1);
+            padding: 40px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        #side-drawer.open {
+            left: 0;
+        }
+
+        .drawer-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-glass);
+            padding-bottom: 16px;
+        }
+
+        .drawer-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .drawer-close {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .drawer-close:hover {
+            color: var(--crimson);
+        }
+
+        .drawer-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            overflow-y: auto;
+            flex-grow: 1;
+        }
+
+        .drawer-item {
+            padding: 12px 16px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            font-weight: 500;
+            border: 1px solid transparent;
+        }
+
+        .drawer-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text-primary);
+        }
+
+        .drawer-item.active {
+            background: rgba(6, 182, 212, 0.1);
+            color: var(--cyan);
+            border-color: rgba(6, 182, 212, 0.2);
+            font-weight: 600;
+        }
+
+        .drawer-item-num {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.8rem;
+            background: rgba(255, 255, 255, 0.08);
+            width: 24px;
+            height: 24px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .drawer-item.active .drawer-item-num {
+            background: var(--cyan);
+            color: var(--bg-deep);
+        }
+
+        .drawer-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0,0,0,0.5);
+            z-index: 199;
+            opacity: 0;
+            visibility: hidden;
+            transition: var(--transition-smooth);
+        }
+
+        .drawer-overlay.open {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Brand watermark top right */
+        .brand-watermark {
+            position: absolute;
+            top: 30px;
+            right: 40px;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brand-text {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            color: var(--text-secondary);
+        }
+
+        .brand-logo {
+            width: 28px;
+            height: 28px;
+            fill: none;
+            stroke: var(--cyan);
+            stroke-width: 2;
+        }
+
+        /* Keyboard Shortcut Info Box */
+        .shortcut-badge {
+            position: absolute;
+            bottom: 30px;
+            right: 40px;
+            z-index: 100;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-glass);
+        }
+
+        /* ==========================================
+           4. VISUAL SLIDECOMPONENTS
+           ========================================== */
+        
+        /* Bullets */
+        .bullet-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .bullet-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            font-size: 1.05rem;
+            line-height: 1.5;
+            color: var(--text-secondary);
+        }
+
+        .bullet-icon {
+            flex-shrink: 0;
+            width: 22px;
+            height: 22px;
+            margin-top: 2px;
+            color: var(--cyan);
+        }
+
+        .bullet-title {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        /* Grid features */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            width: 100%;
+        }
+
+        .feature-card {
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            border-radius: 12px;
+        }
+
+        .card-icon-container {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 4px;
+        }
+
+        .card-icon-container.cyan { background: rgba(6, 182, 212, 0.1); color: var(--cyan); }
+        .card-icon-container.emerald { background: rgba(16, 185, 129, 0.1); color: var(--emerald); }
+        .card-icon-container.amber { background: rgba(245, 158, 11, 0.1); color: var(--amber); }
+        .card-icon-container.crimson { background: rgba(239, 68, 68, 0.1); color: var(--crimson); }
+
+        .feature-card h3 {
+            font-size: 1.2rem;
+            color: var(--text-primary);
+        }
+
+        .feature-card p {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            line-height: 1.45;
+        }
+
+        /* ==========================================
+           5. INTERACTIVE WIDGETS
+           ========================================== */
+
+        /* SLIDE 1: Title & Hero Glow */
+        .hero-title-container {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            z-index: 10;
+        }
+
+        .hero-glow-title {
+            font-size: 5.25rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, #ffffff 10%, #67e8f9 40%, #6366f1 75%, #ec4899 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 50px rgba(99, 102, 241, 0.35);
+            line-height: 1.15;
+            letter-spacing: -0.03em;
+        }
+
+        .hero-sub {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            line-height: 1.6;
+        }
+
+        .hero-meta-badge {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(6, 182, 212, 0.08);
+            border: 1px solid rgba(6, 182, 212, 0.25);
+            border-radius: 30px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            color: var(--cyan);
+            text-transform: uppercase;
+        }
+
+        .cta-btn {
+            background: linear-gradient(135deg, var(--cyan) 0%, #0891b2 100%);
+            color: var(--bg-deep);
+            border: none;
+            padding: 14px 28px;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
+            transition: var(--transition-smooth);
+            margin-top: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cta-btn:hover {
+            box-shadow: 0 0 30px rgba(6, 182, 212, 0.6);
+            transform: translateY(-2px);
+        }
+
+        /* SLIDE 3: AI Scanner Simulation */
+        .ai-pipeline-container {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 100%;
+            height: 100%;
+            justify-content: center;
+        }
+
+        .scanner-card {
+            border-radius: 12px;
+            padding: 24px;
+            background: var(--bg-surface-opaque);
+            border: 1px solid var(--border-glass);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .scanner-canvas-wrap {
+            position: relative;
+            width: 100%;
+            height: 140px;
+            background: #04070d;
+            border: 1px solid #1e293b;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .scan-overlay-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--cyan);
+            box-shadow: 0 0 10px var(--cyan);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .scan-active .scan-overlay-line {
+            animation: scanning 4.5s infinite linear;
+            opacity: 1;
+        }
+
+        @keyframes scanning {
+            0% { top: 0; }
+            50% { top: 100%; }
+            100% { top: 0; }
+        }
+
+        .simulated-plate-crop {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            color: #1e293b;
+            background: #fff;
+            padding: 8px 24px;
+            border: 4px solid #000;
+            border-radius: 6px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            position: relative;
+            transition: var(--transition-smooth);
+        }
+
+        .simulated-plate-crop::before {
+            content: "IND";
+            position: absolute;
+            left: 2px;
+            top: 50%;
+            transform: translateY(-50%) rotate(-90deg);
+            font-size: 0.4rem;
+            color: #00f;
+            font-weight: 800;
+            letter-spacing: 0;
+        }
+
+        /* Filter styling */
+        .crop-step-box { border: 2px solid var(--cyan) !important; color: #000 !important; }
+        .sharp-step-box { 
+            text-shadow: 0 0 2px rgba(0,0,0,0.8);
+            border: 4px solid #111 !important; 
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.5) !important;
+        }
+
+        .ai-pipeline-stages {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        .pipeline-stage {
+            padding: 10px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-glass);
+            text-align: center;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            transition: var(--transition-smooth);
+        }
+
+        .pipeline-stage.active {
+            border-color: var(--cyan);
+            background: rgba(6, 182, 212, 0.05);
+            color: var(--cyan);
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.05);
+        }
+
+        .pipeline-stage-num {
+            font-weight: 700;
+            margin-bottom: 2px;
+            font-size: 0.8rem;
+        }
+
+        .ai-output-box {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border-glass);
+            border-radius: 8px;
+            padding: 12px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            min-height: 80px;
+            color: var(--text-secondary);
+        }
+
+        .scanner-btn {
+            background: transparent;
+            border: 1px solid var(--cyan);
+            color: var(--cyan);
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .scanner-btn:hover:not(:disabled) {
+            background: var(--cyan);
+            color: var(--bg-deep);
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.3);
+        }
+
+        .scanner-btn:disabled {
+            border-color: var(--text-muted);
+            color: var(--text-muted);
+            cursor: not-allowed;
+        }
+
+        /* SLIDE 4: Animated System Architecture Flow (SVG) */
+        .arch-svg-container {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #04070d;
+            border-radius: 12px;
+            border: 1px solid var(--border-glass);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .arch-node {
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .arch-node:hover {
+            filter: drop-shadow(0 0 8px rgba(6, 182, 212, 0.6));
+        }
+
+        .arch-pulse-dot {
+            fill: var(--cyan);
+            filter: drop-shadow(0 0 6px var(--cyan));
+            opacity: 0;
+        }
+
+        .arch-active-log {
+            position: absolute;
+            bottom: 16px;
+            left: 16px;
+            right: 16px;
+            background: rgba(6, 9, 19, 0.9);
+            border: 1px solid var(--border-glass);
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-family: monospace;
+            color: var(--text-secondary);
+        }
+
+        .animate-path {
+            stroke-dasharray: 8;
+            animation: dash 1s linear infinite;
+        }
+
+        @keyframes dash {
+            to { stroke-dashoffset: -16; }
+        }
+
+        /* SLIDE 5: Technical Feasibility Matrix & Latency Simulator */
+        .feasibility-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            width: 100%;
+        }
+
+        .feasibility-card {
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        .feasibility-card h4 {
+            font-size: 1.05rem;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .latency-sim-box {
+            margin-top: 16px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid var(--border-glass);
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .range-slider-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .slider-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .latency-slider {
+            -webkit-appearance: none;
+            width: 100%;
+            height: 6px;
+            border-radius: 3px;
+            background: #1e293b;
+            outline: none;
+            cursor: pointer;
+        }
+
+        .latency-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--cyan);
+            box-shadow: 0 0 6px var(--cyan);
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .latency-slider::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .latency-metrics-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .latency-metric {
+            background: rgba(0,0,0,0.2);
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            border: 1px solid transparent;
+            transition: var(--transition-smooth);
+        }
+
+        .latency-metric.active {
+            border-color: rgba(6, 182, 212, 0.3);
+            background: rgba(6, 182, 212, 0.03);
+        }
+
+        .latency-m-val {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .latency-m-lbl {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 2px;
+        }
+
+        /* SLIDE 6: Guard Tablet Simulator */
+        .tablet-mockup {
+            width: 100%;
+            max-width: 480px;
+            height: 310px;
+            background: #0f172a;
+            border: 10px solid #1e293b;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .tablet-screen {
+            flex-grow: 1;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            background: #060913;
+        }
+
+        .tablet-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding-bottom: 8px;
+        }
+
+        .tablet-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 700;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tablet-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--emerald);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.4); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .tablet-alert-box {
+            padding: 16px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            text-align: center;
+            transition: var(--transition-smooth);
+        }
+
+        .alert-auth {
+            background: rgba(16, 185, 129, 0.08);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            color: var(--emerald);
+        }
+
+        .alert-unverified {
+            background: rgba(245, 158, 11, 0.08);
+            border: 1px solid rgba(245, 158, 11, 0.25);
+            color: var(--amber);
+        }
+
+        .alert-overstay {
+            background: rgba(239, 68, 68, 0.08);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+            color: var(--crimson);
+            animation: alertGlow 1.5s infinite alternate;
+        }
+
+        @keyframes alertGlow {
+            from { box-shadow: 0 0 4px rgba(239, 68, 68, 0.2); }
+            to { box-shadow: 0 0 16px rgba(239, 68, 68, 0.4); }
+        }
+
+        .alert-plate {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+
+        .alert-type {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+        }
+
+        .tablet-controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+            margin-top: auto;
+        }
+
+        .tablet-btn {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border-glass);
+            color: var(--text-secondary);
+            padding: 8px;
+            border-radius: 6px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            text-transform: uppercase;
+        }
+
+        .tablet-btn.active {
+            background: var(--cyan);
+            color: var(--bg-deep);
+            border-color: var(--cyan);
+            font-weight: 700;
+        }
+
+        /* SLIDE 7: Step-by-Step Scenario Timeline */
+        .scenario-tabs {
+            display: flex;
+            gap: 8px;
+            width: 100%;
+            border-bottom: 1px solid var(--border-glass);
+            padding-bottom: 10px;
+        }
+
+        .scenario-tab {
+            padding: 8px 16px;
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-secondary);
+            font-weight: 600;
+            font-size: 0.8rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+
+        .scenario-tab:hover {
+            color: var(--text-primary);
+        }
+
+        .scenario-tab.active {
+            border-color: var(--cyan);
+            color: var(--cyan);
+            background: rgba(6, 182, 212, 0.05);
+        }
+
+        .timeline-scroll-box {
+            flex-grow: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            padding-right: 8px;
+            margin-top: 14px;
+        }
+
+        .timeline-item {
+            display: flex;
+            gap: 16px;
+            position: relative;
+            padding-left: 20px;
+            opacity: 0;
+            transform: translateX(-10px);
+            animation: timelineEnter 0.5s forwards ease;
+        }
+
+        @keyframes timelineEnter {
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        .timeline-item::before {
+            content: "";
+            position: absolute;
+            left: 5px;
+            top: 6px;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--cyan);
+            box-shadow: 0 0 6px var(--cyan);
+        }
+
+        .timeline-item::after {
+            content: "";
+            position: absolute;
+            left: 8px;
+            top: 14px;
+            bottom: -20px;
+            width: 2px;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .timeline-item:last-child::after {
+            display: none;
+        }
+
+        .timeline-time {
+            font-family: monospace;
+            font-size: 0.75rem;
+            color: var(--cyan);
+            white-space: nowrap;
+            width: 60px;
+        }
+
+        .timeline-body {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .timeline-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .timeline-desc {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+
+        /* SLIDE 8: Cryptographic Encryption Visualizer */
+        .crypto-visualizer-card {
+            border-radius: 12px;
+            padding: 24px;
+            background: var(--bg-surface-opaque);
+            border: 1px solid var(--border-glass);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 100%;
+        }
+
+        .crypto-input-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .crypto-input {
+            width: 100%;
+            background: #04070d;
+            border: 1px solid var(--border-glass);
+            padding: 12px 16px;
+            border-radius: 8px;
+            color: #fff;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            outline: none;
+            transition: var(--transition-smooth);
+        }
+
+        .crypto-input:focus {
+            border-color: var(--cyan);
+            box-shadow: 0 0 10px rgba(6, 182, 212, 0.1);
+        }
+
+        .crypto-display-row {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            font-family: monospace;
+            font-size: 0.75rem;
+        }
+
+        .crypto-display-field {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            background: rgba(0,0,0,0.25);
+            padding: 10px 14px;
+            border-radius: 6px;
+            border-left: 3px solid var(--border-glass);
+            transition: var(--transition-smooth);
+        }
+
+        .crypto-display-field.cyan { border-left-color: var(--cyan); }
+        .crypto-display-field.emerald { border-left-color: var(--emerald); }
+        .crypto-display-field.amber { border-left-color: var(--amber); }
+
+        .crypto-lbl {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+
+        .crypto-val {
+            color: var(--text-primary);
+            word-break: break-all;
+            line-height: 1.4;
+        }
+
+        /* SLIDE 9: Financial Sliders & ROI Calculator */
+        .roi-calculator-wrap {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            width: 100%;
+        }
+
+        .roi-stat-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        .roi-stat-box {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border-glass);
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .roi-stat-val {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--cyan);
+        }
+
+        .roi-stat-lbl {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-top: 4px;
+        }
+
+        .chart-container {
+            width: 100%;
+            height: 250px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 12px;
+            border: 1px solid var(--border-glass);
+            padding: 12px;
+        }
+
+        /* Styled Financial Progress Bars */
+        .finance-bars-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100%;
+            padding: 24px;
+            background: rgba(18, 22, 48, 0.45);
+            border-radius: 12px;
+            border: 1px solid var(--border-glass);
+        }
+        
+        .finance-bar-row {
+            display: flex;
+            align-items: center;
+            width: 100%;
+            gap: 16px;
+        }
+        
+        .finance-bar-label {
+            width: 160px;
+            font-size: 1.05rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        
+        .finance-bar-track {
+            flex-grow: 1;
+            height: 38px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .finance-bar-fill {
+            height: 100%;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 16px;
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #fff;
+            transition: var(--transition-smooth);
+        }
+        
+        .fill-capex {
+            background: linear-gradient(90deg, #1e40af, #2563eb);
+            width: 100%;
+            box-shadow: 0 0 15px rgba(37, 99, 235, 0.35);
+        }
+        
+        .fill-opex {
+            background: linear-gradient(90deg, #4b5563, #64748b);
+            width: 24.4%; /* 1.24 / 5.09 * 100% ≈ 24.4% */
+            box-shadow: 0 0 10px rgba(100, 116, 139, 0.2);
+        }
+        
+        .fill-recovery {
+            background: linear-gradient(90deg, #0d9488, #06b6d4);
+            width: 58.9%; /* 3.00 / 5.09 * 100% ≈ 58.9% */
+            box-shadow: 0 0 15px rgba(6, 182, 212, 0.35);
+        }
+
+        .formula-card {
+            background: rgba(255, 255, 255, 0.025);
+            border: 1px solid var(--border-glass);
+            border-radius: 10px;
+            padding: 24px;
+            text-align: center;
+            margin-top: 16px;
+            width: 100%;
+        }
+
+        .formula-text {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.35rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .formula-fraction {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            vertical-align: middle;
+            font-size: 1rem;
+            padding: 0 8px;
+        }
+
+        .fraction-numerator {
+            border-bottom: 1.5px solid var(--text-secondary);
+            padding-bottom: 4px;
+            width: 100%;
+            text-align: center;
+            font-weight: 600;
+        }
+
+        .fraction-denominator {
+            padding-top: 4px;
+            width: 100%;
+            text-align: center;
+            font-weight: 600;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- Ambient Grid & Glows -->
+    <canvas id="particle-canvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; pointer-events: none; opacity: 0.75;"></canvas>
+    <div class="bg-grid"></div>
+    <div class="bg-glow-1"></div>
+    <div class="bg-glow-2"></div>
+
+    <!-- Top Slide Progress Line -->
+    <div id="progress-container">
+        <div id="progress-bar"></div>
+    </div>
+
+    <!-- Side Menu Trigger & Drawer -->
+    <button id="menu-trigger" aria-label="Open presentation index">
+        <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <div class="drawer-overlay" id="drawer-overlay"></div>
+    <div id="side-drawer">
+        <div class="drawer-header">
+            <span class="drawer-title">Presentation Index</span>
+            <button class="drawer-close" id="drawer-close" aria-label="Close index">
+                <svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+        </div>
+        <ul class="drawer-list">
+            <li class="drawer-item active" data-slide="0">
+                <span class="drawer-item-num">01</span>
+                <span>Title & Introduction</span>
+            </li>
+            <li class="drawer-item" data-slide="1">
+                <span class="drawer-item-num">02</span>
+                <span>Executive Summary</span>
+            </li>
+            <li class="drawer-item" data-slide="2">
+                <span class="drawer-item-num">03</span>
+                <span>Dual-Stage AI Pipeline</span>
+            </li>
+            <li class="drawer-item" data-slide="3">
+                <span class="drawer-item-num">04</span>
+                <span>System Architecture</span>
+            </li>
+            <li class="drawer-item" data-slide="4">
+                <span class="drawer-item-num">05</span>
+                <span>Technical Feasibility</span>
+            </li>
+            <li class="drawer-item" data-slide="5">
+                <span class="drawer-item-num">06</span>
+                <span>Operational Feasibility</span>
+            </li>
+            <li class="drawer-item" data-slide="6">
+                <span class="drawer-item-num">07</span>
+                <span>Step-by-Step Scenarios</span>
+            </li>
+            <li class="drawer-item" data-slide="7">
+                <span class="drawer-item-num">08</span>
+                <span>Zero-Trust Cryptography</span>
+            </li>
+            <li class="drawer-item" data-slide="8">
+                <span class="drawer-item-num">09</span>
+                <span>Financial Recommendations</span>
+            </li>
+            <li class="drawer-item" data-slide="9">
+                <span class="drawer-item-num">10</span>
+                <span>Strategic Impact & Conclusion</span>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Top Right Brand Watermark -->
+    <div class="brand-watermark">
+        <span class="brand-text">DTU RAKSHAK</span>
+        <svg class="brand-logo" viewBox="0 0 24 24">
+            <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+        </svg>
+    </div>
+
+    <!-- Bottom Presentation Controls -->
+    <div id="nav-controls">
+        <button class="nav-btn" id="prev-btn" aria-label="Previous slide" disabled>
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7"/></svg>
+        </button>
+        <span class="slide-indicator" id="slide-num">01 / 10</span>
+        <button class="nav-btn" id="next-btn" aria-label="Next slide">
+            <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg>
+        </button>
+        <div class="autoplay-badge" id="autoplay-btn">
+            <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8v4l3 3M12 2a10 10 0 110 20 10 10 0 010-20z"/></svg>
+            <span>AUTOPLAY</span>
+        </div>
+    </div>
+
+    <!-- Shortcut helper bottom right -->
+    <div class="shortcut-badge">
+        <span>Press <kbd>Space</kbd> or <kbd>→</kbd> to navigate</span>
+    </div>
+
+    <!-- ==========================================
+       6. SLIDES CONTAINER
+       ========================================== -->
+    <div id="deck-container">
+
+        <!-- SLIDE 1: Cover & Hero (Title) -->
+        <div class="slide active" id="slide-0">
+            <div style="flex-grow: 1; display: flex; align-items: center; justify-content: center;">
+                <div class="hero-title-container">
+                    <div class="hero-meta-badge">
+                        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" style="margin-right: 4px;"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                        Edge AI & Zero-Trust Campus Security
+                    </div>
+                    <h1 class="hero-glow-title">DTU RAKSHAK</h1>
+                    <p class="hero-sub">Automated, AI-Powered Real-Time Vehicle Sighting, Verification & Overstay Detection Pipeline</p>
+                    <div style="font-size: 0.85rem; color: var(--text-muted); font-weight: 500; margin-bottom: 8px;">
+                        Built by SkillOp Technical Society, Delhi Technological University
+                    </div>
+                    <button class="cta-btn" id="start-presentation-btn">
+                        <span>Begin Presentation</span>
+                        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 5l7 7-7 7M5 12h14"/></svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 2: Executive Summary & Overview -->
+        <div class="slide" id="slide-1">
+            <div class="slide-header">
+                <div class="slide-title-group">
+                    <span class="slide-tag">01 / Overview</span>
+                    <h2 class="slide-title">Executive Summary</h2>
+                </div>
+                <div class="slide-subtitle">Replacing manual logbooks with edge computer vision to log, verify, and secure every vehicle sighting.</div>
+            </div>
+            <div class="slide-content">
+                <div class="content-panel-left" style="flex: 0.9;">
+                    <ul class="bullet-list">
+                        <li class="bullet-item">
+                            <svg class="bullet-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg>
+                            <div>
+                                <span class="bullet-title">Automatic Logging</span>
+                                <p>Edge cameras read license plates as vehicles drive in, eliminating slow paper logbooks completely.</p>
+                            </div>
+                        </li>
+                        <li class="bullet-item">
+                            <svg class="bullet-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg>
+                            <div>
+                                <span class="bullet-title">Overstay Detection</span>
+                                <p>Tracks visitor vehicles under a strict 30-minute grace window, auto-flagging delivery auto or cab overstays.</p>
+                            </div>
+                        </li>
+                        <li class="bullet-item">
+                            <svg class="bullet-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 13l4 4L19 7"/></svg>
+                            <div>
+                                <span class="bullet-title">Total Data Privacy</span>
+                                <p>Sensitive numbers are encrypted before saving, keeping student, guest, and faculty databases fully private.</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="content-panel-right" style="flex: 1.1;">
+                    <div class="feature-grid">
+                        <div class="glass-card feature-card">
+                            <div class="card-icon-container cyan">
+                                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                            </div>
+                            <h3>100% Automated Logs</h3>
+                            <p>Edge microservices detect and read plates instantly, saving guards from repetitive paperwork.</p>
+                        </div>
+                        <div class="glass-card feature-card">
+                            <div class="card-icon-container emerald">
+                                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/></svg>
+                            </div>
+                            <h3>Seamless Entry Bypass</h3>
+                            <p>Registered staff and student cars glide in automatically, opening physical boom barriers instantly.</p>
+                        </div>
+                        <div class="glass-card feature-card">
+                            <div class="card-icon-container amber">
+                                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                            </div>
+                            <h3>Live Path Mapping</h3>
+                            <p>Plots vehicle sighting routes on a geofenced campus map while fully protecting driver privacy.</p>
+                        </div>
+                        <div class="glass-card feature-card">
+                            <div class="card-icon-container crimson">
+                                <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                            </div>
+                            <h3>Instant Tablet Alerts</h3>
+                            <p>Websocket events trigger live flashing alerts on guard tablets the second an overstay occurs.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 3: Dual-Stage AI Pipeline -->
+        <div class="slide" id="slide-2">
+            <div class="slide-header">
+                <div class="slide-title-group">
+                    <span class="slide-tag">02 / Model Architecture</span>
+                    <h2 class="slide-title">Dual-Stage Edge AI Pipeline</h2>
+                </div>
+                <div class="slide-subtitle">How raw CCTV feeds convert to verified structured license plates in milliseconds.</div>
+            </div>
+            <div class="slide-content">
+                <div class="content-panel-left" style="flex: 1.1;">
+                    <div class="ai-pipeline-stages">
+                        <div class="pipeline-stage active" id="stage-box-0">
+                            <div class="pipeline-stage-num">01</div>
+                            <strong>Plate Detection</strong>
+                            <div style="font-size: 0.75rem; margin-top: 4px;">Locates the vehicle license plate within the camera feed.</div>
+                        </div>
+                        <div class="pipeline-stage" id="stage-box-1">
+                            <div class="pipeline-stage-num">02</div>
+                            <strong>Image Clean-up</strong>
+                            <div style="font-size: 0.75rem; margin-top: 4px;">Upscales and sharpens the cropped area to remove motion blur.</div>
+                        </div>
+                        <div class="pipeline-stage" id="stage-box-2">
+                            <div class="pipeline-stage-num">03</div>
+                            <strong>AI Text Reader</strong>
+                            <div style="font-size: 0.75rem; margin-top: 4px;">Reads plate characters, even if they are slanted or dirty.</div>
+                        </div>
+                        <div class="pipeline-stage" id="stage-box-3">
+                            <div class="pipeline-stage-num">04</div>
+                            <strong>Format Checker</strong>
+                            <div style="font-size: 0.75rem; margin-top: 4px;">Standardizes the plate text to official RTO format.</div>
+                        </div>
+                    </div>
+                    <div class="ai-output-box" id="ai-pipeline-output">
+                        Pipeline Idle. Click "Run Simulated Scan" to visualize how the edge microservice processes a license plate under motion-blur and low light.
+                    </div>
+                </div>
+                <div class="content-panel-right" style="flex: 0.9;">
+                    <div class="ai-pipeline-container">
+                        <div class="scanner-card" id="scanner-card-element">
+                            <div class="scan-overlay-line"></div>
+                            <div class="scanner-canvas-wrap">
+                                <div class="simulated-plate-crop" id="simulated-plate">DL 3C AF 0001</div>
+                            </div>
+                            <button class="scanner-btn" id="run-scan-btn">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H16"/></svg>
+                                <span>Run Simulated Scan</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 4: System Architecture & Integration Flow -->
+        <div class="slide" id="slide-3">
+            <div class="slide-header">
+                <div class="slide-title-group">
+                    <span class="slide-tag">03 / Integration</span>
+                    <h2 class="slide-title">System Architecture</h2>
+                </div>
+                <div class="slide-subtitle">Visualizing the real-time data pathway from high-definition field cameras to web dashboards.</div>
+            </div>
+            <div class="slide-content">
+                <div class="content-panel-left" style="flex: 0.85;">
+                    <ul class="bullet-list">
+                        <li class="bullet-item">
+                            <svg class="bullet-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806"/></svg>
+                            <div>
+                                <span class="bullet-title">1. Edge Node (Raspberry Pi 5)</span>
+                                <p>Captures continuous frames, extracts normalized plate text, and POSTs payload with a cryptographic shared secret key.</p>
+                            </div>
+                        </li>
+                        <li class="bullet-item">
+                            <svg class="bullet-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806"/></svg>
+                            <div>
+                                <span class="bullet-title">2. API Gateway (Node/Express)</span>
+                                <p>Validates edge identities, performs deterministic queries in Redis caching, and stores audit trails in PostgreSQL.</p>
+                            </div>
+                        </li>
+                        <li class="bullet-item">
+                            <svg class="bullet-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806"/></svg>
+                            <div>
+                                <span class="bullet-title">3. Admin Dashboard (React/WS)</span>
+                                <p>Listens via active WebSockets, pushing instant UI indicators and alarms straight to physical guard tablet interfaces.</p>
+                            </div>
+                        </li>
+                    </ul>
+                    <button class="scanner-btn" id="trace-packet-btn" style="margin-top: 10px; width: fit-content;">
+                        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        <span>Trace Active Sighting Packet</span>
+                    </button>
+                </div>
+                <div class="content-panel-right" style="flex: 1.15;">
+                    <div class="arch-svg-container">
+                        <!-- High-tech SVG Diagram of architecture -->
+                        <svg width="100%" height="100%" viewBox="0 0 450 300" style="padding: 10px;">
+                            <!-- Definitions -->
+                            <defs>
+                                <linearGradient id="blueGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+                                    <stop offset="0%" stop-color="#06b6d4" />
+                                    <stop offset="100%" stop-color="#3b82f6" />
+                                </linearGradient>
+                            </defs>
+                            
+                            <!-- Connecting Paths -->
+                            <path id="path-cam-edge" d="M 40 150 H 130" stroke="#1e293b" stroke-width="2" fill="none" />
+                            <path id="path-edge-node" d="M 130 150 H 225" stroke="#1e293b" stroke-width="2" fill="none" />
+                            <path id="path-node-db" d="M 225 150 Q 285 150, 345 210" stroke="#1e293b" stroke-width="2" fill="none" />
+                            <path id="path-node-ws" d="M 225 150 Q 285 150, 345 90" stroke="#1e293b" stroke-width="2" fill="none" />
+                            <path id="path-node-redis" d="M 225 150 V 235" stroke="#1e293b" stroke-width="2" fill="none" />
+                            
+                            <!-- Path overlays for dynamic trace animation -->
+                            <path id="trace-path-cam-edge" d="M 40 150 H 130" stroke="var(--cyan)" stroke-width="2" fill="none" opacity="0" class="" />
+                            <path id="trace-path-edge-node" d="M 130 150 H 225" stroke="var(--cyan)" stroke-width="2" fill="none" opacity="0" class="" />
+                            <path id="trace-path-node-db" d="M 225 150 Q 285 150, 345 210" stroke="var(--cyan)" stroke-width="2" fill="none" opacity="0" class="" />
+                            <path id="trace-path-node-ws" d="M 225 150 Q 285 150, 345 90" stroke="var(--cyan)" stroke-width="2" fill="none" opacity="0" class="" />
+                            <path id="trace-path-node-redis" d="M 225 150 V 235" stroke="var(--cyan)" stroke-width="2" fill="none" opacity="0" class="" />
+
+                            <!-- Active Pulse Dots -->
+                            <circle id="pulse-dot-1" r="5" class="arch-pulse-dot" />
+                            <circle id="pulse-dot-2" r="5" class="arch-pulse-dot" />
+                            <circle id="pulse-dot-3" r="5" class="arch-pulse-dot" />
+                            
+                            <!-- Nodes -->
+                            <!-- Node 1: Camera -->
+                            <g class="arch-node" transform="translate(40,150)" id="arch-node-cam">
+                                <circle r="26" fill="#0d1527" stroke="#1e293b" stroke-width="1.5"/>
+                                <path d="M-8-6 h16 v12 h-16 z M8-2 l6-4 v12 l-6-4" stroke="var(--text-secondary)" stroke-width="1.5" fill="none"/>
+                                <text y="38" font-size="8.5" font-family="Space Grotesk" fill="var(--text-secondary)" text-anchor="middle" font-weight="600">IP Camera</text>
+                            </g>
+                            <!-- Node 2: Flask AI Edge -->
+                            <g class="arch-node" transform="translate(130,150)" id="arch-node-edge">
+                                <circle r="26" fill="#0d1527" stroke="#1e293b" stroke-width="1.5"/>
+                                <rect x="-10" y="-10" width="20" height="20" rx="3" stroke="var(--cyan)" stroke-width="1.5" fill="none"/>
+                                <path d="M-5-5 h10 v10 h-10 z" fill="rgba(6, 182, 212, 0.2)"/>
+                                <text y="38" font-size="8.5" font-family="Space Grotesk" fill="var(--text-secondary)" text-anchor="middle" font-weight="600">Raspberry Pi 5</text>
+                            </g>
+                            <!-- Node 3: Express Server -->
+                            <g class="arch-node" transform="translate(225,150)" id="arch-node-api">
+                                <circle r="26" fill="#0d1527" stroke="#1e293b" stroke-width="1.5"/>
+                                <path d="M-10-8 h20 v16 h-20 z" stroke="var(--emerald)" stroke-width="1.5" fill="none"/>
+                                <path d="M-6 0 h12 M0-4 v8" stroke="var(--emerald)" stroke-width="1"/>
+                                <text y="-32" font-size="8.5" font-family="Space Grotesk" fill="var(--text-secondary)" text-anchor="middle" font-weight="600">Express Server</text>
+                            </g>
+                            <!-- Node 4: PostgreSQL Database -->
+                            <g class="arch-node" transform="translate(345,210)" id="arch-node-db">
+                                <circle r="26" fill="#0d1527" stroke="#1e293b" stroke-width="1.5"/>
+                                <ellipse cx="0" cy="-6" rx="10" ry="4" stroke="var(--text-secondary)" stroke-width="1.5" fill="none"/>
+                                <path d="M-10-6 v6 a10 4 0 0 0 20 0 v-6" stroke="var(--text-secondary)" stroke-width="1.5" fill="none"/>
+                                <path d="M-10 0 v6 a10 4 0 0 0 20 0 v-6" stroke="var(--text-secondary)" stroke-width="1.5" fill="none"/>
+                                <text y="38" font-size="8.5" font-family="Space Grotesk" fill="var(--text-secondary)" text-anchor="middle" font-weight="600">Supabase PG</text>
+                            </g>
+                            <!-- Node 5: Redis Cache -->
+                            <g class="arch-node" transform="translate(225,235)" id="arch-node-redis">
+                                <circle r="26" fill="#0d1527" stroke="#1e293b" stroke-width="1.5"/>
+                                <path d="M-8-8 h16 v4 h-16 z M-8-2 h16 v4 h-16 z M-8 4 h16 v4 h-16 z" stroke="var(--amber)" stroke-width="1.5" fill="none"/>
+                                <text y="38" font-size="8.5" font-family="Space Grotesk" fill="var(--text-secondary)" text-anchor="middle" font-weight="600">Redis Cache</text>
+                            </g>
+                            <!-- Node 6: Dashboard WebSockets -->
+                            <g class="arch-node" transform="translate(345,90)" id="arch-node-dash">
+                                <circle r="26" fill="#0d1527" stroke="#1e293b" stroke-width="1.5"/>
+                                <rect x="-12" y="-8" width="24" height="16" rx="2" stroke="var(--text-secondary)" stroke-width="1.5" fill="none"/>
+                                <path d="M-6 8 h12 M0 4 v4" stroke="var(--text-secondary)" stroke-width="1.5"/>
+                                <text y="38" font-size="8.5" font-family="Space Grotesk" fill="var(--text-secondary)" text-anchor="middle" font-weight="600">WebSockets UI</text>
+                            </g>
+                        </svg>
+                        <div class="arch-active-log" id="arch-trace-log">System Idle. Press "Trace Active Sighting Packet" to see telemetry propagation.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 5: Technical Feasibility Matrix -->
+        <div class="slide" id="slide-4">
+            <div class="slide-header">
+                <div class="slide-title-group">
+                    <span class="slide-tag">04 / Feasibility</span>
+                    <h2 class="slide-title">Technical Feasibility Matrix</h2>
+                </div>
+                <div class="slide-subtitle">Evaluating standard assets against physical recommendations required for sub-second system logs.</div>
+            </div>
+            <div class="slide-content">
+                <div class="content-panel-left" style="flex: 1;">
+                    <div class="feasibility-grid">
+                        <div class="glass-card feasibility-card">
+                            <h4 style="color: var(--crimson);">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                Standard Campus Infrastructure
+                            </h4>
+                            <ul style="list-style: none; font-size: 0.8rem; display: flex; flex-direction: column; gap: 8px; color: var(--text-secondary);">
+                                <li>• Standard dome cameras (blur license plates at high speeds)</li>
+                                <li>• Edge CPU inference (~4 to 7 seconds per visual parse)</li>
+                                <li>• Fluctuating gate Wi-Fi/cellular signals (packet drops)</li>
+                            </ul>
+                        </div>
+                        <div class="glass-card feasibility-card" style="border-color: rgba(16, 185, 129, 0.3);">
+                            <h4 style="color: var(--emerald);">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                Rakshak Recommended Spec
+                            </h4>
+                            <ul style="list-style: none; font-size: 0.8rem; display: flex; flex-direction: column; gap: 8px; color: var(--text-secondary);">
+                                <li>• High-definition Zoom/Varifocal IP cameras</li>
+                                <li>• Raspberry Pi 5 (4GB Version) edge boards</li>
+                                <li>• Dedicated PoE switches & fiber-optic runs</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; margin-top: 10px;">
+                        <strong>Key Decision:</strong> Raspberry Pi 5 edge boards are recommended. Running heavy visual transformers on standard gate CPUs causes significant queues and traffic bottlenecks at the gates.
+                    </p>
+                </div>
+                <div class="content-panel-right" style="flex: 1;">
+                    <div class="latency-sim-box w-full">
+                        <h4 style="margin: 0; font-family: 'Space Grotesk', sans-serif;">Latency & Bottleneck Simulator</h4>
+                        <span style="font-size: 0.75rem; color: var(--text-secondary);">Drag the slider to compare edge hardware execution speed.</span>
+                        
+                        <div class="range-slider-wrap">
+                            <input type="range" min="0" max="1" value="0" class="latency-slider" id="hw-slider">
+                            <div class="slider-labels">
+                                <span>STANDARD CPU GATEWAY</span>
+                                <span>RASPBERRY PI 5 (4GB)</span>
+                            </div>
+                        </div>
+
+                        <div class="latency-metrics-row">
+                            <div class="latency-metric active" id="metric-cpu">
+                                <span class="latency-m-lbl">Inference Latency</span>
+                                <div class="latency-m-val" id="latency-val" style="color: var(--crimson);">5.8s</div>
+                                <span style="font-size: 0.6rem; color: var(--text-muted);" id="latency-desc">Severe gate queue queues. Manual guard logs required.</span>
+                            </div>
+                            <div class="latency-metric" id="metric-gpu">
+                                <span class="latency-m-lbl">Target Frame Rate</span>
+                                <div class="latency-m-val" id="fps-val" style="color: var(--text-muted);">2 FPS</div>
+                                <span style="font-size: 0.6rem; color: var(--text-muted);" id="fps-desc">Low temporal safety margin.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 6: Operational Feasibility & Fail-Safe Modes -->
+        <div class="slide" id="slide-5">
+            <div class="slide-header">
+                <div class="slide-title-group">
+                    <span class="slide-tag">05 / Operations</span>
+                    <h2 class="slide-title">Operational Feasibility & Fail-Safes</h2>
+                </div>
+                <div class="slide-subtitle">Intuitive UI interfaces and manual bypass paths designed to maintain rapid vehicle throughput.</div>
+            </div>
+            <div class="slide-content">
+                <div class="content-panel-left" style="flex: 1;">
+                    <ul class="bullet-list">
+                        <li class="bullet-item">
+                            <svg class="bullet-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--emerald);"><path d="M5 13l4 4L19 7"/></svg>
+                            <div>
+                                <span class="bullet-title">Frictionless Guard Dashboard</span>
+                                <p>No complex command boxes. Bright green/yellow/red color-coded visual alerts instantly instruct personnel on exact actions.</p>
+                            </div>
+                        </li>
+                        <li class="bullet-item">
+                            <svg class="bullet-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--amber);"><path d="M5 13l4 4L19 7"/></svg>
+                            <div>
+                                <span class="bullet-title">Physical Integration Fail-Safe</span>
+                                <p>Manual overrides on tablet devices let guards override system blocks during camera mudding or missing plates.</p>
+                            </div>
+                        </li>
+                        <li class="bullet-item">
+                            <svg class="bullet-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--cyan);"><path d="M5 13l4 4L19 7"/></svg>
+                            <div>
+                                <span class="bullet-title">Smart Boom Barrier Hooks</span>
+                                <p>Automated network relay cards open gate barriers directly for authorized vehicles, reducing manual guard overhead.</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="content-panel-right" style="flex: 1;">
+                    <div class="tablet-mockup">
+                        <div class="tablet-screen">
+                            <div class="tablet-header">
+                                <span class="tablet-title">
+                                    <span class="tablet-dot"></span>
+                                    RAKSHAK GUARD PORTAL — NORTH GATE
+                                </span>
+                                <span style="font-size: 0.65rem; color: var(--text-muted);" id="tablet-time-now">16:40:25</span>
+                            </div>
+                            
+                            <div class="tablet-alert-box alert-auth" id="tablet-alert-box">
+                                <div class="alert-type" id="tablet-alert-type">Authorized Vehicle Sighted</div>
+                                <div class="alert-plate" id="tablet-alert-plate">DL3CAF0001</div>
+                                <div style="font-size: 0.7rem; margin-top: 4px;" id="tablet-alert-meta">Owner: Prof. R. Sharma (Faculty Sticker #871)</div>
+                            </div>
+
+                            <div class="tablet-controls">
+                                <button class="tablet-btn active" id="tab-btn-auth">Faculty Sighting</button>
+                                <button class="tablet-btn" id="tab-btn-unverified">Cab Sighting</button>
+                                <button class="tablet-btn" id="tab-btn-overstay">Overstay Alert</button>
+                            </div>
+                            
+                            <div style="display: flex; gap: 8px; width: 100%;">
+                                <button class="tablet-btn" style="flex: 1; border-color: rgba(16, 185, 129, 0.4); color: var(--emerald);" onclick="alert('Manual Override Triggered: Boom Barrier Opened.')">Bypass Barrier</button>
+                                <button class="tablet-btn" style="flex: 1; border-color: rgba(239, 68, 68, 0.4); color: var(--crimson);" onclick="alert('Alert Dispatched to Main Security Center.')">Flag Vehicle</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 7: Step-by-Step Scenarios -->
+        <div class="slide" id="slide-6">
+            <div class="slide-header">
+                <div class="slide-title-group">
+                    <span class="slide-tag">06 / Live Operations</span>
+                    <h2 class="slide-title">Telemetry Scenarios & Working Logic</h2>
+                </div>
+                <div class="slide-subtitle">Simulating live system logic across different vehicle classes moving through gates.</div>
+            </div>
+            <div class="slide-content" style="flex-direction: column; gap: 16px;">
+                <div class="scenario-tabs">
+                    <button class="scenario-tab active" id="scen-tab-0">SCENARIO A: Authorized Faculty</button>
+                    <button class="scenario-tab" id="scen-tab-1">SCENARIO B: Cab (Normal Exit)</button>
+                    <button class="scenario-tab" id="scen-tab-2">SCENARIO C: Cab (Overstay 🚨)</button>
+                    <button class="scenario-tab" id="scen-tab-3">SCENARIO D: Path Tracking</button>
+                </div>
+                <div class="timeline-scroll-box" id="scenario-timeline-box">
+                    <!-- Dynamic timeline items loaded by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 8: Security & Encryption Layer -->
+        <div class="slide" id="slide-7">
+            <div class="slide-header">
+                <div class="slide-title-group">
+                    <span class="slide-tag">07 / Security</span>
+                    <h2 class="slide-title">Zero-Trust Cryptographic Architecture</h2>
+                </div>
+                <div class="slide-subtitle">How RAKSHAK matches high-performance database searches while maintaining total privacy.</div>
+            </div>
+            <div class="slide-content">
+                <div class="content-panel-left" style="flex: 0.9;">
+                    <ul class="bullet-list">
+                        <li class="bullet-item">
+                            <svg class="bullet-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--cyan);"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                            <div>
+                                <span class="bullet-title">Cloudflare Security Shield</span>
+                                <p>Keeps out malicious traffic, blocks external hacker attempts, and ensures high server uptime.</p>
+                            </div>
+                        </li>
+                        <li class="bullet-item">
+                            <svg class="bullet-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--emerald);"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            <div>
+                                <span class="bullet-title">Heavy Load Endurance</span>
+                                <p>Handles gate rush hours easily. Processes hundreds of plate scans per minute without lagging or slowing down traffic.</p>
+                            </div>
+                        </li>
+                        <li class="bullet-item">
+                            <svg class="bullet-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--amber);"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                            <div>
+                                <span class="bullet-title">Total Data Privacy</span>
+                                <p>Encrypts license plate numbers and phone records before saving. DB leaks remain completely scrambled and unreadable.</p>
+                            </div>
+                        </li>
+                        <li class="bullet-item">
+                            <svg class="bullet-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--cyan);"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                            <div>
+                                <span class="bullet-title">Fast & Secure Searches</span>
+                                <p>Uses secure cryptographic mathematical hashes to find vehicles in milliseconds, keeping lookups super fast and completely private.</p>
+                            </div>
+                        </li>
+                    </ul>
+                </div>
+                <div class="content-panel-right" style="flex: 1.1;">
+                    <div class="crypto-visualizer-card">
+                        <div class="crypto-input-wrap">
+                            <label class="crypto-lbl" for="crypto-test-input">Live Encryption Sandbox</label>
+                            <input type="text" value="DL3CAF0001" class="crypto-input" id="crypto-test-input" placeholder="Type vehicle plate...">
+                        </div>
+                        <div class="crypto-display-row">
+                            <div class="crypto-display-field cyan">
+                                <span class="crypto-lbl">AES-256-GCM Ciphertext</span>
+                                <span class="crypto-val" id="crypto-ciphertext">Loading...</span>
+                            </div>
+                            <div class="crypto-display-field amber">
+                                <span class="crypto-lbl">Initialization Vector (IV)</span>
+                                <span class="crypto-val" id="crypto-iv">Loading...</span>
+                            </div>
+                            <div class="crypto-display-field emerald">
+                                <span class="crypto-lbl">Deterministic Search Index (SHA-256 Hash)</span>
+                                <span class="crypto-val" id="crypto-hash">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 9: Financial Recommendations -->
+        <div class="slide" id="slide-8">
+            <div class="slide-header">
+                <div class="slide-title-group">
+                    <span class="slide-tag">08 / Economics</span>
+                    <h2 class="slide-title">Financial Recommendations</h2>
+                </div>
+                <div class="slide-subtitle">Balancing Final Investment & OpEx against commercial vehicle overstay penalties.</div>
+            </div>
+            <div class="slide-content" style="flex-direction: column; align-items: center; justify-content: center; gap: 24px; min-height: 0; width: 100%;">
+                <div class="finance-bars-container" style="width: 100%; max-width: 900px;">
+                    <!-- CapEx Bar -->
+                    <div class="finance-bar-row">
+                        <div class="finance-bar-label">Final Investment</div>
+                        <div class="finance-bar-track">
+                            <div class="finance-bar-fill fill-capex">₹5.09 Lakhs</div>
+                        </div>
+                    </div>
+                    <!-- OpEx Bar -->
+                    <div class="finance-bar-row">
+                        <div class="finance-bar-label">Annual OpEx</div>
+                        <div class="finance-bar-track">
+                            <div class="finance-bar-fill fill-opex">₹1.24 Lakhs</div>
+                        </div>
+                    </div>
+                    <!-- Est. Annual Recovery Bar -->
+                    <div class="finance-bar-row">
+                        <div class="finance-bar-label">Est. Annual Recovery</div>
+                        <div class="finance-bar-track">
+                            <div class="finance-bar-fill fill-recovery">₹3.00 Lakhs</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="font-size: 1.1rem; color: var(--text-secondary); text-align: center; font-weight: 500; letter-spacing: 0.02em; margin-top: 8px;">
+                    Long-Term Cost Efficiency achieved through reduced manual scaling and penalty revenue.
+                </div>
+            </div>
+        </div>
+
+        <!-- SLIDE 10: Strategic Impact & Conclusion -->
+        <div class="slide" id="slide-9">
+            <div class="slide-header">
+                <div class="slide-title-group">
+                    <span class="slide-tag">09 / Summary</span>
+                    <h2 class="slide-title">Conclusion & Strategic Campus Impact</h2>
+                </div>
+                <div class="slide-subtitle">DTU RAKSHAK raises security standards, streamlining manual gate overhead into active campus defense.</div>
+            </div>
+            <div class="slide-content">
+                <div class="content-panel-left" style="flex: 1.05;">
+                    <div class="feature-grid">
+                        <div class="glass-card feature-card" style="padding: 16px;">
+                            <h3 style="display: flex; align-items: center; gap: 8px; color: var(--emerald); font-size: 1rem;">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04"/></svg>
+                                Optimized Manpower
+                            </h3>
+                            <p>Automating gate records frees security personnel from repetitive paper ledger tasks, allowing redeployment to active roving patrols.</p>
+                        </div>
+                        <div class="glass-card feature-card" style="padding: 16px;">
+                            <h3 style="display: flex; align-items: center; gap: 8px; color: var(--cyan); font-size: 1rem;">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                                Digital Accountability
+                            </h3>
+                            <p>Delivers cryptographic, tampering-protected logs of campus vehicle trajectories, resolving insurance liabilities and incident claims.</p>
+                        </div>
+                        <div class="glass-card feature-card" style="padding: 16px;">
+                            <h3 style="display: flex; align-items: center; gap: 8px; color: var(--amber); font-size: 1rem;">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"/></svg>
+                                Enforced Traffic Policies
+                            </h3>
+                            <p>Instantly flags overstaying delivery and commercial vehicles, guaranteeing clear roads and enforcing campus speed safety.</p>
+                        </div>
+                        <div class="glass-card feature-card" style="padding: 16px;">
+                            <h3 style="display: flex; align-items: center; gap: 8px; color: var(--emerald); font-size: 1rem;">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 11v-1m0-1c-1.11 0-2.08-.402-2.599-1M12 12V3"/></svg>
+                                Operational Break-Even
+                            </h3>
+                            <p>Monetizing commercial overstay violations completely covers recurring maintenance, making the system self-sustaining.</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="content-panel-right" style="flex: 0.95; flex-direction: column; justify-content: center; align-items: center; gap: 20px;">
+                    <div class="glass-card" style="padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; max-width: 320px; text-align: center;">
+                        <h4 style="font-family: 'Space Grotesk'; font-size: 1.1rem; color: var(--text-primary);">Strategic Value Breakdown</h4>
+                        <div style="width: 180px; height: 180px; position: relative;">
+                            <canvas id="strategicPieChart"></canvas>
+                        </div>
+                        <button class="scanner-btn" onclick="goToSlide(0)" style="width: 100%; margin-top: 8px;">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H16"/></svg>
+                            <span>Restart Presentation</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ==========================================
+       7. INTERACTIVE PRESENTATION LOGIC
+       ========================================== -->
+    <script>
+        // Slide Navigation Variables
+        const slides = document.querySelectorAll('.slide');
+        const totalSlides = slides.length;
+        let currentSlideIndex = 0;
+        let autoplayTimer = null;
+        let autoplayActive = false;
+
+        // Navigation elements
+        const prevBtn = document.getElementById('prev-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const slideNum = document.getElementById('slide-num');
+        const progressBar = document.getElementById('progress-bar');
+        const startBtn = document.getElementById('start-presentation-btn');
+        
+        // Drawer elements
+        const menuTrigger = document.getElementById('menu-trigger');
+        const sideDrawer = document.getElementById('side-drawer');
+        const drawerOverlay = document.getElementById('drawer-overlay');
+        const drawerClose = document.getElementById('drawer-close');
+        const drawerItems = document.querySelectorAll('.drawer-item');
+
+        /* Initialize slide display */
+        function updateDeckView() {
+            slides.forEach((slide, idx) => {
+                if (idx === currentSlideIndex) {
+                    slide.classList.add('active');
+                } else {
+                    slide.classList.remove('active');
+                }
+            });
+
+            // Update Navigation Panel
+            slideNum.textContent = `${String(currentSlideIndex + 1).padStart(2, '0')} / ${String(totalSlides).padStart(2, '0')}`;
+            prevBtn.disabled = currentSlideIndex === 0;
+            nextBtn.disabled = currentSlideIndex === totalSlides - 1;
+
+            // Update Progress bar width
+            const percent = ((currentSlideIndex + 1) / totalSlides) * 100;
+            progressBar.style.width = `${percent}%`;
+
+            // Update side drawer active indicator
+            drawerItems.forEach((item, idx) => {
+                if (idx === currentSlideIndex) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+
+            // Specialized Slide Initializations on active entry
+            if (currentSlideIndex === 2) {
+                resetAISimulator();
+            } else if (currentSlideIndex === 3) {
+                resetArchTrace();
+            } else if (currentSlideIndex === 6) {
+                loadScenario(0);
+            } else if (currentSlideIndex === 7) {
+                updateCryptoFields();
+            } else if (currentSlideIndex === 8) {
+                setTimeout(initOrUpdateRoiChart, 100);
+            } else if (currentSlideIndex === 9) {
+                setTimeout(initStrategicPieChart, 100);
+            }
+        }
+
+        function goToSlide(index) {
+            if (index >= 0 && index < totalSlides) {
+                currentSlideIndex = index;
+                updateDeckView();
+            }
+        }
+
+        function nextSlide() {
+            if (currentSlideIndex < totalSlides - 1) {
+                goToSlide(currentSlideIndex + 1);
+            } else {
+                stopAutoplay();
+            }
+        }
+
+        function prevSlide() {
+            if (currentSlideIndex > 0) {
+                goToSlide(currentSlideIndex - 1);
+            }
+        }
+
+        // Event Listeners for Nav
+        prevBtn.addEventListener('click', prevSlide);
+        nextBtn.addEventListener('click', nextSlide);
+        startBtn.addEventListener('click', () => goToSlide(1));
+
+        // Keyboard Controls
+        window.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            
+            if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+                e.preventDefault();
+                nextSlide();
+            } else if (e.key === 'ArrowLeft' || e.key === 'Backspace' || e.key === 'PageUp') {
+                e.preventDefault();
+                prevSlide();
+            }
+        });
+
+        // Drawer Controls
+        menuTrigger.addEventListener('click', () => {
+            sideDrawer.classList.add('open');
+            drawerOverlay.classList.add('open');
+        });
+
+        function closeDrawer() {
+            sideDrawer.classList.remove('open');
+            drawerOverlay.classList.remove('open');
+        }
+
+        drawerClose.addEventListener('click', closeDrawer);
+        drawerOverlay.addEventListener('click', closeDrawer);
+
+        drawerItems.forEach(item => {
+            item.addEventListener('click', (e) => {
+                const targetIdx = parseInt(item.getAttribute('data-slide'));
+                goToSlide(targetIdx);
+                closeDrawer();
+            });
+        });
+
+        // Autoplay Logic
+        const autoplayBtn = document.getElementById('autoplay-btn');
+        function startAutoplay() {
+            autoplayActive = true;
+            autoplayBtn.classList.add('active');
+            autoplayTimer = setInterval(nextSlide, 10000); // 10s slide intervals
+        }
+
+        function stopAutoplay() {
+            autoplayActive = false;
+            autoplayBtn.classList.remove('active');
+            clearInterval(autoplayTimer);
+        }
+
+        autoplayBtn.addEventListener('click', () => {
+            if (autoplayActive) {
+                stopAutoplay();
+            } else {
+                startAutoplay();
+            }
+        });
+
+
+        /* ========================================================
+           SLIDE 3: AI PIPELINE SIMULATION JAVASCRIPT
+           ======================================================== */
+        const runScanBtn = document.getElementById('run-scan-btn');
+        const simulatedPlate = document.getElementById('simulated-plate');
+        const aiOutputBox = document.getElementById('ai-pipeline-output');
+        const scannerCardElement = document.getElementById('scanner-card-element');
+
+        function resetAISimulator() {
+            simulatedPlate.className = "simulated-plate-crop";
+            simulatedPlate.textContent = "DL 3C AF 0001";
+            simulatedPlate.style.borderColor = "";
+            simulatedPlate.style.boxShadow = "";
+            simulatedPlate.style.color = "";
+            simulatedPlate.style.textShadow = "";
+            aiOutputBox.innerHTML = 'Pipeline Idle. Click "Run Simulated Scan" to visualize how the edge microservice processes a license plate under motion-blur and low light.';
+            runScanBtn.disabled = false;
+            document.querySelectorAll('.pipeline-stage').forEach(el => el.classList.remove('active'));
+            document.getElementById('stage-box-0').classList.add('active');
+            scannerCardElement.classList.remove('scan-active');
+        }
+
+        runScanBtn.addEventListener('click', () => {
+            resetAISimulator();
+            runScanBtn.disabled = true;
+            scannerCardElement.classList.add('scan-active');
+            
+            // Phase 1: YOLOv8 Bounding Box
+            document.querySelectorAll('.pipeline-stage').forEach(el => el.classList.remove('active'));
+            const stage0 = document.getElementById('stage-box-0');
+            stage0.classList.add('active');
+            simulatedPlate.classList.add('crop-step-box');
+            aiOutputBox.innerHTML = '<span style="color: var(--cyan); font-weight:700;">[STAGE 01 — YOLOv8 DETECTION]</span><br/>Analyzing video frame. Located license plate bounds. Confidence score: 0.915. Padded bounding box cropped.';
+
+            // Phase 2: Upscaling & Sharpening (2.5s delay)
+            setTimeout(() => {
+                document.querySelectorAll('.pipeline-stage').forEach(el => el.classList.remove('active'));
+                document.getElementById('stage-box-1').classList.add('active');
+                simulatedPlate.className = "simulated-plate-crop sharp-step-box";
+                aiOutputBox.innerHTML = '<span style="color: var(--cyan); font-weight:700;">[STAGE 02 — IMAGE ENHANCEMENT]</span><br/>Upscaling crop to height = 82px. Applying high-pass Laplacian sharpening filter to amplify edge contrast and reduce motion blur.';
+            }, 2500);
+
+            // Phase 3: GLM-OCR Vision Processing (5.0s delay)
+            setTimeout(() => {
+                document.querySelectorAll('.pipeline-stage').forEach(el => el.classList.remove('active'));
+                document.getElementById('stage-box-2').classList.add('active');
+                simulatedPlate.textContent = "D L 3C-AF 0001";
+                simulatedPlate.style.color = "#020617";
+                simulatedPlate.style.textShadow = "none";
+                aiOutputBox.innerHTML = '<span style="color: var(--cyan); font-weight:700;">[STAGE 03 — GLM-OCR VISION LANGUAGE PARSING]</span><br/>Feeding crop into decoder. Reading visual character tokens... Characters parsed: "D L 3C-AF 0001".';
+            }, 5000);
+
+            // Phase 4: Regex Normalization (7.5s delay)
+            setTimeout(() => {
+                document.querySelectorAll('.pipeline-stage').forEach(el => el.classList.remove('active'));
+                document.getElementById('stage-box-3').classList.add('active');
+                simulatedPlate.textContent = "DL3CAF0001";
+                simulatedPlate.className = "simulated-plate-crop";
+                simulatedPlate.style.borderColor = "var(--emerald)";
+                simulatedPlate.style.boxShadow = "0 0 15px rgba(16, 185, 129, 0.4)";
+                scannerCardElement.classList.remove('scan-active');
+                aiOutputBox.innerHTML = '<span style="color: var(--emerald); font-weight:700;">[STAGE 04 — REGEX STANDARDIZATION & VERIFICATION]</span><br/>State=DL, RTO=3C, Series=AF, ID=0001. <br/><span style="color: var(--emerald); font-weight:600;">✓ VALID SCAN DISPATCHED TO CENTRAL GATEWAY.</span>';
+                runScanBtn.disabled = false;
+            }, 7500);
+        });
+
+
+        /* ========================================================
+           SLIDE 4: SYSTEM ARCHITECTURE ANIME FLOW JAVASCRIPT
+           ======================================================== */
+        const traceBtn = document.getElementById('trace-packet-btn');
+        const traceLog = document.getElementById('arch-trace-log');
+        
+        function resetArchTrace() {
+            traceLog.innerHTML = "System Idle. Press \"Trace Active Sighting Packet\" to see telemetry propagation.";
+            traceBtn.disabled = false;
+            // Clear animations
+            document.querySelectorAll('.arch-pulse-dot').forEach(el => {
+                el.setAttribute('opacity', '0');
+                el.innerHTML = '';
+            });
+            document.querySelectorAll('[id^="trace-path-"]').forEach(p => p.setAttribute('opacity', '0'));
+        }
+
+        traceBtn.addEventListener('click', () => {
+            traceBtn.disabled = true;
+            resetArchTrace();
+            traceBtn.disabled = true;
+
+            const dot1 = document.getElementById('pulse-dot-1');
+            const dot2 = document.getElementById('pulse-dot-2');
+            const dot3 = document.getElementById('pulse-dot-3');
+            
+            const pathCam = document.getElementById('trace-path-cam-edge');
+            const pathEdge = document.getElementById('trace-path-edge-node');
+            const pathRedis = document.getElementById('trace-path-node-redis');
+            const pathDb = document.getElementById('trace-path-node-db');
+            const pathWs = document.getElementById('trace-path-node-ws');
+
+            // Set visible path lines
+            pathCam.setAttribute('opacity', '0.6');
+            pathCam.setAttribute('class', 'animate-path');
+
+            // 1. Camera to Edge Sighting Sensed (Slowing from 0.8s to 1.6s)
+            traceLog.innerHTML = '<span style="color: var(--cyan);">[0.0s] SIGHTING DETECTED</span> - Camera logs vehicle crop, sending it to the edge computer node.';
+            dot1.setAttribute('opacity', '1');
+            dot1.innerHTML = `<animateMotion dur="1.6s" repeatCount="1" fill="freeze" path="M 40 150 H 130" />`;
+            
+            // 2. Edge processing finished and POSTed to Node (Slowing from 1.2s to 2.4s, Timeout from 800ms to 1600ms)
+            setTimeout(() => {
+                pathEdge.setAttribute('opacity', '0.6');
+                pathEdge.setAttribute('class', 'animate-path');
+                traceLog.innerHTML = '<span style="color: var(--cyan);">[1.6s] EDGE PROCESSED & DISPATCHED</span> - Bounding boxes found, enhanced with high-pass sharpening, parsed by GLM-OCR, and POSTed with secure gateway tokens.';
+                dot1.innerHTML = `<animateMotion dur="2.4s" repeatCount="1" fill="freeze" path="M 130 150 H 225" />`;
+            }, 1600);
+
+            // 3. Node received, queries Redis Cache (Timeout from 2000ms to 4000ms, Duration from 0.8s to 1.6s)
+            setTimeout(() => {
+                pathRedis.setAttribute('opacity', '0.6');
+                pathRedis.setAttribute('class', 'animate-path');
+                traceLog.innerHTML = '<span style="color: var(--cyan);">[4.0s] BACKEND CACHE ROUTING</span> - Node Server received sighting. Performing sub-millisecond Redis cache query. Hash matches active session.';
+                dot2.setAttribute('opacity', '1');
+                dot2.innerHTML = `<animateMotion dur="1.6s" repeatCount="1" fill="freeze" path="M 225 150 V 235" />`;
+            }, 4000);
+
+            // 4. Redis returned cache miss/hit, logs sighting in postgres, and alerts WebSockets dashboard (Timeout from 2800ms to 5600ms, Duration from 1s to 2s)
+            setTimeout(() => {
+                pathDb.setAttribute('opacity', '0.6');
+                pathDb.setAttribute('class', 'animate-path');
+                pathWs.setAttribute('opacity', '0.6');
+                pathWs.setAttribute('class', 'animate-path');
+                traceLog.innerHTML = '<span style="color: var(--emerald); font-weight:700;">[5.6s] PERSISTED & BROADCAST SUCCESS</span> - Event logged in PostgreSQL database. Real-time update broadcasted via secure WebSockets. Boom barrier triggered. Dashboard updated. COMPLETE.';
+                
+                dot2.setAttribute('opacity', '0'); // clear redis dot
+                dot1.innerHTML = `<animateMotion dur="2s" repeatCount="1" fill="freeze" path="M 225 150 Q 285 150, 345 210" />`;
+                dot3.setAttribute('opacity', '1');
+                dot3.innerHTML = `<animateMotion dur="2s" repeatCount="1" fill="freeze" path="M 225 150 Q 285 150, 345 90" />`;
+                
+                setTimeout(() => {
+                    traceBtn.disabled = false;
+                }, 2000);
+            }, 5600);
+        });
+
+
+        /* ========================================================
+           SLIDE 5: HARDWARE SLIDER & LATENCY SIMULATOR
+           ======================================================== */
+        const hwSlider = document.getElementById('hw-slider');
+        const latencyVal = document.getElementById('latency-val');
+        const latencyDesc = document.getElementById('latency-desc');
+        const fpsVal = document.getElementById('fps-val');
+        const fpsDesc = document.getElementById('fps-desc');
+        const metricCpu = document.getElementById('metric-cpu');
+        const metricGpu = document.getElementById('metric-gpu');
+
+        hwSlider.addEventListener('input', () => {
+            const isGpu = hwSlider.value == 1;
+            
+            if (isGpu) {
+                metricCpu.style.borderColor = "transparent";
+                metricCpu.style.background = "rgba(0,0,0,0.2)";
+                metricGpu.style.borderColor = "rgba(16, 185, 129, 0.3)";
+                metricGpu.style.background = "rgba(16, 185, 129, 0.05)";
+                
+                latencyVal.textContent = "0.9s";
+                latencyVal.style.color = "var(--emerald)";
+                latencyDesc.textContent = "Real-time edge processing bounds. Instant automated gate boom barrier trigger.";
+                
+                fpsVal.textContent = "30 FPS";
+                fpsVal.style.color = "var(--cyan)";
+                fpsDesc.textContent = "Robust high frame-rate safety margin. Multiple frames evaluated per vehicle.";
+            } else {
+                metricCpu.style.borderColor = "rgba(239, 68, 68, 0.3)";
+                metricCpu.style.background = "rgba(239, 68, 68, 0.05)";
+                metricGpu.style.borderColor = "transparent";
+                metricGpu.style.background = "rgba(0,0,0,0.2)";
+                
+                latencyVal.textContent = "5.8s";
+                latencyVal.style.color = "var(--crimson)";
+                latencyDesc.textContent = "Severe gate queue queues. Manual guard logs required.";
+                
+                fpsVal.textContent = "2 FPS";
+                fpsVal.style.color = "var(--text-muted)";
+                fpsDesc.textContent = "Low temporal safety margin. High potential for missed plate captures.";
+            }
+        });
+
+
+        /* ========================================================
+           SLIDE 6: TABLET STATUS PORTAL MOCKUP
+           ======================================================== */
+        const tabletAlertBox = document.getElementById('tablet-alert-box');
+        const tabletAlertPlate = document.getElementById('tablet-alert-plate');
+        const tabletAlertMeta = document.getElementById('tablet-alert-meta');
+        const tabletAlertType = document.getElementById('tablet-alert-type');
+        
+        const tabBtnAuth = document.getElementById('tab-btn-auth');
+        const tabBtnUnv = document.getElementById('tab-btn-unverified');
+        const tabBtnOver = document.getElementById('tab-btn-overstay');
+
+        function setTabletState(state) {
+            tabBtnAuth.classList.remove('active');
+            tabBtnUnv.classList.remove('active');
+            tabBtnOver.classList.remove('active');
+
+            tabletAlertBox.className = "tablet-alert-box";
+
+            if (state === 'auth') {
+                tabBtnAuth.classList.add('active');
+                tabletAlertBox.classList.add('alert-auth');
+                tabletAlertPlate.textContent = "DL3CAF0001";
+                tabletAlertType.textContent = "Authorized Vehicle Sighted";
+                tabletAlertMeta.textContent = "Owner: Prof. R. Sharma (Faculty Sticker #871)";
+            } else if (state === 'unverified') {
+                tabBtnUnv.classList.add('active');
+                tabletAlertBox.classList.add('alert-unverified');
+                tabletAlertPlate.textContent = "DL1RT4321";
+                tabletAlertType.textContent = "Unverified Vehicle (Cab)";
+                tabletAlertMeta.textContent = "Grace Stay Active: 30 Min Timer Initialized.";
+            } else if (state === 'overstay') {
+                tabBtnOver.classList.add('active');
+                tabletAlertBox.classList.add('alert-overstay');
+                tabletAlertPlate.textContent = "DL1LB9876";
+                tabletAlertType.textContent = "🚨 OVERSTAY ALERT DISPATCHED";
+                tabletAlertMeta.textContent = "Commercial Auto: Active on campus for 52 Minutes.";
+            }
+        }
+
+        tabBtnAuth.addEventListener('click', () => setTabletState('auth'));
+        tabBtnUnv.addEventListener('click', () => setTabletState('unverified'));
+        tabBtnOver.addEventListener('click', () => setTabletState('overstay'));
+
+        // Update clock on tablet dynamically
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('tablet-time-now').textContent = now.toTimeString().split(' ')[0];
+        }, 1000);
+
+
+        /* ========================================================
+           SLIDE 7: TIMELINE SCENARIO RUNNER JAVASCRIPT
+           ======================================================== */
+        const timelineBox = document.getElementById('scenario-timeline-box');
+        const scenTabs = [
+            document.getElementById('scen-tab-0'),
+            document.getElementById('scen-tab-1'),
+            document.getElementById('scen-tab-2'),
+            document.getElementById('scen-tab-3')
+        ];
+
+        const scenariosData = [
+            // Scenario A
+            [
+                { time: "16:40:02", title: "DL3CAF0001 arrives at Main Gate", desc: "Varifocal high-speed gate camera registers frame stream." },
+                { time: "16:40:03", title: "Edge YOLOv8 locates license plate", desc: "Padded crop routed into GLM-OCR model, reading 'DL3CAF0001'." },
+                { time: "16:40:04", title: "Express Server DB Lookup: MATCH", desc: "SHA-256 hash queries pgSQL via Prisma. Finds Faculty sticker holder Prof. R. Sharma. Caches authenticated object in Redis (24-hour TTL)." },
+                { time: "16:40:04", title: "Barrier Automated Open", desc: "Express signals physical gate relay board. Boom barrier opens. Entry event logged in DB." }
+            ],
+            // Scenario B
+            [
+                { time: "16:15:00", title: "Cab DL1RT4321 enters North Gate", desc: "No sticker match in database. Sighting logged in pgSQL as status 'UNVERIFIED'." },
+                { time: "16:15:01", title: "Overstay Session Created", desc: "Node registers session in Redis with 30-minute expiration TTL." },
+                { time: "16:29:45", title: "Cab DL1RT4321 arrives at Exit Gate", desc: "Exit gate camera scans plate. Backend checks Redis: active unverified session exists." },
+                { time: "16:29:47", title: "Successful Exit logged", desc: "Backend calculates exact campus stay: 14 min 45 sec. Exit log finalized. Redis session deleted." }
+            ],
+            // Scenario C
+            [
+                { time: "15:00:00", title: "Delivery Auto DL1LB9876 enters campus", desc: "Unverified vehicle entries. Status logged 'UNVERIFIED' in pgSQL; 30-minute Redis session key initialized." },
+                { time: "15:30:00", title: "Redis Session Key Expires", desc: "Redis auto-deletes the key. Overstay event listener catches the expiration." },
+                { time: "15:30:02", title: "🚨 OVERSTAY ALERT FIRED", desc: "WebSockets send alert to React Admin portal. Dashboards flash red. Physical guards notified to locate vehicle." },
+                { time: "15:52:10", title: "Exit gate scans plate & resolves overstay", desc: "Guard tablet inputs fine resolution. Exit logged. Campus duration: 52 min 10 sec. Alert cleared." }
+            ],
+            // Scenario D
+            [
+                { time: "16:45:00", title: "Faculty DL3CAF0001 enters Main Gate", desc: "Gate camera registers ENTRY log. Session tracked in Redis." },
+                { time: "16:48:12", title: "Sighted at Pragya Bhawan", desc: "Interior camera scans plate. Sighting logged. Proactively busts Redis path cache." },
+                { time: "16:51:40", title: "Sighted at Mechanical Seminar Hall", desc: "Second interior sighting registered, building Chronological path." },
+                { time: "16:52:00", title: "Admin views Live Map", desc: "Frontend requests vehicle path. Backend aggregates pgSQL sightings chronologically. Returns coordinate arrays bounded strictly by geofenced campus mask." }
+            ]
+        ];
+
+        function loadScenario(scenIdx) {
+            scenTabs.forEach((tab, idx) => {
+                if (idx === scenIdx) tab.classList.add('active');
+                else tab.classList.remove('active');
+            });
+
+            timelineBox.innerHTML = "";
+            const items = scenariosData[scenIdx];
+            
+            items.forEach((item, index) => {
+                setTimeout(() => {
+                    const el = document.createElement('div');
+                    el.className = "timeline-item";
+                    el.innerHTML = `
+                        <div class="timeline-time">${item.time}</div>
+                        <div class="timeline-body">
+                            <div class="timeline-title">${item.title}</div>
+                            <div class="timeline-desc">${item.desc}</div>
+                        </div>
+                    `;
+                    timelineBox.appendChild(el);
+                    timelineBox.scrollTop = timelineBox.scrollHeight;
+                }, index * 300); // Cascading drop animation
+            });
+        }
+
+        scenTabs.forEach((tab, idx) => {
+            tab.addEventListener('click', () => loadScenario(idx));
+        });
+
+
+        /* ========================================================
+           SLIDE 8: CRYPTOGRAPHIC ENCRYPTION SANDBOX JAVASCRIPT
+           ======================================================== */
+        const cryptoInput = document.getElementById('crypto-test-input');
+        const cryptoCipher = document.getElementById('crypto-ciphertext');
+        const cryptoIv = document.getElementById('crypto-iv');
+        const cryptoHash = document.getElementById('crypto-hash');
+
+        // Deterministic SHA-256 in JS (Simplified for presentation view)
+        async function sha256(message) {
+            const msgBuffer = new TextEncoder().encode(message.trim().toUpperCase());
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        // Mock AES-256-GCM (generates fresh random IV on input)
+        function mockEncrypt(message) {
+            const clean = message.trim().toUpperCase();
+            if (clean.length === 0) return { iv: "N/A", cipher: "N/A" };
+            
+            // Random Hex IV (12 bytes = 24 chars)
+            const ivArray = new Uint8Array(12);
+            window.crypto.getRandomValues(ivArray);
+            const ivHex = Array.from(ivArray).map(b => b.toString(16).padStart(2, '0')).join('');
+            
+            // Mock cipher payload
+            let cipherHex = "";
+            for (let i = 0; i < clean.length; i++) {
+                cipherHex += (clean.charCodeAt(i) ^ 0x4F).toString(16).padStart(2, '0');
+            }
+            // Add a mock GCM tag (16 bytes = 32 chars)
+            cipherHex += "ab8f76e27b889da9c084f932e650119e";
+            
+            return { iv: ivHex, cipher: cipherHex };
+        }
+
+        async function updateCryptoFields() {
+            const raw = cryptoInput.value;
+            const res = mockEncrypt(raw);
+            cryptoIv.textContent = res.iv;
+            cryptoCipher.textContent = res.cipher;
+            
+            const hash = await sha256(raw);
+            cryptoHash.textContent = hash;
+        }
+
+        cryptoInput.addEventListener('input', updateCryptoFields);
+
+
+        /* ========================================================
+           SLIDE 9: FINANCIAL OVERVIEW
+           ======================================================== */
+        function initOrUpdateRoiChart() {
+            // Static progress bars and formula rendered natively in HTML
+        }
+
+        /* ========================================================
+           SLIDE 10: STRATEGIC PIE CHART
+           ======================================================== */
+        let strategicChartInstance = null;
+        function initStrategicPieChart() {
+            const ctx = document.getElementById('strategicPieChart').getContext('2d');
+            if (strategicChartInstance) {
+                strategicChartInstance.destroy();
+            }
+            strategicChartInstance = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: ['Manpower Savings', 'Overstay Revenue', 'Safety Prevention'],
+                    datasets: [{
+                        data: [35, 25, 40],
+                        backgroundColor: [
+                            'rgba(99, 102, 241, 0.85)',
+                            'rgba(16, 185, 129, 0.85)',
+                            'rgba(6, 182, 212, 0.85)'
+                        ],
+                        borderColor: 'rgba(15, 23, 42, 0.9)',
+                        borderWidth: 2,
+                        hoverOffset: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                            titleFont: { family: 'Space Grotesk', size: 12 },
+                            bodyFont: { family: 'Plus Jakarta Sans', size: 12 },
+                            callbacks: {
+                                label: function(context) {
+                                    return ` ${context.label}: ${context.raw}%`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        /* ========================================================
+           INTERACTIVE BACKGROUND PARTICLES (CONSTELLATION)
+           ======================================================== */
+        const canvas = document.getElementById('particle-canvas');
+        const ctx = canvas.getContext('2d');
+        let particles = [];
+        let mouse = { x: null, y: null, radius: 150 };
+
+        function initParticles() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            particles = [];
+            
+            // Adjust density based on screen size
+            const numParticles = Math.floor((canvas.width * canvas.height) / 10000);
+            for (let i = 0; i < numParticles; i++) {
+                particles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    vx: (Math.random() - 0.5) * 0.35,
+                    vy: (Math.random() - 0.5) * 0.35,
+                    radius: Math.random() * 2 + 1,
+                    // Soft Indigo or Cyan palette
+                    color: Math.random() > 0.45 ? 'rgba(99, 102, 241, 0.45)' : 'rgba(6, 182, 212, 0.45)'
+                });
+            }
+        }
+
+        function animateParticles() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            for (let i = 0; i < particles.length; i++) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+
+                // Bounce borders
+                if (p.x < 0 || p.x > canvas.width) p.vx = -p.vx;
+                if (p.y < 0 || p.y > canvas.height) p.vy = -p.vy;
+
+                // Draw Particle
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.fill();
+
+                // Mouse interaction attraction
+                if (mouse.x !== null && mouse.y !== null) {
+                    const dx = p.x - mouse.x;
+                    const dy = p.y - mouse.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+                    if (dist < mouse.radius) {
+                        p.x -= dx * 0.008;
+                        p.y -= dy * 0.008;
+                    }
+                }
+
+                // Constellation connections (links)
+                for (let j = i + 1; j < particles.length; j++) {
+                    const p2 = particles[j];
+                    const dx = p.x - p2.x;
+                    const dy = p.y - p2.y;
+                    const dist = Math.sqrt(dx * dx + dy * dy);
+
+                    if (dist < 100) {
+                        const alpha = (1 - dist / 100) * 0.15;
+                        ctx.beginPath();
+                        ctx.moveTo(p.x, p.y);
+                        ctx.lineTo(p2.x, p2.y);
+                        ctx.strokeStyle = `rgba(99, 102, 241, ${alpha})`;
+                        ctx.lineWidth = 0.8;
+                        ctx.stroke();
+                    }
+                }
+            }
+            requestAnimationFrame(animateParticles);
+        }
+
+        window.addEventListener('mousemove', (e) => {
+            mouse.x = e.clientX;
+            mouse.y = e.clientY;
+        });
+
+        window.addEventListener('mouseout', () => {
+            mouse.x = null;
+            mouse.y = null;
+        });
+
+        window.addEventListener('resize', initParticles);
+
+        /* Initialize Deck on Window Load */
+        window.addEventListener('DOMContentLoaded', () => {
+            initParticles();
+            animateParticles();
+            updateDeckView();
+        });
+    </script>
+</body>
+</html>

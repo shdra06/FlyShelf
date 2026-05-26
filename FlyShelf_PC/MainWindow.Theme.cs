@@ -39,6 +39,9 @@ namespace FlyShelf
                 WallpaperFrostTint.Background = new SolidColorBrush(
                     Color.FromArgb(0x25, 0, 0, 0)); // Reset to default neutral tint
 
+                // Clear pre-blurred wallpaper cache (used by selected card frosted glass)
+                Resources["PreBlurredWallpaper"] = null;
+
                 // Stop mascot
                 MascotIdle.StopAnimation();
 
@@ -49,34 +52,61 @@ namespace FlyShelf
         }
 
         /// <summary>
-        /// Restores standard fallback solid background — system Acrylic/Mica blur is completely disabled
-        /// to ensure instant, lag-free summoning/spawning on all machines.
+        /// Activates Mica blur mode — sets SystemBackdropType to Mica if blur is enabled,
+        /// otherwise falls back to a solid background.
         /// </summary>
         private void RestoreMicaBlur()
         {
             ClearWallpaperLayers();
-
-            // ═══ SYSTEM BLUR COMPLETELY DISABLED FOR HIGH PERFORMANCE ═══
-            this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
-            ApplyPopupBackground();
-
-            // Reset selection accent to default (violet)
+            bool blurEnabled = Classes.SettingsManager.Current.EnableBlurBehind 
+                               && Classes.NativeMethods.ShouldUseBlur();
+            if (blurEnabled)
+            {
+                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
+                this.Background = Brushes.Transparent;
+                if (RootContent != null)
+                    RootContent.Background = new SolidColorBrush(Color.FromArgb(0x01, 0, 0, 0)); // Near-transparent for hit-testing
+            }
+            else
+            {
+                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+                ApplyPopupBackground(); // solid dark
+            }
             ResetSelectionAccent();
         }
 
         /// <summary>
-        /// Applies a solid dark background with NO system blur — for Glass, Desktop, and Custom themes.
-        /// Clears all wallpaper layers, disables SystemBackdropType, and sets a neutral dark bg.
+        /// Activates Acrylic blur mode — sets SystemBackdropType to Acrylic if blur is enabled,
+        /// otherwise falls back to a solid background.
+        /// </summary>
+        private void RestoreAcrylicBlur()
+        {
+            ClearWallpaperLayers();
+            bool blurEnabled = Classes.SettingsManager.Current.EnableBlurBehind 
+                               && Classes.NativeMethods.ShouldUseBlur();
+            if (blurEnabled)
+            {
+                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Acrylic;
+                this.Background = Brushes.Transparent;
+                if (RootContent != null)
+                    RootContent.Background = new SolidColorBrush(Color.FromArgb(0x01, 0, 0, 0)); // Near-transparent for hit-testing
+            }
+            else
+            {
+                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+                ApplyPopupBackground(); // solid dark
+            }
+            ResetSelectionAccent();
+        }
+
+        /// <summary>
+        /// Applies a solid dark background for Desktop and Custom themes.
         /// </summary>
         private void ApplyNonMicaBackground()
         {
             ClearWallpaperLayers();
-
-            // Disable system blur/acrylic — only Mica mode gets it
             this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
             ApplyPopupBackground();
-
-            // Reset selection accent to default (violet)
             ResetSelectionAccent();
         }
 
@@ -256,9 +286,27 @@ namespace FlyShelf
                     WallpaperBg.Source = bmp;
                     WallpaperBg.Visibility = Visibility.Visible;
 
-                    // Layer 3: Frosted glass header
-                    WallpaperFrostImg.Source = bmp;
+                    // Layer 3: Frosted glass header — pre-blur on background thread
                     WallpaperFrostHeader.Visibility = Visibility.Visible;
+                    var capturedPathForBlur = path;
+                    var bmpForBlur = bmp;
+                    _ = System.Threading.Tasks.Task.Run(() =>
+                    {
+                        try
+                        {
+                            // Pre-blur at radius 12 for frosted header (replaces runtime BlurEffect)
+                            var blurredHeader = PreBlurBitmap(bmpForBlur, 12);
+                            // Pre-blur at radius 18 for selected card backdrop
+                            var blurredCards = PreBlurBitmap(bmpForBlur, 18);
+                            Dispatcher.InvokeAsync(() =>
+                            {
+                                if (_currentLoadedWallpaperPath != capturedPathForBlur) return; // Stale
+                                WallpaperFrostImg.Source = blurredHeader;
+                                Resources["PreBlurredWallpaper"] = blurredCards;
+                            });
+                        }
+                        catch { }
+                    });
 
                     // Extract dominant color for theme gradient asynchronously to prevent UI stutter
                     System.Threading.Tasks.Task.Run(() =>
@@ -358,6 +406,36 @@ namespace FlyShelf
             catch { }
 
             return Color.FromRgb(99, 102, 241); // Fallback indigo
+        }
+
+        /// <summary>
+        /// Pre-renders a blurred version of a BitmapImage on a background thread.
+        /// Returns a frozen BitmapSource safe for cross-thread assignment to Image.Source.
+        /// This replaces runtime WPF BlurEffect which re-rasterizes every render pass.
+        /// </summary>
+        private static System.Windows.Media.Imaging.BitmapSource PreBlurBitmap(
+            System.Windows.Media.Imaging.BitmapImage source, int radius)
+        {
+            var image = new System.Windows.Controls.Image
+            {
+                Source = source,
+                Effect = new System.Windows.Media.Effects.BlurEffect
+                {
+                    Radius = radius,
+                    KernelType = System.Windows.Media.Effects.KernelType.Gaussian
+                },
+                Width = source.PixelWidth,
+                Height = source.PixelHeight
+            };
+            image.Measure(new Size(source.PixelWidth, source.PixelHeight));
+            image.Arrange(new Rect(0, 0, source.PixelWidth, source.PixelHeight));
+
+            var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                source.PixelWidth, source.PixelHeight, 96, 96,
+                System.Windows.Media.PixelFormats.Pbgra32);
+            rtb.Render(image);
+            rtb.Freeze();
+            return rtb;
         }
     }
 }

@@ -94,8 +94,11 @@ namespace FlyShelf.Windows
                     NoWallpaperText.Visibility = Visibility.Visible;
                 }
 
-                // Blur + dark fallback when Mica is off
-                if (SettingsManager.Current.EnableBlurBehind && NativeMethods.ShouldUseBlur())
+                // Blur + dark fallback based on ThemeDisplayMode and EnableBlurBehind
+                string mode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                bool blurEnabled = SettingsManager.Current.EnableBlurBehind && NativeMethods.ShouldUseBlur();
+
+                if (blurEnabled && mode == "mica")
                 {
                     this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
                     this.Background = System.Windows.Media.Brushes.Transparent;
@@ -107,6 +110,22 @@ namespace FlyShelf.Windows
                         if (hwnd != IntPtr.Zero)
                         {
                             int colorDefault = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE = transparent for Mica
+                            NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref colorDefault, sizeof(int));
+                        }
+                    } catch { }
+                }
+                else if (blurEnabled && mode == "glass")
+                {
+                    this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Acrylic;
+                    this.Background = System.Windows.Media.Brushes.Transparent;
+                    if (RootGrid != null) RootGrid.Background = null;
+                    // Reset caption to default (transparent for Acrylic)
+                    try
+                    {
+                        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                        if (hwnd != IntPtr.Zero)
+                        {
+                            int colorDefault = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE = transparent
                             NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref colorDefault, sizeof(int));
                         }
                     } catch { }
@@ -419,8 +438,8 @@ namespace FlyShelf.Windows
                 // Mode 1: Mica Blur — pure system blur, no wallpaper, no mascot
                 ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "Mica Blur", Tag = "__mica__" });
 
-                // Mode 2: Glass — glassmorphism UI (frosted buttons, translucent cards)
-                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "Glass", Tag = "__glass__" });
+                // Mode 2: Acrylic Blur — glassmorphism UI + system Acrylic blur
+                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "Acrylic Blur", Tag = "__glass__" });
 
                 // Mode 3: FlyShelf — desktop wallpaper on clipboard, Mica blur on hub
                 ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "FlyShelf", Tag = "__desktop__" });

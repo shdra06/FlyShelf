@@ -609,7 +609,7 @@
 
                                             <!-- Extract Text (OCR) -->
                                             <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Extract Text (OCR)" Command="{Binding DataContext.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="TextDescription24" FontSize="14" Foreground="#A855F7" /></ui:Button.Icon>
+                                                <TextBlock Text="T" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI" Foreground="#A855F7" Margin="4,0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>

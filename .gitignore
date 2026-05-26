@@ -82,3 +82,8 @@ FlyShelf_Mobile.apk
 
 # ─── Firebase Security Credentials ────────────────────────────
 FlyShelf_PC/Classes/FirebaseSecrets.cs
+
+# ─── Website (Next.js) Build Artifacts ────────────────────────
+flyshelf-web/node_modules/
+flyshelf-web/.next/
+flyshelf-web/out/

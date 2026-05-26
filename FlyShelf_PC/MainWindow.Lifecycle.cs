@@ -176,6 +176,7 @@ namespace FlyShelf
         private bool _isPersistentMode = false;
         private bool _isAnimatingHide = false;
         private bool _isShowAnimating = false;
+        private bool _isApplyingTheme = false;
 
         /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
         private void PlayShowAnimation()

@@ -14,6 +14,8 @@ namespace FlyShelf.Windows
         private global::Windows.Media.Ocr.OcrResult _ocrResult = null;
         private double _originalWidth = 0;
         private double _originalHeight = 0;
+        private double _imageDpiX = 1.0;
+        private double _imageDpiY = 1.0;
         // The pixel dimensions of the bitmap that was passed to the OCR engine.
         // May differ from _originalWidth/_originalHeight if the image was upscaled for better OCR.
         private double _ocrBitmapWidth = 0;
@@ -22,6 +24,7 @@ namespace FlyShelf.Windows
         public QuickLookWindow(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null)
         {
             InitializeComponent();
+            FlyShelf.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             _item = item;
             _ocrResult = preLoadedOcr;
 
@@ -52,20 +55,7 @@ namespace FlyShelf.Windows
             {
                 bool isLight = FlyShelf.Classes.SettingsManager.Current.ColorScheme == 1;
 
-                // Toggle DWM Immersive Dark Mode attribute on QuickLook so native shadow borders adapt to light/dark
-                try
-                {
-                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                    if (hwnd != IntPtr.Zero)
-                    {
-                        int darkValue = isLight ? 0 : 1;
-                        FlyShelf.Classes.NativeMethods.DwmSetWindowAttribute(hwnd, 20, ref darkValue, sizeof(int));
-
-                        int cn = FlyShelf.Classes.NativeMethods.DWMWA_COLOR_DARK_GRAY;
-                        FlyShelf.Classes.NativeMethods.DwmSetWindowAttribute(hwnd, FlyShelf.Classes.NativeMethods.DWMWA_BORDER_COLOR, ref cn, sizeof(int));
-                    }
-                }
-                catch { }
+                // Handled cleanly by centralized ApplyWindowBackdropAndBackground logic in constructor
 
                 if (isLight)
                 {
@@ -132,10 +122,28 @@ namespace FlyShelf.Windows
                         PreviewImage.Source = bitmap;
                         _originalWidth = bitmap.PixelWidth;
                         _originalHeight = bitmap.PixelHeight;
+                        double initDpiX = bitmap.DpiX > 0 ? bitmap.DpiX / 96.0 : 1.0;
+                        double initDpiY = bitmap.DpiY > 0 ? bitmap.DpiY / 96.0 : 1.0;
+                        _imageDpiX = initDpiX;
+                        _imageDpiY = initDpiY;
+
+                        double gridW = bitmap.PixelWidth / initDpiX;
+                        double gridH = bitmap.PixelHeight / initDpiY;
+
+                        if (ImageContainerGrid != null)
+                        {
+                            ImageContainerGrid.Width = gridW;
+                            ImageContainerGrid.Height = gridH;
+                        }
+                        if (OcrOverlayCanvas != null)
+                        {
+                            OcrOverlayCanvas.Width = gridW;
+                            OcrOverlayCanvas.Height = gridH;
+                        }
                         
                         // Pre-scale intelligently based on original image aspect ratio and dpi to eliminate black spaces
-                        double dpiX = bitmap.DpiX > 0 ? bitmap.DpiX / 96.0 : 1.0;
-                        double dpiY = bitmap.DpiY > 0 ? bitmap.DpiY / 96.0 : 1.0;
+                        double dpiX = initDpiX;
+                        double dpiY = initDpiY;
                         double imgW = bitmap.PixelWidth / dpiX;
                         double imgH = bitmap.PixelHeight / dpiY;
                         double aspect = imgW / imgH;
@@ -666,42 +674,6 @@ namespace FlyShelf.Windows
             }
         }
 
-        private Rect GetImageRenderRect(System.Windows.Controls.Image image)
-        {
-            if (image == null || image.Source == null || image.ActualWidth == 0 || image.ActualHeight == 0)
-                return new Rect();
-
-            // CRITICAL: Use PixelWidth/PixelHeight for coordinate mapping,
-            // since OCR bounding rects are in pixel coordinates.
-            // source.Width/Height are in DIPs and cause misalignment on non-96 DPI images.
-            double srcWidth, srcHeight;
-            if (image.Source is BitmapSource bmpSrc)
-            {
-                double dpiScaleX = bmpSrc.DpiX > 0 ? bmpSrc.DpiX / 96.0 : 1.0;
-                double dpiScaleY = bmpSrc.DpiY > 0 ? bmpSrc.DpiY / 96.0 : 1.0;
-                srcWidth = bmpSrc.PixelWidth / dpiScaleX;
-                srcHeight = bmpSrc.PixelHeight / dpiScaleY;
-            }
-            else
-            {
-                srcWidth = image.Source.Width;
-                srcHeight = image.Source.Height;
-            }
-
-            double scaleX = image.ActualWidth / srcWidth;
-            double scaleY = image.ActualHeight / srcHeight;
-
-            double scale = Math.Min(scaleX, scaleY);
-
-            double displayWidth = srcWidth * scale;
-            double displayHeight = srcHeight * scale;
-
-            double left = (image.ActualWidth - displayWidth) / 2.0;
-            double top = (image.ActualHeight - displayHeight) / 2.0;
-
-            return new Rect(left, top, displayWidth, displayHeight);
-        }
-
         /// <summary>
         /// Tracks which word overlays are currently "selected" (highlighted) for multi-word Ctrl+C copy.
         /// </summary>
@@ -727,13 +699,22 @@ namespace FlyShelf.Windows
             _selectedWordBorders.Clear();
             _selectedWordTexts.Clear();
 
-            Rect renderRect = GetImageRenderRect(PreviewImage);
-            if (renderRect.Width == 0 || renderRect.Height == 0) return;
+            // Calculate size in logical Device-Independent Pixels (DIPs) to match WPF's layout engine.
+            // Sizing the canvas and the container grid in DIPs ensures pixel-perfect mapping at any DPI.
+            double containerW = _originalWidth / _imageDpiX;
+            double containerH = _originalHeight / _imageDpiY;
 
-            // Use the OCR bitmap dimensions for coordinate mapping.
-            // These may differ from _originalWidth/_originalHeight if upscaling was applied.
-            double ocrW = _ocrBitmapWidth > 0 ? _ocrBitmapWidth : _originalWidth;
-            double ocrH = _ocrBitmapHeight > 0 ? _ocrBitmapHeight : _originalHeight;
+            if (ImageContainerGrid != null)
+            {
+                ImageContainerGrid.Width = containerW;
+                ImageContainerGrid.Height = containerH;
+            }
+            OcrOverlayCanvas.Width = containerW;
+            OcrOverlayCanvas.Height = containerH;
+
+            // Calculate the upscale scale factor. _ocrBitmapWidth can be larger if OCR upscaling was active.
+            double scaleX = _ocrBitmapWidth > 0 ? (_ocrBitmapWidth / _originalWidth) : 1.0;
+            double scaleY = _ocrBitmapHeight > 0 ? (_ocrBitmapHeight / _originalHeight) : 1.0;
 
             // Brushes reused across all words — store as fields for drag-selection reuse
             _ocrHoverBg = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x18, 0x60, 0xA5, 0xFA));
@@ -760,16 +741,16 @@ namespace FlyShelf.Windows
 
                     string wordText = word.Text;
 
-                    // Map word bounding rect to displayed image coordinates
-                    // OCR coords are in the OCR bitmap's pixel space (ocrW x ocrH)
-                    double scaledLeft = renderRect.Left + (rect.X / ocrW) * renderRect.Width;
-                    double scaledTop = renderRect.Top + (rect.Y / ocrH) * renderRect.Height;
-                    double scaledWidth = (rect.Width / ocrW) * renderRect.Width;
-                    double scaledHeight = (rect.Height / ocrH) * renderRect.Height;
+                    // Map raw physical OCR pixel coordinates to the original image's DIP space.
+                    // This accounts for both OCR upscaling (scaleX/scaleY) and the image's embedded DPI metadata (_imageDpiX/_imageDpiY).
+                    double scaledLeft = rect.X / (scaleX * _imageDpiX);
+                    double scaledTop = rect.Y / (scaleY * _imageDpiY);
+                    double scaledWidth = rect.Width / (scaleX * _imageDpiX);
+                    double scaledHeight = rect.Height / (scaleY * _imageDpiY);
 
                     if (scaledWidth <= 0 || scaledHeight <= 0) continue;
 
-                    // Add horizontal padding to fill gaps between words (makes drag selection smoother)
+                    // Add horizontal/vertical padding for smoother selection
                     double hPad = Math.Max(3, scaledWidth * 0.12);
                     double vPad = Math.Max(1, scaledHeight * 0.08);
 
@@ -787,7 +768,6 @@ namespace FlyShelf.Windows
                         Focusable = true,
                         Tag = wordText // store text in Tag for easy retrieval
                     };
-
 
                     // --- Click to select + start drag-to-select ---
                     wordBorder.MouseLeftButtonDown += (s, ev) =>
@@ -959,7 +939,7 @@ namespace FlyShelf.Windows
             if (border == null || _selectedWordBorders.Contains(border)) return;
             border.Background = _ocrSelectedBg;
             border.BorderBrush = _ocrSelectedBorder;
-            border.BorderThickness = new Thickness(1);
+            border.BorderThickness = new Thickness(2); // increased to 2 for crisp Viewbox scaling
             _selectedWordBorders.Add(border);
             _selectedWordTexts.Add(border.Tag as string ?? "");
         }

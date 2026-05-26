@@ -10,6 +10,9 @@
         MouseDoubleClick="Window_MouseDoubleClick"
         MouseMove="Window_MouseMove" Deactivated="Window_Deactivated"
         Loaded="Window_Loaded">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="6" CornerRadius="12" GlassFrameThickness="-1" />
+    </WindowChrome.WindowChrome>
     <Grid>
         <!-- Dynamic Frame -->
         <Border x:Name="OuterBorder" CornerRadius="12" Background="#1C1C1C" BorderBrush="#30FFFFFF" BorderThickness="1" ClipToBounds="True">
@@ -26,45 +29,32 @@
                     <!-- Action Buttons (right side) -->
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
                         <!-- Rotate Button (image only) -->
-                        <Border CornerRadius="6" Background="#CC1F1F23" BorderBrush="#22FFFFFF" BorderThickness="1" Margin="0,0,4,0" Padding="0"
-                                Visibility="{Binding ElementName=RotateBtn, Path=Visibility}">
-                            <ui:Button x:Name="RotateBtn" Click="RotateButton_Click" Appearance="Secondary" 
-                                       Foreground="#60A5FA" Padding="5,3" ToolTip="Rotate 90° clockwise"
-                                       Visibility="Collapsed">
-                                <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowRotateClockwise24" Filled="True" FontSize="14"/></ui:Button.Icon>
-                            </ui:Button>
-                        </Border>
+                        <ui:Button x:Name="RotateBtn" Click="RotateButton_Click" Appearance="Secondary" 
+                                   Foreground="#60A5FA" Padding="5,3" Margin="0,0,4,0" ToolTip="Rotate 90° clockwise"
+                                   Visibility="Collapsed">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowRotateClockwise24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
                         <!-- OCR Button (image only) -->
-                        <Border CornerRadius="6" Background="#CC1F1F23" BorderBrush="#22FFFFFF" BorderThickness="1" Margin="0,0,4,0" Padding="0"
-                                Visibility="{Binding ElementName=OcrBtn, Path=Visibility}">
-                            <ui:Button x:Name="OcrBtn" Click="OcrButton_Click" Appearance="Secondary" 
-                                       Foreground="#34D399" Padding="5,3" ToolTip="Extract &amp; Select Text (OCR)"
-                                       Visibility="Collapsed">
-                                <ui:Button.Icon><ui:SymbolIcon Symbol="TextDescription24" Filled="True" FontSize="14"/></ui:Button.Icon>
-                            </ui:Button>
-                        </Border>
+                        <ui:Button x:Name="OcrBtn" Click="OcrButton_Click" Appearance="Secondary" 
+                                   Foreground="#34D399" Padding="5,3" Margin="0,0,4,0" ToolTip="Extract &amp; Select Text (OCR)"
+                                   Visibility="Collapsed">
+                            <TextBlock Text="T" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI" Margin="3,0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </ui:Button>
                         <!-- Copy All OCR Text Button -->
-                        <Border CornerRadius="6" Background="#CC1F1F23" BorderBrush="#22FFFFFF" BorderThickness="1" Margin="0,0,4,0" Padding="0"
-                                Visibility="{Binding ElementName=CopyAllOcrBtn, Path=Visibility}">
-                            <ui:Button x:Name="CopyAllOcrBtn" Click="CopyAllOcrButton_Click" Appearance="Secondary" 
-                                       Foreground="#A855F7" Padding="5,3" ToolTip="Copy all detected text"
-                                       Visibility="Collapsed">
-                                <ui:Button.Icon><ui:SymbolIcon Symbol="Copy24" Filled="True" FontSize="14"/></ui:Button.Icon>
-                            </ui:Button>
-                        </Border>
+                        <ui:Button x:Name="CopyAllOcrBtn" Click="CopyAllOcrButton_Click" Appearance="Secondary" 
+                                   Foreground="#A855F7" Padding="5,3" Margin="0,0,4,0" ToolTip="Copy all detected text"
+                                   Visibility="Collapsed">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Copy24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
                         <!-- Pin Button (toggle always on top) -->
-                        <Border CornerRadius="6" Background="#CC1F1F23" BorderBrush="#22FFFFFF" BorderThickness="1" Margin="0,0,4,0" Padding="0">
-                            <ui:Button x:Name="PinBtn" Click="PinButton_Click" Appearance="Secondary" 
-                                       Foreground="#F59E0B" Padding="5,3" ToolTip="Pin on top">
-                                <ui:Button.Icon><ui:SymbolIcon x:Name="PinIcon" Symbol="Pin24" Filled="True" FontSize="14"/></ui:Button.Icon>
-                            </ui:Button>
-                        </Border>
+                        <ui:Button x:Name="PinBtn" Click="PinButton_Click" Appearance="Secondary" 
+                                   Foreground="#F59E0B" Padding="5,3" Margin="0,0,4,0" ToolTip="Pin on top">
+                            <ui:Button.Icon><ui:SymbolIcon x:Name="PinIcon" Symbol="Pin24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
                         <!-- Close -->
-                        <Border CornerRadius="6" Background="#CC1F1F23" BorderBrush="#22FFFFFF" BorderThickness="1" Padding="0">
-                            <ui:Button x:Name="CloseBtn" Click="CloseButton_Click" Appearance="Secondary" Foreground="#EF4444" Padding="5,3" ToolTip="Close">
-                                <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" Filled="True" FontSize="14"/></ui:Button.Icon>
-                            </ui:Button>
-                        </Border>
+                        <ui:Button x:Name="CloseBtn" Click="CloseButton_Click" Appearance="Secondary" Foreground="#EF4444" Padding="5,3" ToolTip="Close">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
                     </StackPanel>
                 </Grid>
 
@@ -72,8 +62,12 @@
                     <ProgressBar IsIndeterminate="True" x:Name="LoadingProgress" VerticalAlignment="Top" Height="3" Background="Transparent" Foreground="#60A5FA" BorderThickness="0" Visibility="Collapsed" Panel.ZIndex="10" />
                     <!-- Image Mode Grid -->
                     <Grid x:Name="ImageModeGrid" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                        <Image x:Name="PreviewImage" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
-                        <Canvas x:Name="OcrOverlayCanvas" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Visibility="Collapsed" ClipToBounds="True"/>
+                        <Viewbox Stretch="Uniform" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                            <Grid x:Name="ImageContainerGrid">
+                                <Image x:Name="PreviewImage" Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                <Canvas x:Name="OcrOverlayCanvas" Background="Transparent" ClipToBounds="True"/>
+                            </Grid>
+                        </Viewbox>
                     </Grid>
                     
                     <!-- Dynamic Document Mode (PDF/HTML) -->

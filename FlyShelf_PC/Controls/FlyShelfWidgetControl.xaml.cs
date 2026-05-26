@@ -26,8 +26,44 @@ namespace FlyShelf.Controls
         {
             if (_mainWindow != null)
             {
-                var point = PointToScreen(e.GetPosition(this));
-                FlyShelf.Classes.Logger.LogAction("TELEMETRY", $"Widget left click received, point=({point.X}, {point.Y})");
+                double logicalX = 0;
+                double logicalY = 0;
+                
+                if (FlyShelf.Classes.NativeMethods.GetCursorPos(out var pt))
+                {
+                    logicalX = pt.X;
+                    logicalY = pt.Y;
+                    try
+                    {
+                        var monitor = FlyShelf.Classes.Utils.MonitorUtil.GetMonitorWithCursor();
+                        double scaleX = monitor.dpiX / 96.0;
+                        double scaleY = monitor.dpiY / 96.0;
+                        if (scaleX > 0 && scaleY > 0)
+                        {
+                            logicalX = pt.X / scaleX;
+                            logicalY = pt.Y / scaleY;
+                        }
+                    }
+                    catch { }
+                }
+                else
+                {
+                    // Fallback to PointToScreen if GetCursorPos fails
+                    try
+                    {
+                        var point = PointToScreen(e.GetPosition(this));
+                        logicalX = point.X;
+                        logicalY = point.Y;
+                    }
+                    catch
+                    {
+                        // Sane fallback
+                        logicalX = System.Windows.SystemParameters.PrimaryScreenWidth / 2;
+                        logicalY = System.Windows.SystemParameters.PrimaryScreenHeight / 2;
+                    }
+                }
+
+                FlyShelf.Classes.Logger.LogAction("TELEMETRY", $"Widget left click received, screen point=({logicalX}, {logicalY})");
                 bool isMode1 = false;
                 if (_mainWindow.DataContext is FlyShelf.ViewModels.FlyShelfViewModel vm && vm.CurrentMode == 1)
                 {
@@ -40,7 +76,7 @@ namespace FlyShelf.Controls
                 }
                 else
                 {
-                    _mainWindow.ShowNearPosition(point.X, point.Y, 1, false);
+                    _mainWindow.ShowNearPosition(logicalX, logicalY, 1, false);
                 }
             }
         }

@@ -253,6 +253,11 @@ namespace FlyShelf
             {
                 if (e.PropertyName == nameof(Classes.AdvanceSettings.ClipboardWallpaperPath))
                     Dispatcher.InvokeAsync(() => ApplyWallpaper());
+                else if (e.PropertyName == nameof(Classes.AdvanceSettings.EnableBlurBehind) ||
+                         e.PropertyName == nameof(Classes.AdvanceSettings.ThemeDisplayMode))
+                {
+                    Dispatcher.InvokeAsync(() => _themeChangedHandler?.Invoke(Classes.ThemeManager.Instance.ActiveTheme));
+                }
             };
             Classes.SettingsManager.Current.PropertyChanged += _settingsChangedHandler;
 
@@ -371,21 +376,12 @@ namespace FlyShelf
                 Classes.Logger.LogAction("HOOK_FAIL", $"Failed to setup foreground win event hook: {ex.Message}");
             }
 
-            // DWM border styling — must happen after window is shown
+            // DWM border styling — set synchronously, no deferred callback
             var handle = new WindowInteropHelper(this).Handle;
             if (handle != IntPtr.Zero)
             {
-                System.Threading.Tasks.Task.Delay(50).ContinueWith(_ =>
-                {
-                    Dispatcher.InvokeAsync(() =>
-                    {
-                        if (new WindowInteropHelper(this).Handle != IntPtr.Zero)
-                        {
-                            int colorNone = DWMWA_COLOR_DARK_GRAY;
-                            DwmSetWindowAttribute(new WindowInteropHelper(this).Handle, DWMWA_BORDER_COLOR, ref colorNone, Marshal.SizeOf<int>());
-                        }
-                    });
-                });
+                int borderColor = DWMWA_COLOR_DARK_GRAY;
+                DwmSetWindowAttribute(handle, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
             }
 
             // Hook state changes to prevent DWM border leakage on minimize/maximize/restore/etc.
@@ -423,10 +419,15 @@ namespace FlyShelf
             // Apply wallpaper is now handled by the deferred theme block at ApplicationIdle
             // (no more redundant early load that gets overwritten by theme init)
 
-            // ═══ INITIALIZE HIGH-PERFORMANCE SOLID BACKGROUND ═══
-            // Completely disable DWM Acrylic backdrops to prevent summoning lag/ghost frames.
-            this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
-            ApplyPopupBackground();
+            // ═══ BACKDROP STRATEGY: Set once, never toggle ═══
+            // SystemBackdropType is set to Mica via XAML attribute.
+            // On Win10 (Build < 22000), Mica doesn't exist — fall back to solid background once.
+            // This is the ONLY place SystemBackdropType is ever modified at runtime.
+            if (Environment.OSVersion.Version.Build < 22000)
+            {
+                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+                ApplyPopupBackground();
+            }
 
             // Pre-initialize the heavy Hub Window in the background when the system is truly idle
             // Priority: SystemIdle (lowest) — runs AFTER theme init to avoid competing for UI thread
@@ -553,6 +554,8 @@ namespace FlyShelf
                     {
                         Dispatcher.InvokeAsync(() =>
                         {
+                            if (_isApplyingTheme) return; // Reentrancy guard — prevent overlapping theme applications
+                            _isApplyingTheme = true;
                             try
                             {
                                 // STEP 1: Always stop/clear the old mascot + wallpaper first
@@ -587,11 +590,11 @@ namespace FlyShelf
                                 else if (displayMode == "glass")
                                 {
                                     // ═══ GLASS MODE ═══
-                                    // Glassmorphism UI — frosted buttons, translucent cards, NO system blur
+                                    // Glassmorphism UI — frosted buttons, translucent cards, and optional Acrylic blur
                                     Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
-                                    ApplyNonMicaBackground();
+                                    RestoreAcrylicBlur();
                                     Classes.ThemeManager.Instance.ApplyGlassTheme();
-                                    Classes.Logger.LogAction("THEME", "Mode: Glass — glassmorphism UI applied (no blur)");
+                                    Classes.Logger.LogAction("THEME", "Mode: Glass (Acrylic Blur) — glassmorphism UI applied");
                                 }
                                 else if (displayMode == "desktop")
                                 {
@@ -644,6 +647,7 @@ namespace FlyShelf
                             catch (Exception ex) { Classes.Logger.LogAction("THEME", $"Theme switch error: {ex.Message}"); }
                             finally
                             {
+                                _isApplyingTheme = false;
                                 // Re-apply DWM border color override after backdrop/theme changes to prevent system accent color leakage
                                 try
                                 {
@@ -664,9 +668,9 @@ namespace FlyShelf
                     string startupMode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica";
                     if (startupMode == "glass")
                     {
-                        // Glass mode — no system blur, glassmorphism UI
+                        // Glass mode — optional system blur, glassmorphism UI
                         Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
-                        ApplyNonMicaBackground();
+                        RestoreAcrylicBlur();
                         Classes.ThemeManager.Instance.ApplyGlassTheme();
                     }
                     else if (startupMode == "desktop")
