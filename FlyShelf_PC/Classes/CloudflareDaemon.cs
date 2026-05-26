@@ -212,106 +212,111 @@ namespace FlyShelf.Classes
 
                 if (tunnelUrlReceived)
                 {
-                    // Verify the tunnel by checking if the LOCAL server responds on localhost.
-                    // Then verify DNS is resolvable so receivers can actually reach us.
-                    await Task.Delay(3000); // Give cloudflared time to establish the proxy
+                    Logger.LogAction("CLOUDFLARE", $"Tunnel URL received: {GlobalUrl}. Initiating verification in background task...");
                     
-                    bool verified = false;
-                    using var verifyClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
-                    
-                    // Phase 1: Verify local server is responding (this is what Cloudflare proxies to)
-                    for (int v = 0; v < 3; v++)
+                    // Asynchronous fire-and-forget verification to completely avoid blocking application startup
+                    _ = Task.Run(async () =>
                     {
-                        try
-                        {
-                            Logger.LogAction("CLOUDFLARE", $"Verifying local server (attempt {v + 1}/3)...");
-                            var localResp = await verifyClient.GetAsync($"http://localhost:{_localPort}/api/health");
-                            if (localResp.IsSuccessStatusCode)
-                            {
-                                verified = true;
-                                IsTunnelVerified = true;
-                                Logger.LogAction("CLOUDFLARE", $"✅ Local server verified on port {_localPort} — tunnel is live: {GlobalUrl}");
-                                break;
-                            }
-                            Logger.LogAction("CLOUDFLARE", $"Local verify attempt {v + 1}/3: HTTP {(int)localResp.StatusCode}");
-                        }
-                        catch (Exception pingEx)
-                        {
-                            Logger.LogAction("CLOUDFLARE", $"Local verify attempt {v + 1}/3 failed: {pingEx.Message}");
-                        }
-                        await Task.Delay(2000);
-                    }
-                    
-                    // Phase 2: Wait for DNS propagation before publishing URL to Firebase.
-                    // Without this, receivers get "No such host" because Cloudflare's DNS
-                    // hasn't propagated the new subdomain yet.
-                    if (verified)
-                    {
-                        bool dnsReady = false;
-                        for (int d = 0; d < 15; d++) // Up to 15 attempts × 3s = ~45s max wait
-                        {
-                            try
-                            {
-                                // Extract hostname from URL for DNS check
-                                var uri = new Uri(GlobalUrl);
-                                var addresses = await System.Net.Dns.GetHostAddressesAsync(uri.Host);
-                                if (addresses.Length > 0)
-                                {
-                                    dnsReady = true;
-                                    Logger.LogAction("CLOUDFLARE", $"✅ DNS resolved: {uri.Host} → {addresses[0]} ({d * 3}s wait)");
-                                    break;
-                                }
-                            }
-                            catch (Exception dnsEx)
-                            {
-                                Logger.LogAction("CLOUDFLARE", $"DNS not ready (attempt {d + 1}/15): {dnsEx.Message}");
-                            }
-                            if (d < 14) await Task.Delay(3000); // Wait 3s between DNS checks
-                        }
+                        await Task.Delay(3000); // Give cloudflared time to establish the proxy
                         
-                        if (!dnsReady)
-                        {
-                            Logger.LogAction("CLOUDFLARE", "⚠️ DNS propagation timeout — publishing URL anyway (receivers will use fallback)");
-                        }
-                    }
-
-                    // Phase 3: Optional — try the public URL too (works on networks with good DNS)
-                    if (!verified)
-                    {
-                        Logger.LogAction("CLOUDFLARE", "Local server check failed — trying public URL as fallback...");
-                        for (int v = 0; v < 2; v++)
+                        bool verified = false;
+                        using var verifyClient = new HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
+                        
+                        // Phase 1: Verify local server is responding (this is what Cloudflare proxies to)
+                        for (int v = 0; v < 3; v++)
                         {
                             try
                             {
-                                await Task.Delay(3000);
-                                var pubResp = await verifyClient.GetAsync($"{GlobalUrl}/api/health");
-                                if (pubResp.IsSuccessStatusCode)
+                                Logger.LogAction("CLOUDFLARE", $"Verifying local server (attempt {v + 1}/3)...");
+                                var localResp = await verifyClient.GetAsync($"http://localhost:{_localPort}/api/health");
+                                if (localResp.IsSuccessStatusCode)
                                 {
                                     verified = true;
                                     IsTunnelVerified = true;
-                                    Logger.LogAction("CLOUDFLARE", $"✅ Tunnel verified via public URL: {GlobalUrl}");
+                                    Logger.LogAction("CLOUDFLARE", $"✅ Local server verified on port {_localPort} — tunnel is live: {GlobalUrl}");
                                     break;
                                 }
-                                Logger.LogAction("CLOUDFLARE", $"Public URL verify {v + 1}/2: HTTP {(int)pubResp.StatusCode}");
+                                Logger.LogAction("CLOUDFLARE", $"Local verify attempt {v + 1}/3: HTTP {(int)localResp.StatusCode}");
                             }
-                            catch (Exception pubEx)
+                            catch (Exception pingEx)
                             {
-                                Logger.LogAction("CLOUDFLARE", $"Public URL verify {v + 1}/2 failed: {pubEx.Message}");
+                                Logger.LogAction("CLOUDFLARE", $"Local verify attempt {v + 1}/3 failed: {pingEx.Message}");
+                            }
+                            await Task.Delay(2000);
+                        }
+                        
+                        // Phase 2: Wait for DNS propagation before publishing URL to Firebase.
+                        // Without this, receivers get "No such host" because Cloudflare's DNS
+                        // hasn't propagated the new subdomain yet.
+                        if (verified)
+                        {
+                            bool dnsReady = false;
+                            for (int d = 0; d < 15; d++) // Up to 15 attempts × 3s = ~45s max wait
+                            {
+                                try
+                                {
+                                    // Extract hostname from URL for DNS check
+                                    var uri = new Uri(GlobalUrl);
+                                    var addresses = await System.Net.Dns.GetHostAddressesAsync(uri.Host);
+                                    if (addresses.Length > 0)
+                                    {
+                                        dnsReady = true;
+                                        Logger.LogAction("CLOUDFLARE", $"✅ DNS resolved: {uri.Host} → {addresses[0]} ({d * 3}s wait)");
+                                        break;
+                                    }
+                                }
+                                catch (Exception dnsEx)
+                                {
+                                    Logger.LogAction("CLOUDFLARE", $"DNS not ready (attempt {d + 1}/15): {dnsEx.Message}");
+                                }
+                                if (d < 14) await Task.Delay(3000); // Wait 3s between DNS checks
+                            }
+                            
+                            if (!dnsReady)
+                            {
+                                Logger.LogAction("CLOUDFLARE", "⚠️ DNS propagation timeout — publishing URL anyway (receivers will use fallback)");
                             }
                         }
-                    }
+                        
+                        // Phase 3: Optional — try the public URL too (works on networks with good DNS)
+                        if (!verified)
+                        {
+                            Logger.LogAction("CLOUDFLARE", "Local server check failed — trying public URL as fallback...");
+                            for (int v = 0; v < 2; v++)
+                            {
+                                try
+                                {
+                                    await Task.Delay(3000);
+                                    var pubResp = await verifyClient.GetAsync($"{GlobalUrl}/api/health");
+                                    if (pubResp.IsSuccessStatusCode)
+                                    {
+                                        verified = true;
+                                        IsTunnelVerified = true;
+                                        Logger.LogAction("CLOUDFLARE", $"✅ Tunnel verified via public URL: {GlobalUrl}");
+                                        break;
+                                    }
+                                    Logger.LogAction("CLOUDFLARE", $"Public URL verify {v + 1}/2: HTTP {(int)pubResp.StatusCode}");
+                                }
+                                catch (Exception pubEx)
+                                {
+                                    Logger.LogAction("CLOUDFLARE", $"Public URL verify {v + 1}/2 failed: {pubEx.Message}");
+                                }
+                            }
+                        }
 
-                    if (!verified)
-                    {
-                        IsTunnelVerified = false;
-                        Logger.LogAction("CLOUDFLARE", $"⚠️ Tunnel verification FAILED — URL exists but local server not responding: {GlobalUrl}");
-                        Logger.LogAction("CLOUDFLARE", $"⚠️ File sync will use Firebase Storage fallback instead of Cloudflare tunnel.");
-                    }
-                    
-                    // NOW publish the URL to Firebase — DNS has had time to propagate
-                    Logger.LogAction("CLOUDFLARE", $"Publishing tunnel URL to Firebase: {GlobalUrl}");
-                    GlobalUrlUpdated?.Invoke(GlobalUrl);
-                    StartHealthMonitor(); // Begin periodic health checks
+                        if (!verified)
+                        {
+                            IsTunnelVerified = false;
+                            Logger.LogAction("CLOUDFLARE", $"⚠️ Tunnel verification FAILED — URL exists but local server not responding: {GlobalUrl}");
+                            Logger.LogAction("CLOUDFLARE", $"⚠️ File sync will use Firebase Storage fallback instead of Cloudflare tunnel.");
+                        }
+                        
+                        // NOW publish the URL to Firebase — DNS has had time to propagate
+                        Logger.LogAction("CLOUDFLARE", $"Publishing tunnel URL to Firebase: {GlobalUrl}");
+                        GlobalUrlUpdated?.Invoke(GlobalUrl);
+                        StartHealthMonitor(); // Begin periodic health checks
+                    });
+
                     return;
                 }
 

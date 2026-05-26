@@ -133,9 +133,9 @@ namespace FlyShelf.Classes
 
             try
             {
-                // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â v5 PEER-ONLY: Push directly to connected peers Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+                // ═━═━═━ v5 PEER-ONLY: Push directly to connected peers ═━═━═━
                 // PeerManager sends text/files directly via LAN or Cloudflare.
-                // Firebase is NEVER used for content transfer Ã¢â‚¬â€ only for device discovery & URL exchange.
+                // Firebase is NEVER used for content transfer — only for device discovery & URL exchange.
                 bool isTextType = item.ItemType == ClipboardItemType.Text || item.ItemType == ClipboardItemType.Url || item.ItemType == ClipboardItemType.Code;
                 bool isFileEarly = !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath);
 
@@ -165,17 +165,20 @@ namespace FlyShelf.Classes
                     }
                     else
                     {
-                        Logger.LogAction("PEER SYNC", $"Ã¢Å¡Â Ã¯Â¸Â Direct P2P delivery failed Ã¢â‚¬â€ no peers accepted the {(isTextType ? "text" : "file")}");
+                        Logger.LogAction("PEER SYNC", $"⚠️ Direct P2P delivery failed — no peers accepted the {(isTextType ? "text" : "file")}");
+                        throw new InvalidOperationException($"Direct P2P delivery failed: 0 peers accepted the {(isTextType ? "text" : "file")}.");
                     }
                 }
                 else
                 {
-                    Logger.LogAction("PEER SYNC", $"Ã¢Å¡Â Ã¯Â¸Â No peers online Ã¢â‚¬â€ {(isTextType ? "text" : "file")} not delivered");
+                    Logger.LogAction("PEER SYNC", $"⚠️ No online peers available for direct P2P transport.");
+                    throw new InvalidOperationException("No online peers available for direct P2P transport.");
                 }
             }
             catch (Exception ex)
             {
                 Logger.LogAction("PEER SYNC ERROR", ex.Message);
+                throw;
             }
         }
 

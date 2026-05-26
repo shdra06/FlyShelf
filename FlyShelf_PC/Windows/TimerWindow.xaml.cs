@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -8,7 +8,7 @@ using MicaWPF.Controls;
 
 namespace FlyShelf.Windows
 {
-    public partial class TimerWindow : MicaWindow
+    public partial class TimerWindow : Window
     {
         private DispatcherTimer _timer;
         private TimeSpan _remaining;
@@ -31,7 +31,6 @@ namespace FlyShelf.Windows
         public TimerWindow(string contextString)
         {
             InitializeComponent();
-            FlyShelf.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             
             // Cache brushes NOW — avoids FindResource calls during tick which crash
             // when another window disrupts the visual tree
@@ -174,8 +173,8 @@ namespace FlyShelf.Windows
             ArcCanvas.Children.Clear();
             if (progress <= 0) return;
 
-            double size = 220;
-            double strokeWidth = 6;
+            double size = 96;
+            double strokeWidth = 4;
             double radius = (size - strokeWidth) / 2;
             double cx = size / 2;
             double cy = size / 2;

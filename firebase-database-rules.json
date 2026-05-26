@@ -54,7 +54,7 @@
         ".read": "auth != null",
         ".write": "auth != null",
         // Auto-expire: clients should delete after use
-        ".validate": "newData.hasChildren(['PairingKey', 'CreatedAt'])"
+        ".validate": "newData.hasChildren(['deviceId', 'deviceName', 'deviceType', 'pairingKey'])"
       }
     },
 

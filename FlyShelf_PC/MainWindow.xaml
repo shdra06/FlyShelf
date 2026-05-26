@@ -539,16 +539,7 @@
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate>
-                    <Border Name="CardBorder" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1,0.5,1,1" CornerRadius="14" Margin="0" Padding="0" RenderTransformOrigin="0.5,0.5">
-                        <Border.OpacityMask>
-                            <VisualBrush>
-                                <VisualBrush.Visual>
-                                    <Border CornerRadius="14" Background="Black" 
-                                            Width="{Binding ElementName=CardBorder, Path=ActualWidth}"
-                                            Height="{Binding ElementName=CardBorder, Path=ActualHeight}"/>
-                                </VisualBrush.Visual>
-                            </VisualBrush>
-                        </Border.OpacityMask>
+                    <Border Name="CardBorder" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1,0.5,1,1" CornerRadius="14" Margin="0" Padding="0" RenderTransformOrigin="0.5,0.5" ClipToBounds="True">
                         <Border.Background>
                             <SolidColorBrush Color="{DynamicResource MicaWPF.Colors.SubtleFillColorSecondary}" Opacity="0.25" />
                         </Border.Background>
@@ -1065,53 +1056,15 @@
                                             </Setter.Value>
                                         </Setter>
                                         <Style.Triggers>
-                                            <!-- Show on hover or when checked for PDF -->
-                                            <MultiDataTrigger>
-                                                <MultiDataTrigger.Conditions>
-                                                    <Condition Binding="{Binding IsPdfPreview}" Value="True"/>
-                                                    <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True"/>
-                                                </MultiDataTrigger.Conditions>
+                                            <DataTrigger Binding="{Binding IsPdfPreview}" Value="True">
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </MultiDataTrigger>
-                                            <MultiDataTrigger>
-                                                <MultiDataTrigger.Conditions>
-                                                    <Condition Binding="{Binding IsPdfPreview}" Value="True"/>
-                                                    <Condition Binding="{Binding IsCheckedForMerge}" Value="True"/>
-                                                </MultiDataTrigger.Conditions>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsDocPreview}" Value="True">
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </MultiDataTrigger>
-
-                                            <!-- Show on hover or when checked for Document -->
-                                            <MultiDataTrigger>
-                                                <MultiDataTrigger.Conditions>
-                                                    <Condition Binding="{Binding IsDocPreview}" Value="True"/>
-                                                    <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True"/>
-                                                </MultiDataTrigger.Conditions>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </MultiDataTrigger>
-                                            <MultiDataTrigger>
-                                                <MultiDataTrigger.Conditions>
-                                                    <Condition Binding="{Binding IsDocPreview}" Value="True"/>
-                                                    <Condition Binding="{Binding IsCheckedForMerge}" Value="True"/>
-                                                </MultiDataTrigger.Conditions>
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                            </MultiDataTrigger>
-
-                                            <!-- Show on hover or when checked for Image -->
-                                            <MultiDataTrigger>
-                                                <MultiDataTrigger.Conditions>
-                                                    <Condition Binding="{Binding IsImagePreview}" Value="True"/>
-                                                    <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True"/>
-                                                </MultiDataTrigger.Conditions>
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                            </MultiDataTrigger>
-                                            <MultiDataTrigger>
-                                                <MultiDataTrigger.Conditions>
-                                                    <Condition Binding="{Binding IsImagePreview}" Value="True"/>
-                                                    <Condition Binding="{Binding IsCheckedForMerge}" Value="True"/>
-                                                </MultiDataTrigger.Conditions>
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                            </MultiDataTrigger>
+                                            </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Button.Style>

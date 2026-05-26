@@ -8,6 +8,8 @@ using FlyShelf.ViewModels;
 using System;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Data;
+using FlyShelf.Classes;
 
 namespace FlyShelf
 {
@@ -137,8 +139,12 @@ namespace FlyShelf
             }
             
             // Clear the CollectionView filter to show all items again
-            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
-            if (view != null) view.Filter = null;
+            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems) as ListCollectionView;
+            if (view != null)
+            {
+                view.Filter = null;
+                view.CustomSort = null;
+            }
             _viewModel.IsSearchActive = false;
             
             // Also clear any active category filter
@@ -162,29 +168,53 @@ namespace FlyShelf
         private void ApplySearchFilter(string query)
         {
             string queryClean = (query ?? "").Trim();
-            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
+            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems) as ListCollectionView;
             if (view == null) return;
 
             if (string.IsNullOrWhiteSpace(queryClean))
             {
                 view.Filter = null;
+                view.CustomSort = null;
                 _viewModel.IsSearchActive = false;
             }
             else
             {
                 string q = queryClean.ToLowerInvariant();
                 _viewModel.IsSearchActive = true;
+                
+                // Filter logic: Match name, content, extension, or type name
                 view.Filter = obj =>
                 {
                     if (obj is FlyShelf.ViewModels.ClipboardItem item)
                     {
+                        // 1. Check substring match in text content or name
                         if (!string.IsNullOrEmpty(item.RawContent) && item.RawContent.ToLowerInvariant().Contains(q))
                             return true;
                         if (!string.IsNullOrEmpty(item.FileName) && item.FileName.ToLowerInvariant().Contains(q))
                             return true;
+
+                        // 2. Check exact extension match (direct property or via FilePath)
+                        if (!string.IsNullOrEmpty(item.Extension) && item.Extension.Replace(".", "").Trim().ToLowerInvariant() == q)
+                            return true;
+                        if (!string.IsNullOrEmpty(item.FilePath))
+                        {
+                            try
+                            {
+                                string ext = System.IO.Path.GetExtension(item.FilePath).Replace(".", "").Trim().ToLowerInvariant();
+                                if (ext == q) return true;
+                            }
+                            catch { }
+                        }
+
+                        // 3. Check exact match with the item type string
+                        if (item.ItemType.ToString().ToLowerInvariant() == q)
+                            return true;
                     }
                     return false;
                 };
+
+                // Apply custom priority sorter
+                view.CustomSort = new SearchResultComparer(q);
             }
 
             // Render newly visible thumbnails immediately

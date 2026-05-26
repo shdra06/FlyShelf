@@ -112,6 +112,9 @@ namespace FlyShelf.Classes
 
             await DiscoverAndHandshake();
 
+            // ═ ═ ═ UDP MULTICAST: Start zero-config offline discovery ═ ═ ═
+            StartUdpDiscovery();
+
             _ = Task.Run(() => HeartbeatLoop(_cts.Token));
             _ = Task.Run(() => DiscoveryLoop(_cts.Token));
 
@@ -192,6 +195,7 @@ namespace FlyShelf.Classes
         public void Stop()
         {
             _cts.Cancel();
+            StopUdpDiscovery();
             foreach (var p in _peers.Values)
             {
                 p.IsAlive = false;

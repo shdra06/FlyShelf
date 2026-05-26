@@ -463,7 +463,7 @@ namespace FlyShelf.Classes
                 // Check if code is still fresh (5 min TTL)
                 if (info != null && info.timestamp > 0)
                 {
-                    long ageMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - info.timestamp;
+                    long ageMs = NetworkClock.UtcNowMs - info.timestamp;
                     if (ageMs > 5 * 60_000)
                     {
                         Logger.LogAction("PAIR CODE", $"Code {upperCode} expired ({ageMs / 1000}s old)");

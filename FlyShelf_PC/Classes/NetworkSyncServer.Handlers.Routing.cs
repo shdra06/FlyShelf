@@ -114,8 +114,8 @@ namespace FlyShelf.Classes
                 res.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
                 res.AddHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Original-Date, X-FlyShelf-Client, X-Pairing-Key, X-File-Name, X-File-Type, X-Item-Type, X-Source-Device, X-Source-DeviceId, X-Batch-Name, X-Upload-Session, X-Chunk-Index, X-Total-Chunks, X-Device-Id");
                 res.AddHeader("Access-Control-Expose-Headers", "X-Global-Url");
-                // Disable keep-alive: HttpListener's TCP reuse causes 400 errors on rapid-fire requests
-                res.KeepAlive = false;
+                // Enable Keep-Alive to allow socket reuse (crucial for zero-handshake P2P sync and chunked uploads)
+                res.KeepAlive = true;
                 if (!string.IsNullOrEmpty(GlobalUrl)) res.AddHeader("X-Global-Url", GlobalUrl);
 
                 // ═══ RATE LIMITING ═══

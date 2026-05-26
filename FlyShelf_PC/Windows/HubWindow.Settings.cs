@@ -14,6 +14,7 @@ using FlyShelf.Classes;
 using FlyShelf.ViewModels;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.Windows.Data;
 
 namespace FlyShelf.Windows
 {
@@ -393,8 +394,19 @@ namespace FlyShelf.Windows
         private void ApplyFilters()
         {
             if (HubListView.ItemsSource == null) return;
-            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(HubListView.ItemsSource);
-            string query = SearchBox?.Text?.ToLowerInvariant() ?? "";
+            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(HubListView.ItemsSource) as ListCollectionView;
+            if (view == null) return;
+            
+            string queryClean = (SearchBox?.Text ?? "").Trim();
+
+            if (string.IsNullOrWhiteSpace(queryClean))
+            {
+                view.CustomSort = null;
+            }
+            else
+            {
+                view.CustomSort = new SearchResultComparer(queryClean);
+            }
 
             view.Filter = item =>
             {
@@ -412,12 +424,29 @@ namespace FlyShelf.Windows
                         case "Text": passesType = clip.ItemType == ClipboardItemType.Text; break;
                         case "All": passesType = true; break;
                     }
+                    
                     bool passesSearch = true;
-                    if (!string.IsNullOrWhiteSpace(query))
+                    if (!string.IsNullOrWhiteSpace(queryClean))
                     {
-                        passesSearch = (clip.FileName != null && clip.FileName.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) ||
-                                       (clip.RawContent != null && clip.RawContent.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) ||
-                                       (clip.FormatIdentifier != null && clip.FormatIdentifier.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0);
+                        string q = queryClean.ToLowerInvariant();
+                        bool nameMatch = clip.FileName != null && clip.FileName.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0;
+                        bool contentMatch = clip.RawContent != null && clip.RawContent.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0;
+                        bool formatMatch = clip.FormatIdentifier != null && clip.FormatIdentifier.IndexOf(q, StringComparison.OrdinalIgnoreCase) >= 0;
+                        
+                        bool extMatch = !string.IsNullOrEmpty(clip.Extension) && clip.Extension.Replace(".", "").Trim().ToLowerInvariant() == q;
+                        bool pathExtMatch = false;
+                        if (!string.IsNullOrEmpty(clip.FilePath))
+                        {
+                            try
+                            {
+                                string ext = System.IO.Path.GetExtension(clip.FilePath).Replace(".", "").Trim().ToLowerInvariant();
+                                pathExtMatch = ext == q;
+                            }
+                            catch { }
+                        }
+                        bool typeMatch = clip.ItemType.ToString().ToLowerInvariant() == q;
+
+                        passesSearch = nameMatch || contentMatch || formatMatch || extMatch || pathExtMatch || typeMatch;
                     }
                     return passesType && passesSearch;
                 }

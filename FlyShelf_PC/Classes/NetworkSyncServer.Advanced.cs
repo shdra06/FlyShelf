@@ -102,6 +102,17 @@ namespace FlyShelf.Classes
 
                 var chunkFiles = Directory.GetFiles(chunkDir, "chunk_*").OrderBy(f => f).ToArray();
 
+                // Validate chunk count integrity to prevent writing corrupted/truncated files on clipboard
+                if (int.TryParse(totalChunksStr, out int expectedChunks) && expectedChunks > 0 && chunkFiles.Length != expectedChunks)
+                {
+                    Logger.LogAction("CHUNK FINALIZE ERROR", $"Chunk count mismatch for session {sessionId}. Expected: {expectedChunks}, Found: {chunkFiles.Length}");
+                    res.StatusCode = 400;
+                    byte[] errBytes = Encoding.UTF8.GetBytes("{\"error\":\"Chunk count mismatch. Transfer may be incomplete.\"}");
+                    res.ContentType = "application/json";
+                    await res.OutputStream.WriteAsync(errBytes, 0, errBytes.Length);
+                    return;
+                }
+
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                     FlyShelf.Windows.ToastWindow.ShowToast($"Assembling {rawName} ({chunkFiles.Length} chunks)... 📦");
                 });

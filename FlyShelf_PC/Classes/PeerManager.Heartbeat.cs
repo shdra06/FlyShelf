@@ -34,12 +34,12 @@ namespace FlyShelf.Classes
                 var alivePeers = _peers.Values.Where(p => p.IsAlive).ToList();
                 if (alivePeers.Count == 0) continue;
 
-                foreach (var peer in alivePeers)
+                var pingTasks = alivePeers.Select(async peer =>
                 {
                     if (ct.IsCancellationRequested) return;
 
                     // Skip peers with active file transfers — don't kill mid-transfer
-                    if (peer.ActiveTransfers > 0) continue;
+                    if (peer.ActiveTransfers > 0) return;
 
                     bool ok = await PingPeer(peer);
                     if (ok)
@@ -60,7 +60,9 @@ namespace FlyShelf.Classes
                             Logger.LogAction("PEER", $"⚠️ {peer.DeviceName} heartbeat miss ({peer.ConsecutiveFailures}/{MAX_FAILURES})");
                         }
                     }
-                }
+                });
+
+                await Task.WhenAll(pingTasks);
             }
         }
 

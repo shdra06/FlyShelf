@@ -98,11 +98,12 @@ namespace FlyShelf.Classes
                         continue;
                     }
 
+                    using var streamCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
                     string url = await AuthUrl($"active_devices/{pairingKey}.json");
                     var request = new HttpRequestMessage(HttpMethod.Get, url);
                     request.Headers.Add("Accept", "text/event-stream");
 
-                    var response = await _streamClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+                    var response = await _streamClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, streamCts.Token);
                     if (!response.IsSuccessStatusCode)
                     {
                         Logger.LogAction("PEER SSE", $"HTTP {(int)response.StatusCode} — retrying in {reconnectDelay}ms");
@@ -114,15 +115,29 @@ namespace FlyShelf.Classes
                     Logger.LogAction("PEER SSE", "Watching active_devices for URL changes ✓");
                     reconnectDelay = INITIAL_RECONNECT;
 
-                    using var stream = await response.Content.ReadAsStreamAsync();
+                    // Initialize sliding watchdog timer (65s window - Firebase keepalive is 30s)
+                    using var watchdog = new System.Timers.Timer(65000);
+                    watchdog.AutoReset = false;
+                    watchdog.Elapsed += (s, e) =>
+                    {
+                        Logger.LogAction("PEER SSE WARN", "⚠️ SSE watchdog expired (no keepalive/data for 65s). Aborting zombie stream to trigger reconnect...");
+                        try { streamCts.Cancel(); } catch { }
+                    };
+                    watchdog.Start();
+
+                    using var stream = await response.Content.ReadAsStreamAsync(streamCts.Token);
                     using var reader = new StreamReader(stream);
                     string currentEvent = "";
                     string currentData = "";
 
-                    while (!ct.IsCancellationRequested)
+                    while (!streamCts.Token.IsCancellationRequested)
                     {
-                        string? line = await reader.ReadLineAsync();
+                        string? line = await reader.ReadLineAsync(streamCts.Token);
                         if (line == null) break;
+
+                        // Reset sliding watchdog on any line read (event, comment, or keepalive)
+                        watchdog.Stop();
+                        watchdog.Start();
 
                         if (line.StartsWith("event:")) currentEvent = line.Substring(6).Trim();
                         else if (line.StartsWith("data:")) currentData = line.Substring(5).Trim();
@@ -139,9 +154,14 @@ namespace FlyShelf.Classes
                         }
                     }
 
+                    watchdog.Stop();
                     Logger.LogAction("PEER SSE", "Stream closed — reconnecting...");
                 }
-                catch (OperationCanceledException) { break; }
+                catch (OperationCanceledException) 
+                {
+                    if (ct.IsCancellationRequested) break; // Normal shutdown
+                    // Watchdog cancellation — drop through to catch exception and retry
+                }
                 catch (Exception ex)
                 {
                     Logger.LogAction("PEER SSE", $"Error: {ex.Message} — retrying in {reconnectDelay}ms");

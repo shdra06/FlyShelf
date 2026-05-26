@@ -329,42 +329,35 @@ namespace FlyShelf.Classes
 
                     var clientStream = client.GetStream();
                     var targetStream = target.GetStream();
-                    using var bufferedClient = new System.IO.BufferedStream(clientStream, 8192);
 
                     // === HTTP-AWARE PROXY: Rewrite the Host header ===
                     // HttpListener validates Host header against its prefix.
-                    // Browser sends "Host: 192.168.1.36:8999" but HttpListener
-                    // expects "Host: localhost:18999". We MUST rewrite it.
                     using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
 
-                    // Read the initial HTTP headers from the client
-                    var headerBytes = new System.Collections.Generic.List<byte>(4096);
-                    byte[] buf = new byte[1];
-                    int headerEnd = -1;
+                    // Read HTTP headers efficiently using buffered Span-based memory scanning
+                    byte[] buffer = new byte[16384]; // 16KB max header size
+                    int totalRead = 0;
+                    int headerEndIndex = -1;
 
-                    // Read byte-by-byte until we find \r\n\r\n (end of HTTP headers)
-                    while (headerBytes.Count < 16384) // 16KB max header size
+                    while (totalRead < buffer.Length)
                     {
-                        int read = await bufferedClient.ReadAsync(buf, 0, 1, cts.Token);
+                        int read = await clientStream.ReadAsync(buffer, totalRead, buffer.Length - totalRead, cts.Token);
                         if (read == 0) return; // Client disconnected
-                        headerBytes.Add(buf[0]);
+                        totalRead += read;
 
-                        int len = headerBytes.Count;
-                        if (len >= 4 &&
-                            headerBytes[len - 4] == (byte)'\r' &&
-                            headerBytes[len - 3] == (byte)'\n' &&
-                            headerBytes[len - 2] == (byte)'\r' &&
-                            headerBytes[len - 1] == (byte)'\n')
+                        ReadOnlySpan<byte> span = new ReadOnlySpan<byte>(buffer, 0, totalRead);
+                        int idx = span.IndexOf(new byte[] { (byte)'\r', (byte)'\n', (byte)'\r', (byte)'\n' });
+                        if (idx != -1)
                         {
-                            headerEnd = len;
+                            headerEndIndex = idx + 4;
                             break;
                         }
                     }
 
-                    if (headerEnd <= 0) return; // No valid HTTP headers
+                    if (headerEndIndex <= 0) return; // No valid HTTP headers
 
-                    // Parse and rewrite the Host header
-                    string headerText = System.Text.Encoding.ASCII.GetString(headerBytes.ToArray(), 0, headerEnd);
+                    // Parse and rewrite the Host header to target localhost prefix
+                    string headerText = System.Text.Encoding.ASCII.GetString(buffer, 0, headerEndIndex);
                     string rewritten = System.Text.RegularExpressions.Regex.Replace(
                         headerText,
                         @"(?i)Host:\s*[^\r\n]+",
@@ -374,8 +367,15 @@ namespace FlyShelf.Classes
                     byte[] rewrittenBytes = System.Text.Encoding.ASCII.GetBytes(rewritten);
                     await targetStream.WriteAsync(rewrittenBytes, 0, rewrittenBytes.Length, cts.Token);
 
+                    // Send any body bytes that were read along with the header in the initial packets
+                    int leftoverBytes = totalRead - headerEndIndex;
+                    if (leftoverBytes > 0)
+                    {
+                        await targetStream.WriteAsync(buffer, headerEndIndex, leftoverBytes, cts.Token);
+                    }
+
                     // Now relay the rest bi-directionally (body + response)
-                    var t1 = bufferedClient.CopyToAsync(targetStream, cts.Token);
+                    var t1 = clientStream.CopyToAsync(targetStream, cts.Token);
                     var t2 = targetStream.CopyToAsync(clientStream, cts.Token);
                     await Task.WhenAny(t1, t2);
                 }
@@ -420,7 +420,6 @@ namespace FlyShelf.Classes
                     // Wrap in SslStream — this terminates TLS
                     using var sslStream = new SslStream(networkStream, false);
                     await sslStream.AuthenticateAsServerAsync(_tlsCert!, false, System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13, false);
-                    using var bufferedSsl = new System.IO.BufferedStream(sslStream, 8192);
 
                     // Connect to the local HTTP server
                     using var target = new System.Net.Sockets.TcpClient();
@@ -432,33 +431,30 @@ namespace FlyShelf.Classes
 
                     using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
 
-                    // Read HTTP headers from the decrypted stream
-                    var headerBytes = new List<byte>(4096);
-                    byte[] buf = new byte[1];
-                    int headerEnd = -1;
+                    // Read HTTP headers efficiently using buffered Span-based memory scanning
+                    byte[] buffer = new byte[16384]; // 16KB max header size
+                    int totalRead = 0;
+                    int headerEndIndex = -1;
 
-                    while (headerBytes.Count < 16384)
+                    while (totalRead < buffer.Length)
                     {
-                        int read = await bufferedSsl.ReadAsync(buf, 0, 1, cts.Token);
-                        if (read == 0) return;
-                        headerBytes.Add(buf[0]);
+                        int read = await sslStream.ReadAsync(buffer, totalRead, buffer.Length - totalRead, cts.Token);
+                        if (read == 0) return; // Client disconnected
+                        totalRead += read;
 
-                        int len = headerBytes.Count;
-                        if (len >= 4 &&
-                            headerBytes[len - 4] == (byte)'\r' &&
-                            headerBytes[len - 3] == (byte)'\n' &&
-                            headerBytes[len - 2] == (byte)'\r' &&
-                            headerBytes[len - 1] == (byte)'\n')
+                        ReadOnlySpan<byte> span = new ReadOnlySpan<byte>(buffer, 0, totalRead);
+                        int idx = span.IndexOf(new byte[] { (byte)'\r', (byte)'\n', (byte)'\r', (byte)'\n' });
+                        if (idx != -1)
                         {
-                            headerEnd = len;
+                            headerEndIndex = idx + 4;
                             break;
                         }
                     }
 
-                    if (headerEnd <= 0) return;
+                    if (headerEndIndex <= 0) return;
 
                     // Rewrite Host header to match HttpListener's expected prefix
-                    string headerText = Encoding.ASCII.GetString(headerBytes.ToArray(), 0, headerEnd);
+                    string headerText = Encoding.ASCII.GetString(buffer, 0, headerEndIndex);
                     string rewritten = System.Text.RegularExpressions.Regex.Replace(
                         headerText,
                         @"(?i)Host:\s*[^\r\n]+",
@@ -467,8 +463,15 @@ namespace FlyShelf.Classes
                     byte[] rewrittenBytes = Encoding.ASCII.GetBytes(rewritten);
                     await targetStream.WriteAsync(rewrittenBytes, 0, rewrittenBytes.Length, cts.Token);
 
+                    // Send any body bytes that were read along with the header in the initial TLS packets
+                    int leftoverBytes = totalRead - headerEndIndex;
+                    if (leftoverBytes > 0)
+                    {
+                        await targetStream.WriteAsync(buffer, headerEndIndex, leftoverBytes, cts.Token);
+                    }
+
                     // Bi-directional relay: sslStream ↔ targetStream
-                    var t1 = bufferedSsl.CopyToAsync(targetStream, cts.Token);
+                    var t1 = sslStream.CopyToAsync(targetStream, cts.Token);
                     var t2 = targetStream.CopyToAsync(sslStream, cts.Token);
                     await Task.WhenAny(t1, t2);
                 }
