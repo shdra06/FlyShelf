@@ -6,9 +6,8 @@
         Title="Table Extractor" Height="700" Width="1200" MinWidth="600" MinHeight="500"
         WindowStartupLocation="CenterScreen"
         SystemBackdropType="Mica" Background="Transparent"
-        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
         KeyDown="Window_KeyDown">
-    <Grid>
+    <Grid TextElement.Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}">
         <!-- Main layout: Header + Content + Footer -->
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>

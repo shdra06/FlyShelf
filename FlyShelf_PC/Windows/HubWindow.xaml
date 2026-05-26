@@ -14,7 +14,6 @@
         WindowStartupLocation="CenterScreen"
         SystemBackdropType="Mica"
         Background="Transparent"
-        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
         AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver">
     
     <WindowChrome.WindowChrome>
@@ -30,7 +29,7 @@
         </ResourceDictionary>
     </Window.Resources>
 
-    <Grid x:Name="RootGrid">
+    <Grid x:Name="RootGrid" TextElement.Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
