@@ -415,6 +415,39 @@ namespace FlyShelf
 
         private void ShelfListView_ScrollChanged(object sender, ScrollChangedEventArgs e)
         {
+            // DELETION SCROLL GUARD: If we're in the middle of deleting an item,
+            // the VirtualizingStackPanel is recalculating extents during its layout pass.
+            // Intercept the scroll change and immediately correct the offset to keep
+            // the anchor card pinned. This fires synchronously during the layout pass,
+            // so no frame is ever rendered with the wrong offset.
+            if (_isDeletionScrollGuardActive && e.VerticalChange != 0)
+            {
+                try
+                {
+                    var sv = GetShelfScrollViewer();
+                    if (sv != null && _deletionAnchorIndex >= 0 && _deletionAnchorIndex < ShelfListView.Items.Count)
+                    {
+                        var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(_deletionAnchorIndex) as ListViewItem;
+                        if (container != null)
+                        {
+                            var transform = container.TransformToAncestor(this);
+                            var currentPos = transform.Transform(new Point(0, 0));
+                            double drift = currentPos.Y - _deletionAnchorTargetY;
+                            _deletionLog?.Add($"  GUARD HIT: scrollΔ={e.VerticalChange:+0.0;-0.0}  anchorY={currentPos.Y:F1}  drift={drift:+0.0;-0.0}px  offset={sv.VerticalOffset:F2}  extent={sv.ExtentHeight:F2}");
+                            if (Math.Abs(drift) > 0.5)
+                            {
+                                double correctedOffset = sv.VerticalOffset + drift;
+                                correctedOffset = Math.Max(0, Math.Min(correctedOffset, sv.ScrollableHeight));
+                                sv.ScrollToVerticalOffset(correctedOffset);
+                                _deletionLog?.Add($"  GUARD FIX: → {correctedOffset:F2}");
+                            }
+                        }
+                    }
+                }
+                catch { }
+                return; // Don't process velocity/scrolling state during deletion
+            }
+
             if (e.VerticalChange == 0) return;
 
             var now = DateTime.UtcNow;

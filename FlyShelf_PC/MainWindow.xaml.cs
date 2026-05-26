@@ -159,17 +159,6 @@ namespace FlyShelf
 
             this.SizeChanged += (s, e) =>
             {
-                if (IsDeletingItem)
-                {
-                    // Update the locked bottom edge to sync with the new shrunken bottom of the window.
-                    // This prevents the window from suddenly snapping back or jumping when IsDeletingItem becomes false!
-                    if (this.ActualHeight > 0)
-                    {
-                        _lockedBottomEdge = this.Top + this.ActualHeight + 20;
-                    }
-                    return;
-                }
-
                 if (_isEdgeLocked && this.ActualWidth > 0 && this.ActualHeight > 0)
                 {
                     var workArea = SystemParameters.WorkArea;
@@ -187,7 +176,7 @@ namespace FlyShelf
                         this.Left = newLeft;
                     }
 
-                    if (e.HeightChanged)
+                    if (e.HeightChanged && !IsDeletingItem)
                     {
                         double newTop = _lockedBottomEdge - this.ActualHeight - 20;
                         
@@ -293,6 +282,19 @@ namespace FlyShelf
 
             // Calculate initial toolbar buttons visibility based on current mode
             UpdateToolbarButtonsVisibility();
+        }
+
+        private void DeleteContextMenu_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem mi)
+            {
+                var cm = mi.Parent as ContextMenu ?? (mi.Parent is DependencyObject obj ? FindVisualParent<ContextMenu>(obj) : null);
+                if (cm != null && cm.PlacementTarget is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
+                {
+                    _justDeletedAnItem = true;
+                    AnimateAndRemoveItems(new System.Collections.Generic.List<ClipboardItem> { item });
+                }
+            }
         }
 
         private delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);

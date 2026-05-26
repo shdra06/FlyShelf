@@ -176,9 +176,7 @@
                 <Separator />
 
                 <!-- ═══ Universal: Delete ═══ -->
-                <MenuItem Header="Delete" 
-                          Command="{Binding PlacementTarget.Tag.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                          CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Foreground="#EF4444"/>
+                <MenuItem Header="Delete" Click="DeleteContextMenu_Click" Foreground="#EF4444"/>
             </ContextMenu>
         </ResourceDictionary>
     </controls:MicaWindow.Resources>
@@ -485,7 +483,7 @@
                                   Width="42" Height="42"/>
         </Canvas>
 
-        <ListView Name="ShelfListView" Grid.Row="1" ItemsSource="{Binding DroppedItems}" Background="#01000000" BorderThickness="0" Margin="12,0,2,12"
+        <ListView Name="ShelfListView" Grid.Row="1" ItemsSource="{Binding DroppedItems}" Background="#01000000" BorderThickness="0" Margin="12,0,2,12" Padding="0,0,0,250"
                   Focusable="True" KeyboardNavigation.DirectionalNavigation="Contained"
                   UseLayoutRounding="True" SnapsToDevicePixels="True"
                   ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"

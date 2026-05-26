@@ -276,27 +276,298 @@ namespace FlyShelf
         {
             if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
             {
-                // Set flag to suppress the subsequent MouseUp paste-and-close
                 _justDeletedAnItem = true;
-
-                try
-                {
-                    IsDeletingItem = true;
-                    _isSuppressingSizeSync = true; // Prevent PropertyChanged → Height persistence during deletion
-                    _viewModel.RemoveItem(item);
-                }
-                catch { }
-
-                // Defer resetting the deletion flags until after layout/size changes have completed.
-                // Doing this at Loaded priority ensures it runs after WPF has completed the layout/size pass.
-                Dispatcher.InvokeAsync(() =>
-                {
-                    _isSuppressingSizeSync = false;
-                    IsDeletingItem = false;
-                }, System.Windows.Threading.DispatcherPriority.Loaded);
-
+                AnimateAndRemoveItems(new System.Collections.Generic.List<ClipboardItem> { item });
                 e.Handled = true;
             }
+        }
+
+        // Deletion anchor state — used by the ScrollChanged interceptor
+        private bool _isDeletionScrollGuardActive = false;
+        private int _deletionAnchorIndex = -1;
+        private double _deletionAnchorTargetY = 0;
+        // Shared log list so ScrollChanged guard can append entries
+        private System.Collections.Generic.List<string>? _deletionLog = null;
+
+        private void AnimateAndRemoveItems(System.Collections.Generic.List<ClipboardItem> items)
+        {
+            if (items == null || items.Count == 0) return;
+
+            var log = new System.Collections.Generic.List<string>();
+            log.Add($"═══ DELETE @ {DateTime.Now:HH:mm:ss.fff} ═══");
+
+            try
+            {
+                IsDeletingItem = true;
+                _isSuppressingSizeSync = true;
+
+                var sv = GetShelfScrollViewer();
+                double savedOffset = sv?.VerticalOffset ?? 0;
+
+                log.Add($"  BEFORE: Offset={savedOffset:F2}  Extent={sv?.ExtentHeight:F2}  Viewport={sv?.ViewportHeight:F2}  ScrollableH={sv?.ScrollableHeight:F2}");
+                var beforePositions = CaptureVisibleCardPositions(log, "BEFORE");
+
+                // Capture anchor: first visible container at or below header area
+                int anchorIndex = -1;
+                double anchorOffsetInViewport = 0;
+                if (sv != null)
+                {
+                    for (int i = 0; i < ShelfListView.Items.Count; i++)
+                    {
+                        var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(i) as ListViewItem;
+                        if (container == null) continue;
+                        try
+                        {
+                            var transform = container.TransformToAncestor(this);
+                            var pos = transform.Transform(new Point(0, 0));
+                            if (pos.Y >= 50)
+                            {
+                                anchorIndex = i;
+                                anchorOffsetInViewport = pos.Y;
+                                break;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                log.Add($"  Anchor: idx={anchorIndex}  Y={anchorOffsetInViewport:F1}");
+
+                int deletedIndex = items.Count > 0 ? _viewModel.DroppedItems.IndexOf(items[0]) : -1;
+                log.Add($"  Deleting: idx={deletedIndex}  count={items.Count}");
+
+                // Calculate the corrected anchor index after deletion
+                int correctedAnchorIndex = anchorIndex;
+                if (anchorIndex >= 0)
+                {
+                    if (deletedIndex >= 0 && deletedIndex < anchorIndex)
+                        correctedAnchorIndex = anchorIndex - 1;
+                    else if (deletedIndex >= 0 && deletedIndex == anchorIndex)
+                        correctedAnchorIndex = anchorIndex;
+                }
+
+                // REDUCE VIRTUALIZATION CACHE to prevent off-screen re-estimation
+                VirtualizingPanel.SetCacheLength(ShelfListView, new VirtualizationCacheLength(0, 0));
+                log.Add($"  CACHE → 0,0");
+
+                // Remove the item(s)
+                foreach (var item in items)
+                {
+                    _viewModel.RemoveItem(item);
+                }
+
+                log.Add($"  AFTER REMOVE: Offset={sv?.VerticalOffset:F2}  Extent={sv?.ExtentHeight:F2}  ScrollableH={sv?.ScrollableHeight:F2}");
+
+                // Immediate scroll restore — the permanent 250px bottom padding
+                // provides enough extra scrollable range to prevent bottom-of-list clamping
+                if (sv != null && savedOffset > 0)
+                {
+                    double clampedOffset = Math.Min(savedOffset, sv.ScrollableHeight);
+                    sv.ScrollToVerticalOffset(clampedOffset);
+                    log.Add($"  IMMEDIATE RESTORE: {savedOffset:F2} → {clampedOffset:F2}");
+                }
+
+                // SYNCHRONOUS CORRECTION while CacheLength=0,0
+                // With zero cache, UpdateLayout() won't trigger massive re-estimation,
+                // so it's safe to call synchronously without causing cascading jitter.
+                if (sv != null && correctedAnchorIndex >= 0)
+                {
+                    sv.UpdateLayout();
+                    log.Add($"  SYNC LAYOUT: Offset={sv.VerticalOffset:F2}  Extent={sv.ExtentHeight:F2}");
+
+                    for (int pass = 0; pass < 3; pass++)
+                    {
+                        if (correctedAnchorIndex < 0 || correctedAnchorIndex >= ShelfListView.Items.Count) break;
+                        var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(correctedAnchorIndex) as ListViewItem;
+                        if (container == null) break;
+                        try
+                        {
+                            var transform = container.TransformToAncestor(this);
+                            var currentPos = transform.Transform(new Point(0, 0));
+                            double drift = currentPos.Y - anchorOffsetInViewport;
+                            log.Add($"  SYNC PASS {pass}: anchorY={currentPos.Y:F1}  drift={drift:+0.0;-0.0}px");
+                            if (Math.Abs(drift) <= 0.5) { log.Add($"  SYNC CONVERGED on pass {pass}"); break; }
+                            double correctedOffset = sv.VerticalOffset + drift;
+                            correctedOffset = Math.Max(0, Math.Min(correctedOffset, sv.ScrollableHeight));
+                            sv.ScrollToVerticalOffset(correctedOffset);
+                            sv.UpdateLayout();
+                        }
+                        catch { break; }
+                    }
+                }
+
+                // RESTORE CACHE in deferred callback — any re-estimation from cache
+                // restoration happens AFTER our corrected frame is already displayed
+                if (sv != null && correctedAnchorIndex >= 0)
+                {
+                    int capturedIndex = correctedAnchorIndex;
+                    double capturedTargetY = anchorOffsetInViewport;
+
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        try
+                        {
+                            // Restore cache
+                            VirtualizingPanel.SetCacheLength(ShelfListView, new VirtualizationCacheLength(3, 3));
+                            sv.UpdateLayout();
+                            log.Add($"  CACHE → 3,3  Offset={sv.VerticalOffset:F2}  Extent={sv.ExtentHeight:F2}");
+
+                            // Correct any drift from cache restoration
+                            if (capturedIndex >= 0 && capturedIndex < ShelfListView.Items.Count)
+                            {
+                                var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(capturedIndex) as ListViewItem;
+                                if (container != null)
+                                {
+                                    var transform = container.TransformToAncestor(this);
+                                    var currentPos = transform.Transform(new Point(0, 0));
+                                    double drift = currentPos.Y - capturedTargetY;
+                                    log.Add($"  POST-CACHE: anchorY={currentPos.Y:F1}  drift={drift:+0.0;-0.0}px");
+                                    if (Math.Abs(drift) > 0.5)
+                                    {
+                                        double correctedOffset = sv.VerticalOffset + drift;
+                                        correctedOffset = Math.Max(0, Math.Min(correctedOffset, sv.ScrollableHeight));
+                                        sv.ScrollToVerticalOffset(correctedOffset);
+                                        sv.UpdateLayout();
+                                        log.Add($"  POST-CACHE FIX: → {correctedOffset:F2}");
+                                    }
+                                }
+                            }
+
+                            // Final drift check
+                            CaptureVisibleCardPositions(log, "FINAL");
+                            if (beforePositions != null)
+                            {
+                                var afterPositions = GetVisibleCardPositionMap();
+                                log.Add($"  POSITION DRIFT:");
+                                bool anyDrift = false;
+                                foreach (var kvp in beforePositions)
+                                {
+                                    if (afterPositions.TryGetValue(kvp.Key, out double afterY))
+                                    {
+                                        double d = afterY - kvp.Value;
+                                        if (Math.Abs(d) > 0.1) { log.Add($"    {kvp.Key}: {d:+0.0;-0.0}px"); anyDrift = true; }
+                                    }
+                                }
+                                if (!anyDrift) log.Add($"    (none — all cards stayed put!)");
+                            }
+
+                            // FORCE MOUSE RE-EVALUATION: After deletion, the next card slides
+                            // into the cursor's position but WPF doesn't fire MouseEnter because
+                            // the mouse didn't physically move. Inject a synthetic mouse move to
+                            // force WPF to re-evaluate IsMouseOver on the new card, making the
+                            // hover action buttons (delete, pin, etc.) appear immediately.
+                            ForceMouseReEvaluation();
+                        }
+                        catch (Exception ex) { log.Add($"  DEFERRED ERROR: {ex.Message}"); }
+
+                        log.Add("");
+                        try
+                        {
+                            string logPath = System.IO.Path.Combine(
+                                System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? ".",
+                                "deletion_debug.log");
+                            System.IO.File.AppendAllLines(logPath, log);
+                        }
+                        catch { }
+                    }, System.Windows.Threading.DispatcherPriority.Loaded);
+                }
+                else
+                {
+                    // No anchor — just restore cache and force mouse re-evaluation
+                    VirtualizingPanel.SetCacheLength(ShelfListView, new VirtualizationCacheLength(3, 3));
+                    Dispatcher.InvokeAsync(() => ForceMouseReEvaluation(), System.Windows.Threading.DispatcherPriority.Input);
+                }
+            }
+            catch { }
+            finally
+            {
+                _isDeletionScrollGuardActive = false;
+                _deletionLog = null;
+                _isSuppressingSizeSync = false;
+                IsDeletingItem = false;
+
+                if (_isEdgeLocked && this.ActualHeight > 0)
+                {
+                    _lockedBottomEdge = this.Top + this.ActualHeight + 20;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Injects a synthetic mouse move event at the current cursor position to force WPF
+        /// to re-evaluate IsMouseOver on all elements under the cursor. This is needed after
+        /// deleting a card because the next card slides into position under the stationary
+        /// cursor, but WPF doesn't fire MouseEnter since the mouse didn't physically move.
+        /// </summary>
+        private void ForceMouseReEvaluation()
+        {
+            try
+            {
+                // Get current mouse position in screen coordinates via Win32
+                if (Classes.NativeMethods.GetCursorPos(out var pt))
+                {
+                    // Re-set the cursor to the same position — this forces WPF
+                    // to re-process mouse hit testing and fire MouseEnter/MouseLeave events
+                    // on the card that slid into position under the stationary cursor
+                    Classes.NativeMethods.SetCursorPos(pt.X, pt.Y);
+                }
+            }
+            catch { }
+        }
+
+        /// <summary>Logs screen-relative Y positions of all visible ListViewItem containers.</summary>
+        private System.Collections.Generic.Dictionary<string, double>? CaptureVisibleCardPositions(
+            System.Collections.Generic.List<string> logLines, string label)
+        {
+            var posMap = new System.Collections.Generic.Dictionary<string, double>();
+            try
+            {
+                int logged = 0;
+                for (int i = 0; i < ShelfListView.Items.Count && logged < 20; i++)
+                {
+                    var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(i) as ListViewItem;
+                    if (container == null) continue;
+
+                    var transform = container.TransformToAncestor(this);
+                    var pos = transform.Transform(new Point(0, 0));
+                    string itemKey = $"idx{i}";
+                    if (container.DataContext is ClipboardItem ci)
+                    {
+                        string preview = ci.RawContent?.Length > 20 ? ci.RawContent.Substring(0, 20) : (ci.RawContent ?? ci.ItemType.ToString());
+                        itemKey = $"idx{i}:\"{preview}\"";
+                    }
+                    posMap[itemKey] = pos.Y;
+                    logLines.Add($"    [{label}] {itemKey}  Y={pos.Y:F1}  H={container.ActualHeight:F1}");
+                    logged++;
+                }
+            }
+            catch { }
+            return posMap;
+        }
+
+        /// <summary>Returns a map of visible card keys to their screen-relative Y positions.</summary>
+        private System.Collections.Generic.Dictionary<string, double> GetVisibleCardPositionMap()
+        {
+            var map = new System.Collections.Generic.Dictionary<string, double>();
+            try
+            {
+                for (int i = 0; i < ShelfListView.Items.Count && map.Count < 20; i++)
+                {
+                    var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(i) as ListViewItem;
+                    if (container == null) continue;
+
+                    var transform = container.TransformToAncestor(this);
+                    var pos = transform.Transform(new Point(0, 0));
+                    string itemKey = $"idx{i}";
+                    if (container.DataContext is ClipboardItem ci)
+                    {
+                        string preview = ci.RawContent?.Length > 20 ? ci.RawContent.Substring(0, 20) : (ci.RawContent ?? ci.ItemType.ToString());
+                        itemKey = $"idx{i}:\"{preview}\"";
+                    }
+                    map[itemKey] = pos.Y;
+                }
+            }
+            catch { }
+            return map;
         }
 
         private void OpenSpecific_Click(object sender, MouseButtonEventArgs e)
@@ -510,25 +781,7 @@ namespace FlyShelf
             if (e.Key == Key.Delete && ShelfListView.SelectedItems.Count > 0)
             {
                 var itemsToRemove = ShelfListView.SelectedItems.Cast<ClipboardItem>().ToList();
-                try
-                {
-                    IsDeletingItem = true;
-                    _isSuppressingSizeSync = true;
-                    foreach (var item in itemsToRemove)
-                    {
-                        _viewModel.RemoveItem(item);
-                    }
-                }
-                catch { }
-
-                // Defer resetting the deletion flags until after layout/size changes have completed.
-                // Doing this at Loaded priority ensures it runs after WPF has completed the layout/size pass.
-                Dispatcher.InvokeAsync(() =>
-                {
-                    _isSuppressingSizeSync = false;
-                    IsDeletingItem = false;
-                }, System.Windows.Threading.DispatcherPriority.Loaded);
-
+                AnimateAndRemoveItems(itemsToRemove);
                 e.Handled = true;
             }
             else if (e.Key == Key.Enter && ShelfListView.SelectedItem is ClipboardItem selected)
