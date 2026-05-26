@@ -523,7 +523,7 @@ public static partial class NativeMethods
             {
                 if (window is MainWindow)
                 {
-                    micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Tabbed;
+                    micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
                 }
                 else
                 {

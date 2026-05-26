@@ -12,7 +12,7 @@
         Width="360" 
         Opacity="0"
         MaxHeight="300" SizeToContent="Manual" MinHeight="100" BorderThickness="0"
-        WindowStyle="None" ResizeMode="NoResize" Background="Transparent" SystemBackdropType="Tabbed"
+        WindowStyle="None" ResizeMode="NoResize" Background="Transparent" SystemBackdropType="Mica"
         ShowInTaskbar="False" Margin="0" Topmost="True" ShowActivated="False"
         AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver"
         TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Animated" UseLayoutRounding="True"
