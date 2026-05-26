@@ -522,7 +522,7 @@ namespace FlyShelf.Windows
                 }
                 else
                 {
-                    occupiedZones.Add((0, 80)); // Protect the Widgets area on the far left corner on Win11
+                    occupiedZones.Add((0, 200)); // Protect the Widgets area on the far left corner on Win11 (expanded to 200 to clear dynamic weather text)
                 }
 
                 Classes.Logger.LogAction("WIDGET", $"FindTaskbarFreeZone: Scanning child windows of taskbarHandle={taskbarHandle}, taskbarWidth={taskbarWidth}");
