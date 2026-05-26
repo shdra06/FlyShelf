@@ -780,6 +780,64 @@ namespace FlyShelf
             GoogleSearch_Click(sender, new RoutedEventArgs());
         }
 
+        private void SanitizeUrlSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                e.Handled = true;
+                if (item.ItemType == FlyShelf.ViewModels.ClipboardItemType.Url && !string.IsNullOrEmpty(item.RawContent))
+                {
+                    try
+                    {
+                        string original = item.RawContent;
+                        // Compile our robust tracking parameter cleaner regex
+                        var rxUtmClean = new System.Text.RegularExpressions.Regex(
+                            @"(?<=&|\?)(utm_source|utm_medium|utm_campaign|utm_term|utm_content|gclid|fbclid|_gl|msclkid|mc_eid|ig_shid)=[^&]*&?", 
+                            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                        
+                        string cleanUrl = rxUtmClean.Replace(original, string.Empty).TrimEnd('?', '&');
+                        if (cleanUrl != original)
+                        {
+                            item.RawContent = cleanUrl;
+                            item.FileName = cleanUrl;
+                            
+                            // 1. Write the clean URL to the OS system clipboard safely
+                            try
+                            {
+                                SetWritingClipboard(true);
+                                System.Windows.Clipboard.SetText(cleanUrl);
+                            }
+                            catch { }
+                            finally
+                            {
+                                _ = System.Threading.Tasks.Task.Run(async () =>
+                                {
+                                    await System.Threading.Tasks.Task.Delay(500);
+                                    SetWritingClipboard(false);
+                                });
+                            }
+
+                            // 2. Persist updated history to disk
+                            _viewModel.PersistHistoryPublic();
+
+                            // 3. Show a premium visual toast
+                            FlyShelf.Windows.ToastWindow.ShowToast("URL Sanitized & Copied! 🛡️");
+                            
+                            FlyShelf.Classes.Logger.LogAction("URL_SANITY", $"Successfully stripped tracking metrics from URL. Result: {cleanUrl}");
+                        }
+                        else
+                        {
+                            FlyShelf.Windows.ToastWindow.ShowToast("URL is already clean! ✨");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        FlyShelf.Classes.Logger.LogAction("URL_SANITY_ERR", $"Sanitization failed: {ex.Message}");
+                    }
+                }
+            }
+        }
+
         private void ExpandToggleSpecific_Click(object sender, MouseButtonEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
