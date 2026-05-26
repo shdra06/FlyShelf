@@ -523,9 +523,13 @@
                                     <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
                                 </Border>
                                 <ControlTemplate.Triggers>
-                                    <Trigger Property="IsSelected" Value="True">
+                                    <MultiDataTrigger>
+                                        <MultiDataTrigger.Conditions>
+                                            <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource Self}}" Value="True"/>
+                                            <Condition Binding="{Binding Path=DataContext.HideSelectionBgOnFirstItem, RelativeSource={RelativeSource AncestorType={x:Type ListView}}}" Value="False"/>
+                                        </MultiDataTrigger.Conditions>
                                         <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource ShelfCardSelectionBg}"/>
-                                    </Trigger>
+                                    </MultiDataTrigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
                         </Setter.Value>
@@ -1468,6 +1472,7 @@
                             <MultiDataTrigger.Conditions>
                                 <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True"/>
                                 <Condition Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableBlurBehind}" Value="True"/>
+                                <Condition Binding="{Binding Path=DataContext.HideSelectionBgOnFirstItem, RelativeSource={RelativeSource AncestorType={x:Type ListView}}}" Value="False"/>
                             </MultiDataTrigger.Conditions>
                             <Setter TargetName="SelectedBlurBg" Property="Visibility" Value="Visible"/>
                         </MultiDataTrigger>
@@ -1478,6 +1483,7 @@
                                 <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True"/>
                                 <Condition Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=ThemeDisplayMode}" Value="theme"/>
                                 <Condition Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableBlurBehind}" Value="False"/>
+                                <Condition Binding="{Binding Path=DataContext.HideSelectionBgOnFirstItem, RelativeSource={RelativeSource AncestorType={x:Type ListView}}}" Value="False"/>
                             </MultiDataTrigger.Conditions>
                             <Setter TargetName="CardBorder" Property="Background" Value="{DynamicResource ShelfCardSelectionBg}"/>
                             <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource ShelfCardSelectionBorder}"/>

@@ -543,7 +543,13 @@ namespace FlyShelf
 
         private void ShelfListView_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            if (_isInitialSpawn) return;
             if (IsDeletingItem) return;
+
+            if (_viewModel != null)
+            {
+                _viewModel.HideSelectionBgOnFirstItem = false;
+            }
 
             // Only manage the Unpin button here. Merge bar is controlled by checkbox toggles.
             if (ShelfListView.SelectedItems.Count > 1)

@@ -792,6 +792,10 @@ namespace FlyShelf
 
         private void ShelfListView_KeyDown(object sender, KeyEventArgs e)
         {
+            if (_viewModel != null)
+            {
+                _viewModel.HideSelectionBgOnFirstItem = false;
+            }
             if (e.Key == Key.Delete && ShelfListView.SelectedItems.Count > 0)
             {
                 var itemsToRemove = ShelfListView.SelectedItems.Cast<ClipboardItem>().ToList();
@@ -876,6 +880,10 @@ namespace FlyShelf
 
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
         {
+            if (_viewModel != null)
+            {
+                _viewModel.HideSelectionBgOnFirstItem = false;
+            }
             if (e.Key == Key.Up || e.Key == Key.Down)
             {
                 // Let the TextBox (SearchTextBox) handle its own cursor navigation/Enter/Down keys.

@@ -71,6 +71,20 @@ namespace FlyShelf.ViewModels
             }
         }
 
+        private bool _hideSelectionBgOnFirstItem = false;
+        public bool HideSelectionBgOnFirstItem
+        {
+            get => _hideSelectionBgOnFirstItem;
+            set
+            {
+                if (_hideSelectionBgOnFirstItem != value)
+                {
+                    _hideSelectionBgOnFirstItem = value;
+                    OnPropertyChanged(nameof(HideSelectionBgOnFirstItem));
+                }
+            }
+        }
+
 
         /// <summary>
         /// Loads persisted clipboard history from disk and rebuilds Icon previews.
