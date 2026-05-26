@@ -494,7 +494,7 @@ public static partial class NativeMethods
 
             if (blurEnabled && mode == "mica")
             {
-                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
+                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Tabbed;
                 micaWin.Background = System.Windows.Media.Brushes.Transparent;
                 if (rootGrid != null) rootGrid.Background = null;
             }

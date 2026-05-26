@@ -62,7 +62,7 @@ namespace FlyShelf
                                && Classes.NativeMethods.ShouldUseBlur();
             if (blurEnabled)
             {
-                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
+                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Tabbed;
                 this.Background = Brushes.Transparent;
                 if (RootContent != null)
                     RootContent.Background = new SolidColorBrush(Color.FromArgb(0x01, 0, 0, 0)); // Near-transparent for hit-testing
