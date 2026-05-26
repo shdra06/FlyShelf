@@ -437,8 +437,8 @@ public partial class App : Application
                             int deltaY = currentY - _lastShakeY;
                             double distSq = (double)(deltaX * deltaX + deltaY * deltaY);
 
-                            // Highly sensitive displacement threshold (9px within 40ms = effortless natural trigger)
-                            if (distSq >= 81)
+                            // Lowered displacement threshold from 9px (81) to 7.7px (60) for highly sensitive diagonal detection
+                            if (distSq >= 60)
                             {
                                 bool reversed = false;
 
@@ -475,9 +475,9 @@ public partial class App : Application
                                         int triggerX = currentX;
                                         int triggerY = currentY;
 
-                                        // Clamping check to prevent triggering during normal long downward drag-and-drops
+                                        // Expanded clamping threshold from 180px to 300px to easily allow diagonal shaking sweeps
                                         int netDriftY = triggerY - _shakeStartY;
-                                        if (netDriftY > 180) return;
+                                        if (netDriftY > 300) return;
 
                                         _lastClipboardLaunchTime = Environment.TickCount64;
 
