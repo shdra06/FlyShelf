@@ -92,17 +92,18 @@ namespace FlyShelf
                         this.SizeToContent = SizeToContent.Manual;
                     this.Height = _viewModel.CurrentFlyShelfMaxHeight;
                 }
-                this.UpdateLayout();
+                // PERF: Removed redundant UpdateLayout() pass here. The window is still offscreen, 
+                // and ShowNearPositionInternal will perform a single, clean visual-tree update layout pass.
             }
             finally
             {
                 _isSuppressingSizeSync = false;
             }
 
-            // ALWAYS defer the positioning, activation, and summon animation to Background priority.
-            // This guarantees that WPF renders the 0% opacity frame offscreen, fully committing 
-            // the 0% transparent state to DWM, BEFORE the window is positioned back onscreen.
-            // This completely eliminates any repositioning or rapid re-summon flashes/double-spawns!
+            // HIGH-PERFORMANCE DEFERRAL: Defer the positioning, activation, and summon animation to Input priority.
+            // Yielding to Input priority is fast enough to make the keypress respond instantly, while still ensuring
+            // WPF renders the 0% opacity frame offscreen, fully committing the 0% transparent state to DWM
+            // before the window is moved onscreen.
             Dispatcher.InvokeAsync(() =>
             {
                 // Verify this summon hasn't been superseded by a newer summon in the meantime
@@ -113,7 +114,7 @@ namespace FlyShelf
                 }
 
                 ShowNearPositionInternal(targetX, targetY, mode, isPersistent, stealFocus);
-            }, System.Windows.Threading.DispatcherPriority.Background);
+            }, System.Windows.Threading.DispatcherPriority.Input);
         }
 
         private void ShowNearPositionInternal(double targetX, double targetY, int mode, bool isPersistent, bool stealFocus)
@@ -232,9 +233,7 @@ namespace FlyShelf
             }
             catch { }
 
-            // 3. Activate while still offscreen — this is the slow Win32 call that causes
-            //    layout stalls. Doing it offscreen means the stall is invisible.
-            if (stealFocus) this.Activate();
+            // 3. Focus Attachment: Deferred to step 6 asynchronously to completely avoid focus stalls.
 
             // 4. Start the opacity animation BEFORE moving onscreen.
             //    The animation clock starts ticking from opacity=0. When we move the window
@@ -260,6 +259,27 @@ namespace FlyShelf
             this.Top = computedTop;
 
             _isEdgeLocked = true; // Lock the edge AFTER all positioning has been completed!
+
+            // 6. Focus Attachment: Transfer focus and activate asynchronously.
+            //    Doing this asynchronously ensures that the window is already composite-visible
+            //    and the fade-in animation starts playing instantly, completely immune to 
+            //    Win32 focus-switching layout blockages!
+            int tokenAtStart = _spawnToken;
+            if (stealFocus)
+            {
+                Dispatcher.InvokeAsync(() =>
+                {
+                    if (_spawnToken == tokenAtStart && _isCurrentlySummoned && !_isAnimatingHide)
+                    {
+                        try
+                        {
+                            this.Activate();
+                            this.Focus();
+                        }
+                        catch { }
+                    }
+                }, System.Windows.Threading.DispatcherPriority.Input);
+            }
 
             // Explicitly set DWM border color on each summon to prevent OS/MicaWPF composition resets.
             // PERF: Defer to Background priority so it runs after the spawn animation is fully started.

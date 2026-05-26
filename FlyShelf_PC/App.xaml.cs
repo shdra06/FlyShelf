@@ -486,7 +486,7 @@ public partial class App : Application
                                             await System.Threading.Tasks.Task.Delay(300);
                                             if (ActiveMergeWindow != null && ActiveMergeWindow.IsActive) return;
                                             _instance.LaunchClipboardManager(triggerX, triggerY, false, 0, false);
-                                        }, System.Windows.Threading.DispatcherPriority.Background);
+                                        }, System.Windows.Threading.DispatcherPriority.Normal);
                                     }
                                 }
                             }
