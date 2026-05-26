@@ -208,10 +208,6 @@ namespace FlyShelf
             catch { }
         }
 
-        /// <summary>
-        /// Resets selection accent brushes to the default violet.
-        /// Called when switching to Mica or non-wallpaper modes.
-        /// </summary>
         private void ResetSelectionAccent()
         {
             try
@@ -219,14 +215,16 @@ namespace FlyShelf
                 var app = Application.Current;
                 if (app == null) return;
 
+                // For Mica and Acrylic blur modes, use the premium Indigo (#6366F1) palette
+                // to match the global active control highlight color beautifully!
                 var selBorder = new SolidColorBrush(
-                    Color.FromArgb(0x90, 0xA7, 0x8B, 0xFA)); // #90A78BFA (was 0x60)
+                    Color.FromArgb(0x95, 0x63, 0x66, 0xF1)); // #956366F1
                 selBorder.Freeze();
                 var selBg = new SolidColorBrush(
-                    Color.FromArgb(0x25, 0xA7, 0x8B, 0xFA)); // #25A78BFA (was 0x10)
+                    Color.FromArgb(0x25, 0x63, 0x66, 0xF1)); // #256366F1
                 selBg.Freeze();
                 var focusBorder = new SolidColorBrush(
-                    Color.FromArgb(0xB0, 0xA7, 0x8B, 0xFA)); // #B0A78BFA (was 0x80)
+                    Color.FromArgb(0xB5, 0x63, 0x66, 0xF1)); // #B56366F1
                 focusBorder.Freeze();
 
                 app.Resources["ShelfCardSelectionBorder"] = selBorder;
@@ -384,10 +382,6 @@ namespace FlyShelf
                              {
                                  try
                                  {
-                                     // GUARD: If the window is no longer summoned or is currently dismissing,
-                                     // do NOT apply the wallpaper theme updates!
-                                     if (!_isCurrentlySummoned || _isAnimatingHide) return;
-
                                      var centerColor = Color.FromArgb(50, dominantColor.R, dominantColor.G, dominantColor.B);
                                      var edgeColor = Color.FromArgb(105, (byte)(dominantColor.R / 1.3), (byte)(dominantColor.G / 1.3), (byte)(dominantColor.B / 1.3));
  
