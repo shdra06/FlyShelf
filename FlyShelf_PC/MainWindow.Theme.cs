@@ -173,11 +173,11 @@ namespace FlyShelf
                 // 1. Convert dominant color to HSL space to isolate Hue
                 RgbToHsl(dominant, out double h, out double s, out double l);
 
-                // 2. Mathematically optimize Saturation & Lightness to create a stunning neon/glowing accent
-                //    No matter what color the wallpaper has, it preserves the wallpaper's EXACT HUE (H),
-                //    but forces high Saturation (S) and Lightness (L) to guarantee visual excellence.
-                s = 0.90; // Clamp saturation to 90% for pure rich colors
-                l = 0.68; // Clamp lightness to 68% for high contrast neon glow against dark theme layouts
+                // 2. Mathematically optimize Saturation & Lightness to create a stunning desaturated frosted-glass glow.
+                //    We preserve the wallpaper's EXACT HUE (H), but keep Saturation low (approx 35%) and Lightness high (approx 82%)
+                //    so it is always towards a clean, light white-greyish side with an elegant, soft tint of the theme's color.
+                s = 0.35; // Soft desaturated saturation (approx 35%) for an elegant, white-greyish tinted accent
+                l = 0.82; // Bright frosted glass lightness (approx 82%) to keep selection light and high contrast
 
                 // Convert HSL back to RGB
                 dominant = HslToRgb(h, s, l);
