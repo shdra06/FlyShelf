@@ -1472,15 +1472,15 @@
                             <Setter TargetName="SelectedBlurBg" Property="Visibility" Value="Visible"/>
                         </MultiDataTrigger>
 
-                        <!-- Mascot Theme Selection (Blur OFF) — Dynamic Cozy Purple Overlay -->
+                        <!-- Mascot Theme Selection (Blur OFF) — Dynamic Cozy Accent Overlay -->
                         <MultiDataTrigger>
                             <MultiDataTrigger.Conditions>
                                 <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True"/>
                                 <Condition Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=ThemeDisplayMode}" Value="theme"/>
                                 <Condition Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableBlurBehind}" Value="False"/>
                             </MultiDataTrigger.Conditions>
-                            <Setter TargetName="CardBorder" Property="Background" Value="#25A78BFA"/>
-                            <Setter TargetName="CardBorder" Property="BorderBrush" Value="#80A78BFA"/>
+                            <Setter TargetName="CardBorder" Property="Background" Value="{DynamicResource ShelfCardSelectionBg}"/>
+                            <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource ShelfCardSelectionBorder}"/>
                         </MultiDataTrigger>
                     </DataTemplate.Triggers>
                 </DataTemplate>

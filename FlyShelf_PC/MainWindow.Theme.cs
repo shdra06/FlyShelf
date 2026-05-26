@@ -166,24 +166,29 @@ namespace FlyShelf
                 var app = Application.Current;
                 if (app == null) return;
 
-                byte borderAlpha = 0x90;
-                byte bgAlpha = 0x22;
+                byte borderAlpha = 0x95; // Crisp, highly visible selection border alpha (approx 58%)
+                byte bgAlpha = 0x25;     // Clean, visible selection background tint alpha (approx 15%)
                 byte focusAlpha = 0xB0;
 
-                // Clamp/blend dominant color to ensure it is always highly visible as an accent
-                double luma = 0.299 * dominant.R + 0.587 * dominant.G + 0.114 * dominant.B;
-                if (luma < 160)
-                {
-                    // For darker wallpapers, we need much higher vibrancy and opacity to guarantee visibility
-                    // Blend 85% violet (#A78BFA) and 15% dominant color to create a beautiful custom glowing theme accent
-                    byte r = (byte)Math.Min(255, (dominant.R * 0.15) + (167 * 0.85));
-                    byte g = (byte)Math.Min(255, (dominant.G * 0.15) + (139 * 0.85));
-                    byte b = (byte)Math.Min(255, (dominant.B * 0.15) + (250 * 0.85));
-                    dominant = Color.FromRgb(r, g, b);
+                // 1. Convert dominant color to HSL space to isolate Hue
+                RgbToHsl(dominant, out double h, out double s, out double l);
 
-                    borderAlpha = 0xD5; // Sharp glowing high-contrast border
-                    bgAlpha = 0x3C;     // Richer semi-transparent selection box fill
-                    focusAlpha = 0xE5;  // Highly visible focus outline
+                // 2. Mathematically optimize Saturation & Lightness to create a stunning neon/glowing accent
+                //    No matter what color the wallpaper has, it preserves the wallpaper's EXACT HUE (H),
+                //    but forces high Saturation (S) and Lightness (L) to guarantee visual excellence.
+                s = 0.90; // Clamp saturation to 90% for pure rich colors
+                l = 0.68; // Clamp lightness to 68% for high contrast neon glow against dark theme layouts
+
+                // Convert HSL back to RGB
+                dominant = HslToRgb(h, s, l);
+
+                // If the wallpaper is extremely dark, we increase alpha values slightly to make the neon glow extra distinct!
+                double originalLuma = 0.299 * dominant.R + 0.587 * dominant.G + 0.114 * dominant.B;
+                if (originalLuma < 160)
+                {
+                    borderAlpha = 0xD8; // Beautiful high-visibility glowing border outline
+                    bgAlpha = 0x3E;     // Highly readable translucent selection background overlay
+                    focusAlpha = 0xEA;  // Clear, distinct focus outline
                 }
 
                 var selBorder = new SolidColorBrush(
@@ -457,6 +462,70 @@ namespace FlyShelf
             catch { }
 
             return Color.FromRgb(99, 102, 241); // Fallback indigo
+        }
+
+        private static void RgbToHsl(Color rgb, out double h, out double s, out double l)
+        {
+            double r = rgb.R / 255.0;
+            double g = rgb.G / 255.0;
+            double b = rgb.B / 255.0;
+
+            double max = Math.Max(r, Math.Max(g, b));
+            double min = Math.Min(r, Math.Min(g, b));
+
+            h = 0;
+            s = 0;
+            l = (max + min) / 2.0;
+
+            if (max != min)
+            {
+                double d = max - min;
+                s = l > 0.5 ? d / (2.0 - max - min) : d / (max + min);
+
+                if (max == r)
+                {
+                    h = (g - b) / d + (g < b ? 6 : 0);
+                }
+                else if (max == g)
+                {
+                    h = (b - r) / d + 2;
+                }
+                else if (max == b)
+                {
+                    h = (r - g) / d + 4;
+                }
+
+                h /= 6.0;
+            }
+        }
+
+        private static Color HslToRgb(double h, double s, double l)
+        {
+            double r = l;
+            double g = l;
+            double b = l;
+
+            if (s != 0)
+            {
+                double q = l < 0.5 ? l * (1.0 + s) : l + s - l * s;
+                double p = 2.0 * l - q;
+
+                r = HueToRgb(p, q, h + 1.0 / 3.0);
+                g = HueToRgb(p, q, h);
+                b = HueToRgb(p, q, h - 1.0 / 3.0);
+            }
+
+            return Color.FromRgb((byte)Math.Round(r * 255), (byte)Math.Round(g * 255), (byte)Math.Round(b * 255));
+        }
+
+        private static double HueToRgb(double p, double q, double t)
+        {
+            if (t < 0) t += 1.0;
+            if (t > 1) t -= 1.0;
+            if (t < 1.0 / 6.0) return p + (q - p) * 6.0 * t;
+            if (t < 1.0 / 2.0) return q;
+            if (t < 2.0 / 3.0) return p + (q - p) * (2.0 / 3.0 - t) * 6.0;
+            return p;
         }
 
         /// <summary>
