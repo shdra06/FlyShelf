@@ -62,6 +62,12 @@ namespace FlyShelf
                                && Classes.NativeMethods.ShouldUseBlur();
             if (blurEnabled)
             {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    Classes.NativeMethods.DisableCustomAcrylic(hwnd);
+                }
+
                 this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
                 this.Background = Brushes.Transparent;
                 if (RootContent != null)
@@ -69,6 +75,12 @@ namespace FlyShelf
             }
             else
             {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    Classes.NativeMethods.DisableCustomAcrylic(hwnd);
+                }
+
                 this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
                 ApplyPopupBackground(); // solid dark
             }
@@ -99,6 +111,12 @@ namespace FlyShelf
             }
             else
             {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    Classes.NativeMethods.DisableCustomAcrylic(hwnd);
+                }
+
                 this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
                 ApplyPopupBackground(); // solid dark
             }
@@ -111,6 +129,13 @@ namespace FlyShelf
         private void ApplyNonMicaBackground()
         {
             ClearWallpaperLayers();
+            
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero)
+            {
+                Classes.NativeMethods.DisableCustomAcrylic(hwnd);
+            }
+
             this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
             ApplyPopupBackground();
             ResetSelectionAccent();

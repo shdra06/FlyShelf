@@ -440,23 +440,6 @@ public partial class App : Application
                             // Lowered displacement threshold from 9px (81) to 7.7px (60) for highly sensitive diagonal detection
                             if (distSq >= 60)
                             {
-                                // Strict slash diagonal check: only allow bottom-left to top-right '/' direction
-                                // 1. Must have opposite signs for deltaX and deltaY (Slash diagonal)
-                                bool isSlashDiagonal = (deltaX > 0 && deltaY < 0) || (deltaX < 0 && deltaY > 0);
-                                // 2. Must not be approximately vertical or horizontal (slope must be solid diagonal)
-                                bool isNotVerticalOrHorizontal = Math.Abs(deltaX) * 0.4 <= Math.Abs(deltaY) && Math.Abs(deltaY) * 0.4 <= Math.Abs(deltaX);
-
-                                if (!isSlashDiagonal || !isNotVerticalOrHorizontal)
-                                {
-                                    _shakeCount = 0;
-                                    _lastSigDirX = 0;
-                                    _lastSigDirY = 0;
-                                    _lastShakeX = currentX;
-                                    _lastShakeY = currentY;
-                                    _lastShakeTime = currentTime;
-                                    return; // Discard non-slash-diagonal motions entirely!
-                                }
-
                                 bool reversed = false;
 
                                 // Dot product of current direction vector and last direction vector.

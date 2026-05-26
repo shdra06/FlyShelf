@@ -320,6 +320,10 @@ namespace FlyShelf.Windows
                 {
                     int colorNone = DWMWA_COLOR_DARK_GRAY;
                     DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref colorNone, Marshal.SizeOf<int>());
+
+                    // Force dark caption color to prevent title bar red accent color bleeding
+                    int captionColor = 0x00202020;
+                    DwmSetWindowAttribute(hwnd, 35, ref captionColor, Marshal.SizeOf<int>());
                 }
             }
             catch { }

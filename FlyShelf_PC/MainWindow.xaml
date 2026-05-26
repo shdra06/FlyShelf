@@ -546,7 +546,7 @@
                             </VisualBrush>
                         </Border.OpacityMask>
                         <Border.Background>
-                            <SolidColorBrush Color="{DynamicResource MicaWPF.Colors.SubtleFillColorSecondary}" Opacity="0.55" />
+                            <SolidColorBrush Color="{DynamicResource MicaWPF.Colors.SubtleFillColorSecondary}" Opacity="0.25" />
                         </Border.Background>
                         <Border.Style>
                             <Style TargetType="Border">

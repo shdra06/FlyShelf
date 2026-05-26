@@ -457,6 +457,32 @@ public static partial class NativeMethods
         }
     }
 
+    public static void DisableCustomAcrylic(IntPtr hwnd)
+    {
+        var accent = new AccentPolicy
+        {
+            AccentState = AccentState.ACCENT_DISABLED
+        };
+
+        int size = Marshal.SizeOf(accent);
+        IntPtr buffer = Marshal.AllocHGlobal(size);
+        try
+        {
+            Marshal.StructureToPtr(accent, buffer, false);
+            var data = new WindowCompositionAttributeData
+            {
+                Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
+                Data = buffer,
+                SizeOfData = size
+            };
+            SetWindowCompositionAttribute(hwnd, ref data);
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer);
+        }
+    }
+
     public static void ApplyWindowBackdropAndBackground(System.Windows.Window window, System.Windows.Controls.Grid? rootGrid = null)
     {
         if (window == null) return;
@@ -502,12 +528,14 @@ public static partial class NativeMethods
                 }
                 else
                 {
-                    int colorDefault = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE = transparent for Mica
-                    DwmSetWindowAttribute(hwnd, 35, ref colorDefault, sizeof(int));
+                    // Force a neutral solid titlebar baseline (0x00202020 dark gray / 0x00F5F6F8 light gray)
+                    // to override DWM accent coloring titlebar bleeding under system red accent preferences.
+                    int darkCaption = isLight ? 0x00F5F6F8 : 0x00202020;
+                    DwmSetWindowAttribute(hwnd, 35, ref darkCaption, sizeof(int));
                 }
 
-                // Override active window border color
-                int borderColor = DWMWA_COLOR_DARK_GRAY;
+                // Override active window border color to prevent accent border leakage
+                int borderColor = isLight ? 0x00D5D6D8 : 0x002D2D2D;
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
             }
         }

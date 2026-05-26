@@ -19,6 +19,35 @@
 
 
 
+            <!-- Premium WPF-UI Accent Overrides -->
+            <Color x:Key="SystemAccentColor">#6366F1</Color>
+            <Color x:Key="SystemAccentColorLight1">#8184FF</Color>
+            <Color x:Key="SystemAccentColorLight2">#9F9FFF</Color>
+            <Color x:Key="SystemAccentColorLight3">#BDBDFE</Color>
+            <Color x:Key="SystemAccentColorDark1">#4F52DD</Color>
+            <Color x:Key="SystemAccentColorDark2">#3C3EAA</Color>
+            <Color x:Key="SystemAccentColorDark3">#2A2A77</Color>
+
+            <SolidColorBrush x:Key="SystemAccentColorBrush" Color="#6366F1"/>
+            <SolidColorBrush x:Key="SystemAccentColorLight1Brush" Color="#8184FF"/>
+            <SolidColorBrush x:Key="SystemAccentColorLight2Brush" Color="#9F9FFF"/>
+            <SolidColorBrush x:Key="SystemAccentColorLight3Brush" Color="#BDBDFE"/>
+            <SolidColorBrush x:Key="SystemAccentColorDark1Brush" Color="#4F52DD"/>
+            <SolidColorBrush x:Key="SystemAccentColorDark2Brush" Color="#3C3EAA"/>
+            <SolidColorBrush x:Key="SystemAccentColorDark3Brush" Color="#2A2A77"/>
+
+            <!-- Premium MicaWPF Accent Overrides -->
+            <Color x:Key="MicaWPF.Colors.SystemAccentColor">#6366F1</Color>
+            <Color x:Key="MicaWPF.Colors.SystemAccentColorLight1">#8184FF</Color>
+            <Color x:Key="MicaWPF.Colors.SystemAccentColorLight2">#9F9FFF</Color>
+            <Color x:Key="MicaWPF.Colors.SystemAccentColorDark1">#4F52DD</Color>
+            <Color x:Key="MicaWPF.Colors.SystemAccentColorDark2">#3C3EAA</Color>
+
+            <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColor" Color="#6366F1"/>
+            <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColorLight1" Color="#8184FF"/>
+            <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColorLight2" Color="#9F9FFF"/>
+            <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColorDark1" Color="#4F52DD"/>
+
             <!-- Premium UI Gradients — Muted, sophisticated darks -->
             <LinearGradientBrush x:Key="PremiumGradientNetwork" StartPoint="0,0" EndPoint="1,1">
                 <GradientStop Color="#0C2D33" Offset="0" />

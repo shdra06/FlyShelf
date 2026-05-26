@@ -103,14 +103,14 @@ namespace FlyShelf.Windows
                     this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
                     this.Background = System.Windows.Media.Brushes.Transparent;
                     if (RootGrid != null) RootGrid.Background = null;
-                    // Reset caption to default (transparent for Mica)
+                    // Force dark caption color to prevent system red accent bleeding
                     try
                     {
                         var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                         if (hwnd != IntPtr.Zero)
                         {
-                            int colorDefault = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE = transparent for Mica
-                            NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref colorDefault, sizeof(int));
+                            int colorDark = 0x00202020;
+                            NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref colorDark, sizeof(int));
                         }
                     } catch { }
                 }
@@ -119,14 +119,14 @@ namespace FlyShelf.Windows
                     this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Acrylic;
                     this.Background = System.Windows.Media.Brushes.Transparent;
                     if (RootGrid != null) RootGrid.Background = null;
-                    // Reset caption to default (transparent for Acrylic)
+                    // Force dark caption color to prevent system red accent bleeding
                     try
                     {
                         var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                         if (hwnd != IntPtr.Zero)
                         {
-                            int colorDefault = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE = transparent
-                            NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref colorDefault, sizeof(int));
+                            int colorDark = 0x00202020;
+                            NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref colorDark, sizeof(int));
                         }
                     } catch { }
                 }
