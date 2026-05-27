@@ -44,6 +44,7 @@ namespace FlyShelf
         private void OpenNotesPanel()
         {
             // Close other modes
+            if (_isTodoActive) CloseTodoPanel(immediate: true);
             if (_isSearchActive) CloseSearch();
             if (_isFilterBarActive) ToggleFilterBar(false);
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
@@ -62,6 +63,9 @@ namespace FlyShelf
             NotesDaySidebar.ItemsSource = NoteManager.Days;
 
             _isNotesActive = true;
+
+            // Update taskbar/alt-tab title
+            Title = "Notes";
 
             // Update window activation style dynamically so clicking it works
             UpdateWindowActivationStyle();
@@ -148,7 +152,7 @@ namespace FlyShelf
             if (helper.Handle != IntPtr.Zero)
             {
                 int exStyle = GetWindowLong(helper.Handle, GWL_EXSTYLE);
-                if (_isNotesActive)
+                if (_isNotesActive || _isTodoActive)
                 {
                     // Remove WS_EX_NOACTIVATE
                     SetWindowLong(helper.Handle, GWL_EXSTYLE, exStyle & ~WS_EX_NOACTIVATE);
@@ -213,9 +217,12 @@ namespace FlyShelf
             }, System.Windows.Threading.DispatcherPriority.Input);
         }
 
-        private void CloseNotesPanel()
+        private void CloseNotesPanel(bool immediate = false)
         {
             _isNotesActive = false;
+
+            // Restore taskbar/alt-tab title
+            Title = "FlyShelf";
 
             // Restore non-activating window style
             UpdateWindowActivationStyle();
@@ -234,6 +241,15 @@ namespace FlyShelf
             TextOptions.SetTextFormattingMode(HeaderAndFiltersStack, TextFormattingMode.Ideal);
             TextOptions.SetTextRenderingMode(HeaderAndFiltersStack, TextRenderingMode.Auto);
             RenderOptions.SetClearTypeHint(HeaderAndFiltersStack, ClearTypeHint.Auto);
+
+            if (immediate)
+            {
+                // Instant close — no animation (used when switching to another panel)
+                NotesPanel.BeginAnimation(OpacityProperty, null);
+                NotesPanel.Opacity = 0;
+                NotesPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
 
             // Animate out
             var fadeAnim = new DoubleAnimation(1, 0, new Duration(TimeSpan.FromMilliseconds(150)));
@@ -372,6 +388,10 @@ namespace FlyShelf
 
         private void NoteBulletHeader_TextChanged(object sender, TextChangedEventArgs e)
         {
+            if (sender is TextBox tb && tb.IsFocused && tb.DataContext is NoteBullet bullet)
+            {
+                bullet.LastEdited = DateTime.Now;
+            }
             NoteManager.MarkDirty();
         }
 
@@ -390,6 +410,10 @@ namespace FlyShelf
 
         private void NoteBulletText_TextChanged(object sender, TextChangedEventArgs e)
         {
+            if (sender is TextBox tb && tb.IsFocused && tb.DataContext is NoteBullet bullet)
+            {
+                bullet.LastEdited = DateTime.Now;
+            }
             NoteManager.MarkDirty();
         }
 

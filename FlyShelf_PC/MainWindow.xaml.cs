@@ -202,6 +202,11 @@ namespace FlyShelf
                     FocusNotesActiveTextBox();
                     return;
                 }
+                if (_isTodoActive)
+                {
+                    FocusTodoActiveTextBox();
+                    return;
+                }
 
                 // Debounce: only re-focus if the ListView isn't already keyboard-focused
                 if (!ShelfListView.IsKeyboardFocusWithin)
@@ -410,16 +415,18 @@ namespace FlyShelf
                 }
                 catch { }
 
-                // Notes Mode Alt+Tab/Restore un-minimize handling
-                if (this.WindowState == WindowState.Normal && _isNotesActive)
+                // Notes/Todo Mode Alt+Tab/Restore un-minimize handling
+                if (this.WindowState == WindowState.Normal && (_isNotesActive || _isTodoActive))
                 {
                     this.Opacity = 1;
                     _isCurrentlySummoned = true;
                     this.Activate();
                     this.Topmost = true;
                     
-                    // Re-focus the active text box in the notes panel
-                    FocusNotesActiveTextBox();
+                    if (_isNotesActive)
+                        FocusNotesActiveTextBox();
+                    else if (_isTodoActive)
+                        FocusTodoActiveTextBox();
                 }
             };
 
@@ -825,7 +832,7 @@ namespace FlyShelf
             _isCurrentlySummoned = false;
             _isEdgeLocked = false;
 
-            if (_isNotesActive)
+            if (_isNotesActive || _isTodoActive)
             {
                 // Instead of moving offscreen, minimize the window so it remains in Alt+Tab list as requested
                 this.Opacity = 1;

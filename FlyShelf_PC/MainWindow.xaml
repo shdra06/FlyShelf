@@ -352,6 +352,16 @@
                          <ui:Button.Icon><ui:SymbolIcon Symbol="Notepad24" /></ui:Button.Icon>
                      </ui:Button>
 
+                     <!-- To-Do List Toggle -->
+                     <ui:Button x:Name="TodoToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="TodoToggle_Click" ToolTip="To-Do List" Margin="0,0,6,0">
+                         <ui:Button.Resources>
+                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
+                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
+                             <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#C4B5FD"/>
+                         </ui:Button.Resources>
+                         <ui:Button.Icon><ui:SymbolIcon Symbol="CheckboxChecked24" /></ui:Button.Icon>
+                     </ui:Button>
+
                      <!-- Sort/Filter by Category -->
                      <ui:Button x:Name="SortFilterBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="SortFilter_Click" ToolTip="Filter by Category" Margin="0,0,6,0">
                          <ui:Button.Icon><ui:SymbolIcon Symbol="Filter24" /></ui:Button.Icon>
@@ -499,6 +509,7 @@
                             </ui:Button.Resources>
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Rocket24" /></ui:Button.Icon>
                         </ui:Button>
+
 
                         <!-- Clear Shelf Button -->
                         <ui:Button x:Name="ClearAllToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ClearAllToolbar_Click" ToolTip="Clear Shelf (Delete Unpinned)" Margin="0,0,4,0"
@@ -2003,6 +2014,7 @@
                                                 <Grid.ColumnDefinitions>
                                                     <ColumnDefinition Width="Auto"/> <!-- Bullet dot -->
                                                     <ColumnDefinition Width="*"/>    <!-- Header Box + Spacer -->
+                                                    <ColumnDefinition Width="Auto"/> <!-- Last Edited Time -->
                                                     <ColumnDefinition Width="Auto"/> <!-- Delete -->
                                                     <ColumnDefinition Width="Auto"/> <!-- Collapse -->
                                                 </Grid.ColumnDefinitions>
@@ -2051,14 +2063,30 @@
                                                     </TextBlock>
                                                 </Grid>
                                                 
+                                                <!-- Last Edited Timestamp (Visible only when collapsed) -->
+                                                <TextBlock Grid.Column="2" Text="{Binding LastEditedDisplay}" FontSize="10.5" 
+                                                           Foreground="#8B8BA8" VerticalAlignment="Center" Margin="0,0,6,0"
+                                                           IsHitTestVisible="False">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsCollapsed}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                
                                                 <!-- Delete button (visible on hover) -->
-                                                <Border x:Name="BulletDeleteBtn" Grid.Column="2" CornerRadius="4" Cursor="Hand" 
+                                                <Border x:Name="BulletDeleteBtn" Grid.Column="3" CornerRadius="4" Cursor="Hand" 
                                                         Padding="3,1" Margin="0,0,3,0" Visibility="Collapsed"
                                                         Background="#20EF4444" MouseLeftButtonDown="NoteBulletDelete_Click" ToolTip="Delete">
                                                     <ui:SymbolIcon Symbol="Delete16" Foreground="#EF4444" FontSize="10"/>
                                                 </Border>
                                                 <!-- Collapse toggle -->
-                                                <Border Grid.Column="3" CornerRadius="4" Cursor="Hand" Padding="4,1"
+                                                <Border Grid.Column="4" CornerRadius="4" Cursor="Hand" Padding="4,1"
                                                         MouseLeftButtonDown="NoteBulletCollapse_Click" Background="Transparent">
                                                     <TextBlock Text="{Binding CollapseIcon}" FontSize="11" FontWeight="Bold" 
                                                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
@@ -2303,6 +2331,246 @@
                         </ItemsControl>
                     </ScrollViewer>
                 </Border>
+            </Grid>
+        </Grid>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- TO-DO LIST PANEL — overlays ShelfListView in Grid.Row=1      -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <Grid x:Name="TodoPanel" Grid.Row="1" Visibility="Collapsed" Opacity="0" Margin="0"
+              RenderTransformOrigin="0.5,0" PreviewMouseDown="TodoPanel_PreviewMouseDown"
+              TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
+              RenderOptions.ClearTypeHint="Enabled" UseLayoutRounding="True" SnapsToDevicePixels="True"
+              Background="Transparent">
+            <Grid.RenderTransform>
+                <TranslateTransform Y="0"/>
+            </Grid.RenderTransform>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>  <!-- Todo header -->
+                <RowDefinition Height="*"/>     <!-- Content area -->
+            </Grid.RowDefinitions>
+
+            <!-- ═══ TODO HEADER BAR ═══ -->
+            <Border Grid.Row="0" CornerRadius="0" Padding="10,6" Margin="0,0,0,0"
+                    Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" 
+                    BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="0,0,0,1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/> <!-- Back -->
+                        <ColumnDefinition Width="Auto"/> <!-- Day label -->
+                        <ColumnDefinition Width="*"/>    <!-- Spacer -->
+                        <ColumnDefinition Width="Auto"/> <!-- Progress pill -->
+                        <ColumnDefinition Width="Auto"/> <!-- Add -->
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Back to clipboard -->
+                    <Border Grid.Column="0" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="TodoBack_Click" Padding="6,3" Margin="0,0,4,0"
+                            Background="{DynamicResource MicaWPF.Brushes.ControlFillColorSecondary}" 
+                            BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="1" ToolTip="Back to Clipboard">
+                        <ui:SymbolIcon Symbol="ArrowLeft24" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="14"/>
+                    </Border>
+
+                    <!-- Title and Current day label -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0">
+                        <ui:SymbolIcon Symbol="CheckboxChecked24" Foreground="#8B5CF6" FontSize="14" Margin="0,0,5,0"/>
+                        <TextBlock Text="To-Do" FontSize="12.5" FontWeight="Bold" 
+                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock Text="•" FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                        <TextBlock x:Name="TodoCurrentDayLabel" Text="{Binding DisplayDate, FallbackValue='27, May'}" FontSize="12" FontWeight="SemiBold" 
+                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Progress pill -->
+                    <Border Grid.Column="3" CornerRadius="8" Background="#188B5CF6" Padding="6,2" Margin="0,0,6,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="TodoProgressText" Text="0 done" FontSize="9.5" FontWeight="SemiBold" Foreground="#C4B5FD"/>
+                    </Border>
+
+                    <!-- Add new to-do item -->
+                    <Border Grid.Column="4" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="TodoAddBtn_Click" Padding="7,3"
+                            Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1" ToolTip="Add To-Do Item">
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Add12" Foreground="#C4B5FD" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Add" FontSize="10.5" FontWeight="SemiBold" Foreground="#C4B5FD" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- ═══ CONTENT AREA (Sidebar + List) ═══ -->
+            <Grid Grid.Row="1" Background="{DynamicResource MicaWPF.Brushes.SolidBackgroundFillColorBase}">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="54"/>  <!-- Collapsed Day Sidebar (left) -->
+                    <ColumnDefinition Width="*"/>   <!-- To-Do List Area (right) -->
+                </Grid.ColumnDefinitions>
+
+                <!-- ═══ DAY SIDEBAR (Newest-first list of dates) ═══ -->
+                <Border Grid.Column="0" BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="0,0,1,0" Background="{DynamicResource MicaWPF.Brushes.ControlAltFillColorTertiary}">
+                    <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="TodoDaySidebar" Margin="0,4,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <!-- Day badge container -->
+                                    <Border x:Name="TodoDayBorder" CornerRadius="8" Width="40" Height="40" Margin="0,0,0,6"
+                                            Cursor="Hand" MouseLeftButtonDown="TodoDayItem_Click"
+                                            BorderThickness="1" SnapsToDevicePixels="True"
+                                            Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}"
+                                            BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}"
+                                            ToolTip="{Binding FullLabel}">
+                                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                            <!-- Day number -->
+                                            <TextBlock Text="{Binding DayNumber}" FontSize="15" FontWeight="Bold" 
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextAlignment="Center" Margin="0,-2,0,0"/>
+                                            <!-- Abbreviated Month -->
+                                            <TextBlock Text="{Binding MonthName}" FontSize="8" FontWeight="SemiBold" 
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextAlignment="Center" Margin="0,-2,0,0" Opacity="0.8"/>
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- ═══ TO-DO LIST CONTENT AREA ═══ -->
+                <Grid Grid.Column="1">
+                    <ScrollViewer x:Name="TodoScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="TodoListItemsControl">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <!-- Todo Card -->
+                                    <Border x:Name="TodoCard" CornerRadius="8" Margin="6,0,6,4" Padding="0" ClipToBounds="True"
+                                            BorderThickness="1" BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}"
+                                            Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}">
+                                        <Grid Margin="8,6,6,6">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/> <!-- Circle checkbox -->
+                                                <ColumnDefinition Width="*"/>    <!-- Text input -->
+                                                <ColumnDefinition Width="Auto"/> <!-- Timestamp (CreatedAtDisplay) -->
+                                                <ColumnDefinition Width="Auto"/> <!-- Delete btn -->
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- Custom Circle Checkbox -->
+                                            <Border Grid.Column="0" Width="18" Height="18" CornerRadius="9" Margin="2,0,8,0" 
+                                                    Cursor="Hand" MouseLeftButtonDown="TodoItemCheck_Click" VerticalAlignment="Center">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background" Value="Transparent"/>
+                                                        <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                        <Setter Property="BorderThickness" Value="1.5"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                <Setter Property="Background" Value="#10B981"/>
+                                                                <Setter Property="BorderBrush" Value="#10B981"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <ui:SymbolIcon Symbol="Checkmark12" Foreground="White" FontSize="9" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <ui:SymbolIcon.Style>
+                                                        <Style TargetType="ui:SymbolIcon">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </ui:SymbolIcon.Style>
+                                                </ui:SymbolIcon>
+                                            </Border>
+
+                                            <!-- Todo Text -->
+                                            <TextBox Grid.Column="1" x:Name="TodoItemTextBox"
+                                                     Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                     FontSize="12.5" Background="Transparent" BorderThickness="0" Padding="0"
+                                                     CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
+                                                     SelectionBrush="#608B5CF6" VerticalAlignment="Center"
+                                                     TextChanged="TodoItemText_TextChanged"
+                                                     GotFocus="TodoItemText_GotFocus"
+                                                     PreviewKeyDown="TodoItemText_PreviewKeyDown">
+                                                <TextBox.Style>
+                                                    <Style TargetType="TextBox">
+                                                        <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                        <Setter Property="Template">
+                                                            <Setter.Value>
+                                                                <ControlTemplate TargetType="TextBox">
+                                                                    <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                                                                        <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
+                                                                    </Border>
+                                                                </ControlTemplate>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                                <Setter Property="Opacity" Value="0.6"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBox.Style>
+                                            </TextBox>
+                                            <TextBlock Grid.Column="1" Text="What needs to be done?" FontSize="12.5"
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
+                                                       IsHitTestVisible="False" VerticalAlignment="Center" Margin="0" Opacity="0.5">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Text}" Value="">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Text}" Value="{x:Null}">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+
+                                            <!-- Time showing when the task was assigned/created -->
+                                            <TextBlock Grid.Column="2" Text="{Binding CreatedAtDisplay}" FontSize="10" 
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
+                                                       VerticalAlignment="Center" Margin="6,0,8,0" IsHitTestVisible="False" Opacity="0.8"/>
+
+                                            <!-- Delete button (visible on hover) -->
+                                            <Border x:Name="TodoDeleteBtn" Grid.Column="3" CornerRadius="4" Cursor="Hand" 
+                                                    Padding="3,1" Margin="0,0,2,0" Visibility="Collapsed"
+                                                    Background="#20EF4444" MouseLeftButtonDown="TodoItemDelete_Click" ToolTip="Delete">
+                                                <ui:SymbolIcon Symbol="Delete16" Foreground="#EF4444" FontSize="10"/>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                    <DataTemplate.Triggers>
+                                        <!-- Show delete button on card hover -->
+                                        <Trigger SourceName="TodoCard" Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="TodoDeleteBtn" Property="Visibility" Value="Visible"/>
+                                        </Trigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- TODO EMPTY STATE -->
+                    <StackPanel x:Name="TodoEmptyHint" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,30,0,0">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Items.Count, ElementName=TodoListItemsControl}" Value="0">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Items, ElementName=TodoListItemsControl}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Visible"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </StackPanel.Style>
+                        <ui:SymbolIcon Symbol="CheckboxChecked24" FontSize="28" Foreground="#308B5CF6" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <TextBlock Text="No tasks yet" Opacity="0.35" FontSize="12" FontWeight="Medium" TextAlignment="Center"/>
+                        <TextBlock Text="Click Add to list your tasks" Opacity="0.2" FontSize="10.5" TextAlignment="Center" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </Grid>
             </Grid>
         </Grid>
 

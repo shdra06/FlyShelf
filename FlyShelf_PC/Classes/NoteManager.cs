@@ -103,6 +103,24 @@ namespace FlyShelf.Classes
 
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
+        private DateTime _lastEdited = DateTime.Now;
+        public DateTime LastEdited
+        {
+            get => _lastEdited;
+            set
+            {
+                if (_lastEdited != value)
+                {
+                    _lastEdited = value;
+                    OnPropertyChanged(nameof(LastEdited));
+                    OnPropertyChanged(nameof(LastEditedDisplay));
+                }
+            }
+        }
+
+        [JsonIgnore]
+        public string LastEditedDisplay => LastEdited.ToString("h:mm tt");
+
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
