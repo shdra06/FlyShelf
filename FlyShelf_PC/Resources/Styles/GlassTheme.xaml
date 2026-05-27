@@ -526,6 +526,33 @@
     <Style x:Key="GlassScrollBarThumbStyle" TargetType="Thumb">
         <Setter Property="OverridesDefaultStyle" Value="True"/>
         <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Height" Value="80"/>
+        <Setter Property="MinHeight" Value="80"/>
+        <Setter Property="MaxHeight" Value="80"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Border x:Name="ThumbBorder" Background="#30FFFFFF" CornerRadius="3"
+                            SnapsToDevicePixels="True" Margin="1"/>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#50FFFFFF"/>
+                        </Trigger>
+                        <Trigger Property="IsDragging" Value="True">
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="#60A78BFA"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="GlassScrollBarThumbHorizontalStyle" TargetType="Thumb">
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Width" Value="60"/>
+        <Setter Property="MinWidth" Value="60"/>
+        <Setter Property="MaxWidth" Value="60"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
@@ -574,7 +601,7 @@
                             <Border Background="Transparent" CornerRadius="4">
                                 <Track x:Name="PART_Track">
                                     <Track.Thumb>
-                                        <Thumb Style="{StaticResource GlassScrollBarThumbStyle}"/>
+                                        <Thumb Style="{StaticResource GlassScrollBarThumbHorizontalStyle}"/>
                                     </Track.Thumb>
                                 </Track>
                             </Border>

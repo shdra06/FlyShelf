@@ -9,7 +9,9 @@
     <Style x:Key="Win11ScrollBarThumb" TargetType="Thumb">
         <Setter Property="OverridesDefaultStyle" Value="True"/>
         <Setter Property="IsTabStop" Value="False"/>
-        <Setter Property="MinHeight" Value="40"/>
+        <Setter Property="Height" Value="80"/>
+        <Setter Property="MinHeight" Value="80"/>
+        <Setter Property="MaxHeight" Value="80"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
