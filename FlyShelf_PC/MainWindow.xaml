@@ -477,7 +477,7 @@
             </Border>
 
             <!-- Floating Overflow Menu Popup -->
-            <Popup x:Name="OverflowPopup" PlacementTarget="{Binding ElementName=MoreBtn}" 
+            <Popup x:Name="OverflowPopup" PlacementTarget="{x:Reference MoreBtn}" 
                    Placement="Bottom" StaysOpen="False" AllowsTransparency="True" 
                    VerticalOffset="6" HorizontalOffset="-72" PopupAnimation="Fade">
                 <Border CornerRadius="12" Padding="6,5" 

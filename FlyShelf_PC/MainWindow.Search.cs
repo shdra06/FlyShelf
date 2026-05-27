@@ -9,6 +9,7 @@ using System;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Data;
+using System.Windows.Media;
 using FlyShelf.Classes;
 
 namespace FlyShelf
@@ -17,6 +18,7 @@ namespace FlyShelf
     {
         private bool _isSearchActive = false;
         private bool _isFilterBarActive = false;
+        private bool _isUtilsBarActive = false;
 
         private void SearchToggle_Click(object sender, RoutedEventArgs e)
         {
@@ -446,6 +448,7 @@ namespace FlyShelf
         {
             if (OverflowPopup != null)
             {
+                OverflowPopup.PlacementTarget = MoreBtn;
                 OverflowPopup.IsOpen = !OverflowPopup.IsOpen;
             }
         }
