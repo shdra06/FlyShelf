@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 // ═══ ClipItem Type ═══
 export type ClipItem = {
@@ -13,6 +13,10 @@ export type ClipItem = {
   Timestamp?: number;
   CachedUri?: string;
   _receivedVia?: 'LAN' | 'Cloud' | 'Local';
+  PreviewUrl?: string;
+  DownloadUrl?: string;
+  EventId?: string;
+  Encrypted?: boolean;
 };
 
 // ═══ Organized Storage Paths ═══

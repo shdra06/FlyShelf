@@ -15,6 +15,7 @@ namespace FlyShelf
     public partial class MainWindow
     {
         private int _clipboardUpdateToken;
+        private DateTime _lastClipboardCaptureTime = DateTime.MinValue;
 
         private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
@@ -149,6 +150,13 @@ namespace FlyShelf
         {
             try
             {
+                var now = DateTime.UtcNow;
+                if ((now - _lastClipboardCaptureTime).TotalMilliseconds < 300)
+                {
+                    Classes.Logger.LogAction("CLIPBOARD", "Skipped clipboard update: Cooldown (300ms) active.");
+                    return;
+                }
+
                 // PERF: Clipboard.GetDataObject() is a COM call that MUST run on the STA UI thread.
                 // Extract the MINIMUM data here, then offload ALL processing to a background thread.
                 IDataObject data = Clipboard.GetDataObject();
@@ -239,6 +247,7 @@ namespace FlyShelf
                 // Bypasses HandleDrop() which would re-extract data from IDataObject (redundant COM calls)
                 if (bitmap != null && (files == null || files.Length == 0))
                 {
+                    _lastClipboardCaptureTime = DateTime.UtcNow;
                     var capturedBitmap = bitmap;
                     _ = Task.Run(() =>
                     {
@@ -248,12 +257,14 @@ namespace FlyShelf
                 }
                 else if (files != null && files.Length > 0)
                 {
+                    _lastClipboardCaptureTime = DateTime.UtcNow;
                     Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as FILES ({files.Length} items)");
                     var capturedFiles = files;
                     _ = Task.Run(() => vm.HandleDropInternal(capturedFiles, null, null, false, false));
                 }
                 else if (!string.IsNullOrWhiteSpace(text))
                 {
+                    _lastClipboardCaptureTime = DateTime.UtcNow;
                     Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as TEXT ({text.Length} chars)");
                     var capturedText = text;
                     _ = Task.Run(() => vm.HandleDropInternal(null, null, capturedText, false, false));

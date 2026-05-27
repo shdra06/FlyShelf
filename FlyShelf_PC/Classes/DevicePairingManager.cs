@@ -328,17 +328,19 @@ namespace FlyShelf.Classes
             Logger.LogAction("PAIR", $"Removed device: {deviceId}");
         }
 
-        // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â Short Pairing Code System Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+        // ═══ Short Pairing Code System ═══
 
         /// <summary>
-        /// Generate a 6-character alphanumeric code (no ambiguous chars like I/1/O/0).
+        /// Generate a 6-character alphanumeric code using CSPRNG (no ambiguous chars like I/1/O/0).
         /// </summary>
         public static string GenerateShortCode()
         {
             const string chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-            var rng = new Random();
             var code = new char[6];
-            for (int i = 0; i < 6; i++) code[i] = chars[rng.Next(chars.Length)];
+            for (int i = 0; i < 6; i++)
+            {
+                code[i] = chars[System.Security.Cryptography.RandomNumberGenerator.GetInt32(chars.Length)];
+            }
             return new string(code);
         }
 
@@ -351,7 +353,7 @@ namespace FlyShelf.Classes
             string code = GenerateShortCode();
             try
             {
-                // Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â Clean up any previous code from this device Ã¢â€¢ÂÃ¢â€¢ÂÃ¢â€¢Â
+                // ─── Clean up any previous code from this device ───
                 // If the PC was killed before cleanup ran, stale codes stay in Firebase
                 // and cause "Code Expired" on phones. Delete any previous code first.
                 if (!string.IsNullOrEmpty(CurrentPairingCode))
@@ -368,7 +370,8 @@ namespace FlyShelf.Classes
                 try
                 {
                     string myDeviceId = SettingsManager.Current.DeviceId ?? "";
-                    var scanRes = await _httpClient.GetAsync($"{FIREBASE_BASE}/pairing_codes.json?orderBy=\"deviceId\"&equalTo=\"{myDeviceId}\"");
+                    string scanUrl = await FirebaseAuthManager.AuthenticateUrl($"{FIREBASE_BASE}/pairing_codes.json?orderBy=\"deviceId\"&equalTo=\"{myDeviceId}\"");
+                    var scanRes = await _httpClient.GetAsync(scanUrl);
                     if (scanRes.IsSuccessStatusCode)
                     {
                         string scanJson = await scanRes.Content.ReadAsStringAsync();

@@ -19,6 +19,7 @@ namespace FlyShelf
     {
         private async void MergeSelectedPdfsBtn_Click(object sender, RoutedEventArgs e)
         {
+            if (OverflowPopup != null) OverflowPopup.IsOpen = false;
             var checkedPdfs = _viewModel.DroppedItems
                 .Where(i => i.IsCheckedForMerge && i.IsPdfPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
                 .ToList();
@@ -141,17 +142,6 @@ namespace FlyShelf
             {
                 item.IsCheckedForMerge = !item.IsCheckedForMerge;
                 UpdatePdfMergeToolbar();
-
-                // Select this item in the ListView
-                ShelfListView.SelectedItem = item;
-
-                // Focus the container
-                var container = ShelfListView.ItemContainerGenerator.ContainerFromItem(item) as ListViewItem;
-                if (container != null)
-                {
-                    container.Focus();
-                    Keyboard.Focus(container);
-                }
             }
         }
 

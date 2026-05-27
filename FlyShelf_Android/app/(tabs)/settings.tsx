@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, Keyb
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSettings } from '../../context/SettingsContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { getSecureItem } from '../../utils/secureStorage';
 import * as IntentLauncher from 'expo-intent-launcher';
 import Constants from 'expo-constants';

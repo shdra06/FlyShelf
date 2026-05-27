@@ -342,6 +342,16 @@
                          </ui:SymbolIcon>
                      </Grid>
  
+                     <!-- Quick Notes Toggle -->
+                     <ui:Button x:Name="NotesToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="NotesToggle_Click" ToolTip="Quick Notes" Margin="0,0,6,0">
+                         <ui:Button.Resources>
+                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
+                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
+                             <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#C4B5FD"/>
+                         </ui:Button.Resources>
+                         <ui:Button.Icon><ui:SymbolIcon Symbol="Notepad24" /></ui:Button.Icon>
+                     </ui:Button>
+
                      <!-- Sort/Filter by Category -->
                      <ui:Button x:Name="SortFilterBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="SortFilter_Click" ToolTip="Filter by Category" Margin="0,0,6,0">
                          <ui:Button.Icon><ui:SymbolIcon Symbol="Filter24" /></ui:Button.Icon>
@@ -1927,6 +1937,356 @@
                 <Run Text="🔍 "/><Run Text="Ctrl+F" FontWeight="SemiBold"/><Run Text=" to search your clips"/>
             </TextBlock>
         </StackPanel>
+
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <!-- QUICK NOTES PANEL — overlays ShelfListView in Grid.Row=1     -->
+        <!-- ═══════════════════════════════════════════════════════════════ -->
+        <Grid x:Name="NotesPanel" Grid.Row="1" Visibility="Collapsed" Opacity="0" Margin="12,0,12,12"
+              RenderTransformOrigin="0.5,0">
+            <Grid.RenderTransform>
+                <TranslateTransform Y="0"/>
+            </Grid.RenderTransform>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>  <!-- Notes header -->
+                <RowDefinition Height="Auto"/>  <!-- Notes search bar (inline, hidden by default) -->
+                <RowDefinition Height="*"/>     <!-- Content area -->
+            </Grid.RowDefinitions>
+
+            <!-- ═══ NOTES HEADER BAR ═══ -->
+            <Border Grid.Row="0" CornerRadius="10" Padding="6,4" Margin="0,0,0,6"
+                    Background="{DynamicResource MicaWPF.Brushes.SmokeFillColorDefault}" 
+                    BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/> <!-- Back -->
+                        <ColumnDefinition Width="Auto"/> <!-- Day label -->
+                        <ColumnDefinition Width="*"/>    <!-- Spacer -->
+                        <ColumnDefinition Width="Auto"/> <!-- Search -->
+                        <ColumnDefinition Width="Auto"/> <!-- Mode toggle -->
+                        <ColumnDefinition Width="Auto"/> <!-- Add -->
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Back to clipboard -->
+                    <Border Grid.Column="0" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesBack_Click" Padding="6,3" Margin="0,0,4,0"
+                            Background="#14FFFFFF" BorderBrush="#18FFFFFF" BorderThickness="1" ToolTip="Back to Clipboard">
+                        <ui:SymbolIcon Symbol="ArrowLeft24" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="14"/>
+                    </Border>
+
+                    <!-- Current day label -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0">
+                        <ui:SymbolIcon Symbol="Notepad24" Foreground="#8B5CF6" FontSize="14" Margin="0,0,5,0"/>
+                        <TextBlock x:Name="NotesCurrentDayLabel" Text="27, May" FontSize="12" FontWeight="SemiBold" 
+                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Search notes -->
+                    <Border Grid.Column="3" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesSearchToggle_Click" Padding="6,3" Margin="0,0,4,0"
+                            Background="#14FFFFFF" BorderBrush="#18FFFFFF" BorderThickness="1" ToolTip="Search Notes">
+                        <ui:SymbolIcon Symbol="Search24" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="13"/>
+                    </Border>
+
+                    <!-- Mode toggle: Bullets ↔ Freeform -->
+                    <Border Grid.Column="4" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesModeToggle_Click" Padding="8,3" Margin="0,0,4,0"
+                            Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1" ToolTip="Toggle Bullets / Freeform">
+                        <TextBlock x:Name="NotesModeToggleText" Text="📄 Freeform" FontSize="10" FontWeight="SemiBold" 
+                                   Foreground="#C4B5FD" VerticalAlignment="Center"/>
+                    </Border>
+
+                    <!-- Add bullet -->
+                    <Border Grid.Column="5" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesAddBullet_Click" Padding="6,3"
+                            Background="#208B5CF6" BorderBrush="#408B5CF6" BorderThickness="1" ToolTip="Add Bullet">
+                        <ui:SymbolIcon Symbol="Add24" Foreground="#8B5CF6" FontSize="13"/>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- ═══ NOTES SEARCH BAR (inline, hidden by default) ═══ -->
+            <Border x:Name="NotesSearchBar" Grid.Row="1" CornerRadius="8" Padding="6,3" Margin="0,0,0,6" Visibility="Collapsed" Opacity="0"
+                    Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                    BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ui:SymbolIcon Grid.Column="0" Symbol="Search24" Foreground="#8B5CF6" FontSize="13" Margin="4,0,6,0" VerticalAlignment="Center"/>
+                    <TextBox x:Name="NotesSearchBox" Grid.Column="1" FontSize="11.5" Background="Transparent" BorderThickness="0" 
+                             Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
+                             CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Padding="2,1" VerticalAlignment="Center"
+                             TextChanged="NotesSearchBox_TextChanged" PreviewKeyDown="NotesSearchBox_PreviewKeyDown">
+                        <TextBox.Style>
+                            <Style TargetType="TextBox">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="TextBox">
+                                            <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                                                <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </TextBox.Style>
+                    </TextBox>
+                    <Border Grid.Column="2" CornerRadius="5" Cursor="Hand" MouseLeftButtonDown="NotesSearchToggle_Click" Padding="4,2" Margin="2,0,0,0"
+                            Background="#14FFFFFF" BorderBrush="#18FFFFFF" BorderThickness="1">
+                        <ui:SymbolIcon Symbol="Dismiss12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="10"/>
+                    </Border>
+                </Grid>
+            </Border>
+
+            <!-- ═══ MAIN CONTENT: SIDEBAR + NOTEPAD ═══ -->
+            <Grid Grid.Row="2">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/> <!-- Thin date sidebar -->
+                    <ColumnDefinition Width="*"/>    <!-- Content -->
+                </Grid.ColumnDefinitions>
+
+                <!-- ═══ DATE SIDEBAR (collapsed: just day number, hover: shows month) ═══ -->
+                <Border x:Name="NotesSidebarBorder" Grid.Column="0" CornerRadius="8" Padding="2,4" Margin="0,0,6,0" MinWidth="22"
+                        Background="{DynamicResource MicaWPF.Brushes.SmokeFillColorDefault}" 
+                        BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="NotesDaySidebar">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border x:Name="DayPill" CornerRadius="6" Padding="4,5" Margin="1,1" Cursor="Hand"
+                                            MouseLeftButtonDown="NotesDayItem_Click" ToolTip="{Binding FullLabel}"
+                                            Background="Transparent" BorderThickness="0">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <!-- Day number (always visible) -->
+                                            <TextBlock Text="{Binding DayNumber}" FontSize="11" FontWeight="Bold" 
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
+                                                       TextAlignment="Center" HorizontalAlignment="Center"/>
+                                            <!-- Month abbreviation (shown on sidebar hover via parent trigger) -->
+                                            <TextBlock x:Name="MonthLabel" Text="{Binding MonthName}" FontSize="8" FontWeight="Medium" 
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
+                                                       TextAlignment="Center" HorizontalAlignment="Center" Margin="0,-1,0,0"
+                                                       Visibility="Collapsed"/>
+                                        </StackPanel>
+                                    </Border>
+                                    <DataTemplate.Triggers>
+                                        <!-- Today highlight -->
+                                        <DataTrigger Binding="{Binding IsToday}" Value="True">
+                                            <Setter TargetName="DayPill" Property="Background" Value="#208B5CF6"/>
+                                            <Setter TargetName="DayPill" Property="BorderBrush" Value="#408B5CF6"/>
+                                            <Setter TargetName="DayPill" Property="BorderThickness" Value="1"/>
+                                        </DataTrigger>
+                                        <!-- Hover: show month -->
+                                        <Trigger SourceName="DayPill" Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="MonthLabel" Property="Visibility" Value="Visible"/>
+                                            <Setter TargetName="DayPill" Property="Background" Value="#14FFFFFF"/>
+                                        </Trigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+
+                <!-- ═══ NOTES CONTENT AREA ═══ -->
+                <Grid x:Name="NotesContentArea" Grid.Column="1">
+                    <!-- BULLET MODE: Scrollable list of bullet cards -->
+                    <ScrollViewer x:Name="NotesBulletScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="NotesBulletList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <!-- Bullet Card -->
+                                    <Border x:Name="BulletCard" CornerRadius="10" Margin="0,0,0,4" Padding="0" ClipToBounds="True"
+                                            BorderThickness="1" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                <GradientStop Color="#0CFFFFFF" Offset="0"/>
+                                                <GradientStop Color="#06FFFFFF" Offset="1"/>
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/> <!-- Header row: bullet dot + collapse toggle -->
+                                                <RowDefinition Height="Auto"/> <!-- Content row (collapsible) -->
+                                                <RowDefinition Height="Auto"/> <!-- Image row (optional) -->
+                                            </Grid.RowDefinitions>
+
+                                            <!-- Bullet header: dot + collapse toggle + delete -->
+                                            <Grid Grid.Row="0" Margin="8,5,6,2">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/> <!-- Bullet dot -->
+                                                    <ColumnDefinition Width="*"/>    <!-- Spacer -->
+                                                    <ColumnDefinition Width="Auto"/> <!-- Delete -->
+                                                    <ColumnDefinition Width="Auto"/> <!-- Collapse -->
+                                                </Grid.ColumnDefinitions>
+                                                <!-- Bullet dot -->
+                                                <Ellipse Grid.Column="0" Width="7" Height="7" Fill="#8B5CF6" Margin="2,0,6,0" VerticalAlignment="Center"/>
+                                                <!-- Delete button (visible on hover) -->
+                                                <Border x:Name="BulletDeleteBtn" Grid.Column="2" CornerRadius="4" Cursor="Hand" 
+                                                        Padding="3,1" Margin="0,0,3,0" Visibility="Collapsed"
+                                                        Background="#20EF4444" MouseLeftButtonDown="NoteBulletDelete_Click" ToolTip="Delete">
+                                                    <ui:SymbolIcon Symbol="Delete16" Foreground="#EF4444" FontSize="10"/>
+                                                </Border>
+                                                <!-- Collapse toggle -->
+                                                <Border Grid.Column="3" CornerRadius="4" Cursor="Hand" Padding="4,1"
+                                                        MouseLeftButtonDown="NoteBulletCollapse_Click" Background="Transparent">
+                                                    <TextBlock Text="{Binding CollapseIcon}" FontSize="11" FontWeight="Bold" 
+                                                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                </Border>
+                                            </Grid>
+
+                                            <!-- Bullet text content (collapsible) -->
+                                            <Border x:Name="BulletContent" Grid.Row="1" Margin="22,0,8,6">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsCollapsed}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBox Text="{Binding Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                                         TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="False"
+                                                         FontSize="11.5" Background="Transparent" BorderThickness="0" Padding="0,2"
+                                                         Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
+                                                         CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
+                                                         SelectionBrush="#608B5CF6"
+                                                         TextChanged="NoteBulletText_TextChanged"
+                                                         PreviewKeyDown="NoteBulletText_PreviewKeyDown"
+                                                         DataObject.Pasting="NoteBulletText_Paste">
+                                                    <TextBox.Style>
+                                                        <Style TargetType="TextBox">
+                                                            <Setter Property="Template">
+                                                                <Setter.Value>
+                                                                    <ControlTemplate TargetType="TextBox">
+                                                                        <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                                                                            <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
+                                                                        </Border>
+                                                                    </ControlTemplate>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                        </Style>
+                                                    </TextBox.Style>
+                                                </TextBox>
+                                            </Border>
+
+                                            <!-- Embedded image (optional, resizable via mouse wheel) -->
+                                            <Border x:Name="BulletImageArea" Grid.Row="2" Margin="22,0,8,6">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasImage}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <Grid>
+                                                    <Border CornerRadius="6" ClipToBounds="True" 
+                                                            BorderBrush="#308B5CF6" BorderThickness="1" 
+                                                            HorizontalAlignment="Left"
+                                                            MouseWheel="NoteImageResize_MouseWheel" ToolTip="Scroll to resize">
+                                                        <Image Source="{Binding ImagePath}" 
+                                                               Width="{Binding ImageDisplayWidth}" 
+                                                               Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                                    </Border>
+                                                    <!-- Remove image button -->
+                                                    <Border CornerRadius="4" HorizontalAlignment="Left" VerticalAlignment="Top" 
+                                                            Margin="4,4,0,0" Padding="3,1" Cursor="Hand" Background="#80000000"
+                                                            MouseLeftButtonDown="NoteImageRemove_Click" ToolTip="Remove image">
+                                                        <ui:SymbolIcon Symbol="Dismiss12" Foreground="#CCFFFFFF" FontSize="9"/>
+                                                    </Border>
+                                                </Grid>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+                                    <DataTemplate.Triggers>
+                                        <!-- Show delete button on card hover -->
+                                        <Trigger SourceName="BulletCard" Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="BulletDeleteBtn" Property="Visibility" Value="Visible"/>
+                                        </Trigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+
+                    <!-- FREEFORM MODE: Large text area -->
+                    <TextBox x:Name="NotesFreeformBox" Visibility="Collapsed" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True"
+                             FontSize="12" Background="Transparent" BorderThickness="0" Padding="8,6"
+                             Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
+                             CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
+                             SelectionBrush="#608B5CF6" VerticalScrollBarVisibility="Auto"
+                             TextChanged="NotesFreeformBox_TextChanged">
+                        <TextBox.Style>
+                            <Style TargetType="TextBox">
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="TextBox">
+                                            <Border Background="#06FFFFFF" CornerRadius="10" Padding="{TemplateBinding Padding}"
+                                                    BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
+                                                <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
+                                            </Border>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </TextBox.Style>
+                    </TextBox>
+
+                    <!-- NOTES EMPTY STATE -->
+                    <StackPanel x:Name="NotesEmptyHint" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,30,0,0">
+                        <StackPanel.Style>
+                            <Style TargetType="StackPanel">
+                                <Setter Property="Visibility" Value="Collapsed"/>
+                            </Style>
+                        </StackPanel.Style>
+                        <ui:SymbolIcon Symbol="Notepad24" FontSize="28" Foreground="#308B5CF6" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <TextBlock Text="No bullets yet" Opacity="0.35" FontSize="12" FontWeight="Medium" TextAlignment="Center"/>
+                        <TextBlock Text="Click + to add your first note" Opacity="0.2" FontSize="10.5" TextAlignment="Center" Margin="0,4,0,0"/>
+                    </StackPanel>
+                </Grid>
+
+                <!-- ═══ NOTES SEARCH RESULTS (replaces content area during search) ═══ -->
+                <Border x:Name="NotesSearchResults" Grid.Column="1" Visibility="Collapsed">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <ItemsControl x:Name="NotesSearchResultsList">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <!-- Search result card: date sidebar + content -->
+                                    <Border CornerRadius="8" Margin="0,0,0,4" Padding="0" Cursor="Hand" ClipToBounds="True"
+                                            MouseLeftButtonDown="NotesSearchResult_Click"
+                                            BorderThickness="1" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                <GradientStop Color="#108B5CF6" Offset="0"/>
+                                                <GradientStop Color="#06FFFFFF" Offset="0.15"/>
+                                                <GradientStop Color="#06FFFFFF" Offset="1"/>
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="42"/> <!-- Date column -->
+                                                <ColumnDefinition Width="*"/>  <!-- Content -->
+                                            </Grid.ColumnDefinitions>
+                                            <!-- Date badge -->
+                                            <Border Grid.Column="0" Background="#158B5CF6" Padding="4,6">
+                                                <TextBlock Text="{Binding DateLabel}" FontSize="9" FontWeight="Bold" 
+                                                           Foreground="#C4B5FD" TextAlignment="Center" TextWrapping="Wrap"/>
+                                            </Border>
+                                            <!-- Content preview -->
+                                            <TextBlock Grid.Column="1" Text="{Binding Content}" FontSize="11" TextTrimming="CharacterEllipsis" 
+                                                       MaxHeight="42" TextWrapping="Wrap" Margin="8,6" 
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Border>
+            </Grid>
+        </Grid>
 
         <!-- Drag-Over Overlay Zone removed - replaced with elegant mini arrow animation in button header -->
 

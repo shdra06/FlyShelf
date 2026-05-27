@@ -98,25 +98,10 @@ namespace FlyShelf.Windows
                 string mode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
                 bool blurEnabled = SettingsManager.Current.EnableBlurBehind && NativeMethods.ShouldUseBlur();
 
-                if (blurEnabled && mode == "mica")
+                if (blurEnabled)
                 {
-                    this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
-                    this.Background = System.Windows.Media.Brushes.Transparent;
-                    if (RootGrid != null) RootGrid.Background = null;
-                    // Force dark caption color to prevent system red accent bleeding
-                    try
-                    {
-                        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                        if (hwnd != IntPtr.Zero)
-                        {
-                            int colorDark = 0x00202020;
-                            NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref colorDark, sizeof(int));
-                        }
-                    } catch { }
-                }
-                else if (blurEnabled && mode == "glass")
-                {
-                    this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Acrylic;
+                    // HubWindow always gets Mica blur (or Acrylic blur if in glass mode) when blur is enabled
+                    this.SystemBackdropType = (mode == "glass") ? MicaWPF.Core.Enums.BackdropType.Acrylic : MicaWPF.Core.Enums.BackdropType.Mica;
                     this.Background = System.Windows.Media.Brushes.Transparent;
                     if (RootGrid != null) RootGrid.Background = null;
                     // Force dark caption color to prevent system red accent bleeding

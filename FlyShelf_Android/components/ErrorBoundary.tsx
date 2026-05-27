@@ -2,7 +2,7 @@ import React, { Component, ErrorInfo } from 'react';
 import { StyleSheet, View, Text, TouchableOpacity, ScrollView, Platform, Alert, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Clipboard from 'expo-clipboard';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { colors, font, radius, space, shadows } from '../styles/theme';
 import { syncLog } from '../utils/debugLog';
 import { DOWNLOAD_BASE, SYNC_CACHE_BASE, CONVERTED_BASE, IMAGE_CACHE_BASE } from '../utils/clipTypes';

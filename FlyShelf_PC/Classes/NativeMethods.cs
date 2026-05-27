@@ -547,42 +547,35 @@ public static partial class NativeMethods
             string mode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
             bool blurEnabled = SettingsManager.Current.EnableBlurBehind && ShouldUseBlur();
 
-            if (blurEnabled && mode == "mica")
+            if (blurEnabled && window is not MainWindow)
             {
-                if (window is MainWindow)
-                {
-                    micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
-                }
-                else
-                {
-                    micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
-                }
+                // Utility windows (HubWindow, EmojiPickerWindow, etc.) always get Mica/Acrylic blur when blur is enabled
+                micaWin.SystemBackdropType = (mode == "glass") ? MicaWPF.Core.Enums.BackdropType.Acrylic : MicaWPF.Core.Enums.BackdropType.Mica;
+                micaWin.Background = System.Windows.Media.Brushes.Transparent;
+                if (rootGrid != null) rootGrid.Background = null;
+            }
+            else if (blurEnabled && mode == "mica")
+            {
+                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
                 micaWin.Background = System.Windows.Media.Brushes.Transparent;
                 if (rootGrid != null) rootGrid.Background = null;
             }
             else if (blurEnabled && mode == "glass")
             {
-                if (window is MainWindow)
-                {
-                    micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
-                    micaWin.Background = System.Windows.Media.Brushes.Transparent;
-                    if (rootGrid != null) rootGrid.Background = null;
+                // Main window glass mode
+                micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+                micaWin.Background = System.Windows.Media.Brushes.Transparent;
+                if (rootGrid != null) rootGrid.Background = null;
 
-                    var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-                    if (hwnd != IntPtr.Zero)
-                    {
-                        EnableCustomAcrylic(hwnd, 0x22242424);
-                    }
-                }
-                else
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                if (hwnd != IntPtr.Zero)
                 {
-                    micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
-                    micaWin.Background = System.Windows.Media.Brushes.Transparent;
-                    if (rootGrid != null) rootGrid.Background = null;
+                    EnableCustomAcrylic(hwnd, 0x22242424);
                 }
             }
             else
             {
+                // Solid background fallback for all modes where blur is disabled or wallpaper is solid
                 micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
                 var bgColor = isLight ? System.Windows.Media.Color.FromRgb(245, 246, 248) : System.Windows.Media.Color.FromRgb(18, 18, 26);
                 var darkBg = new System.Windows.Media.SolidColorBrush(bgColor);

@@ -370,6 +370,18 @@ public partial class App : Application
         ViewModels.ClipboardItem.StopActivePlayback();
 
         _shakeTimer?.Dispose();
+
+        try
+        {
+            FlyShelf.Classes.NetworkSyncServer.Instance?.Stop();
+        }
+        catch { }
+
+        try
+        {
+            FlyShelf.Classes.PeerManager.Instance?.Stop();
+        }
+        catch { }
         
         try
         {
@@ -377,6 +389,9 @@ public partial class App : Application
         }
         catch { }
         
+        // Flush any pending notes to disk
+        try { FlyShelf.Classes.NoteManager.SaveNow(); } catch { }
+
         FlyShelf.Classes.Logger.Shutdown();
         base.OnExit(e);
     }

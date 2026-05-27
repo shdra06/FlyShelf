@@ -489,6 +489,49 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("SANDBOX_SCAVENGE_ERR", $"Scavenge failed: {ex.Message}");
             }
+
+            // Also clean up stale FlyShelf zip files older than 24 hours
+            ScavengeStaleZipFiles();
+        }
+
+        /// <summary>
+        /// Deletes FlyShelf_*.zip temp files older than 24 hours from %TEMP%.
+        /// Prevents unbounded temp storage growth from zip creation.
+        /// </summary>
+        public static void ScavengeStaleZipFiles()
+        {
+            try
+            {
+                string tempDir = Path.GetTempPath();
+                var zipFiles = Directory.GetFiles(tempDir, "FlyShelf_*.zip", SearchOption.TopDirectoryOnly);
+                int prunedCount = 0;
+                long reclaimedBytes = 0;
+
+                foreach (var file in zipFiles)
+                {
+                    try
+                    {
+                        var fileInfo = new FileInfo(file);
+                        if (fileInfo.Exists && fileInfo.LastWriteTime < DateTime.Now.AddDays(-1))
+                        {
+                            reclaimedBytes += fileInfo.Length;
+                            File.Delete(file);
+                            prunedCount++;
+                        }
+                    }
+                    catch { /* Ignore locked files */ }
+                }
+
+                if (prunedCount > 0)
+                {
+                    double reclaimedMB = reclaimedBytes / (1024.0 * 1024.0);
+                    Logger.LogAction("ZIP_SCAVENGE", $"Deleted {prunedCount} stale zip files, reclaimed {reclaimedMB:F1} MB.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("ZIP_SCAVENGE_ERR", $"Scavenge failed: {ex.Message}");
+            }
         }
 
         /// <summary>

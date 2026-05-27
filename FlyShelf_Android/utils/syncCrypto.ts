@@ -55,15 +55,16 @@ async function getKey(): Promise<CryptoKey> {
   );
 
   // Derive AES-GCM key using PBKDF2-SHA256
-  _cachedKey = await cryptoInstance.subtle.deriveKey(
+  const derivedKey = await cryptoInstance.subtle.deriveKey(
     { name: 'PBKDF2', salt, iterations: PBKDF2_ITERATIONS, hash: 'SHA-256' },
     keyMaterial,
     { name: 'AES-GCM', length: KEY_SIZE_BITS },
     false,
     ['encrypt', 'decrypt']
   );
+  _cachedKey = derivedKey;
   _cachedPairingKey = pairingKey;
-  return _cachedKey;
+  return derivedKey;
 }
 
 /**

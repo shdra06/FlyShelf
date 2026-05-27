@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
+import * as Crypto from 'expo-crypto';
 
 export type PairedDevice = {
   deviceId: string;
@@ -58,12 +59,12 @@ const SettingsContext = createContext<SettingsContextType>({
 
 export const useSettings = () => useContext(SettingsContext);
 
-/** Generate a 32-char hex key (same format as PC's Guid.ToString("N")) */
+/** Generate a 32-char hex key (same format as PC's Guid.ToString("N")) using CSPRNG */
 const generatePairingKey = (): string => {
-  const hex = '0123456789abcdef';
-  let key = '';
-  for (let i = 0; i < 32; i++) key += hex[Math.floor(Math.random() * 16)];
-  return key;
+  const randomBytes = Crypto.getRandomBytes(16);
+  return Array.from(randomBytes)
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
 };
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

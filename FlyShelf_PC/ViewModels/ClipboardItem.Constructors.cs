@@ -178,39 +178,6 @@ namespace FlyShelf.ViewModels
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedSize)));
             });
 
-            // Zip files in background thread for cross-device transfer
-            System.Threading.Tasks.Task.Run(() =>
-            {
-                try
-                {
-                    string tempZip = Path.Combine(Path.GetTempPath(), $"FlyShelf_Group_{DateTime.Now:yyyyMMdd_HHmmss}.zip");
-                    if (File.Exists(tempZip)) File.Delete(tempZip);
-                    
-                    using (var archive = ZipFile.Open(tempZip, ZipArchiveMode.Create))
-                    {
-                        foreach (var path in capturedFiles)
-                        {
-                            if (File.Exists(path))
-                            {
-                                string entryName = Path.GetFileName(path);
-                                archive.CreateEntryFromFile(path, entryName, CompressionLevel.Fastest);
-                            }
-                            else if (Directory.Exists(path))
-                            {
-                                string dirName = Path.GetFileName(path);
-                                AddDirectoryToZip(archive, path, dirName);
-                            }
-                        }
-                    }
-                    ZippedArchivePath = tempZip;
-                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ZippedArchivePath)));
-                    Classes.Logger.LogAction("GROUP ZIP", $"Created zip for group: {tempZip}");
-                }
-                catch (Exception ex)
-                {
-                    Classes.Logger.LogAction("GROUP ZIP ERR", ex.Message);
-                }
-            });
 
             // Generate premium overlapping diagonal stacked card icons
             GenerateStackedGroupIcon(capturedFiles);
@@ -413,16 +380,7 @@ namespace FlyShelf.ViewModels
                             
                             RawContent = listing.ToString();
                             
-                            // Zip for P2P cross-device transfer
-                            string tempZip = Path.Combine(Path.GetTempPath(), $"FlyShelf_{FileName}_{DateTime.Now:HHmmss}.zip");
-                            if (File.Exists(tempZip)) File.Delete(tempZip);
-                            ZipFile.CreateFromDirectory(capturedPath, tempZip, CompressionLevel.Fastest, true);
-                            ZippedArchivePath = tempZip;
-                            var zipInfo = new FileInfo(tempZip);
-                            FormattedSize = $"{FormatBytes(folderSize)} → {FormatBytes(zipInfo.Length)} zipped • {allFiles.Length} files";
-                            
                             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedSize)));
-                            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ZippedArchivePath)));
                         }
                         catch (Exception ex)
                         {

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, Image as RNImage } from 'react-native';
 import { Image } from 'expo-image';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { IMAGE_CACHE_BASE } from '../utils/clipTypes';
 
 const safeHash = (s: string): string => {
@@ -172,7 +172,7 @@ const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: 
     </View>
   );
 
-  const imageStyle = aspectRatio 
+  const imageStyle: any = aspectRatio 
     ? { width: '100%', aspectRatio, borderRadius: 12, backgroundColor: '#1C202B' }
     : { width: '100%', minHeight: 160, maxHeight: 320, borderRadius: 12, backgroundColor: '#1C202B' };
 

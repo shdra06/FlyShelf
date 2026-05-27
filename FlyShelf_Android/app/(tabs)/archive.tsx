@@ -5,7 +5,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as MediaLibrary from 'expo-media-library';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as DocumentPicker from 'expo-document-picker';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -76,7 +76,8 @@ export default function ConnectScreen() {
 
   // Real-time Firebase sync for groups
   useEffect(() => {
-    const groupsRef = dbRef(database, 'device_groups');
+    if (!pairingKey) return;
+    const groupsRef = dbRef(database, `device_groups/${pairingKey}`);
     const unsubGroups = onValue(groupsRef, (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.val();
@@ -87,10 +88,11 @@ export default function ConnectScreen() {
       }
     });
     return () => unsubGroups();
-  }, []);
+  }, [pairingKey]);
 
   const saveGroupToFirebase = async (group: DeviceGroup) => {
-    const groupRef = dbRef(database, `device_groups/${group.id}`);
+    if (!pairingKey) return;
+    const groupRef = dbRef(database, `device_groups/${pairingKey}/${group.id}`);
     await set(groupRef, { name: group.name, deviceNames: group.deviceNames });
   };
 
@@ -111,7 +113,8 @@ export default function ConnectScreen() {
     Alert.alert('Delete Group', 'Are you sure?', [
       { text: 'Cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
-        const groupRef = dbRef(database, `device_groups/${groupId}`);
+        if (!pairingKey) return;
+        const groupRef = dbRef(database, `device_groups/${pairingKey}/${groupId}`);
         await set(groupRef, null);
       }}
     ]);
@@ -533,6 +536,7 @@ export default function ConnectScreen() {
                 uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
                 headers: {
                   'X-FlyShelf-Client': 'MobileCompanion',
+                  'X-Pairing-Key': pairingKey,
                   'X-Original-Date': (asset.creationTime || Date.now()).toString(),
                   'X-File-Name': encodeURIComponent(asset.filename || 'file.bin'),
                   'X-Batch-Name': encodeURIComponent(batchName),
@@ -588,6 +592,7 @@ export default function ConnectScreen() {
               uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
               headers: {
                 'X-FlyShelf-Client': 'MobileCompanion',
+                'X-Pairing-Key': pairingKey,
                 'X-Upload-Session': sessionId,
                 'X-Chunk-Index': i.toString(),
               }
@@ -612,6 +617,7 @@ export default function ConnectScreen() {
         method: 'POST',
         headers: {
           'X-FlyShelf-Client': 'MobileCompanion',
+          'X-Pairing-Key': pairingKey,
           'X-Upload-Session': sessionId,
           'X-File-Name': encodeURIComponent(asset.filename || 'file.bin'),
           'X-Batch-Name': encodeURIComponent(batch),

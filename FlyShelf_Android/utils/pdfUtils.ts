@@ -2,7 +2,7 @@
 // No native modules needed — pure JavaScript
 
 import { PDFDocument } from 'pdf-lib';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 /**
  * Read a PDF file from a URI (local or http) and return its bytes as Uint8Array.

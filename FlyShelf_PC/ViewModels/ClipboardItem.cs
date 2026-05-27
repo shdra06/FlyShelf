@@ -36,9 +36,30 @@ namespace FlyShelf.ViewModels
         public string FilePath { get; set; } = string.Empty;
         
         /// <summary>
-        /// For Folder items: path to the auto-generated temp zip for transfer.
+        /// For Group/Folder items: path to the on-demand temp zip for transfer.
+        /// Set when user clicks "Convert to .zip" hover button.
         /// </summary>
-        public string ZippedArchivePath { get; set; } = string.Empty;
+        public string ZippedArchivePath
+        {
+            get => _zippedArchivePath;
+            set
+            {
+                if (_zippedArchivePath != value)
+                {
+                    _zippedArchivePath = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ZippedArchivePath)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasZipArchive)));
+                }
+            }
+        }
+        private string _zippedArchivePath = string.Empty;
+
+        /// <summary>
+        /// True when a zip archive has been created for this Group/Folder item.
+        /// Used by XAML DataTriggers for hover button visibility.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public bool HasZipArchive => !string.IsNullOrEmpty(ZippedArchivePath) && System.IO.File.Exists(ZippedArchivePath);
 
         private string _fileName = string.Empty;
         public string FileName

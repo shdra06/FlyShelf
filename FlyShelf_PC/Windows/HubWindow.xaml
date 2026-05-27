@@ -1304,7 +1304,7 @@
                                                 <Grid>
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                     <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipW_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
-                                                    <Slider Grid.Column="1" Minimum="200" Maximum="500" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormWidth}" TickFrequency="25" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                                    <Slider Grid.Column="1" Minimum="200" Maximum="500" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormWidth}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
                                                     <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipW_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
                                                 </Grid>
                                             </StackPanel>
@@ -1319,7 +1319,7 @@
                                                 <Grid>
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                     <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipH_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
-                                                    <Slider Grid.Column="1" Minimum="300" Maximum="700" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormHeight}" TickFrequency="25" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                                    <Slider Grid.Column="1" Minimum="300" Maximum="700" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormHeight}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
                                                     <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipH_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
                                                 </Grid>
                                             </StackPanel>
@@ -1376,7 +1376,7 @@
                                                 <Grid>
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                     <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropW_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
-                                                    <Slider Grid.Column="1" Minimum="180" Maximum="400" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormWidth}" TickFrequency="20" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                                    <Slider Grid.Column="1" Minimum="180" Maximum="400" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormWidth}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
                                                     <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropW_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
                                                 </Grid>
                                             </StackPanel>
@@ -1391,7 +1391,7 @@
                                                 <Grid>
                                                     <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                     <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropH_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
-                                                    <Slider Grid.Column="1" Minimum="100" Maximum="350" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormHeight}" TickFrequency="25" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                                    <Slider Grid.Column="1" Minimum="100" Maximum="350" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormHeight}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
                                                     <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropH_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
                                                 </Grid>
                                             </StackPanel>

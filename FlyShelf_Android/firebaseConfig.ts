@@ -1,7 +1,9 @@
 import { initializeApp } from "firebase/app";
 import { getDatabase } from "firebase/database";
 
-import { initializeAuth, getAuth, getReactNativePersistence, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+import { initializeAuth, getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+// @ts-ignore
+import { getReactNativePersistence } from "firebase/auth/react-native";
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 
 // ═══ XOR Obfuscation Key (matching PC) ═══

@@ -486,6 +486,7 @@ namespace FlyShelf
 
         private void OpenApp_Click(object sender, RoutedEventArgs e)
         {
+            if (OverflowPopup != null) OverflowPopup.IsOpen = false;
             try
             {
                 CloseEmojiPicker();
@@ -567,18 +568,6 @@ namespace FlyShelf
 
                 // Sync → Unpin swap in toolbar (mirrors emoji → merge pattern)
                 UpdateToolbarButtonsVisibility();
-
-                // Shift/Ctrl-select PDF/DOC/Image merge: auto-check selected files for merge/convert
-                var selectedMergeable = ShelfListView.SelectedItems.Cast<ClipboardItem>()
-                    .Where(i => (i.IsPdfPreview || i.IsDocPreview || i.ItemType == ClipboardItemType.Image) && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
-                    .ToList();
-
-                if (selectedMergeable.Count >= 2 || (selectedMergeable.Count == 1 && selectedMergeable[0].IsDocPreview))
-                {
-                    foreach (var item in selectedMergeable)
-                        item.IsCheckedForMerge = true;
-                    UpdatePdfMergeToolbar();
-                }
             }
             else
             {
@@ -589,6 +578,7 @@ namespace FlyShelf
 
         private void UnpinSelectedBtn_Click(object sender, RoutedEventArgs e)
         {
+            if (OverflowPopup != null) OverflowPopup.IsOpen = false;
             var pinnedSelected = ShelfListView.SelectedItems
                 .Cast<ClipboardItem>()
                 .Where(i => i.IsPinned)

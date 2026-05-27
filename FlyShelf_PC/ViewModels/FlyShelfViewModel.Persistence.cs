@@ -55,6 +55,7 @@ namespace FlyShelf.ViewModels
                 // Cleanup backing file + DB delete asynchronously in background
                 var itemCopy = item;
                 string filePath = item.FilePath;
+                string zippedPath = item.ZippedArchivePath;
                 ClipboardItemType itemType = item.ItemType;
                 System.Threading.Tasks.Task.Run(() =>
                 {
@@ -62,6 +63,7 @@ namespace FlyShelf.ViewModels
                     {
                         Classes.ClipboardHistoryManager.AppendDeleteToJournal(itemCopy);
                         CleanupTempFile(filePath);
+                        CleanupTempFile(zippedPath);
                         Classes.ClipboardHistoryManager.DeletePersistentImage(filePath, itemType);
                     }
                     catch { }
@@ -106,6 +108,7 @@ namespace FlyShelf.ViewModels
                     {
                         Classes.ClipboardHistoryManager.AppendDeleteToJournal(item);
                         CleanupTempFile(item.FilePath);
+                        CleanupTempFile(item.ZippedArchivePath);
                         Classes.ClipboardHistoryManager.DeletePersistentImage(item.FilePath, item.ItemType);
                     }
                     catch { }
@@ -181,6 +184,7 @@ namespace FlyShelf.ViewModels
                         {
                             Classes.ClipboardHistoryManager.AppendDeleteToJournal(item);
                             CleanupTempFile(item.FilePath);
+                            CleanupTempFile(item.ZippedArchivePath);
                             Classes.ClipboardHistoryManager.DeletePersistentImage(item.FilePath, item.ItemType);
                         }
                         catch { }
@@ -581,10 +585,10 @@ namespace FlyShelf.ViewModels
             
             if (itemsToRemove.Count > 0)
             {
-                var filesToCleanup = new List<(string path, ClipboardItemType type)>();
+                var filesToCleanup = new List<(string path, string zippedPath, ClipboardItemType type)>();
                 foreach (var item in itemsToRemove)
                 {
-                    filesToCleanup.Add((item.FilePath, item.ItemType));
+                    filesToCleanup.Add((item.FilePath, item.ZippedArchivePath, item.ItemType));
                 }
 
                 FlyShelf.Windows.ToastWindow.ShowToast($"🗑️ Clipboard full — removed {itemsToRemove.Count} oldest items.");
@@ -592,9 +596,10 @@ namespace FlyShelf.ViewModels
                 // Background cleanup
                 _ = System.Threading.Tasks.Task.Run(() =>
                 {
-                    foreach (var (path, type) in filesToCleanup)
+                    foreach (var (path, zippedPath, type) in filesToCleanup)
                     {
                         try { CleanupTempFile(path); } catch { }
+                        try { CleanupTempFile(zippedPath); } catch { }
                         try { Classes.ClipboardHistoryManager.DeletePersistentImage(path, type); } catch { }
                     }
                 });
@@ -633,8 +638,117 @@ namespace FlyShelf.ViewModels
                 }
             }
 
+            // Deduplicate against the first 10 items
+            DeduplicateItem(newItem);
+
             DroppedItems.Insert(0, newItem);
             return true;
+        }
+
+        /// <summary>
+        /// Checks if newItem is a duplicate of existing.
+        /// Checks RawContent for text-based items, FilePath (case-insensitive) for file-based items,
+        /// or FileName for non-screenshot identical file names.
+        /// </summary>
+        private bool IsDuplicate(ClipboardItem newItem, ClipboardItem existing)
+        {
+            if (newItem == null || existing == null) return false;
+
+            // 1. Text-based items (Text, Code, Url)
+            bool isNewTextual = newItem.ItemType == ClipboardItemType.Text || newItem.ItemType == ClipboardItemType.Code || newItem.ItemType == ClipboardItemType.Url;
+            bool isExistingTextual = existing.ItemType == ClipboardItemType.Text || existing.ItemType == ClipboardItemType.Code || existing.ItemType == ClipboardItemType.Url;
+            
+            if (isNewTextual && isExistingTextual)
+            {
+                return !string.IsNullOrEmpty(newItem.RawContent) && newItem.RawContent == existing.RawContent;
+            }
+
+            // 2. File-based items (File, Document, Pdf, Archive, Video, Audio, Presentation, Folder, Image)
+            // If they have FilePath, check if they are equal
+            if (!string.IsNullOrEmpty(newItem.FilePath) && !string.IsNullOrEmpty(existing.FilePath))
+            {
+                return string.Equals(newItem.FilePath, existing.FilePath, StringComparison.OrdinalIgnoreCase);
+            }
+
+            // 3. Fallback to FileName if file paths are not available (e.g. for some custom items)
+            if (!string.IsNullOrEmpty(newItem.FileName) && !string.IsNullOrEmpty(existing.FileName) && newItem.ItemType == existing.ItemType)
+            {
+                // Avoid false positives for generic screenshots or empty names
+                if (!newItem.FileName.StartsWith("Screenshot", StringComparison.OrdinalIgnoreCase))
+                {
+                    return string.Equals(newItem.FileName, existing.FileName, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Compares two images using Resolution and exact file size in bytes to determine duplicate status.
+        /// </summary>
+        private bool IsImageDuplicate(ClipboardItem item1, ClipboardItem item2)
+        {
+            if (string.IsNullOrEmpty(item1.FilePath) || string.IsNullOrEmpty(item2.FilePath))
+                return false;
+
+            if (!File.Exists(item1.FilePath) || !File.Exists(item2.FilePath))
+                return false;
+
+            try
+            {
+                var fi1 = new FileInfo(item1.FilePath);
+                var fi2 = new FileInfo(item2.FilePath);
+
+                // If they have the exact same file size and dimensions, they are duplicate images
+                if (fi1.Length == fi2.Length && item1.FormattedSize == item2.FormattedSize)
+                {
+                    return true;
+                }
+            }
+            catch { }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Scans the first 10 entries of DroppedItems for a duplicate of newItem.
+        /// If found, removes the duplicate item from DroppedItems and backing database/files.
+        /// </summary>
+        public void DeduplicateItem(ClipboardItem newItem)
+        {
+            if (newItem == null) return;
+
+            ClipboardItem? duplicateToRemoval = null;
+            int checkCount = Math.Min(10, DroppedItems.Count);
+            for (int i = 0; i < checkCount; i++)
+            {
+                var existing = DroppedItems[i];
+                if (existing == null) continue;
+
+                if (IsDuplicate(newItem, existing))
+                {
+                    duplicateToRemoval = existing;
+                    break;
+                }
+            }
+
+            if (duplicateToRemoval != null)
+            {
+                Classes.Logger.LogAction("DEDUP", $"Found duplicate in first 10 entries: Type={duplicateToRemoval.ItemType}, Path={duplicateToRemoval.FilePath}, Name={duplicateToRemoval.FileName}. Removing old duplicate.");
+                RemoveItem(duplicateToRemoval);
+            }
+        }
+
+        /// <summary>
+        /// Deduplicates newItem against the first 10 entries and inserts it at index 0.
+        /// </summary>
+        public void DeduplicateAndInsert(ClipboardItem newItem)
+        {
+            if (newItem == null) return;
+            DeduplicateItem(newItem);
+            DroppedItems.Insert(0, newItem);
+            PruneOldItems();
+            OnPropertyChanged(nameof(ShelfVisibility));
         }
 
         // ═══ AUTO-CLEANUP TIMER ═══

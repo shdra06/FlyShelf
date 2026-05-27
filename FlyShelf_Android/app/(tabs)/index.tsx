@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ActivityIndicator, KeyboardAvoidingView, Platform, Alert, AppState, AppStateStatus, Modal, ToastAndroid, NativeModules, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
+const FlashListCast = FlashList as any;
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
@@ -12,7 +13,7 @@ import { syncLog } from '../../utils/debugLog';
 import { ref, push, set, get, onValue, query, limitToLast, orderByChild, update, remove } from 'firebase/database';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { getSecureItem, setSecureItem } from '../../utils/secureStorage';
 import * as MediaLibrary from 'expo-media-library';
 import { Image } from 'expo-image';
@@ -27,6 +28,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ClipItem, DOWNLOAD_BASE, SYNC_CACHE_BASE, CONVERTED_BASE, IMAGE_CACHE_BASE, getDownloadPath } from '../../utils/clipTypes';
 import { fetchWithTimeout, getConnectionType, connectionColors, resolveOptimalUrl, getDeviceUrls, getMediaUrl, decryptDevice, decryptDeviceList } from '../../utils/networkHelpers';
 import { encrypt as aesEncrypt, decrypt as aesDecrypt } from '../../utils/syncCrypto';
+import { NetworkClock } from '../../utils/networkClock';
 import { styles } from '../../styles/syncStyles';
 import { colors, font, radius, space } from '../../styles/theme';
 import AnimatedCard from '../../components/AnimatedCard';
@@ -40,6 +42,11 @@ const { AdvanceOverlay } = NativeModules;
 const normalizeTextForFingerprint = (text: string): string => {
   if (!text) return '';
   return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
+};
+
+const isValidPairingKey = (key: string | null | undefined): boolean => {
+  if (!key) return false;
+  return /^[a-fA-F0-9]{32}$/.test(key);
 };
 
 // ════════════════════════════════════════════════════════
@@ -127,6 +134,7 @@ export default function SyncScreen() {
   }, [clips, persistClips]);
   // ─── Firebase Anonymous Auth — sign in once at startup ───
   useEffect(() => {
+    NetworkClock.sync().catch(() => {});
     ensureFirebaseAuth().then(() => {
       syncLog('[Auth] Firebase anonymous auth ready');
     }).catch((err: any) => {
@@ -269,8 +277,11 @@ export default function SyncScreen() {
       }
     }
     isDownloadingRef.current = false;
-    // Cap processed set to prevent memory growth
-    if (processedDownloadsRef.current.size > 500) processedDownloadsRef.current.clear();
+    // Cap processed set using sliding slice eviction to prevent unbounded memory growth while keeping history
+    if (processedDownloadsRef.current.size > 500) {
+      const items = Array.from(processedDownloadsRef.current);
+      processedDownloadsRef.current = new Set(items.slice(-200));
+    }
   }, []);
 
   // ─── downloadedBy Tracking: Mark file as downloaded by this device ───
@@ -281,7 +292,7 @@ export default function SyncScreen() {
       const myDeviceId = `Mobile_${(deviceName || 'phone').replace(/\s/g, '_')}`;
 
       // Step 1: Mark this device as downloaded
-      await set(ref(database, `clipboard/${pk}/${entryId}/downloadedBy/${myDeviceId}`), Date.now());
+      await set(ref(database, `clipboard/${pk}/${entryId}/downloadedBy/${myDeviceId}`), NetworkClock.now());
 
       // Step 2: Read the full entry to check targets
       const snap = await get(ref(database, `clipboard/${pk}/${entryId}`));
@@ -304,7 +315,7 @@ export default function SyncScreen() {
           const devSnap = await get(ref(database, `active_devices/${pk}`));
           if (devSnap.exists()) {
             const devices = devSnap.val();
-            const now = Date.now();
+            const now = NetworkClock.now();
             const onlineIds = new Set<string>();
             Object.values(devices).forEach((dev: any) => {
               if (dev.IsOnline && (now - (dev.Timestamp || 0)) < 300000) {
@@ -330,17 +341,23 @@ export default function SyncScreen() {
     } catch (e) { syncLog(`[SYNC_TRACK] markFileDownloaded error: ${e}`); }
   };
 
-  // ─── Scoped Clipboard (only paired devices see each other) ───
+  // Scoped Clipboard (only paired devices see each other)
   const pairingKeyRef = useRef<string>('');
   useEffect(() => {
-    getSecureItem('pairingKey').then(k => { if (k) pairingKeyRef.current = k; });
+    getSecureItem('pairingKey').then(k => { if (isValidPairingKey(k)) pairingKeyRef.current = k!; });
   }, []);
   // Keep ref in sync when context key changes (e.g. after pairing or regeneration)
   useEffect(() => {
-    if (contextPairingKey) pairingKeyRef.current = contextPairingKey;
+    if (isValidPairingKey(contextPairingKey)) pairingKeyRef.current = contextPairingKey;
   }, [contextPairingKey]);
   /** Returns the Firebase path scoped to the pairing key, e.g. `clipboard/abc123` */
-  const clipboardPath = () => `clipboard/${pairingKeyRef.current}`;
+  const clipboardPath = () => {
+    const pk = pairingKeyRef.current;
+    if (!isValidPairingKey(pk)) {
+      throw new Error("Invalid or missing pairing key room scope");
+    }
+    return `clipboard/${pk}`;
+  };
 
   // ─── PC URL (auto-discovered from Firebase, no manual config needed) ───
   const cachedPcUrlRef = useRef<string | null>(null);
@@ -348,7 +365,7 @@ export default function SyncScreen() {
 
   const getCachedPcUrl = async (): Promise<string> => {
     // Return cached URL if fresh (15s TTL)
-    const now = Date.now();
+    const now = NetworkClock.now();
     if (cachedPcUrlRef.current && (now - cachedPcUrlTimestampRef.current) < 15_000) {
       return cachedPcUrlRef.current;
     }
@@ -451,7 +468,7 @@ export default function SyncScreen() {
   const lastNativeSyncRef = useRef<number>(0);
   useEffect(() => {
     if (Platform.OS === 'android' && AdvanceOverlay && isFloatingBallEnabled) {
-      const now = Date.now();
+      const now = NetworkClock.now();
       if (now - lastNativeSyncRef.current < 500) return;
       lastNativeSyncRef.current = now;
 
@@ -509,11 +526,11 @@ export default function SyncScreen() {
           // Fingerprint to prevent echo back from Firebase
           sentContentFingerprintsRef.current.add(copiedText.substring(0, 200));
           const overlayEventId = generateEventId();
-          processedEventsRef.current.set(overlayEventId, Date.now());
+          processedEventsRef.current.set(overlayEventId, NetworkClock.now());
           const newItem: ClipItem = {
             Title: copiedText.substring(0, 80), Type: 'Text', Raw: copiedText,
             Time: new Date().toLocaleString(), SourceDeviceName: deviceName,
-            SourceDeviceType: 'Mobile', Timestamp: Date.now(),
+            SourceDeviceType: 'Mobile', Timestamp: NetworkClock.now(),
             _receivedVia: 'Local',
           };
           setClips(prev => [newItem, ...prev]);
@@ -536,7 +553,7 @@ export default function SyncScreen() {
   // ─── Screenshot Detection ───
   // SINGLE source of truth: handled by handleForegroundMediaCheck + pollAndSyncScreenshot in the main useEffect below.
   // This avoids duplicate detectors that cause infinite loops.
-  const lastScreenshotTsRef = useRef<number>(Date.now());
+  const lastScreenshotTsRef = useRef<number>(NetworkClock.now());
   // Local screenshots are stored in a ref so Firebase listener can merge them into the feed
   const localScreenshotsRef = useRef<ClipItem[]>([]);
 
@@ -601,8 +618,13 @@ export default function SyncScreen() {
               const perm = await MediaLibrary.requestPermissionsAsync();
               if (perm.status === 'granted') {
                 await Promise.all(batch.urls.map(async (url: string, idx: number) => {
-                  const localUri = `${SYNC_CACHE_BASE}relayed_${Date.now()}_${idx}.jpg`;
-                  const dl = await FileSystem.downloadAsync(url, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } });
+                  const localUri = `${SYNC_CACHE_BASE}relayed_${NetworkClock.now()}_${idx}.jpg`;
+                  const dl = await FileSystem.downloadAsync(url, localUri, {
+                    headers: {
+                      'X-FlyShelf-Client': 'MobileCompanion',
+                      'X-Pairing-Key': pairingKeyRef.current
+                    }
+                  });
                   const asset = await MediaLibrary.createAssetAsync(dl.uri);
                   await MediaLibrary.createAlbumAsync("FlyShelf Extractions", asset, false);
                 }));
@@ -629,11 +651,11 @@ export default function SyncScreen() {
   const firebaseFallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firebaseUnsubFeedRef = useRef<(() => void) | null>(null);
   const firebaseUnsubNodesRef = useRef<(() => void) | null>(null);
-  const lastSuccessfulPollRef = useRef<number>(Date.now());
+  const lastSuccessfulPollRef = useRef<number>(NetworkClock.now());
 
   // Called by LAN/Cloudflare poller on every successful /api/sync response
   const markPcReachable = () => {
-    lastSuccessfulPollRef.current = Date.now();
+    lastSuccessfulPollRef.current = NetworkClock.now();
     // PC is reachable directly — disconnect Firebase listener if active
     if (firebaseUnsubFeedRef.current) {
       firebaseUnsubFeedRef.current();
@@ -652,11 +674,11 @@ export default function SyncScreen() {
     if (firebaseUnsubFeedRef.current) return; // Already connected to Firebase
     if (!isGlobalSyncEnabled) return;
     const pk = pairingKeyRef.current;
-    if (!pk) return;
+    if (!isValidPairingKey(pk)) return;
     firebaseFallbackTimerRef.current = setTimeout(() => {
       firebaseFallbackTimerRef.current = null;
       // Only activate if PC is STILL unreachable after 30s
-      if (Date.now() - lastSuccessfulPollRef.current < 25_000) return;
+      if (NetworkClock.now() - lastSuccessfulPollRef.current < 25_000) return;
       syncLog('FIREBASE', '🔥 PC unreachable for 30s — activating Firebase fallback listener');
       connectFirebaseClipboardListener(pk);
     }, 30_000);
@@ -709,11 +731,11 @@ export default function SyncScreen() {
             syncLog('FIREBASE', `Filtered by EventId: ${(c as any).EventId}`);
             return false;
           }
-          if ((c as any).EventId) processedEventsRef.current.set((c as any).EventId, Date.now());
+          if ((c as any).EventId) processedEventsRef.current.set((c as any).EventId, NetworkClock.now());
           return true;
         });
         syncLog('FIREBASE', `Feed: ${allParsed.length} total, ${parsed.length} after self-filter`);
-        const now = Date.now();
+        const now = NetworkClock.now();
         recentSyncFingerprintsRef.current.forEach((ts, fp) => { if (now - ts > 30_000) recentSyncFingerprintsRef.current.delete(fp); });
 
         // Push text/url items to floating ball overlay
@@ -725,7 +747,7 @@ export default function SyncScreen() {
               let rawData = c.Raw;
               if (c.Type === 'Pdf' || c.Type === 'Document') { rawData = DOWNLOAD_BASE + c.Title.replace(/[^a-zA-Z0-9.-]/g, '_'); }
               AdvanceOverlay.pushClipToNativeDB(rawData, c.SourceDeviceName || 'Cloud');
-              recentSyncFingerprintsRef.current.set(fp, Date.now());
+              recentSyncFingerprintsRef.current.set(fp, NetworkClock.now());
             }
           });
         }
@@ -745,7 +767,7 @@ export default function SyncScreen() {
               if (dupIdx >= 0) {
                 // Duplicate found — remove from old position, put at top with updated timestamp
                 const existing = updated.splice(dupIdx, 1)[0];
-                updated.unshift({ ...existing, Timestamp: Date.now() });
+                updated.unshift({ ...existing, Timestamp: NetworkClock.now() });
                 changed = true;
               } else {
                 // Genuinely new — add to top
@@ -775,10 +797,10 @@ export default function SyncScreen() {
           for (const fileItem of fileItems) {
             const fileDedupKey = `filedl::${fileItem.Title || ''}::${fileItem.Timestamp || ''}`;
             if (recentSyncFingerprintsRef.current.has(fileDedupKey)) continue;
-            recentSyncFingerprintsRef.current.set(fileDedupKey, Date.now());
+            recentSyncFingerprintsRef.current.set(fileDedupKey, NetworkClock.now());
             try {
               const subfolder = fileItem.Type === 'Pdf' ? 'PDFs' : fileItem.Type === 'Video' ? 'Videos' : 'Documents';
-              const safeName = (fileItem.Title || `file_${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+              const safeName = (fileItem.Title || `file_${NetworkClock.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
               const destPath = await getDownloadPath(subfolder, safeName);
               enqueueDownload({
                 id: fileItem.id || '', title: fileItem.Title || safeName, type: fileItem.Type || 'File',
@@ -804,7 +826,7 @@ export default function SyncScreen() {
         const allSnap = await get(ref(database, `clipboard/${pk}`));
         if (allSnap.exists()) {
           const allData = allSnap.val();
-          const now = Date.now();
+          const now = NetworkClock.now();
           const ONE_HOUR = 60 * 60 * 1000;
           let purged = 0;
           for (const key of Object.keys(allData)) {
@@ -829,7 +851,7 @@ export default function SyncScreen() {
         let rawDevices: any[] = [];
         if (snapshot.exists()) {
           const data = snapshot.val();
-          const now = Date.now();
+          const now = NetworkClock.now();
           const filtered = Object.keys(data).map(k => ({ ...data[k], _key: k })).filter(d => d.IsOnline && d.Timestamp && (now - d.Timestamp) < 600_000);
           rawDevices = await decryptDeviceList(filtered);
         }
@@ -857,7 +879,7 @@ export default function SyncScreen() {
             setSecureItem('pairedGlobalUrl', dev.GlobalUrl).catch(() => {});
             // Also update the in-memory PC URL cache immediately
             cachedPcUrlRef.current = dev.GlobalUrl;
-            cachedPcUrlTimestampRef.current = Date.now();
+            cachedPcUrlTimestampRef.current = NetworkClock.now();
             syncLog('PEER SSE', `⚡ PC URL cached: ${dev.GlobalUrl.substring(0, 50)}`);
           }
           // Cache LAN URL if available
@@ -884,7 +906,7 @@ export default function SyncScreen() {
               const probeUrl = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed.split(':')[0] + ':8999'}`;
               const res = await fetch(`${probeUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(2000) });
               if (res.ok) {
-                rawDevices.push({ DeviceName: 'PC (LAN)', DeviceType: 'PC', IsOnline: true, Url: probeUrl, LocalIp: probeUrl, _key: 'local_direct', _lanVerified: true, _lanUrl: probeUrl, Timestamp: Date.now() });
+                rawDevices.push({ DeviceName: 'PC (LAN)', DeviceType: 'PC', IsOnline: true, Url: probeUrl, LocalIp: probeUrl, _key: 'local_direct', _lanVerified: true, _lanUrl: probeUrl, Timestamp: NetworkClock.now() });
                 break;
               }
             } catch {}
@@ -1080,14 +1102,14 @@ export default function SyncScreen() {
               // EventId dedup for LAN poll
               const lanEventId = latest.EventId || '';
               if (lanEventId && processedEventsRef.current.has(lanEventId)) return;
-              if (lanEventId) processedEventsRef.current.set(lanEventId, Date.now());
+              if (lanEventId) processedEventsRef.current.set(lanEventId, NetworkClock.now());
 
               const crossFp = `${latest.Type}::${(latest.Raw || '').substring(0, 150)}`;
-              recentSyncFingerprintsRef.current.set(crossFp, Date.now());
+              recentSyncFingerprintsRef.current.set(crossFp, NetworkClock.now());
               const isOwnEcho = (latest.SourceDeviceName && deviceName && latest.SourceDeviceName === deviceName) || (latest.SourceDeviceType === 'Mobile');
 
               if (!isOwnEcho) {
-                lastActivityRef.current = Date.now(); // Keep adaptive polling at high frequency
+                lastActivityRef.current = NetworkClock.now(); // Keep adaptive polling at high frequency
                 syncLog('PC-POLL', `New from PC: ${latest.Type} - ${(latest.Title || '').substring(0, 50)}`);
                 if (latest.Type === 'Text' || latest.Type === 'Code' || latest.Type === 'Url') {
                   const latestRaw = latest.Raw;
@@ -1123,7 +1145,7 @@ export default function SyncScreen() {
                       const updated = [...prev];
                       const existing = updated.splice(dupIdx, 1)[0];
                       scrollToTop();
-                      return [{ ...existing, ...resolvedItem, _needsDownload: !existing.CachedUri, Timestamp: Date.now() }, ...updated];
+                      return [{ ...existing, ...resolvedItem, _needsDownload: !existing.CachedUri, Timestamp: NetworkClock.now() }, ...updated];
                     }
                     scrollToTop();
                     return [{ ...resolvedItem, _needsDownload: true, _receivedVia: 'LAN' as const } as any, ...prev];
@@ -1134,7 +1156,7 @@ export default function SyncScreen() {
                   if (recentSyncFingerprintsRef.current.has(fileDedupKey)) {
                     // Already handled by Firebase path — skip
                   } else {
-                    recentSyncFingerprintsRef.current.set(fileDedupKey, Date.now());
+                    recentSyncFingerprintsRef.current.set(fileDedupKey, NetworkClock.now());
                     try {
                       // ── Smart URL resolution: extract path, probe LAN, fallback to Cloudflare ──
                       const dlPath = latest.DownloadUrl || latest.Raw || '';
@@ -1197,7 +1219,7 @@ export default function SyncScreen() {
                       syncLog('PC-POLL', `File DL: ${latest.Title} → ${dlSource}: ${fileUrl.substring(0, 80)}`);
                       if (fileUrl) {
                         const subfolder = latest.Type === 'Pdf' ? 'PDFs' : latest.Type === 'Video' ? 'Videos' : latest.Type === 'Audio' ? 'Audio' : 'Documents';
-                        const safeName = (latest.Title || `file_${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+                        const safeName = (latest.Title || `file_${NetworkClock.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
                         const destPath = await getDownloadPath(subfolder, safeName);
                         enqueueDownload({
                           id: latest.id || '', title: latest.Title || safeName, type: latest.Type,
@@ -1224,10 +1246,10 @@ export default function SyncScreen() {
                       const updated = [...prev];
                       const existing = updated.splice(dupIdx, 1)[0];
                       scrollToTop();
-                      return [{ ...existing, Raw: existing.Title || existing.Raw, Timestamp: Date.now() }, ...updated];
+                      return [{ ...existing, Raw: existing.Title || existing.Raw, Timestamp: NetworkClock.now() }, ...updated];
                     }
                     scrollToTop();
-                    return [{ ...latest, Raw: latest.Title || latest.Raw, Timestamp: Date.now(), _receivedVia: 'LAN' as const } as any, ...prev];
+                    return [{ ...latest, Raw: latest.Title || latest.Raw, Timestamp: NetworkClock.now(), _receivedVia: 'LAN' as const } as any, ...prev];
                   });
                   // If this file was previously deleted by the user, un-delete it so it reappears
                   if (latest.id && localDeletedIds.has(latest.id)) {
@@ -1268,7 +1290,7 @@ export default function SyncScreen() {
             if (isOwnEcho) continue;
             const fileDedupKey = `filedl::${item.Title || ''}::${item.Timestamp || ''}`;
             if (recentSyncFingerprintsRef.current.has(fileDedupKey)) continue;
-            recentSyncFingerprintsRef.current.set(fileDedupKey, Date.now());
+            recentSyncFingerprintsRef.current.set(fileDedupKey, NetworkClock.now());
 
             // Smart URL resolution
             try {
@@ -1327,7 +1349,7 @@ export default function SyncScreen() {
 
               if (fileUrl) {
                 const subfolder = item.Type === 'Pdf' ? 'PDFs' : item.Type === 'Video' ? 'Videos' : item.Type === 'Audio' ? 'Audio' : 'Documents';
-                const safeName = (item.Title || `file_${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
+                const safeName = (item.Title || `file_${NetworkClock.now()}`).replace(/[^a-zA-Z0-9._-]/g, '_');
                 const destPath = await getDownloadPath(subfolder, safeName);
                 syncLog('PC-POLL', `File sweep → queue: ${item.Title} via ${dlSource}`);
                 enqueueDownload({
@@ -1359,7 +1381,7 @@ export default function SyncScreen() {
               if (dupIdx >= 0) {
                 // Dup found — remove from old position, put at top
                 const existing = merged.splice(dupIdx, 1)[0];
-                merged.unshift({ ...existing, Timestamp: Date.now() });
+                merged.unshift({ ...existing, Timestamp: NetworkClock.now() });
                 changed = true;
               } else {
                 // New — add to top
@@ -1375,10 +1397,10 @@ export default function SyncScreen() {
       } catch (e) { cachedPcUrlRef.current = null; markPcUnreachable(); }
     };
     // Adaptive polling: 2s (LAN active) → 5s (Cloud) → 10s (idle/no PC) → re-evaluate every cycle
-    lastActivityRef.current = Date.now();
+    lastActivityRef.current = NetworkClock.now();
     const getAdaptiveInterval = () => {
       const url = cachedPcUrlRef.current || '';
-      const idleSecs = (Date.now() - lastActivityRef.current) / 1000;
+      const idleSecs = (NetworkClock.now() - lastActivityRef.current) / 1000;
       if (!url) return 10000; // No PC found — slow poll
       if (url.includes('trycloudflare')) return idleSecs > 120 ? 10000 : 5000; // Cloud: 5s active, 10s idle
       return idleSecs > 120 ? 5000 : 2000; // LAN: 2s active, 5s idle
@@ -1423,7 +1445,7 @@ export default function SyncScreen() {
             longPollBackoff = 0; // Reset backoff on success
             if (res.status === 200) {
               // Clipboard changed! Fetch the new data immediately
-              lastActivityRef.current = Date.now();
+              lastActivityRef.current = NetworkClock.now();
               syncLog('LONG-POLL', '⚡ Instant notification — fetching now');
               await pollFn();
             }
@@ -1458,7 +1480,7 @@ export default function SyncScreen() {
     const pk = pairingKeyRef.current;
     if (!pk) return;
     const registerSelf = async () => {
-      try { await set(ref(database, `active_devices/${pk}/${myDeviceId}`), { DeviceId: myDeviceId, DeviceName: deviceName, DeviceType: 'Mobile', IsOnline: true, Timestamp: Date.now() }); } catch(e) {}
+      try { await set(ref(database, `active_devices/${pk}/${myDeviceId}`), { DeviceId: myDeviceId, DeviceName: deviceName, DeviceType: 'Mobile', IsOnline: true, LocalIp: '', Timestamp: NetworkClock.now() }); } catch(e) {}
     };
     registerSelf();
     // Reduced from 30s to 600s — Firebase writes are expensive at scale (10-minute heartbeat)
@@ -1470,7 +1492,7 @@ export default function SyncScreen() {
   // ─── Periodic dedup cleanup (every 60s) ───
   useEffect(() => {
     const cleanup = setInterval(() => {
-      const now = Date.now();
+      const now = NetworkClock.now();
       // Clean processedEventsRef — TTL eviction, remove entries older than 120s (NEVER full clear)
       processedEventsRef.current.forEach((ts, id) => {
         if (now - ts > 120_000) processedEventsRef.current.delete(id);
@@ -1494,7 +1516,7 @@ export default function SyncScreen() {
   const clearAllClips = async () => {
     const executeWipe = async () => {
       try {
-        const now = Date.now();
+        const now = NetworkClock.now();
         setLocalWipeTimestamp(now);
         AsyncStorage.setItem('localWipeTimestamp', now.toString()).catch(() => {});
         if (isGlobalSyncEnabled) {
@@ -1570,7 +1592,7 @@ export default function SyncScreen() {
             const upRes = await FileSystem.uploadAsync(
               `${targetUrl}/api/sync_file?name=${encodeURIComponent(fileName)}&type=Image&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`,
               uploadUri,
-              { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion', ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}) } }
+              { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': NetworkClock.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion', ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}) } }
             );
             if (upRes.status === 200) {
               syncLog('SCREENSHOT', `Sent to PC via ${targetUrl.includes('trycloudflare') ? 'Cloud' : 'LAN'}: ${fileName}`);
@@ -1592,7 +1614,7 @@ export default function SyncScreen() {
       const media = await MediaLibrary.getAssetsAsync({ first: 1, mediaType: ['photo'], sortBy: [[MediaLibrary.SortBy.creationTime, false]] });
       if (media.assets.length > 0) {
         const latest = media.assets[0];
-        const isRecent = (Date.now() - latest.creationTime) < 2 * 60 * 1000;
+        const isRecent = (NetworkClock.now() - latest.creationTime) < 2 * 60 * 1000;
         // ONLY detect screenshots — skip random photos/downloads
         const isScreenshot = (latest.filename || '').toLowerCase().includes('screenshot');
         if (isRecent && isScreenshot && latest.id !== lastScannedImageId) {
@@ -1616,7 +1638,7 @@ export default function SyncScreen() {
             const assetUri = assetInfo.localUri || assetInfo.uri;
             if (assetUri) {
               // Step 1: Create local cached copy for preview
-              const safeName = (assetInfo.filename || `ss_${Date.now()}.png`).replace(/[^a-zA-Z0-9.-]/g, '_');
+              const safeName = (assetInfo.filename || `ss_${NetworkClock.now()}.png`).replace(/[^a-zA-Z0-9.-]/g, '_');
               await FileSystem.makeDirectoryAsync(IMAGE_CACHE_BASE, { intermediates: true }).catch(() => {});
               const localCopy = `${IMAGE_CACHE_BASE}${safeName}`;
               try { await FileSystem.copyAsync({ from: assetUri, to: localCopy }); } catch { /* use asset URI directly */ }
@@ -1631,7 +1653,7 @@ export default function SyncScreen() {
                 Time: new Date().toLocaleString(),
                 SourceDeviceName: deviceName || 'Phone',
                 SourceDeviceType: 'Mobile',
-                Timestamp: Date.now(),
+                Timestamp: NetworkClock.now(),
                 _receivedVia: 'Local',
               };
               // Store in ref so Firebase listener can merge it
@@ -1670,7 +1692,7 @@ export default function SyncScreen() {
                   try {
                     const upRes = await FileSystem.uploadAsync(`${targetUrl}/api/sync_file?name=${encodeURIComponent(assetInfo.filename || 'screenshot.jpg')}&type=ImageLink&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`, assetUri, {
                       httpMethod: 'POST', uploadType: 0 as any,
-                      headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion', ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}) }
+                      headers: { 'X-Original-Date': NetworkClock.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion', ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}) }
                     });
                     localSuccess = upRes.status === 200;
                     if (localSuccess) {
@@ -1806,7 +1828,7 @@ export default function SyncScreen() {
       }
       sentContentFingerprintsRef.current.add(finalRaw.substring(0, 200));
       const txEventId = generateEventId();
-      processedEventsRef.current.set(txEventId, Date.now());
+      processedEventsRef.current.set(txEventId, NetworkClock.now());
       let localSuccess = false;
       try {
         const pairingKey = await getSecureItem('pairingKey');
@@ -1818,19 +1840,19 @@ export default function SyncScreen() {
           data: finalRaw,
           sourceDeviceName: deviceName || 'Mobile',
           sourceDeviceId: `Mobile_${(deviceName || 'Phone').replace(/[^a-zA-Z0-9_]/g, '_')}`,
-          timestamp: Date.now(),
+          timestamp: NetworkClock.now(),
         });
         const response = await fetchWithTimeout(`${targetUrl}/api/sync_text`, { method: 'POST', headers: hdrs, body: jsonBody }, 1500);
         localSuccess = response.ok;
       } catch(e) { cachedPcUrlRef.current = null; }
       // Always add sent text to local clips so it appears in the feed
       const sentItem: ClipItem = {
-        id: `local_${Date.now()}`,
+        id: `local_${NetworkClock.now()}`,
         Title: payloadText.length > 50 ? payloadText.substring(0, 50) + '...' : payloadText,
         Type: finalType,
         Raw: finalRaw,
         Time: new Date().toLocaleTimeString(),
-        Timestamp: Date.now(),
+        Timestamp: NetworkClock.now(),
         SourceDeviceName: deviceName || 'Mobile',
         SourceDeviceType: 'Mobile',
         _receivedVia: 'Local',
@@ -1853,7 +1875,7 @@ export default function SyncScreen() {
           encRaw = await aesEncrypt(encRaw);
           encrypted = true;
         } catch (e: any) { syncLog('SYNC_CRYPTO', `Encryption failed, sending plaintext: ${e?.message || 'unknown'}`); }
-        const payload = { Title: encTitle, Type: finalType, Raw: encRaw, Time: new Date().toLocaleTimeString(), Timestamp: Date.now(), EventId: txEventId, Encrypted: encrypted, SourceDeviceName: deviceName || 'Unknown Mobile', SourceDeviceType: 'Mobile' };
+        const payload = { Title: encTitle, Type: finalType, Raw: encRaw, Time: new Date().toLocaleTimeString(), Timestamp: NetworkClock.now(), EventId: txEventId, Encrypted: encrypted, SourceDeviceName: deviceName || 'Unknown Mobile', SourceDeviceType: 'Mobile' };
         const RETRY_DELAYS = [2000, 5000, 10000];
         for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt++) {
           try {
@@ -1931,7 +1953,7 @@ export default function SyncScreen() {
 
       if (pdfUris.length < 2) { Alert.alert('Error', 'Could not resolve mergeable files.'); return; }
 
-      const outputPath = CONVERTED_BASE + `merged_${Date.now()}.pdf`;
+      const outputPath = CONVERTED_BASE + `merged_${NetworkClock.now()}.pdf`;
 
       try {
         // Try local merge first (on-device, no PC needed)
@@ -1961,10 +1983,44 @@ export default function SyncScreen() {
         const pdfUrls = mergeQueue.map(item => getMediaUrlForItem(item)).filter(u => u.startsWith('http'));
         if (pdfUrls.length < 2) { Alert.alert('Error', `Local: ${localErr.message}\nPC: No HTTP URLs available.`); return; }
         const res = await fetchWithTimeout(`${targetUrl}/api/merge_pdfs`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion' }, body: JSON.stringify({ urls: pdfUrls, sourceDevice: deviceName || 'Mobile' }) }, 30000);
-        if (res.ok) { const body = await res.json(); if (body.downloadUrl) { const mergedUrl = body.downloadUrl.startsWith('http') ? body.downloadUrl : `${targetUrl}${body.downloadUrl}`; const localUri = CONVERTED_BASE + `merged_${Date.now()}.pdf`; await FileSystem.downloadAsync(mergedUrl, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }); await Sharing.shareAsync(localUri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Merged PDF' }); } } else Alert.alert('Merge Failed');
+        if (res.ok) { const body = await res.json(); if (body.downloadUrl) { const mergedUrl = body.downloadUrl.startsWith('http') ? body.downloadUrl : `${targetUrl}${body.downloadUrl}`; const localUri = CONVERTED_BASE + `merged_${NetworkClock.now()}.pdf`; await FileSystem.downloadAsync(mergedUrl, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }); await Sharing.shareAsync(localUri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Merged PDF' }); } } else Alert.alert('Merge Failed');
       }
     } catch (e) { Alert.alert('Merge Error'); }
     exitMultiSelect();
+  };
+
+  const handleSanitizeUrl = async (item: ClipItem) => {
+    try {
+      const original = item.Raw || item.Title || '';
+      if (!original) return;
+      
+      const rxUtmClean = /(?<=&|\?)(utm_source|utm_medium|utm_campaign|utm_term|utm_content|gclid|fbclid|_gl|msclkid|mc_eid|ig_shid)=[^&]*&?/gi;
+      const cleanUrl = original.replace(rxUtmClean, '').replace(/[?&]$/, '');
+      
+      if (cleanUrl !== original) {
+        // Copy to system clipboard
+        await Clipboard.setStringAsync(cleanUrl);
+        
+        // Update local state
+        setClips(prev => prev.map(c => c.id === item.id ? { ...c, Raw: cleanUrl, Title: cleanUrl } : c));
+        
+        // Write to Firebase if matched
+        if (item.id && !item.id.startsWith('local_') && pairingKeyRef.current) {
+          try {
+            const encTitle = await aesEncrypt(cleanUrl);
+            const encRaw = await aesEncrypt(cleanUrl);
+            await update(ref(database, `${clipboardPath()}/${item.id}`), { Title: encTitle, Raw: encRaw });
+          } catch (e) {
+            await update(ref(database, `${clipboardPath()}/${item.id}`), { Title: cleanUrl, Raw: cleanUrl });
+          }
+        }
+        if (Platform.OS === 'android') ToastAndroid.show("URL Sanitized & Copied! 🛡️", ToastAndroid.SHORT);
+      } else {
+        if (Platform.OS === 'android') ToastAndroid.show("URL is already clean! ✨", ToastAndroid.SHORT);
+      }
+    } catch (e) {
+      if (Platform.OS === 'android') ToastAndroid.show("Sanitization failed", ToastAndroid.SHORT);
+    }
   };
 
   const handleConvertImageToPdf = async (item: ClipItem) => {
@@ -1978,13 +2034,13 @@ export default function SyncScreen() {
         return;
       }
       
-      const safeName = (item.Title || `image_${Date.now()}.png`).replace(/[^a-zA-Z0-9.-]/g, '_');
+      const safeName = (item.Title || `image_${NetworkClock.now()}.png`).replace(/[^a-zA-Z0-9.-]/g, '_');
       let safeTitleWithoutExt = safeName;
       const lastDotIndex = safeName.lastIndexOf('.');
       if (lastDotIndex > 0) {
         safeTitleWithoutExt = safeName.substring(0, lastDotIndex);
       }
-      const pdfFileName = `${safeTitleWithoutExt}_converted_${Date.now().toString().slice(-4)}.pdf`;
+      const pdfFileName = `${safeTitleWithoutExt}_converted_${NetworkClock.now().toString().slice(-4)}.pdf`;
       const pdfPath = DOWNLOAD_BASE + 'PDFs/' + pdfFileName;
 
       await localConvertImageToPdf(imgUri, pdfPath);
@@ -1993,13 +2049,13 @@ export default function SyncScreen() {
       
       // Construct a new PDF ClipItem and insert it at the top of the clips feed
       const newPdfItem: ClipItem = {
-        id: `local_pdf_${Date.now()}`,
+        id: `local_pdf_${NetworkClock.now()}`,
         Title: pdfFileName,
         Type: 'Pdf',
         Raw: pdfPath,
         CachedUri: pdfPath,
         Time: new Date().toLocaleTimeString(),
-        Timestamp: Date.now(),
+        Timestamp: NetworkClock.now(),
         SourceDeviceName: deviceName || 'Mobile',
         SourceDeviceType: 'Mobile',
         _receivedVia: 'Local',
@@ -2051,8 +2107,8 @@ export default function SyncScreen() {
     syncLog('FORCE-SYNC', `Syncing ${selected.length} items to ${targetDeviceKeys.length} devices`);
     if (Platform.OS === 'android') ToastAndroid.show(`Force syncing ${selected.length} items...`, ToastAndroid.LONG);
     try {
-      for (const deviceKey of targetDeviceKeys) { for (const item of selected) { const forcedRef = push(ref(database, `forced_sync/${deviceKey}`)); await set(forcedRef, { ...item, ForcedBy: deviceName, ForcedAt: Date.now(), SourceDeviceName: deviceName, SourceDeviceType: 'Mobile' }); } }
-      for (const item of selected) { if (!item.id && pairingKeyRef.current) { const clipRef = push(ref(database, clipboardPath())); await set(clipRef, { ...item, Timestamp: Date.now() }); } }
+      for (const deviceKey of targetDeviceKeys) { for (const item of selected) { const forcedRef = push(ref(database, `forced_sync/${deviceKey}`)); await set(forcedRef, { ...item, ForcedBy: deviceName, ForcedAt: NetworkClock.now(), SourceDeviceName: deviceName, SourceDeviceType: 'Mobile' }); } }
+      for (const item of selected) { if (!item.id && pairingKeyRef.current) { const clipRef = push(ref(database, clipboardPath())); await set(clipRef, { ...item, Timestamp: NetworkClock.now() }); } }
       for (const deviceKey of targetDeviceKeys) {
         const dev = forceSyncDevices.find(d => d.key === deviceKey);
         if (dev?.LocalIp) {
@@ -2110,7 +2166,7 @@ export default function SyncScreen() {
     if (!result.canceled) {
       const file = result.assets[0];
       try { const b64 = await FileSystem.readAsStringAsync(file.uri, { encoding: (FileSystem as any).EncodingType.Base64 }); await Clipboard.setImageAsync(b64); Platform.OS === 'android' ? ToastAndroid.show("Captured & Copied", ToastAndroid.SHORT) : null; } catch (e) {}
-      const payload = { uri: file.uri, name: file.fileName || `camera_${Date.now()}.jpg`, size: file.fileSize, type: 'Image' };
+      const payload = { uri: file.uri, name: file.fileName || `camera_${NetworkClock.now()}.jpg`, size: file.fileSize, type: 'Image' };
       const pc = activeDevices.find((d: any) => d.DeviceType === 'PC');
       setPendingUploadPayload(payload);
       if (pc) { executeHeavyUpload(pc); } else { setIsTargetModalVisible(true); }
@@ -2121,7 +2177,7 @@ export default function SyncScreen() {
     if (!result.canceled) {
       const file = result.assets[0];
       try { if (file.type === 'image') { const b64 = await FileSystem.readAsStringAsync(file.uri, { encoding: (FileSystem as any).EncodingType.Base64 }); await Clipboard.setImageAsync(b64); } } catch (e) {}
-      const payload = { uri: file.uri, name: file.fileName || `media_${Date.now()}`, size: file.fileSize, type: file.type === 'video' ? 'Video' : 'Image' };
+      const payload = { uri: file.uri, name: file.fileName || `media_${NetworkClock.now()}`, size: file.fileSize, type: file.type === 'video' ? 'Video' : 'Image' };
       const pc = activeDevices.find((d: any) => d.DeviceType === 'PC');
       setPendingUploadPayload(payload);
       if (pc) { executeHeavyUpload(pc); } else { setIsTargetModalVisible(true); }
@@ -2156,7 +2212,7 @@ export default function SyncScreen() {
 
     // ═══ ALWAYS save pairing info — the key is what matters for cloud sync ═══
     // Even if we can't reach the PC right now, the shared key enables Firebase sync.
-    const pairingTs = Date.now().toString();
+    const pairingTs = NetworkClock.now().toString();
     await Promise.all([
       setSecureItem('pairingKey', key || ''),
       setSecureItem('pairedPcName', pcName || ''),
@@ -2172,7 +2228,7 @@ export default function SyncScreen() {
     pairingTimestampRef.current = parseInt(pairingTs);
     if (workingUrl) {
       cachedPcUrlRef.current = workingUrl;
-      cachedPcUrlTimestampRef.current = Date.now();
+      cachedPcUrlTimestampRef.current = NetworkClock.now();
     }
     setPairedPcName(pcName || 'Device');
     if (!isGlobalSyncEnabled) setGlobalSyncEnabled(true);
@@ -2180,10 +2236,10 @@ export default function SyncScreen() {
     // Register the remote device in the paired devices list
     const deviceType = (pairInfo as any).deviceType || 'PC';
     await addPairedDevice({
-      deviceId: pcId || `${pcName}_${Date.now()}`,
+      deviceId: pcId || `${pcName}_${NetworkClock.now()}`,
       deviceName: pcName || 'Unknown Device',
       deviceType: deviceType as 'PC' | 'Mobile' | 'Browser',
-      pairedAt: Date.now(),
+      pairedAt: NetworkClock.now(),
     });
 
     setIsPairing(false);
@@ -2215,7 +2271,7 @@ export default function SyncScreen() {
       if (!data) { setIsPairing(false); Alert.alert('Code Not Found', 'No device found with this code.\nMake sure the code is correct and the other device is online.'); return; }
 
       // Check TTL (5 min)
-      if (data.timestamp && (Date.now() - data.timestamp) > 5 * 60 * 1000) {
+      if (data.timestamp && (NetworkClock.now() - data.timestamp) > 5 * 60 * 1000) {
         setIsPairing(false); Alert.alert('Code Expired', 'This code has expired. Generate a new one on the other device.'); return;
       }
 
@@ -2250,7 +2306,7 @@ export default function SyncScreen() {
         localUrl: '',
         globalUrl: '',
         pin: '',
-        timestamp: Date.now(),
+        timestamp: NetworkClock.now(),
       };
       const _pubToken = await getFirebaseIdToken();
       await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_pubToken ? `?auth=${_pubToken}` : ''}`, {
@@ -2278,7 +2334,7 @@ export default function SyncScreen() {
           for (const key of Object.keys(devices)) {
             const dev = devices[key];
             // Look for a recently-active PC that's online
-            if (dev.DeviceType === 'PC' && dev.IsOnline && dev.Timestamp && (Date.now() - dev.Timestamp) < 120000) {
+            if (dev.DeviceType === 'PC' && dev.IsOnline && dev.Timestamp && (NetworkClock.now() - dev.Timestamp) < 120000) {
               // Check if this PC is NOT already in our paired list
               const alreadyPaired = (await AsyncStorage.getItem('@pairedDevices') || '[]');
               const pairedList = JSON.parse(alreadyPaired);
@@ -2288,14 +2344,14 @@ export default function SyncScreen() {
                   deviceId: key,
                   deviceName: dev.DeviceName || 'PC',
                   deviceType: 'PC',
-                  pairedAt: Date.now(),
+                  pairedAt: NetworkClock.now(),
                 });
                 // Save their connection URLs for fast LAN sync
                 if (dev.LocalIp) await setSecureItem('pairedLocalUrl', dev.LocalIp.startsWith('http') ? dev.LocalIp : `http://${dev.LocalIp}`);
                 if (dev.GlobalUrl) await setSecureItem('pairedGlobalUrl', dev.GlobalUrl);
                 if (dev.Url) {
                   cachedPcUrlRef.current = dev.Url;
-                  cachedPcUrlTimestampRef.current = Date.now();
+                  cachedPcUrlTimestampRef.current = NetworkClock.now();
                 }
                 setPairedPcName(dev.DeviceName || 'PC');
                 if (!isGlobalSyncEnabled) setGlobalSyncEnabled(true);
@@ -2362,7 +2418,7 @@ export default function SyncScreen() {
   }, [pairedDevices]);
 
   // ─── Heavy Upload ───
-  const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB (under Cloudflare 100MB limit)
+  const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB (optimized to prevent Base64 string memory exhaustion on mobile devices)
 
   const executeHeavyUpload = async (targetDeviceOrGlobal: any) => {
     try {
@@ -2372,7 +2428,7 @@ export default function SyncScreen() {
     const { uri: physicalPath, name, size, type } = pendingUploadPayload;
     syncLog('UPLOAD', `Starting: ${name} (${type}) size=${size || '?'}`);
     try {
-      const safeName = `sync_${Date.now()}_` + name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const safeName = `sync_${NetworkClock.now()}_` + name.replace(/[^a-zA-Z0-9.-]/g, '_');
       const hydratedPath = `${SYNC_CACHE_BASE}${safeName}`;
       await FileSystem.copyAsync({ from: physicalPath, to: hydratedPath });
 
@@ -2394,7 +2450,7 @@ export default function SyncScreen() {
         }
         if (!resolved) { Alert.alert('PC Unreachable', 'Could not reach your PC. Make sure FlyShelf is running.'); setIsSending(false); setPendingUploadPayload(null); return; }
         const uploadUrl = `${resolved}/api/sync_file?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`;
-        await FileSystem.uploadAsync(uploadUrl, hydratedPath, { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion', ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}) } });
+        await FileSystem.uploadAsync(uploadUrl, hydratedPath, { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': NetworkClock.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion', ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}) } });
       } else {
         // Direct device transfer (LAN or Cloudflare)
         let resolved = await resolveOptimalUrl(targetDeviceOrGlobal);
@@ -2467,7 +2523,7 @@ export default function SyncScreen() {
               'X-FlyShelf-Client': 'MobileCompanion',
               'X-Upload-Session': sessionId,
               'X-File-Name': encodeURIComponent(name),
-              'X-Original-Date': Date.now().toString(),
+              'X-Original-Date': NetworkClock.now().toString(),
               'X-Total-Chunks': totalChunks.toString(),
               'X-Source-Device': encodeURIComponent(deviceName || 'Mobile'),
               ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}),
@@ -2477,7 +2533,7 @@ export default function SyncScreen() {
         } else {
           // ── Direct single POST (LAN or small Cloudflare files) ──
           const uploadUrl = `${resolved}/api/sync_file?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`;
-          await FileSystem.uploadAsync(uploadUrl, hydratedPath, { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': Date.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion', ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}) } });
+          await FileSystem.uploadAsync(uploadUrl, hydratedPath, { httpMethod: 'POST', uploadType: 0 as any, headers: { 'X-Original-Date': NetworkClock.now().toString(), 'X-FlyShelf-Client': 'MobileCompanion', ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}) } });
         }
       }
       if (Platform.OS === 'android') ToastAndroid.show(`✅ ${name} sent!`, ToastAndroid.SHORT);
@@ -2781,17 +2837,18 @@ export default function SyncScreen() {
           {clips.filter(clipFilter).length === 0 && hasLoadedOnceRef.current ? (
             <Text style={styles.emptyText}>{feedSearch ? `No results for "${feedSearch}"` : feedCategory !== 'All' ? `No ${feedCategory.toLowerCase()} items yet.` : 'No clips synced yet.'}</Text>
           ) : clips.filter(clipFilter).length === 0 ? null : (
-            <FlashList
+            // @ts-ignore
+            <FlashListCast
               ref={feedListRef}
               data={clips.filter(clipFilter)}
-              keyExtractor={(item, index) => item.id ? item.id : index.toString()}
+              keyExtractor={(item: any, index: number) => item.id ? item.id : index.toString()}
               showsVerticalScrollIndicator={false}
               drawDistance={300}
               estimatedItemSize={120}
               contentContainerStyle={{ paddingBottom: 110 }}
 
-              renderItem={({ item, index: itemIndex }) => {
-                let iconName = 'doc.text', iconColor = '#8A8F98';
+              renderItem={({ item, index: itemIndex }: any) => {
+                let iconName: any = 'doc.text', iconColor = '#8A8F98';
                 const lowerTit = (item.Title || item.Raw || '').toLowerCase();
                 const isApk = lowerTit.endsWith('.apk');
                 const isPdf = item.Type === 'Pdf' || lowerTit.endsWith('.pdf');
@@ -2832,7 +2889,7 @@ export default function SyncScreen() {
                       <View style={[styles.clipIconContainer, { backgroundColor: iconColor + '15', borderColor: iconColor + '30', marginRight: space.md }]}>
                         <IconSymbol name={iconName} size={20} color={iconColor} />
                       </View>
-
+ 
                       {/* Header Info */}
                       <View style={styles.clipContentContainer}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -2849,7 +2906,7 @@ export default function SyncScreen() {
                       {/* Transfer method badge (LAN/Cloud) */}
                       {(() => {
                         const via = item._receivedVia || '';
-                        let viaIcon = 'paperplane';
+                        let viaIcon: any = 'paperplane';
                         let label = '';
                         let badgeColor = '#4C5361';
                         let badgeBg = 'rgba(15,17,21,0.85)';
@@ -3066,7 +3123,7 @@ export default function SyncScreen() {
             const newItem: ClipItem = {
               Title: title, Type: 'Pdf', Raw: newUri,
               Time: new Date().toLocaleString(), SourceDeviceName: deviceName || 'Phone',
-              SourceDeviceType: 'Mobile', Timestamp: Date.now(), CachedUri: newUri,
+              SourceDeviceType: 'Mobile', Timestamp: NetworkClock.now(), CachedUri: newUri,
               _receivedVia: 'Local',
             };
             setClips(prev => [newItem, ...prev]);

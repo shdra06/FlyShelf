@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -625,6 +626,118 @@ namespace FlyShelf.ViewModels
 
 
 
+        /// <summary>
+        /// On-demand zip creation for Group and Folder items.
+        /// Called when user clicks the "Convert to .zip" hover button.
+        /// </summary>
+        public void CreateZipArchive()
+        {
+            if (HasZipArchive) return; // Already created
 
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    if (ItemType == ClipboardItemType.Group)
+                    {
+                        // Group: zip all file paths stored in RawContent
+                        string[] paths = RawContent.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                        string tempZip = Path.Combine(Path.GetTempPath(), $"FlyShelf_Group_{DateTime.Now:yyyyMMdd_HHmmss}.zip");
+                        if (File.Exists(tempZip)) File.Delete(tempZip);
+
+                        using (var archive = System.IO.Compression.ZipFile.Open(tempZip, System.IO.Compression.ZipArchiveMode.Create))
+                        {
+                            foreach (var path in paths)
+                            {
+                                string trimmed = path.Trim();
+                                if (File.Exists(trimmed))
+                                {
+                                    archive.CreateEntryFromFile(trimmed, Path.GetFileName(trimmed), System.IO.Compression.CompressionLevel.Fastest);
+                                }
+                                else if (Directory.Exists(trimmed))
+                                {
+                                    string dirName = Path.GetFileName(trimmed);
+                                    foreach (var file in Directory.GetFiles(trimmed, "*", SearchOption.AllDirectories))
+                                    {
+                                        string relativePath = Path.GetRelativePath(trimmed, file);
+                                        string entryName = Path.Combine(dirName, relativePath);
+                                        archive.CreateEntryFromFile(file, entryName, System.IO.Compression.CompressionLevel.Fastest);
+                                    }
+                                }
+                            }
+                        }
+
+                        ZippedArchivePath = tempZip;
+                        FlyShelf.Classes.Logger.LogAction("GROUP ZIP", $"Created zip on demand: {tempZip}");
+                    }
+                    else if (ItemType == ClipboardItemType.Folder && !string.IsNullOrEmpty(FilePath) && Directory.Exists(FilePath))
+                    {
+                        // Folder: zip the entire directory
+                        string tempZip = Path.Combine(Path.GetTempPath(), $"FlyShelf_{FileName}_{DateTime.Now:HHmmss}.zip");
+                        if (File.Exists(tempZip)) File.Delete(tempZip);
+                        System.IO.Compression.ZipFile.CreateFromDirectory(FilePath, tempZip, System.IO.Compression.CompressionLevel.Fastest, true);
+
+                        ZippedArchivePath = tempZip;
+                        var zipInfo = new FileInfo(tempZip);
+                        long folderSize = Directory.GetFiles(FilePath, "*", SearchOption.AllDirectories)
+                            .Sum(f => { try { return new FileInfo(f).Length; } catch { return 0L; } });
+                        FormattedSize = $"{FormatBytes(folderSize)} → {FormatBytes(zipInfo.Length)} zipped";
+                        PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(FormattedSize)));
+                        FlyShelf.Classes.Logger.LogAction("FOLDER ZIP", $"Created zip on demand: {tempZip}");
+                    }
+
+                    // Show toast on UI thread
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowToast("📦 Zip archive created!");
+                    });
+                }
+                catch (Exception ex)
+                {
+                    FlyShelf.Classes.Logger.LogAction("ZIP CREATE ERR", ex.Message);
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowToast($"❌ Zip creation failed: {ex.Message}");
+                    });
+                }
+            });
+        }
+
+        /// <summary>
+        /// Sends the zip archive to all alive LAN peers only (no Cloudflare).
+        /// Called when user clicks the "Sync via LAN" hover button.
+        /// </summary>
+        public async Task SyncZipViaLanAsync()
+        {
+            if (!HasZipArchive)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No zip archive to sync. Create one first.");
+                return;
+            }
+
+            try
+            {
+                var peerCount = FlyShelf.Classes.PeerManager.Instance.AliveCount;
+                if (peerCount == 0)
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No LAN peers connected.");
+                    return;
+                }
+
+                FlyShelf.Windows.ToastWindow.ShowToast("📡 Syncing zip via LAN...");
+                int delivered = await FlyShelf.Classes.PeerManager.Instance.PushFileToAllPeers(
+                    ZippedArchivePath, FileName ?? "Archive", "Archive");
+
+                if (delivered > 0)
+                    FlyShelf.Windows.ToastWindow.ShowToast($"📡 Synced to {delivered} LAN peer(s)!");
+                else
+                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Failed to sync to any LAN peer.");
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Classes.Logger.LogAction("LAN SYNC ERR", ex.Message);
+                FlyShelf.Windows.ToastWindow.ShowToast($"❌ LAN sync failed: {ex.Message}");
+            }
+        }
     }
 }

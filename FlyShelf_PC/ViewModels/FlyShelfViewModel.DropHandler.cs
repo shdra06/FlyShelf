@@ -123,9 +123,7 @@ namespace FlyShelf.ViewModels
                     
                     Application.Current.Dispatcher.InvokeAsync(() =>
                     {
-                        DroppedItems.Insert(0, groupItem);
-                        PruneOldItems();
-                        OnPropertyChanged(nameof(ShelfVisibility));
+                        DeduplicateAndInsert(groupItem);
                     });
 
                     // PERF: Journal the single item (fast append) instead of full serialize
@@ -138,26 +136,7 @@ namespace FlyShelf.ViewModels
                         groupItem.ItemType.ToString(), 
                         groupItem.FileName);
 
-                    // Sync Group item to alive LAN PC peers in background task
-                    System.Threading.Tasks.Task.Run(async () =>
-                    {
-                        // Wait up to 60s for the ZIP file to finish compressing in the background thread
-                        for (int wait = 0; wait < 120; wait++)
-                        {
-                            if (!string.IsNullOrEmpty(groupItem.ZippedArchivePath) && File.Exists(groupItem.ZippedArchivePath))
-                                break;
-                            await System.Threading.Tasks.Task.Delay(500);
-                        }
 
-                        if (!string.IsNullOrEmpty(groupItem.ZippedArchivePath) && File.Exists(groupItem.ZippedArchivePath))
-                        {
-                            var peers = Classes.PeerManager.Instance.GetAliveLanPcPeers();
-                            foreach (var peer in peers)
-                            {
-                                await Classes.PeerManager.Instance.TrySendGroupToPeer(peer, groupItem);
-                            }
-                        }
-                    });
 
                     return;
                 }
@@ -180,6 +159,11 @@ namespace FlyShelf.ViewModels
                 // Phase 2: Batch-insert into ObservableCollection on UI thread
                 Application.Current.Dispatcher.InvokeAsync(() =>
                 {
+                    // Run deduplication for each individual new item
+                    foreach (var newItem in newItems.Select(x => x.item))
+                    {
+                        DeduplicateItem(newItem);
+                    }
                     DroppedItems.InsertRange(0, newItems.Select(x => x.item));
                     PruneOldItems();
                     OnPropertyChanged(nameof(ShelfVisibility));
@@ -258,19 +242,7 @@ namespace FlyShelf.ViewModels
 
                             if (!isGlobalDownload)
                             {
-                                if (item.ItemType == ClipboardItemType.Folder)
-                                {
-                                    var capturedItem = item;
-                                    for (int wait = 0; wait < 120; wait++)
-                                    {
-                                        if (!string.IsNullOrEmpty(capturedItem.ZippedArchivePath) && File.Exists(capturedItem.ZippedArchivePath))
-                                            break;
-                                        await System.Threading.Tasks.Task.Delay(500);
-                                    }
-                                    if (!string.IsNullOrEmpty(capturedItem.ZippedArchivePath) && File.Exists(capturedItem.ZippedArchivePath))
-                                        await SyncFileToDevicesAsync(capturedItem.ZippedArchivePath, capturedItem, label: "FOLDER");
-                                    continue;
-                                }
+
 
                                 string fileExt = Path.GetExtension(filePath).ToLowerInvariant();
                                 if (fileExt is ".crdownload" or ".part" or ".tmp" or ".download" or ".partial")
@@ -341,8 +313,7 @@ namespace FlyShelf.ViewModels
                 // Insert immediately into DroppedItems on UI thread
                 Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    DroppedItems.Insert(0, item);
-                    PruneOldItems();
+                    DeduplicateAndInsert(item);
                 });
 
                 // PERF: Journal the bitmap item immediately (fast append)
@@ -447,6 +418,28 @@ namespace FlyShelf.ViewModels
                             item.IsLoadedHighQuality = !IsScrolling;
 
                             item.FilePath = tempFile;
+
+                            // Now that FilePath is written to disk, check for duplicate image in the first 10 items
+                            ClipboardItem? duplicateImage = null;
+                            int checkCount = Math.Min(10, DroppedItems.Count);
+                            for (int i = 1; i < checkCount; i++) // Start at index 1 because current item is at index 0
+                            {
+                                var existing = DroppedItems[i];
+                                if (existing != null && existing.ItemType == ClipboardItemType.Image)
+                                {
+                                    if (IsImageDuplicate(item, existing))
+                                    {
+                                        duplicateImage = existing;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (duplicateImage != null)
+                            {
+                                Classes.Logger.LogAction("DEDUP", $"Found duplicate image: {duplicateImage.FilePath}. Removing older duplicate.");
+                                RemoveItem(duplicateImage);
+                            }
+
                             item.ScanForQRCodeAsync(tempFile);
                             OnPropertyChanged(nameof(ShelfVisibility));
 
@@ -682,7 +675,7 @@ namespace FlyShelf.ViewModels
                                 {
                                     item.ItemType = ClipboardItemType.Text;
                                     string displayText = capturedText.Trim();
-                                    if (DetectIfPasswordOrApiKey(displayText))
+                                    if (false && DetectIfPasswordOrApiKey(displayText))
                                     {
                                         item.IsPassword = true;
                                         item.Extension = "PASSWORD";
@@ -730,11 +723,10 @@ namespace FlyShelf.ViewModels
                         }
                     }
 
-                    // Insert directly on UI thread (No duplicate checking/removing!)
+                    // Insert directly on UI thread with deduplication
                     Application.Current.Dispatcher.InvokeAsync(() =>
                     {
-                        DroppedItems.Insert(0, item);
-                        PruneOldItems();
+                        DeduplicateAndInsert(item);
 
                         FlyShelf.Classes.NetworkSyncServer.Instance?.NotifyClipboardChanged(item.ItemType.ToString(), item.FileName ?? item.RawContent?.Substring(0, Math.Min(40, item.RawContent?.Length ?? 0)) ?? "");
 

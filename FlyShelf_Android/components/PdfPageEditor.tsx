@@ -4,7 +4,7 @@ import {
   View, Text, Modal, TouchableOpacity, ScrollView, ActivityIndicator,
   ToastAndroid, Platform, StyleSheet, Alert,
 } from 'react-native';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { getPdfPageInfo, extractPages, mergePdfs } from '../utils/pdfUtils';
 import { IconSymbol } from '@/components/ui/icon-symbol';
