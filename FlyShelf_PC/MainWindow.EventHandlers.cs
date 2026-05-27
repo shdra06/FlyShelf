@@ -141,6 +141,7 @@ namespace FlyShelf
 
         private void ToggleGlobalSync_Click(object sender, RoutedEventArgs e)
         {
+            if (OverflowPopup != null) OverflowPopup.IsOpen = false;
             bool newState = !FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery;
             FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery = newState;
             // Toggle ALL sync: Cloudflare + LAN
@@ -161,6 +162,7 @@ namespace FlyShelf
         {
             ToggleClearConfirmPanel(false);
             _viewModel.ClearShelf();
+            Windows.ToastWindow.ShowToast("Shelf cleared! 🧹");
         }
 
         private void ClearShelf_Cancel(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -223,6 +225,7 @@ namespace FlyShelf
 
         private void EmojiPicker_Click(object sender, RoutedEventArgs e)
         {
+            if (OverflowPopup != null) OverflowPopup.IsOpen = false;
             // Close any existing emoji picker first
             CloseEmojiPicker();
 
@@ -260,8 +263,56 @@ namespace FlyShelf
         }
 
 
-        // ═══ Search & Filter methods moved to MainWindow.Search.cs ═══
+        private void MakePasswordSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                e.Handled = true;
+                item.IsPassword = true;
+                item.Extension = "PASSWORD";
+                if (string.IsNullOrEmpty(item.FileName) || item.FileName == item.RawContent)
+                {
+                    item.FileName = "Protected Password";
+                }
+                item.GeneratePasswordIcon();
+                FlyShelf.Windows.ToastWindow.ShowToast("Locked as password card! 🔒");
 
+                // Save to history immediately
+                _viewModel.PersistHistoryPublic();
+
+                // Open the View/Edit dialog
+                OpenPasswordManagerWindow(item, false);
+            }
+        }
+
+        private void ConvertToZip_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                e.Handled = true;
+                if (item.HasZipArchive)
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("📦 Zip already exists!");
+                    return;
+                }
+                FlyShelf.Windows.ToastWindow.ShowToast("📦 Creating zip archive...");
+                item.CreateZipArchive();
+            }
+        }
+
+        private void SyncZipLan_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                e.Handled = true;
+                if (!item.HasZipArchive)
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Create a zip first!");
+                    return;
+                }
+                _ = item.SyncZipViaLanAsync();
+            }
+        }
 
         private void PinSpecific_Click(object sender, MouseButtonEventArgs e)
         {
