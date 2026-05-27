@@ -154,13 +154,18 @@ namespace FlyShelf
                 int exStyle = GetWindowLong(helper.Handle, GWL_EXSTYLE);
                 if (_isNotesActive || _isTodoActive)
                 {
-                    // Remove WS_EX_NOACTIVATE
-                    SetWindowLong(helper.Handle, GWL_EXSTYLE, exStyle & ~WS_EX_NOACTIVATE);
+                    // Remove WS_EX_NOACTIVATE and WS_EX_TOOLWINDOW so the window can be activated
+                    // Add WS_EX_APPWINDOW so it appears in the taskbar and alt+tab with its proper app icon
+                    exStyle = exStyle & ~WS_EX_NOACTIVATE & ~WS_EX_TOOLWINDOW;
+                    exStyle = exStyle | WS_EX_APPWINDOW;
+                    SetWindowLong(helper.Handle, GWL_EXSTYLE, exStyle);
                 }
                 else
                 {
-                    // Add WS_EX_NOACTIVATE back
-                    SetWindowLong(helper.Handle, GWL_EXSTYLE, exStyle | WS_EX_NOACTIVATE);
+                    // Remove WS_EX_APPWINDOW and add WS_EX_NOACTIVATE back for clipboard overlay mode
+                    exStyle = exStyle & ~WS_EX_APPWINDOW;
+                    exStyle = exStyle | WS_EX_NOACTIVATE;
+                    SetWindowLong(helper.Handle, GWL_EXSTYLE, exStyle);
                 }
 
                 // Force frame to update style changes immediately
@@ -248,6 +253,9 @@ namespace FlyShelf
                 NotesPanel.BeginAnimation(OpacityProperty, null);
                 NotesPanel.Opacity = 0;
                 NotesPanel.Visibility = Visibility.Collapsed;
+                ShelfListView.Visibility = Visibility.Visible;
+                if (_viewModel.DroppedItems.Count == 0)
+                    EmptyStatePanel.Visibility = Visibility.Visible;
                 return;
             }
 

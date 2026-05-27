@@ -20,6 +20,7 @@ public static partial class NativeMethods
     internal const int WS_POPUP = unchecked((int)0x80000000);
     internal const int WS_EX_NOACTIVATE = 0x08000000;
     internal const int WS_EX_TOOLWINDOW = 0x00000080;
+    internal const int WS_EX_APPWINDOW = 0x00040000;
 
     // SetWindowPos Flags
     internal const int HWND_TOPMOST = -1;

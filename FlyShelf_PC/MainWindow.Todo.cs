@@ -109,6 +109,9 @@ namespace FlyShelf
                 TodoPanel.BeginAnimation(OpacityProperty, null);
                 TodoPanel.Opacity = 0;
                 TodoPanel.Visibility = Visibility.Collapsed;
+                ShelfListView.Visibility = Visibility.Visible;
+                if (_viewModel.DroppedItems.Count == 0)
+                    EmptyStatePanel.Visibility = Visibility.Visible;
                 return;
             }
 
