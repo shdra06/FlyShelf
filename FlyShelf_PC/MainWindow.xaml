@@ -512,9 +512,9 @@
                                 <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#1AEAB308"/>
                                 <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#30EAB308"/>
                             </ui:Button.Resources>
-                            <Image Source="pack://application:,,,/Resources/fluent_smile_emoji.png"
-                                   Width="20" Height="20"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            <emoji:TextBlock Text="😊" FontSize="19" 
+                                             VerticalAlignment="Center" HorizontalAlignment="Center"
+                                             Margin="0,-2,0,0"/>
                         </ui:Button>
 
                         <!-- Merge PDF button — hidden by default, replaces emoji space when PDFs selected -->
