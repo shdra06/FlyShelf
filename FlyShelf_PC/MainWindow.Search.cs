@@ -18,7 +18,6 @@ namespace FlyShelf
     {
         private bool _isSearchActive = false;
         private bool _isFilterBarActive = false;
-        private bool _isUtilsBarActive = false;
         private DateTime _overflowPopupLastClosed = DateTime.MinValue;
 
         private void SearchToggle_Click(object sender, RoutedEventArgs e)
@@ -65,6 +64,12 @@ namespace FlyShelf
         {
             string query = SearchTextBox.Text;
             SearchPlaceholder.Visibility = string.IsNullOrEmpty(query) ? Visibility.Visible : Visibility.Collapsed;
+
+            if (_isNotesActive)
+            {
+                ApplyNotesSearch(query);
+                return;
+            }
 
             if (_searchDebounceTimer == null)
             {
@@ -141,28 +146,40 @@ namespace FlyShelf
                 SearchToggleBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
             }
             
-            // Clear the CollectionView filter only if no category filter is active
-            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems) as ListCollectionView;
-            if (view != null)
+            if (_isNotesActive)
             {
-                if (_activeCategoryFilter == null)
-                {
-                    view.Filter = null;
-                }
-                else
-                {
-                    // Reapply the active category filter to maintain persistence
-                    ReapplyActiveFilters();
-                }
-                view.CustomSort = null;
+                NotesSearchResults.Visibility = Visibility.Collapsed;
+                NotesContentArea.Visibility = Visibility.Visible;
             }
-            _viewModel.IsSearchActive = false;
+            else
+            {
+                // Clear the CollectionView filter only if no category filter is active
+                var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems) as ListCollectionView;
+                if (view != null)
+                {
+                    if (_activeCategoryFilter == null)
+                    {
+                        view.Filter = null;
+                    }
+                    else
+                    {
+                        // Reapply the active category filter to maintain persistence
+                        ReapplyActiveFilters();
+                    }
+                    view.CustomSort = null;
+                }
+                _viewModel.IsSearchActive = false;
+            }
             
-            // Also close utilities bar!
-            if (_isUtilsBarActive) ToggleUtilsBar(false);
-
-            // Move focus back to the list view
-            ShelfListView.Focus();
+            // Move focus back to the list view or notes box
+            if (_isNotesActive)
+            {
+                FocusNotesActiveTextBox();
+            }
+            else
+            {
+                ShelfListView.Focus();
+            }
 
             // Stop mascot search animation
             try { Classes.AnimationTriggerService.Instance.OnSearchToggle(false); } catch { }
@@ -173,8 +190,6 @@ namespace FlyShelf
 
         private void ApplySearchFilter(string query)
         {
-            if (_isUtilsBarActive) ToggleUtilsBar(false);
-
             string queryClean = (query ?? "").Trim();
             var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems) as ListCollectionView;
             if (view == null) return;
@@ -250,7 +265,6 @@ namespace FlyShelf
             {
                 // Close search and utilities if active
                 if (_isSearchActive) CloseSearch();
-                if (_isUtilsBarActive) ToggleUtilsBar(false);
 
                 // Highlight buttons based on category
                 UpdateFilterButtonHighlight(FilterBtn_Images, "Images", "#F472B6");
@@ -468,124 +482,18 @@ namespace FlyShelf
             }
         }
 
-        private void UtilsToolbar_Click(object sender, RoutedEventArgs e)
+        private void ShortcutsBtn_Click(object sender, RoutedEventArgs e)
         {
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
-            ToggleUtilsBar(!_isUtilsBarActive);
-        }
 
-        private void ToggleUtilsBar(bool show)
-        {
-            if (UtilsInlineBar == null) return;
-
-            _isUtilsBarActive = show;
-
-            if (show)
+            // Lazy-load shortcuts data on first access
+            if (Classes.ShortcutManager.Shortcuts.Count == 0)
             {
-                // Close search and category filters
-                if (_isSearchActive) CloseSearch();
-                if (_isFilterBarActive) ToggleFilterBar(false);
-
-                UtilsInlineBar.Visibility = Visibility.Visible;
-
-                // Smooth slide-down + fade-in animation
-                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(-8, 0, new Duration(TimeSpan.FromMilliseconds(150)))
-                {
-                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-                };
-                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(150)));
-
-                if (UtilsInlineBar.RenderTransform is TranslateTransform translate)
-                {
-                    translate.BeginAnimation(TranslateTransform.YProperty, slideAnim);
-                }
-                UtilsInlineBar.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+                Classes.ShortcutManager.Load();
             }
-            else
-            {
-                // Smooth slide-up + fade-out animation
-                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(0, -8, new Duration(TimeSpan.FromMilliseconds(120)))
-                {
-                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn }
-                };
-                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(1, 0, new Duration(TimeSpan.FromMilliseconds(120)));
 
-                fadeAnim.Completed += (s, args) =>
-                {
-                    if (!_isUtilsBarActive)
-                    {
-                        UtilsInlineBar.Visibility = Visibility.Collapsed;
-                    }
-                };
-
-                if (UtilsInlineBar.RenderTransform is TranslateTransform translate)
-                {
-                    translate.BeginAnimation(TranslateTransform.YProperty, slideAnim);
-                }
-                UtilsInlineBar.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
-            }
-        }
-
-        private void AddNoteToClipboard_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            try
-            {
-                string noteText = QuickNoteInput.Text?.Trim() ?? "";
-                if (string.IsNullOrEmpty(noteText)) return;
-
-                // Set system clipboard — FlyShelf listener will automatically capture it,
-                // create a card, evaluate smart actions, and slide it to the top!
-                System.Windows.Clipboard.SetText(noteText);
-
-                // Clear note scratchpad and close utilities bar
-                QuickNoteInput.Text = "";
-                ToggleUtilsBar(false);
-
-                Windows.ToastWindow.ShowToast("Note added to clipboard! 📋");
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Failed to add note to clipboard: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private void ShortcutTimer_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            try
-            {
-                ToggleUtilsBar(false);
-                // Launch the new Dome Timer for 5 minutes
-                var tw = new Windows.TimerWindow("5 minutes");
-                tw.Show();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Failed to launch timer: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private void ShortcutClear_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            try
-            {
-                ToggleUtilsBar(false);
-                
-                var result = MessageBox.Show(
-                    "Are you sure you want to clear all unpinned items from your clipboard shelf?",
-                    "Clear Shelf",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Warning);
-
-                if (result == MessageBoxResult.Yes)
-                {
-                    _viewModel.ClearShelf();
-                    Windows.ToastWindow.ShowToast("Shelf cleared! 🧹");
-                }
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Failed to clear shelf: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            var win = new Windows.ShortcutsWindow();
+            win.Show();
         }
 
         private void ClearAllToolbar_Click(object sender, RoutedEventArgs e)

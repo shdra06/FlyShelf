@@ -24,7 +24,6 @@ namespace FlyShelf
         private bool _isNotesActive = false;
         private bool _isNotesLoaded = false;
         private NoteDay? _selectedNoteDay = null;
-        private bool _isNotesSearchActive = false;
         private Brush? _originalHeaderBg = null;
         private static readonly SolidColorBrush _notesHeaderBrush = new(Color.FromRgb(0x1A, 0x1A, 0x2E));
         private TextBox? _lastFocusedBulletTextBox = null;
@@ -47,7 +46,6 @@ namespace FlyShelf
             // Close other modes
             if (_isSearchActive) CloseSearch();
             if (_isFilterBarActive) ToggleFilterBar(false);
-            if (_isUtilsBarActive) ToggleUtilsBar(false);
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
 
             // Lazy-load notes data on first open
@@ -281,13 +279,9 @@ namespace FlyShelf
             _selectedNoteDay = day;
 
             // Clear search if active
-            if (_isNotesSearchActive)
+            if (_isSearchActive)
             {
-                _isNotesSearchActive = false;
-                NotesSearchBar.Visibility = Visibility.Collapsed;
-                NotesSearchBox.Text = "";
-                NotesSearchResults.Visibility = Visibility.Collapsed;
-                NotesContentArea.Visibility = Visibility.Visible;
+                CloseSearch();
             }
 
             // Update sidebar selection highlight
@@ -903,50 +897,17 @@ namespace FlyShelf
         // NOTES SEARCH
         // ═══════════════════════════════════════════════════════════
 
-        private void NotesSearchToggle_Click(object sender, MouseButtonEventArgs e)
+        private void ApplyNotesSearch(string query)
         {
-            _isNotesSearchActive = !_isNotesSearchActive;
-            if (_isNotesSearchActive)
-            {
-                ActivateNotesWindow();
-                NotesSearchBar.Visibility = Visibility.Visible;
-
-                // Animate in
-                var fadeAnim = new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(150)));
-                NotesSearchBar.BeginAnimation(OpacityProperty, fadeAnim);
-
-                Dispatcher.InvokeAsync(() =>
-                {
-                    NotesSearchBox.Focus();
-                    Keyboard.Focus(NotesSearchBox);
-                }, System.Windows.Threading.DispatcherPriority.Input);
-            }
-            else
-            {
-                CloseNotesSearch();
-            }
-        }
-
-        private void CloseNotesSearch()
-        {
-            _isNotesSearchActive = false;
-            NotesSearchBox.Text = "";
-            NotesSearchBar.Visibility = Visibility.Collapsed;
-            NotesSearchResults.Visibility = Visibility.Collapsed;
-            NotesContentArea.Visibility = Visibility.Visible;
-        }
-
-        private void NotesSearchBox_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            string query = NotesSearchBox.Text?.Trim() ?? "";
-            if (string.IsNullOrWhiteSpace(query))
+            string queryClean = (query ?? "").Trim();
+            if (string.IsNullOrWhiteSpace(queryClean))
             {
                 NotesSearchResults.Visibility = Visibility.Collapsed;
                 NotesContentArea.Visibility = Visibility.Visible;
                 return;
             }
 
-            var results = NoteManager.Search(query);
+            var results = NoteManager.Search(queryClean);
 
             // Build display items
             var displayItems = results.Select(r => new NoteSearchResult
@@ -962,20 +923,11 @@ namespace FlyShelf
             NotesContentArea.Visibility = Visibility.Collapsed;
         }
 
-        private void NotesSearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Escape)
-            {
-                CloseNotesSearch();
-                e.Handled = true;
-            }
-        }
-
         private void NotesSearchResult_Click(object sender, MouseButtonEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is NoteSearchResult result)
             {
-                CloseNotesSearch();
+                CloseSearch();
                 SelectNoteDay(result.Day);
             }
         }

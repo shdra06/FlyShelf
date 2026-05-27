@@ -7,6 +7,7 @@
 using FlyShelf.ViewModels;
 using System;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -16,6 +17,21 @@ namespace FlyShelf
     {
         private int _clipboardUpdateToken;
         private DateTime _lastClipboardCaptureTime = DateTime.MinValue;
+
+        // ═══ SendInput for auto-paste after shortcut expansion ═══
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern uint SendInput(uint nInputs, INPUT_SC[] pInputs, int cbSize);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct INPUT_SC { public uint type; public INPUTUNION_SC u; }
+        [StructLayout(LayoutKind.Explicit)]
+        private struct INPUTUNION_SC { [FieldOffset(0)] public KEYBDINPUT_SC ki; }
+        [StructLayout(LayoutKind.Sequential)]
+        private struct KEYBDINPUT_SC { public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public IntPtr dwExtraInfo; }
+        private const uint INPUT_KEYBOARD_SC = 1;
+        private const uint KEYEVENTF_KEYUP_SC = 0x0002;
+        private const ushort VK_CONTROL_SC = 0x11;
+        private const ushort VK_V_SC = 0x56;
 
         private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
@@ -210,6 +226,50 @@ namespace FlyShelf
                             text = data.GetData(DataFormats.Text) as string;
                     }
                     catch { }
+                }
+
+                // ═══ SHORTCUT EXPANSION: Intercept /trigger text before normal processing ═══
+                if (!string.IsNullOrWhiteSpace(text) && text.Trim().StartsWith("/"))
+                {
+                    var matchedShortcut = Classes.ShortcutManager.TryExpand(text);
+                    if (matchedShortcut != null)
+                    {
+                        Classes.Logger.LogAction("SHORTCUTS", $"Expanding '{matchedShortcut.Trigger}' → '{matchedShortcut.Label}'");
+                        try
+                        {
+                            _isWritingClipboard = true;
+                            Application.Current.Dispatcher.Invoke(() =>
+                            {
+                                Clipboard.SetText(matchedShortcut.Expansion);
+                            });
+                        }
+                        finally
+                        {
+                            _isWritingClipboard = false;
+                        }
+                        _lastClipboardCaptureTime = DateTime.UtcNow;
+
+                        // Auto-paste: simulate Ctrl+V after a brief delay so the clipboard is ready.
+                        // The user just Ctrl+C'd the /trigger (text is still selected), so Ctrl+V replaces it in-place.
+                        _ = Task.Run(async () =>
+                        {
+                            await Task.Delay(80);
+                            var inputs = new INPUT_SC[]
+                            {
+                                new INPUT_SC { type = INPUT_KEYBOARD_SC, u = new INPUTUNION_SC { ki = new KEYBDINPUT_SC { wVk = VK_CONTROL_SC } } },
+                                new INPUT_SC { type = INPUT_KEYBOARD_SC, u = new INPUTUNION_SC { ki = new KEYBDINPUT_SC { wVk = VK_V_SC } } },
+                                new INPUT_SC { type = INPUT_KEYBOARD_SC, u = new INPUTUNION_SC { ki = new KEYBDINPUT_SC { wVk = VK_V_SC, dwFlags = KEYEVENTF_KEYUP_SC } } },
+                                new INPUT_SC { type = INPUT_KEYBOARD_SC, u = new INPUTUNION_SC { ki = new KEYBDINPUT_SC { wVk = VK_CONTROL_SC, dwFlags = KEYEVENTF_KEYUP_SC } } },
+                            };
+                            SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT_SC>());
+                        });
+
+                        Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            Windows.ToastWindow.ShowToast($"✦ {matchedShortcut.Label}");
+                        });
+                        return; // Don't create a clipboard card for the trigger text
+                    }
                 }
 
                 // ═══ PERF: ALL heavy processing moves to background thread ═══

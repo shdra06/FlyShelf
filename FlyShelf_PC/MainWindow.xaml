@@ -417,73 +417,6 @@
                 </UniformGrid>
             </Border>
 
-            <!-- Dynamic Inline Utilities Panel (same style as SortFilterInlineBar) -->
-            <Border x:Name="UtilsInlineBar" Margin="14,0,14,8" Visibility="Collapsed" Opacity="0"
-                    CornerRadius="10" Padding="8,6"
-                    Background="{DynamicResource MicaWPF.Brushes.SmokeFillColorDefault}" 
-                    BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
-                    RenderTransformOrigin="0.5,0">
-                <Border.RenderTransform>
-                    <TranslateTransform Y="0"/>
-                </Border.RenderTransform>
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.15" Color="#000000"/>
-                </Border.Effect>
-                <Grid Width="{Binding ActualWidth, ElementName=TopHeaderGrid}" HorizontalAlignment="Center">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="12"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-
-                    <!-- Left Column: Quick Scratchpad (Notes) -->
-                    <StackPanel Grid.Column="0" Margin="4,2">
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <ui:SymbolIcon Symbol="Note24" Foreground="#8B5CF6" FontSize="13" Margin="0,0,4,0"/>
-                            <TextBlock Text="Quick Scratchpad" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                        </StackPanel>
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <Border CornerRadius="6" Padding="6,3" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
-                                <ui:TextBox x:Name="QuickNoteInput" FontSize="11" PlaceholderText="Type a quick note..." Background="Transparent" BorderThickness="0" 
-                                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
-                                            MaxLength="200" Padding="0,1" Height="20"
-                                            SelectionBrush="{DynamicResource MicaWPF.Brushes.SystemAccentColor}"/>
-                            </Border>
-                            <Border Grid.Column="1" CornerRadius="6" Background="#208B5CF6" BorderBrush="#408B5CF6" BorderThickness="1" Margin="4,0,0,0" Padding="6,2" Cursor="Hand" MouseLeftButtonDown="AddNoteToClipboard_Click" ToolTip="Clip It!">
-                                <ui:SymbolIcon Symbol="Add24" Foreground="#8B5CF6" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                        </Grid>
-                    </StackPanel>
-
-                    <!-- Right Column: Shortcuts -->
-                    <StackPanel Grid.Column="2" Margin="4,2">
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                            <ui:SymbolIcon Symbol="Rocket24" Foreground="#10B981" FontSize="13" Margin="0,0,4,0"/>
-                            <TextBlock Text="Shortcuts" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                        </StackPanel>
-                        <UniformGrid Rows="1">
-                            <!-- Shortcut 1: Desktop Timer -->
-                            <Border CornerRadius="6" Background="#15FFFFFF" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" Padding="4,4" Margin="0,0,3,0" Cursor="Hand" MouseLeftButtonDown="ShortcutTimer_Click" ToolTip="Start 5m Dome Timer">
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                    <ui:SymbolIcon Symbol="Timer24" Foreground="#10B981" FontSize="12" Margin="0,0,3,0"/>
-                                    <TextBlock Text="Timer" FontSize="9.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Border>
-                            <!-- Shortcut 2: Clear Volatile -->
-                            <Border CornerRadius="6" Background="#15FFFFFF" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" Padding="4,4" Margin="3,0,0,0" Cursor="Hand" MouseLeftButtonDown="ShortcutClear_Click" ToolTip="Clear History">
-                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                    <ui:SymbolIcon Symbol="Delete24" Foreground="#EF4444" FontSize="12" Margin="0,0,3,0"/>
-                                    <TextBlock Text="Clear" FontSize="9.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
-                                </StackPanel>
-                            </Border>
-                        </UniformGrid>
-                    </StackPanel>
-                </Grid>
-            </Border>
 
             <!-- Floating Overflow Menu Popup -->
             <Popup x:Name="OverflowPopup" PlacementTarget="{x:Reference MoreBtn}" 
@@ -557,14 +490,14 @@
                             <ui:Button.Icon><ui:SymbolIcon Symbol="PinOff24" Foreground="#F59E0B"/></ui:Button.Icon>
                         </ui:Button>
 
-                        <!-- Utils Button -->
-                        <ui:Button x:Name="UtilsToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="UtilsToolbar_Click" ToolTip="Quick Utilities" Margin="0,0,4,0">
+                        <!-- Shortcuts Button -->
+                        <ui:Button x:Name="ShortcutsToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ShortcutsBtn_Click" ToolTip="Text Shortcuts" Margin="0,0,4,0">
                             <ui:Button.Resources>
-                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#280EA5E9"/>
-                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#600EA5E9"/>
-                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#7DD3FC"/>
+                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
+                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
+                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#C4B5FD"/>
                             </ui:Button.Resources>
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="Apps24" /></ui:Button.Icon>
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Rocket24" /></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Clear Shelf Button -->
@@ -1951,7 +1884,6 @@
             </Grid.RenderTransform>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>  <!-- Notes header -->
-                <RowDefinition Height="Auto"/>  <!-- Notes search bar (inline, hidden by default) -->
                 <RowDefinition Height="*"/>     <!-- Content area -->
             </Grid.RowDefinitions>
 
@@ -1964,7 +1896,6 @@
                         <ColumnDefinition Width="Auto"/> <!-- Back -->
                         <ColumnDefinition Width="Auto"/> <!-- Day label -->
                         <ColumnDefinition Width="*"/>    <!-- Spacer -->
-                        <ColumnDefinition Width="Auto"/> <!-- Search -->
                         <ColumnDefinition Width="Auto"/> <!-- Mode toggle -->
                         <ColumnDefinition Width="Auto"/> <!-- Add -->
                     </Grid.ColumnDefinitions>
@@ -1982,65 +1913,24 @@
                                    Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
 
-                    <!-- Search notes -->
-                    <Border Grid.Column="3" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesSearchToggle_Click" Padding="6,3" Margin="0,0,4,0"
-                            Background="#14FFFFFF" BorderBrush="#18FFFFFF" BorderThickness="1" ToolTip="Search Notes">
-                        <ui:SymbolIcon Symbol="Search24" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="13"/>
-                    </Border>
-
                     <!-- Mode toggle: Bullets ↔ Freeform -->
-                    <Border Grid.Column="4" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesModeToggle_Click" Padding="8,3" Margin="0,0,4,0"
+                    <Border Grid.Column="3" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesModeToggle_Click" Padding="8,3" Margin="0,0,4,0"
                             Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1" ToolTip="Toggle Bullets / Freeform">
                         <TextBlock x:Name="NotesModeToggleText" Text="📄 Freeform" FontSize="10" FontWeight="SemiBold" 
                                    Foreground="#C4B5FD" VerticalAlignment="Center"/>
                     </Border>
 
                     <!-- Add bullet -->
-                    <Border Grid.Column="5" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesAddBullet_Click" Padding="6,3"
+                    <Border Grid.Column="4" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesAddBullet_Click" Padding="6,3"
                             Background="#208B5CF6" BorderBrush="#408B5CF6" BorderThickness="1" ToolTip="Add Bullet">
                         <ui:SymbolIcon Symbol="Add24" Foreground="#8B5CF6" FontSize="13"/>
                     </Border>
-                </Grid>
-            </Border>
 
-            <!-- ═══ NOTES SEARCH BAR (inline, hidden by default) ═══ -->
-            <Border x:Name="NotesSearchBar" Grid.Row="1" CornerRadius="8" Padding="6,3" Margin="0,0,0,6" Visibility="Collapsed" Opacity="0"
-                    Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
-                    BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
-                    <ui:SymbolIcon Grid.Column="0" Symbol="Search24" Foreground="#8B5CF6" FontSize="13" Margin="4,0,6,0" VerticalAlignment="Center"/>
-                    <TextBox x:Name="NotesSearchBox" Grid.Column="1" FontSize="11.5" Background="Transparent" BorderThickness="0" 
-                             Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
-                             CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Padding="2,1" VerticalAlignment="Center"
-                             TextChanged="NotesSearchBox_TextChanged" PreviewKeyDown="NotesSearchBox_PreviewKeyDown">
-                        <TextBox.Style>
-                            <Style TargetType="TextBox">
-                                <Setter Property="Template">
-                                    <Setter.Value>
-                                        <ControlTemplate TargetType="TextBox">
-                                            <Border Background="Transparent" Padding="{TemplateBinding Padding}">
-                                                <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
-                                            </Border>
-                                        </ControlTemplate>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </TextBox.Style>
-                    </TextBox>
-                    <Border Grid.Column="2" CornerRadius="5" Cursor="Hand" MouseLeftButtonDown="NotesSearchToggle_Click" Padding="4,2" Margin="2,0,0,0"
-                            Background="#14FFFFFF" BorderBrush="#18FFFFFF" BorderThickness="1">
-                        <ui:SymbolIcon Symbol="Dismiss12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="10"/>
-                    </Border>
                 </Grid>
             </Border>
 
             <!-- ═══ MAIN CONTENT: SIDEBAR + NOTEPAD ═══ -->
-            <Grid Grid.Row="2">
+            <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/> <!-- Thin date sidebar -->
                     <ColumnDefinition Width="*"/>    <!-- Content -->
