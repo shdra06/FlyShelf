@@ -141,25 +141,25 @@ namespace FlyShelf
                 SearchToggleBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
             }
             
-            // Clear the CollectionView filter to show all items again
+            // Clear the CollectionView filter only if no category filter is active
             var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems) as ListCollectionView;
             if (view != null)
             {
-                view.Filter = null;
+                if (_activeCategoryFilter == null)
+                {
+                    view.Filter = null;
+                }
+                else
+                {
+                    // Reapply the active category filter to maintain persistence
+                    ReapplyActiveFilters();
+                }
                 view.CustomSort = null;
             }
             _viewModel.IsSearchActive = false;
             
             // Also close utilities bar!
             if (_isUtilsBarActive) ToggleUtilsBar(false);
-
-            // Also clear any active category filter
-            _activeCategoryFilter = null;
-            if (_isFilterBarActive) ToggleFilterBar(false);
-            if (SortFilterBtn != null)
-            {
-                SortFilterBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
-            }
 
             // Move focus back to the list view
             ShelfListView.Focus();

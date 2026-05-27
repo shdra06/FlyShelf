@@ -191,11 +191,18 @@ namespace FlyShelf
                 }
             };
 
-            // Restore keyboard focus to ListView after window is moved/repositioned
+            // Restore keyboard focus to ListView or Notes textbox after window is moved/repositioned
             this.Activated += (s, e) =>
             {
                 // Skip re-focus if a topmost child window (QuickLook) is active — prevents infinite activation loop
                 if (System.Windows.Application.Current.Windows.OfType<Window>().Any(w => w.Topmost && w != this && w.IsActive)) return;
+
+                if (_isNotesActive)
+                {
+                    FocusNotesActiveTextBox();
+                    return;
+                }
+
                 // Debounce: only re-focus if the ListView isn't already keyboard-focused
                 if (!ShelfListView.IsKeyboardFocusWithin)
                 {
@@ -269,13 +276,16 @@ namespace FlyShelf
                 }
                 else if (e.Action == NotifyCollectionChangedAction.Remove)
                 {
-                    // For removals, just auto-dismiss merge state if needed, but do NOT refresh the view to allow smooth native WPF slide transitions!
+                    // For removals, auto-dismiss merge state if needed and reapply active filters to ensure persistence
                     Dispatcher.InvokeAsync(() =>
                     {
                         if (MergePdfToolbarBtn.Visibility == Visibility.Visible)
                         {
                             DismissMergeState();
                         }
+
+                        // Reapply active category/search filters to keep the filtered view persistent after deleting an item
+                        ReapplyActiveFilters();
                     }, System.Windows.Threading.DispatcherPriority.Background);
                 }
             };
@@ -399,6 +409,18 @@ namespace FlyShelf
                     }
                 }
                 catch { }
+
+                // Notes Mode Alt+Tab/Restore un-minimize handling
+                if (this.WindowState == WindowState.Normal && _isNotesActive)
+                {
+                    this.Opacity = 1;
+                    _isCurrentlySummoned = true;
+                    this.Activate();
+                    this.Topmost = true;
+                    
+                    // Re-focus the active text box in the notes panel
+                    FocusNotesActiveTextBox();
+                }
             };
 
             // Launch the taskbar-embedded widget
@@ -802,8 +824,18 @@ namespace FlyShelf
         {
             _isCurrentlySummoned = false;
             _isEdgeLocked = false;
-            this.Left = -20000;
-            this.Top = -20000;
+
+            if (_isNotesActive)
+            {
+                // Instead of moving offscreen, minimize the window so it remains in Alt+Tab list as requested
+                this.Opacity = 1;
+                this.WindowState = WindowState.Minimized;
+            }
+            else
+            {
+                this.Left = -20000;
+                this.Top = -20000;
+            }
         }
     }
 }

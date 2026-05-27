@@ -5,7 +5,9 @@
 // ---------------------------------------------------------------
 using FlyShelf.Classes;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -23,6 +25,10 @@ namespace FlyShelf
         private bool _isNotesLoaded = false;
         private NoteDay? _selectedNoteDay = null;
         private bool _isNotesSearchActive = false;
+        private Brush? _originalHeaderBg = null;
+        private static readonly SolidColorBrush _notesHeaderBrush = new(Color.FromRgb(0x1A, 0x1A, 0x2E));
+        private TextBox? _lastFocusedBulletTextBox = null;
+        private DateTime _lastBulletAddedTime = DateTime.MinValue;
 
         // ═══════════════════════════════════════════════════════════
         // TOGGLE NOTES PANEL
@@ -59,13 +65,25 @@ namespace FlyShelf
 
             _isNotesActive = true;
 
-            // Activate window for keyboard input
-            this.Activate();
+            // Update window activation style dynamically so clicking it works
+            UpdateWindowActivationStyle();
+
+            // ─── FOCUS FIX: Force-activate and topmost-cycle to grab OS focus ───
+            ActivateNotesWindow();
 
             // Hide clipboard, show notes
             ShelfListView.Visibility = Visibility.Collapsed;
             EmptyStatePanel.Visibility = Visibility.Collapsed;
             NotesPanel.Visibility = Visibility.Visible;
+
+            // ─── HEADER: Match the opaque notes dark theme ───
+            if (_originalHeaderBg == null)
+                _originalHeaderBg = HeaderAndFiltersStack.Background;
+            HeaderAndFiltersStack.Background = _notesHeaderBrush;
+            // Also apply ClearType hints to the header while notes are active
+            TextOptions.SetTextFormattingMode(HeaderAndFiltersStack, TextFormattingMode.Display);
+            TextOptions.SetTextRenderingMode(HeaderAndFiltersStack, TextRenderingMode.ClearType);
+            RenderOptions.SetClearTypeHint(HeaderAndFiltersStack, ClearTypeHint.Enabled);
 
             // Highlight the notes button
             NotesToggleBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x8B, 0x5C, 0xF6));
@@ -83,15 +101,141 @@ namespace FlyShelf
             SelectNoteDay(today);
         }
 
+        /// <summary>
+        /// Force the MainWindow to become the active foreground window.
+        /// This is critical because FlyShelf uses ShowActivated="False" and is normally
+        /// a non-activating overlay. Without this, typing may go to the previously focused app.
+        /// </summary>
+        private void ActivateNotesWindow()
+        {
+            // Step 1: Activate the WPF window (requests OS focus)
+            this.Activate();
+
+            // Step 2: Temporarily toggle Topmost to force Win32 SetForegroundWindow
+            if (!this.Topmost)
+            {
+                this.Topmost = true;
+                this.Topmost = false;
+            }
+
+            // Step 3: Set keyboard focus to the notes panel itself
+            this.Focus();
+        }
+
+        /// <summary>
+        /// Activates the WPF window and brings it to the foreground without stealing keyboard
+        /// focus from child text elements that the user is trying to click on.
+        /// </summary>
+        private void ActivateWindowWithoutStealingFocus()
+        {
+            if (!this.IsActive)
+            {
+                this.Activate();
+                if (!this.Topmost)
+                {
+                    this.Topmost = true;
+                    this.Topmost = false;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Updates the WS_EX_NOACTIVATE style dynamically based on the notes panel state.
+        /// When in notes mode, we remove WS_EX_NOACTIVATE so clicking the window activates it.
+        /// When not in notes mode, we add it back so it stays a non-activating overlay.
+        /// </summary>
+        private void UpdateWindowActivationStyle()
+        {
+            var helper = new System.Windows.Interop.WindowInteropHelper(this);
+            if (helper.Handle != IntPtr.Zero)
+            {
+                int exStyle = GetWindowLong(helper.Handle, GWL_EXSTYLE);
+                if (_isNotesActive)
+                {
+                    // Remove WS_EX_NOACTIVATE
+                    SetWindowLong(helper.Handle, GWL_EXSTYLE, exStyle & ~WS_EX_NOACTIVATE);
+                }
+                else
+                {
+                    // Add WS_EX_NOACTIVATE back
+                    SetWindowLong(helper.Handle, GWL_EXSTYLE, exStyle | WS_EX_NOACTIVATE);
+                }
+
+                // Force frame to update style changes immediately
+                Classes.NativeMethods.SetWindowPos(
+                    helper.Handle,
+                    0, 0, 0, 0, 0,
+                    Classes.NativeMethods.SWP_NOMOVE |
+                    Classes.NativeMethods.SWP_NOSIZE |
+                    Classes.NativeMethods.SWP_NOZORDER |
+                    Classes.NativeMethods.SWP_NOACTIVATE |
+                    0x0020 // SWP_FRAMECHANGED
+                );
+            }
+        }
+
+        /// <summary>
+        /// Restores keyboard focus to the active text field inside the notes panel.
+        /// </summary>
+        private void FocusNotesActiveTextBox()
+        {
+            if (_selectedNoteDay == null) return;
+
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (_selectedNoteDay.IsFreeformMode)
+                {
+                    NotesFreeformBox.Focus();
+                    Keyboard.Focus(NotesFreeformBox);
+                }
+                else
+                {
+                    // Focus last focused bullet TextBox if it's still valid
+                    if (_lastFocusedBulletTextBox != null && _lastFocusedBulletTextBox.IsLoaded && _lastFocusedBulletTextBox.IsVisible)
+                    {
+                        _lastFocusedBulletTextBox.Focus();
+                        Keyboard.Focus(_lastFocusedBulletTextBox);
+                    }
+                    else if (_selectedNoteDay.Bullets.Count > 0)
+                    {
+                        // Fallback: focus first bullet's TextBox
+                        var firstBullet = _selectedNoteDay.Bullets.First();
+                        var container = NotesBulletList.ItemContainerGenerator.ContainerFromItem(firstBullet);
+                        if (container is ContentPresenter cp)
+                        {
+                            var tb = FindVisualChild<TextBox>(cp, "NoteBulletContentBox");
+                            if (tb != null)
+                            {
+                                tb.Focus();
+                                Keyboard.Focus(tb);
+                            }
+                        }
+                    }
+                }
+            }, System.Windows.Threading.DispatcherPriority.Input);
+        }
+
         private void CloseNotesPanel()
         {
             _isNotesActive = false;
+
+            // Restore non-activating window style
+            UpdateWindowActivationStyle();
+
+            // Clear last focused bullet textbox reference
+            _lastFocusedBulletTextBox = null;
 
             // Save before closing
             NoteManager.SaveNow();
 
             // Reset button color
             NotesToggleBtn.Foreground = (Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
+
+            // ─── HEADER: Restore original transparent/Mica background ───
+            HeaderAndFiltersStack.Background = _originalHeaderBg ?? Brushes.Transparent;
+            TextOptions.SetTextFormattingMode(HeaderAndFiltersStack, TextFormattingMode.Ideal);
+            TextOptions.SetTextRenderingMode(HeaderAndFiltersStack, TextRenderingMode.Auto);
+            RenderOptions.SetClearTypeHint(HeaderAndFiltersStack, ClearTypeHint.Auto);
 
             // Animate out
             var fadeAnim = new DoubleAnimation(1, 0, new Duration(TimeSpan.FromMilliseconds(150)));
@@ -112,6 +256,20 @@ namespace FlyShelf
         private void NotesBack_Click(object sender, MouseButtonEventArgs e)
         {
             CloseNotesPanel();
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // FOCUS CAPTURE: Clicking anywhere in notes panel activates window
+        // ═══════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// PreviewMouseDown on the entire NotesPanel grid.
+        /// Ensures the window captures OS focus when user clicks ANYWHERE inside notes.
+        /// Without this, keyboard input may still go to the previously focused app.
+        /// </summary>
+        private void NotesPanel_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            ActivateWindowWithoutStealingFocus();
         }
 
         // ═══════════════════════════════════════════════════════════
@@ -139,17 +297,26 @@ namespace FlyShelf
             NotesBulletList.ItemsSource = day.Bullets;
             NotesFreeformBox.Text = day.FreeformContent ?? "";
 
+            // Bind freeform images
+            NotesFreeformImageList.ItemsSource = day.FreeformImages;
+
             // Show correct mode
             if (day.IsFreeformMode)
             {
                 NotesBulletList.Visibility = Visibility.Collapsed;
-                NotesFreeformBox.Visibility = Visibility.Visible;
+                NotesFreeformArea.Visibility = Visibility.Visible;
                 NotesModeToggleText.Text = "● Bullets";
+                // Defer focus to freeform text box
+                Dispatcher.InvokeAsync(() =>
+                {
+                    NotesFreeformBox.Focus();
+                    Keyboard.Focus(NotesFreeformBox);
+                }, System.Windows.Threading.DispatcherPriority.Input);
             }
             else
             {
                 NotesBulletList.Visibility = Visibility.Visible;
-                NotesFreeformBox.Visibility = Visibility.Collapsed;
+                NotesFreeformArea.Visibility = Visibility.Collapsed;
                 NotesModeToggleText.Text = "📄 Freeform";
             }
 
@@ -178,6 +345,13 @@ namespace FlyShelf
         {
             if (_selectedNoteDay == null) return;
 
+            // Spam proof check: enforce 1 second cooldown
+            if ((DateTime.Now - _lastBulletAddedTime).TotalMilliseconds < 1000)
+            {
+                return;
+            }
+            _lastBulletAddedTime = DateTime.Now;
+
             var bullet = NoteManager.AddBullet(_selectedNoteDay);
 
             // Focus the new bullet's TextBox after render
@@ -186,7 +360,7 @@ namespace FlyShelf
                 var container = NotesBulletList.ItemContainerGenerator.ContainerFromItem(bullet);
                 if (container is ContentPresenter cp)
                 {
-                    var tb = FindVisualChild<TextBox>(cp);
+                    var tb = FindVisualChild<TextBox>(cp, "NoteBulletContentBox");
                     if (tb != null)
                     {
                         tb.Focus();
@@ -199,24 +373,25 @@ namespace FlyShelf
         private void NotesAddBullet_Click(object sender, MouseButtonEventArgs e)
         {
             if (_selectedNoteDay == null) return;
+            AddNewBulletAndFocus();
+        }
 
-            var bullet = NoteManager.AddBullet(_selectedNoteDay);
+        private void NoteBulletHeader_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            NoteManager.MarkDirty();
+        }
 
-            // Focus the new bullet's TextBox after render
-            Dispatcher.InvokeAsync(() =>
+        private void NoteBulletHeader_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (sender is TextBox tb && tb.DataContext is NoteBullet bullet)
             {
-                // Find the last item container and focus its TextBox
-                var container = NotesBulletList.ItemContainerGenerator.ContainerFromItem(bullet);
-                if (container is ContentPresenter cp)
+                if (e.Key == Key.Enter)
                 {
-                    var tb = FindVisualChild<TextBox>(cp);
-                    if (tb != null)
-                    {
-                        tb.Focus();
-                        Keyboard.Focus(tb);
-                    }
+                    e.Handled = true;
+                    // Move focus to the content textbox of the same bullet card
+                    tb.MoveFocus(new System.Windows.Input.TraversalRequest(System.Windows.Input.FocusNavigationDirection.Next));
                 }
-            }, System.Windows.Threading.DispatcherPriority.Background);
+            }
         }
 
         private void NoteBulletText_TextChanged(object sender, TextChangedEventArgs e)
@@ -226,8 +401,18 @@ namespace FlyShelf
 
         private void NoteBulletText_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            if (sender is TextBox tb && tb.DataContext is NoteBullet)
+            if (sender is TextBox tb && tb.DataContext is NoteBullet bullet)
             {
+                // Intercept Ctrl+V to handle image/file paste manually
+                if (e.Key == Key.V && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+                {
+                    if (HandleImagePasteForBullet(bullet))
+                    {
+                        e.Handled = true;
+                        return;
+                    }
+                }
+
                 // Shift+Enter → insert newline (AcceptsReturn handles this when true)
                 // Enter without Shift → add new bullet below
                 if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
@@ -236,6 +421,167 @@ namespace FlyShelf
                     AddNewBulletAndFocus();
                 }
             }
+        }
+
+        private bool AssignImageToBullet(NoteBullet bullet, string path, double width)
+        {
+            if (string.IsNullOrEmpty(bullet.ImagePath))
+            {
+                bullet.ImagePath = path;
+                bullet.ImageDisplayWidth = width;
+                NoteManager.MarkDirty();
+                return true;
+            }
+            else if (string.IsNullOrEmpty(bullet.ImagePath2))
+            {
+                bullet.ImagePath2 = path;
+                bullet.ImageDisplayWidth2 = width;
+                NoteManager.MarkDirty();
+                return true;
+            }
+            return false;
+        }
+
+        private bool HandleImagePasteForBullet(NoteBullet bullet)
+        {
+            try
+            {
+                IDataObject data = Clipboard.GetDataObject();
+                if (data == null) return false;
+
+                if (data.GetDataPresent(DataFormats.Bitmap) || 
+                    data.GetDataPresent(typeof(BitmapSource)) ||
+                    data.GetDataPresent("DeviceIndependentBitmap"))
+                {
+                    BitmapSource? img = null;
+                    if (data.GetDataPresent(DataFormats.Bitmap))
+                        img = data.GetData(DataFormats.Bitmap) as BitmapSource;
+                    if (img == null && data.GetDataPresent(typeof(BitmapSource)))
+                        img = data.GetData(typeof(BitmapSource)) as BitmapSource;
+                    if (img == null && data.GetDataPresent("DeviceIndependentBitmap"))
+                        img = Clipboard.GetImage();
+
+                    if (img != null)
+                    {
+                        string path = NoteManager.SaveImage(img);
+                        double width = Math.Min(img.PixelWidth, 140);
+                        return AssignImageToBullet(bullet, path, width);
+                    }
+                }
+                else if (data.GetDataPresent(DataFormats.FileDrop))
+                {
+                    var files = data.GetData(DataFormats.FileDrop) as string[];
+                    if (files != null && files.Length > 0)
+                    {
+                        foreach (string? f in files)
+                        {
+                            if (f != null && IsImageFile(f))
+                            {
+                                string destDir = NoteManager.GetImagesDirectory();
+                                string destFile = Path.Combine(destDir, $"note_{DateTime.Now:yyyyMMdd_HHmmss}_{Path.GetFileName(f)}");
+                                File.Copy(f, destFile, overwrite: true);
+                                return AssignImageToBullet(bullet, destFile, 140);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NOTES", $"HandleImagePasteForBullet error: {ex.Message}");
+            }
+            return false;
+        }
+
+        private void NotesFreeformBox_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            // Intercept Ctrl+V to handle image/file paste manually
+            if (e.Key == Key.V && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            {
+                if (HandleImagePasteForFreeform())
+                {
+                    e.Handled = true;
+                    return;
+                }
+            }
+        }
+
+        private bool HandleImagePasteForFreeform()
+        {
+            if (_selectedNoteDay == null) return false;
+            try
+            {
+                IDataObject data = Clipboard.GetDataObject();
+                if (data == null) return false;
+
+                if (data.GetDataPresent(DataFormats.Bitmap) || 
+                    data.GetDataPresent(typeof(BitmapSource)) ||
+                    data.GetDataPresent("DeviceIndependentBitmap"))
+                {
+                    BitmapSource? img = null;
+                    if (data.GetDataPresent(DataFormats.Bitmap))
+                        img = data.GetData(DataFormats.Bitmap) as BitmapSource;
+                    if (img == null && data.GetDataPresent(typeof(BitmapSource)))
+                        img = data.GetData(typeof(BitmapSource)) as BitmapSource;
+                    if (img == null && data.GetDataPresent("DeviceIndependentBitmap"))
+                        img = Clipboard.GetImage();
+
+                    if (img != null)
+                    {
+                        string path = NoteManager.SaveImage(img);
+                        var freeformImg = new FreeformImage
+                        {
+                            ImagePath = path,
+                            DisplayWidth = Math.Min(img.PixelWidth, 140)
+                        };
+                        _selectedNoteDay.FreeformImages.Add(freeformImg);
+                        NoteManager.MarkDirty();
+                        return true;
+                    }
+                }
+                else if (data.GetDataPresent(DataFormats.FileDrop))
+                {
+                    var files = data.GetData(DataFormats.FileDrop) as string[];
+                    if (files != null && files.Length > 0)
+                    {
+                        foreach (string? f in files)
+                        {
+                            if (f != null && IsImageFile(f))
+                            {
+                                string destDir = NoteManager.GetImagesDirectory();
+                                string destFile = Path.Combine(destDir, $"note_{DateTime.Now:yyyyMMdd_HHmmss}_{Path.GetFileName(f)}");
+                                File.Copy(f, destFile, overwrite: true);
+                                var freeformImg = new FreeformImage
+                                {
+                                    ImagePath = destFile,
+                                    DisplayWidth = 140
+                                };
+                                _selectedNoteDay.FreeformImages.Add(freeformImg);
+                                NoteManager.MarkDirty();
+                                return true;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NOTES", $"HandleImagePasteForFreeform error: {ex.Message}");
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// When a bullet TextBox gets focus, make sure the window is activated.
+        /// This fixes the ghost-typing issue where text goes to external app.
+        /// </summary>
+        private void NoteBulletText_GotFocus(object sender, RoutedEventArgs e)
+        {
+            if (sender is TextBox tb)
+            {
+                _lastFocusedBulletTextBox = tb;
+            }
+            ActivateWindowWithoutStealingFocus();
         }
 
         private void NoteBulletCollapse_Click(object sender, MouseButtonEventArgs e)
@@ -264,40 +610,47 @@ namespace FlyShelf
         {
             if (sender is TextBox tb && tb.DataContext is NoteBullet bullet)
             {
-                // Check for image data on clipboard
-                if (Clipboard.ContainsImage())
-                {
-                    e.CancelCommand(); // Cancel text paste
+                var dataObject = e.DataObject;
+                if (dataObject == null) return;
 
-                    var img = Clipboard.GetImage();
+                // Check for image data on clipboard
+                if (dataObject.GetDataPresent(DataFormats.Bitmap))
+                {
+                    var img = dataObject.GetData(DataFormats.Bitmap) as BitmapSource;
                     if (img != null)
                     {
                         string path = NoteManager.SaveImage(img);
-                        bullet.ImagePath = path;
-                        bullet.ImageDisplayWidth = Math.Min(img.PixelWidth, 280); // Fit within panel
-                        NoteManager.MarkDirty();
+                        double width = Math.Min(img.PixelWidth, 140);
+                        if (AssignImageToBullet(bullet, path, width))
+                        {
+                            e.CancelCommand(); // Cancel text paste
+                        }
                     }
                 }
                 // Check for image file path
-                else if (Clipboard.ContainsFileDropList())
+                else if (dataObject.GetDataPresent(DataFormats.FileDrop))
                 {
-                    var files = Clipboard.GetFileDropList();
-                    foreach (string? f in files)
+                    var files = dataObject.GetData(DataFormats.FileDrop) as string[];
+                    if (files != null && files.Length > 0)
                     {
-                        if (f != null && IsImageFile(f))
+                        foreach (string? f in files)
                         {
-                            e.CancelCommand();
-                            // Copy image to notes directory
-                            string destDir = NoteManager.GetImagesDirectory();
-                            string destFile = Path.Combine(destDir, $"note_{DateTime.Now:yyyyMMdd_HHmmss}_{Path.GetFileName(f)}");
-                            try
+                            if (f != null && IsImageFile(f))
                             {
-                                File.Copy(f, destFile, overwrite: true);
-                                bullet.ImagePath = destFile;
-                                NoteManager.MarkDirty();
+                                // Copy image to notes directory
+                                string destDir = NoteManager.GetImagesDirectory();
+                                string destFile = Path.Combine(destDir, $"note_{DateTime.Now:yyyyMMdd_HHmmss}_{Path.GetFileName(f)}");
+                                try
+                                {
+                                    File.Copy(f, destFile, overwrite: true);
+                                    if (AssignImageToBullet(bullet, destFile, 140))
+                                    {
+                                        e.CancelCommand(); // Cancel text paste
+                                    }
+                                }
+                                catch { }
+                                break; // Only first image
                             }
-                            catch { }
-                            break; // Only first image
                         }
                     }
                 }
@@ -322,6 +675,18 @@ namespace FlyShelf
             }
         }
 
+        private void NoteImageResize2_MouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is NoteBullet bullet)
+            {
+                double delta = e.Delta > 0 ? 20 : -20;
+                double newWidth = Math.Clamp(bullet.ImageDisplayWidth2 + delta, 60, 600);
+                bullet.ImageDisplayWidth2 = newWidth;
+                NoteManager.MarkDirty();
+                e.Handled = true;
+            }
+        }
+
         private void NoteImageRemove_Click(object sender, MouseButtonEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is NoteBullet bullet)
@@ -332,6 +697,47 @@ namespace FlyShelf
                 }
                 bullet.ImagePath = "";
                 NoteManager.MarkDirty();
+            }
+        }
+
+        private void NoteImageRemove2_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is NoteBullet bullet)
+            {
+                if (bullet.HasImage2)
+                {
+                    try { File.Delete(bullet.ImagePath2); } catch { }
+                }
+                bullet.ImagePath2 = "";
+                NoteManager.MarkDirty();
+            }
+        }
+
+        private void NoteImage_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is NoteBullet bullet && bullet.HasImage)
+            {
+                var virtualItem = new FlyShelf.ViewModels.ClipboardItem
+                {
+                    FilePath = bullet.ImagePath,
+                    ItemType = FlyShelf.ViewModels.ClipboardItemType.Image
+                };
+                ShowQuickLookForItem(virtualItem);
+                e.Handled = true;
+            }
+        }
+
+        private void NoteImage2_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is NoteBullet bullet && bullet.HasImage2)
+            {
+                var virtualItem = new FlyShelf.ViewModels.ClipboardItem
+                {
+                    FilePath = bullet.ImagePath2,
+                    ItemType = FlyShelf.ViewModels.ClipboardItemType.Image
+                };
+                ShowQuickLookForItem(virtualItem);
+                e.Handled = true;
             }
         }
 
@@ -349,19 +755,22 @@ namespace FlyShelf
             if (_selectedNoteDay.IsFreeformMode)
             {
                 NotesBulletList.Visibility = Visibility.Collapsed;
-                NotesFreeformBox.Visibility = Visibility.Visible;
+                NotesFreeformArea.Visibility = Visibility.Visible;
                 NotesModeToggleText.Text = "● Bullets";
-                // Focus freeform
+
+                // ─── FOCUS FIX: Activate window, then focus freeform box ───
+                ActivateNotesWindow();
                 Dispatcher.InvokeAsync(() =>
                 {
                     NotesFreeformBox.Focus();
                     Keyboard.Focus(NotesFreeformBox);
+                    NotesFreeformBox.CaretIndex = NotesFreeformBox.Text.Length;
                 }, System.Windows.Threading.DispatcherPriority.Input);
             }
             else
             {
                 NotesBulletList.Visibility = Visibility.Visible;
-                NotesFreeformBox.Visibility = Visibility.Collapsed;
+                NotesFreeformArea.Visibility = Visibility.Collapsed;
                 NotesModeToggleText.Text = "📄 Freeform";
             }
         }
@@ -375,6 +784,121 @@ namespace FlyShelf
             }
         }
 
+        /// <summary>
+        /// When freeform TextBox gets focus, force-activate the window.
+        /// </summary>
+        private void NotesFreeformBox_GotFocus(object sender, RoutedEventArgs e)
+        {
+            ActivateWindowWithoutStealingFocus();
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // FREEFORM IMAGE PASTE
+        // ═══════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Intercept paste in freeform TextBox — if clipboard has an image, save it and add
+        /// to the day's FreeformImages list instead of pasting text.
+        /// </summary>
+        private void NotesFreeformBox_Paste(object sender, DataObjectPastingEventArgs e)
+        {
+            if (_selectedNoteDay == null) return;
+            var dataObject = e.DataObject;
+            if (dataObject == null) return;
+
+            if (dataObject.GetDataPresent(DataFormats.Bitmap))
+            {
+                e.CancelCommand();
+
+                var img = dataObject.GetData(DataFormats.Bitmap) as BitmapSource;
+                if (img != null)
+                {
+                    string path = NoteManager.SaveImage(img);
+                    var freeformImg = new FreeformImage
+                    {
+                        ImagePath = path,
+                        DisplayWidth = Math.Min(img.PixelWidth, 140) // Nice and small default size
+                    };
+                    _selectedNoteDay.FreeformImages.Add(freeformImg);
+                    NoteManager.MarkDirty();
+                }
+            }
+            else if (dataObject.GetDataPresent(DataFormats.FileDrop))
+            {
+                var files = dataObject.GetData(DataFormats.FileDrop) as string[];
+                if (files != null && files.Length > 0)
+                {
+                    foreach (string? f in files)
+                    {
+                        if (f != null && IsImageFile(f))
+                        {
+                            e.CancelCommand();
+                            string destDir = NoteManager.GetImagesDirectory();
+                            string destFile = Path.Combine(destDir, $"note_{DateTime.Now:yyyyMMdd_HHmmss}_{Path.GetFileName(f)}");
+                            try
+                            {
+                                File.Copy(f, destFile, overwrite: true);
+                                var freeformImg = new FreeformImage
+                                {
+                                    ImagePath = destFile,
+                                    DisplayWidth = 140 // Nice and small default size
+                                };
+                                _selectedNoteDay.FreeformImages.Add(freeformImg);
+                                NoteManager.MarkDirty();
+                            }
+                            catch { }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Click on a freeform image → open in default system viewer.
+        /// </summary>
+        private void FreeformImage_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is FreeformImage fi && fi.HasImage)
+            {
+                var virtualItem = new FlyShelf.ViewModels.ClipboardItem
+                {
+                    FilePath = fi.ImagePath,
+                    ItemType = FlyShelf.ViewModels.ClipboardItemType.Image
+                };
+                ShowQuickLookForItem(virtualItem);
+                e.Handled = true;
+            }
+        }
+
+        /// <summary>
+        /// Mouse wheel on freeform image → resize.
+        /// </summary>
+        private void FreeformImageResize_MouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is FreeformImage fi)
+            {
+                double delta = e.Delta > 0 ? 20 : -20;
+                fi.DisplayWidth = Math.Clamp(fi.DisplayWidth + delta, 60, 600);
+                NoteManager.MarkDirty();
+                e.Handled = true;
+            }
+        }
+
+        /// <summary>
+        /// Remove a freeform image.
+        /// </summary>
+        private void FreeformImageRemove_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (_selectedNoteDay == null) return;
+            if (sender is FrameworkElement fe && fe.DataContext is FreeformImage fi)
+            {
+                if (fi.HasImage) { try { File.Delete(fi.ImagePath); } catch { } }
+                _selectedNoteDay.FreeformImages.Remove(fi);
+                NoteManager.MarkDirty();
+            }
+        }
+
         // ═══════════════════════════════════════════════════════════
         // NOTES SEARCH
         // ═══════════════════════════════════════════════════════════
@@ -384,7 +908,7 @@ namespace FlyShelf
             _isNotesSearchActive = !_isNotesSearchActive;
             if (_isNotesSearchActive)
             {
-                this.Activate();
+                ActivateNotesWindow();
                 NotesSearchBar.Visibility = Visibility.Visible;
 
                 // Animate in
@@ -428,7 +952,7 @@ namespace FlyShelf
             var displayItems = results.Select(r => new NoteSearchResult
             {
                 DateLabel = r.Day.DisplayDate,
-                Content = r.Bullet.Content,
+                Content = !string.IsNullOrEmpty(r.Bullet.Header) ? $"[{r.Bullet.Header}] {r.Bullet.Content}" : r.Bullet.Content,
                 Day = r.Day,
                 Bullet = r.Bullet
             }).ToList();

@@ -23,6 +23,13 @@ namespace FlyShelf.Classes
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
         
+        private string _header = "";
+        public string Header
+        {
+            get => _header;
+            set { if (_header != value) { _header = value; OnPropertyChanged(nameof(Header)); } }
+        }
+
         private string _content = "";
         public string Content
         {
@@ -52,6 +59,24 @@ namespace FlyShelf.Classes
         [JsonIgnore]
         public bool HasImage => !string.IsNullOrEmpty(_imagePath) && File.Exists(_imagePath);
 
+        private string _imagePath2 = "";
+        public string ImagePath2
+        {
+            get => _imagePath2;
+            set
+            {
+                if (_imagePath2 != value)
+                {
+                    _imagePath2 = value;
+                    OnPropertyChanged(nameof(ImagePath2));
+                    OnPropertyChanged(nameof(HasImage2));
+                }
+            }
+        }
+
+        [JsonIgnore]
+        public bool HasImage2 => !string.IsNullOrEmpty(_imagePath2) && File.Exists(_imagePath2);
+
         private bool _isCollapsed;
         public bool IsCollapsed
         {
@@ -67,6 +92,48 @@ namespace FlyShelf.Classes
         {
             get => _imageDisplayWidth;
             set { if (Math.Abs(_imageDisplayWidth - value) > 0.5) { _imageDisplayWidth = value; OnPropertyChanged(nameof(ImageDisplayWidth)); } }
+        }
+
+        private double _imageDisplayWidth2 = 200;
+        public double ImageDisplayWidth2
+        {
+            get => _imageDisplayWidth2;
+            set { if (Math.Abs(_imageDisplayWidth2 - value) > 0.5) { _imageDisplayWidth2 = value; OnPropertyChanged(nameof(ImageDisplayWidth2)); } }
+        }
+
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+
+    public class FreeformImage : INotifyPropertyChanged
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+
+        private string _imagePath = "";
+        public string ImagePath
+        {
+            get => _imagePath;
+            set
+            {
+                if (_imagePath != value)
+                {
+                    _imagePath = value;
+                    OnPropertyChanged(nameof(ImagePath));
+                    OnPropertyChanged(nameof(HasImage));
+                }
+            }
+        }
+
+        [JsonIgnore]
+        public bool HasImage => !string.IsNullOrEmpty(_imagePath) && File.Exists(_imagePath);
+
+        private double _displayWidth = 200;
+        public double DisplayWidth
+        {
+            get => _displayWidth;
+            set { if (Math.Abs(_displayWidth - value) > 0.5) { _displayWidth = value; OnPropertyChanged(nameof(DisplayWidth)); } }
         }
 
         public DateTime CreatedAt { get; set; } = DateTime.Now;
@@ -108,6 +175,14 @@ namespace FlyShelf.Classes
         {
             get => _freeformContent;
             set { if (_freeformContent != value) { _freeformContent = value; OnPropertyChanged(nameof(FreeformContent)); } }
+        }
+
+        /// <summary>Images embedded in freeform mode. Shown in a strip below the text area.</summary>
+        private ObservableCollection<FreeformImage> _freeformImages = new();
+        public ObservableCollection<FreeformImage> FreeformImages
+        {
+            get => _freeformImages;
+            set { _freeformImages = value; OnPropertyChanged(nameof(FreeformImages)); }
         }
 
         private bool _isFreeformMode;
@@ -336,7 +411,9 @@ namespace FlyShelf.Classes
             {
                 foreach (var bullet in day.Bullets)
                 {
-                    if (!string.IsNullOrEmpty(bullet.Content) && bullet.Content.ToLowerInvariant().Contains(q))
+                    bool matchContent = !string.IsNullOrEmpty(bullet.Content) && bullet.Content.ToLowerInvariant().Contains(q);
+                    bool matchHeader = !string.IsNullOrEmpty(bullet.Header) && bullet.Header.ToLowerInvariant().Contains(q);
+                    if (matchContent || matchHeader)
                     {
                         results.Add((day, bullet));
                     }
