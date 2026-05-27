@@ -503,7 +503,7 @@
                     <StackPanel Orientation="Horizontal">
                         <!-- Emoji Picker -->
                         <ui:Button x:Name="EmojiBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,4,0"
-                                   Background="#22EAB308" BorderBrush="#35EAB308">
+                                   Background="#22EAB308" BorderBrush="#35EAB308" Padding="0">
                             <ui:Button.Resources>
                                 <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#38EAB308"/>
                                 <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#75EAB308"/>
@@ -512,9 +512,9 @@
                                 <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#1AEAB308"/>
                                 <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#30EAB308"/>
                             </ui:Button.Resources>
-                            <emoji:TextBlock Text="😊" FontSize="19" 
+                            <emoji:TextBlock Text="😊" FontSize="16" 
                                              VerticalAlignment="Center" HorizontalAlignment="Center"
-                                             Margin="0,-2,0,0"/>
+                                             Margin="0,-1,0,0"/>
                         </ui:Button>
 
                         <!-- Merge PDF button — hidden by default, replaces emoji space when PDFs selected -->
