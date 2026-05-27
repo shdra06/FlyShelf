@@ -19,6 +19,7 @@ namespace FlyShelf
         private bool _isSearchActive = false;
         private bool _isFilterBarActive = false;
         private bool _isUtilsBarActive = false;
+        private DateTime _overflowPopupLastClosed = DateTime.MinValue;
 
         private void SearchToggle_Click(object sender, RoutedEventArgs e)
         {
@@ -444,12 +445,26 @@ namespace FlyShelf
             }
         }
 
+        private void OverflowPopup_Closed(object sender, EventArgs e)
+        {
+            _overflowPopupLastClosed = DateTime.Now;
+        }
+
         private void MoreBtn_Click(object sender, RoutedEventArgs e)
         {
             if (OverflowPopup != null)
             {
+                // If the popup was closed very recently (within 200ms), it means
+                // the user clicked the MoreBtn to close it, and the StaysOpen="False"
+                // behavior triggered a close before this click handler fired.
+                // In that case, we want it to stay closed.
+                if ((DateTime.Now - _overflowPopupLastClosed).TotalMilliseconds < 200)
+                {
+                    return;
+                }
+
                 OverflowPopup.PlacementTarget = MoreBtn;
-                OverflowPopup.IsOpen = !OverflowPopup.IsOpen;
+                OverflowPopup.IsOpen = true;
             }
         }
 

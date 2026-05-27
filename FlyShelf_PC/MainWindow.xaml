@@ -26,27 +26,26 @@
             </ResourceDictionary.MergedDictionaries>
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
 
-            <!-- Premium Glassmorphism Style for Header Toolbar Buttons -->
             <Style x:Key="PremiumHeaderButtonStyle" TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                <Setter Property="Background" Value="#16FFFFFF"/>
-                <Setter Property="BorderBrush" Value="#20FFFFFF"/>
+                <Setter Property="Background" Value="#14FFFFFF"/>
+                <Setter Property="BorderBrush" Value="#18FFFFFF"/>
                 <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="Foreground" Value="#E5FFFFFF"/>
-                <Setter Property="Padding" Value="9,6"/>
-                <Setter Property="CornerRadius" Value="8"/>
-                <Setter Property="Height" Value="32"/>
+                <Setter Property="Foreground" Value="#CCFFFFFF"/>
+                <Setter Property="Padding" Value="8,6"/>
+                <Setter Property="CornerRadius" Value="10"/>
+                <Setter Property="Height" Value="34"/>
                 <Setter Property="Width" Value="38"/>
                 <Setter Property="HorizontalContentAlignment" Value="Center"/>
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
                 <Setter Property="Focusable" Value="False"/>
                 <Style.Resources>
-                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#2AFFFFFF"/>
-                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#40FFFFFF"/>
-                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FFFFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#22FFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#35FFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#F0FFFFFF"/>
                     
-                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#12FFFFFF"/>
-                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#30FFFFFF"/>
-                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#DDFFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#0CFFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#25FFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#BBFFFFFF"/>
                 </Style.Resources>
             </Style>
 
@@ -479,41 +478,86 @@
             <!-- Floating Overflow Menu Popup -->
             <Popup x:Name="OverflowPopup" PlacementTarget="{x:Reference MoreBtn}" 
                    Placement="Bottom" StaysOpen="False" AllowsTransparency="True" 
-                   VerticalOffset="6" HorizontalOffset="-72" PopupAnimation="Fade">
-                <Border CornerRadius="12" Padding="6,5" 
-                        Background="#EE1A1A1E" 
-                        BorderBrush="#25FFFFFF" BorderThickness="1.5">
+                   VerticalOffset="8" HorizontalOffset="-72" PopupAnimation="Fade"
+                   Closed="OverflowPopup_Closed">
+                <!-- Floating Glassmorphism Container with Soft Accent Glow -->
+                <Border CornerRadius="12" Padding="6,5" BorderThickness="1.5">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                            <GradientStop Color="#EC1E1A33" Offset="0.0"/>
+                            <GradientStop Color="#E5121020" Offset="0.6"/>
+                            <GradientStop Color="#DC08070F" Offset="1.0"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <Border.BorderBrush>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#858184FF" Offset="0.0"/> <!-- Accent light leak top-left -->
+                            <GradientStop Color="#2CFFFFFF" Offset="0.4"/>
+                            <GradientStop Color="#12FFFFFF" Offset="0.7"/>
+                            <GradientStop Color="#408184FF" Offset="1.0"/> <!-- Accent light leak bottom-right -->
+                        </LinearGradientBrush>
+                    </Border.BorderBrush>
                     <Border.Effect>
-                        <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.4" Color="Black"/>
+                        <DropShadowEffect BlurRadius="25" ShadowDepth="3" Opacity="0.45" Color="{DynamicResource SystemAccentColor}"/>
                     </Border.Effect>
                     <StackPanel Orientation="Horizontal">
                         <!-- Emoji Picker -->
                         <ui:Button x:Name="EmojiBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,4,0">
+                            <ui:Button.Resources>
+                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28A855F7"/>
+                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#60A855F7"/>
+                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#D8B4FE"/>
+                            </ui:Button.Resources>
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Emoji24" /></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Merge PDF button — hidden by default, replaces emoji space when PDFs selected -->
                         <ui:Button x:Name="MergePdfToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,4,0" Background="#30EF4444" Foreground="#EF4444" BorderBrush="#50EF4444">
+                            <ui:Button.Resources>
+                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28EF4444"/>
+                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#60EF4444"/>
+                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FECDD3"/>
+                            </ui:Button.Resources>
                             <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24" Foreground="#EF4444"/></ui:Button.Icon>
                         </ui:Button>
                         
                         <!-- Global Sync Toggle -->
                         <ui:Button x:Name="SyncToolbarBtn" Style="{StaticResource ToolbarSyncButtonStyle}" Click="ToggleGlobalSync_Click" ToolTip="Toggle All Sync" Margin="0,0,4,0">
+                            <ui:Button.Resources>
+                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#2810B981"/>
+                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#6010B981"/>
+                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#A7F3D0"/>
+                            </ui:Button.Resources>
                             <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowSync24" Filled="True"/></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Unpin toolbar button — hidden by default, replaces sync space when pinned items selected -->
                         <ui:Button x:Name="UnpinToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="UnpinSelectedBtn_Click" ToolTip="Unpin Selected Items" Margin="0,0,4,0" Background="#30F59E0B" Foreground="#F59E0B" BorderBrush="#50F59E0B">
+                            <ui:Button.Resources>
+                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28F59E0B"/>
+                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#60F59E0B"/>
+                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FDE68A"/>
+                            </ui:Button.Resources>
                             <ui:Button.Icon><ui:SymbolIcon Symbol="PinOff24" Foreground="#F59E0B"/></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Utils Button -->
                         <ui:Button x:Name="UtilsToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="UtilsToolbar_Click" ToolTip="Quick Utilities" Margin="0,0,4,0">
+                            <ui:Button.Resources>
+                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#280EA5E9"/>
+                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#600EA5E9"/>
+                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#7DD3FC"/>
+                            </ui:Button.Resources>
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Apps24" /></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Open Settings Hub -->
                         <ui:Button x:Name="OpenSettingsBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="OpenApp_Click" ToolTip="Open Hub (Settings)">
+                            <ui:Button.Resources>
+                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28F59E0B"/>
+                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#60F59E0B"/>
+                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FDE68A"/>
+                            </ui:Button.Resources>
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Settings24" /></ui:Button.Icon>
                         </ui:Button>
                     </StackPanel>
@@ -883,6 +927,64 @@
                                     </ui:Button>
                                 </Border>
 
+                                <!-- ═══ Convert to .zip (Group/Folder only, no zip yet) ═══ -->
+                                <Border Margin="0,0,2,0" Padding="0">
+                                    <Border.Style>
+                                        <Style TargetType="Border" BasedOn="{StaticResource ActionPillStyle}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding ItemType}" Value="Group"/>
+                                                        <Condition Binding="{Binding HasZipArchive}" Value="False"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </MultiDataTrigger>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding ItemType}" Value="Folder"/>
+                                                        <Condition Binding="{Binding HasZipArchive}" Value="False"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#06B6D4" ToolTip="Convert to .zip"
+                                               PreviewMouseLeftButtonDown="ConvertToZip_Click">
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="FolderZip24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                    </ui:Button>
+                                </Border>
+
+                                <!-- ═══ Sync via LAN (Group/Folder with zip ready) ═══ -->
+                                <Border Margin="0,0,2,0" Padding="0">
+                                    <Border.Style>
+                                        <Style TargetType="Border" BasedOn="{StaticResource ActionPillStyle}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding ItemType}" Value="Group"/>
+                                                        <Condition Binding="{Binding HasZipArchive}" Value="True"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </MultiDataTrigger>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding ItemType}" Value="Folder"/>
+                                                        <Condition Binding="{Binding HasZipArchive}" Value="True"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#22C55E" ToolTip="Sync via LAN"
+                                               PreviewMouseLeftButtonDown="SyncZipLan_Click">
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Send24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                    </ui:Button>
+                                </Border>
+
                                 <!-- ═══ Convert Image to PDF ═══ -->
                                 <Border Margin="0,0,2,0" Padding="0">
                                     <Border.Style>
@@ -948,6 +1050,24 @@
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#0EA5E9" ToolTip="Sanitize URL (Remove trackers)"
                                                PreviewMouseLeftButtonDown="SanitizeUrlSpecific_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Shield24" FontSize="14"/></ui:Button.Icon>
+                                    </ui:Button>
+                                </Border>
+
+                                <!-- ═══ Protect/Make Password (Text only) ═══ -->
+                                <Border Margin="0,0,2,0" Padding="0">
+                                    <Border.Style>
+                                        <Style TargetType="Border" BasedOn="{StaticResource ActionPillStyle}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding CanConvertToPassword}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#F59E0B" ToolTip="Protect as Password"
+                                               PreviewMouseLeftButtonDown="MakePasswordSpecific_Click">
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Key24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
 
@@ -1167,15 +1287,53 @@
                                             </Setter.Value>
                                         </Setter>
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding IsPdfPreview}" Value="True">
+                                            <!-- Show on hover for PDF -->
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsPdfPreview}" Value="True"/>
+                                                    <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding IsDocPreview}" Value="True">
+                                            </MultiDataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsPdfPreview}" Value="True"/>
+                                                    <Condition Binding="{Binding IsCheckedForMerge}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
-                                            <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
+                                            </MultiDataTrigger>
+
+                                            <!-- Show on hover for Document -->
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsDocPreview}" Value="True"/>
+                                                    <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
+                                            </MultiDataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsDocPreview}" Value="True"/>
+                                                    <Condition Binding="{Binding IsCheckedForMerge}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </MultiDataTrigger>
+
+                                            <!-- Show on hover for Image -->
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsImagePreview}" Value="True"/>
+                                                    <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </MultiDataTrigger>
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsImagePreview}" Value="True"/>
+                                                    <Condition Binding="{Binding IsCheckedForMerge}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </MultiDataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Button.Style>
