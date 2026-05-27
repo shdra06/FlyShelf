@@ -210,11 +210,12 @@ namespace FlyShelf.Classes
 
                 // cloudflared.exe binary check
                 sb.AppendLine("── CLOUDFLARED BINARY ──");
-                string exePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "agent", "cloudflared.exe");
+                string exePath = CloudflareDaemon.GetCloudflaredExePath();
+                bool isBundled = exePath.StartsWith(AppContext.BaseDirectory, StringComparison.OrdinalIgnoreCase);
                 if (File.Exists(exePath))
                 {
                     var fi = new FileInfo(exePath);
-                    sb.AppendLine($"  Path:     {exePath}");
+                    sb.AppendLine($"  Path:     {exePath}{(isBundled ? " (Bundled)" : " (AppData)")}");
                     sb.AppendLine($"  Size:     {fi.Length / 1048576.0:F1} MB");
                     sb.AppendLine($"  Modified: {fi.LastWriteTime:yyyy-MM-dd HH:mm:ss}");
                     sb.AppendLine($"  Valid:    {fi.Length > 10_000_000}");

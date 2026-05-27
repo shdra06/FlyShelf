@@ -48,6 +48,13 @@ namespace FlyShelf.Classes
             UpdateCheckCompleted?.Invoke(false);
             return false;
 #else
+            if (StartupHelper.IsPackaged())
+            {
+                StatusChanged?.Invoke("Updates are managed by the Microsoft Store.");
+                UpdateCheckCompleted?.Invoke(false);
+                return false;
+            }
+
             try
             {
                 StatusChanged?.Invoke("Checking for updates...");
@@ -210,6 +217,12 @@ namespace FlyShelf.Classes
             StatusChanged?.Invoke("Updates are managed by the Microsoft Store.");
             return false;
 #else
+            if (StartupHelper.IsPackaged())
+            {
+                StatusChanged?.Invoke("Updates are managed by the Microsoft Store.");
+                return false;
+            }
+
             if (string.IsNullOrEmpty(DownloadUrl))
             {
                 StatusChanged?.Invoke("No download URL available.");
@@ -509,6 +522,12 @@ namespace FlyShelf.Classes
             StatusChanged?.Invoke("Updates are managed by the Microsoft Store.");
             return;
 #else
+            if (StartupHelper.IsPackaged())
+            {
+                StatusChanged?.Invoke("Updates are managed by the Microsoft Store.");
+                return;
+            }
+
             string tempDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Update");
             string tempExePath = Path.Combine(tempDir, "FlyShelf_new.exe");
 

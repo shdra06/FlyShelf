@@ -31,6 +31,7 @@ namespace FlyShelf.Windows
         private int _cachedFreeZoneWidth = -1;
         private DateTime _lastFreeZoneScan = DateTime.MinValue;
         private bool _isClosed = false;
+        private bool _isFloatingMode = false; // True when taskbar auto-hide is on — widget floats independently
 
         // Position stability — avoid redundant SetWindowPos calls that cause flicker
         private int _lastWidgetLeft = -1;
@@ -42,6 +43,9 @@ namespace FlyShelf.Windows
         // Caching for Taskbar HWND to avoid heavy EnumWindows P/Invoke queries
         private IntPtr _cachedTaskbarHandle = IntPtr.Zero;
         private bool _cachedIsMainTaskbarSelected = true;
+
+        private bool _lastCachedTaskbarCentered = false;
+        private bool _lastCachedWidgetsVisible = true;
 
         public TaskbarWindow()
         {
@@ -263,6 +267,94 @@ namespace FlyShelf.Windows
             return mainHwnd;
         }
 
+        // ═══ Auto-hide detection via Shell AppBar API ═══
+        [DllImport("shell32.dll")]
+        private static extern IntPtr SHAppBarMessage(uint dwMessage, ref APPBARDATA pData);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct APPBARDATA
+        {
+            public int cbSize;
+            public IntPtr hWnd;
+            public uint uCallbackMessage;
+            public uint uEdge;
+            public RECT rc;
+            public IntPtr lParam;
+        }
+
+        private const uint ABM_GETSTATE = 0x04;
+        private const int ABS_AUTOHIDE = 0x01;
+
+        private bool IsTaskbarAutoHideEnabled()
+        {
+            try
+            {
+                var abd = new APPBARDATA();
+                abd.cbSize = Marshal.SizeOf(typeof(APPBARDATA));
+                IntPtr result = SHAppBarMessage(ABM_GETSTATE, ref abd);
+                return (result.ToInt32() & ABS_AUTOHIDE) != 0;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
+        /// Switches widget from embedded (child of taskbar) to floating (standalone topmost window).
+        /// </summary>
+        private void SwitchToFloatingMode(IntPtr widgetHwnd)
+        {
+            if (_isFloatingMode) return;
+            _isFloatingMode = true;
+
+            // Un-parent from taskbar
+            SetParent(widgetHwnd, IntPtr.Zero);
+
+            // Restore popup style (remove WS_CHILD, add WS_POPUP)
+            int style = GetWindowLong(widgetHwnd, GWL_STYLE);
+            style = (style & ~WS_CHILD) | WS_POPUP;
+            SetWindowLong(widgetHwnd, GWL_STYLE, style);
+
+            // Keep tool window + topmost
+            int exStyle = GetWindowLong(widgetHwnd, GWL_EXSTYLE);
+            exStyle |= WS_EX_TOOLWINDOW;
+            SetWindowLong(widgetHwnd, GWL_EXSTYLE, exStyle);
+
+            // Invalidate position cache to force recalculation
+            _lastWidgetLeft = -1;
+            _lastWidgetTop = -1;
+            _cachedFreeZoneLeft = -1;
+            _lastFreeZoneScan = DateTime.MinValue;
+
+            Classes.Logger.LogAction("WIDGET", "Switched to FLOATING mode (taskbar auto-hide detected)");
+        }
+
+        /// <summary>
+        /// Switches widget from floating back to embedded (child of taskbar).
+        /// </summary>
+        private void SwitchToEmbeddedMode(IntPtr widgetHwnd, IntPtr taskbarHandle)
+        {
+            if (!_isFloatingMode) return;
+            _isFloatingMode = false;
+
+            // Re-parent to taskbar
+            int style = GetWindowLong(widgetHwnd, GWL_STYLE);
+            style = (style & ~WS_POPUP) | WS_CHILD;
+            SetWindowLong(widgetHwnd, GWL_STYLE, style);
+
+            int exStyle = GetWindowLong(widgetHwnd, GWL_EXSTYLE);
+            exStyle |= WS_EX_TOOLWINDOW;
+            SetWindowLong(widgetHwnd, GWL_EXSTYLE, exStyle);
+
+            SetParent(widgetHwnd, taskbarHandle);
+
+            // Invalidate position cache
+            _lastWidgetLeft = -1;
+            _lastWidgetTop = -1;
+            _cachedFreeZoneLeft = -1;
+            _lastFreeZoneScan = DateTime.MinValue;
+
+            Classes.Logger.LogAction("WIDGET", "Switched to EMBEDDED mode (taskbar auto-hide disabled)");
+        }
+
         private void SetupWindow()
         {
             if (_isClosed) return;
@@ -285,18 +377,37 @@ namespace FlyShelf.Windows
                     return;
                 }
 
-                int style = GetWindowLong(taskbarWindowHandle, GWL_STYLE);
-                style = (style & ~WS_POPUP) | WS_CHILD;
-                SetWindowLong(taskbarWindowHandle, GWL_STYLE, style);
+                // Check auto-hide state — if on, use floating mode instead of embedding
+                bool autoHide = IsTaskbarAutoHideEnabled();
+                if (autoHide)
+                {
+                    _isFloatingMode = true;
 
-                int exStyle = GetWindowLong(taskbarWindowHandle, GWL_EXSTYLE);
-                exStyle |= WS_EX_TOOLWINDOW;
-                SetWindowLong(taskbarWindowHandle, GWL_EXSTYLE, exStyle);
+                    int exStyle = GetWindowLong(taskbarWindowHandle, GWL_EXSTYLE);
+                    exStyle |= WS_EX_TOOLWINDOW;
+                    SetWindowLong(taskbarWindowHandle, GWL_EXSTYLE, exStyle);
 
-                SetParent(taskbarWindowHandle, taskbarHandle); 
+                    // Position at bottom of screen
+                    CalculateFloatingPosition(taskbarWindowHandle, taskbarHandle);
+                    Classes.Logger.LogAction("WIDGET", "SetupWindow complete — floating mode (auto-hide)");
+                }
+                else
+                {
+                    _isFloatingMode = false;
 
-                CalculateAndSetPosition(taskbarHandle, taskbarWindowHandle);
-                Classes.Logger.LogAction("WIDGET", "SetupWindow complete — widget embedded in taskbar");
+                    int style = GetWindowLong(taskbarWindowHandle, GWL_STYLE);
+                    style = (style & ~WS_POPUP) | WS_CHILD;
+                    SetWindowLong(taskbarWindowHandle, GWL_STYLE, style);
+
+                    int exStyle = GetWindowLong(taskbarWindowHandle, GWL_EXSTYLE);
+                    exStyle |= WS_EX_TOOLWINDOW;
+                    SetWindowLong(taskbarWindowHandle, GWL_EXSTYLE, exStyle);
+
+                    SetParent(taskbarWindowHandle, taskbarHandle);
+
+                    CalculateAndSetPosition(taskbarHandle, taskbarWindowHandle);
+                    Classes.Logger.LogAction("WIDGET", "SetupWindow complete — widget embedded in taskbar");
+                }
             }
             catch (Exception ex)
             {
@@ -342,17 +453,140 @@ namespace FlyShelf.Windows
 
                 if (interop.Handle == IntPtr.Zero) return;
 
-                if (GetParent(interop.Handle) != taskbarHandle)
+                // Dynamically detect auto-hide state changes
+                bool autoHide = IsTaskbarAutoHideEnabled();
+
+                if (autoHide && !_isFloatingMode)
                 {
-                    SetParent(interop.Handle, taskbarHandle);
+                    // Switched to auto-hide — switch to floating mode
+                    SwitchToFloatingMode(interop.Handle);
+                }
+                else if (!autoHide && _isFloatingMode)
+                {
+                    // Auto-hide turned off — re-embed in taskbar
+                    if (taskbarHandle != IntPtr.Zero)
+                        SwitchToEmbeddedMode(interop.Handle, taskbarHandle);
                 }
 
-                if (taskbarHandle != IntPtr.Zero && interop.Handle != IntPtr.Zero)
+                if (_isFloatingMode)
                 {
-                    Dispatcher.BeginInvoke(() => { CalculateAndSetPosition(taskbarHandle, interop.Handle); }, DispatcherPriority.Background);
+                    // Floating mode: position at bottom of screen independently
+                    if (taskbarHandle != IntPtr.Zero)
+                    {
+                        Dispatcher.BeginInvoke(() => { CalculateFloatingPosition(interop.Handle, taskbarHandle); }, DispatcherPriority.Background);
+                    }
+                }
+                else
+                {
+                    // Embedded mode: normal taskbar child positioning
+                    if (GetParent(interop.Handle) != taskbarHandle)
+                    {
+                        SetParent(interop.Handle, taskbarHandle);
+                    }
+
+                    if (taskbarHandle != IntPtr.Zero && interop.Handle != IntPtr.Zero)
+                    {
+                        Dispatcher.BeginInvoke(() => { CalculateAndSetPosition(taskbarHandle, interop.Handle); }, DispatcherPriority.Background);
+                    }
                 }
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Positions the widget as a standalone floating window at the bottom edge of the screen.
+        /// Used when the taskbar has auto-hide enabled — the widget stays visible at the screen edge
+        /// so the user can always click it.
+        /// </summary>
+        private void CalculateFloatingPosition(IntPtr widgetHwnd, IntPtr taskbarHandle)
+        {
+            if (_isClosed) return;
+            if (_positionUpdateInProgress) return;
+            _positionUpdateInProgress = true;
+
+            try
+            {
+                double dpiScale = GetDpiForWindow(taskbarHandle) / 96.0;
+                if (dpiScale <= 0) dpiScale = 1.0;
+
+                var (logicalWidth, logicalHeight) = Widget.CalculateSize(dpiScale);
+                int physicalWidth = (int)(logicalWidth * dpiScale * _scale);
+                int physicalHeight = (int)(logicalHeight * dpiScale);
+
+                // Get monitor bounds
+                var monitor = MonitorUtil.GetMonitor(taskbarHandle);
+                Rect monitorArea = monitor.monitorArea;
+
+                // Detect taskbar alignment for left/right positioning
+                bool isTaskbarCentered = true;
+                try
+                {
+                    using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"))
+                    {
+                        if (key != null)
+                        {
+                            var valAl = key.GetValue("TaskbarAl");
+                            if (valAl != null && Convert.ToInt32(valAl) == 0)
+                                isTaskbarCentered = false;
+                        }
+                    }
+                }
+                catch { }
+
+                // Position at the very bottom of the screen, flush with the edge
+                int screenX;
+                if (isTaskbarCentered)
+                {
+                    // Left side — after the widgets area
+                    screenX = (int)monitorArea.Left + 8;
+                }
+                else
+                {
+                    // Right side — beside where system tray would be
+                    screenX = (int)(monitorArea.Right) - physicalWidth - 8;
+                }
+
+                int screenY = (int)(monitorArea.Bottom) - physicalHeight;
+
+                // Size the widget WPF controls
+                Widget.Width = physicalWidth / dpiScale;
+                Widget.Height = physicalHeight / dpiScale;
+                double targetLogicalWidth = physicalWidth / dpiScale;
+                double targetLogicalHeight = physicalHeight / dpiScale;
+                if (Math.Abs(this.Width - targetLogicalWidth) > 0.01)
+                    this.Width = targetLogicalWidth;
+                if (Math.Abs(this.Height - targetLogicalHeight) > 0.01)
+                    this.Height = targetLogicalHeight;
+
+                // HWND_TOPMOST = -1 to keep above other windows
+                const int HWND_TOPMOST = -1;
+
+                if (screenX != _lastWidgetLeft || screenY != _lastWidgetTop ||
+                    physicalWidth != _lastWidgetW || physicalHeight != _lastWidgetH)
+                {
+                    SetWindowPos(widgetHwnd, HWND_TOPMOST,
+                             screenX, screenY,
+                             physicalWidth, physicalHeight,
+                             SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                    _lastWidgetLeft = screenX;
+                    _lastWidgetTop = screenY;
+                    _lastWidgetW = physicalWidth;
+                    _lastWidgetH = physicalHeight;
+                }
+                else
+                {
+                    // Keep topmost
+                    SetWindowPos(widgetHwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+                }
+
+                Visibility = Visibility.Visible;
+            }
+            catch { }
+            finally
+            {
+                _positionUpdateInProgress = false;
+            }
         }
 
         private void CalculateAndSetPosition(IntPtr taskbarHandle, IntPtr taskbarWindowHandle)
@@ -379,6 +613,12 @@ namespace FlyShelf.Windows
                 bool isSizeChanged = currentWidth != _lastTaskbarWidth;
                 _lastTaskbarWidth = currentWidth;
                 _lastTaskbarHeight = currentHeight;
+
+                if (isSizeChanged)
+                {
+                    _cachedFreeZoneLeft = -1;
+                    _lastFreeZoneScan = DateTime.MinValue;
+                }
 
                 if (isSizeChanged || _lastTaskbarFrameRect == Rect.Empty)
                 {
@@ -491,6 +731,40 @@ namespace FlyShelf.Windows
         /// </summary>
         private (int left, int width) FindTaskbarFreeZone(IntPtr taskbarHandle, int taskbarWidth, double dpiScale, int physicalWidth)
         {
+            // Detect if Windows 11 taskbar icons are centered using the registry key
+            bool isTaskbarCentered = false;
+            bool isWidgetsVisible = true;
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"))
+                {
+                    if (key != null)
+                    {
+                        var valAl = key.GetValue("TaskbarAl");
+                        if (valAl != null && Convert.ToInt32(valAl) == 1)
+                        {
+                            isTaskbarCentered = true;
+                        }
+
+                        var valDa = key.GetValue("TaskbarDa");
+                        if (valDa != null && Convert.ToInt32(valDa) == 0)
+                        {
+                            isWidgetsVisible = false;
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // If alignment or widgets visibility changed since last scan, invalidate the cache to reposition instantly
+            if (isTaskbarCentered != _lastCachedTaskbarCentered || isWidgetsVisible != _lastCachedWidgetsVisible)
+            {
+                _cachedFreeZoneLeft = -1;
+                _lastFreeZoneScan = DateTime.MinValue;
+                _lastCachedTaskbarCentered = isTaskbarCentered;
+                _lastCachedWidgetsVisible = isWidgetsVisible;
+            }
+
             // Cache for 5 seconds to avoid expensive enumeration every 500ms
             if (_cachedFreeZoneLeft >= 0 && (DateTime.Now - _lastFreeZoneScan).TotalSeconds < 5)
                 return (_cachedFreeZoneLeft, _cachedFreeZoneWidth);
@@ -499,46 +773,21 @@ namespace FlyShelf.Windows
             {
                 IntPtr myHwnd = new WindowInteropHelper(this).Handle;
                 var occupiedZones = new List<(int left, int right)>();
-                
-                // Detect if Windows 11 taskbar icons are centered using the registry key
-                bool isTaskbarCentered = false;
-                bool isWidgetsVisible = true;
-                try
-                {
-                    using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"))
-                    {
-                        if (key != null)
-                        {
-                            var valAl = key.GetValue("TaskbarAl");
-                            if (valAl != null && Convert.ToInt32(valAl) == 1)
-                            {
-                                isTaskbarCentered = true;
-                            }
-
-                            var valDa = key.GetValue("TaskbarDa");
-                            if (valDa != null && Convert.ToInt32(valDa) == 0)
-                            {
-                                isWidgetsVisible = false;
-                            }
-                        }
-                    }
-                }
-                catch { }
 
                 // Protect the Start/Search area if left-aligned, or the Widgets corner if centered (only if Widgets button is visible)
                 if (!isTaskbarCentered)
                 {
-                    occupiedZones.Add((0, 180));
+                    occupiedZones.Add((0, (int)(180 * dpiScale)));
                 }
                 else
                 {
                     if (isWidgetsVisible)
                     {
-                        occupiedZones.Add((0, 200)); // Protect the Widgets area on the far left corner on Win11 (expanded to 200 to clear dynamic weather text)
+                        occupiedZones.Add((0, (int)(320 * dpiScale))); // Protect the Widgets area on the far left corner on Win11 (expanded to 320 logical pixels, scaled by DPI, to clear dynamic weather/news text)
                     }
                     else
                     {
-                        occupiedZones.Add((0, 12)); // Just protect the leftmost margin if Widgets is disabled
+                        occupiedZones.Add((0, (int)(12 * dpiScale))); // Just protect the leftmost margin if Widgets is disabled
                     }
                 }
 
@@ -638,35 +887,40 @@ namespace FlyShelf.Windows
 
                     Classes.Logger.LogAction("WIDGET", $"FindTaskbarFreeZone: occupiedZones merged={mergedZones.Count}, gaps count={gaps.Count}");
 
-                    int align = SettingsManager.Current.WidgetTaskbarAlignment;
+                    // Dynamic positioning based on Windows taskbar alignment:
+                    // - Centered taskbar → widget goes to the LEFT (leftmost gap)
+                    // - Left-aligned taskbar → widget goes to the RIGHT (beside system tray)
+                    int effectiveAlign;
+                    if (isTaskbarCentered)
+                    {
+                        effectiveAlign = 0; // Left — the left side is free when taskbar icons are centered
+                    }
+                    else
+                    {
+                        effectiveAlign = 2; // Right — left side is occupied by Start/Search when left-aligned
+                    }
                     
                     if (gaps.Count > 0)
                     {
                         (int left, int width) selectedGap;
                         int widgetPos = 0;
 
-                        if (align == 0) // Left alignment: pick the leftmost gap
+                        if (effectiveAlign == 0) // Left: pick the leftmost gap
                         {
                             selectedGap = gaps[0];
                             widgetPos = selectedGap.left + 8;
                         }
-                        else if (align == 2) // Right alignment: pick the rightmost gap
+                        else // Right: pick the rightmost gap (beside system tray)
                         {
                             selectedGap = gaps[gaps.Count - 1];
                             widgetPos = selectedGap.left + selectedGap.width - physicalWidth - 8;
-                        }
-                        else // Center alignment: pick the largest gap and center in it
-                        {
-                            var sortedGaps = gaps.OrderByDescending(g => g.width).ToList();
-                            selectedGap = sortedGaps[0];
-                            widgetPos = selectedGap.left + (selectedGap.width - physicalWidth) / 2;
                         }
 
                         _cachedFreeZoneLeft = widgetPos;
                         _cachedFreeZoneWidth = physicalWidth;
                         _lastFreeZoneScan = DateTime.Now;
                         
-                        Classes.Logger.LogAction("WIDGET", $"FindTaskbarFreeZone: align={align}, selected widgetPos={widgetPos}");
+                        Classes.Logger.LogAction("WIDGET", $"FindTaskbarFreeZone: taskbarCentered={isTaskbarCentered}, effectiveAlign={effectiveAlign}, widgetPos={widgetPos}");
                         return (widgetPos, physicalWidth);
                     }
                 }
@@ -676,22 +930,25 @@ namespace FlyShelf.Windows
                 Classes.Logger.LogAction("WIDGET", $"Free zone detection failed: {ex.Message}");
             }
 
-            // Fallback: full taskbar width with padding
+            // Fallback: full taskbar width with padding, using dynamic alignment
             int fallbackLeft = 12;
             int fallbackWidth = taskbarWidth - 24;
             int widgetLeft = 0;
-            int fallbackAlign = SettingsManager.Current.WidgetTaskbarAlignment;
-            if (fallbackAlign == 1) // Center
+
+            if (isTaskbarCentered)
             {
-                widgetLeft = fallbackLeft + (fallbackWidth - physicalWidth) / 2;
+                if (isWidgetsVisible)
+                {
+                    widgetLeft = (int)(320 * dpiScale) + 8; // Left side, safely cleared of Widgets weather/news text
+                }
+                else
+                {
+                    widgetLeft = fallbackLeft + 8; // Just protect standard margin if disabled
+                }
             }
-            else if (fallbackAlign == 2) // Right
+            else
             {
-                widgetLeft = fallbackLeft + fallbackWidth - physicalWidth - 8;
-            }
-            else // Left
-            {
-                widgetLeft = fallbackLeft + 8;
+                widgetLeft = fallbackLeft + fallbackWidth - physicalWidth - 8; // Right side (beside tray)
             }
 
             _cachedFreeZoneLeft = widgetLeft;

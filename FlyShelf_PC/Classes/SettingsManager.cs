@@ -276,19 +276,15 @@ namespace FlyShelf.Classes
         /// </summary>
         public static void PerformFullUninstall()
         {
-            // 1. Remove auto-start registry entry
+            // 1. Disable auto-start (uses StartupTask API for MSIX, and Registry Run key for unpackaged)
             try
             {
-                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(
-                    @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run", true))
-                {
-                    key?.DeleteValue("FlyShelf", throwOnMissingValue: false);
-                }
-                Logger.LogAction("UNINSTALL", "Removed auto-start registry entry.");
+                StartupHelper.SetRunAtStartupAsync(false).Wait(2000);
+                Logger.LogAction("UNINSTALL", "Successfully disabled auto-start using unified startup API.");
             }
             catch (Exception ex)
             {
-                Logger.LogAction("UNINSTALL", $"Failed to remove registry entry: {ex.Message}");
+                Logger.LogAction("UNINSTALL", $"Failed to disable auto-start: {ex.Message}");
             }
 
             // 2. Delete the entire %AppData%\FlyShelf\ directory

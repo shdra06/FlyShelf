@@ -11,3 +11,23 @@
    at FlyShelf.MainWindow.InitializeComponent() in E:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml:line 1
    at FlyShelf.MainWindow..ctor() in E:\exeapps\FlyShelf\FlyShelf_PC\MainWindow.xaml.cs:line 127
    at FlyShelf.App.<OnStartup>b__22_6() in E:\exeapps\FlyShelf\FlyShelf_PC\App.xaml.cs:line 326
+[MainWindow Startup Failed] System.Windows.Markup.XamlParseException: Provide value on 'System.Windows.Baml2006.TypeConverterMarkupExtension' threw an exception.
+ ---> System.FormatException: TaskListSquare24 is not a valid value for SymbolRegular.
+ ---> System.ArgumentException: Requested value 'TaskListSquare24' was not found.
+   at System.Enum.TryParseByName[TStorage](RuntimeType enumType, ReadOnlySpan`1 value, Boolean ignoreCase, Boolean throwOnFailure, TStorage& result)
+   at System.Enum.TryParseByValueOrName[TUnderlying,TStorage](RuntimeType enumType, ReadOnlySpan`1 value, Boolean ignoreCase, Boolean throwOnFailure, TUnderlying& result)
+   at System.Enum.TryParse(Type enumType, ReadOnlySpan`1 value, Boolean ignoreCase, Boolean throwOnFailure, Object& result)
+   at System.Enum.Parse(Type enumType, String value, Boolean ignoreCase)
+   at System.ComponentModel.EnumConverter.ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, Object value)
+   --- End of inner exception stack trace ---
+   at System.ComponentModel.EnumConverter.ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, Object value)
+   at MS.Internal.Xaml.Runtime.ClrObjectRuntime.CallProvideValue(MarkupExtension me, IServiceProvider serviceProvider)
+   --- End of inner exception stack trace ---
+   at System.Windows.Markup.XamlReader.RewrapException(Exception e, IXamlLineInfo lineInfo, Uri baseUri)
+   at System.Windows.Markup.WpfXamlLoader.Load(XamlReader xamlReader, IXamlObjectWriterFactory writerFactory, Boolean skipJournaledProperties, Object rootObject, XamlObjectWriterSettings settings, Uri baseUri)
+   at System.Windows.Markup.WpfXamlLoader.LoadBaml(XamlReader xamlReader, Boolean skipJournaledProperties, Object rootObject, XamlAccessLevel accessLevel, Uri baseUri)
+   at System.Windows.Markup.XamlReader.LoadBaml(Stream stream, ParserContext parserContext, Object parent, Boolean closeStream)
+   at System.Windows.Application.LoadComponent(Object component, Uri resourceLocator)
+   at FlyShelf.MainWindow.InitializeComponent()
+   at FlyShelf.MainWindow..ctor()
+   at FlyShelf.App.<OnStartup>b__22_6()

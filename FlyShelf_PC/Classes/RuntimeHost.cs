@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
@@ -15,11 +15,10 @@ namespace FlyShelf.Classes
             string basePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FlyShelf", "RuntimeCore");
             ExecutionDir = basePath;
 
-            string trueExePath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? System.IO.Path.Combine(AppContext.BaseDirectory, "FlyShelf.exe");
-            long currentVer = new FileInfo(trueExePath).LastWriteTimeUtc.Ticks;
+            string currentVer = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
 
             string verFile = Path.Combine(ExecutionDir, "version.txt");
-            if (File.Exists(verFile) && File.ReadAllText(verFile).Trim() == currentVer.ToString())
+            if (File.Exists(verFile) && File.ReadAllText(verFile).Trim() == currentVer)
             {
                 // Already extracted the payloads for this version. Fast boot.
                 return;
@@ -31,7 +30,7 @@ namespace FlyShelf.Classes
 
             ExtractResource("FlyShelf.WebClient.zip", Path.Combine(ExecutionDir, "Resources", "WebClient"));
 
-            File.WriteAllText(verFile, currentVer.ToString());
+            File.WriteAllText(verFile, currentVer);
         }
 
         private static void ExtractResource(string resourceName, string outDir)

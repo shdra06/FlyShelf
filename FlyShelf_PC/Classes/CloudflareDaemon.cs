@@ -39,42 +39,71 @@ namespace FlyShelf.Classes
             await StartTunnelCore();
         }
 
+        public static string GetCloudflaredExePath()
+        {
+            // 1. Check bundled paths (perfect for packaged MSIX and portable bundles)
+            string bundledAgentExe = Path.Combine(AppContext.BaseDirectory, "agent", "cloudflared.exe");
+            if (File.Exists(bundledAgentExe)) return bundledAgentExe;
+
+            string bundledRootExe = Path.Combine(AppContext.BaseDirectory, "cloudflared.exe");
+            if (File.Exists(bundledRootExe)) return bundledRootExe;
+
+            // 2. Fall back to %AppData% folder (where dynamic installer drops/verifies it)
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), 
+                "FlyShelf", "agent", "cloudflared.exe"
+            );
+        }
+
         private async Task StartTunnelCore()
         {
             if (_stopped) return;
 
             try
             {
-                string agentDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "agent");
-                Directory.CreateDirectory(agentDir);
-                string exePath = Path.Combine(agentDir, "cloudflared.exe");
+                string exePath = GetCloudflaredExePath();
+                bool isBundled = exePath.StartsWith(AppContext.BaseDirectory, StringComparison.OrdinalIgnoreCase);
 
                 // Verify if cloudflared.exe exists, has valid size, and is cryptographically integral
                 bool needsDownload = false;
-                if (!File.Exists(exePath) || new FileInfo(exePath).Length < MIN_EXE_SIZE)
+
+                if (!isBundled)
                 {
-                    needsDownload = true;
+                    string agentDir = Path.GetDirectoryName(exePath);
+                    if (!string.IsNullOrEmpty(agentDir))
+                    {
+                        Directory.CreateDirectory(agentDir);
+                    }
+
+                    if (!File.Exists(exePath) || new FileInfo(exePath).Length < MIN_EXE_SIZE)
+                    {
+                        needsDownload = true;
+                    }
+                    else
+                    {
+                        try
+                        {
+                            using (var sha = System.Security.Cryptography.SHA256.Create())
+                            using (var fs = File.OpenRead(exePath))
+                            {
+                                string existingHash = BitConverter.ToString(sha.ComputeHash(fs)).Replace("-", "").ToLowerInvariant();
+                                if (existingHash != TRUSTED_CF_HASH)
+                                {
+                                    Logger.LogAction("CLOUDFLARE", "Existing cloudflared.exe hash mismatch — will re-download to guarantee integrity.");
+                                    needsDownload = true;
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogAction("CLOUDFLARE_ERROR", $"Failed to verify existing cloudflared.exe hash: {ex.Message} — forcing secure re-download.");
+                            needsDownload = true;
+                        }
+                    }
                 }
                 else
                 {
-                    try
-                    {
-                        using (var sha = System.Security.Cryptography.SHA256.Create())
-                        using (var fs = File.OpenRead(exePath))
-                        {
-                            string existingHash = BitConverter.ToString(sha.ComputeHash(fs)).Replace("-", "").ToLowerInvariant();
-                            if (existingHash != TRUSTED_CF_HASH)
-                            {
-                                Logger.LogAction("CLOUDFLARE", "Existing cloudflared.exe hash mismatch — will re-download to guarantee integrity.");
-                                needsDownload = true;
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.LogAction("CLOUDFLARE_ERROR", $"Failed to verify existing cloudflared.exe hash: {ex.Message} — forcing secure re-download.");
-                        needsDownload = true;
-                    }
+                    Logger.LogAction("CLOUDFLARE", $"Using secure bundled agent at: {exePath}");
                 }
 
                 if (needsDownload)

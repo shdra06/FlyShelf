@@ -77,6 +77,10 @@ namespace FlyShelf.Classes
                             {
                                 foreach (var snapshotItem in snapshot)
                                 {
+                                    if (snapshotItem.IsPassword)
+                                    {
+                                        snapshotItem.RawContent = SecureStorage.Decrypt(snapshotItem.RawContent);
+                                    }
                                     if (IsValidClipboardItem(snapshotItem))
                                         items.Add(snapshotItem);
                                     else
@@ -97,6 +101,10 @@ namespace FlyShelf.Classes
                                     int recoveredCount = 0;
                                     foreach (var snapshotItem in backupSnapshot)
                                     {
+                                        if (snapshotItem.IsPassword)
+                                        {
+                                            snapshotItem.RawContent = SecureStorage.Decrypt(snapshotItem.RawContent);
+                                        }
                                         if (IsValidClipboardItem(snapshotItem))
                                         {
                                             items.Add(snapshotItem);
@@ -130,6 +138,10 @@ namespace FlyShelf.Classes
                                     case "add":
                                         if (entry.Item != null)
                                         {
+                                            if (entry.Item.IsPassword)
+                                            {
+                                                entry.Item.RawContent = SecureStorage.Decrypt(entry.Item.RawContent);
+                                            }
                                             if (IsValidClipboardItem(entry.Item))
                                                 items.Insert(0, entry.Item);
                                             else
@@ -188,7 +200,8 @@ namespace FlyShelf.Classes
             try
             {
                 Directory.CreateDirectory(_appDataDir);
-                var entry = new JournalEntry { Action = "add", Item = item, ItemId = GetItemId(item) };
+                var diskItem = CloneForDisk(item);
+                var entry = new JournalEntry { Action = "add", Item = diskItem, ItemId = GetItemId(item) };
                 var json = JsonSerializer.Serialize(entry);
                 var line = json + "\n";
 
@@ -311,8 +324,9 @@ namespace FlyShelf.Classes
 
                     _maxLoadedItemCount = Math.Max(_maxLoadedItemCount, items.Count);
 
+                    var diskItems = items.Select(CloneForDisk).ToList();
                     var options = new JsonSerializerOptions { WriteIndented = false };
-                    var json = JsonSerializer.Serialize(items, options);
+                    var json = JsonSerializer.Serialize(diskItems, options);
 
                     // Write to temp file first, then atomic rename for safety
                     var tempPath = _historyPath + ".tmp";
@@ -381,6 +395,10 @@ namespace FlyShelf.Classes
                         {
                             foreach (var snapshotItem in snapshot)
                             {
+                                if (snapshotItem.IsPassword)
+                                {
+                                    snapshotItem.RawContent = SecureStorage.Decrypt(snapshotItem.RawContent);
+                                }
                                 if (IsValidClipboardItem(snapshotItem))
                                     items.Add(snapshotItem);
                             }
@@ -400,6 +418,10 @@ namespace FlyShelf.Classes
                                 var entry = JsonSerializer.Deserialize<JournalEntry>(line);
                                 if (entry?.Action == "add" && entry.Item != null)
                                 {
+                                    if (entry.Item.IsPassword)
+                                    {
+                                        entry.Item.RawContent = SecureStorage.Decrypt(entry.Item.RawContent);
+                                    }
                                     if (IsValidClipboardItem(entry.Item))
                                         items.Insert(0, entry.Item);
                                 }
@@ -571,6 +593,28 @@ namespace FlyShelf.Classes
             string contentKey = item.RawContent ?? item.FileName ?? item.FilePath ?? "";
             int stableHash = contentKey.GetHashCode(StringComparison.Ordinal);
             return $"{item.ItemType}_{item.DateCopied.Ticks}_{stableHash:X8}";
+        }
+
+        private static ViewModels.ClipboardItem CloneForDisk(ViewModels.ClipboardItem item)
+        {
+            if (item == null) return null!;
+            return new ViewModels.ClipboardItem
+            {
+                DateCopied = item.DateCopied,
+                FilePath = item.FilePath,
+                FileName = item.FileName,
+                Extension = item.Extension,
+                ItemType = item.ItemType,
+                FormattedSize = item.FormattedSize,
+                RawContent = item.IsPassword ? SecureStorage.Encrypt(item.RawContent) : item.RawContent,
+                IsPassword = item.IsPassword,
+                IsPinned = item.IsPinned,
+                AssociatedContextTitle = item.AssociatedContextTitle,
+                SourceDeviceName = item.SourceDeviceName,
+                SourceDeviceType = item.SourceDeviceType,
+                TransferMethod = item.TransferMethod,
+                ZippedArchivePath = item.ZippedArchivePath
+            };
         }
 
         /// <summary>Journal entry for append-only log.</summary>

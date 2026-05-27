@@ -87,7 +87,8 @@ namespace FlyShelf.Classes
                 if (File.Exists(path))
                 {
                     var json = File.ReadAllText(path);
-                    var list = JsonSerializer.Deserialize<ObservableCollection<TextShortcut>>(json);
+                    var decrypted = SecureStorage.Decrypt(json);
+                    var list = JsonSerializer.Deserialize<ObservableCollection<TextShortcut>>(decrypted);
                     if (list != null)
                     {
                         Shortcuts = list;
@@ -107,6 +108,7 @@ namespace FlyShelf.Classes
             try
             {
                 var json = JsonSerializer.Serialize(Shortcuts, new JsonSerializerOptions { WriteIndented = true });
+                var encrypted = SecureStorage.Encrypt(json);
                 string path = GetFilePath();
                 System.Threading.Tasks.Task.Run(() =>
                 {
@@ -115,7 +117,7 @@ namespace FlyShelf.Classes
                         try
                         {
                             string tempPath = path + ".tmp";
-                            File.WriteAllText(tempPath, json);
+                            File.WriteAllText(tempPath, encrypted);
                             File.Move(tempPath, path, true);
                         }
                         catch (Exception ex)

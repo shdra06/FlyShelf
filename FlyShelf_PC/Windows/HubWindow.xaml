@@ -79,6 +79,9 @@
                     <ui:NavigationViewItem Content="System Logs" Tag="Logs" PreviewMouseLeftButtonDown="Nav_Click">
                         <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Document24"/></ui:NavigationViewItem.Icon>
                     </ui:NavigationViewItem>
+                    <ui:NavigationViewItem Content="About" Tag="About" PreviewMouseLeftButtonDown="Nav_Click">
+                        <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Info24"/></ui:NavigationViewItem.Icon>
+                    </ui:NavigationViewItem>
                 </ui:NavigationView.MenuItems>
             </ui:NavigationView>
 
@@ -1231,7 +1234,7 @@
                                     </Grid>
                                 </Border>
 
-                                <!-- ROW 1, COL 2: Bar Position -->
+                                <!-- ROW 1, COL 2: Widget Position (Auto) -->
                                 <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource PremiumSettingStyle}">
                                     <StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
@@ -1244,14 +1247,19 @@
                                                 </Border.Background>
                                                 <ui:SymbolIcon Symbol="ResizeLarge24" Foreground="White" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
-                                            <TextBlock Text="Bar Position" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Widget Position" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                                         </StackPanel>
-                                        <TextBlock Text="Where the hover drop target appears." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="11" Margin="0,0,0,10" TextWrapping="Wrap" LineHeight="16"/>
-                                        <ComboBox HorizontalAlignment="Stretch" SelectedIndex="{Binding Source={x:Static settings:SettingsManager.Current}, Path=WidgetTaskbarAlignment}">
-                                            <ComboBoxItem Content="Corner Left Anchor" />
-                                            <ComboBoxItem Content="Centered Floating" />
-                                            <ComboBoxItem Content="Corner Right Clock" />
-                                        </ComboBox>
+                                        <TextBlock Text="Automatic — adapts to your Windows taskbar alignment." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap" LineHeight="16"/>
+                                        <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="8" Padding="10,8">
+                                            <StackPanel>
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextWrapping="Wrap" LineHeight="17">
+                                                    <Run Text="📌" /> <Run Text="Center taskbar" FontWeight="SemiBold"/> <Run Text="→ Widget on the left"/>
+                                                </TextBlock>
+                                                <TextBlock FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextWrapping="Wrap" LineHeight="17" Margin="0,2,0,0">
+                                                    <Run Text="📌" /> <Run Text="Left taskbar" FontWeight="SemiBold"/> <Run Text="→ Widget beside system tray"/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
                                 </Border>
 
@@ -1399,83 +1407,14 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- ROW 3: Full-width Save + Update -->
+                                <!-- ROW 3: Full-width Save -->
                                 <Border Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3" Style="{StaticResource PremiumSettingStyle}">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="12"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <!-- Save Config -->
-                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                            <ui:Button Appearance="Primary" Click="SaveSettings_Click" HorizontalAlignment="Stretch" Content="Save Configuration" Padding="10,8" CornerRadius="8" FontWeight="SemiBold"/>
-                                        </StackPanel>
-                                        <!-- Update Section -->
-                                        <StackPanel Grid.Column="2">
-                                            <Grid Margin="0,0,0,8">
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0">
-                                                    <StackPanel Orientation="Horizontal">
-                                                        <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,8,0">
-                                                            <Border.Background>
-                                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                                    <GradientStop Color="#059669" Offset="0"/>
-                                                                    <GradientStop Color="#34D399" Offset="1"/>
-                                                                </LinearGradientBrush>
-                                                            </Border.Background>
-                                                            <ui:SymbolIcon Symbol="ArrowDownload24" Foreground="White" FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                        </Border>
-                                                        <StackPanel VerticalAlignment="Center">
-                                                            <TextBlock Text="App Updates" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                                                            <StackPanel Orientation="Horizontal">
-                                                                <TextBlock x:Name="CurrentVersionText" Text="v1.0.0" FontSize="10" Foreground="#A78BFA" FontWeight="SemiBold"/>
-                                                                <TextBlock x:Name="LatestVersionText" Text="" FontSize="10" Foreground="#34D399" FontWeight="SemiBold" Margin="6,0,0,0"/>
-                                                            </StackPanel>
-                                                        </StackPanel>
-                                                    </StackPanel>
-                                                </StackPanel>
-                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <ui:Button x:Name="RedownloadBtn" Appearance="Secondary" Padding="8,5" CornerRadius="8" Click="RedownloadBtn_Click" Margin="0,0,6,0" ToolTip="Re-download current version from GitHub (repair install)">
-                                                        <StackPanel Orientation="Horizontal">
-                                                            <ui:SymbolIcon Symbol="ArrowSync24" FontSize="12" Margin="0,0,5,0"/>
-                                                            <TextBlock Text="Repair" FontSize="11" FontWeight="SemiBold"/>
-                                                        </StackPanel>
-                                                    </ui:Button>
-                                                    <ui:Button x:Name="UpdateBtn" Appearance="Primary" Content="Check for Updates" Padding="10,5" CornerRadius="8" FontWeight="SemiBold" Click="UpdateBtn_Click"/>
-                                                </StackPanel>
-                                            </Grid>
-                                            <Border x:Name="UpdateProgressPanel" Visibility="Collapsed" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="6" Padding="10,6" Margin="0,0,0,6">
-                                                <StackPanel>
-                                                    <Grid Margin="0,0,0,4">
-                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                        <TextBlock x:Name="UpdateStatusText" Text="Checking..." FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
-                                                        <TextBlock x:Name="UpdatePctText" Text="" Grid.Column="1" FontSize="11" Foreground="#34D399" FontWeight="SemiBold"/>
-                                                    </Grid>
-                                                    <Border Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" CornerRadius="2" Height="4">
-                                                        <Border x:Name="UpdateProgressBar" CornerRadius="2" HorizontalAlignment="Left" Width="0">
-                                                            <Border.Background>
-                                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                                                    <GradientStop Color="#34D399" Offset="0"/>
-                                                                    <GradientStop Color="#6EE7B7" Offset="1"/>
-                                                                </LinearGradientBrush>
-                                                            </Border.Background>
-                                                        </Border>
-                                                    </Border>
-                                                </StackPanel>
-                                            </Border>
-                                            <Border x:Name="ChangelogPanel" Visibility="Collapsed" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="6" Padding="10" Margin="0,0,0,0">
-                                                <StackPanel>
-                                                    <TextBlock Text="What's new" FontSize="10" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,4"/>
-                                                    <TextBlock x:Name="ChangelogText" Text="" FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap" LineHeight="16"/>
-                                                </StackPanel>
-                                            </Border>
-                                        </StackPanel>
-                                    </Grid>
+                                    <StackPanel VerticalAlignment="Center">
+                                        <ui:Button Appearance="Primary" Click="SaveSettings_Click" HorizontalAlignment="Stretch" Content="Save Configuration" Padding="10,8" CornerRadius="8" FontWeight="SemiBold"/>
+                                    </StackPanel>
                                 </Border>
+
+
                             </Grid>
 
                             <!-- Run at Startup -->
@@ -1877,6 +1816,257 @@
                             <TextBox Grid.Row="1" x:Name="LogsTextBox" IsReadOnly="True" Background="Transparent" BorderThickness="0" FontFamily="Consolas" FontSize="13" Foreground="#10B981" TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" AcceptsReturn="True" SelectionBrush="#3310B981" Padding="16,12" />
                         </Grid>
                     </Border>
+                </Grid>
+
+                <!-- 6. ABOUT TAB -->
+                <Grid x:Name="AboutGrid" Visibility="Collapsed">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                        <StackPanel Margin="0,8,0,0">
+                            
+                            <!-- Header branding -->
+                            <Grid Margin="0,0,0,24">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <Border Grid.Column="0" Width="80" Height="80" CornerRadius="20" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" Padding="12" Margin="0,0,20,0">
+                                    <Image Source="/Resources/FlyShelfIcon.png" RenderOptions.BitmapScalingMode="HighQuality"/>
+                                </Border>
+                                
+                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock Text="FlyShelf" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                        <Border Background="{DynamicResource MicaWPF.Brushes.SystemAccentColor}" CornerRadius="6" Padding="8,3" Margin="12,0,0,0" VerticalAlignment="Center">
+                                            <TextBlock Text="v1.0.0 Stable" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock Text="Cross-device clipboard manager and synchronization hub for power users." FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Grid>
+                            
+                            <!-- Dynamic glow accent dividers -->
+                            <Border Height="2" CornerRadius="1" HorizontalAlignment="Left" Width="60" Margin="0,0,0,20">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#6366F1" Offset="0"/>
+                                        <GradientStop Color="#8B5CF6" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+
+                            <!-- Core Features Card -->
+                            <Border Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="24" Margin="0,0,0,20" ClipToBounds="True">
+                                <Grid>
+                                    <!-- Subtle radial glow in background -->
+                                    <Border CornerRadius="14" Opacity="0.08" HorizontalAlignment="Right" VerticalAlignment="Top" Width="180" Height="180" Margin="-40,-40,0,0">
+                                        <Border.Background>
+                                            <RadialGradientBrush>
+                                                <GradientStop Color="#6366F1" Offset="0"/>
+                                                <GradientStop Color="Transparent" Offset="1"/>
+                                            </RadialGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+                                    
+                                    <StackPanel>
+                                        <TextBlock Text="Privacy-First Core Architecture" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Margin="0,0,0,12"/>
+                                        
+                                        <TextBlock Text="FlyShelf is engineered with a strict privacy-by-design methodology. All clipboard data remains entirely inside your own private ecosystem under your absolute ownership." FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextWrapping="Wrap" LineHeight="18" Margin="0,0,0,16"/>
+                                        
+                                        <!-- Bullet points with icon indicators -->
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="28"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon Grid.Column="0" Symbol="LockShield24" Foreground="#10B981" FontSize="16" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="At-Rest Encryption (Windows DPAPI)" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                <TextBlock Text="Sensitive items (like passwords) and key credentials (Gemini API keys, pairing tokens) are encrypted locally using Windows Data Protection API (DPAPI) tied to your secure user account context." FontSize="12.5" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap" LineHeight="18"/>
+                                            </StackPanel>
+                                        </Grid>
+                                        
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="28"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon Grid.Column="0" Symbol="Wifi124" Foreground="#3B82F6" FontSize="16" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="End-to-End Encrypted Transit (AES-256-GCM)" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                <TextBlock Text="Clipboard synchronization between devices uses direct peer-to-peer (LAN) pathways or secure, ephemeral Cloudflare relays. All network packets are encrypted with keys derived via PBKDF2-SHA256 (100,000 iterations)." FontSize="12.5" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap" LineHeight="18"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid Margin="0,0,0,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="28"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:SymbolIcon Grid.Column="0" Symbol="Cloud24" Foreground="#F59E0B" FontSize="16" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="Zero Cloud Storage for Clipboard Data" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                <TextBlock Text="Firebase is used strictly for signaling/discovery endpoints—never storing clipboard content. Ephemeral discovery records are auto-purged on disconnection." FontSize="12.5" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap" LineHeight="18"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Software Updates Card -->
+                            <Border x:Name="UpdateSectionCard" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="24" Margin="0,0,0,20" ClipToBounds="True">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    
+                                    <Grid Grid.Row="0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        
+                                        <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Border Width="40" Height="40" CornerRadius="12" Margin="0,0,14,0">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                        <GradientStop Color="#059669" Offset="0"/>
+                                                        <GradientStop Color="#10B981" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <ui:SymbolIcon Symbol="ArrowDownload24" Foreground="White" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="Application Updates" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                    <TextBlock x:Name="CurrentVersionText" Text="v1.0.0" FontSize="11" Foreground="#A78BFA" FontWeight="SemiBold"/>
+                                                    <TextBlock x:Name="LatestVersionText" Text="" FontSize="11" Foreground="#34D399" FontWeight="SemiBold" Margin="8,0,0,0"/>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </StackPanel>
+                                        
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <ui:Button x:Name="RedownloadBtn" Appearance="Secondary" Padding="12,7" CornerRadius="8" Click="RedownloadBtn_Click" Margin="0,0,8,0" ToolTip="Re-download current version from GitHub (repair install)">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" Margin="0,0,6,0"/>
+                                                    <TextBlock Text="Repair" FontSize="12" FontWeight="SemiBold"/>
+                                                </StackPanel>
+                                            </ui:Button>
+                                            <ui:Button x:Name="UpdateBtn" Appearance="Primary" Content="Check for Updates" Padding="14,7" CornerRadius="8" FontWeight="SemiBold" Click="UpdateBtn_Click"/>
+                                        </StackPanel>
+                                    </Grid>
+                                    
+                                    <StackPanel Grid.Row="1" Margin="0,16,0,0">
+                                        <Border x:Name="UpdateProgressPanel" Visibility="Collapsed" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="8" Padding="14,10" Margin="0,0,0,12">
+                                            <StackPanel>
+                                                <Grid Margin="0,0,0,6">
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock x:Name="UpdateStatusText" Text="Checking..." FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
+                                                    <TextBlock x:Name="UpdatePctText" Text="" Grid.Column="1" FontSize="12" Foreground="#34D399" FontWeight="SemiBold"/>
+                                                </Grid>
+                                                <Border Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" CornerRadius="2" Height="6">
+                                                    <Border x:Name="UpdateProgressBar" CornerRadius="2" HorizontalAlignment="Left" Width="0">
+                                                        <Border.Background>
+                                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                                <GradientStop Color="#34D399" Offset="0"/>
+                                                                <GradientStop Color="#6EE7B7" Offset="1"/>
+                                                            </LinearGradientBrush>
+                                                        </Border.Background>
+                                                    </Border>
+                                                </Border>
+                                            </StackPanel>
+                                        </Border>
+                                        
+                                        <Border x:Name="ChangelogPanel" Visibility="Collapsed" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,0">
+                                            <StackPanel>
+                                                <TextBlock Text="What's New in This Version" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,6"/>
+                                                <TextBlock x:Name="ChangelogText" Text="" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap" LineHeight="18"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- Bottom Row: 2 Small Action Cards -->
+                            <Grid Margin="0,0,0,24">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="16"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                
+                                <!-- Card 1: Compliance & Privacy -->
+                                <Border Grid.Column="0" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="20" ClipToBounds="True">
+                                    <Grid>
+                                        <Border CornerRadius="14" Opacity="0.08" HorizontalAlignment="Right" VerticalAlignment="Top" Width="100" Height="100" Margin="-20,-20,0,0">
+                                            <Border.Background>
+                                                <RadialGradientBrush>
+                                                    <GradientStop Color="#10B981" Offset="0"/>
+                                                    <GradientStop Color="Transparent" Offset="1"/>
+                                                </RadialGradientBrush>
+                                            </Border.Background>
+                                        </Border>
+                                        
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                                <Border Width="32" Height="32" CornerRadius="8" Background="#1AEF4444" Margin="0,0,10,0">
+                                                    <ui:SymbolIcon Symbol="DocumentProtect24" Foreground="#EF4444" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="Privacy Compliance" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            
+                                            <TextBlock Text="Read our comprehensive, Microsoft Store-compliant privacy statement. Review details on what data is processed and how to inspect/delete your local files." FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextWrapping="Wrap" LineHeight="17" Margin="0,0,0,16" Height="51"/>
+                                            
+                                            <ui:Button Appearance="Primary" Content="View Privacy Policy" HorizontalAlignment="Stretch" Padding="0,8" CornerRadius="8" Click="PrivacyPolicyLink_Click">
+                                                <ui:Button.Icon>
+                                                    <ui:SymbolIcon Symbol="Document24" FontSize="14"/>
+                                                </ui:Button.Icon>
+                                            </ui:Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                                
+                                <!-- Card 2: Development & Source -->
+                                <Border Grid.Column="2" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="20" ClipToBounds="True">
+                                    <Grid>
+                                        <Border CornerRadius="14" Opacity="0.08" HorizontalAlignment="Right" VerticalAlignment="Top" Width="100" Height="100" Margin="-20,-20,0,0">
+                                            <Border.Background>
+                                                <RadialGradientBrush>
+                                                    <GradientStop Color="#8B5CF6" Offset="0"/>
+                                                    <GradientStop Color="Transparent" Offset="1"/>
+                                                </RadialGradientBrush>
+                                            </Border.Background>
+                                        </Border>
+                                        
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                                <Border Width="32" Height="32" CornerRadius="8" Background="#1A8B5CF6" Margin="0,0,10,0">
+                                                    <ui:SymbolIcon Symbol="Code24" Foreground="#8B5CF6" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="Open Source Community" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            
+                                            <TextBlock Text="FlyShelf is built entirely in the open. You can audit the security, report bugs, request features, or contribute code directly on our official GitHub page." FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextWrapping="Wrap" LineHeight="17" Margin="0,0,0,16" Height="51"/>
+                                            
+                                            <ui:Button Appearance="Secondary" Content="Visit GitHub Repository" HorizontalAlignment="Stretch" Padding="0,8" CornerRadius="8" Click="GitHubLink_Click">
+                                                <ui:Button.Icon>
+                                                    <ui:SymbolIcon Symbol="Globe24" FontSize="14"/>
+                                                </ui:Button.Icon>
+                                            </ui:Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+
+                            <!-- Footer -->
+                            <TextBlock Text="© 2026 FlyShelf. Built with 💜 by Shivendra. All rights reserved." FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,10,0,24" Opacity="0.7"/>
+                            
+                        </StackPanel>
+                    </ScrollViewer>
                 </Grid>
 
             </Grid>

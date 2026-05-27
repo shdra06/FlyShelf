@@ -64,6 +64,21 @@ namespace FlyShelf.Windows
             VersionBadgeText.Text = $"v{v}";
             CurrentVersionText.Text = $"v{v}";
 
+#if MSIX_STORE
+            // In Microsoft Store builds, suppress showing the in-app autoupdater card to comply with Store policies
+            if (UpdateSectionCard != null)
+            {
+                UpdateSectionCard.Visibility = Visibility.Collapsed;
+            }
+#endif
+            if (StartupHelper.IsPackaged())
+            {
+                if (UpdateSectionCard != null)
+                {
+                    UpdateSectionCard.Visibility = Visibility.Collapsed;
+                }
+            }
+
             // Wire up UpdateManager events
             _updateManager.StatusChanged += (msg) => Dispatcher.Invoke(() =>
             {
@@ -349,6 +364,7 @@ namespace FlyShelf.Windows
                 if (NetworkGrid != null) NetworkGrid.Visibility = tag == "Network" ? Visibility.Visible : Visibility.Collapsed;
                 if (SettingsGrid != null) SettingsGrid.Visibility = tag == "Settings" ? Visibility.Visible : Visibility.Collapsed;
                 if (LogsGrid != null) LogsGrid.Visibility = tag == "Logs" ? Visibility.Visible : Visibility.Collapsed;
+                if (AboutGrid != null) AboutGrid.Visibility = tag == "About" ? Visibility.Visible : Visibility.Collapsed;
                 
                 if (tag == "Logs") RefreshLogs_Click(null, null);
                 if (tag == "Settings") PopulateThemeCombo();
@@ -392,6 +408,38 @@ namespace FlyShelf.Windows
         {
             SettingsManager.Save();
             MessageBox.Show("Configuration updated successfully.", "FlyShelf", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private void PrivacyPolicyLink_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "https://github.com/shdra06/FlyShelf/blob/main/PRIVACY_POLICY.md",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("HYPERLINK_ERROR", $"Failed to open privacy policy: {ex.Message}");
+            }
+        }
+
+        private void GitHubLink_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = "https://github.com/shdra06/FlyShelf",
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("HYPERLINK_ERROR", $"Failed to open github link: {ex.Message}");
+            }
         }
 
         private void RetentionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
