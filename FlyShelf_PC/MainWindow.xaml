@@ -557,6 +557,20 @@
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Apps24" /></ui:Button.Icon>
                         </ui:Button>
 
+                        <!-- Clear Shelf Button -->
+                        <ui:Button x:Name="ClearAllToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ClearAllToolbar_Click" ToolTip="Clear Shelf (Delete Unpinned)" Margin="0,0,4,0"
+                                   Background="#30EF4444" Foreground="#EF4444" BorderBrush="#50EF4444">
+                            <ui:Button.Resources>
+                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28EF4444"/>
+                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#60EF4444"/>
+                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FECDD3"/>
+                                
+                                <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#1AEF4444"/>
+                                <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#30EF4444"/>
+                            </ui:Button.Resources>
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" Foreground="#EF4444"/></ui:Button.Icon>
+                        </ui:Button>
+
                         <!-- Open Settings Hub -->
                         <ui:Button x:Name="OpenSettingsBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="OpenApp_Click" ToolTip="Open Hub (Settings)">
                             <ui:Button.Resources>

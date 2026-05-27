@@ -587,5 +587,29 @@ namespace FlyShelf
                 MessageBox.Show($"Failed to clear shelf: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
+
+        private void ClearAllToolbar_Click(object sender, RoutedEventArgs e)
+        {
+            if (OverflowPopup != null) OverflowPopup.IsOpen = false;
+            
+            try
+            {
+                var result = MessageBox.Show(
+                    "Are you sure you want to clear all unpinned items from your clipboard shelf?",
+                    "Clear Shelf",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Warning);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    _viewModel.ClearShelf();
+                    Windows.ToastWindow.ShowToast("Shelf cleared! 🧹");
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to clear shelf: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
     }
 }
