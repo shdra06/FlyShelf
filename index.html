@@ -3,39 +3,71 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FlyShelf — Best Cross-Platform Clipboard Manager for PC & Android</title>
+  <title>FlyShelf — Best Cross-Device Clipboard Manager for Windows PC & Android</title>
   
-  <!-- SEO Meta Tags -->
-  <meta name="description" content="FlyShelf is the ultimate cross-platform clipboard manager and P2P file sync tool for Windows PC and Android. Seamlessly sync copy-paste history, links, and screenshots in real-time.">
-  <meta name="keywords" content="clipboard, clipboard manager, clipboard manager for pc, pc clipboard sync, android clipboard, copy paste tool, clipboard history, P2P clipboard, windows clipboard, sync clipboard, universal clipboard, flyshelf, productivity tools">
-  <meta name="author" content="Shivendra">
+  <!-- Advanced SEO Engine Meta Tags -->
+  <meta name="description" content="FlyShelf is the ultimate open-source, cross-device clipboard manager and P2P file share tool for Windows PC & Android. Sync your copy-paste history, files, and screenshots instantly over LAN and Cloud tunnels safely.">
+  <meta name="keywords" content="clipboard manager, cross-device clipboard sync, best clipboard manager for pc, windows clipboard history, android clipboard sync, copy paste sync utility, flyshelf github, shdra06 flyshelf, P2P file transfer, open source clipboard sync, universal copy paste app">
+  <meta name="author" content="Shivendra (shdra06)">
+  <link rel="canonical" href="https://shdra06.github.io/FlyShelf/" />
   
-  <!-- Open Graph / Social Media -->
-  <meta property="og:title" content="FlyShelf — Best Cross-Platform Clipboard Manager for PC & Android">
-  <meta property="og:description" content="Copy on one device. Paste anywhere. Instantly. Secure peer-to-peer clipboard sync for PC and Android.">
+  <!-- Open Graph / Facebook Social Metadata -->
+  <meta property="og:title" content="FlyShelf — Premium Cross-Device Clipboard Manager & Productivity Ecosystem">
+  <meta property="og:description" content="Copy once, paste anywhere. Sync clipboard text, files, and screenshots between Windows PC and Android instantly. Secure P2P transport.">
   <meta property="og:type" content="website">
-  <meta property="og:url" content="https://github.com/shdra06/FlyShelf">
+  <meta property="og:url" content="https://shdra06.github.io/FlyShelf/" />
+  <meta property="og:site_name" content="FlyShelf" />
   
-  <!-- JSON-LD Structured Data for SoftwareApplication Search SEO -->
+  <!-- Twitter Cards metadata -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="FlyShelf — Best Cross-Device Clipboard Manager for PC & Android">
+  <meta name="twitter:description" content="Secure, P2P clipboard synchronization between Windows PC and Android. Copy once, paste globally.">
+  
+  <!-- Advanced JSON-LD Entity Graph linking Website, Repo and Profile -->
   <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "FlyShelf",
-    "operatingSystem": "Windows 10, Windows 11, Android",
-    "applicationCategory": "ProductivityApplication",
-    "downloadUrl": "https://github.com/shdra06/FlyShelf/releases/tag/v7.0.0",
-    "offers": {
-      "@type": "Offer",
-      "price": "0.00",
-      "priceCurrency": "USD"
+  [
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "@id": "https://shdra06.github.io/FlyShelf/#software",
+      "name": "FlyShelf",
+      "operatingSystem": "Windows 10, Windows 11, Android",
+      "applicationCategory": "ProductivityApplication",
+      "downloadUrl": "https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf.exe",
+      "offers": {
+        "@type": "Offer",
+        "price": "0.00",
+        "priceCurrency": "USD"
+      },
+      "description": "Premium P2P cross-device clipboard manager and history sync tool for PC and Android. Copy once, paste everywhere instantly. Features high-speed local LAN transfer, Cloudflare firewalled tunnels, and Firebase signals.",
+      "applicationSubCategory": "Utility, Developer Tools",
+      "softwareVersion": "6.0.1",
+      "license": "https://github.com/shdra06/FlyShelf/blob/main/LICENSE",
+      "author": {
+        "@type": "Person",
+        "name": "Shivendra",
+        "alternateName": "shdra06",
+        "url": "https://github.com/shdra06"
+      }
     },
-    "description": "Premium P2P cross-platform clipboard manager and history sync tool for PC and Android. Copy once, paste everywhere instantly.",
-    "author": {
-      "@type": "Person",
-      "name": "Shivendra"
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "@id": "https://shdra06.github.io/FlyShelf/#website",
+      "url": "https://shdra06.github.io/FlyShelf/",
+      "name": "FlyShelf",
+      "description": "Interactive website showcasing the FlyShelf P2P cross-device clipboard manager ecosystem.",
+      "publisher": {
+        "@type": "Person",
+        "name": "Shivendra",
+        "alternateName": "shdra06",
+        "sameAs": [
+          "https://github.com/shdra06",
+          "https://github.com/shdra06/FlyShelf"
+        ]
+      }
     }
-  }
+  ]
   </script>
   
   <!-- Favicon / Styling CSS -->
@@ -74,7 +106,7 @@
   <!-- Hero Section -->
   <header class="hero" id="hero-header">
     <div class="hero-tag scroll-reveal">
-      <span></span> Ecosystem Version 7.0.0 is Live
+      <span></span> Ecosystem Version 6.0.1 is Live
     </div>
     <h1 class="scroll-reveal">
       Your Clipboard.<br>
@@ -83,12 +115,27 @@
     <p class="lead scroll-reveal">
       An ultra-premium, zero-friction clipboard synchronization and productivity platform. Copy text, links, code blocks, screenshots, or files on one device and watch them globally appear in milliseconds.
     </p>
+
+    <!-- Swatch Theme Switcher (From Next.js) -->
+    <div class="theme-switcher-wrapper scroll-reveal">
+      <div class="theme-switcher-box">
+        <span class="theme-switcher-label">Select Workspace Theme:</span>
+        <div class="theme-swatches">
+          <button class="theme-swatch active" data-theme="midnight" id="swatch-midnight"><span class="swatch-circle swatch-midnight"></span> Midnight</button>
+          <button class="theme-swatch" data-theme="ocean" id="swatch-ocean"><span class="swatch-circle swatch-ocean"></span> Ocean</button>
+          <button class="theme-swatch" data-theme="sunset" id="swatch-sunset"><span class="swatch-circle swatch-sunset"></span> Sunset</button>
+          <button class="theme-swatch" data-theme="emerald" id="swatch-emerald"><span class="swatch-circle swatch-emerald"></span> Emerald</button>
+          <button class="theme-swatch" data-theme="lavender" id="swatch-lavender"><span class="swatch-circle swatch-lavender"></span> Lavender</button>
+        </div>
+      </div>
+    </div>
+
     <div class="hero-ctas scroll-reveal">
-      <a href="https://github.com/shdra06/FlyShelf/releases/download/v7.0.0/FlyShelf.exe" class="btn-premium btn-cyan" id="btn-hero-download-exe">
+      <a href="https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf.exe" class="btn-premium btn-cyan" id="btn-hero-download-exe">
         <ion-icon name="logo-windows"></ion-icon>
         Download for Windows
       </a>
-      <a href="https://github.com/shdra06/FlyShelf/releases/download/v7.0.0/FlyShelf_Mobile.apk" class="btn-premium btn-outline" id="btn-hero-download-apk">
+      <a href="https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf_Mobile.apk" class="btn-premium btn-outline" id="btn-hero-download-apk">
         <ion-icon name="logo-android"></ion-icon>
         Get Android APK
       </a>
@@ -100,14 +147,14 @@
         <div class="platform-icon"><ion-icon name="logo-windows"></ion-icon></div>
         <div class="platform-info">
           <div class="platform-name">Windows PC</div>
-          <div class="platform-ver">v7.0.0 | .NET 10 WPF</div>
+          <div class="platform-ver">v6.0.1 | .NET 10 WPF</div>
         </div>
       </div>
       <div class="platform-card android">
         <div class="platform-icon"><ion-icon name="logo-android"></ion-icon></div>
         <div class="platform-info">
           <div class="platform-name">Android Mobile</div>
-          <div class="platform-ver">v7.0.0 | Native companion</div>
+          <div class="platform-ver">v6.0.1 | Native companion</div>
         </div>
       </div>
     </div>
@@ -210,6 +257,35 @@
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECTION: THE CLIPBOARD DILEMMA (From Next.js) -->
+  <section class="dilemma-section scroll-reveal" id="dilemma">
+    <div class="section-header">
+      <span class="badge badge-purple">Product Friction</span>
+      <h2>The Clipboard Dilemma</h2>
+      <p>Why default Windows solutions and legacy clipboard managers leave you frustrated:</p>
+    </div>
+    
+    <div class="problem-grid">
+      <div class="problem-card glass">
+        <div class="problem-icon">🤢</div>
+        <h3>Outdated UI/UX Layouts</h3>
+        <p>Ditto and CopyQ are packed with power, but feature eyesore, early-2000s desktop layouts that interrupt your focus and modern desktop aesthetics.</p>
+      </div>
+      
+      <div class="problem-card glass">
+        <div class="problem-icon">❌</div>
+        <h3>No Mobile Integration</h3>
+        <p>Windows built-in clipboard (Win + V) restricts your history to 25 items, does not support raw files, and completely lacks synchronization with Android phones.</p>
+      </div>
+      
+      <div class="problem-card glass">
+        <div class="problem-icon">🕵️</div>
+        <h3>Privacy Vulnerabilities</h3>
+        <p>Commercial clipboard sharing utilities require private online cloud accounts, store your clipboard logs on third-party servers, or track your data.</p>
       </div>
     </div>
   </section>
@@ -414,6 +490,92 @@
     </div>
   </section>
 
+  <!-- SECTION: COMPARISON MATRIX (From Next.js) -->
+  <section class="comparison-section scroll-reveal" id="compare">
+    <div class="section-header">
+      <span class="badge badge-cyan">Feature Comparison</span>
+      <h2>How FlyShelf Compares</h2>
+      <p>A features comparison matching FlyShelf with standard and classic clipboard tools:</p>
+    </div>
+    
+    <div class="comparison-table-wrapper">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th class="highlight-col">⚡ FlyShelf</th>
+            <th>Win + V</th>
+            <th>Ditto</th>
+            <th>PastePaw</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Interface Design</strong></td>
+            <td class="highlight-col">✨ Mica Glassmorphism</td>
+            <td>Standard Gray</td>
+            <td>📅 2005 Windows Forms</td>
+            <td>✨ Mica (Rust)</td>
+          </tr>
+          <tr>
+            <td><strong>History Capacity</strong></td>
+            <td class="highlight-col">Unlimited</td>
+            <td>25 Items</td>
+            <td>Unlimited</td>
+            <td>Unlimited</td>
+          </tr>
+          <tr>
+            <td><strong>Cross-device Sync</strong></td>
+            <td class="highlight-col">✅ PC ↔ Android (P2P)</td>
+            <td>❌ PC Only</td>
+            <td>❌ PC Only</td>
+            <td>❌ PC Only</td>
+          </tr>
+          <tr>
+            <td><strong>Raw File Transfers</strong></td>
+            <td class="highlight-col">✅ P2P LAN + Cloud</td>
+            <td>❌ None</td>
+            <td>❌ Local LAN only</td>
+            <td>❌ None</td>
+          </tr>
+          <tr>
+            <td><strong>Built-in Utilities</strong></td>
+            <td class="highlight-col">✅ AI OCR + PDF Merge</td>
+            <td>❌ None</td>
+            <td>❌ None</td>
+            <td>❌ AI ready only</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- SECTION: STATS & CONNECTIONS (From Next.js) -->
+  <section class="stats-section scroll-reveal">
+    <div class="stats-grid">
+      <div class="stat-card glass">
+        <span class="stat-value">3</span>
+        <span class="stat-label">Sync Lanes (LAN / Cloud / Signal)</span>
+        <span class="stat-desc">Sub-millisecond dynamic routing</span>
+      </div>
+      <div class="stat-card glass">
+        <span class="stat-value">0</span>
+        <span class="stat-label">Ads, Telemetry or Tracking</span>
+        <span class="stat-desc">100% offline-first & secure P2P</span>
+      </div>
+      <div class="stat-card glass">
+        <span class="stat-value">100%</span>
+        <span class="stat-label">Free & Open Source</span>
+        <span class="stat-desc">No premium gates or paywalls</span>
+      </div>
+      <div class="stat-card glass">
+        <span class="stat-value">2</span>
+        <span class="stat-label">Supported Platforms</span>
+        <span class="stat-desc">Windows PC & Android Phone</span>
+      </div>
+    </div>
+  </section>
+
   <!-- SECTION 4: TECHNICAL ARCHITECTURE DIAGRAM -->
   <section class="arch-section scroll-reveal" id="architecture">
     <div class="arch-card glass">
@@ -516,13 +678,13 @@
       Download the latest stable client binaries below. Fully self-contained, portable, zero installation needed.
     </p>
     <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
-      <a href="https://github.com/shdra06/FlyShelf/releases/download/v7.0.0/FlyShelf.exe" class="btn-premium btn-cyan" style="padding: 16px 32px; font-size: 1.05rem;" id="btn-footer-download-exe">
+      <a href="https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf.exe" class="btn-premium btn-cyan" style="padding: 16px 32px; font-size: 1.05rem;" id="btn-footer-download-exe">
         <ion-icon name="logo-windows"></ion-icon>
-        Windows Executable (v7.0.0)
+        Windows Executable (v6.0.1)
       </a>
-      <a href="https://github.com/shdra06/FlyShelf/releases/download/v7.0.0/FlyShelf_Mobile.apk" class="btn-premium btn-outline" style="padding: 16px 32px; font-size: 1.05rem;" id="btn-footer-download-apk">
+      <a href="https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf_Mobile.apk" class="btn-premium btn-outline" style="padding: 16px 32px; font-size: 1.05rem;" id="btn-footer-download-apk">
         <ion-icon name="logo-android"></ion-icon>
-        Android APK Build (v7.0.0)
+        Android APK Build (v6.0.1)
       </a>
     </div>
   </section>
@@ -563,7 +725,7 @@
     <div class="footer-bottom">
       <div>© 2026 FlyShelf Ecosystem. Built by Shivendra. All Rights Reserved.</div>
       <div style="display: flex; gap: 15px;">
-        <span>v7.0.0 Release Build</span>
+        <span>v6.0.1 Release Build</span>
         <span>•</span>
         <span>Secure P2P Protocol</span>
       </div>
