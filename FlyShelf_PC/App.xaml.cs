@@ -441,8 +441,12 @@ public partial class App : Application
                             _shakeStartY = currentY;
                         }
 
-                        if (currentTime - _lastShakeTime > 500)
+                        if (currentTime - _lastShakeTime > 650) // Increased turn reset to 650ms for slower/natural reversals
                         {
+                            if (_shakeCount > 0)
+                            {
+                                FlyShelf.Classes.Logger.LogAction("SHAKE", $"Shake timer reset due to inactivity gap ({currentTime - _lastShakeTime}ms). Resetting count from {_shakeCount} to 0.");
+                            }
                             _shakeCount = 0;
                             _lastSigDirX = 0;
                             _lastSigDirY = 0;
@@ -456,8 +460,8 @@ public partial class App : Application
                             int deltaY = currentY - _lastShakeY;
                             double distSq = (double)(deltaX * deltaX + deltaY * deltaY);
 
-                            // Lowered displacement threshold from 9px (81) to 7.7px (60) for highly sensitive diagonal detection
-                            if (distSq >= 60)
+                            // Lowered displacement threshold from 60 to 45 (6.7px) for much higher responsiveness
+                            if (distSq >= 45)
                             {
                                 bool reversed = false;
 
@@ -483,10 +487,12 @@ public partial class App : Application
                                 if (reversed)
                                 {
                                     _shakeCount++;
+                                    FlyShelf.Classes.Logger.LogAction("SHAKE", $"Direction reversal detected! Count: {_shakeCount}/4. Speed Sq: {distSq:F1}. Delta ({deltaX}, {deltaY}).");
 
                                     // Effortless and natural trigger after 4 reversals
                                     if (_shakeCount >= 4)
                                     {
+                                        FlyShelf.Classes.Logger.LogAction("SHAKE", "✅ Shake-to-open gesture fully recognized! Checking constraints...");
                                         _shakeCount = 0;
                                         _lastSigDirX = 0;
                                         _lastSigDirY = 0;
@@ -494,16 +500,25 @@ public partial class App : Application
                                         int triggerX = currentX;
                                         int triggerY = currentY;
 
-                                        // Expanded clamping threshold from 180px to 300px to easily allow diagonal shaking sweeps
-                                        int netDriftY = triggerY - _shakeStartY;
-                                        if (netDriftY > 300) return;
+                                        // Absolute vertical drift clamping check (covers both upwards and downwards drift)
+                                        int netDriftY = Math.Abs(triggerY - _shakeStartY);
+                                        if (netDriftY > 300)
+                                        {
+                                            FlyShelf.Classes.Logger.LogAction("SHAKE", $"❌ Rejected: Exceeded Y-axis drift constraint. Drift: {netDriftY}px (Max allowed: 300px).");
+                                            return;
+                                        }
 
                                         _lastClipboardLaunchTime = Environment.TickCount64;
+                                        FlyShelf.Classes.Logger.LogAction("SHAKE", $"🚀 Launching Clipboard Mini-Shelf at screen coordinates ({triggerX}, {triggerY}).");
 
                                         _instance?.Dispatcher.InvokeAsync(async () => 
                                         {
-                                            await System.Threading.Tasks.Task.Delay(300);
-                                            if (ActiveMergeWindow != null && ActiveMergeWindow.IsActive) return;
+                                            await System.Threading.Tasks.Task.Delay(150); // Lowered delay to 150ms for instant summon feedback
+                                            if (ActiveMergeWindow != null && ActiveMergeWindow.IsActive)
+                                            {
+                                                FlyShelf.Classes.Logger.LogAction("SHAKE", "❌ Rejected: PDF Merger window is active.");
+                                                return;
+                                            }
                                             _instance.LaunchClipboardManager(triggerX, triggerY, false, 0, false);
                                         }, System.Windows.Threading.DispatcherPriority.Background);
                                     }
@@ -514,7 +529,13 @@ public partial class App : Application
                 }
                 else
                 {
-                    _shakeCount = 0;
+                    if (_shakeCount > 0)
+                    {
+                        _shakeCount = 0;
+                        _lastSigDirX = 0;
+                        _lastSigDirY = 0;
+                        FlyShelf.Classes.Logger.LogAction("SHAKE", "LBUTTON released. Resetting shake state.");
+                    }
                 }
             }
             catch { }
