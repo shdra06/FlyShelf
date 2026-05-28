@@ -50,12 +50,7 @@ echo    Saved: FINAL\FlyShelf.exe.sha256
 echo.
 echo [4/4] Updating version.json with new hash...
 
-:: Update pc_sha256 in version.json using PowerShell
-powershell -NoProfile -Command ^
-  "$json = Get-Content '..\version.json' -Raw | ConvertFrom-Json; ^
-   $json.pc_sha256 = '%NEWHASH%'; ^
-   $json | ConvertTo-Json -Depth 10 | Set-Content '..\version.json' -Encoding UTF8; ^
-   Write-Host '    Updated version.json pc_sha256 to %NEWHASH%'"
+powershell -NoProfile -Command "$json = Get-Content '..\version.json' -Raw | ConvertFrom-Json; $json.pc_sha256 = '%NEWHASH%'; $json | ConvertTo-Json -Depth 10 | Set-Content '..\version.json' -Encoding UTF8; Write-Host '    Updated version.json pc_sha256 to %NEWHASH%'"
 
 echo.
 echo ==============================================
