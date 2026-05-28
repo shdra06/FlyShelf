@@ -333,22 +333,23 @@ namespace FlyShelf
                     bmp.BeginInit();
                     bmp.UriSource = new Uri(path, UriKind.Absolute);
                     bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                    bmp.DecodePixelWidth = 300; // Keep it lightweight
+                    bmp.DecodePixelWidth = 1200; // High-quality decoded resolution
                     bmp.EndInit();
                     bmp.Freeze();
 
-                    // Layer 1: Background image
+                    // Show container layers immediately with unblurred preview to prevent flash
                     WallpaperBg.Source = bmp;
                     WallpaperBg.Visibility = Visibility.Visible;
-
-                    // Layer 3: Frosted glass header — pre-blur on background thread
                     WallpaperFrostHeader.Visibility = Visibility.Visible;
+
                     var capturedPathForBlur = path;
                     var bmpForBlur = bmp;
                     _ = System.Threading.Tasks.Task.Run(() =>
                     {
                         try
                         {
+                            // Pre-blur background at a soft radius of 15 for a premium glassmorphic feel
+                            var blurredBg = PreBlurBitmap(bmpForBlur, 15);
                             // Pre-blur at radius 12 for frosted header (replaces runtime BlurEffect)
                             var blurredHeader = PreBlurBitmap(bmpForBlur, 12);
                             // Pre-blur at radius 18 for selected card backdrop
@@ -356,6 +357,7 @@ namespace FlyShelf
                             Dispatcher.InvokeAsync(() =>
                             {
                                 if (_currentLoadedWallpaperPath != capturedPathForBlur) return; // Stale
+                                WallpaperBg.Source = blurredBg;
                                 WallpaperFrostImg.Source = blurredHeader;
                                 Resources["PreBlurredWallpaper"] = blurredCards;
                             });
@@ -528,7 +530,7 @@ namespace FlyShelf
         /// Returns a frozen BitmapSource safe for cross-thread assignment to Image.Source.
         /// This replaces runtime WPF BlurEffect which re-rasterizes every render pass.
         /// </summary>
-        private static System.Windows.Media.Imaging.BitmapSource PreBlurBitmap(
+        public static System.Windows.Media.Imaging.BitmapSource PreBlurBitmap(
             System.Windows.Media.Imaging.BitmapImage source, int radius)
         {
             var image = new System.Windows.Controls.Image

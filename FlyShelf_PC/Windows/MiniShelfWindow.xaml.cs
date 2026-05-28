@@ -22,6 +22,7 @@ namespace FlyShelf.Windows
         private IntPtr _previousForegroundWindow = IntPtr.Zero;
         private IntPtr _lastActiveExternalWindow = IntPtr.Zero;
         private DateTime _spawnTime = DateTime.MinValue;
+        private string _loadedWallpaperPathInMini = "";
 
         // P/Invoke declarations
         [DllImport("user32.dll")]
@@ -119,26 +120,86 @@ namespace FlyShelf.Windows
             if (displayMode == "desktop" || displayMode == "theme")
             {
                 string wpPath = Classes.SettingsManager.Current.ClipboardWallpaperPath;
-                if (!string.IsNullOrEmpty(wpPath) && System.IO.File.Exists(wpPath))
+                if (string.IsNullOrEmpty(wpPath) || !System.IO.File.Exists(wpPath))
                 {
-                    try
+                    XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
+                    WallpaperBg.Source = null;
+                    WallpaperBg.Visibility = Visibility.Collapsed;
+                    _loadedWallpaperPathInMini = "";
+                    return;
+                }
+
+                if (wpPath == _loadedWallpaperPathInMini)
+                {
+                    WallpaperBg.Visibility = Visibility.Visible;
+                    return; // Already loaded!
+                }
+
+                try
+                {
+                    _loadedWallpaperPathInMini = wpPath;
+                    string ext = System.IO.Path.GetExtension(wpPath).ToLowerInvariant();
+                    bool isGif = ext == ".gif";
+
+                    if (isGif)
                     {
-                        var bmp = new BitmapImage();
-                        bmp.BeginInit();
-                        bmp.UriSource = new Uri(wpPath);
-                        bmp.CacheOption = BitmapCacheOption.OnLoad;
-                        bmp.DecodePixelWidth = 400;
-                        bmp.EndInit();
-                        bmp.Freeze();
-                        WallpaperBg.Source = bmp;
+                        // ═══ LIVE ANIMATED GIF WALLPAPER ═══
+                        WallpaperBg.Source = null;
+                        var uri = new Uri(wpPath, UriKind.Absolute);
+                        XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, uri);
+                        XamlAnimatedGif.AnimationBehavior.SetRepeatBehavior(WallpaperBg,
+                            System.Windows.Media.Animation.RepeatBehavior.Forever);
                         WallpaperBg.Visibility = Visibility.Visible;
                     }
-                    catch { WallpaperBg.Visibility = Visibility.Collapsed; }
+                    else
+                    {
+                        // ═══ STATIC PNG/JPG WALLPAPER ═══
+                        XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null); // Clear any GIF
+
+                        var bmp = new BitmapImage();
+                        bmp.BeginInit();
+                        bmp.UriSource = new Uri(wpPath, UriKind.Absolute);
+                        bmp.CacheOption = BitmapCacheOption.OnLoad;
+                        bmp.DecodePixelWidth = 1200; // High-quality decoded resolution
+                        bmp.EndInit();
+                        bmp.Freeze();
+
+                        // Set unblurred initially to prevent flash
+                        WallpaperBg.Source = bmp;
+                        WallpaperBg.Visibility = Visibility.Visible;
+
+                        var capturedPath = wpPath;
+                        var bmpToBlur = bmp;
+                        System.Threading.Tasks.Task.Run(() =>
+                        {
+                            try
+                            {
+                                // Pre-render a premium soft blur at radius 15 on background thread
+                                var blurredBg = MainWindow.PreBlurBitmap(bmpToBlur, 15);
+                                Dispatcher.InvokeAsync(() =>
+                                {
+                                    if (_loadedWallpaperPathInMini != capturedPath) return; // Stale
+                                    WallpaperBg.Source = blurredBg;
+                                });
+                            }
+                            catch { }
+                        });
+                    }
+                }
+                catch
+                {
+                    XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
+                    WallpaperBg.Source = null;
+                    WallpaperBg.Visibility = Visibility.Collapsed;
+                    _loadedWallpaperPathInMini = "";
                 }
             }
             else
             {
+                XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
+                WallpaperBg.Source = null;
                 WallpaperBg.Visibility = Visibility.Collapsed;
+                _loadedWallpaperPathInMini = "";
             }
         }
 
