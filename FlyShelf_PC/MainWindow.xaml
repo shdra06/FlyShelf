@@ -2063,21 +2063,10 @@
                                                     </TextBlock>
                                                 </Grid>
                                                 
-                                                <!-- Last Edited Timestamp (Visible only when collapsed) -->
+                                                <!-- Last Edited Timestamp (always visible) -->
                                                 <TextBlock Grid.Column="2" Text="{Binding LastEditedDisplay}" FontSize="10.5" 
                                                            Foreground="#8B8BA8" VerticalAlignment="Center" Margin="0,0,6,0"
-                                                           IsHitTestVisible="False">
-                                                    <TextBlock.Style>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsCollapsed}" Value="True">
-                                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </TextBlock.Style>
-                                                </TextBlock>
+                                                           IsHitTestVisible="False" Opacity="0.8"/>
                                                 
                                                 <!-- Delete button (visible on hover) -->
                                                 <Border x:Name="BulletDeleteBtn" Grid.Column="3" CornerRadius="4" Cursor="Hand" 
