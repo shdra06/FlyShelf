@@ -1,8 +1,8 @@
 {
-  "pc_version": "8.0.0",
-  "pc_changelog": "v8.0.0 — Auto-Hide Taskbar Support & Notes Improvements\n\n• New: Smart floating mode when taskbar auto-hide is enabled — widget appears in the bottom corner.\n• Fixed: Widget mode transition (floating ↔ embedded) now works reliably when toggling auto-hide.\n• Fixed: Full cache invalidation during mode transitions prevents ghost positioning bugs.\n• Improved: Removed scroll-to-resize on note images — cleaner interaction.",
-  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v8.0.0/FlyShelf.exe",
-  "pc_sha256": "ee09eb1c460e83e73d668e845b3e276cae08b00e7bd673eedf009fa63f6801c5",
+  "pc_version": "8.1.0",
+  "pc_changelog": "v8.1.0 — Unified Window Restore, Scrollbar Removal & Search Improvements\n\n• New: Reverted separate MiniShelfWindow, fully restored the highly reliable unified MainWindow layout for all clipboard modes.\n• New: Search capability is now fully visible and active inside the mini flyshelf clipboard.\n• Improved: Vertical scrollbar is dynamically hidden in Mini Mode to prevent visual clutter in tight spaces.\n• Fixed: Added mode-driven check to ensure the mini clipboard always opens directly in standard clipboard list mode.",
+  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v8.1.0/FlyShelf.exe",
+  "pc_sha256": "720802520abc20d1f3805d48a2da35fb1faa046ff29144fe91e9022c58cdb83e",
   "android_version": "7.1.0",
   "android_changelog": "v7.1.0 — Version Sync\n\n• Bumped version to sync with Desktop client release.",
   "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"
