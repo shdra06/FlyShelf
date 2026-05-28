@@ -1,8 +1,8 @@
 {
-  "pc_version": "7.1.0",
-  "pc_changelog": "v7.1.0 — Flawless Transitions & Premium Card Deletion\n\n• Fixed: Complete elimination of the 1-frame solid background flash during summon or re-summon.\n• Fixed: Elimination of the card deletion visual jerk and layout shift. Upper cards now remain perfectly anchored.",
-  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf.exe",
-  "pc_sha256": "d089074e428e6856cf1796b1bb534e16d3134c88b6a14defd688d2cef3f4f788",
+  "pc_version": "8.0.0",
+  "pc_changelog": "v8.0.0 — Auto-Hide Taskbar Support & Notes Improvements\n\n• New: Smart floating mode when taskbar auto-hide is enabled — widget appears in the bottom corner.\n• Fixed: Widget mode transition (floating ↔ embedded) now works reliably when toggling auto-hide.\n• Fixed: Full cache invalidation during mode transitions prevents ghost positioning bugs.\n• Improved: Removed scroll-to-resize on note images — cleaner interaction.",
+  "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v8.0.0/FlyShelf.exe",
+  "pc_sha256": "e98d5ea80529ce71717a25d47bb0da2c56f0b854d6deea8b4ad41d851311aed2",
   "android_version": "7.1.0",
   "android_changelog": "v7.1.0 — Version Sync\n\n• Bumped version to sync with Desktop client release.",
   "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"

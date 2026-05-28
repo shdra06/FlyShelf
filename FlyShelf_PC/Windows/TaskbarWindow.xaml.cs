@@ -7,6 +7,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Threading;
@@ -46,6 +47,10 @@ namespace FlyShelf.Windows
 
         private bool _lastCachedTaskbarCentered = false;
         private bool _lastCachedWidgetsVisible = true;
+
+        // Cached Widgets button right edge (detected via UI Automation)
+        private int _cachedWidgetsButtonRight = -1;
+        private DateTime _lastWidgetsButtonScan = DateTime.MinValue;
 
         public TaskbarWindow()
         {
@@ -313,16 +318,22 @@ namespace FlyShelf.Windows
             style = (style & ~WS_CHILD) | WS_POPUP;
             SetWindowLong(widgetHwnd, GWL_STYLE, style);
 
-            // Keep tool window + topmost
+            // Keep tool window
             int exStyle = GetWindowLong(widgetHwnd, GWL_EXSTYLE);
             exStyle |= WS_EX_TOOLWINDOW;
             SetWindowLong(widgetHwnd, GWL_EXSTYLE, exStyle);
 
-            // Invalidate position cache to force recalculation
+            // Invalidate ALL caches to force complete recalculation
             _lastWidgetLeft = -1;
             _lastWidgetTop = -1;
+            _lastWidgetW = -1;
+            _lastWidgetH = -1;
             _cachedFreeZoneLeft = -1;
             _lastFreeZoneScan = DateTime.MinValue;
+            _lastTaskbarWidth = -1;
+            _lastTaskbarHeight = -1;
+            _lastTaskbarFrameRect = Rect.Empty;
+            _positionUpdateInProgress = false;
 
             Classes.Logger.LogAction("WIDGET", "Switched to FLOATING mode (taskbar auto-hide detected)");
         }
@@ -346,13 +357,29 @@ namespace FlyShelf.Windows
 
             SetParent(widgetHwnd, taskbarHandle);
 
-            // Invalidate position cache
+            // Force the native window to be visible after re-parenting
+            const int SW_SHOWNOACTIVATE = 8;
+            NativeMethods.ShowWindow(widgetHwnd, SW_SHOWNOACTIVATE);
+
+            // Invalidate ALL caches so CalculateAndSetPosition starts completely fresh
+            // (taskbar dimensions change between auto-hide and normal mode)
             _lastWidgetLeft = -1;
             _lastWidgetTop = -1;
+            _lastWidgetW = -1;
+            _lastWidgetH = -1;
             _cachedFreeZoneLeft = -1;
             _lastFreeZoneScan = DateTime.MinValue;
+            _lastTaskbarWidth = -1;
+            _lastTaskbarHeight = -1;
+            _lastTaskbarFrameRect = Rect.Empty;
+            _cachedWidgetsButtonRight = -1;
+            _lastWidgetsButtonScan = DateTime.MinValue;
+            _positionUpdateInProgress = false;
 
-            Classes.Logger.LogAction("WIDGET", "Switched to EMBEDDED mode (taskbar auto-hide disabled)");
+            // Force WPF visibility
+            Visibility = Visibility.Visible;
+
+            Classes.Logger.LogAction("WIDGET", "Switched to EMBEDDED mode (taskbar auto-hide disabled) — all caches reset");
         }
 
         private void SetupWindow()
@@ -377,7 +404,6 @@ namespace FlyShelf.Windows
                     return;
                 }
 
-                // Check auto-hide state — if on, use floating mode instead of embedding
                 bool autoHide = IsTaskbarAutoHideEnabled();
                 if (autoHide)
                 {
@@ -387,7 +413,6 @@ namespace FlyShelf.Windows
                     exStyle |= WS_EX_TOOLWINDOW;
                     SetWindowLong(taskbarWindowHandle, GWL_EXSTYLE, exStyle);
 
-                    // Position at bottom of screen
                     CalculateFloatingPosition(taskbarWindowHandle, taskbarHandle);
                     Classes.Logger.LogAction("WIDGET", "SetupWindow complete — floating mode (auto-hide)");
                 }
@@ -470,7 +495,7 @@ namespace FlyShelf.Windows
 
                 if (_isFloatingMode)
                 {
-                    // Floating mode: position at bottom of screen independently
+                    // Floating mode: always keep the widget visible in the corner
                     if (taskbarHandle != IntPtr.Zero)
                     {
                         Dispatcher.BeginInvoke(() => { CalculateFloatingPosition(interop.Handle, taskbarHandle); }, DispatcherPriority.Background);
@@ -479,7 +504,8 @@ namespace FlyShelf.Windows
                 else
                 {
                     // Embedded mode: normal taskbar child positioning
-                    if (GetParent(interop.Handle) != taskbarHandle)
+                    IntPtr currentParent = GetParent(interop.Handle);
+                    if (currentParent == IntPtr.Zero || (currentParent != taskbarHandle && !NativeMethods.IsChild(taskbarHandle, currentParent)))
                     {
                         SetParent(interop.Handle, taskbarHandle);
                     }
@@ -491,6 +517,28 @@ namespace FlyShelf.Windows
                 }
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Checks if the auto-hide taskbar is currently visible (slid into view) by comparing
+        /// its screen position to the monitor edge. When hidden, the taskbar is positioned
+        /// mostly off-screen (only 2px visible at the edge).
+        /// </summary>
+        private bool IsTaskbarCurrentlyVisible(IntPtr taskbarHandle)
+        {
+            try
+            {
+                GetWindowRect(taskbarHandle, out RECT taskbarRect);
+                var monitor = MonitorUtil.GetMonitor(taskbarHandle);
+                int taskbarHeight = taskbarRect.Bottom - taskbarRect.Top;
+
+                // The taskbar is at the bottom. When hidden, its Top is near monitorArea.Bottom
+                // (only ~2px peeking). When visible, its Top is well above the bottom.
+                // Consider it visible if more than 10px of the taskbar is showing.
+                int visiblePixels = (int)monitor.monitorArea.Bottom - taskbarRect.Top;
+                return visiblePixels > 10;
+            }
+            catch { return true; }
         }
 
         /// <summary>
@@ -558,13 +606,13 @@ namespace FlyShelf.Windows
                 if (Math.Abs(this.Height - targetLogicalHeight) > 0.01)
                     this.Height = targetLogicalHeight;
 
-                // HWND_TOPMOST = -1 to keep above other windows
-                const int HWND_TOPMOST = -1;
+                // HWND_BOTTOM = 1 to keep behind all app windows (like the taskbar when auto-hidden)
+                const int HWND_BOTTOM = 1;
 
                 if (screenX != _lastWidgetLeft || screenY != _lastWidgetTop ||
                     physicalWidth != _lastWidgetW || physicalHeight != _lastWidgetH)
                 {
-                    SetWindowPos(widgetHwnd, HWND_TOPMOST,
+                    SetWindowPos(widgetHwnd, HWND_BOTTOM,
                              screenX, screenY,
                              physicalWidth, physicalHeight,
                              SWP_NOACTIVATE | SWP_SHOWWINDOW);
@@ -575,8 +623,8 @@ namespace FlyShelf.Windows
                 }
                 else
                 {
-                    // Keep topmost
-                    SetWindowPos(widgetHwnd, HWND_TOPMOST, 0, 0, 0, 0,
+                    // Keep behind other windows
+                    SetWindowPos(widgetHwnd, HWND_BOTTOM, 0, 0, 0, 0,
                                  SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
                 }
 
@@ -681,6 +729,22 @@ namespace FlyShelf.Windows
                 // Set parent-local coordinates: X is from FindTaskbarFreeZone, Y is mapped client coordinate
                 containerPos.X = widgetLeft;
 
+                // Get the actual parent window handle (handles third-party customizer re-parenting)
+                IntPtr actualParent = GetParent(taskbarWindowHandle);
+                if (actualParent == IntPtr.Zero)
+                {
+                    actualParent = taskbarHandle; // Fallback to taskbar handle
+                }
+
+                // If actual parent is different from the target taskbarHandle, translate the coordinates!
+                if (actualParent != taskbarHandle)
+                {
+                    // Convert taskbarHandle client coordinates to absolute screen coordinates
+                    NativeMethods.ClientToScreen(taskbarHandle, ref containerPos);
+                    // Convert screen coordinates to actual parent client coordinates
+                    NativeMethods.ScreenToClient(actualParent, ref containerPos);
+                }
+
                 // Size the widget WPF controls to match exactly (to avoid WPF layout loops)
                 Widget.Width = physicalWidth / dpiScale;
                 Widget.Height = physicalHeight / dpiScale;
@@ -761,6 +825,8 @@ namespace FlyShelf.Windows
             {
                 _cachedFreeZoneLeft = -1;
                 _lastFreeZoneScan = DateTime.MinValue;
+                _cachedWidgetsButtonRight = -1;
+                _lastWidgetsButtonScan = DateTime.MinValue;
                 _lastCachedTaskbarCentered = isTaskbarCentered;
                 _lastCachedWidgetsVisible = isWidgetsVisible;
             }
@@ -783,7 +849,17 @@ namespace FlyShelf.Windows
                 {
                     if (isWidgetsVisible)
                     {
-                        occupiedZones.Add((0, (int)(320 * dpiScale))); // Protect the Widgets area on the far left corner on Win11 (expanded to 320 logical pixels, scaled by DPI, to clear dynamic weather/news text)
+                        // Use UI Automation to detect the actual Widgets button width
+                        int widgetsRight = DetectWidgetsButtonRight(taskbarHandle);
+                        if (widgetsRight > 0)
+                        {
+                            occupiedZones.Add((0, widgetsRight));
+                        }
+                        else
+                        {
+                            // Fallback: conservative estimate if UI Automation fails
+                            occupiedZones.Add((0, (int)(160 * dpiScale)));
+                        }
                     }
                     else
                     {
@@ -955,6 +1031,55 @@ namespace FlyShelf.Windows
             _cachedFreeZoneWidth = physicalWidth;
             _lastFreeZoneScan = DateTime.Now;
             return (widgetLeft, physicalWidth);
+        }
+
+        /// <summary>
+        /// Uses UI Automation to detect the actual right edge of the Windows 11 Widgets button
+        /// (the weather/news toggle on the far left of the taskbar). The Widgets button is rendered
+        /// via XAML Islands and has no traditional HWND, so standard window enumeration cannot detect it.
+        /// The result is cached for 30 seconds since the button size changes infrequently.
+        /// </summary>
+        private int DetectWidgetsButtonRight(IntPtr taskbarHandle)
+        {
+            // Return cached value if still fresh (30 seconds — Widgets button size rarely changes)
+            if (_cachedWidgetsButtonRight > 0 && (DateTime.Now - _lastWidgetsButtonScan).TotalSeconds < 30)
+                return _cachedWidgetsButtonRight;
+
+            try
+            {
+                var taskbarElement = AutomationElement.FromHandle(taskbarHandle);
+                if (taskbarElement == null) return _cachedWidgetsButtonRight > 0 ? _cachedWidgetsButtonRight : -1;
+
+                // Find the Widgets button by its AutomationId ('WidgetsButton')
+                var widgetsButton = taskbarElement.FindFirst(
+                    TreeScope.Descendants,
+                    new PropertyCondition(AutomationElement.AutomationIdProperty, "WidgetsButton")
+                );
+
+                if (widgetsButton != null)
+                {
+                    var bounds = widgetsButton.Current.BoundingRectangle;
+                    if (!bounds.IsEmpty && bounds.Width > 0)
+                    {
+                        // Convert screen-space right edge to taskbar-local coordinate
+                        POINT pt = new() { X = (int)(bounds.Left + bounds.Width), Y = (int)bounds.Top };
+                        ScreenToClient(taskbarHandle, ref pt);
+                        _cachedWidgetsButtonRight = pt.X;
+                        _lastWidgetsButtonScan = DateTime.Now;
+
+                        Classes.Logger.LogAction("WIDGET", $"DetectWidgetsButtonRight: UIA detected WidgetsButton right={pt.X} (screen: L={bounds.Left}, W={bounds.Width})");
+                        return _cachedWidgetsButtonRight;
+                    }
+                }
+
+                Classes.Logger.LogAction("WIDGET", "DetectWidgetsButtonRight: WidgetsButton not found via UIA");
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("WIDGET", $"DetectWidgetsButtonRight failed: {ex.Message}");
+            }
+
+            return _cachedWidgetsButtonRight > 0 ? _cachedWidgetsButtonRight : -1;
         }
 
         [DllImport("user32.dll")]

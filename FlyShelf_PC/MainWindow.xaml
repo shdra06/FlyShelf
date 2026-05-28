@@ -2166,9 +2166,8 @@
                                                         <Border CornerRadius="6" ClipToBounds="True" 
                                                                 BorderBrush="#308B5CF6" BorderThickness="1" 
                                                                 HorizontalAlignment="Left" Cursor="Hand"
-                                                                MouseWheel="NoteImageResize_MouseWheel" 
                                                                 MouseLeftButtonDown="NoteImage_Click"
-                                                                ToolTip="Click to open • Scroll to resize">
+                                                                ToolTip="Click to open">
                                                             <Image Source="{Binding ImagePath}" 
                                                                    Width="{Binding ImageDisplayWidth}" 
                                                                    Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
@@ -2196,9 +2195,8 @@
                                                         <Border CornerRadius="6" ClipToBounds="True" 
                                                                 BorderBrush="#308B5CF6" BorderThickness="1" 
                                                                 HorizontalAlignment="Left" Cursor="Hand"
-                                                                MouseWheel="NoteImageResize2_MouseWheel" 
                                                                 MouseLeftButtonDown="NoteImage2_Click"
-                                                                ToolTip="Click to open • Scroll to resize">
+                                                                ToolTip="Click to open">
                                                             <Image Source="{Binding ImagePath2}" 
                                                                    Width="{Binding ImageDisplayWidth2}" 
                                                                    Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
@@ -2262,9 +2260,8 @@
                                             <Grid>
                                                 <Border CornerRadius="6" ClipToBounds="True" HorizontalAlignment="Left" Cursor="Hand"
                                                         BorderBrush="#308B5CF6" BorderThickness="1"
-                                                        MouseWheel="FreeformImageResize_MouseWheel"
                                                         MouseLeftButtonDown="FreeformImage_Click"
-                                                        ToolTip="Click to open • Scroll to resize">
+                                                        ToolTip="Click to open">
                                                     <Image Source="{Binding ImagePath}" Width="{Binding DisplayWidth}"
                                                            Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
                                                 </Border>
