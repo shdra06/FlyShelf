@@ -2,12 +2,13 @@
  
 # ⚡ FlyShelf
 
-### **The Best Cross-Device Clipboard Manager & Productivity Ecosystem for PC & Android**
+### **The Ultimate Premium Cross-Device Clipboard & Productivity Ecosystem**
 
-*Copy on one device. Paste anywhere. Instantly. Secure P2P clipboard history, file sharing, and screenshots.*
+*Copy on one device. Paste anywhere. Instantly. Secure peer-to-peer pipelines for Windows & Android.*
 
-[![Windows Desktop App](https://img.shields.io/badge/Windows_Desktop-v6.0.1-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf.exe)
+[![Windows Desktop App](https://img.shields.io/badge/Windows_PC-v6.0.1-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf.exe)
 [![Android Mobile Companion](https://img.shields.io/badge/Android_Mobile-v6.0.1-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf_Mobile.apk)
+[![Ecosystem License](https://img.shields.io/badge/License-Proprietary-FF007F?style=for-the-badge&logo=shield&logoColor=white)](LICENSE)
 
 🚀 **Live Interactive Showcase**: [https://shdra06.github.io/FlyShelf](https://shdra06.github.io/FlyShelf)
 
@@ -17,180 +18,88 @@
 
 ## 🎯 What is FlyShelf?
 
-**FlyShelf** is an ultra-premium, zero-friction **cross-device clipboard manager** and real-time productivity platform. Engineered specifically for developers, power users, and creators, it seamlessly unifies your **clipboard history**, code snippets, hyperlinks, local files, and screenshots across all your Windows PCs and Android devices.
+**FlyShelf** is an ultra-premium, zero-friction **cross-device clipboard manager** and real-time productivity ecosystem. Engineered specifically for developers, power users, and creators, it seamlessly unifies your clipboard history, local files, code snippets, and screenshots across all your Windows PCs and Android devices in real-time.
 
-If you are looking for the **best clipboard manager for PC** that seamlessly syncs with your phone without cloud storage delays, FlyShelf is the perfect open-source solution. Unlike generic clipboard synchronization apps, FlyShelf operates entirely **peer-to-peer (P2P)** where possible. It implements a smart hybrid transport routing engine utilizing direct **WiFi LAN connections**, secure firewalled **Cloudflare Tunnels**, and sub-millisecond **Firebase Realtime Database** relays. No accounts, no advertising, no tracking, and absolute security.
+Unlike generic clipboard managers, FlyShelf works entirely **peer-to-peer (P2P)** where possible. It autodetects your network topology to route clipboard assets over the fastest path available—lightning-speed **WiFi LAN connections (100+ Mbps)**, firewalled secure **Cloudflare Tunnels**, or low-latency **Firebase Realtime Database** cloud relays. No advertising, no accounts to create, no spyware, and absolute privacy.
 
 ---
 
 ## ✨ Features that Define FlyShelf
 
-### 📋 Seamless Universal Clipboard Sync
-- **Instantly Synchronize**: Copy text, hyperlinks, rich code blocks, images, or raw files on any device and watch them appear globally in milliseconds.
-- **Dynamic Connection Engine**: Autodetects network topologies to route data over the fastest path—LAN (instant, 100+ Mbps) or secure cloud relays.
-- **Intelligent Deduplication**: Smart memory caching prevents double clipboard writes and maintains chronological order.
+### 📋 Universal Clipboard & File Sync
+- **Instantly Synchronize**: Copy text, hyperlinks, rich code blocks, screenshots, or raw files on any device and watch them appear globally in milliseconds.
+- **Dynamic Connection Routing**: Autodetects network environments to route heavy files locally over LAN, falling back to secure Cloudflare relays when remote.
+- **Intelligent Deduplication**: Smart memory caching prevents double clipboard writes and maintains strict chronological order.
 
-### 📱 Android Floating Ball & Background Service
-- **Persistent Overlay**: Access your entire workspace history anywhere on Android with a premium, physics-enabled floating overlay.
+### 🖥️ Mica summon Dashboard (Windows PC)
+- **Summon Dashboard**: A global keyboard shortcut (`Win + Shift + V` or `Alt + C`) or a cursor shaking gesture summons a beautiful glassmorphic dashboard featuring deep Windows 11 Mica blur and Acrylic backdrops.
+- **Interactive Action Pills**: Context-aware buttons reveal themselves on hover with micro-animations and drop-shadows.
+- **Premium Chevron Control**: Sleek, high-contrast, glassmorphic expand/collapse buttons point down when collapsed (blue) and up when expanded (red) to maximize text space utilization.
+
+### 📱 Android Foreground Service & Physics Overlay Ball
+- **Persistent Overlay**: Access your entire workspace history anywhere on Android with a premium, physics-enabled floating overlay bubble.
 - **Paste with a Single Tap**: Copy historical clips back into any active text input without shifting focus.
-- **Persistent Operations**: Backed by a secure, power-efficient native Kotlin **Foreground Service** that survives Android's aggressive background app termination and screen lock.
+- **Kotlin Foreground Service**: Backed by an energy-efficient native background service that survives Android's aggressive memory management and screen lock.
 
-### 🖥️ Premium Desktop Power Hub (WPF / .NET 10)
-- **Summon Dashboard**: A global keyboard shortcut (`Win + Shift + V` or `Alt + C`) reveals a glassmorphic dashboard featuring deep Mica blur effects.
-- **Interactive Action Pills**: Action buttons reveal themselves on hover with micro-animations and drop-shadows.
-- **Premium Chevron Control**: Sleek, high-contrast, circular glassmorphic expand/collapse buttons point down when collapsed (blue) and up when expanded (red) for optimal text space utilization.
-- **Search & Filter**: Find files, code structures, or links with high-speed keyword queries.
+### 🔀 Fluid Drag-and-Drop Workspace
+- **Drag-In Files**: Select folders or documents from your file manager and drag them directly onto the FlyShelf overlay to instantly add them to the clipboard stack.
+- **Drag-Out Clips**: Grab card thumbnails from the FlyShelf overlay and drop them directly into active applications (Outlook, Slack, Word, Explorer) to paste them instantly.
 
-### 🛠️ Advanced Productivity Powerhouses
-- **📦 Bulk PDF Merging**: Select multiple PDFs, documents, or images on your shelf and merge them into a single high-quality PDF with a single click.
-- **🔍 Contextual Utilities**: Right-click any card to trigger contextual actions:
-  - **Code Preview**: Launch terminal runners or open scripts directly in VS Code.
-  - **Google Search**: Proactively query highlighted clipboard clips.
-  - **Text-to-PDF**: Instantly render raw text files into professional documents.
-  - **Gemini AI OCR & Tables**: Extract clean markdown tables from images using Gemini Pro Vision APIs.
+### 📁 Universal File Extension Support
+FlyShelf classified badges adapt to **all file extensions** to sort and optimize your shelf history:
+- **Documents & PDFs**: `.pdf`, `.docx`, `.xlsx`, `.pptx`, `.txt`, `.csv`
+- **Media Assets**: Images (`.png`, `.jpg`, `.webp`, `.gif`), Audio (`.mp3`, `.wav`), Videos (`.mp4`, `.mkv`)
+- **Archives**: `.zip`, `.rar`, `.7z`, `.tar.gz`
 
-### ⏱️ Glassmorphic Timer Dashboard
-- **Speed Commands**: Type `/5`, `timer 30 min`, or `2:30` directly into the search bar to launch a timer.
-- **Visual Feedback**: A beautiful progress ring glows dynamically and transitions color (green/blue ➔ amber ➔ red) as time runs out.
+### 🎨 Visual Workspace Custom Themes
+Match your focus with five premium glassmorphic color schemes. Selecting a theme changes the ambient background blurs, text gradients, and button shadows dynamically:
+- 🌌 **Midnight**: Deep cybernetic dark blue with purple and cyan gradients (Default).
+- 🌊 **Ocean**: Glowing neon teal with cyan highlights.
+- 🌅 **Sunset**: Warm orange/pink coral gradients.
+- 🌲 **Emerald**: Sleek mint green and emerald highlights.
+- 🔮 **Lavender**: Pastel violet and magenta gradients.
 
-### 🔄 Integrated One-Click Updates
-- Pre-configured check-for-updates system that safely pulls, decompresses, and reinstalls the latest binaries directly from GitHub Releases.
+### 📦 Local PDF Merger & Stitcher
+- **Stitch Files**: Select multiple PDF items on your shelf, reorder them in a visual queue using drag handles, and merge them into a single high-quality PDF with a single click. Processes entirely locally inside the app.
 
----
+### 📝 Clipboard Notes & Tasks
+- **Sticky Notes**: Create, edit, and pin text notes directly on your clipboard shelf to store quick-access guidelines, snippets, or immediate reminders.
 
-## 🏗️ Technical Architecture & Routing
+### ⏱️ Speed Timer Commands
+- **Command Triggers**: Type `/5`, `timer 30 min`, or `2:30` directly into the search bar to launch a timer.
+- **Visual Countdown**: A progress ring glows dynamically and transitions color (cyan ➔ amber ➔ warning red) as time ticks down.
 
-```
-┌──────────────────┐                        ┌──────────────────┐
-│   Windows PC     │   ◄── Firebase ──►     │   Android Phone  │
-│   FlyShelf.exe   │       (signaling)      │   FlyShelf.apk   │
-│                  │                        │                  │
-│  • Clipboard     │   ◄── Cloudflare ──►   │  • Floating Ball │
-│  • File Server   │      (file transfer)   │  • Background    │
-│  • Hub Dashboard │                        │    Sync Service  │
-│  • Timer         │   ◄── LAN Direct ──►   │  • Settings      │
-│  • PDF Tools     │      (same WiFi)       │                  │
-└──────────────────┘                        └──────────────────┘
-```
-
-FlyShelf implements a robust three-tier transport system:
-1. **Direct LAN (Peer-to-Peer)**: Transfers heavy files and large images locally over WiFi at maximum network speed.
-2. **Cloudflare Tunnel**: Bypasses firewalls and NATs securely, allowing remote file sharing between home and office.
-3. **Firebase RTDB**: Low-overhead signaling channel to relay short text clipboard items securely.
+### 🔍 Contextual Smart Utilities
+Right-click any card to trigger contextual actions:
+- **UTM URL Cleaner**: Strips marketing tracking parameters (`utm_*`, `fbclid`) from links.
+- **Google Search**: Query highlighted clips instantly.
+- **Math Solver**: Auto-evaluates math equations like `(12 * 8) - 15` using a Shunting-yard algorithm.
+- **Gemini AI OCR**: Extract markdown tables from screenshots using Google Gemini API keys.
+- **macOS QuickLook**: Tap Spacebar on any item to open a clean instant preview window.
+- **Emoji Picker**: Floating category-filtered panel containing 800+ color emojis.
 
 ---
 
-## 📦 Project Structure
+## 🚀 Installation & Getting Started
 
-```
-FlyShelf/
-├── FlyShelf_PC/                 # Windows desktop app (C# / WPF / .NET 10)
-│   ├── Classes/                 # Networking, updates, Daemons, and file transport logic
-│   ├── Windows/                 # Mica-enabled XAML UI views (Hub, Timer, Toast)
-│   ├── ViewModels/              # Core MVVM binders and drag-drop structures
-│   ├── Resources/               # Web client components, icons, and themes
-│   ├── Scripts/                 # Native deployment scripts
-│   └── FlyShelf.csproj          # Performance-tuned build configuration
-│
-├── FlyShelf_Android/            # Android companion (React Native + Kotlin)
-│   ├── app/(tabs)/              # React Native view screens & feeds
-│   ├── android/app/src/main/    # Native Android code, foreground Service, Overlay
-│   ├── context/                 # System configuration persistence
-│   └── package.json             # Mobile app dependencies
-│
-├── flyshelf-web/                # Next.js website (GitHub Pages)
-│   ├── app/                     # Pages: home, features, download, privacy
-│   └── deploy.ps1               # Deployment script for gh-pages
-│
-├── PRIVACY_POLICY.md            # Full privacy policy
-├── version.json                 # Auto-update version metadata
-└── README.md
-```
+FlyShelf is distributed as fully self-contained, ready-to-run standalone binaries. No installer or runtime setup is required.
+
+- **Desktop (Windows 10/11)**: [Download FlyShelf.exe](https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf.exe) (Single-file, self-contained release, no .NET install required).
+- **Mobile (Android 8.0+)**: [Download FlyShelf_Mobile.apk](https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf_Mobile.apk) (Lightweight, single-architecture arm64 release).
 
 ---
 
-## 🚀 Installation & Getting Started — Clipboard Manager for PC & Mobile Free Download
-
-### Pre-built Standalone Binaries
-Ensure a swift start by downloading the latest stable release binaries directly:
-- **Desktop (Windows 10/11)**: [Download FlyShelf.exe](https://github.com/shdra06/FlyShelf/releases/download/v7.0.0/FlyShelf.exe) (Single-file, self-contained release, no .NET install required).
-- **Mobile (Android 8.0+)**: [Download FlyShelf_Mobile.apk](https://github.com/shdra06/FlyShelf/releases/download/v7.0.0/FlyShelf_Mobile.apk) (Lightweight, single-architecture arm64 release).
+## 🛡️ Privacy & Security Strategy
+- **No Cloud Data Retained**: Transferred files stream entirely peer-to-peer over your local networks.
+- **Zero Third-Party Storage**: Clipboard historical content is only cached locally in RAM/disk on your own machines.
+- **Auto-Purge Relays**: Signaling relays on Firebase are configured to auto-delete text items after 5 minutes and file indicators after 24 hours.
 
 ---
 
-### Building from Source
+## 🔒 Proprietary Software & Licensing Notice
 
-#### Windows Client (WPF)
-Launch standard compilations using the pre-configured automation scripts:
-```powershell
-cd FlyShelf_PC
-# Compiles an optimized, self-contained single executable inside the 'FINAL' directory
-.\Build_PC.bat
-```
+**Copyright © 2026 FlyShelf Ecosystem. All Rights Reserved.**
 
-#### Android Client (Expo / Native Kotlin)
-Run a custom native device compilation:
-```powershell
-cd FlyShelf_Android
-# Cleans workspace, configures SDK paths, and compiles arm64-only APK natively
-.\Build_Android_Device.bat
-```
-
----
-
-## ⚙️ Configuration & Integration
-
-Configure the companion apps within their respective Settings dashboards:
-- **Universal Clipboard Sync**: Toggling "Global Sync" activates realtime cross-device sync.
-- **P2P File Transfers**: Enter your desktop's local IP address on Android's Settings panel to route large file transfers instantly over LAN WiFi.
-- **AI Acceleration**: Input a Google Gemini API Key in the Desktop Client to activate Gemini-powered OCR and structural markdown table extraction.
-
----
-
-## 🛡️ Security & Privacy First
-
-FlyShelf is designed with a **privacy-first architecture**:
-
-- **No Cloud Data Retained**: Clipboard content is **never** stored in any cloud service. All sync is peer-to-peer.
-- **Zero Telemetry**: No analytics, no tracking, no usage data collection whatsoever.
-- **End-to-End Encryption**: All data in transit is encrypted using **AES-256-GCM** with PBKDF2-SHA256 derived keys.
-- **Local-Only Storage**: All clipboard history is stored as JSON files in `%AppData%\FlyShelf\` on your machine.
-- **No Account Required**: Anonymous Firebase auth for signaling only — no email, no password.
-
-📄 **[Read the full Privacy Policy →](PRIVACY_POLICY.md)**  
-🌐 **[View Privacy Policy on our website →](https://shdra06.github.io/FlyShelf/privacy)**
-
----
-
-## 🗑️ Uninstall & Data Deletion
-
-FlyShelf stores all data locally in `%AppData%\FlyShelf\`. You have complete control over your data.
-
-### In-App Uninstall
-Open the Hub dashboard → navigate to the **Logs** tab → scroll to the **Danger Zone** section → click **"Uninstall FlyShelf & Remove All Data"**. This will:
-- Delete all clipboard history, images, and synced files
-- Remove all settings, paired devices, and certificates
-- Remove the auto-start registry entry
-- Close the application
-
-### Manual Removal
-```powershell
-# Delete all FlyShelf data
-Remove-Item -Recurse -Force "$env:APPDATA\FlyShelf"
-
-# Remove auto-start (if enabled)
-Remove-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run" -Name "FlyShelf" -ErrorAction SilentlyContinue
-
-# Delete the executable
-Remove-Item "path\to\FlyShelf.exe"
-```
-
----
-
-<div align="center">
-
-Built with ❤️ using **C# WPF (.NET 10)**, **React Native**, and **Kotlin**.
-
-**Copy once. Paste everywhere.**
-
-</div>
+FlyShelf is a **proprietary, copyrighted, closed-source** software application. 
+- The core execution source codes—including the C# WPF (.NET 10) desktop engine, the React Native Android companion workspace, and the native Kotlin foreground synchronization services—are strictly private, proprietary, and copyrighted.
+- Pre-compiled binaries are distributed officially under strict security compliance for end-user personal productivity. Modification, compilation from unauthorized sources, reverse-engineering, or unauthorized redistribution of the binaries is strictly prohibited.

@@ -1231,8 +1231,11 @@
                                          </Style.Triggers>
                                      </Style>
                                  </Border.Style>
-                                 <TextBlock Text="Image" FontSize="9" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
-                                            HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                 <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5">
+                                     <TextBlock Text="🖼" FontSize="22" HorizontalAlignment="Center"/>
+                                     <TextBlock Text="Image" FontSize="9" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
+                                                HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                 </StackPanel>
                              </Border>
 
                             <!-- ═══ Rotate Image — round floating button, bottom-right of icon ═══ -->
@@ -1739,7 +1742,7 @@
                              <Setter TargetName="ImagePlaceholderBorder" Property="Grid.ColumnSpan" Value="2" />
                              <Setter TargetName="ImagePlaceholderBorder" Property="HorizontalAlignment" Value="Center" />
                              <Setter TargetName="ImagePlaceholderBorder" Property="Width" Value="180" />
-                             <Setter TargetName="ImagePlaceholderBorder" Property="Height" Value="120" />
+                             <Setter TargetName="ImagePlaceholderBorder" Property="Height" Value="165" />
                              <Setter TargetName="ImagePlaceholderBorder" Property="CornerRadius" Value="11" />
                              <Setter TargetName="TitleText" Property="Visibility" Value="Collapsed" />
                         </DataTrigger>

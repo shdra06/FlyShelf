@@ -333,7 +333,7 @@ namespace FlyShelf
                     _scrollHighQualityTimer.Tick += (s, ev) =>
                     {
                         _scrollHighQualityTimer.Stop();
-                        RenderVisibleThumbnails();
+                        RenderVisibleThumbnails(onlyFirstTen: false);
                     };
                 }
                 else
@@ -497,12 +497,13 @@ namespace FlyShelf
 
             _scrollDecayTimer.Start();
 
-            // Active Scrolling Throttling: trigger prefetch rendering every 80ms while actively scrolling
-            // so incoming images in the 300px prefetch buffer are loaded long before they hit the screen!
+            // Active Scrolling Throttling: trigger prefetch rendering every 80ms while actively scrolling.
+            // PERF: Only load first-10 images during active scroll — skip heavy BitmapImage decoding
+            // for older images to eliminate scroll jitter. Full load happens when scroll stops (30ms timer).
             if ((DateTime.Now - _lastScrollRenderTime).TotalMilliseconds >= 80)
             {
                 _lastScrollRenderTime = DateTime.Now;
-                RenderVisibleThumbnails();
+                RenderVisibleThumbnails(onlyFirstTen: true);
             }
 
             // Start or reset the snappier 30ms stoppage timer to load visible high-quality thumbnails instantly when scroll stops
@@ -515,7 +516,7 @@ namespace FlyShelf
                 _scrollHighQualityTimer.Tick += (s, ev) =>
                 {
                     _scrollHighQualityTimer.Stop();
-                    RenderVisibleThumbnails();
+                    RenderVisibleThumbnails(onlyFirstTen: false);
                 };
             }
             else
@@ -532,7 +533,7 @@ namespace FlyShelf
             _viewModel.AllowHover = true;
         }
 
-        private void RenderVisibleThumbnails()
+        private void RenderVisibleThumbnails(bool onlyFirstTen = false)
         {
             Dispatcher.InvokeAsync(() =>
             {
@@ -556,7 +557,7 @@ namespace FlyShelf
                         _evictionBackgroundTimer.Tick += (s, ev) =>
                         {
                             if (!this.IsVisible) return;
-                            RenderVisibleThumbnails();
+                            RenderVisibleThumbnails(onlyFirstTen: false);
                         };
                         _evictionBackgroundTimer.Start();
                     }
@@ -608,8 +609,10 @@ namespace FlyShelf
                             // On-Screen / Visible / Prefetch Zone: Reset eviction timer
                             item.LeftViewportTime = null;
 
-                            // Load 300px thumbnail if not loaded/loading
-                            if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality)
+                            // Load 300px thumbnail if not loaded/loading.
+                            // During active scrolling (onlyFirstTen=true), skip non-first-10 images
+                            // to avoid BitmapImage decode stutters that cause scroll jitter.
+                            if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality && (!onlyFirstTen || isFirst10Images))
                             {
                                 item.IsLoadingHighQuality = true;
                                 string filePath = item.FilePath;
