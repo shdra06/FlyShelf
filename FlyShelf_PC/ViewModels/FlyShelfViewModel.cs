@@ -174,15 +174,27 @@ namespace FlyShelf.ViewModels
                 // Start the auto-cleanup timer
                 StartAutoCleanupTimer();
 
-                // Only decode icons for the first ~12 items (visible viewport) at startup.
-                // Off-screen items stay as placeholder cards — RenderVisibleThumbnails lazily
-                // loads their thumbnails when they scroll into view.
+                // Only decode icons for the first ~12 items (visible viewport) at startup,
+                // but keep image/QR thumbnails capped at the top 5 to keep RAM extremely low.
                 var visibleBatch = sortedItems.Take(12).ToList();
+                int startupImageCount = 0;
                 foreach (var item in visibleBatch)
                 {
-                    bool needsIcon = (item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
+                    bool isImage = item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode;
+                    bool needsIcon = isImage
                         && !string.IsNullOrEmpty(item.FilePath) && File.Exists(item.FilePath);
-                    bool needsFileIcon = !needsIcon && (item.ItemType == ClipboardItemType.File || item.ItemType == ClipboardItemType.Document ||
+
+                    if (needsIcon)
+                    {
+                        startupImageCount++;
+                        if (startupImageCount > 5)
+                        {
+                            // Cap image decoding to the top 5 at startup to ensure RAM stays under 50 MB
+                            continue;
+                        }
+                    }
+
+                    bool needsFileIcon = !isImage && (item.ItemType == ClipboardItemType.File || item.ItemType == ClipboardItemType.Document ||
                         item.ItemType == ClipboardItemType.Pdf || item.ItemType == ClipboardItemType.Archive ||
                         item.ItemType == ClipboardItemType.Video || item.ItemType == ClipboardItemType.Audio ||
                         item.ItemType == ClipboardItemType.Presentation) && !string.IsNullOrEmpty(item.FilePath);

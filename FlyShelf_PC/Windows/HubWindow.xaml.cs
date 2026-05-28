@@ -300,6 +300,10 @@ namespace FlyShelf.Windows
 
                 // Stop fast-polling when window is hidden
                 _pairingHandshakeTimer?.Stop();
+
+                // Actively optimize and release memory whenever the HubWindow is closed/hidden
+                var mainWin = Application.Current.MainWindow as MainWindow;
+                mainWin?.OptimizeMemoryUsage();
             }
             base.OnClosing(e);
         }

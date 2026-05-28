@@ -1,9 +1,9 @@
-﻿{
-    "pc_version":  "8.1.0",
-    "pc_changelog":  "v8.1.0 â€” Unified Window Restore, Scrollbar Removal \u0026 Search Improvements\n\nâ€¢ New: Reverted separate MiniShelfWindow, fully restored the highly reliable unified MainWindow layout for all clipboard modes.\nâ€¢ New: Search capability is now fully visible and active inside the mini flyshelf clipboard.\nâ€¢ Improved: Vertical scrollbar is dynamically hidden in Mini Mode to prevent visual clutter in tight spaces.\nâ€¢ Fixed: Added mode-driven check to ensure the mini clipboard always opens directly in standard clipboard list mode.",
-    "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v8.1.0/FlyShelf.exe",
-    "pc_sha256":  "51a77f8a625bb89d344242d4f2e3e721d919beea301a026e6904ff7c84327b31",
-    "android_version":  "7.1.0",
-    "android_changelog":  "v7.1.0 â€” Version Sync\n\nâ€¢ Bumped version to sync with Desktop client release.",
-    "android_download":  "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"
+{
+    "pc_version": "8.2.0",
+    "pc_changelog": "v8.2.0 \u2013 Smart Memory Optimization & Instant Thumbnails\n\n\u2022 New: Top 5 image thumbnails are permanently cached in RAM for instant, zero-flash summon appearance.\n\u2022 Improved: Background memory footprint reduced to under 50 MB via Win32 working set trimming.\n\u2022 Improved: Startup image decoding capped to top 5 images for faster cold launch.\n\u2022 Improved: Off-screen image eviction refined from 10 to 5 images for tighter memory control.\n\u2022 Fixed: Cloudflare tunnel auto-reactivation race condition when toggling outgoing sync.",
+    "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v8.2.0/FlyShelf.exe",
+    "pc_sha256": "a4507e5e573b9e8a91300c4fcd1dc81a4af2b6744bf8c6377ca9ac48100d06fe",
+    "android_version": "7.1.0",
+    "android_changelog": "v7.1.0 \u2013 Version Sync\n\n\u2022 Bumped version to sync with Desktop client release.",
+    "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"
 }

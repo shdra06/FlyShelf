@@ -47,6 +47,9 @@ namespace FlyShelf
         private const int VK_LBUTTON = 0x01;
         private const int VK_RBUTTON = 0x02;
 
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "SetProcessWorkingSetSize", SetLastError = true)]
+        private static extern int SetProcessWorkingSetSize(IntPtr process, int minimumWorkingSetSize, int maximumWorkingSetSize);
+
         private System.Windows.Threading.DispatcherTimer? _dragActiveDismissTimer;
 
         private void StartDragActiveDismissTimer()
@@ -325,6 +328,59 @@ namespace FlyShelf
                     }
                 }
             }
+        }
+
+        public void OptimizeMemoryUsage()
+        {
+            // 1. Evict non-pinned image/QR thumbnails to free heavy image memory, keeping top 5 always loaded
+            try
+            {
+                if (_viewModel?.DroppedItems != null)
+                {
+                    int imageCount = 0;
+                    foreach (var item in _viewModel.DroppedItems)
+                    {
+                        if (item == null) continue;
+
+                        if (item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
+                        {
+                            imageCount++;
+                            if (imageCount <= 5)
+                            {
+                                // Keep the top 5 images loaded in RAM to hide the sudden appearance on summon
+                                continue;
+                            }
+
+                            if (!item.IsPinned)
+                            {
+                                item.Icon = null;
+                                item.IsLoadedHighQuality = false;
+                                item.IsLoadingHighQuality = false;
+                                item.LeftViewportTime = null;
+                            }
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            // 2. Perform Garbage Collection and Empty the Process Working Set asynchronously
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    // Force complete Gen 2 collection
+                    System.GC.Collect(2, System.GCCollectionMode.Forced, true);
+                    System.GC.WaitForPendingFinalizers();
+
+                    // Empty process working set to release physical RAM pages back to OS standby list
+                    using (var currentProcess = System.Diagnostics.Process.GetCurrentProcess())
+                    {
+                        SetProcessWorkingSetSize(currentProcess.Handle, -1, -1);
+                    }
+                }
+                catch { }
+            });
         }
 
         private IntPtr GetTargetForegroundWindow()

@@ -912,6 +912,9 @@ namespace FlyShelf
                 this.Left = -20000;
                 this.Top = -20000;
             }
+
+            // Actively optimize and release memory whenever the window is hidden/unsummoned
+            OptimizeMemoryUsage();
         }
 
         /// <summary>

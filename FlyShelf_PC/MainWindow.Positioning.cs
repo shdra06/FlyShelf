@@ -589,7 +589,7 @@ namespace FlyShelf
                         if (item.ItemType != ClipboardItemType.Image && item.ItemType != ClipboardItemType.QRCode) continue;
 
                         imageCount++;
-                        bool isFirst10Images = imageCount <= 10;
+                        bool isFirst5Images = imageCount <= 5;
 
                         var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(i) as FrameworkElement;
                         bool isVisible = false;
@@ -614,9 +614,9 @@ namespace FlyShelf
                             item.LeftViewportTime = null;
 
                             // Load 300px thumbnail if not loaded/loading.
-                            // During active scrolling (onlyFirstTen=true), skip non-first-10 images
+                            // During active scrolling (onlyFirstTen=true), skip non-first-5 images
                             // to avoid BitmapImage decode stutters that cause scroll jitter.
-                            if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality && (!onlyFirstTen || isFirst10Images))
+                            if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality && (!onlyFirstTen || isFirst5Images))
                             {
                                 item.IsLoadingHighQuality = true;
                                 string filePath = item.FilePath;
@@ -678,8 +678,8 @@ namespace FlyShelf
                         }
                         else
                         {
-                            // Off-Screen / Scrolled Out: Skip eviction if pinned OR is one of the first 10 images
-                            if (item.IsPinned || isFirst10Images)
+                            // Off-Screen / Scrolled Out: Skip eviction if pinned OR is one of the first 5 images
+                            if (item.IsPinned || isFirst5Images)
                             {
                                 item.LeftViewportTime = null;
                                 continue;
