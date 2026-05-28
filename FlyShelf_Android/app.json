@@ -2,7 +2,7 @@
   "expo": {
     "name": "FlyShelf",
     "slug": "flyshelf",
-    "version": "6.0.1",
+    "version": "7.1.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "flyshelf",
