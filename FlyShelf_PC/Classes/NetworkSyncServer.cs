@@ -288,10 +288,12 @@ namespace FlyShelf.Classes
                     bool cfOn = SettingsManager.Current.EnableGlobalCloudflare;
                     bool lanOn = SettingsManager.Current.EnableLocalLAN;
                     
+                    bool serverStartedJustNow = false;
                     // Auto-manage server: if either transport is on, server must be running
                     if (cfOn && !SettingsManager.Current.EnableLocalNetworkSync)
                     {
-                        SettingsManager.Current.EnableLocalNetworkSync = true; // starts server
+                        serverStartedJustNow = true;
+                        SettingsManager.Current.EnableLocalNetworkSync = true; // starts server (internally launches tunnel)
                     }
                     else if (!cfOn && !lanOn)
                     {
@@ -300,7 +302,10 @@ namespace FlyShelf.Classes
                     
                     if (cfOn && _isRunning)
                     {
-                        _ = _cfDaemon.StartAsync(CurrentPort);
+                        if (!serverStartedJustNow)
+                        {
+                            _ = _cfDaemon.StartAsync(CurrentPort);
+                        }
                         // When tunnel comes up, ForceResync to broadcast new URL to all peers
                         _ = Task.Run(async () =>
                         {

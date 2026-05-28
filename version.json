@@ -2,7 +2,7 @@
     "pc_version":  "8.1.0",
     "pc_changelog":  "v8.1.0 â€” Unified Window Restore, Scrollbar Removal \u0026 Search Improvements\n\nâ€¢ New: Reverted separate MiniShelfWindow, fully restored the highly reliable unified MainWindow layout for all clipboard modes.\nâ€¢ New: Search capability is now fully visible and active inside the mini flyshelf clipboard.\nâ€¢ Improved: Vertical scrollbar is dynamically hidden in Mini Mode to prevent visual clutter in tight spaces.\nâ€¢ Fixed: Added mode-driven check to ensure the mini clipboard always opens directly in standard clipboard list mode.",
     "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v8.1.0/FlyShelf.exe",
-    "pc_sha256":  "883a5a9887e2131987043f829f931a11e8815a7621bcb07f5fb8b9512c46a113",
+    "pc_sha256":  "51a77f8a625bb89d344242d4f2e3e721d919beea301a026e6904ff7c84327b31",
     "android_version":  "7.1.0",
     "android_changelog":  "v7.1.0 â€” Version Sync\n\nâ€¢ Bumped version to sync with Desktop client release.",
     "android_download":  "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"
