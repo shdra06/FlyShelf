@@ -289,6 +289,8 @@ namespace FlyShelf.Classes
         /// </summary>
         private async Task ConfirmAndCleanup()
         {
+            if (!SettingsManager.Current.EnableCloudDiscovery) return;
+
             try
             {
                 using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };

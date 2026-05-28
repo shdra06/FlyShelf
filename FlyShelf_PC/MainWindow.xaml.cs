@@ -17,6 +17,13 @@ namespace FlyShelf
     {
         private Point _dragStartPoint;
         private readonly FlyShelfViewModel _viewModel;
+        public FlyShelfViewModel ViewModel => _viewModel;
+        
+        /// <summary>Inject MiniShelfWindow into the taskbar widget (called from App on first shake).</summary>
+        public void SetMiniShelfOnWidget(Windows.MiniShelfWindow miniShelf)
+        {
+            _taskbarWidget?.Widget?.SetMiniShelfWindow(miniShelf);
+        }
         private int _spawnToken = 0;
         private bool _isDragHovering = false;
         private bool _shouldPreventDrag = false;
@@ -909,6 +916,18 @@ namespace FlyShelf
                 this.Left = -20000;
                 this.Top = -20000;
             }
+        }
+
+        /// <summary>
+        /// Ensures the window is in clipboard mode by closing any active Notes or Todo panel.
+        /// Called by shake-to-open to guarantee only the clipboard overlay appears.
+        /// </summary>
+        public void EnsureClipboardMode()
+        {
+            if (_isNotesActive)
+                CloseNotesPanel(immediate: true);
+            if (_isTodoActive)
+                CloseTodoPanel(immediate: true);
         }
     }
 }

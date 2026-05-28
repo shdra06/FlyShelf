@@ -6,6 +6,42 @@
 document.addEventListener('DOMContentLoaded', () => {
 
   /* ==========================================
+     0. BRAND WORKSPACE THEME SWITCHER
+     ========================================== */
+  const swatches = document.querySelectorAll('.theme-swatch');
+  
+  // Load saved theme from LocalStorage
+  const savedTheme = localStorage.getItem('flyshelf-theme') || 'midnight';
+  applyTheme(savedTheme);
+  
+  swatches.forEach(swatch => {
+    swatch.addEventListener('click', () => {
+      const theme = swatch.dataset.theme;
+      applyTheme(theme);
+    });
+  });
+  
+  function applyTheme(themeName) {
+    // Remove other theme classes from body and apply selected
+    document.body.className = '';
+    if (themeName !== 'midnight') {
+      document.body.classList.add(`theme-${themeName}`);
+    }
+    
+    // Update active state in UI
+    swatches.forEach(s => {
+      if (s.dataset.theme === themeName) {
+        s.classList.add('active');
+      } else {
+        s.classList.remove('active');
+      }
+    });
+    
+    // Save selection
+    localStorage.setItem('flyshelf-theme', themeName);
+  }
+
+  /* ==========================================
      1. SCROLL REVEAL UTILITY (INTERSECTION OBSERVER)
      ========================================== */
   const revealElements = document.querySelectorAll('.scroll-reveal');

@@ -172,7 +172,7 @@
                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Visibility="{Binding PlacementTarget.DataContext.CanShowInExplorer, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
-                <Separator />
+
 
                 <!-- ═══ Universal: Delete ═══ -->
                 <MenuItem Header="Delete" Click="DeleteContextMenu_Click" Foreground="#EF4444"/>
@@ -420,6 +420,76 @@
                         </StackPanel>
                     </Border>
                     <Border CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterClear_Click"
+                            Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                            BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" Padding="0,5">
+                        <ui:SymbolIcon Symbol="Dismiss16" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" HorizontalAlignment="Center"/>
+                    </Border>
+                </UniformGrid>
+            </Border>
+
+            <!-- Sync Direction Control Bar — Inline popup for granular incoming/outgoing toggles -->
+            <Border x:Name="SyncDirectionBar" Margin="14,0,14,8" Visibility="Collapsed" Opacity="0"
+                    CornerRadius="10" Padding="4"
+                    Background="{DynamicResource MicaWPF.Brushes.SmokeFillColorDefault}" 
+                    BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                    RenderTransformOrigin="0.5,0">
+                <Border.RenderTransform>
+                    <TranslateTransform Y="0"/>
+                </Border.RenderTransform>
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.15" Color="#000000"/>
+                </Border.Effect>
+                <UniformGrid Rows="1" HorizontalAlignment="Center" MaxWidth="420" Width="{Binding ActualWidth, ElementName=TopHeaderGrid}">
+                    <!-- Incoming Toggle -->
+                    <Border x:Name="SyncBtn_Incoming" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="SyncIncoming_Click" Tag="Incoming"
+                            Background="#1810B981" BorderBrush="#3010B981" BorderThickness="1" Padding="6,5">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center">
+                                <ui:SymbolIcon Symbol="ArrowDownload24" Foreground="#10B981" FontSize="13" Margin="0,0,4,0"/>
+                                <TextBlock Text="In" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <Ellipse x:Name="SyncDot_Incoming" Grid.Column="1" Width="8" Height="8" Margin="6,0,2,0" VerticalAlignment="Center"
+                                     Fill="#33888888" Stroke="#22FFFFFF" StrokeThickness="0.5"/>
+                        </Grid>
+                    </Border>
+                    <!-- Outgoing Toggle -->
+                    <Border x:Name="SyncBtn_Outgoing" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="SyncOutgoing_Click" Tag="Outgoing"
+                            Background="#183B82F6" BorderBrush="#303B82F6" BorderThickness="1" Padding="6,5">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center">
+                                <ui:SymbolIcon Symbol="ArrowUpload24" Foreground="#3B82F6" FontSize="13" Margin="0,0,4,0"/>
+                                <TextBlock Text="Out" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <Ellipse x:Name="SyncDot_Outgoing" Grid.Column="1" Width="8" Height="8" Margin="6,0,2,0" VerticalAlignment="Center"
+                                     Fill="#33888888" Stroke="#22FFFFFF" StrokeThickness="0.5"/>
+                        </Grid>
+                    </Border>
+                    <!-- Both Master Toggle -->
+                    <Border x:Name="SyncBtn_Both" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="SyncBoth_Click" Tag="Both"
+                            Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1" Padding="6,5">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center">
+                                <ui:SymbolIcon Symbol="ArrowSync24" Foreground="#8B5CF6" FontSize="13" Margin="0,0,4,0"/>
+                                <TextBlock Text="Both" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <Ellipse x:Name="SyncDot_Both" Grid.Column="1" Width="8" Height="8" Margin="6,0,2,0" VerticalAlignment="Center"
+                                     Fill="#33888888" Stroke="#22FFFFFF" StrokeThickness="0.5"/>
+                        </Grid>
+                    </Border>
+                    <!-- Dismiss -->
+                    <Border CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="SyncBarDismiss_Click"
                             Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                             BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" Padding="0,5">
                         <ui:SymbolIcon Symbol="Dismiss16" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" HorizontalAlignment="Center"/>

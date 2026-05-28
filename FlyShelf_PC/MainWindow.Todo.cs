@@ -162,6 +162,9 @@ namespace FlyShelf
             // Bind content
             TodoListItemsControl.ItemsSource = day.Items;
 
+            // Update day label in header
+            TodoCurrentDayLabel.Text = day.DisplayDate;
+
             // Update progress label
             UpdateTodoProgress(day);
 

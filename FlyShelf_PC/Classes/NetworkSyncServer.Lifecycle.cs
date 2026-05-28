@@ -254,8 +254,8 @@ namespace FlyShelf.Classes
                 // ═══════════════════════════════════════════════════════════════════
                 _ = Task.Run(async () =>
                 {
-                    // Wait a bit for Cloudflare tunnel to establish first
-                    await Task.Delay(8000);
+                    // PeerManager starts instantly to scan LAN/cache, Cloudflare auto-triggers resync when up
+                    await Task.Delay(500);
                     try
                     {
                         var peerManager = new PeerManager();
@@ -491,6 +491,7 @@ namespace FlyShelf.Classes
             ServerUrl = "Offline";
             try { _heartbeatTimer?.Stop(); _heartbeatTimer?.Dispose(); } catch { }
             _cfDaemon.Stop();
+            try { PeerManager.Instance?.Stop(); } catch { }
             _ = CloudDiscoveryManager.PushTunnelUrl("offline", false, "", forceWrite: true);
             try { _listener?.Stop(); } catch { }
             try { _proxyListener?.Stop(); } catch { }

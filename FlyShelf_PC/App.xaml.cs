@@ -11,10 +11,14 @@ public partial class App : Application
     private const int VK_LBUTTON = 0x01;
     private static App _instance;
     private static MainWindow _mainWinInstance;
+    private static Windows.MiniShelfWindow? _miniShelfInstance;
     private static System.Threading.Timer? _shakeTimer;
 
     /// <summary>Reference to open PDF merge window; shake suppressed only when it's focused.</summary>
     internal static Window? ActiveMergeWindow = null;
+    
+    /// <summary>Public accessor so TaskbarWindow widget can set the MiniShelfWindow reference.</summary>
+    internal static Windows.MiniShelfWindow? MiniShelfInstance => _miniShelfInstance;
 
     // Shake Detection State
     private static int _shakeCount = 0;
@@ -525,7 +529,7 @@ public partial class App : Application
             MainWindow = _mainWinInstance;
         }
 
-        // Convert physical x and y to logical coordinates before calling ShowNearPosition
+        // Convert physical x and y to logical coordinates
         double logicalX = x;
         double logicalY = y;
         try
@@ -541,7 +545,21 @@ public partial class App : Application
         }
         catch { }
 
-        _mainWinInstance.ShowNearPosition(logicalX, logicalY, mode, isPersistent, stealFocus);
+        // INDEPENDENT MINI SHELF: Use a separate window for shake-to-open.
+        // This prevents size distortion when Notes/Todo is active on the MainWindow.
+        if (_miniShelfInstance == null)
+        {
+            _miniShelfInstance = new Windows.MiniShelfWindow(_mainWinInstance.ViewModel);
+            _miniShelfInstance.Show();
+            _miniShelfInstance.Left = -20000;
+            _miniShelfInstance.Top = -20000;
+            
+            // Inject into widget so clicks go through the mini shelf
+            try { _mainWinInstance.SetMiniShelfOnWidget(_miniShelfInstance); }
+            catch { }
+        }
+
+        _miniShelfInstance.ToggleVisibility(logicalX, logicalY);
     }
 
     [DllImport("user32.dll")]

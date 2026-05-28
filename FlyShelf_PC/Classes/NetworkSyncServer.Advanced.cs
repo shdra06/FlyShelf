@@ -64,6 +64,21 @@ namespace FlyShelf.Classes
 
         private async Task HandleChunkFinalize(HttpListenerRequest req, HttpListenerResponse res)
         {
+            // ── Incoming Sync Gate ──
+            if (!SettingsManager.Current.EnableIncomingSync)
+            {
+                // Clean up chunk temp directory so it doesn't accumulate
+                string gateSessionId = req.Headers["X-Upload-Session"] ?? "";
+                if (!string.IsNullOrEmpty(gateSessionId) && _chunkSessions.TryRemove(gateSessionId, out string gateChunkDir))
+                {
+                    try { if (Directory.Exists(gateChunkDir)) Directory.Delete(gateChunkDir, true); } catch { }
+                }
+                res.StatusCode = 200;
+                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"sync_paused\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                res.Close();
+                return;
+            }
+
             try
             {
                 string sessionId = req.Headers["X-Upload-Session"] ?? "";

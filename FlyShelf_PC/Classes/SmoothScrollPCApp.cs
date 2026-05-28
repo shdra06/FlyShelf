@@ -411,7 +411,14 @@ namespace FlyShelf.Classes
                     _ancestorCache[element] = sv;
                     return sv;
                 }
-                current = VisualTreeHelper.GetParent(current);
+                if (current is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D)
+                {
+                    current = VisualTreeHelper.GetParent(current);
+                }
+                else
+                {
+                    current = LogicalTreeHelper.GetParent(current);
+                }
             }
             return null;
         }
@@ -422,7 +429,14 @@ namespace FlyShelf.Classes
             while (current != null)
             {
                 if (current == parent) return true;
-                current = VisualTreeHelper.GetParent(current);
+                if (current is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D)
+                {
+                    current = VisualTreeHelper.GetParent(current);
+                }
+                else
+                {
+                    current = LogicalTreeHelper.GetParent(current);
+                }
             }
             return false;
         }

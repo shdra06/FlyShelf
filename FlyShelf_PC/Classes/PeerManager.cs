@@ -192,6 +192,8 @@ namespace FlyShelf.Classes
             catch { }
         }
 
+        public bool IsRunning => !_cts.IsCancellationRequested;
+
         public void Stop()
         {
             _cts.Cancel();
@@ -202,6 +204,10 @@ namespace FlyShelf.Classes
                 try { p.WsCts?.Cancel(); } catch { }
                 try { p.LiveSocket?.Dispose(); } catch { }
             }
+            if (Instance == this)
+            {
+                Instance = null;
+            }
             Logger.LogAction("PEER", "PeerManager stopped.");
         }
 
@@ -209,6 +215,12 @@ namespace FlyShelf.Classes
 
         private async Task DiscoverAndHandshake()
         {
+            if (!SettingsManager.Current.EnableCloudDiscovery)
+            {
+                Logger.LogAction("PEER", "Cloud discovery is disabled. Skipping Firebase peer scan.");
+                return;
+            }
+
             try
             {
                 using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
@@ -341,6 +353,8 @@ namespace FlyShelf.Classes
         /// </summary>
         private async Task SendUrlRequest()
         {
+            if (!SettingsManager.Current.EnableCloudDiscovery) return;
+
             try
             {
                 using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };

@@ -1,22 +1,22 @@
-﻿@echo off
+@echo off
 color 0a
 echo ==============================================
 echo FlyShelf - Desktop App Compiler Pipeline (PC Only)
 echo ==============================================
 
 echo.
-echo [0/2] Terminating any active FlyShelf PC processes to unlock paths...
+echo [0/4] Terminating any active FlyShelf PC processes to unlock paths...
 taskkill /f /im FlyShelf.exe >nul 2>nul
 ping 127.0.0.1 -n 2 >nul
 
 if not exist "FINAL" mkdir "FINAL"
 
 echo.
-echo [1/2] Purging heavy uncompiled local Runtime Caches...
+echo [1/4] Purging heavy uncompiled local Runtime Caches...
 FOR /d /r . %%d in (__pycache__) DO @if exist "%%d" rd /s /q "%%d" >nul 2>nul
 
 echo.
-echo [2/2] Compiling Desktop C# Executable (Self-Contained + Compressed Single-File Win64, Multi-Core Accelerated)...
+echo [2/4] Compiling Desktop C# Executable (Self-Contained + Compressed Single-File Win64, Multi-Core Accelerated)...
 dotnet publish FlyShelf.csproj -c Release -r win-x64 --self-contained -m -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:IncludeAllContentForSelfExtract=true -o "FINAL"
 
 if %errorlevel% neq 0 (
@@ -31,11 +31,47 @@ if %errorlevel% neq 0 (
 del /Q "FINAL\*.pdb" "FINAL\*.config" "FINAL\*.dll" "FINAL\*.json" >nul 2>nul
 
 echo.
+echo [3/4] Computing SHA-256 hash of compiled FlyShelf.exe...
+
+:: Compute SHA-256 using PowerShell (built-in on all modern Windows)
+for /f "delims=" %%H in ('powershell -NoProfile -Command "(Get-FileHash -Path 'FINAL\FlyShelf.exe' -Algorithm SHA256).Hash.ToLower()"') do set "NEWHASH=%%H"
+
+if "%NEWHASH%"=="" (
+    echo [WARNING] Could not compute SHA-256 hash! Skipping hash update.
+    goto :launch
+)
+
+echo    Hash: %NEWHASH%
+
+:: Write the .sha256 file (upload this alongside FlyShelf.exe on GitHub Releases)
+echo %NEWHASH%  FlyShelf.exe> "FINAL\FlyShelf.exe.sha256"
+echo    Saved: FINAL\FlyShelf.exe.sha256
+
+echo.
+echo [4/4] Updating version.json with new hash...
+
+:: Update pc_sha256 in version.json using PowerShell
+powershell -NoProfile -Command ^
+  "$json = Get-Content '..\version.json' -Raw | ConvertFrom-Json; ^
+   $json.pc_sha256 = '%NEWHASH%'; ^
+   $json | ConvertTo-Json -Depth 10 | Set-Content '..\version.json' -Encoding UTF8; ^
+   Write-Host '    Updated version.json pc_sha256 to %NEWHASH%'"
+
+echo.
 echo ==============================================
 echo [SUCCESS] PC Compilation Complete!
-echo You can find the pure standalone "FlyShelf.exe"
-echo sitting cleanly inside the 'FINAL' directory.
+echo.
+echo   EXE:    FINAL\FlyShelf.exe
+echo   HASH:   %NEWHASH%
+echo   SHA256: FINAL\FlyShelf.exe.sha256
+echo.
+echo RELEASE CHECKLIST:
+echo   1. Upload FINAL\FlyShelf.exe to GitHub Release
+echo   2. Upload FINAL\FlyShelf.exe.sha256 to GitHub Release
+echo   3. Commit and push updated version.json
+echo ==============================================
+
+:launch
 echo.
 echo Launching the freshly compiled FlyShelf.exe...
-echo ==============================================
 start "" "FINAL\FlyShelf.exe"

@@ -204,6 +204,7 @@ namespace FlyShelf.Classes
             // Re-publish our URLs so peers can find us
             _urlCleanedFromFirebase = false;
             _urlRequestSent = false;
+            _lastUrlRequestTime = DateTime.MinValue; // Reset URL request throttle to send instantly
 
             string globalUrl = CloudDiscoveryManager.CachedGlobalUrl;
             string localUrl = CloudDiscoveryManager.CachedLocalUrl;
@@ -219,6 +220,13 @@ namespace FlyShelf.Classes
             // Try cached URLs first, then Firebase
             await TryCachedUrlsFirst();
             await DiscoverAndHandshake();
+
+            // Unconditionally send URL request to all dead peers so they immediately re-publish their URLs!
+            if (_peers.Values.Any(p => !p.IsAlive))
+            {
+                Logger.LogAction("PEER", "Force resync — sending instant URL requests to all dead peers");
+                await SendUrlRequest();
+            }
 
             Logger.LogAction("PEER", $"🔄 Force resync complete — {AliveCount}/{_peers.Count} peer(s) alive");
         }

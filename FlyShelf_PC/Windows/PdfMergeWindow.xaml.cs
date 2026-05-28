@@ -243,7 +243,14 @@ namespace FlyShelf.Windows
             while (current != null)
             {
                 if (current is T t) return t;
-                current = VisualTreeHelper.GetParent(current);
+                if (current is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D)
+                {
+                    current = VisualTreeHelper.GetParent(current);
+                }
+                else
+                {
+                    current = LogicalTreeHelper.GetParent(current);
+                }
             }
             return null;
         }

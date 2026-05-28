@@ -60,6 +60,15 @@ namespace FlyShelf.Classes
         
         private bool _enableCloudDiscovery = true;
         public bool EnableCloudDiscovery { get => _enableCloudDiscovery; set => SetProperty(ref _enableCloudDiscovery, value); }
+
+        // Granular sync direction controls
+        private bool _enableIncomingSync = true;
+        /// <summary>When false, incoming clipboard items from paired devices are silently discarded.</summary>
+        public bool EnableIncomingSync { get => _enableIncomingSync; set => SetProperty(ref _enableIncomingSync, value); }
+
+        private bool _enableOutgoingSync = true;
+        /// <summary>When false, local clipboard items are NOT pushed to paired devices.</summary>
+        public bool EnableOutgoingSync { get => _enableOutgoingSync; set => SetProperty(ref _enableOutgoingSync, value); }
         
         private string _webClientPinToken = "";
         public string WebClientPinToken { get => _webClientPinToken; set => SetProperty(ref _webClientPinToken, value); }
@@ -103,6 +112,10 @@ namespace FlyShelf.Classes
         // Taskbar Widget
         private bool _enableTaskbarWidget = true;
         public bool EnableTaskbarWidget { get => _enableTaskbarWidget; set => SetProperty(ref _enableTaskbarWidget, value); }
+
+        // Manual horizontal offset (physical pixels) — lets users nudge the widget left/right on problematic taskbars
+        private int _widgetHorizontalOffset = 0;
+        public int WidgetHorizontalOffset { get => _widgetHorizontalOffset; set => SetProperty(ref _widgetHorizontalOffset, value); }
 
         private int _version = 1;
         public int Version { get => _version; set => SetProperty(ref _version, value); }

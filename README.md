@@ -1,14 +1,15 @@
 <div align="center">
+ 
+# ⚡ FlyShelf
 
-# ⚡ FlyShelf — Best Cross-Platform Clipboard Manager for PC & Android
+### **The Best Cross-Device Clipboard Manager & Productivity Ecosystem for PC & Android**
 
-### **The Premium Cross-Device Clipboard & Universal Copy-Paste Sync Ecosystem**
+*Copy on one device. Paste anywhere. Instantly. Secure P2P clipboard history, file sharing, and screenshots.*
 
-*Copy on one device. Paste anywhere instantly. Safe & secure peer-to-peer local WiFi and cloud pipeline clipboard sync.*
+[![Windows Desktop App](https://img.shields.io/badge/Windows_Desktop-v6.0.1-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf.exe)
+[![Android Mobile Companion](https://img.shields.io/badge/Android_Mobile-v6.0.1-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v6.0.1/FlyShelf_Mobile.apk)
 
-[![Windows](https://img.shields.io/badge/Windows_Desktop-v7.0.0-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v7.0.0/FlyShelf.exe)
-[![Android](https://img.shields.io/badge/Android_Mobile-v7.0.0-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v7.0.0/FlyShelf_Mobile.apk)
-[![Privacy](https://img.shields.io/badge/Privacy_First-Zero_Telemetry-10B981?style=for-the-badge&logo=shield&logoColor=white)](PRIVACY_POLICY.md)
+🚀 **Live Interactive Showcase**: [https://shdra06.github.io/FlyShelf](https://shdra06.github.io/FlyShelf)
 
 ---
 
@@ -16,9 +17,9 @@
 
 ## 🎯 What is FlyShelf?
 
-**FlyShelf** is an ultra-premium, zero-friction clipboard synchronization and productivity platform designed for developers, power users, and creators. It unifies your clipboard history, local files, code snippets, and screenshots across **all your Windows PCs and Android devices** in real-time. 
+**FlyShelf** is an ultra-premium, zero-friction **cross-device clipboard manager** and real-time productivity platform. Engineered specifically for developers, power users, and creators, it seamlessly unifies your **clipboard history**, code snippets, hyperlinks, local files, and screenshots across all your Windows PCs and Android devices.
 
-Unlike generic clipboard managers, FlyShelf works entirely peer-to-peer where possible, offering a hybrid syncing model utilizing direct **LAN connections**, secure **Cloudflare Tunnels**, and low-latency **Firebase Realtime Database** synchronization. No accounts to create, no ads, no spyware, and absolutely no limits.
+If you are looking for the **best clipboard manager for PC** that seamlessly syncs with your phone without cloud storage delays, FlyShelf is the perfect open-source solution. Unlike generic clipboard synchronization apps, FlyShelf operates entirely **peer-to-peer (P2P)** where possible. It implements a smart hybrid transport routing engine utilizing direct **WiFi LAN connections**, secure firewalled **Cloudflare Tunnels**, and sub-millisecond **Firebase Realtime Database** relays. No accounts, no advertising, no tracking, and absolute security.
 
 ---
 

@@ -191,6 +191,12 @@ namespace FlyShelf.Windows
             if (_mainWindow != null)
             {
                 Widget.SetMainWindow(_mainWindow);
+                
+                // Inject MiniShelfWindow if already created (may be null at startup, will be set lazily)
+                if (App.MiniShelfInstance != null)
+                {
+                    Widget.SetMiniShelfWindow(App.MiniShelfInstance);
+                }
             }
         }
 
@@ -609,6 +615,9 @@ namespace FlyShelf.Windows
                 // HWND_BOTTOM = 1 to keep behind all app windows (like the taskbar when auto-hidden)
                 const int HWND_BOTTOM = 1;
 
+                // Apply user's manual horizontal offset
+                screenX += SettingsManager.Current.WidgetHorizontalOffset;
+
                 if (screenX != _lastWidgetLeft || screenY != _lastWidgetTop ||
                     physicalWidth != _lastWidgetW || physicalHeight != _lastWidgetH)
                 {
@@ -756,6 +765,9 @@ namespace FlyShelf.Windows
                 if (Math.Abs(this.Height - targetLogicalHeight) > 0.01)
                     this.Height = targetLogicalHeight;
 
+                // Apply user's manual horizontal offset
+                containerPos.X += SettingsManager.Current.WidgetHorizontalOffset;
+
                 // Only call SetWindowPos if the container position/size actually changed — avoids flicker
                 if (containerPos.X != _lastWidgetLeft || containerPos.Y != _lastWidgetTop ||
                     physicalWidth != _lastWidgetW || physicalHeight != _lastWidgetH)
@@ -834,6 +846,21 @@ namespace FlyShelf.Windows
             // Cache for 5 seconds to avoid expensive enumeration every 500ms
             if (_cachedFreeZoneLeft >= 0 && (DateTime.Now - _lastFreeZoneScan).TotalSeconds < 5)
                 return (_cachedFreeZoneLeft, _cachedFreeZoneWidth);
+
+            // FAST PATH: When centered taskbar + Widgets button OFF, skip unreliable EnumChildWindows
+            // gap detection entirely. Win11's XAML Islands taskbar renders all icons inside a single
+            // DesktopWindowContentBridge that spans full width — EnumChildWindows can't see individual
+            // buttons, so gap detection produces wrong results on many machines (Lenovo ThinkPad AI, etc.).
+            // Instead, use a safe direct position at the far-left corner of the taskbar.
+            if (isTaskbarCentered && !isWidgetsVisible)
+            {
+                int safeLeft = (int)(12 * dpiScale) + 8;
+                _cachedFreeZoneLeft = safeLeft;
+                _cachedFreeZoneWidth = physicalWidth;
+                _lastFreeZoneScan = DateTime.Now;
+                Classes.Logger.LogAction("WIDGET", $"FindTaskbarFreeZone: FAST PATH (centered + no widgets) → left={safeLeft}");
+                return (safeLeft, physicalWidth);
+            }
 
             try
             {

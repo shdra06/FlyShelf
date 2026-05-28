@@ -479,11 +479,26 @@ namespace FlyShelf.Windows
                     while (parent != null)
                     {
                         if (parent == OcrOverlayCanvas) return true;
-                        parent = System.Windows.Media.VisualTreeHelper.GetParent(parent);
+                        if (parent is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D)
+                        {
+                            parent = System.Windows.Media.VisualTreeHelper.GetParent(parent);
+                        }
+                        else
+                        {
+                            parent = LogicalTreeHelper.GetParent(parent);
+                        }
                     }
                     return false;
                 }
-                current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+                
+                if (current is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D)
+                {
+                    current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+                }
+                else
+                {
+                    current = LogicalTreeHelper.GetParent(current);
+                }
             }
             return false;
         }

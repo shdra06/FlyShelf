@@ -233,7 +233,7 @@ namespace FlyShelf.ViewModels
                             finally { _iconDecodeSemaphore.Release(); }
 
                             // Cloud Discovery sync
-                            if (capturedNewItems.Count > 10 || !FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery || skipCloudSync)
+                            if (capturedNewItems.Count > 10 || !FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery || !FlyShelf.Classes.SettingsManager.Current.EnableOutgoingSync || skipCloudSync)
                                 continue;
 
                             var archPath = FlyShelf.Classes.SettingsManager.Current.CustomArchiveExtractionPath;
@@ -482,7 +482,7 @@ namespace FlyShelf.ViewModels
                             }
 
                             // Cloud discovery sync (with echo prevention logic)
-                            if (FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery && !skipCloudSync)
+                            if (FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery && FlyShelf.Classes.SettingsManager.Current.EnableOutgoingSync && !skipCloudSync)
                             {
                                 string imgFp = $"IMG::{item.FormattedSize}";
                                 if (!IsCloudSourced(imgFp))
@@ -709,7 +709,7 @@ namespace FlyShelf.ViewModels
                     item.EvaluateSmartActions();
 
                     // Cloud Discovery sync (with echo prevention logic)
-                    if (FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery && !skipCloudSync)
+                    if (FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery && FlyShelf.Classes.SettingsManager.Current.EnableOutgoingSync && !skipCloudSync)
                     {
                         string normalizedContent = NormalizeTextForFingerprint(item.RawContent ?? "");
                         string txtFp = $"TXT::{normalizedContent.Substring(0, Math.Min(200, normalizedContent.Length))}";

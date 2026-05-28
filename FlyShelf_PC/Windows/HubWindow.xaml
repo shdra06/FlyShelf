@@ -1499,6 +1499,41 @@
                                 </Grid>
                             </Border>
 
+                            <!-- Widget Position Offset — only visible when taskbar widget is enabled -->
+                            <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12"
+                                    Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableTaskbarWidget, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                <StackPanel VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                        <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#6366F1" Offset="0"/>
+                                                    <GradientStop Color="#818CF8" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <ui:SymbolIcon Symbol="ArrowMove24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock Text="Widget Position Offset" FontWeight="Bold" FontSize="14" Foreground="#818CF8" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock Text="Nudge the widget left or right if it overlaps your taskbar icons. Use 0 for default positioning." 
+                                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,6" TextWrapping="Wrap" LineHeight="17"/>
+                                    <Grid Margin="38,0,16,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Slider Grid.Column="0" Minimum="-200" Maximum="200" 
+                                                Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=WidgetHorizontalOffset, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                                TickFrequency="10" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                        <TextBlock Grid.Column="1" MinWidth="50" Margin="12,0,0,0" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                                   FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}">
+                                            <TextBlock.Text>
+                                                <Binding Source="{x:Static settings:SettingsManager.Current}" Path="WidgetHorizontalOffset" StringFormat="{}{0}px"/>
+                                            </TextBlock.Text>
+                                        </TextBlock>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
                             <!-- Auto Cleanup -->
                             <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12">
                                 <Grid>
@@ -1778,24 +1813,6 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- ═══ Danger Zone — Uninstall ═══ -->
-                        <Border Background="#12EF4444" BorderBrush="#30EF4444" BorderThickness="1" CornerRadius="12" Padding="16,12" Margin="0,6,0,10">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <Border Width="24" Height="24" CornerRadius="6" Background="#25EF4444" Margin="0,0,8,0">
-                                        <ui:SymbolIcon Symbol="Delete24" FontSize="12" Foreground="#EF4444" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                    </Border>
-                                    <TextBlock Text="Danger Zone" FontWeight="Bold" FontSize="13" Foreground="#EF4444" VerticalAlignment="Center"/>
-                                </StackPanel>
-                                <TextBlock Text="Permanently remove all FlyShelf data from this computer — clipboard history, images, synced files, settings, paired devices, logs, and certificates. This action cannot be undone." FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap" Margin="0,0,0,10"/>
-                                <ui:Button x:Name="UninstallBtn" Appearance="Danger" Padding="14,7" Click="UninstallFlyShelf_Click" ToolTip="Delete all FlyShelf data from %AppData% and close the app">
-                                    <StackPanel Orientation="Horizontal">
-                                        <ui:SymbolIcon Symbol="Delete24" FontSize="14" Margin="0,0,6,0"/>
-                                        <TextBlock Text="Uninstall FlyShelf &amp; Remove All Data" FontWeight="SemiBold" FontSize="12"/>
-                                    </StackPanel>
-                                </ui:Button>
-                            </StackPanel>
-                        </Border>
 
                     </StackPanel>
                     <!-- Unified log viewer -->
@@ -2061,6 +2078,25 @@
                                     </Grid>
                                 </Border>
                             </Grid>
+
+                            <!-- ═══ Danger Zone — Uninstall ═══ -->
+                            <Border Background="#12EF4444" BorderBrush="#30EF4444" BorderThickness="1" CornerRadius="14" Padding="20,16" Margin="0,0,0,20">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                        <Border Width="32" Height="32" CornerRadius="8" Background="#25EF4444" Margin="0,0,10,0">
+                                            <ui:SymbolIcon Symbol="Delete24" FontSize="14" Foreground="#EF4444" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock Text="Danger Zone" FontWeight="Bold" FontSize="14" Foreground="#EF4444" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <TextBlock Text="Permanently remove all FlyShelf data from this computer — clipboard history, images, synced files, settings, paired devices, logs, and certificates. This action cannot be undone." FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap" LineHeight="18" Margin="0,0,0,14"/>
+                                    <ui:Button x:Name="UninstallBtn" Appearance="Danger" Padding="14,8" CornerRadius="8" Click="UninstallFlyShelf_Click" ToolTip="Delete all FlyShelf data from %AppData% and close the app">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="Delete24" FontSize="14" Margin="0,0,6,0"/>
+                                            <TextBlock Text="Uninstall FlyShelf &amp; Remove All Data" FontWeight="SemiBold" FontSize="12"/>
+                                        </StackPanel>
+                                    </ui:Button>
+                                </StackPanel>
+                            </Border>
 
                             <!-- Footer -->
                             <TextBlock Text="© 2026 FlyShelf. Built with 💜 by Shivendra. All rights reserved." FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,10,0,24" Opacity="0.7"/>

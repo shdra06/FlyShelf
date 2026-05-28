@@ -139,16 +139,239 @@ namespace FlyShelf
             }
         }
 
+        // ═══════════════════════════════════════════════════════════════════
+        // SYNC DIRECTION CONTROLS — Inline Responsive Bar
+        // ═══════════════════════════════════════════════════════════════════
+
+        private bool _isSyncBarActive = false;
+
         private void ToggleGlobalSync_Click(object sender, RoutedEventArgs e)
         {
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
-            bool newState = !FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery;
-            FlyShelf.Classes.SettingsManager.Current.EnableCloudDiscovery = newState;
-            // Toggle ALL sync: Cloudflare + LAN
-            // When OFF, no data enters or leaves the device
-            FlyShelf.Classes.SettingsManager.Current.EnableGlobalCloudflare = newState;
-            FlyShelf.Classes.SettingsManager.Current.EnableLocalLAN = newState;
+            ToggleSyncBar(!_isSyncBarActive);
+        }
+
+        private void ToggleSyncBar(bool show)
+        {
+            if (SyncDirectionBar == null) return;
+
+            _isSyncBarActive = show;
+
+            if (show)
+            {
+                // Close other bars if active
+                if (_isFilterBarActive) ToggleFilterBar(false);
+
+                // Update pill highlights to match current state
+                UpdateSyncButtonHighlights();
+
+                SyncDirectionBar.Visibility = Visibility.Visible;
+
+                // Smooth slide-down + fade-in animation (same pattern as SortFilterInlineBar)
+                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(-8, 0, new Duration(TimeSpan.FromMilliseconds(150)))
+                {
+                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+                };
+                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(150)));
+
+                if (SyncDirectionBar.RenderTransform is System.Windows.Media.TranslateTransform translate)
+                {
+                    translate.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, slideAnim);
+                }
+                SyncDirectionBar.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+            }
+            else
+            {
+                // Smooth slide-up + fade-out animation
+                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(0, -8, new Duration(TimeSpan.FromMilliseconds(120)))
+                {
+                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn }
+                };
+                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(1, 0, new Duration(TimeSpan.FromMilliseconds(120)));
+
+                fadeAnim.Completed += (s, args) =>
+                {
+                    if (!_isSyncBarActive)
+                    {
+                        SyncDirectionBar.Visibility = Visibility.Collapsed;
+                    }
+                };
+
+                if (SyncDirectionBar.RenderTransform is System.Windows.Media.TranslateTransform translate)
+                {
+                    translate.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, slideAnim);
+                }
+                SyncDirectionBar.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+            }
+        }
+
+        private void SyncIncoming_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var settings = FlyShelf.Classes.SettingsManager.Current;
+            settings.EnableIncomingSync = !settings.EnableIncomingSync;
+
+            if (settings.EnableIncomingSync)
+            {
+                if (!settings.EnableCloudDiscovery)
+                {
+                    settings.EnableCloudDiscovery = true;
+                    settings.EnableGlobalCloudflare = true;
+                    settings.EnableLocalLAN = true;
+                }
+            }
+            else
+            {
+                if (!settings.EnableOutgoingSync)
+                {
+                    settings.EnableCloudDiscovery = false;
+                    settings.EnableGlobalCloudflare = false;
+                    settings.EnableLocalLAN = false;
+                }
+            }
+
             FlyShelf.Classes.SettingsManager.Save();
+            UpdateSyncButtonHighlights();
+
+            if (settings.EnableIncomingSync || settings.EnableOutgoingSync)
+            {
+                TriggerInstantResync();
+            }
+        }
+
+        private void SyncOutgoing_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var settings = FlyShelf.Classes.SettingsManager.Current;
+            settings.EnableOutgoingSync = !settings.EnableOutgoingSync;
+
+            if (settings.EnableOutgoingSync)
+            {
+                if (!settings.EnableCloudDiscovery)
+                {
+                    settings.EnableCloudDiscovery = true;
+                    settings.EnableGlobalCloudflare = true;
+                    settings.EnableLocalLAN = true;
+                }
+            }
+            else
+            {
+                if (!settings.EnableIncomingSync)
+                {
+                    settings.EnableCloudDiscovery = false;
+                    settings.EnableGlobalCloudflare = false;
+                    settings.EnableLocalLAN = false;
+                }
+            }
+
+            FlyShelf.Classes.SettingsManager.Save();
+            UpdateSyncButtonHighlights();
+
+            if (settings.EnableIncomingSync || settings.EnableOutgoingSync)
+            {
+                TriggerInstantResync();
+            }
+        }
+
+        private void SyncBoth_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            var settings = FlyShelf.Classes.SettingsManager.Current;
+            bool bothOn = settings.EnableIncomingSync && settings.EnableOutgoingSync && settings.EnableCloudDiscovery;
+
+            if (bothOn)
+            {
+                // Turn everything OFF
+                settings.EnableCloudDiscovery = false;
+                settings.EnableGlobalCloudflare = false;
+                settings.EnableLocalLAN = false;
+                settings.EnableIncomingSync = false;
+                settings.EnableOutgoingSync = false;
+            }
+            else
+            {
+                // Turn everything ON
+                settings.EnableCloudDiscovery = true;
+                settings.EnableGlobalCloudflare = true;
+                settings.EnableLocalLAN = true;
+                settings.EnableIncomingSync = true;
+                settings.EnableOutgoingSync = true;
+            }
+            FlyShelf.Classes.SettingsManager.Save();
+            UpdateSyncButtonHighlights();
+
+            if (!bothOn)
+            {
+                TriggerInstantResync();
+            }
+        }
+
+        private void TriggerInstantResync()
+        {
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                // Poll for up to 3 seconds to find a healthy, running PeerManager.Instance
+                for (int i = 0; i < 30; i++)
+                {
+                    var instance = FlyShelf.Classes.PeerManager.Instance;
+                    if (instance != null && instance.IsRunning)
+                    {
+                        FlyShelf.Classes.Logger.LogAction("UI_TRIGGER", "Found active PeerManager.Instance — running ForceResync instantly");
+                        await instance.ForceResync();
+                        return;
+                    }
+                    await System.Threading.Tasks.Task.Delay(100);
+                }
+                FlyShelf.Classes.Logger.LogAction("UI_TRIGGER", "⚠️ Could not find active PeerManager.Instance within timeout");
+            });
+        }
+
+        private void SyncBarDismiss_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            ToggleSyncBar(false);
+        }
+
+        private void UpdateSyncButtonHighlights()
+        {
+            var settings = FlyShelf.Classes.SettingsManager.Current;
+            bool inOn = settings.EnableIncomingSync && settings.EnableCloudDiscovery;
+            bool outOn = settings.EnableOutgoingSync && settings.EnableCloudDiscovery;
+            bool bothOn = inOn && outOn;
+
+            // Incoming pill + dot
+            UpdateSyncPillHighlight(SyncBtn_Incoming, SyncDot_Incoming, inOn, "#10B981");
+            // Outgoing pill + dot
+            UpdateSyncPillHighlight(SyncBtn_Outgoing, SyncDot_Outgoing, outOn, "#3B82F6");
+            // Both pill + dot
+            UpdateSyncPillHighlight(SyncBtn_Both, SyncDot_Both, bothOn, "#8B5CF6");
+        }
+
+        private void UpdateSyncPillHighlight(System.Windows.Controls.Border btn, System.Windows.Shapes.Ellipse dot, bool isActive, string accentHex)
+        {
+            if (btn == null) return;
+            var accent = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(accentHex);
+            if (isActive)
+            {
+                btn.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x50, accent.R, accent.G, accent.B));
+                btn.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x80, accent.R, accent.G, accent.B));
+            }
+            else
+            {
+                btn.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x18, accent.R, accent.G, accent.B));
+                btn.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x30, accent.R, accent.G, accent.B));
+            }
+
+            // Toggle dot indicator: bright accent glow when ON, dim gray when OFF
+            if (dot != null)
+            {
+                if (isActive)
+                {
+                    dot.Fill = new System.Windows.Media.SolidColorBrush(accent);
+                    dot.Stroke = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x60, accent.R, accent.G, accent.B));
+                }
+                else
+                {
+                    dot.Fill = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x33, 0x88, 0x88, 0x88));
+                    dot.Stroke = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
+                }
+            }
         }
 
         private bool _isClearConfirmActive = false;
@@ -1048,9 +1271,19 @@ namespace FlyShelf
 
         private static T? FindVisualParent<T>(DependencyObject child) where T : DependencyObject
         {
-            DependencyObject parentObject = VisualTreeHelper.GetParent(child);
+            if (child == null) return null;
+            DependencyObject parentObject = null;
+            if (child is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D)
+            {
+                parentObject = VisualTreeHelper.GetParent(child);
+            }
+            else
+            {
+                parentObject = LogicalTreeHelper.GetParent(child);
+            }
+
             if (parentObject == null) return null;
-            T? parent = parentObject as T;
+            T parent = parentObject as T;
             if (parent != null) return parent;
             else return FindVisualParent<T>(parentObject);
         }
@@ -1063,7 +1296,14 @@ namespace FlyShelf
             {
                 if (current is FrameworkElement fe && fe.Tag as string == tag)
                     return true;
-                current = VisualTreeHelper.GetParent(current);
+                if (current is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D)
+                {
+                    current = VisualTreeHelper.GetParent(current);
+                }
+                else
+                {
+                    current = LogicalTreeHelper.GetParent(current);
+                }
             }
             return false;
         }

@@ -382,7 +382,14 @@ namespace FlyShelf.Classes
                                     string sourceDeviceName = root.TryGetProperty("sourceDeviceName", out var nameProp) ? nameProp.GetString() : "Remote PC";
 
                                     Logger.LogAction("WS", $"Received SyncText via WebSocket from {sourceDeviceName}: '{title}'");
-                                    InjectReceivedText(data, sourceDeviceName, "WebSocket", itemType, "PC");
+                                    if (SettingsManager.Current.EnableIncomingSync)
+                                    {
+                                        InjectReceivedText(data, sourceDeviceName, "WebSocket", itemType, "PC");
+                                    }
+                                    else
+                                    {
+                                        Logger.LogAction("WS", $"Incoming sync paused — discarded text from {sourceDeviceName}");
+                                    }
                                 }
                                 else if (envelopeType == "SyncFileStart")
                                 {
@@ -393,6 +400,23 @@ namespace FlyShelf.Classes
                                     string sourceDeviceName = root.TryGetProperty("sourceDeviceName", out var nameProp) ? nameProp.GetString() : "Remote PC";
 
                                     Logger.LogAction("WS", $"Received SyncFileStart: {fileName} ({fileSize} bytes) from {sourceDeviceName}");
+
+                                    // ── Incoming Sync Gate ──
+                                    if (!SettingsManager.Current.EnableIncomingSync)
+                                    {
+                                        Logger.LogAction("WS", $"Incoming sync paused — discarding file {fileName} from {sourceDeviceName}");
+                                        // Still need to consume the binary data from the WebSocket to keep connection valid
+                                        long bytesSkipped = 0;
+                                        while (bytesSkipped < fileSize)
+                                        {
+                                            long remain = fileSize - bytesSkipped;
+                                            int toRead = (int)Math.Min(buffer.Length, remain);
+                                            var skipResult = await ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, toRead), CancellationToken.None);
+                                            if (skipResult.MessageType == WebSocketMessageType.Close) return;
+                                            bytesSkipped += skipResult.Count;
+                                        }
+                                        continue;
+                                    }
 
                                     string dateString = DateTime.Now.ToString("dd-MM-yyyy");
                                     string uploadDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), 

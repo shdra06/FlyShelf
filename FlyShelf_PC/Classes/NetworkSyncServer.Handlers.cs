@@ -120,6 +120,15 @@ namespace FlyShelf.Classes
 
         private async Task HandleTextUpload(HttpListenerRequest req, HttpListenerResponse res)
         {
+            // ── Incoming Sync Gate ──
+            if (!SettingsManager.Current.EnableIncomingSync)
+            {
+                res.StatusCode = 200;
+                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"sync_paused\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                res.Close();
+                return;
+            }
+
             // SPEED: Read body first, then respond 200 IMMEDIATELY so the sender isn't blocked
             string text;
             string sourceDevice;
@@ -266,6 +275,15 @@ namespace FlyShelf.Classes
 
         private async Task HandleFileUpload(HttpListenerRequest req, HttpListenerResponse res)
         {
+            // ── Incoming Sync Gate ──
+            if (!SettingsManager.Current.EnableIncomingSync)
+            {
+                res.StatusCode = 200;
+                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"sync_paused\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                res.Close();
+                return;
+            }
+
             string tempFile = "";
             ClipboardItem? placeholder = null;
             string sourceDevice = "Mobile";
@@ -453,6 +471,15 @@ namespace FlyShelf.Classes
 
         private async Task HandleArchiveUpload(HttpListenerRequest req, HttpListenerResponse res)
         {
+            // ── Incoming Sync Gate ──
+            if (!SettingsManager.Current.EnableIncomingSync)
+            {
+                res.StatusCode = 200;
+                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"sync_paused\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                res.Close();
+                return;
+            }
+
             try
             {
                 string batchName = req.Headers["X-Batch-Name"];
@@ -568,6 +595,15 @@ namespace FlyShelf.Classes
         // ─── Relay Upload: Android uploads file → PC saves + pushes Cloudflare URL to Firebase ───
         private async Task HandleRelayUpload(HttpListenerRequest req, HttpListenerResponse res)
         {
+            // ── Incoming Sync Gate ──
+            if (!SettingsManager.Current.EnableIncomingSync)
+            {
+                res.StatusCode = 200;
+                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"sync_paused\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                res.Close();
+                return;
+            }
+
             try
             {
                 string encodedName = req.Headers["X-File-Name"] ?? "";

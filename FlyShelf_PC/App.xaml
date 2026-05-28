@@ -116,7 +116,7 @@
             <Style x:Key="DashboardCardStyle" TargetType="Border">
                 <Setter Property="CacheMode">
                     <Setter.Value>
-                        <BitmapCache EnableClearType="True" RenderAtScale="1"/>
+                        <BitmapCache EnableClearType="True" RenderAtScale="2"/>
                     </Setter.Value>
                 </Setter>
                 <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
