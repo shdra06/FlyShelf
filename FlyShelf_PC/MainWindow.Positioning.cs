@@ -21,6 +21,10 @@ namespace FlyShelf
         public void ShowNearPosition(double targetX, double targetY, int mode = 0, bool isPersistent = false, bool stealFocus = true)
         {
             Classes.Logger.LogAction("TELEMETRY", $"ShowNearPosition entered, mode={mode}, isPersistent={isPersistent}, stealFocus={stealFocus}");
+            if (mode == 0)
+            {
+                EnsureClipboardMode();
+            }
             CloseSearch();
             CloseEmojiPicker();
 

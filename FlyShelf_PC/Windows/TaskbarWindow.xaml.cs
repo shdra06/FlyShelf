@@ -191,12 +191,6 @@ namespace FlyShelf.Windows
             if (_mainWindow != null)
             {
                 Widget.SetMainWindow(_mainWindow);
-                
-                // Inject MiniShelfWindow if already created (may be null at startup, will be set lazily)
-                if (App.MiniShelfInstance != null)
-                {
-                    Widget.SetMiniShelfWindow(App.MiniShelfInstance);
-                }
             }
         }
 

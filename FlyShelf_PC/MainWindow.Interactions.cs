@@ -626,12 +626,27 @@ namespace FlyShelf
             
             if (SearchToggleBtn != null)
             {
-                SearchToggleBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
+                SearchToggleBtn.Visibility = Visibility.Visible;
             }
             
             if (OpenSettingsBtn != null)
             {
                 OpenSettingsBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
+            }
+
+            if (NotesToggleBtn != null)
+            {
+                NotesToggleBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
+            }
+
+            if (TodoToggleBtn != null)
+            {
+                TodoToggleBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
+            }
+
+            if (ShelfListView != null)
+            {
+                ScrollViewer.SetVerticalScrollBarVisibility(ShelfListView, isMini ? ScrollBarVisibility.Hidden : ScrollBarVisibility.Auto);
             }
             
             // Emoji → Merge PDF swap (existing behavior)

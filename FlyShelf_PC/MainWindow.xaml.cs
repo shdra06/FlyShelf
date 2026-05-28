@@ -19,11 +19,7 @@ namespace FlyShelf
         private readonly FlyShelfViewModel _viewModel;
         public FlyShelfViewModel ViewModel => _viewModel;
         
-        /// <summary>Inject MiniShelfWindow into the taskbar widget (called from App on first shake).</summary>
-        public void SetMiniShelfOnWidget(Windows.MiniShelfWindow miniShelf)
-        {
-            _taskbarWidget?.Widget?.SetMiniShelfWindow(miniShelf);
-        }
+
         private int _spawnToken = 0;
         private bool _isDragHovering = false;
         private bool _shouldPreventDrag = false;

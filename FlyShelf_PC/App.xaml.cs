@@ -11,14 +11,10 @@ public partial class App : Application
     private const int VK_LBUTTON = 0x01;
     private static App _instance;
     private static MainWindow _mainWinInstance;
-    private static Windows.MiniShelfWindow? _miniShelfInstance;
     private static System.Threading.Timer? _shakeTimer;
 
     /// <summary>Reference to open PDF merge window; shake suppressed only when it's focused.</summary>
     internal static Window? ActiveMergeWindow = null;
-    
-    /// <summary>Public accessor so TaskbarWindow widget can set the MiniShelfWindow reference.</summary>
-    internal static Windows.MiniShelfWindow? MiniShelfInstance => _miniShelfInstance;
 
     // Shake Detection State
     private static int _shakeCount = 0;
@@ -337,6 +333,8 @@ public partial class App : Application
                     _mainWinInstance.Left = -20000;
                     _mainWinInstance.Top = -20000;
                     MainWindow.Show();
+
+
                     
                     // One-time cleanup: purge old GUID-based device entries from Firebase
                     _ = FlyShelf.Classes.CloudDiscoveryManager.CleanupStaleDevices();
@@ -502,9 +500,9 @@ public partial class App : Application
 
                                         // Absolute vertical drift clamping check (covers both upwards and downwards drift)
                                         int netDriftY = Math.Abs(triggerY - _shakeStartY);
-                                        if (netDriftY > 300)
+                                        if (netDriftY > 500)
                                         {
-                                            FlyShelf.Classes.Logger.LogAction("SHAKE", $"❌ Rejected: Exceeded Y-axis drift constraint. Drift: {netDriftY}px (Max allowed: 300px).");
+                                            FlyShelf.Classes.Logger.LogAction("SHAKE", $"❌ Rejected: Exceeded Y-axis drift constraint. Drift: {netDriftY}px (Max allowed: 500px).");
                                             return;
                                         }
 
@@ -566,21 +564,7 @@ public partial class App : Application
         }
         catch { }
 
-        // INDEPENDENT MINI SHELF: Use a separate window for shake-to-open.
-        // This prevents size distortion when Notes/Todo is active on the MainWindow.
-        if (_miniShelfInstance == null)
-        {
-            _miniShelfInstance = new Windows.MiniShelfWindow(_mainWinInstance.ViewModel);
-            _miniShelfInstance.Show();
-            _miniShelfInstance.Left = -20000;
-            _miniShelfInstance.Top = -20000;
-            
-            // Inject into widget so clicks go through the mini shelf
-            try { _mainWinInstance.SetMiniShelfOnWidget(_miniShelfInstance); }
-            catch { }
-        }
-
-        _miniShelfInstance.ToggleVisibility(logicalX, logicalY);
+        _mainWinInstance.ShowNearPosition(logicalX, logicalY, mode, isPersistent, stealFocus);
     }
 
     [DllImport("user32.dll")]

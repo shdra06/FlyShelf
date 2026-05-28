@@ -6,7 +6,6 @@ namespace FlyShelf.Controls
     public partial class FlyShelfWidgetControl : UserControl
     {
         private MainWindow? _mainWindow;
-        private Windows.MiniShelfWindow? _miniShelfWindow;
 
         public FlyShelfWidgetControl()
         {
@@ -16,11 +15,6 @@ namespace FlyShelf.Controls
         public void SetMainWindow(MainWindow window)
         {
             _mainWindow = window;
-        }
-
-        public void SetMiniShelfWindow(Windows.MiniShelfWindow miniShelf)
-        {
-            _miniShelfWindow = miniShelf;
         }
 
         public (double Width, double Height) CalculateSize(double dpiScale)
@@ -69,14 +63,9 @@ namespace FlyShelf.Controls
 
             FlyShelf.Classes.Logger.LogAction("TELEMETRY", $"Widget left click received, screen point=({logicalX}, {logicalY})");
 
-            // Use independent MiniShelfWindow for widget clicks
-            if (_miniShelfWindow != null)
+            // Summon the bigger clipboard MainWindow consistently
+            if (_mainWindow != null)
             {
-                _miniShelfWindow.ToggleVisibility(logicalX, logicalY);
-            }
-            else if (_mainWindow != null)
-            {
-                // Fallback to MainWindow if MiniShelfWindow not set
                 bool isMode1 = false;
                 if (_mainWindow.DataContext is FlyShelf.ViewModels.FlyShelfViewModel vm && vm.CurrentMode == 1)
                 {
