@@ -1,0 +1,489 @@
+================================================================================
+  FLYSHELF — COMPLETE UPDATE & RELEASE GUIDE
+  Last Updated: 29 May 2026
+================================================================================
+
+  This guide covers every step needed to ship a new FlyShelf PC update.
+  Follow each section in order. Do NOT skip steps.
+
+
+================================================================================
+  TABLE OF CONTENTS
+================================================================================
+
+  1. PRE-RELEASE CHECKLIST
+  2. STEP 1 — BUMP VERSION NUMBER (3 FILES)
+  3. STEP 2 — BUILD THE RELEASE EXE
+  4. STEP 3 — VERIFY THE BUILD
+  5. STEP 4 — COMMIT & PUSH TO PRIVATE REPO
+  6. STEP 5 — PUSH TO PUBLIC REPO
+  7. STEP 6 — CREATE GITHUB RELEASE & UPLOAD ASSETS
+  8. STEP 7 — VERIFY THE UPDATE PIPELINE
+  9. STEP 8 — WEBSITE GOES LIVE AUTOMATICALLY
+  10. TROUBLESHOOTING
+  11. FILE REFERENCE MAP
+  12. QUICK COMMAND CHEAT SHEET
+
+
+================================================================================
+  1. PRE-RELEASE CHECKLIST
+================================================================================
+
+  Before starting any release, confirm the following:
+
+  [ ] All code changes are tested and working
+  [ ] The app launches and runs without crashes
+  [ ] No compilation errors (warnings are OK)
+  [ ] You know the new version number (e.g., 8.6.0)
+  [ ] You have a changelog ready (what's new, what's fixed)
+  [ ] Git working tree is clean (no uncommitted junk)
+  [ ] You are on the 'main' branch
+  [ ] Internet connection is stable (for GitHub push + release upload)
+
+  Check git status:
+    > cd E:\exeapps\FlyShelf
+    > git status
+    > git branch        (should show * main)
+
+
+================================================================================
+  2. STEP 1 — BUMP VERSION NUMBER (3 FILES)
+================================================================================
+
+  You MUST update the version in exactly 3 files. Miss one and things break.
+
+
+  ── FILE A: FlyShelf_PC\FlyShelf.csproj ──────────────────────────────────────
+
+  Location: E:\exeapps\FlyShelf\FlyShelf_PC\FlyShelf.csproj
+  Lines:    17-19 (approximately)
+
+  Find these 3 XML tags and change the version:
+
+    BEFORE:
+      <Version>8.5.0</Version>
+      <AssemblyVersion>8.5.0</AssemblyVersion>
+      <FileVersion>8.5.0</FileVersion>
+
+    AFTER (example for 8.6.0):
+      <Version>8.6.0</Version>
+      <AssemblyVersion>8.6.0</AssemblyVersion>
+      <FileVersion>8.6.0</FileVersion>
+
+  WHY: This is the single source of truth. The app reads its version at
+       runtime from the assembly. UpdateManager, LicenseManager, PeerManager
+       all use Assembly.GetExecutingAssembly().GetName().Version.
+
+
+  ── FILE B: version.json ─────────────────────────────────────────────────────
+
+  Location: E:\exeapps\FlyShelf\version.json
+
+  Update these fields:
+
+    "pc_version":   "8.6.0"
+    "pc_changelog": "v8.6.0 – Your Release Title\n\n• Fixed: ...\n• Improved: ..."
+    "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v8.6.0/FlyShelf.exe"
+    "pc_sha256":    (leave as-is — Build_PC.bat will auto-update this!)
+
+  DO NOT touch:
+    "android_version"    (only change if you release a new APK)
+    "android_download"   (only change if you release a new APK)
+
+  WHY: This is the fallback update check. Users who can't reach the GitHub
+       Releases API will use raw.githubusercontent.com/.../version.json.
+       The app compares pc_version against its own assembly version.
+
+
+  ── FILE C: website\index.html ───────────────────────────────────────────────
+
+  Location: E:\exeapps\FlyShelf\website\index.html
+
+  There are 8 places that reference the PC version. Update ALL of them:
+
+    Line ~36:  "downloadUrl": "...download/v8.6.0/FlyShelf.exe"
+    Line ~44:  "softwareVersion": "8.6.0"
+    Line ~105: Ecosystem Version 8.6.0 is Live
+    Line ~130: href="...download/v8.6.0/FlyShelf.exe"
+    Line ~146: <div class="platform-ver">v8.6.0</div>
+    Line ~867: href="...download/v8.6.0/FlyShelf.exe"
+    Line ~869: Windows Executable (v8.6.0)
+    Line ~913: <span>v8.6.0 & v7.1.0 Release Build</span>
+
+  TIP: Use Find & Replace in your editor:
+       Find:    8.5.0    (the OLD version)
+       Replace: 8.6.0    (the NEW version)
+       But be careful NOT to replace android version strings!
+
+  WHY: This is your public-facing website hosted at:
+       https://shdra06.github.io/FlyShelf/
+       The JSON-LD schema helps with SEO. Download links must point to
+       the correct release tag or users get 404 errors.
+
+
+================================================================================
+  3. STEP 2 — BUILD THE RELEASE EXE
+================================================================================
+
+  Open a terminal and run:
+
+    > cd E:\exeapps\FlyShelf\FlyShelf_PC
+    > .\Build_PC.bat
+
+  This script does the following automatically:
+
+    [0/4] Kills any running FlyShelf.exe processes
+    [1/4] Purges __pycache__ directories
+    [2/4] Compiles: dotnet publish (Release, win-x64, self-contained, single-file)
+    [3/4] Computes SHA-256 hash of FINAL\FlyShelf.exe
+          Saves hash to FINAL\FlyShelf.exe.sha256
+    [4/4] AUTO-UPDATES version.json pc_sha256 field with the new hash
+
+  Output files will be in:
+    E:\exeapps\FlyShelf\FlyShelf_PC\FINAL\FlyShelf.exe
+    E:\exeapps\FlyShelf\FlyShelf_PC\FINAL\FlyShelf.exe.sha256
+
+  EXPECTED BUILD TIME: ~25-40 seconds
+
+  IMPORTANT: The build script automatically cleans up .pdb, .config, .dll,
+  and .json files from the FINAL\ directory to ensure a pure single-file EXE.
+
+  If the build FAILS:
+    - Check the error messages for compilation errors
+    - Fix the code, save, and re-run Build_PC.bat
+    - Common issues: missing NuGet packages, syntax errors, namespace conflicts
+
+
+================================================================================
+  4. STEP 3 — VERIFY THE BUILD
+================================================================================
+
+  After Build_PC.bat finishes successfully:
+
+  A) CHECK THE HASH WAS UPDATED:
+     Open version.json and verify pc_sha256 matches the hash printed by the
+     build script. Example:
+       "pc_sha256": "7d4a398451d5b98b824b51de510c781d1f00103da6581cc4d35c138bb303d1b2"
+
+  B) CHECK THE EXE SIZE:
+     The EXE should be around 75-90 MB. If it's much smaller, something
+     went wrong with the self-contained packaging.
+       > dir FlyShelf_PC\FINAL\FlyShelf.exe
+
+  C) LAUNCH AND TEST:
+     Build_PC.bat auto-launches the EXE. Verify:
+     - The app opens without crashes
+     - Check About/Settings to confirm the version shows the new number
+     - Test the key features you changed
+     - Test the update check (Settings > Check for Updates) — it should
+       say "You're up to date" since you're running the latest
+
+
+================================================================================
+  5. STEP 4 — COMMIT & PUSH TO PRIVATE REPO
+================================================================================
+
+  The private repo contains ALL source code.
+
+  Remote name: origin
+  Remote URL:  https://github.com/shdra06/FlyShelf-Private.git
+
+  Commands:
+
+    > cd E:\exeapps\FlyShelf
+    > git add -A
+    > git commit -m "v8.6.0 – Your Release Title"
+    > git push origin main
+
+  COMMIT MESSAGE CONVENTION:
+    "v{VERSION} – {Short Description}"
+    Example: "v8.5.0 – Search Stability & Notes Auto-Bullet (Pro Enabled)"
+
+  WAIT for the push to complete. Large files (APK, videos) may take a while.
+  You'll see warnings about large files — these are OK as long as the push
+  succeeds.
+
+
+================================================================================
+  6. STEP 5 — PUSH TO PUBLIC REPO
+================================================================================
+
+  The public repo hosts releases, website, and version.json.
+  It shares the SAME git history as the private repo.
+
+  Remote name: public
+  Remote URL:  https://github.com/shdra06/FlyShelf.git
+
+  Commands:
+
+    > git push public main
+
+  WAIT for this to complete before creating the release.
+
+  NOTE: Both repos get the exact same commit. The private repo is just
+  not visible to the public. The public repo is where GitHub Pages serves
+  your website and where users download releases.
+
+
+================================================================================
+  7. STEP 6 — CREATE GITHUB RELEASE & UPLOAD ASSETS
+================================================================================
+
+  This is the most important step for the auto-update pipeline.
+
+  ── OPTION A: Using GitHub CLI (gh) ──────────────────────────────────────────
+
+  If GITHUB_TOKEN env var causes issues, clear it first:
+    > $env:GITHUB_TOKEN = ""
+
+  Make sure you're authenticated:
+    > gh auth status
+    > gh auth switch --user shdra06     (if needed)
+
+  Create the release:
+
+    > gh release create v8.6.0 `
+        "FlyShelf_PC/FINAL/FlyShelf.exe" `
+        "FlyShelf_PC/FINAL/FlyShelf.exe.sha256" `
+        --repo shdra06/FlyShelf `
+        --title "v8.6.0 - Your Release Title" `
+        --notes "## What's New in v8.6.0
+
+    ### Bug Fixes
+    - Fixed: ...
+    - Fixed: ...
+
+    ### Improvements
+    - Improved: ...
+
+    ---
+    **SHA-256**: YOUR_HASH_HERE
+    **Platform**: Windows 10/11 (x64, self-contained)"
+
+  UPLOAD TIME: The ~80 MB EXE upload takes about 1-3 minutes.
+
+
+  ── OPTION B: Using GitHub Web UI ────────────────────────────────────────────
+
+  1. Go to: https://github.com/shdra06/FlyShelf/releases/new
+  2. Tag: v8.6.0 (create new tag)
+  3. Target: main
+  4. Title: v8.6.0 – Your Release Title
+  5. Description: Write your changelog in Markdown
+  6. Drag & drop these 2 files into the assets area:
+       - FlyShelf_PC\FINAL\FlyShelf.exe
+       - FlyShelf_PC\FINAL\FlyShelf.exe.sha256
+  7. Click "Publish release"
+
+
+  ── CRITICAL: ASSET NAMING ───────────────────────────────────────────────────
+
+  The EXE MUST be named exactly:  FlyShelf.exe
+  The hash MUST be named exactly: FlyShelf.exe.sha256
+
+  The UpdateManager.cs code searches for these exact filenames in the
+  release assets. If you rename them, auto-update will break.
+
+  UpdateManager checks for assets in this order:
+    1. Asset named "FlyShelf.exe" → download URL
+    2. Asset named "FlyShelf.exe.sha256" or "sha256.txt" → hash verification
+
+
+================================================================================
+  8. STEP 7 — VERIFY THE UPDATE PIPELINE
+================================================================================
+
+  After the release is published, verify the update pipeline works:
+
+  A) CHECK GITHUB RELEASES API:
+     Open in browser:
+       https://api.github.com/repos/shdra06/FlyShelf/releases/latest
+
+     Verify:
+     - "tag_name" shows "v8.6.0"
+     - "assets" array contains "FlyShelf.exe" and "FlyShelf.exe.sha256"
+     - Each asset has a valid "browser_download_url"
+
+  B) CHECK VERSION.JSON FALLBACK:
+     Open in browser:
+       https://raw.githubusercontent.com/shdra06/FlyShelf/main/version.json
+
+     Verify:
+     - "pc_version" shows "8.6.0"
+     - "pc_sha256" matches the hash from your build
+     - "pc_download" URL points to v8.6.0
+
+  C) TEST ON AN OLDER VERSION:
+     If you have an older FlyShelf EXE (e.g., v8.5.0), launch it and:
+     - It should detect the update within 1 minute (checks on startup)
+     - Or go to Settings > Check for Updates
+     - It should download, verify SHA-256, and prompt to restart
+
+  D) CHECK WEBSITE:
+     Open: https://shdra06.github.io/FlyShelf/
+     - GitHub Pages rebuilds automatically within ~60 seconds of push
+     - Verify the hero tag shows "Ecosystem Version 8.6.0 is Live"
+     - Click the download button — it should download the correct EXE
+     - Check the footer shows the correct version
+
+
+================================================================================
+  9. STEP 8 — WEBSITE GOES LIVE AUTOMATICALLY
+================================================================================
+
+  The website is hosted via GitHub Pages from the public repo.
+
+  URL: https://shdra06.github.io/FlyShelf/
+
+  It serves files from the /website/ directory on the main branch.
+  When you push to the public repo, GitHub Pages automatically rebuilds
+  and deploys within 30-60 seconds. No manual deployment needed.
+
+  Files that make up the website:
+    website/index.html     — Main landing page
+    website/pricing.html   — Pro tier pricing page
+    website/style.css      — All styles
+    website/app.js         — Interactive JavaScript
+    website/robots.txt     — SEO crawl rules
+    website/sitemap.xml    — SEO sitemap
+
+
+================================================================================
+  10. TROUBLESHOOTING
+================================================================================
+
+  ── BUILD FAILS ──────────────────────────────────────────────────────────────
+
+  Q: "dotnet publish" fails with errors
+  A: Read the error messages. Common causes:
+     - Missing NuGet package → run: dotnet restore
+     - Syntax error in C# → fix the code
+     - File locked → close FlyShelf.exe, Visual Studio, etc.
+     - SDK not found → ensure .NET 10 SDK is installed
+
+
+  ── HASH MISMATCH ON UPDATE ──────────────────────────────────────────────────
+
+  Q: Users report "Update verification failed"
+  A: The SHA-256 in version.json or .sha256 file doesn't match the EXE.
+     This happens if you:
+     - Re-built the EXE after uploading (recompilation changes the hash)
+     - Manually edited version.json with the wrong hash
+     - Uploaded a different EXE than what Build_PC.bat produced
+     FIX: Re-run Build_PC.bat, note the new hash, update version.json,
+          re-upload the EXE to the GitHub release, push version.json.
+
+
+  ── GITHUB CLI AUTH ISSUES ───────────────────────────────────────────────────
+
+  Q: "gh release create" fails with HTTP 401
+  A: The GITHUB_TOKEN environment variable is overriding the keyring token.
+     Fix:
+       > $env:GITHUB_TOKEN = ""
+       > gh auth switch --user shdra06
+       > gh auth status    (verify it says "Logged in")
+
+
+  ── USERS DON'T SEE THE UPDATE ───────────────────────────────────────────────
+
+  Q: Old versions don't detect the new release
+  A: Check these in order:
+     1. Is the GitHub release published (not draft)?
+     2. Is the release tagged correctly (v8.6.0, not 8.6.0)?
+     3. Does the release have FlyShelf.exe as an asset?
+     4. Is version.json pushed to the public repo main branch?
+     5. Does pc_version in version.json match the new version?
+
+  The app checks for updates using TWO strategies:
+     Strategy 1 (Primary):  GitHub Releases API → latest release tag
+     Strategy 2 (Fallback): raw.githubusercontent.com/.../version.json
+
+
+  ── WEBSITE NOT UPDATING ────────────────────────────────────────────────────
+
+  Q: Website still shows old version after push
+  A: GitHub Pages can take up to 5 minutes. Hard-refresh (Ctrl+Shift+R).
+     Check the Actions tab for Pages build status:
+     https://github.com/shdra06/FlyShelf/actions
+
+
+  ── LARGE FILE WARNINGS ──────────────────────────────────────────────────────
+
+  Q: "warning: File is larger than GitHub's recommended maximum file size"
+  A: These are warnings, not errors. The push still succeeds.
+     Consider using Git LFS for files > 50 MB (APK, videos) in the future.
+
+
+================================================================================
+  11. FILE REFERENCE MAP
+================================================================================
+
+  PROJECT ROOT: E:\exeapps\FlyShelf\
+
+  ── VERSION FILES (must all agree) ───────────────────────────────────────────
+  FlyShelf_PC\FlyShelf.csproj        → <Version>, <AssemblyVersion>, <FileVersion>
+  version.json                       → pc_version, pc_sha256, pc_download
+  website\index.html                 → 8 references (see Step 1, File C)
+
+  ── BUILD PIPELINE ───────────────────────────────────────────────────────────
+  FlyShelf_PC\Build_PC.bat           → Release build script (use this!)
+  FlyShelf_PC\run.bat                → Quick debug build (NOT for releases)
+  FlyShelf_PC\FINAL\FlyShelf.exe     → Compiled release EXE
+  FlyShelf_PC\FINAL\FlyShelf.exe.sha256 → SHA-256 hash file
+
+  ── UPDATE SYSTEM (code) ────────────────────────────────────────────────────
+  FlyShelf_PC\Classes\UpdateManager.cs → Auto-update check, download, verify
+
+  ── GIT REMOTES ──────────────────────────────────────────────────────────────
+  origin  → https://github.com/shdra06/FlyShelf-Private.git  (all source)
+  public  → https://github.com/shdra06/FlyShelf.git          (releases/website)
+
+  ── WEBSITE ──────────────────────────────────────────────────────────────────
+  website\index.html                 → Landing page
+  website\pricing.html               → Pro pricing
+  website\style.css                  → Styles
+  website\app.js                     → Interactive JS
+  Hosted at: https://shdra06.github.io/FlyShelf/
+
+  ── LICENSING ────────────────────────────────────────────────────────────────
+  FlyShelf_PC\Classes\LicenseManager.cs → Pro/Free tier system
+  Key format: FS-PRO-XXXX-XXXX-XXXX-XXXX
+
+
+================================================================================
+  12. QUICK COMMAND CHEAT SHEET
+================================================================================
+
+  ┌─────────────────────────────────────────────────────────────────────┐
+  │  FULL RELEASE IN 6 COMMANDS                                        │
+  ├─────────────────────────────────────────────────────────────────────┤
+  │                                                                     │
+  │  1. Edit version in 3 files (csproj, version.json, index.html)     │
+  │                                                                     │
+  │  2. cd E:\exeapps\FlyShelf\FlyShelf_PC                             │
+  │     .\Build_PC.bat                                                  │
+  │                                                                     │
+  │  3. cd E:\exeapps\FlyShelf                                         │
+  │     git add -A                                                      │
+  │     git commit -m "v8.6.0 – Release Title"                         │
+  │                                                                     │
+  │  4. git push origin main                                            │
+  │                                                                     │
+  │  5. git push public main                                            │
+  │                                                                     │
+  │  6. $env:GITHUB_TOKEN = ""                                          │
+  │     gh release create v8.6.0 ^                                      │
+  │       "FlyShelf_PC/FINAL/FlyShelf.exe" ^                            │
+  │       "FlyShelf_PC/FINAL/FlyShelf.exe.sha256" ^                     │
+  │       --repo shdra06/FlyShelf ^                                     │
+  │       --title "v8.6.0 - Release Title" ^                            │
+  │       --notes "Changelog here"                                      │
+  │                                                                     │
+  └─────────────────────────────────────────────────────────────────────┘
+
+  Done! Website auto-deploys. Users auto-detect the update.
+
+
+================================================================================
+  END OF GUIDE
+================================================================================

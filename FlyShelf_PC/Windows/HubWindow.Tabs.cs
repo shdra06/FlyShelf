@@ -183,7 +183,7 @@ namespace FlyShelf.Windows
         {
             if (!LicenseManager.CanSetCustomWallpaper())
             {
-                UpgradePrompt.ShowCustomWallpaperLimit();
+                UpgradePrompt.ShowCustomWallpaperLimit(this);
                 return;
             }
 
@@ -515,7 +515,7 @@ namespace FlyShelf.Windows
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                         Windows.ToastWindow.ShowToast("🔒 Unlock Premium to use this option!"));
-                    UpgradePrompt.ShowThemeLimit();
+                    UpgradePrompt.ShowThemeLimit(this);
                     RevertThemeComboSelection();
                     return;
                 }
@@ -525,7 +525,7 @@ namespace FlyShelf.Windows
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                         Windows.ToastWindow.ShowToast("🔒 Unlock Premium to use this option!"));
-                    UpgradePrompt.ShowThemeLimit();
+                    UpgradePrompt.ShowThemeLimit(this);
                     RevertThemeComboSelection();
                     return;
                 }

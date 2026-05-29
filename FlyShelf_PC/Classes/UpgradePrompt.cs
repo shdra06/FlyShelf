@@ -3,10 +3,12 @@
 // Also provides the license activation dialog.
 // ═══════════════════════════════════════════════════════════════════
 using System;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+
 
 namespace FlyShelf.Classes
 {
@@ -86,34 +88,34 @@ namespace FlyShelf.Classes
                 owner);
         }
 
-        public static void ShowThemeLimit()
+        public static void ShowThemeLimit(Window? owner = null)
         {
             ShowLimitDialog(
                 "Custom Themes — Pro Feature",
                 "Custom themes are available for FlyShelf Pro users.",
                 "Upgrade to unlock all themes including Glass UI!",
                 "🎨",
-                null);
+                owner);
         }
 
-        public static void ShowCustomWallpaperLimit()
+        public static void ShowCustomWallpaperLimit(Window? owner = null)
         {
             ShowLimitDialog(
                 "Custom Wallpaper — Pro Feature",
                 "Setting a custom clipboard wallpaper is a Pro feature.",
                 "Upgrade to FlyShelf Pro to personalize your wallpaper!",
                 "🖼️",
-                null);
+                owner);
         }
 
-        public static void ShowCloudflareLimit()
+        public static void ShowCloudflareLimit(Window? owner = null)
         {
             ShowLimitDialog(
                 "Global Sync — Pro Feature",
                 "Cloudflare tunnel (internet-wide sync) is available for FlyShelf Pro users.",
                 "Upgrade to sync your clipboard across the internet!",
                 "🌐",
-                null);
+                owner);
         }
 
         public static void ShowPinLimit()
@@ -145,13 +147,15 @@ namespace FlyShelf.Classes
         /// </summary>
         public static bool ShowActivationDialog(Window? owner = null)
         {
+            var resolvedOwner = ResolveActiveOwner(owner);
+
             var dialog = new Window
             {
                 Title = "Activate FlyShelf Pro",
                 Width = 440,
                 Height = 280,
-                WindowStartupLocation = owner != null ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen,
-                Owner = owner,
+                WindowStartupLocation = resolvedOwner != null ? WindowStartupLocation.CenterOwner : WindowStartupLocation.CenterScreen,
+                Owner = resolvedOwner,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStyle = WindowStyle.ToolWindow,
                 Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x2E))
@@ -239,7 +243,7 @@ namespace FlyShelf.Classes
                 try
                 {
                     string deviceId = FlyShelf.Classes.SettingsManager.Current.DeviceId ?? "";
-                    string paymentUrl = $"https://advance-sync.web.app/?deviceId={Uri.EscapeDataString(deviceId)}";
+                    string paymentUrl = $"https://shdra06.github.io/FlyShelf/pricing.html?deviceId={Uri.EscapeDataString(deviceId)}";
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = paymentUrl,
@@ -320,18 +324,63 @@ namespace FlyShelf.Classes
         // INTERNAL — Generic limit dialog builder
         // ═══════════════════════════════════════════════════════════════
 
+        private static Window? ResolveActiveOwner(Window? owner)
+        {
+            if (owner != null && owner.IsVisible)
+            {
+                return owner;
+            }
+
+            try
+            {
+                var app = System.Windows.Application.Current;
+                if (app != null)
+                {
+                    if (app.Dispatcher.CheckAccess())
+                    {
+                        var resolved = app.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive && w.IsVisible)
+                                       ?? (app.MainWindow != null && app.MainWindow.IsVisible ? app.MainWindow : null);
+                        if (resolved != null) return resolved;
+                    }
+                    else
+                    {
+                        return app.Dispatcher.Invoke(() =>
+                            app.Windows.OfType<Window>().FirstOrDefault(w => w.IsActive && w.IsVisible)
+                            ?? (app.MainWindow != null && app.MainWindow.IsVisible ? app.MainWindow : null));
+                    }
+                }
+            }
+            catch { }
+
+            return null;
+        }
+
         private static void ShowLimitDialog(string title, string message, string upgradeMessage, string emoji, Window? owner)
         {
-            var result = MessageBox.Show(
-                owner,
-                $"{emoji} {message}\n\n{upgradeMessage}\n\nYour daily limits will reset at midnight.\n\nWould you like to enter a license key to upgrade?",
-                $"FlyShelf — {title}",
-                MessageBoxButton.YesNo,
-                MessageBoxImage.Information);
+            var resolvedOwner = ResolveActiveOwner(owner);
+
+            MessageBoxResult result;
+            if (resolvedOwner != null)
+            {
+                result = MessageBox.Show(
+                    resolvedOwner,
+                    $"{emoji} {message}\n\n{upgradeMessage}\n\nYour daily limits will reset at midnight.\n\nWould you like to enter a license key to upgrade?",
+                    $"FlyShelf — {title}",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Information);
+            }
+            else
+            {
+                result = MessageBox.Show(
+                    $"{emoji} {message}\n\n{upgradeMessage}\n\nYour daily limits will reset at midnight.\n\nWould you like to enter a license key to upgrade?",
+                    $"FlyShelf — {title}",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Information);
+            }
 
             if (result == MessageBoxResult.Yes)
             {
-                ShowActivationDialog(owner);
+                ShowActivationDialog(resolvedOwner);
             }
         }
     }

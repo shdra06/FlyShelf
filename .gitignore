@@ -90,3 +90,7 @@ FlyShelf_PC/Tools/
 flyshelf-web/node_modules/
 flyshelf-web/.next/
 flyshelf-web/out/
+
+# ─── Payment Backend — Secrets & Build Artifacts ─────────────
+FlyShelf_Payment/functions/.env
+FlyShelf_Payment/functions/node_modules/

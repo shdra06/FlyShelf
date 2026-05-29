@@ -26,7 +26,8 @@ function getRazorpayKeyId() {
   try {
     return functions.config().razorpay.key_id;
   } catch (_) {
-    return process.env.RAZORPAY_KEY_ID || "rzp_test_SvCf5HlgqjXlLk";
+    if (process.env.RAZORPAY_KEY_ID) return process.env.RAZORPAY_KEY_ID;
+    throw new Error("Razorpay Key ID not configured. Set via functions:config or .env");
   }
 }
 
@@ -34,7 +35,8 @@ function getRazorpayKeySecret() {
   try {
     return functions.config().razorpay.key_secret;
   } catch (_) {
-    return process.env.RAZORPAY_KEY_SECRET || "un8XK4YJ7ufxnkZeWTvN0zH6";
+    if (process.env.RAZORPAY_KEY_SECRET) return process.env.RAZORPAY_KEY_SECRET;
+    throw new Error("Razorpay Key Secret not configured. Set via functions:config or .env");
   }
 }
 
@@ -49,7 +51,7 @@ const razorpayInstance = new Razorpay({
 // ---------------------------------------------------------------------------
 // HMAC secret used for license-key checksum (must match the desktop app)
 // ---------------------------------------------------------------------------
-const HMAC_SECRET = "FlyShelf_Pro_2026_Secure_Salt";
+const HMAC_SECRET = "FS_Pro_Kx9m4R7vQ2nE8wLp_2026";
 
 // ---------------------------------------------------------------------------
 // Helper — generate a FlyShelf Pro license key

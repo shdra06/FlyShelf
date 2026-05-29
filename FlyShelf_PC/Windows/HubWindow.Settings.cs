@@ -717,7 +717,7 @@ namespace FlyShelf.Windows
             {
                 string deviceId = FlyShelf.Classes.SettingsManager.Current.DeviceId ?? "";
                 // TODO: Update this URL once you deploy to Firebase Hosting
-                string paymentUrl = $"https://advance-sync.web.app/?deviceId={Uri.EscapeDataString(deviceId)}";
+                string paymentUrl = $"https://shdra06.github.io/FlyShelf/pricing.html?deviceId={Uri.EscapeDataString(deviceId)}";
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                 {
                     FileName = paymentUrl,
