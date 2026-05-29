@@ -16,6 +16,9 @@
   <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
   
+  <!-- Razorpay Checkout SDK -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  
   <!-- Custom pricing specific styles -->
   <style>
     .pricing-hero {
@@ -306,7 +309,7 @@
           <span style="font-weight: 700;">Total Price:</span>
           <div style="text-align: right;">
             <span id="price-display-usd" style="font-size: 1.75rem; font-weight: 800; color: #fff;">$4.99</span>
-            <span id="price-display-inr" style="font-size: 1.75rem; font-weight: 800; color: #fff; display: none;">₹399</span>
+            <span id="price-display-inr" style="font-size: 1.75rem; font-weight: 800; color: #fff; display: none;">₹299</span>
             <div style="font-size: 0.65rem; color: var(--text-muted);">One-time payment</div>
           </div>
         </div>
@@ -329,7 +332,7 @@
         <!-- User email input -->
         <div style="display: flex; flex-direction: column; gap: 8px;">
           <label style="font-size: 0.78rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-secondary);">Customer Email Address</label>
-          <input type="email" id="customer-email" class="input-field-glow" placeholder="you@example.com" value="test@flyshelf.app">
+          <input type="email" id="customer-email" class="input-field-glow" placeholder="you@example.com">
           <div style="font-size: 0.68rem; color: var(--text-muted);">Your license key will be generated and bound to this email.</div>
         </div>
         
@@ -349,7 +352,7 @@
           
           <!-- Submit Button -->
           <button class="btn-checkout-pay btn-razorpay" id="btn-submit-payment">
-            <ion-icon name="card-outline"></ion-icon> Pay ₹399 via Razorpay
+            <ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay
           </button>
         </div>
       </div>
@@ -375,7 +378,7 @@
         <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">This is the local FlyShelf checkout sandbox. To test the license generation and C# app auto-activation, click the confirm payment button below.</p>
         <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-light); padding: 12px; border-radius: 8px; font-size: 0.78rem; text-align: left; color: var(--text-secondary);">
           <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Email:</span><strong id="confirm-email" style="color:#fff;">test@flyshelf.app</strong></div>
-          <div style="display:flex; justify-content:space-between;"><span>Amount:</span><strong id="confirm-amount" style="color:var(--color-cyan);">₹399</strong></div>
+          <div style="display:flex; justify-content:space-between;"><span>Amount:</span><strong id="confirm-amount" style="color:var(--color-cyan);">₹299</strong></div>
         </div>
         <button class="btn-checkout-pay btn-razorpay" id="btn-confirm-test-pay" style="margin-top: 10px;">
           Confirm Test Payment
@@ -412,7 +415,7 @@
     </div>
   </div>
 
-  <!-- JavaScript key generation matching C# LicenseManager checksum exactly -->
+  <!-- JavaScript: Real Razorpay Checkout + Cryptographic Key Generation -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       
@@ -434,22 +437,28 @@
       const customerEmail = document.getElementById('customer-email');
       const confirmEmail = document.getElementById('confirm-email');
       const confirmAmount = document.getElementById('confirm-amount');
-      const btnConfirmTestPay = document.getElementById('btn-confirm-test-pay');
       
       const licenseKeyOutput = document.getElementById('license-key-output');
       const btnCopyLicense = document.getElementById('btn-copy-license');
       const btnActivateDeeplink = document.getElementById('btn-activate-deeplink');
       const btnCloseModal = document.getElementById('btn-close-modal');
       
-      let selectedRegion = 'INR'; // 'INR' or 'USD'
+      let selectedRegion = 'INR';
       let generatedKey = '';
+
+      // Get deviceId from URL params (passed from desktop app)
+      const urlParams = new URLSearchParams(window.location.search);
+      const deviceId = urlParams.get('deviceId') || 'web_purchase';
 
       // Set reveal trigger
       setTimeout(() => {
         document.querySelectorAll('.scroll-reveal').forEach(el => el.classList.add('visible'));
       }, 100);
 
-      // Region Switching
+      // ═══════════════════════════════════════════
+      // REGION TAB SWITCHING
+      // ═══════════════════════════════════════════
+
       tabInr.addEventListener('click', () => {
         selectedRegion = 'INR';
         tabInr.classList.add('active');
@@ -460,7 +469,7 @@
         paypalDetails.style.display = 'none';
         
         btnSubmitPayment.className = 'btn-checkout-pay btn-razorpay';
-        btnSubmitPayment.innerHTML = '<ion-icon name="card-outline"></ion-icon> Pay ₹399 via Razorpay';
+        btnSubmitPayment.innerHTML = '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
       });
 
       tabUsd.addEventListener('click', () => {
@@ -476,7 +485,10 @@
         btnSubmitPayment.innerHTML = '<ion-icon name="logo-paypal"></ion-icon> Pay $4.99 via PayPal';
       });
 
-      // Submit payment trigger
+      // ═══════════════════════════════════════════
+      // PAYMENT BUTTON CLICK
+      // ═══════════════════════════════════════════
+
       btnSubmitPayment.addEventListener('click', () => {
         const emailVal = customerEmail.value.trim();
         if (!emailVal || !emailVal.includes('@')) {
@@ -484,59 +496,130 @@
           return;
         }
 
-        confirmEmail.textContent = emailVal;
-        confirmAmount.textContent = selectedRegion === 'INR' ? '₹399' : '$4.99';
-        
-        // Show modal and start verification simulator
-        checkoutModal.style.display = 'flex';
-        modalStageLoading.style.display = 'flex';
-        modalStageApproval.style.display = 'none';
-        modalStageSuccess.style.display = 'none';
-
-        const gateway = selectedRegion === 'INR' ? 'Razorpay' : 'PayPal';
-        loaderHeadline.textContent = `Connecting with ${gateway}...`;
-        loaderDesc.textContent = 'Verifying secure checkout token channels...';
-
-        setTimeout(() => {
-          loaderDesc.textContent = 'Awaiting payment authorization request...';
-          setTimeout(() => {
-            // Transition to simulated payment approval step
-            modalStageLoading.style.display = 'none';
-            modalStageApproval.style.display = 'flex';
-            
-            // Adjust confirm button style to match
-            btnConfirmTestPay.className = selectedRegion === 'INR' ? 'btn-checkout-pay btn-razorpay' : 'btn-checkout-pay btn-paypal';
-          }, 1000);
-        }, 1200);
+        if (selectedRegion === 'INR') {
+          // ── REAL RAZORPAY CHECKOUT ──
+          openRazorpayCheckout(emailVal);
+        } else {
+          // PayPal — placeholder (not yet set up)
+          alert('PayPal integration coming soon! Please use Razorpay (India) for now.');
+        }
       });
 
-      // Confirm test payment button click
-      btnConfirmTestPay.addEventListener('click', async () => {
-        modalStageApproval.style.display = 'none';
-        modalStageLoading.style.display = 'flex';
-        loaderHeadline.textContent = 'Processing Payment Captured...';
-        loaderDesc.textContent = 'Running tamper-proof cryptographic validation...';
-        
-        // Generate real cryptographically valid key
-        generatedKey = await generateProKey();
-        
-        setTimeout(() => {
-          loaderDesc.textContent = 'Saving license records to database...';
-          setTimeout(() => {
-            modalStageLoading.style.display = 'none';
-            modalStageSuccess.style.display = 'flex';
-            
-            licenseKeyOutput.textContent = generatedKey;
-            btnActivateDeeplink.href = `flyshelf://activate?key=${generatedKey}`;
-          }, 900);
-        }, 1200);
-      });
+      // ═══════════════════════════════════════════
+      // RAZORPAY STANDARD CHECKOUT
+      // ═══════════════════════════════════════════
 
-      // Copy license button click
+      function openRazorpayCheckout(email) {
+        // Disable button to prevent double-click
+        btnSubmitPayment.disabled = true;
+        btnSubmitPayment.innerHTML = '<div class="payment-loader" style="width:20px;height:20px;border-width:2px;margin:0;"></div> Processing...';
+
+        const options = {
+          key: 'rzp_test_SvCf5HlgqjXlLk', // Razorpay Test Key ID
+          amount: 29900, // ₹299 in paise
+          currency: 'INR',
+          name: 'FlyShelf Pro',
+          description: 'Lifetime Pro License — One-time Payment',
+          prefill: {
+            email: email
+          },
+          notes: {
+            product: 'FlyShelf Pro Lifetime',
+            deviceId: deviceId,
+            email: email
+          },
+          theme: {
+            color: '#0b72e7'
+          },
+          handler: async function(response) {
+            // ── PAYMENT SUCCESS ──
+            // response.razorpay_payment_id — the payment ID from Razorpay
+            console.log('Payment successful:', response.razorpay_payment_id);
+            
+            // Show processing modal
+            checkoutModal.style.display = 'flex';
+            modalStageLoading.style.display = 'flex';
+            modalStageApproval.style.display = 'none';
+            modalStageSuccess.style.display = 'none';
+            loaderHeadline.textContent = 'Payment Captured!';
+            loaderDesc.textContent = 'Generating your license key...';
+
+            // Generate the license key
+            generatedKey = await generateProKey();
+
+            // Store payment record in Firebase RTDB (fire-and-forget)
+            try {
+              const fbUrl = 'https://advance-sync-default-rtdb.firebaseio.com';
+              await fetch(`${fbUrl}/payments/${response.razorpay_payment_id}.json`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  gateway: 'razorpay',
+                  paymentId: response.razorpay_payment_id,
+                  orderId: response.razorpay_order_id || '',
+                  amount: 29900,
+                  currency: 'INR',
+                  email: email,
+                  deviceId: deviceId,
+                  licenseKey: generatedKey,
+                  status: 'completed',
+                  timestamp: new Date().toISOString()
+                })
+              });
+              console.log('Payment record saved to Firebase RTDB');
+            } catch (fbErr) {
+              console.warn('Firebase record save failed (non-critical):', fbErr);
+            }
+
+            // Show success after a brief moment
+            setTimeout(() => {
+              modalStageLoading.style.display = 'none';
+              modalStageSuccess.style.display = 'flex';
+              licenseKeyOutput.textContent = generatedKey;
+              btnActivateDeeplink.href = `flyshelf://activate?key=${generatedKey}`;
+              confirmEmail.textContent = email;
+              confirmAmount.textContent = '₹299';
+            }, 1500);
+
+            // Reset button
+            btnSubmitPayment.disabled = false;
+            btnSubmitPayment.innerHTML = '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
+          },
+          modal: {
+            ondismiss: function() {
+              // User closed the Razorpay popup
+              btnSubmitPayment.disabled = false;
+              btnSubmitPayment.innerHTML = '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
+            }
+          }
+        };
+
+        try {
+          const rzp = new Razorpay(options);
+          
+          rzp.on('payment.failed', function(response) {
+            console.error('Payment failed:', response.error);
+            alert(`Payment failed: ${response.error.description}\n\nPlease try again.`);
+            btnSubmitPayment.disabled = false;
+            btnSubmitPayment.innerHTML = '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
+          });
+
+          rzp.open();
+        } catch (err) {
+          console.error('Razorpay init error:', err);
+          alert('Could not initialize payment. Please try again.');
+          btnSubmitPayment.disabled = false;
+          btnSubmitPayment.innerHTML = '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
+        }
+      }
+
+      // ═══════════════════════════════════════════
+      // COPY LICENSE KEY
+      // ═══════════════════════════════════════════
+
       btnCopyLicense.addEventListener('click', () => {
         navigator.clipboard.writeText(generatedKey);
         
-        // Temporary copy toast indicator
         const originalText = btnCopyLicense.innerHTML;
         btnCopyLicense.innerHTML = '<ion-icon name="checkmark-done-outline"></ion-icon> Copied!';
         btnCopyLicense.style.background = 'var(--color-emerald)';
@@ -554,64 +637,42 @@
         checkoutModal.style.display = 'none';
       });
 
-      // Close modal on background click
       checkoutModal.addEventListener('click', (e) => {
         if (e.target === checkoutModal) {
           checkoutModal.style.display = 'none';
         }
       });
 
-      // =================================════════════════════════════
+      // ═══════════════════════════════════════════
       // CRYPTOGRAPHIC KEY GENERATOR (Web Crypto API)
-      // Matches C# LicenseManager offline validation logic exactly
-      // =================================════════════════════════════
+      // Matches C# LicenseManager offline validation
+      // ═══════════════════════════════════════════
 
       async function computeChecksum(input) {
         const encoder = new TextEncoder();
-        
-        // KeyValidation Secret: "FlyShelf_Pro_2026_Secure_Salt"
-        const secretKeyStr = "FlyShelf_Pro_2026_Secure_Salt";
-        const secretData = encoder.encode(secretKeyStr);
+        const secretData = encoder.encode('FS_Pro_Kx9m4R7vQ2nE8wLp_2026');
         const inputData = encoder.encode(input);
         
-        // Import raw HMAC key
         const cryptoKey = await window.crypto.subtle.importKey(
-          "raw",
-          secretData,
-          { name: "HMAC", hash: "SHA-256" },
-          false,
-          ["sign"]
+          'raw', secretData,
+          { name: 'HMAC', hash: 'SHA-256' },
+          false, ['sign']
         );
         
-        // Generate HMAC signature
-        const signature = await window.crypto.subtle.sign(
-          "HMAC",
-          cryptoKey,
-          inputData
-        );
-        
-        // Convert signature array buffer to hex string
+        const signature = await window.crypto.subtle.sign('HMAC', cryptoKey, inputData);
         const hashArray = Array.from(new Uint8Array(signature));
         const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
-        
-        // Take first 4 characters of hash hex digest
         return hashHex.substring(0, 4);
       }
 
       async function generateProKey() {
-        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-        let randomPart = "";
-        
-        // Generate 12 random alphanumeric characters
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let randomPart = '';
         for (let i = 0; i < 12; i++) {
           randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
         }
-        
-        // Compute the 4-character HMAC SHA256 checksum
         const checksum = await computeChecksum(randomPart);
-        const payload = randomPart + checksum; // 16 characters total
-        
-        // Format key as FS-PRO-XXXX-XXXX-XXXX-XXXX
+        const payload = randomPart + checksum;
         return `FS-PRO-${payload.substring(0, 4)}-${payload.substring(4, 8)}-${payload.substring(8, 12)}-${payload.substring(12, 16)}`;
       }
 
