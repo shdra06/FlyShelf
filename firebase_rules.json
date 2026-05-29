@@ -72,6 +72,25 @@
       ".read": false,
       ".write": false
     },
+    "licenses": {
+      "revoked": {
+        "$keyId": {
+          ".read": true,
+          ".write": false
+        }
+      },
+      "activations": {
+        "$keyId": {
+          ".read": true,
+          "$deviceId": {
+            ".write": true,
+            ".validate": "newData.hasChildren(['deviceId', 'activatedAt'])"
+          }
+        }
+      },
+      ".read": false,
+      ".write": false
+    },
     ".read": false,
     ".write": false
   }

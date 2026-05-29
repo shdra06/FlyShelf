@@ -148,6 +148,16 @@ namespace FlyShelf.ViewModels
         {
             if (item != null && DroppedItems.Contains(item))
             {
+                if (!item.IsPinned) // Trying to pin a new item
+                {
+                    int currentPinnedCount = DroppedItems.Count(i => i.IsPinned);
+                    if (currentPinnedCount >= Classes.LicenseManager.GetPinLimit())
+                    {
+                        Classes.UpgradePrompt.ShowPinLimit();
+                        return;
+                    }
+                }
+
                 item.IsPinned = !item.IsPinned;
                 
                 SavePinnedItems();
@@ -462,9 +472,23 @@ namespace FlyShelf.ViewModels
         /// </summary>
         private async System.Threading.Tasks.Task SyncFileToDevicesAsync(string filePath, ClipboardItem item, long maxFirebaseBytes = 25 * 1024 * 1024, string label = "FILE")
         {
+            // SECURITY: Password items must NEVER be synced to any device
+            if (item.IsPassword)
+            {
+                Classes.Logger.LogAction($"{label} SYNC", "🔒 Blocked password item from file sync — password items are never synced");
+                return;
+            }
+
             try
             {
                 long fSize = new FileInfo(filePath).Length;
+                if (fSize > 50L * 1024 * 1024 && !Classes.LicenseManager.IsPro)
+                {
+                    Application.Current.Dispatcher.InvokeAsync(() =>
+                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ {Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) exceeds 50 MB Free tier sync limit."));
+                    return;
+                }
+
                 var srv = LocalServer;
                 bool tunnelOk = FlyShelf.Classes.CloudDiscoveryManager.CachedTunnelVerified;
 
@@ -538,39 +562,38 @@ namespace FlyShelf.ViewModels
             }
         }
 
-        private const int MAX_UNPINNED_ITEMS = 500;
-        private const int WARNING_THRESHOLD = 150;
-
         /// <summary>
         /// Prunes oldest unpinned items beyond the cap to prevent unbounded memory growth.
-        /// Warning toast at 150 items, hard cap at 500.
         /// </summary>
         public void PruneOldItems()
         {
+            int maxUnpinnedItems = Classes.LicenseManager.GetHistoryCap();
+            int warningThreshold = Classes.LicenseManager.IsPro ? 2000 : 150;
             int totalCount = DroppedItems.Count;
             
-            // Show warning starting at 150 items (but don't prune yet)
-            if (totalCount >= WARNING_THRESHOLD && totalCount <= MAX_UNPINNED_ITEMS)
+            // Show warning starting at warningThreshold items (but don't prune yet)
+            if (totalCount >= warningThreshold && totalCount <= maxUnpinnedItems)
             {
                 int unpinnedCount = DroppedItems.Count(i => !i.IsPinned);
-                if (unpinnedCount >= WARNING_THRESHOLD && unpinnedCount < MAX_UNPINNED_ITEMS)
+                if (unpinnedCount >= warningThreshold && unpinnedCount < maxUnpinnedItems)
                 {
-                    // Warn every 50 items to give frequent heads-up
-                    if (unpinnedCount % 50 == 0)
+                    // Warn every 50 items for Free (or 100 for Pro) to give frequent heads-up
+                    int step = Classes.LicenseManager.IsPro ? 100 : 50;
+                    if (unpinnedCount % step == 0)
                     {
-                        int remaining = MAX_UNPINNED_ITEMS - unpinnedCount;
-                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Clipboard has {unpinnedCount} items. {remaining} slots remaining (max {MAX_UNPINNED_ITEMS}).");
+                        int remaining = maxUnpinnedItems - unpinnedCount;
+                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Clipboard has {unpinnedCount} items. {remaining} slots remaining (max {maxUnpinnedItems}).");
                     }
                 }
             }
 
-            if (totalCount <= MAX_UNPINNED_ITEMS) return;
+            if (totalCount <= maxUnpinnedItems) return;
 
             // Collect unpinned items to remove (from end of the list, oldest first)
             var itemsToRemove = new List<ClipboardItem>();
             
             var itemsToRemoveFromDropped = new List<ClipboardItem>();
-            for (int i = DroppedItems.Count - 1; i >= 0 && DroppedItems.Count - itemsToRemove.Count > MAX_UNPINNED_ITEMS; i--)
+            for (int i = DroppedItems.Count - 1; i >= 0 && DroppedItems.Count - itemsToRemove.Count > maxUnpinnedItems; i--)
             {
                 if (!DroppedItems[i].IsPinned)
                 {

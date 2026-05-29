@@ -550,6 +550,34 @@ namespace FlyShelf
             {
                 try
                 {
+                    // Enforce free tier restrictions at startup
+                    if (!Classes.LicenseManager.IsPro)
+                    {
+                        bool changed = false;
+                        if (Classes.SettingsManager.Current.ThemeDisplayMode == "glass")
+                        {
+                            Classes.SettingsManager.Current.ThemeDisplayMode = "mica";
+                            Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                            changed = true;
+                        }
+                        
+                        string activeThemeName = Classes.SettingsManager.Current.ActiveThemeName ?? "";
+                        if (!string.IsNullOrEmpty(activeThemeName) && !Classes.LicenseManager.CanUseTheme(activeThemeName))
+                        {
+                            Classes.SettingsManager.Current.ActiveThemeName = "";
+                            if (Classes.SettingsManager.Current.ThemeDisplayMode == "theme")
+                            {
+                                Classes.SettingsManager.Current.ThemeDisplayMode = "mica";
+                                Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                            }
+                            changed = true;
+                        }
+                        if (changed)
+                        {
+                            Classes.SettingsManager.Save();
+                        }
+                    }
+
                     Classes.ThemeManager.Instance.Initialize();
                     Classes.AnimationTriggerService.Instance.Initialize();
 

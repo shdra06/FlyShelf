@@ -401,6 +401,27 @@ namespace FlyShelf.Classes
 
                                     Logger.LogAction("WS", $"Received SyncFileStart: {fileName} ({fileSize} bytes) from {sourceDeviceName}");
 
+                                    // Check size limit for Free tier
+                                    if (fileSize > 50L * 1024 * 1024 && !LicenseManager.IsPro)
+                                    {
+                                        Logger.LogAction("WS", $"File receipt rejected — {fileName} ({fileSize} bytes) exceeds 50 MB limit on Free tier.");
+                                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                                            FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming file {fileName} exceeds 50 MB Free tier limit.");
+                                        });
+
+                                        // Drain the WebSocket bytes to keep it alive
+                                        long bytesSkipped = 0;
+                                        while (bytesSkipped < fileSize)
+                                        {
+                                            long remain = fileSize - bytesSkipped;
+                                            int toRead = (int)Math.Min(buffer.Length, remain);
+                                            var skipResult = await ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, toRead), CancellationToken.None);
+                                            if (skipResult.MessageType == WebSocketMessageType.Close) return;
+                                            bytesSkipped += skipResult.Count;
+                                        }
+                                        continue;
+                                    }
+
                                     // ── Incoming Sync Gate ──
                                     if (!SettingsManager.Current.EnableIncomingSync)
                                     {

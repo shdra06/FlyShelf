@@ -28,8 +28,11 @@ namespace FlyShelf.ViewModels
 
 
             {
-
-
+                if (!FlyShelf.Classes.LicenseManager.CanExtractTable())
+                {
+                    FlyShelf.Classes.UpgradePrompt.ShowTableExtractLimit();
+                    return;
+                }
 
                 if (!IsImagePreview || string.IsNullOrEmpty(FilePath)) return;
 
@@ -654,6 +657,7 @@ namespace FlyShelf.ViewModels
 
 
 
+                        FlyShelf.Classes.LicenseManager.RecordTableExtraction();
                         var editor = new FlyShelf.Windows.TableEditorWindow(finalJsonPayload, imgPath, method);
 
 

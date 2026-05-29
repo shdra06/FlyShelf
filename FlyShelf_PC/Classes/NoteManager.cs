@@ -273,6 +273,20 @@ namespace FlyShelf.Classes
                         // Sort newest first
                         var sorted = loaded.OrderByDescending(d => d.Date).ToList();
                         _days = new ObservableCollection<NoteDay>(sorted);
+
+                        // Trim notes beyond tier history limit
+                        int maxDays = LicenseManager.GetNoteHistoryDays();
+                        if (maxDays < int.MaxValue)
+                        {
+                            DateTime cutoff = DateTime.Today.AddDays(-maxDays);
+                            var trimmed = sorted.Where(d => d.Date >= cutoff).ToList();
+                            if (sorted.Count > trimmed.Count)
+                            {
+                                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                    UpgradePrompt.ShowNoteHistoryLimit());
+                            }
+                            _days = new ObservableCollection<NoteDay>(trimmed);
+                        }
                     }
                     else
                     {

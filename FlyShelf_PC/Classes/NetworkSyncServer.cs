@@ -286,6 +286,16 @@ namespace FlyShelf.Classes
                 if (e.PropertyName == nameof(AdvanceSettings.EnableGlobalCloudflare))
                 {
                     bool cfOn = SettingsManager.Current.EnableGlobalCloudflare;
+                    
+                    if (cfOn && !LicenseManager.CanUseCloudflare())
+                    {
+                        SettingsManager.Current.EnableGlobalCloudflare = false;
+                        SettingsManager.Save();
+                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                            UpgradePrompt.ShowCloudflareLimit());
+                        return;
+                    }
+
                     bool lanOn = SettingsManager.Current.EnableLocalLAN;
                     
                     bool serverStartedJustNow = false;

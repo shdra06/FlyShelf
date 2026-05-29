@@ -28,8 +28,11 @@ namespace FlyShelf.Classes
                 Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Microsoft", "Windows", "Recent")
             };
 
-            // Add manual custom bounds
-            pathsToWatch.AddRange(SettingsManager.Current.CustomSnifferPaths);
+            // Custom sniffer folders are a Pro feature
+            if (LicenseManager.IsPro)
+            {
+                pathsToWatch.AddRange(SettingsManager.Current.CustomSnifferPaths);
+            }
 
             foreach (var path in pathsToWatch.Distinct())
             {

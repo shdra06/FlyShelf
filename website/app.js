@@ -129,9 +129,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Path coordinate interpolation for particle flow
   function animatePacket(onComplete) {
-    const totalLength = flowPath.getTotalLength();
     let startTime = null;
     const duration = 1200; // ms
+    
+    // Select control Y based on current pathway for high-performance Bezier calculation
+    let controlY = 0;
+    if (activePathway === 'cloud') {
+      controlY = 20;
+    } else if (activePathway === 'firebase') {
+      controlY = 80;
+    }
     
     flowParticle.style.opacity = '1';
     
@@ -140,11 +147,15 @@ document.addEventListener('DOMContentLoaded', () => {
       const elapsed = timestamp - startTime;
       const progress = Math.min(elapsed / duration, 1);
       
-      const currentLength = progress * totalLength;
-      const point = flowPath.getPointAtLength(currentLength);
+      // Calculate coordinates using exact Bezier math to bypass heavy layout queries (getPointAtLength)
+      // x(t) = 200 * t
+      // y(t) = 50 * (1 - t)^2 + 2 * controlY * (1 - t) * t + 50 * t^2
+      const t = progress;
+      const x = 200 * t;
+      const y = 50 * (1 - t) * (1 - t) + 2 * controlY * (1 - t) * t + 50 * t * t;
       
-      flowParticle.setAttribute('cx', point.x);
-      flowParticle.setAttribute('cy', point.y);
+      flowParticle.setAttribute('cx', x);
+      flowParticle.setAttribute('cy', y);
       
       if (progress < 1) {
         requestAnimationFrame(tick);
@@ -228,7 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const currentX = e.clientX;
     const deltaX = currentX - lastMouseX;
     
-    if (Math.abs(deltaX) > 8) { // threshold movement scale
+    if (Math.abs(deltaX) > 3) { // threshold movement scale (reduced from 8 for easy shake)
       const currentDirection = deltaX > 0 ? 1 : -1;
       
       if (lastDirection !== 0 && currentDirection !== lastDirection) {
@@ -236,8 +247,8 @@ document.addEventListener('DOMContentLoaded', () => {
         directionsSwitched++;
         updateGauge(directionsSwitched);
         
-        // Summon on achieving 8 rapid direction reversals
-        if (directionsSwitched >= 8) {
+        // Summon on achieving 3 rapid direction reversals (reduced from 8 for ultra-easy unlock)
+        if (directionsSwitched >= 3) {
           triggerSummoSummon();
         }
       }
@@ -260,9 +271,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  let isGaugeUpdatePending = false;
+  let currentScoreValue = 0;
+
   function updateGauge(score) {
-    const percentage = Math.min((score / 8) * 100, 100);
-    shakeGauge.style.width = `${percentage}%`;
+    currentScoreValue = score;
+    if (isGaugeUpdatePending) return;
+    
+    isGaugeUpdatePending = true;
+    requestAnimationFrame(() => {
+      const percentage = Math.min((currentScoreValue / 3) * 100, 100);
+      shakeGauge.style.width = `${percentage}%`;
+      isGaugeUpdatePending = false;
+    });
   }
 
   function triggerSummoSummon() {
@@ -541,4 +562,66 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+
+  /* ==========================================
+     8. ADVANCED SMART ACTION: TEXT SNIPPETS SHORTS
+     ========================================== */
+  const snippetShortcutInput = document.getElementById('snippet-shortcut-input');
+  const btnExpandSnippet = document.getElementById('btn-expand-snippet');
+  const snippetExpandedOutput = document.getElementById('snippet-expanded-output');
+  const snippetQuickTags = document.querySelectorAll('[data-shortcut]');
+
+  // Registered Snippets Library
+  const snippetsLibrary = {
+    '/address': '1600 Amphitheatre Pkwy, Mountain View, CA 94043',
+    '/email': 'support@flyshelf.app',
+    '/sig': 'Best regards,\nShivendra Prasad\nLead Developer, FlyShelf'
+  };
+
+  // Set initial expansion
+  if (snippetShortcutInput) {
+    expandActiveSnippet();
+
+    // Expand click handler
+    btnExpandSnippet.addEventListener('click', () => {
+      expandActiveSnippet();
+    });
+
+    // Input keypress / change
+    snippetShortcutInput.addEventListener('input', () => {
+      expandActiveSnippet();
+    });
+
+    // Quick Tags click
+    snippetQuickTags.forEach(tag => {
+      tag.addEventListener('click', () => {
+        const shortcut = tag.dataset.shortcut;
+        snippetShortcutInput.value = shortcut;
+        expandActiveSnippet();
+        
+        // Flash animation on tag
+        tag.style.transform = 'scale(0.95)';
+        setTimeout(() => { tag.style.transform = ''; }, 100);
+      });
+    });
+  }
+
+  function expandActiveSnippet() {
+    const inputVal = snippetShortcutInput.value.trim().toLowerCase();
+    
+    if (snippetsLibrary.hasOwnProperty(inputVal)) {
+      const expanded = snippetsLibrary[inputVal];
+      snippetExpandedOutput.value = expanded;
+      snippetExpandedOutput.style.color = 'var(--color-cyan)';
+      snippetExpandedOutput.style.borderColor = 'rgba(0, 210, 255, 0.4)';
+      snippetExpandedOutput.style.boxShadow = '0 0 15px rgba(0, 210, 255, 0.1)';
+    } else {
+      snippetExpandedOutput.value = `Shortcut "${inputVal}" is not registered.\nRegistered: /address, /email, /sig`;
+      snippetExpandedOutput.style.color = 'var(--text-muted)';
+      snippetExpandedOutput.style.borderColor = 'rgba(255, 255, 255, 0.05)';
+      snippetExpandedOutput.style.boxShadow = 'none';
+    }
+  }
+
 });
+

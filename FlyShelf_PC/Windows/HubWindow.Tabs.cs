@@ -181,6 +181,12 @@ namespace FlyShelf.Windows
 
         private void ChooseWallpaper_Click(object sender, RoutedEventArgs e)
         {
+            if (!LicenseManager.CanSetCustomWallpaper())
+            {
+                UpgradePrompt.ShowCustomWallpaperLimit();
+                return;
+            }
+
             var dialog = new Microsoft.Win32.OpenFileDialog
             {
                 Title = "Choose Clipboard Wallpaper",
@@ -424,7 +430,8 @@ namespace FlyShelf.Windows
                 ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "Mica Blur", Tag = "__mica__" });
 
                 // Mode 2: Acrylic Blur — glassmorphism UI + system Acrylic blur
-                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "Acrylic Blur", Tag = "__glass__" });
+                string acrylicLabel = LicenseManager.CanUseGlassTheme() ? "Acrylic Blur" : "🔒 Acrylic Blur";
+                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = acrylicLabel, Tag = "__glass__" });
 
                 // Mode 3: FlyShelf — desktop wallpaper on clipboard, Mica blur on hub
                 ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "FlyShelf", Tag = "__desktop__" });
@@ -449,7 +456,8 @@ namespace FlyShelf.Windows
                     if (!hasRealSprites) continue;
 
                     int idx = ThemeCombo.Items.Count;
-                    ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = theme.Name, Tag = theme.Name });
+                    string themeLabel = LicenseManager.CanUseTheme(theme.Name) ? theme.Name : "🔒 " + theme.Name;
+                    ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = themeLabel, Tag = theme.Name });
 
                     if (savedMode == "theme" && theme.Name.Equals(activeTheme, System.StringComparison.OrdinalIgnoreCase))
                         selectedIdx = idx;
@@ -463,11 +471,64 @@ namespace FlyShelf.Windows
             }
         }
 
+        private void RevertThemeComboSelection()
+        {
+            ThemeCombo.SelectionChanged -= ThemeCombo_SelectionChanged;
+            try
+            {
+                string savedMode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                string activeTheme = SettingsManager.Current.ActiveThemeName ?? "";
+
+                int selectedIdx = 0;
+                if (savedMode == "glass")
+                    selectedIdx = 1;
+                else if (savedMode == "desktop")
+                    selectedIdx = 2;
+                else if (savedMode == "theme")
+                {
+                    for (int i = 3; i < ThemeCombo.Items.Count; i++)
+                    {
+                        if (ThemeCombo.Items[i] is System.Windows.Controls.ComboBoxItem cbi && 
+                            cbi.Tag?.ToString()?.Equals(activeTheme, StringComparison.OrdinalIgnoreCase) == true)
+                        {
+                            selectedIdx = i;
+                            break;
+                        }
+                    }
+                }
+                ThemeCombo.SelectedIndex = selectedIdx;
+            }
+            finally
+            {
+                ThemeCombo.SelectionChanged += ThemeCombo_SelectionChanged;
+            }
+        }
+
         private void ThemeCombo_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             if (ThemeCombo.SelectedItem is System.Windows.Controls.ComboBoxItem selected)
             {
                 string tag = selected.Tag?.ToString() ?? "__mica__";
+
+                // Check Pro permissions for Glass UI
+                if (tag == "__glass__" && !Classes.LicenseManager.CanUseGlassTheme())
+                {
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        Windows.ToastWindow.ShowToast("🔒 Unlock Premium to use this option!"));
+                    UpgradePrompt.ShowThemeLimit();
+                    RevertThemeComboSelection();
+                    return;
+                }
+
+                // Check Pro permissions for Mascot Themes
+                if (tag != "__mica__" && tag != "__glass__" && tag != "__desktop__" && !Classes.LicenseManager.CanUseTheme(tag))
+                {
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        Windows.ToastWindow.ShowToast("🔒 Unlock Premium to use this option!"));
+                    UpgradePrompt.ShowThemeLimit();
+                    RevertThemeComboSelection();
+                    return;
+                }
 
                 // Always clean up Glass theme first when switching away
                 if (tag != "__glass__")

@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FlyShelf Pro — Upgrade &amp; Unlock Everything</title>
+  <meta name="description" content="Upgrade to FlyShelf Pro for ₹299. Unlimited clipboard history, PDF operations, custom themes, global sync and more. One-time payment, lifetime access." />
+  <meta name="theme-color" content="#0a0a1a" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet" />
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <style>
+    /* ───────────────────────── Reset & Globals ───────────────────────── */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-deep:    #0a0a1a;
+      --bg-surface: #1a1a2e;
+      --bg-card:    rgba(255, 255, 255, 0.04);
+      --border:     rgba(255, 255, 255, 0.08);
+      --border-h:   rgba(139, 92, 246, 0.35);
+      --purple:     #8B5CF6;
+      --indigo:     #6366F1;
+      --blue:       #3B82F6;
+      --cyan:       #06B6D4;
+      --green:      #22C55E;
+      --text:       #E2E8F0;
+      --text-dim:   #94A3B8;
+      --text-faint: #64748B;
+      --radius:     16px;
+      --radius-sm:  10px;
+      --glass:      rgba(255, 255, 255, 0.05);
+      --glass-border: rgba(255, 255, 255, 0.1);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-deep);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ───────────────────────── Animated BG ───────────────────────── */
+    .bg-glow {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+    }
+    .bg-glow .orb {
+      position: absolute; border-radius: 50%; filter: blur(120px); opacity: .22;
+      animation: drift 18s ease-in-out infinite alternate;
+    }
+    .bg-glow .orb-1 { width: 600px; height: 600px; background: var(--purple); top: -10%; left: -8%; animation-delay: 0s; }
+    .bg-glow .orb-2 { width: 500px; height: 500px; background: var(--indigo); bottom: -12%; right: -6%; animation-delay: -6s; }
+    .bg-glow .orb-3 { width: 400px; height: 400px; background: var(--blue);   top: 40%; left: 50%; animation-delay: -12s; }
+
+    @keyframes drift {
+      0%   { transform: translate(0, 0) scale(1); }
+      50%  { transform: translate(40px, -30px) scale(1.08); }
+      100% { transform: translate(-30px, 20px) scale(.95); }
+    }
+
+    /* ───────────────────────── Layout ───────────────────────── */
+    .wrapper {
+      position: relative; z-index: 1;
+      max-width: 1100px; margin: 0 auto; padding: 2rem 1.25rem 3rem;
+    }
+
+    /* ───────────────────────── Entrance Animations ───────────────────────── */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(28px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .anim { animation: fadeUp .7s cubic-bezier(.22,1,.36,1) both; }
+    .d1 { animation-delay: .08s; }
+    .d2 { animation-delay: .18s; }
+    .d3 { animation-delay: .28s; }
+    .d4 { animation-delay: .38s; }
+    .d5 { animation-delay: .48s; }
+
+    /* ───────────────────────── Hero ───────────────────────── */
+    .hero { text-align: center; padding: 3.5rem 0 2.5rem; }
+
+    .hero-icon {
+      font-size: 3.6rem; margin-bottom: 1rem;
+      display: inline-block;
+      animation: rocketBob 3s ease-in-out infinite;
+    }
+    @keyframes rocketBob {
+      0%, 100% { transform: translateY(0) rotate(-6deg); }
+      50%      { transform: translateY(-10px) rotate(6deg); }
+    }
+
+    .hero h1 {
+      font-size: clamp(2rem, 5vw, 3.2rem);
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, #fff 0%, var(--purple) 50%, var(--cyan) 100%);
+      background-size: 200% 200%;
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+      animation: shineGrad 6s ease infinite;
+    }
+    @keyframes shineGrad {
+      0%, 100% { background-position: 0% 50%; }
+      50%      { background-position: 100% 50%; }
+    }
+
+    .hero .subtitle {
+      font-size: 1.15rem; color: var(--text-dim); margin-top: .6rem; font-weight: 400;
+    }
+
+    /* price pill */
+    .price-badge {
+      display: inline-flex; align-items: baseline; gap: .35rem;
+      margin-top: 1.6rem; padding: .6rem 1.8rem;
+      background: linear-gradient(135deg, rgba(139,92,246,.15), rgba(99,102,241,.1));
+      border: 1px solid rgba(139,92,246,.25);
+      border-radius: 60px;
+    }
+    .price-badge .amount {
+      font-size: 2.4rem; font-weight: 900;
+      background: linear-gradient(135deg, var(--purple), var(--cyan));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .price-label { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+    .price-label span {
+      font-size: .72rem; text-transform: uppercase; letter-spacing: .06em;
+      color: var(--text-dim); font-weight: 600; line-height: 1.2;
+    }
+    .price-label .lifetime {
+      color: var(--green); font-weight: 700;
+    }
+
+    /* ───────────────────────── Features Grid ───────────────────────── */
+    .features-title {
+      text-align: center; font-size: 1.05rem; font-weight: 600; color: var(--text-dim);
+      margin-bottom: 1.2rem; text-transform: uppercase; letter-spacing: .08em;
+    }
+    .features {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: .85rem;
+      margin-bottom: 2.8rem;
+    }
+    @media (max-width: 720px) {
+      .features { grid-template-columns: 1fr 1fr; }
+    }
+    @media (max-width: 480px) {
+      .features { grid-template-columns: 1fr; }
+    }
+
+    .feat {
+      background: var(--glass);
+      backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-sm);
+      padding: 1rem 1.1rem;
+      display: flex; align-items: center; gap: .75rem;
+      transition: transform .25s cubic-bezier(.22,1,.36,1),
+                  border-color .3s,
+                  box-shadow .3s;
+      cursor: default;
+    }
+    .feat:hover {
+      transform: translateY(-3px) scale(1.02);
+      border-color: var(--border-h);
+      box-shadow: 0 8px 30px rgba(139,92,246,.12);
+    }
+    .feat-icon {
+      font-size: 1.5rem; flex-shrink: 0;
+      width: 40px; height: 40px;
+      display: grid; place-items: center;
+      background: rgba(139,92,246,.1);
+      border-radius: 10px;
+    }
+    .feat-text {
+      font-size: .88rem; font-weight: 500; color: var(--text); line-height: 1.35;
+    }
+    .feat-text small { display: block; font-size: .74rem; font-weight: 400; color: var(--text-dim); margin-top: 2px; }
+
+    /* ───────────────────────── Checkout Card ───────────────────────── */
+    .card-wrap {
+      display: flex; justify-content: center;
+      perspective: 800px;
+    }
+    .card {
+      width: 100%; max-width: 460px;
+      background: rgba(255,255,255,.04);
+      backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: var(--radius);
+      padding: 2.2rem 2rem 1.8rem;
+      box-shadow: 0 24px 80px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.06);
+      transition: opacity .5s, transform .5s;
+    }
+    .card.hidden {
+      opacity: 0; pointer-events: none; position: absolute;
+      transform: translateY(20px) scale(.96);
+    }
+    .card.visible {
+      opacity: 1; pointer-events: auto; position: relative;
+      transform: translateY(0) scale(1);
+    }
+
+    .card-title {
+      font-size: 1.25rem; font-weight: 700; text-align: center; margin-bottom: 1.4rem;
+    }
+
+    .field label {
+      display: block; font-size: .78rem; font-weight: 600; color: var(--text-dim);
+      margin-bottom: .4rem; text-transform: uppercase; letter-spacing: .05em;
+    }
+    .field input {
+      width: 100%; padding: .78rem 1rem; font-size: .95rem;
+      background: rgba(255,255,255,.06);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      color: var(--text);
+      font-family: inherit;
+      outline: none;
+      transition: border-color .25s, box-shadow .25s;
+    }
+    .field input::placeholder { color: var(--text-faint); }
+    .field input:focus {
+      border-color: var(--purple);
+      box-shadow: 0 0 0 3px rgba(139,92,246,.18);
+    }
+
+    /* CTA Button */
+    .cta {
+      margin-top: 1.4rem; width: 100%; padding: 1rem;
+      font-size: 1.1rem; font-weight: 700;
+      font-family: inherit;
+      color: #fff; border: none; border-radius: var(--radius-sm);
+      background: linear-gradient(135deg, var(--purple), var(--indigo), var(--blue));
+      background-size: 200% 200%;
+      cursor: pointer;
+      position: relative; overflow: hidden;
+      transition: transform .2s, box-shadow .3s, filter .2s;
+      animation: gradShift 4s ease infinite;
+    }
+    @keyframes gradShift {
+      0%, 100% { background-position: 0% 50%; }
+      50%      { background-position: 100% 50%; }
+    }
+    .cta:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px rgba(139,92,246,.35);
+      filter: brightness(1.08);
+    }
+    .cta:active:not(:disabled) { transform: translateY(0); }
+    .cta:disabled { opacity: .7; cursor: not-allowed; }
+
+    .cta .spinner {
+      display: none;
+      width: 20px; height: 20px;
+      border: 2.5px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+      margin-right: .5rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .cta.loading .spinner { display: inline-block; }
+    .cta.loading .btn-label { opacity: .85; }
+
+    .cta-sub {
+      text-align: center; font-size: .74rem; color: var(--text-faint);
+      margin-top: .85rem; line-height: 1.5;
+    }
+    .cta-sub .lock-icon { margin-right: .2rem; }
+
+    .payment-icons {
+      display: flex; justify-content: center; gap: .6rem; margin-top: .8rem; flex-wrap: wrap;
+    }
+    .payment-icons span {
+      font-size: .68rem; font-weight: 600;
+      padding: .25rem .55rem;
+      background: rgba(255,255,255,.06);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-dim);
+    }
+
+    /* ───────────────────────── Success Card ───────────────────────── */
+    .success-card { text-align: center; }
+
+    .success-check {
+      width: 80px; height: 80px; margin: 0 auto 1.2rem;
+      background: linear-gradient(135deg, rgba(34,197,94,.2), rgba(34,197,94,.06));
+      border-radius: 50%; display: grid; place-items: center;
+      animation: popIn .5s cubic-bezier(.22,1,.36,1) both;
+    }
+    @keyframes popIn {
+      from { transform: scale(0); opacity: 0; }
+      to   { transform: scale(1); opacity: 1; }
+    }
+    .success-check span { font-size: 2.6rem; }
+
+    .success-card h2 {
+      font-size: 1.5rem; font-weight: 800; color: var(--green); margin-bottom: .35rem;
+    }
+    .success-card .success-sub {
+      font-size: .9rem; color: var(--text-dim); margin-bottom: 1.4rem;
+    }
+
+    .key-label {
+      font-size: .75rem; font-weight: 600; color: var(--text-dim);
+      text-transform: uppercase; letter-spacing: .07em; margin-bottom: .4rem;
+    }
+
+    .key-box {
+      display: flex; align-items: center; gap: .5rem;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(139,92,246,.25);
+      border-radius: var(--radius-sm);
+      padding: .75rem 1rem;
+      margin-bottom: .6rem;
+    }
+    .key-box code {
+      flex: 1; font-family: 'JetBrains Mono', monospace;
+      font-size: .95rem; font-weight: 700;
+      color: var(--purple);
+      word-break: break-all;
+      user-select: all;
+    }
+    .copy-btn {
+      padding: .45rem .85rem; font-size: .8rem; font-weight: 600;
+      font-family: inherit;
+      background: rgba(139,92,246,.15);
+      border: 1px solid rgba(139,92,246,.3);
+      border-radius: 8px;
+      color: var(--purple);
+      cursor: pointer;
+      transition: background .2s, transform .15s;
+      white-space: nowrap;
+    }
+    .copy-btn:hover { background: rgba(139,92,246,.25); transform: scale(1.04); }
+    .copy-btn:active { transform: scale(.97); }
+
+    .success-instructions {
+      font-size: .82rem; color: var(--text-dim); margin-top: 1rem;
+      line-height: 1.6;
+      background: rgba(255,255,255,.03);
+      border-radius: var(--radius-sm);
+      padding: .85rem 1rem;
+      border: 1px solid var(--border);
+    }
+    .success-instructions strong { color: var(--text); }
+
+    /* ───────────────────────── Toast ───────────────────────── */
+    .toast-wrap {
+      position: fixed; top: 1.2rem; left: 50%; transform: translateX(-50%);
+      z-index: 9999; display: flex; flex-direction: column; align-items: center; gap: .5rem;
+      pointer-events: none;
+    }
+    .toast {
+      padding: .7rem 1.4rem;
+      border-radius: 10px;
+      font-size: .85rem; font-weight: 600;
+      pointer-events: auto;
+      animation: toastIn .35s cubic-bezier(.22,1,.36,1) both;
+      box-shadow: 0 8px 30px rgba(0,0,0,.35);
+    }
+    .toast.error {
+      background: rgba(220,38,38,.92); color: #fff;
+      border: 1px solid rgba(255,255,255,.12);
+    }
+    .toast.success {
+      background: rgba(22,163,74,.92); color: #fff;
+      border: 1px solid rgba(255,255,255,.12);
+    }
+    @keyframes toastIn {
+      from { opacity: 0; transform: translateY(-14px) scale(.95); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes toastOut {
+      to { opacity: 0; transform: translateY(-14px) scale(.95); }
+    }
+
+    /* ───────────────────────── Footer ───────────────────────── */
+    .footer {
+      text-align: center; padding: 3rem 0 1.5rem;
+      font-size: .78rem; color: var(--text-faint);
+    }
+    .footer a {
+      color: var(--purple); text-decoration: none;
+      transition: color .2s;
+    }
+    .footer a:hover { color: var(--cyan); }
+
+    /* ───────────────────────── Scrollbar ───────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(139,92,246,.3); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+  <!-- Ambient Background -->
+  <div class="bg-glow" aria-hidden="true">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+
+  <div class="wrapper">
+
+    <!-- ════════════ Hero ════════════ -->
+    <section class="hero anim d1">
+      <div class="hero-icon" aria-hidden="true">🚀</div>
+      <h1>Upgrade to FlyShelf Pro</h1>
+      <p class="subtitle">Unlock the full power of your clipboard</p>
+      <div class="price-badge">
+        <span class="amount">₹299</span>
+        <div class="price-label">
+          <span>one-time payment</span>
+          <span class="lifetime">✦ Lifetime access</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ════════════ Features ════════════ -->
+    <p class="features-title anim d2">Everything you unlock</p>
+    <div class="features anim d2">
+      <div class="feat">
+        <div class="feat-icon">🔓</div>
+        <div class="feat-text">Unlimited Clipboard History<small>Up to 2,500 items</small></div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">📄</div>
+        <div class="feat-text">Unlimited PDF Operations<small>Merge, split, convert &amp; more</small></div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🎨</div>
+        <div class="feat-text">Custom Themes &amp; Glass UI<small>Personalize every detail</small></div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🌐</div>
+        <div class="feat-text">Global Sync via Cloudflare<small>Access from any device</small></div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">📁</div>
+        <div class="feat-text">Custom Sniffer Folders<small>Watch any folder for changes</small></div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">♾️</div>
+        <div class="feat-text">Unlimited Daily Limits<small>No more restrictions</small></div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🖼️</div>
+        <div class="feat-text">Custom Wallpapers<small>Beautiful backgrounds</small></div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">🔄</div>
+        <div class="feat-text">Auto-Cleanup Controls<small>Smart storage management</small></div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon">📏</div>
+        <div class="feat-text">Custom Sizing Options<small>Resize to your liking</small></div>
+      </div>
+    </div>
+
+    <!-- ════════════ Cards Container ════════════ -->
+    <div class="card-wrap anim d4">
+
+      <!-- Checkout Card -->
+      <div id="checkoutCard" class="card visible">
+        <div class="card-title">Complete Your Purchase</div>
+
+        <div class="field">
+          <label for="email">Email <span style="font-weight:400;text-transform:none;letter-spacing:0">(optional, for receipt)</span></label>
+          <input type="email" id="email" placeholder="your@email.com (optional)" autocomplete="email" />
+        </div>
+
+        <button class="cta" id="payBtn" onclick="initiatePayment()">
+          <span class="spinner"></span>
+          <span class="btn-label">🚀 Pay ₹299 — Get Pro</span>
+        </button>
+
+        <p class="cta-sub">
+          <span class="lock-icon">🔒</span> Secure payment via Razorpay &bull; Instant license key delivery
+        </p>
+
+        <div class="payment-icons">
+          <span>💳 Cards</span>
+          <span>🏦 UPI</span>
+          <span>📱 Wallets</span>
+          <span>🏧 Net Banking</span>
+        </div>
+      </div>
+
+      <!-- Success Card -->
+      <div id="successCard" class="card hidden success-card">
+        <div class="success-check"><span>✅</span></div>
+        <h2>Payment Successful!</h2>
+        <p class="success-sub">Thank you for upgrading to FlyShelf Pro 🎉</p>
+
+        <p class="key-label">Your FlyShelf Pro License Key</p>
+        <div class="key-box">
+          <code id="licenseKeyDisplay">—</code>
+          <button class="copy-btn" onclick="copyKey()">📋 Copy Key</button>
+        </div>
+
+        <div class="success-instructions">
+          <strong>How to activate:</strong><br/>
+          Open FlyShelf → <strong>Settings</strong> → <strong>License Key</strong> → Paste the key → <strong>Activate</strong>
+        </div>
+      </div>
+
+    </div><!-- /card-wrap -->
+
+    <!-- ════════════ Footer ════════════ -->
+    <footer class="footer anim d5">
+      © 2026 FlyShelf &bull; Secure payments by <a href="https://razorpay.com" target="_blank" rel="noopener">Razorpay</a>
+    </footer>
+
+  </div><!-- /wrapper -->
+
+  <!-- Toast container -->
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script>
+    /* ─── State ─── */
+    let isProcessing = false;
+
+    /* ─── URL params ─── */
+    const params = new URLSearchParams(window.location.search);
+    const deviceId = params.get('deviceId') || 'web_purchase';
+
+    /* ─── Initiate Payment ─── */
+    async function initiatePayment() {
+      if (isProcessing) return;
+
+      const email = document.getElementById('email').value.trim();
+      const btn   = document.getElementById('payBtn');
+
+      setLoading(true);
+
+      try {
+        const res = await fetch('/api/createOrder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, deviceId })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || 'Failed to create order. Please try again.');
+        }
+
+        const data = await res.json();
+
+        /* ─── Open Razorpay ─── */
+        const options = {
+          key: data.keyId,
+          amount: data.amount,
+          currency: data.currency,
+          name: 'FlyShelf Pro',
+          description: 'Lifetime Pro License',
+          order_id: data.orderId,
+          prefill: { email: email || undefined },
+          theme: { color: '#8B5CF6' },
+          handler: async function (response) {
+            await verifyPayment(response, email);
+          },
+          modal: {
+            ondismiss: function () {
+              setLoading(false);
+            }
+          }
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.on('payment.failed', function (resp) {
+          showToast('Payment failed: ' + (resp.error.description || 'Unknown error'), 'error');
+          setLoading(false);
+        });
+        rzp.open();
+
+      } catch (err) {
+        showToast(err.message || 'Something went wrong. Please try again.', 'error');
+        setLoading(false);
+      }
+    }
+
+    /* ─── Verify Payment ─── */
+    async function verifyPayment(response, email) {
+      try {
+        const res = await fetch('/api/verifyPayment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_order_id:   response.razorpay_order_id,
+            razorpay_signature:  response.razorpay_signature,
+            email: email,
+            deviceId: deviceId
+          })
+        });
+
+        const result = await res.json();
+
+        if (result.success) {
+          showSuccess(result.licenseKey);
+        } else {
+          showToast('Payment verification failed. Please contact support.', 'error');
+          setLoading(false);
+        }
+      } catch (err) {
+        showToast('Network error during verification. Please contact support.', 'error');
+        setLoading(false);
+      }
+    }
+
+    /* ─── Show Success ─── */
+    function showSuccess(licenseKey) {
+      const checkout = document.getElementById('checkoutCard');
+      const success  = document.getElementById('successCard');
+
+      document.getElementById('licenseKeyDisplay').textContent = licenseKey;
+
+      checkout.classList.remove('visible');
+      checkout.classList.add('hidden');
+
+      setTimeout(() => {
+        success.classList.remove('hidden');
+        success.classList.add('visible');
+      }, 350);
+
+      setLoading(false);
+    }
+
+    /* ─── Copy Key ─── */
+    function copyKey() {
+      const key = document.getElementById('licenseKeyDisplay').textContent;
+      if (!key || key === '—') return;
+
+      navigator.clipboard.writeText(key).then(() => {
+        showToast('License key copied to clipboard!', 'success');
+        const btn = document.querySelector('.copy-btn');
+        btn.textContent = '✅ Copied!';
+        setTimeout(() => { btn.textContent = '📋 Copy Key'; }, 2200);
+      }).catch(() => {
+        /* Fallback for older browsers */
+        const ta = document.createElement('textarea');
+        ta.value = key; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast('License key copied!', 'success');
+      });
+    }
+
+    /* ─── Loading State ─── */
+    function setLoading(on) {
+      isProcessing = on;
+      const btn = document.getElementById('payBtn');
+      btn.disabled = on;
+      btn.classList.toggle('loading', on);
+    }
+
+    /* ─── Toasts ─── */
+    function showToast(msg, type = 'error') {
+      const wrap = document.getElementById('toastWrap');
+      const el   = document.createElement('div');
+      el.className = 'toast ' + type;
+      el.textContent = msg;
+      wrap.appendChild(el);
+
+      setTimeout(() => {
+        el.style.animation = 'toastOut .3s ease forwards';
+        setTimeout(() => el.remove(), 300);
+      }, 4500);
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ConfuserEx Configuration for FlyShelf
+  =====================================
+  This file is used by ConfuserEx to obfuscate the compiled FlyShelf.dll.
+  
+  USAGE:
+    1. Download ConfuserEx from: https://github.com/mkaring/ConfuserEx/releases
+    2. Extract to a folder (e.g., E:\tools\ConfuserEx)
+    3. Run AFTER building Release:
+       
+       dotnet build FlyShelf.csproj -c Release
+       E:\tools\ConfuserEx\Confuser.CLI.exe FlyShelf_PC\confuser.crproj
+    
+    4. Obfuscated output will be in: bin\Release\...\Confused\
+    
+  WHAT IT DOES:
+    - Renames all classes, methods, fields to meaningless names (anti-decompiler)
+    - Encrypts all string literals (hides _keySecret, Firebase URLs, etc.)
+    - Scrambles control flow (anti-debugger)
+    - Adds anti-tamper protection (detects binary patching)
+    - Adds anti-debug detection
+-->
+<project outputDir="bin\Release\net10.0-windows10.0.19041.0\Confused"
+         baseDir="bin\Release\net10.0-windows10.0.19041.0"
+         xmlns="http://confuser.codeplex.com">
+  
+  <!-- Global protection rules applied to all modules -->
+  <rule pattern="true" preset="aggressive" inherit="false">
+    <!-- Rename all symbols (classes, methods, fields, properties) -->
+    <protection id="rename">
+      <argument name="mode" value="unicode" />
+      <argument name="renPublic" value="false" />
+    </protection>
+    
+    <!-- Encrypt all string constants (prevents finding "FlyShelf_Pro_2026_Secure_Salt" etc.) -->
+    <protection id="constants">
+      <argument name="mode" value="dynamic" />
+      <argument name="decoderCount" value="5" />
+    </protection>
+    
+    <!-- Scramble control flow (makes decompiled code unreadable) -->
+    <protection id="ctrl flow">
+      <argument name="type" value="switch" />
+    </protection>
+    
+    <!-- Anti-tamper: detect if the binary has been modified -->
+    <protection id="anti tamper">
+      <argument name="mode" value="anti" />
+    </protection>
+    
+    <!-- Anti-debug: detect if a debugger is attached -->
+    <protection id="anti debug">
+      <argument name="mode" value="anti" />
+    </protection>
+    
+    <!-- Reference proxy: hide method calls behind proxy delegates -->
+    <protection id="ref proxy">
+      <argument name="mode" value="mild" />
+    </protection>
+  </rule>
+
+  <!-- The assembly to obfuscate -->
+  <module path="FlyShelf.dll" />
+</project>

@@ -2441,7 +2441,7 @@
 
                     <!-- Progress pill -->
                     <Border Grid.Column="3" CornerRadius="8" Background="#188B5CF6" Padding="6,2" Margin="0,0,6,0" VerticalAlignment="Center">
-                        <TextBlock x:Name="TodoProgressText" Text="0 done" FontSize="9.5" FontWeight="SemiBold" Foreground="#C4B5FD"/>
+                        <TextBlock x:Name="TodoProgressText" Text="0 done" FontSize="9.5" FontWeight="SemiBold" Foreground="#C4B5FD" FontFamily="Segoe UI Emoji"/>
                     </Border>
 
                     <!-- Add new to-do item -->
@@ -2500,12 +2500,22 @@
                                     <Border x:Name="TodoCard" CornerRadius="8" Margin="6,0,6,4" Padding="0" ClipToBounds="True"
                                             BorderThickness="1" BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}"
                                             Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}">
+                                        <Border.ContextMenu>
+                                            <ContextMenu>
+                                                <MenuItem Header="Delete" Click="TodoItemDeleteMenu_Click" Icon="{ui:SymbolIcon Symbol=Delete16}">
+                                                    <MenuItem.Style>
+                                                        <Style TargetType="MenuItem">
+                                                            <Setter Property="Foreground" Value="#EF4444"/>
+                                                        </Style>
+                                                    </MenuItem.Style>
+                                                </MenuItem>
+                                            </ContextMenu>
+                                        </Border.ContextMenu>
                                         <Grid Margin="8,6,6,6">
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/> <!-- Circle checkbox -->
-                                                <ColumnDefinition Width="*"/>    <!-- Text input -->
-                                                <ColumnDefinition Width="Auto"/> <!-- Timestamp (CreatedAtDisplay) -->
-                                                <ColumnDefinition Width="Auto"/> <!-- Delete btn -->
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
 
                                             <!-- Custom Circle Checkbox -->
@@ -2544,6 +2554,7 @@
                                                      FontSize="12.5" Background="Transparent" BorderThickness="0" Padding="0"
                                                      CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
                                                      SelectionBrush="#608B5CF6" VerticalAlignment="Center"
+                                                     AcceptsReturn="True" TextWrapping="Wrap"
                                                      TextChanged="TodoItemText_TextChanged"
                                                      GotFocus="TodoItemText_GotFocus"
                                                      PreviewKeyDown="TodoItemText_PreviewKeyDown">
@@ -2591,20 +2602,8 @@
                                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
                                                        VerticalAlignment="Center" Margin="6,0,8,0" IsHitTestVisible="False" Opacity="0.8"/>
 
-                                            <!-- Delete button (visible on hover) -->
-                                            <Border x:Name="TodoDeleteBtn" Grid.Column="3" CornerRadius="4" Cursor="Hand" 
-                                                    Padding="3,1" Margin="0,0,2,0" Visibility="Collapsed"
-                                                    Background="#20EF4444" MouseLeftButtonDown="TodoItemDelete_Click" ToolTip="Delete">
-                                                <ui:SymbolIcon Symbol="Delete16" Foreground="#EF4444" FontSize="10"/>
-                                            </Border>
                                         </Grid>
                                     </Border>
-                                    <DataTemplate.Triggers>
-                                        <!-- Show delete button on card hover -->
-                                        <Trigger SourceName="TodoCard" Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="TodoDeleteBtn" Property="Visibility" Value="Visible"/>
-                                        </Trigger>
-                                    </DataTemplate.Triggers>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

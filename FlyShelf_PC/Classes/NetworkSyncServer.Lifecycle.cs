@@ -180,7 +180,15 @@ namespace FlyShelf.Classes
                 // If we bound directly, Cloudflare tunnels to publicPort which HttpListener handles.
                 if (SettingsManager.Current.EnableGlobalCloudflare)
                 {
-                    _ = _cfDaemon.StartAsync(CurrentPort);
+                    if (LicenseManager.CanUseCloudflare())
+                    {
+                        _ = _cfDaemon.StartAsync(CurrentPort);
+                    }
+                    else
+                    {
+                        SettingsManager.Current.EnableGlobalCloudflare = false;
+                        SettingsManager.Save();
+                    }
                 }
                 _ = CloudDiscoveryManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl);
 

@@ -21,7 +21,11 @@ namespace FlyShelf.ViewModels
 
             if (!IsImagePreview || string.IsNullOrEmpty(FilePath)) return;
 
-
+            if (!FlyShelf.Classes.LicenseManager.CanExtractOcr())
+            {
+                FlyShelf.Classes.UpgradePrompt.ShowOcrLimit();
+                return;
+            }
 
             try
 
@@ -94,6 +98,7 @@ namespace FlyShelf.ViewModels
                                     });
 
                                     FlyShelf.Windows.ToastWindow.ShowToast("OCR Text Copied to Clipboard! 📋");
+                                    FlyShelf.Classes.LicenseManager.RecordOcrExtraction();
 
                                     var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
 
@@ -160,6 +165,7 @@ namespace FlyShelf.ViewModels
         public void ScanForOcrTextAsync(string path)
 
         {
+            if (!FlyShelf.Classes.LicenseManager.CanExtractOcr()) return;
 
             System.Threading.Tasks.Task.Run(async () =>
 

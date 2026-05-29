@@ -45,6 +45,20 @@
                 <Image Source="/Resources/FlyShelfIcon.png" Width="22" Height="22" Margin="0,0,12,0" RenderOptions.BitmapScalingMode="HighQuality"/>
                 <TextBlock Text="FlyShelf" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                 <TextBlock Text="Desktop Hub" FontSize="15" FontWeight="Normal" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center" Margin="6,0,0,0" Opacity="0.6"/>
+                <!-- PRO Badge (visible only for Pro users) -->
+                <Border x:Name="ProBadgeTitleBar" Visibility="Collapsed" CornerRadius="4" Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="#F59E0B" Offset="0"/>
+                            <GradientStop Color="#EF4444" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <TextBlock Text="PRO" FontSize="10" FontWeight="Black" Foreground="White" VerticalAlignment="Center"/>
+                </Border>
+                <!-- FREE badge (visible for Free users) -->
+                <Border x:Name="FreeBadgeTitleBar" CornerRadius="4" Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}">
+                    <TextBlock Text="FREE" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center"/>
+                </Border>
             </StackPanel>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" WindowChrome.IsHitTestVisibleInChrome="True">
                 <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="6" Padding="8,3" Margin="0,0,4,0">
@@ -301,7 +315,12 @@
                                                     <ui:SymbolIcon Symbol="History24" Foreground="White" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
                                                 <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock Text="Smart History Cleanup" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="Smart History Cleanup" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
+                                                        <Border Background="#10B981" CornerRadius="4" Margin="6,0,0,0" Padding="5,1,5,1" VerticalAlignment="Center">
+                                                            <TextBlock Text="PRO" Foreground="White" FontSize="9" FontWeight="Bold"/>
+                                                        </Border>
+                                                    </StackPanel>
                                                     <TextBlock Text="Timeframe Purge" FontSize="11" Foreground="#10B981" FontWeight="SemiBold"/>
                                                 </StackPanel>
                                             </StackPanel>
@@ -329,6 +348,7 @@
                                                 </ui:Button.Icon>
                                             </ui:Button>
                                         </StackPanel>
+                                        <Grid Background="Transparent" MouseDown="SizingLockedCard_MouseDown" Visibility="Collapsed" x:Name="SmartHistoryCleanupLockedOverlay"/>
                                     </Grid>
                                 </Border>
                             </Grid>
@@ -1188,7 +1208,7 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- ROW 0, COL 2: AI Engine Key -->
+                                <!-- ROW 0, COL 2: License Key Activation -->
                                 <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource PremiumSettingStyle}">
                                     <StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
@@ -1196,15 +1216,49 @@
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                         <GradientStop Color="#F59E0B" Offset="0"/>
-                                                        <GradientStop Color="#FBBF24" Offset="1"/>
+                                                        <GradientStop Color="#EF4444" Offset="1"/>
                                                     </LinearGradientBrush>
                                                 </Border.Background>
-                                                <ui:SymbolIcon Symbol="Brain24" Foreground="White" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                <ui:SymbolIcon Symbol="Key24" Foreground="White" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
-                                            <TextBlock Text="AI Extraction Key" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                                            <TextBlock Text="License Key" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                                            <!-- Inline Pro/Free badge -->
+                                            <Border x:Name="SettingsProBadge" Visibility="Collapsed" CornerRadius="4" Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop Color="#F59E0B" Offset="0"/>
+                                                        <GradientStop Color="#EF4444" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <TextBlock Text="PRO" FontSize="9" FontWeight="Black" Foreground="White"/>
+                                            </Border>
                                         </StackPanel>
-                                        <TextBlock Text="Required for Smart Text Extraction from images." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="11" Margin="0,0,0,10" TextWrapping="Wrap" LineHeight="16"/>
-                                        <ui:PasswordBox PasswordChar="*" HorizontalAlignment="Stretch" Password="{Binding Source={x:Static settings:SettingsManager.Current}, Path=GeminiApiKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" PlaceholderText="AIzaSyA..." BorderThickness="1"/>
+                                        <TextBlock x:Name="SettingsLicenseDesc" Text="Activate Pro to unlock unlimited features." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="11" Margin="0,0,0,10" TextWrapping="Wrap" LineHeight="16"/>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:TextBox x:Name="SettingsLicenseKeyInput" Grid.Column="0" PlaceholderText="FS-PRO-XXXX-XXXX-XXXX-XXXX" FontFamily="Consolas" CharacterCasing="Upper" Margin="0,0,6,0"/>
+                                            <ui:Button x:Name="SettingsActivateBtn" Grid.Column="1" Appearance="Primary" Content="Activate" Padding="12,6" FontWeight="Bold" Click="SettingsActivateLicense_Click"/>
+                                        </Grid>
+                                        <TextBlock x:Name="SettingsLicenseError" Text="" FontSize="10" Foreground="#EF4444" Margin="0,4,0,0" Visibility="Collapsed" TextWrapping="Wrap"/>
+
+                                        <!-- Buy Premium Button (visible for Free users only) -->
+                                        <Border x:Name="SettingsBuyPremiumBtn" CornerRadius="10" Margin="0,12,0,0" Cursor="Hand" MouseLeftButtonUp="BuyPremium_Click">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                    <GradientStop Color="#8B5CF6" Offset="0"/>
+                                                    <GradientStop Color="#6366F1" Offset="0.5"/>
+                                                    <GradientStop Color="#4F46E5" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="16,10">
+                                                <TextBlock Text="🚀" FontSize="16" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                                <TextBlock Text="Buy FlyShelf Pro — ₹299" FontSize="14" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                                                <TextBlock Text="  (Lifetime)" FontSize="11" Foreground="#D1D5DB" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
                                     </StackPanel>
                                 </Border>
 
@@ -1265,146 +1319,162 @@
 
                                 <!-- ROW 2: Full-width Clipboard Size card -->
                                 <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource PremiumSettingStyle}">
-                                    <StackPanel>
-                                        <Grid Margin="0,0,0,4">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Orientation="Horizontal">
-                                                <Border Width="32" Height="32" CornerRadius="8" Margin="0,0,10,0">
-                                                    <Border.Background>
-                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                            <GradientStop Color="#6366F1" Offset="0"/>
-                                                            <GradientStop Color="#818CF8" Offset="1"/>
-                                                        </LinearGradientBrush>
-                                                    </Border.Background>
-                                                    <ui:SymbolIcon Symbol="ResizeLarge24" Foreground="White" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                                <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock Text="Clipboard Size" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                                                    <TextBlock Text="Alt+C / Widget popup" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                    <Grid>
+                                        <StackPanel>
+                                            <Grid Margin="0,0,0,4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Border Width="32" Height="32" CornerRadius="8" Margin="0,0,10,0">
+                                                        <Border.Background>
+                                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                                <GradientStop Color="#6366F1" Offset="0"/>
+                                                                <GradientStop Color="#818CF8" Offset="1"/>
+                                                            </LinearGradientBrush>
+                                                        </Border.Background>
+                                                        <ui:SymbolIcon Symbol="ResizeLarge24" Foreground="White" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="Clipboard Size" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                            <Border Background="#6366F1" CornerRadius="4" Margin="6,0,0,0" Padding="5,1,5,1" VerticalAlignment="Center">
+                                                                <TextBlock Text="PRO" Foreground="White" FontSize="9" FontWeight="Bold"/>
+                                                            </Border>
+                                                        </StackPanel>
+                                                        <TextBlock Text="Alt+C / Widget popup" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                    </StackPanel>
                                                 </StackPanel>
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                <ui:Button Appearance="Secondary" Click="PreviewClipboardSize_Click" ToolTip="Preview" Padding="6,4" CornerRadius="8" Margin="0,0,4,0">
-                                                    <ui:Button.Icon><ui:SymbolIcon Symbol="Eye24" FontSize="12" /></ui:Button.Icon>
-                                                </ui:Button>
-                                                <ui:Button Appearance="Secondary" Click="ResetClipboardSize_Click" ToolTip="Reset" Padding="6,4" CornerRadius="8">
-                                                    <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowReset24" FontSize="12" /></ui:Button.Icon>
-                                                </ui:Button>
-                                            </StackPanel>
-                                        </Grid>
-                                        <Grid Margin="0,12,0,0">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="16"/>
-                                                <ColumnDefinition Width="*"/>
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0">
-                                                <Grid Margin="0,0,0,4">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                    <TextBlock Text="Width" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="11" VerticalAlignment="Center"/>
-                                                    <Border Grid.Column="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="4" Padding="6,1">
-                                                        <TextBlock Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormWidth, StringFormat='{}{0}px'}" Foreground="#60A5FA" FontSize="11" FontWeight="SemiBold"/>
-                                                    </Border>
-                                                </Grid>
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                    <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipW_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
-                                                    <Slider Grid.Column="1" Minimum="200" Maximum="500" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormWidth}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
-                                                    <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipW_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
-                                                </Grid>
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="2">
-                                                <Grid Margin="0,0,0,4">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                    <TextBlock Text="Height" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="11" VerticalAlignment="Center"/>
-                                                    <Border Grid.Column="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="4" Padding="6,1">
-                                                        <TextBlock Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormHeight, StringFormat='{}{0}px'}" Foreground="#60A5FA" FontSize="11" FontWeight="SemiBold"/>
-                                                    </Border>
-                                                </Grid>
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                    <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipH_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
-                                                    <Slider Grid.Column="1" Minimum="300" Maximum="700" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormHeight}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
-                                                    <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipH_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
-                                                </Grid>
-                                            </StackPanel>
-                                        </Grid>
-                                    </StackPanel>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <ui:Button Appearance="Secondary" Click="PreviewClipboardSize_Click" ToolTip="Preview" Padding="6,4" CornerRadius="8" Margin="0,0,4,0">
+                                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Eye24" FontSize="12" /></ui:Button.Icon>
+                                                    </ui:Button>
+                                                    <ui:Button Appearance="Secondary" Click="ResetClipboardSize_Click" ToolTip="Reset" Padding="6,4" CornerRadius="8">
+                                                        <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowReset24" FontSize="12" /></ui:Button.Icon>
+                                                    </ui:Button>
+                                                </StackPanel>
+                                            </Grid>
+                                            <Grid Margin="0,12,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="16"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <Grid Margin="0,0,0,4">
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                        <TextBlock Text="Width" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="11" VerticalAlignment="Center"/>
+                                                        <Border Grid.Column="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="4" Padding="6,1">
+                                                            <TextBlock Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormWidth, StringFormat='{}{0}px'}" Foreground="#60A5FA" FontSize="11" FontWeight="SemiBold"/>
+                                                        </Border>
+                                                    </Grid>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                        <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipW_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
+                                                        <Slider Grid.Column="1" Minimum="200" Maximum="500" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormWidth}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                                        <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipW_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
+                                                    </Grid>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2">
+                                                    <Grid Margin="0,0,0,4">
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                        <TextBlock Text="Height" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="11" VerticalAlignment="Center"/>
+                                                        <Border Grid.Column="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="4" Padding="6,1">
+                                                            <TextBlock Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormHeight, StringFormat='{}{0}px'}" Foreground="#60A5FA" FontSize="11" FontWeight="SemiBold"/>
+                                                        </Border>
+                                                    </Grid>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                        <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipH_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
+                                                        <Slider Grid.Column="1" Minimum="300" Maximum="700" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormHeight}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                                        <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipH_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                        <Grid Background="Transparent" MouseDown="SizingLockedCard_MouseDown" Visibility="Collapsed" x:Name="ClipboardSizeLockedOverlay"/>
+                                    </Grid>
                                 </Border>
 
                                 <!-- ROW 2, COL 2: FlyShelf Size -->
                                 <Border Grid.Row="2" Grid.Column="2" Style="{StaticResource PremiumSettingStyle}">
-                                    <StackPanel>
-                                        <Grid Margin="0,0,0,4">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Orientation="Horizontal">
-                                                <Border Width="32" Height="32" CornerRadius="8" Margin="0,0,10,0">
-                                                    <Border.Background>
-                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                            <GradientStop Color="#A855F7" Offset="0"/>
-                                                            <GradientStop Color="#C084FC" Offset="1"/>
-                                                        </LinearGradientBrush>
-                                                    </Border.Background>
-                                                    <ui:SymbolIcon Symbol="SquareMultiple24" Foreground="White" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                                <StackPanel VerticalAlignment="Center">
-                                                    <TextBlock Text="FlyShelf Size" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                                                    <TextBlock Text="Mouse Shake mini" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                    <Grid>
+                                        <StackPanel>
+                                            <Grid Margin="0,0,0,4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Orientation="Horizontal">
+                                                    <Border Width="32" Height="32" CornerRadius="8" Margin="0,0,10,0">
+                                                        <Border.Background>
+                                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                                <GradientStop Color="#A855F7" Offset="0"/>
+                                                                <GradientStop Color="#C084FC" Offset="1"/>
+                                                            </LinearGradientBrush>
+                                                        </Border.Background>
+                                                        <ui:SymbolIcon Symbol="SquareMultiple24" Foreground="White" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                    <StackPanel VerticalAlignment="Center">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <TextBlock Text="FlyShelf Size" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                            <Border Background="#A855F7" CornerRadius="4" Margin="6,0,0,0" Padding="5,1,5,1" VerticalAlignment="Center">
+                                                                <TextBlock Text="PRO" Foreground="White" FontSize="9" FontWeight="Bold"/>
+                                                            </Border>
+                                                        </StackPanel>
+                                                        <TextBlock Text="Mouse Shake mini" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                    </StackPanel>
                                                 </StackPanel>
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                <ui:Button Appearance="Secondary" Click="PreviewFlyShelfSize_Click" ToolTip="Preview" Padding="6,4" CornerRadius="8" Margin="0,0,4,0">
-                                                    <ui:Button.Icon><ui:SymbolIcon Symbol="Eye24" FontSize="12" /></ui:Button.Icon>
-                                                </ui:Button>
-                                                <ui:Button Appearance="Secondary" Click="ResetFlyShelfSize_Click" ToolTip="Reset" Padding="6,4" CornerRadius="8">
-                                                    <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowReset24" FontSize="12" /></ui:Button.Icon>
-                                                </ui:Button>
-                                            </StackPanel>
-                                        </Grid>
-                                        <Grid Margin="0,12,0,0">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="16"/>
-                                                <ColumnDefinition Width="*"/>
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Grid.Column="0">
-                                                <Grid Margin="0,0,0,4">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                    <TextBlock Text="Width" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="11" VerticalAlignment="Center"/>
-                                                    <Border Grid.Column="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="4" Padding="6,1">
-                                                        <TextBlock Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormWidth, StringFormat='{}{0}px'}" Foreground="#A78BFA" FontSize="11" FontWeight="SemiBold"/>
-                                                    </Border>
-                                                </Grid>
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                    <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropW_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
-                                                    <Slider Grid.Column="1" Minimum="180" Maximum="400" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormWidth}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
-                                                    <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropW_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
-                                                </Grid>
-                                            </StackPanel>
-                                            <StackPanel Grid.Column="2">
-                                                <Grid Margin="0,0,0,4">
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                    <TextBlock Text="Height" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="11" VerticalAlignment="Center"/>
-                                                    <Border Grid.Column="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="4" Padding="6,1">
-                                                        <TextBlock Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormHeight, StringFormat='{}{0}px'}" Foreground="#A78BFA" FontSize="11" FontWeight="SemiBold"/>
-                                                    </Border>
-                                                </Grid>
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                                    <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropH_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
-                                                    <Slider Grid.Column="1" Minimum="100" Maximum="350" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormHeight}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
-                                                    <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropH_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
-                                                </Grid>
-                                            </StackPanel>
-                                        </Grid>
-                                    </StackPanel>
+                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <ui:Button Appearance="Secondary" Click="PreviewFlyShelfSize_Click" ToolTip="Preview" Padding="6,4" CornerRadius="8" Margin="0,0,4,0">
+                                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Eye24" FontSize="12" /></ui:Button.Icon>
+                                                    </ui:Button>
+                                                    <ui:Button Appearance="Secondary" Click="ResetFlyShelfSize_Click" ToolTip="Reset" Padding="6,4" CornerRadius="8">
+                                                        <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowReset24" FontSize="12" /></ui:Button.Icon>
+                                                    </ui:Button>
+                                                </StackPanel>
+                                            </Grid>
+                                            <Grid Margin="0,12,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="16"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <Grid Margin="0,0,0,4">
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                        <TextBlock Text="Width" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="11" VerticalAlignment="Center"/>
+                                                        <Border Grid.Column="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="4" Padding="6,1">
+                                                            <TextBlock Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormWidth, StringFormat='{}{0}px'}" Foreground="#A78BFA" FontSize="11" FontWeight="SemiBold"/>
+                                                        </Border>
+                                                    </Grid>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                        <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropW_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
+                                                        <Slider Grid.Column="1" Minimum="180" Maximum="400" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormWidth}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                                        <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropW_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
+                                                    </Grid>
+                                                </StackPanel>
+                                                <StackPanel Grid.Column="2">
+                                                    <Grid Margin="0,0,0,4">
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                        <TextBlock Text="Height" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="11" VerticalAlignment="Center"/>
+                                                        <Border Grid.Column="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="4" Padding="6,1">
+                                                            <TextBlock Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormHeight, StringFormat='{}{0}px'}" Foreground="#A78BFA" FontSize="11" FontWeight="SemiBold"/>
+                                                        </Border>
+                                                    </Grid>
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                        <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropH_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
+                                                        <Slider Grid.Column="1" Minimum="100" Maximum="350" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormHeight}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                                        <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropH_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
+                                                    </Grid>
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
+                                        <Grid Background="Transparent" MouseDown="SizingLockedCard_MouseDown" Visibility="Collapsed" x:Name="FlyShelfSizeLockedOverlay"/>
+                                    </Grid>
                                 </Border>
 
                                 <!-- ROW 3: Full-width Save -->
@@ -1926,6 +1996,96 @@
                                                 <TextBlock Text="Firebase is used strictly for signaling/discovery endpoints—never storing clipboard content. Ephemeral discovery records are auto-purged on disconnection." FontSize="12.5" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" TextWrapping="Wrap" LineHeight="18"/>
                                             </StackPanel>
                                         </Grid>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- License & Pro Status Card -->
+                            <Border x:Name="LicenseCard" Style="{StaticResource DashboardCardStyle}" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="24" Margin="0,0,0,20" ClipToBounds="True">
+                                <Grid>
+                                    <!-- Subtle radial glow -->
+                                    <Border CornerRadius="14" Opacity="0.08" HorizontalAlignment="Right" VerticalAlignment="Top" Width="180" Height="180" Margin="-40,-40,0,0">
+                                        <Border.Background>
+                                            <RadialGradientBrush>
+                                                <GradientStop Color="#F59E0B" Offset="0"/>
+                                                <GradientStop Color="Transparent" Offset="1"/>
+                                            </RadialGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+
+                                    <StackPanel>
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                            <Border Width="32" Height="32" CornerRadius="8" Margin="0,0,10,0">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                        <GradientStop Color="#F59E0B" Offset="0"/>
+                                                        <GradientStop Color="#EF4444" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <ui:SymbolIcon Symbol="Trophy24" Foreground="White" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <StackPanel VerticalAlignment="Center">
+                                                <TextBlock Text="License &amp; Subscription" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <!-- Current Status -->
+                                        <Border x:Name="LicenseStatusPanel" CornerRadius="10" Padding="16,12" Margin="0,0,0,16">
+                                            <Border.Background>
+                                                <SolidColorBrush Color="#1A10B981"/>
+                                            </Border.Background>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock x:Name="LicenseStatusTitle" Text="Free Tier" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                    <TextBlock x:Name="LicenseStatusDesc" Text="Upgrade to Pro to unlock unlimited features" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                                <Border x:Name="LicenseStatusBadge" Grid.Column="1" CornerRadius="6" Padding="10,5" VerticalAlignment="Center" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}">
+                                                    <TextBlock x:Name="LicenseStatusBadgeText" Text="FREE" FontSize="12" FontWeight="Black" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+
+                                        <!-- Activation Input (visible for Free users) -->
+                                        <StackPanel x:Name="LicenseActivationPanel">
+                                            <TextBlock Text="Enter License Key" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Margin="0,0,0,8"/>
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <ui:TextBox x:Name="LicenseKeyInput" Grid.Column="0" PlaceholderText="FS-PRO-XXXX-XXXX-XXXX-XXXX" FontSize="14" FontFamily="Consolas" Margin="0,0,8,0" CharacterCasing="Upper"/>
+                                                <ui:Button x:Name="ActivateLicenseBtn" Grid.Column="1" Appearance="Primary" Content="Activate" Padding="16,8" FontWeight="Bold" Click="ActivateLicense_Click">
+                                                    <ui:Button.Icon>
+                                                        <ui:SymbolIcon Symbol="Key24"/>
+                                                    </ui:Button.Icon>
+                                                </ui:Button>
+                                            </Grid>
+                                            <TextBlock x:Name="LicenseErrorText" Text="" FontSize="11" Foreground="#EF4444" Margin="0,6,0,0" Visibility="Collapsed" TextWrapping="Wrap"/>
+                                            <!-- Buy Premium link -->
+                                            <TextBlock x:Name="AboutBuyPremiumLink" Margin="0,10,0,0" Cursor="Hand" MouseLeftButtonUp="BuyPremium_Click">
+                                                <Run Text="🛒 " FontSize="13"/>
+                                                <Run Text="Don't have a key? Buy FlyShelf Pro (₹299)" FontSize="12" Foreground="#8B5CF6" TextDecorations="Underline"/>
+                                            </TextBlock>
+                                        </StackPanel>
+
+                                        <!-- Deactivation (visible for Pro users) -->
+                                        <StackPanel x:Name="LicenseDeactivatePanel" Visibility="Collapsed" Margin="0,4,0,0">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0">
+                                                    <TextBlock Text="Active License Key" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,4"/>
+                                                    <TextBlock x:Name="ActiveKeyDisplay" Text="FS-PRO-****-****-****-XXXX" FontSize="14" FontFamily="Consolas" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                </StackPanel>
+                                                <ui:Button Grid.Column="1" Appearance="Secondary" Content="Deactivate" Padding="12,6" Click="DeactivateLicense_Click" VerticalAlignment="Center"/>
+                                            </Grid>
+                                        </StackPanel>
                                     </StackPanel>
                                 </Grid>
                             </Border>

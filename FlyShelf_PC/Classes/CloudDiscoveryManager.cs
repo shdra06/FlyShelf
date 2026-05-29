@@ -94,6 +94,13 @@ namespace FlyShelf.Classes
 
         public static async Task PushToCloudHub(ClipboardItem item)
         {
+            // SECURITY: Password items must NEVER be synced to any device
+            if (item.IsPassword)
+            {
+                Logger.LogAction("FIREBASE SYNC", "🔒 Blocked password item from cloud sync — password items are never synced");
+                return;
+            }
+
             if (!SettingsManager.Current.EnableCloudDiscovery)
                 return;
 

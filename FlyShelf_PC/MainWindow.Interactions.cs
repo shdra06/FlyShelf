@@ -36,6 +36,13 @@ namespace FlyShelf
                 return;
             }
 
+            // Guard: if the Down handler flagged a special element (PdfMergeToggle, etc.), don't paste
+            if (_shouldPreventDrag)
+            {
+                e.Handled = true;
+                return;
+            }
+
             if ((DateTime.Now - _spawnTime).TotalMilliseconds < 300)
             {
                 e.Handled = true;

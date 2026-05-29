@@ -143,6 +143,24 @@ namespace FlyShelf.Classes
                     }
                 }
 
+                var fileInfo = new FileInfo(finalPath);
+                if (fileInfo.Length > 50L * 1024 * 1024 && !LicenseManager.IsPro)
+                {
+                    try { File.Delete(finalPath); } catch { }
+                    try { Directory.Delete(chunkDir, true); } catch { }
+                    _chunkSessions.TryRemove(sessionId, out _);
+
+                    res.StatusCode = 413;
+                    byte[] errBytes = Encoding.UTF8.GetBytes("{\"error\":\"File transfer limited to 50 MB on Free tier.\"}");
+                    res.ContentType = "application/json";
+                    await res.OutputStream.WriteAsync(errBytes, 0, errBytes.Length);
+
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ File assembly rejected: exceeds 50 MB Free tier limit.");
+                    });
+                    return;
+                }
+
                 // Set original timestamps
                 DateTime? originalDate = null;
                 if (!string.IsNullOrEmpty(originalDateStr) && long.TryParse(originalDateStr, out long epochMs))
@@ -158,7 +176,6 @@ namespace FlyShelf.Classes
                 try { Directory.Delete(chunkDir, true); } catch { }
                 _chunkSessions.TryRemove(sessionId, out _);
 
-                var fileInfo = new FileInfo(finalPath);
                 string sizeStr = fileInfo.Length > 1_073_741_824 ? $"{fileInfo.Length / 1_073_741_824.0:F1} GB" : $"{fileInfo.Length / 1_048_576.0:F1} MB";
 
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
@@ -209,6 +226,16 @@ namespace FlyShelf.Classes
 
         private async Task HandleConvertToPdf(HttpListenerRequest req, HttpListenerResponse res)
         {
+            if (!LicenseManager.CanConvertDoc())
+            {
+                res.StatusCode = 402; // Payment Required
+                byte[] errBytes = Encoding.UTF8.GetBytes("{\"error\":\"Daily document conversion limit reached on Free tier.\"}");
+                res.ContentType = "application/json";
+                await res.OutputStream.WriteAsync(errBytes, 0, errBytes.Length);
+                res.Close();
+                return;
+            }
+
             try
             {
                 string fileName = req.QueryString["name"] ?? $"document_{DateTime.Now.Ticks}.docx";
@@ -287,6 +314,9 @@ namespace FlyShelf.Classes
                         _viewModel.HandleDrop(dataObj, true);
                         FlyShelf.Windows.ToastWindow.ShowToast($"Converted: {pdfName} ✅");
                     });
+
+                    // Record successful doc conversion
+                    LicenseManager.RecordDocConversion();
 
                     string downloadUrl = $"/download?path={Uri.EscapeDataString(pdfPath)}";
                     string json = JsonSerializer.Serialize(new { success = true, downloadUrl, fileName = pdfName });

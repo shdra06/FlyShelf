@@ -545,6 +545,9 @@ namespace FlyShelf
                 {
                     if (!this.IsVisible) return;
 
+                    // Force visual layout pass to guarantee container generation
+                    ShelfListView.UpdateLayout();
+
                     // Guard: Ensure containers are fully generated before evaluating visibility or eviction
                     if (ShelfListView.ItemContainerGenerator.Status != System.Windows.Controls.Primitives.GeneratorStatus.ContainersGenerated)
                     {
@@ -594,7 +597,11 @@ namespace FlyShelf
                         var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(i) as FrameworkElement;
                         bool isVisible = false;
 
-                        if (container != null && container.IsLoaded)
+                        if (isFirst5Images)
+                        {
+                            isVisible = true; // Sane default: top 5 images are always considered visible!
+                        }
+                        else if (container != null && container.IsLoaded)
                         {
                             try
                             {

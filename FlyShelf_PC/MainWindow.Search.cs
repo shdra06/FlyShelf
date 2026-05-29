@@ -18,6 +18,7 @@ namespace FlyShelf
     {
         private bool _isSearchActive = false;
         private bool _isFilterBarActive = false;
+        private bool _isClosingSearch = false;   // re-entrancy guard for CloseSearch
         private DateTime _overflowPopupLastClosed = DateTime.MinValue;
 
         private void SearchToggle_Click(object sender, RoutedEventArgs e)
@@ -62,6 +63,9 @@ namespace FlyShelf
 
         private void SearchTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
         {
+            // Guard: skip re-entrant calls fired while CloseSearch() is clearing the text box
+            if (_isClosingSearch) return;
+
             string query = SearchTextBox.Text;
             SearchPlaceholder.Visibility = string.IsNullOrEmpty(query) ? Visibility.Visible : Visibility.Collapsed;
 
@@ -135,57 +139,81 @@ namespace FlyShelf
             CloseSearch();
         }
 
-        private void CloseSearch()
+        /// <summary>
+        /// Closes the search bar and resets filters.
+        /// When <paramref name="switchingPanel"/> is true, we skip heavy clipboard-specific
+        /// cleanup (CollectionView refresh, RenderVisibleThumbnails, focus restore) because
+        /// the caller (OpenNotesPanel / OpenTodoPanel) is about to collapse ShelfListView anyway.
+        /// This prevents the UI-thread freeze caused by cascading re-entrant events.
+        /// </summary>
+        private void CloseSearch(bool switchingPanel = false)
         {
-            _isSearchActive = false;
-            _searchDebounceTimer?.Stop();
-            SearchTextBox.Text = "";
-            SearchBarContainer.Visibility = Visibility.Collapsed;
-            if (SearchToggleBtn != null)
+            if (_isClosingSearch) return;   // prevent re-entrant calls
+            _isClosingSearch = true;
+            try
             {
-                SearchToggleBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
-            }
-            
-            if (_isNotesActive)
-            {
-                NotesSearchResults.Visibility = Visibility.Collapsed;
-                NotesContentArea.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                // Clear the CollectionView filter only if no category filter is active
-                var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems) as ListCollectionView;
-                if (view != null)
+                _isSearchActive = false;
+                _searchDebounceTimer?.Stop();
+                SearchTextBox.Text = "";           // fires TextChanged, but the guard above blocks it
+                SearchBarContainer.Visibility = Visibility.Collapsed;
+                if (SearchToggleBtn != null)
                 {
-                    if (_activeCategoryFilter == null)
-                    {
-                        view.Filter = null;
-                    }
-                    else
-                    {
-                        // Reapply the active category filter to maintain persistence
-                        ReapplyActiveFilters();
-                    }
-                    view.CustomSort = null;
+                    SearchToggleBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
                 }
-                _viewModel.IsSearchActive = false;
-            }
-            
-            // Move focus back to the list view or notes box
-            if (_isNotesActive)
-            {
-                FocusNotesActiveTextBox();
-            }
-            else
-            {
-                ShelfListView.Focus();
-            }
 
-            // Stop mascot search animation
-            try { Classes.AnimationTriggerService.Instance.OnSearchToggle(false); } catch { }
+                // Stop mascot search animation
+                try { Classes.AnimationTriggerService.Instance.OnSearchToggle(false); } catch { }
 
-            // Render newly visible thumbnails immediately
-            RenderVisibleThumbnails();
+                // ── When switching to Notes/Todo, skip all clipboard-specific work ──
+                if (switchingPanel)
+                {
+                    // Still clear ViewModel search state and filters so returning
+                    // to clipboard later doesn't show stale results
+                    _viewModel.IsSearchActive = false;
+                    var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems) as ListCollectionView;
+                    if (view != null)
+                    {
+                        if (_activeCategoryFilter == null)
+                            view.Filter = null;
+                        view.CustomSort = null;
+                    }
+                    return;
+                }
+
+                if (_isNotesActive)
+                {
+                    NotesSearchResults.Visibility = Visibility.Collapsed;
+                    NotesContentArea.Visibility = Visibility.Visible;
+                    FocusNotesActiveTextBox();
+                }
+                else
+                {
+                    // Clear the CollectionView filter only if no category filter is active
+                    var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems) as ListCollectionView;
+                    if (view != null)
+                    {
+                        if (_activeCategoryFilter == null)
+                        {
+                            view.Filter = null;
+                        }
+                        else
+                        {
+                            // Reapply the active category filter to maintain persistence
+                            ReapplyActiveFilters();
+                        }
+                        view.CustomSort = null;
+                    }
+                    _viewModel.IsSearchActive = false;
+                    ShelfListView.Focus();
+
+                    // Render newly visible thumbnails immediately
+                    RenderVisibleThumbnails();
+                }
+            }
+            finally
+            {
+                _isClosingSearch = false;
+            }
         }
 
         private void ApplySearchFilter(string query)
@@ -252,7 +280,17 @@ namespace FlyShelf
 
         private void SortFilter_Click(object sender, RoutedEventArgs e)
         {
-            ToggleFilterBar(!_isFilterBarActive);
+            if (_isFilterBarActive)
+            {
+                // Clicking the filter button while active → clear filter and close bar
+                if (_activeCategoryFilter != null)
+                    ClearCategoryFilter();
+                ToggleFilterBar(false);
+            }
+            else
+            {
+                ToggleFilterBar(true);
+            }
         }
 
         private void ToggleFilterBar(bool show)

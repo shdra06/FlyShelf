@@ -1,9 +1,9 @@
-{
-    "pc_version": "8.2.0",
-    "pc_changelog": "v8.2.0 \u2013 Smart Memory Optimization & Instant Thumbnails\n\n\u2022 New: Top 5 image thumbnails are permanently cached in RAM for instant, zero-flash summon appearance.\n\u2022 Improved: Background memory footprint reduced to under 50 MB via Win32 working set trimming.\n\u2022 Improved: Startup image decoding capped to top 5 images for faster cold launch.\n\u2022 Improved: Off-screen image eviction refined from 10 to 5 images for tighter memory control.\n\u2022 Fixed: Cloudflare tunnel auto-reactivation race condition when toggling outgoing sync.",
-    "pc_download": "https://github.com/shdra06/FlyShelf/releases/download/v8.2.0/FlyShelf.exe",
-    "pc_sha256": "a4507e5e573b9e8a91300c4fcd1dc81a4af2b6744bf8c6377ca9ac48100d06fe",
-    "android_version": "7.1.0",
-    "android_changelog": "v7.1.0 \u2013 Version Sync\n\n\u2022 Bumped version to sync with Desktop client release.",
-    "android_download": "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"
+﻿{
+    "pc_version":  "8.5.0",
+    "pc_changelog":  "v8.5.0 – Search Stability \u0026 Notes Auto-Bullet\n\n• Fixed: Critical freeze when switching from Search to Notes or To-Do panel.\n• Improved: Auto-bullet creation when opening Notes in bullet mode.\n• Improved: Auto-task item creation for empty To-Do days.\n• Improved: Robust thumbnail loading with retry fallback.\n• Fixed: Filter toggle now properly deactivates on re-click.\n• Fixed: Clipboard selection no longer auto-closes during multi-select.\n• Improved: Emoji rendering in progress bars.",
+    "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v8.5.0/FlyShelf.exe",
+    "pc_sha256":  "7d4a398451d5b98b824b51de510c781d1f00103da6581cc4d35c138bb303d1b2",
+    "android_version":  "7.1.0",
+    "android_changelog":  "v7.1.0 – Version Sync\n\n• Bumped version to sync with Desktop client release.",
+    "android_download":  "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"
 }

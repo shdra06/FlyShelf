@@ -83,6 +83,9 @@ FlyShelf_Mobile.apk
 # ─── Firebase Security Credentials ────────────────────────────
 FlyShelf_PC/Classes/FirebaseSecrets.cs
 
+# ─── License Key Generator (contains HMAC secret — NEVER push) ─
+FlyShelf_PC/Tools/
+
 # ─── Website (Next.js) Build Artifacts ────────────────────────
 flyshelf-web/node_modules/
 flyshelf-web/.next/

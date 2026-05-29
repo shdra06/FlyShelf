@@ -18,6 +18,7 @@ namespace FlyShelf.ViewModels
         public void ScanForQRCodeAsync(string path)
 
         {
+            if (!FlyShelf.Classes.LicenseManager.CanScanQr()) return;
 
             System.Threading.Tasks.Task.Run(() => {
 
@@ -94,6 +95,7 @@ namespace FlyShelf.ViewModels
 
 
                                 FlyShelf.Windows.ToastWindow.ShowToast("QR Code Extracted & Copied! 📋");
+                                FlyShelf.Classes.LicenseManager.RecordQrScan();
 
                             });
 
@@ -186,12 +188,13 @@ namespace FlyShelf.ViewModels
 
 
         public void ConvertPdfToWordTask()
-
-
-
         {
-
-
+            if (!FlyShelf.Classes.LicenseManager.CanConvertDoc())
+            {
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    FlyShelf.Classes.UpgradePrompt.ShowDocConvertLimit());
+                return;
+            }
 
             System.Threading.Tasks.Task.Run(() =>
 
@@ -367,6 +370,7 @@ $word.Quit();
 
 
                             FlyShelf.Windows.ToastWindow.ShowToast($"✅ Converted: {Path.GetFileName(outputPath)}");
+                            FlyShelf.Classes.LicenseManager.RecordDocConversion();
 
 
 
@@ -430,6 +434,12 @@ $word.Quit();
 
         public void ManualScanQRCode()
         {
+            if (!FlyShelf.Classes.LicenseManager.CanScanQr())
+            {
+                FlyShelf.Classes.UpgradePrompt.ShowQrScanLimit();
+                return;
+            }
+
             try
             {
                 if (string.IsNullOrEmpty(FilePath) || !System.IO.File.Exists(FilePath))
@@ -467,6 +477,7 @@ $word.Quit();
                             });
 
                             FlyShelf.Windows.ToastWindow.ShowToast("QR Code Extracted & Copied! 📋");
+                            FlyShelf.Classes.LicenseManager.RecordQrScan();
                         });
                     }
                     else

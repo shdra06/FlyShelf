@@ -45,7 +45,7 @@ namespace FlyShelf
         {
             // Close other modes
             if (_isTodoActive) CloseTodoPanel(immediate: true);
-            if (_isSearchActive) CloseSearch();
+            if (_isSearchActive) CloseSearch(switchingPanel: true);
             if (_isFilterBarActive) ToggleFilterBar(false);
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
 
@@ -87,7 +87,9 @@ namespace FlyShelf
             TextOptions.SetTextRenderingMode(HeaderAndFiltersStack, TextRenderingMode.ClearType);
             RenderOptions.SetClearTypeHint(HeaderAndFiltersStack, ClearTypeHint.Enabled);
 
-            // Highlight the notes button
+            // Swap notes button to clipboard icon (acts as "go back" button)
+            NotesToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.ClipboardTextLtr24 };
+            NotesToggleBtn.ToolTip = "Back to Clipboard";
             NotesToggleBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x8B, 0x5C, 0xF6));
 
             // Animate in
@@ -207,6 +209,7 @@ namespace FlyShelf
                     {
                         // Fallback: focus first bullet's TextBox
                         var firstBullet = _selectedNoteDay.Bullets.First();
+                        NotesBulletList.UpdateLayout(); // Force container generation!
                         var container = NotesBulletList.ItemContainerGenerator.ContainerFromItem(firstBullet);
                         if (container is ContentPresenter cp)
                         {
@@ -238,7 +241,9 @@ namespace FlyShelf
             // Save before closing
             NoteManager.SaveNow();
 
-            // Reset button color
+            // Restore notes button icon and tooltip
+            NotesToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Notepad24 };
+            NotesToggleBtn.ToolTip = "Quick Notes";
             NotesToggleBtn.Foreground = (Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
 
             // ─── HEADER: Restore original transparent/Mica background ───
@@ -336,10 +341,22 @@ namespace FlyShelf
                 NotesBulletList.Visibility = Visibility.Visible;
                 NotesFreeformArea.Visibility = Visibility.Collapsed;
                 NotesModeToggleText.Text = "📄 Freeform";
+
+                // Auto-create a first bullet if the day is empty so user can start typing immediately
+                if (day.Bullets.Count == 0)
+                {
+                    _lastBulletAddedTime = DateTime.MinValue; // Reset cooldown
+                    AddNewBulletAndFocus();
+                }
+                else
+                {
+                    // Auto-focus the last bullet's content text box
+                    FocusNotesActiveTextBox();
+                }
             }
 
             // Update day label
-            NotesCurrentDayLabel.Text = day.DisplayDate;
+            NotesCurrentDayLabel.Text = "Notes · " + day.DisplayDate;
         }
 
         private void UpdateDaySidebarSelection()
@@ -375,6 +392,7 @@ namespace FlyShelf
             // Focus the new bullet's TextBox after render
             Dispatcher.InvokeAsync(() =>
             {
+                NotesBulletList.UpdateLayout(); // Force container generation!
                 var container = NotesBulletList.ItemContainerGenerator.ContainerFromItem(bullet);
                 if (container is ContentPresenter cp)
                 {
@@ -460,6 +478,13 @@ namespace FlyShelf
             }
             else if (string.IsNullOrEmpty(bullet.ImagePath2))
             {
+                if (!LicenseManager.IsPro)
+                {
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        Windows.ToastWindow.ShowToast("⚠️ Embedding 2 images per bullet is a Pro feature."));
+                    return false;
+                }
+
                 bullet.ImagePath2 = path;
                 bullet.ImageDisplayWidth2 = width;
                 NoteManager.MarkDirty();
@@ -798,6 +823,18 @@ namespace FlyShelf
                 NotesBulletList.Visibility = Visibility.Visible;
                 NotesFreeformArea.Visibility = Visibility.Collapsed;
                 NotesModeToggleText.Text = "📄 Freeform";
+
+                // ─── FOCUS FIX: Activate window, then auto-create or focus bullet ───
+                ActivateNotesWindow();
+                if (_selectedNoteDay.Bullets.Count == 0)
+                {
+                    _lastBulletAddedTime = DateTime.MinValue; // Reset cooldown
+                    AddNewBulletAndFocus();
+                }
+                else
+                {
+                    FocusNotesActiveTextBox();
+                }
             }
         }
 

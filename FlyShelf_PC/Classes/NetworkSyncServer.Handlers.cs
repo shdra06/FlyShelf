@@ -76,6 +76,7 @@ namespace FlyShelf.Classes
                     string deviceId = SettingsManager.Current.DeviceId ?? "PC";
                     var payload = _viewModel.DroppedItems
                         .Where(x => x.Extension != "MOBILE") // Don't echo Mobile items back
+                        .Where(x => !x.IsPassword) // SECURITY: Never expose password items to any device
                         .Take(15).Select(x => {
                         string contentKey = x.RawContent ?? x.FileName ?? x.FilePath ?? "";
                         int stableHash = contentKey.GetHashCode(StringComparison.Ordinal);
@@ -315,6 +316,17 @@ namespace FlyShelf.Classes
                 }
 
                 long totalBytes = req.ContentLength64;
+                if (totalBytes > 50L * 1024 * 1024 && !LicenseManager.IsPro)
+                {
+                    res.StatusCode = 413; // Payload Too Large
+                    try { var b = Encoding.UTF8.GetBytes("{\"ok\":false,\"message\":\"File size exceeds 50 MB limit for Free tier.\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                    res.Close();
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                        FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming transfer rejected: file exceeds 50 MB Free tier limit.");
+                    });
+                    return;
+                }
+
                 bool isLargeFile = totalBytes >= 10 * 1024 * 1024;
 
                 if (isLargeFile)
@@ -350,6 +362,11 @@ namespace FlyShelf.Classes
                     {
                         await tempFs.WriteAsync(buffer, 0, read);
                         totalRead += read;
+
+                        if (totalRead > 50L * 1024 * 1024 && !LicenseManager.IsPro)
+                        {
+                            throw new InvalidDataException("File size exceeds 50 MB limit for Free tier.");
+                        }
 
                         if (isLargeFile && placeholder != null && (DateTime.Now - lastProgressUpdate).TotalMilliseconds >= 300)
                         {
@@ -480,6 +497,18 @@ namespace FlyShelf.Classes
                 return;
             }
 
+            long totalBytes = req.ContentLength64;
+            if (totalBytes > 50L * 1024 * 1024 && !LicenseManager.IsPro)
+            {
+                res.StatusCode = 413;
+                try { var b = Encoding.UTF8.GetBytes("{\"ok\":false,\"message\":\"File size exceeds 50 MB limit for Free tier.\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                res.Close();
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                    FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming archive rejected: exceeds 50 MB Free tier limit.");
+                });
+                return;
+            }
+
             try
             {
                 string batchName = req.Headers["X-Batch-Name"];
@@ -601,6 +630,18 @@ namespace FlyShelf.Classes
                 res.StatusCode = 200;
                 try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"sync_paused\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
                 res.Close();
+                return;
+            }
+
+            long totalBytes = req.ContentLength64;
+            if (totalBytes > 50L * 1024 * 1024 && !LicenseManager.IsPro)
+            {
+                res.StatusCode = 413;
+                try { var b = Encoding.UTF8.GetBytes("{\"ok\":false,\"message\":\"File size exceeds 50 MB limit for Free tier.\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                res.Close();
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                    FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming relay rejected: exceeds 50 MB Free tier limit.");
+                });
                 return;
             }
 

@@ -130,6 +130,17 @@ namespace FlyShelf.Classes
 
         public async Task<int> PushFileToAllPeers(string filePath, string title, string itemType = "Image")
         {
+            if (File.Exists(filePath))
+            {
+                long fSize = new FileInfo(filePath).Length;
+                if (fSize > 50L * 1024 * 1024 && !LicenseManager.IsPro)
+                {
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        Windows.ToastWindow.ShowToast($"⚠️ File transfer limited to 50 MB on Free tier."));
+                    return 0;
+                }
+            }
+
             int delivered = 0;
             var alive = _peers.Values.Where(p => p.IsAlive).ToList();
             if (alive.Count == 0) return 0;
@@ -163,6 +174,17 @@ namespace FlyShelf.Classes
         /// </summary>
         public async Task<bool> PushFileToSinglePeer(string targetDeviceId, string filePath, string title, string itemType = "Archive")
         {
+            if (File.Exists(filePath))
+            {
+                long fSize = new FileInfo(filePath).Length;
+                if (fSize > 50L * 1024 * 1024 && !LicenseManager.IsPro)
+                {
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        Windows.ToastWindow.ShowToast($"⚠️ File transfer limited to 50 MB on Free tier."));
+                    return false;
+                }
+            }
+
             var peer = _peers.Values.FirstOrDefault(p => p.DeviceId == targetDeviceId);
             if (peer == null)
             {

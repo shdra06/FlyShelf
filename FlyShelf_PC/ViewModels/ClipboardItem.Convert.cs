@@ -20,6 +20,13 @@ namespace FlyShelf.ViewModels
 
 
         {
+            if (!FlyShelf.Classes.LicenseManager.CanConvertDoc())
+            {
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    FlyShelf.Classes.UpgradePrompt.ShowDocConvertLimit());
+                return;
+            }
+
 
 
 
@@ -177,6 +184,7 @@ namespace FlyShelf.ViewModels
 
 
                                     FlyShelf.Windows.ToastWindow.ShowToast("Format Synthesized Successfully ✅");
+                                    FlyShelf.Classes.LicenseManager.RecordDocConversion();
 
 
 
@@ -281,6 +289,13 @@ namespace FlyShelf.ViewModels
 
 
             if (!IsImagePreview || string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath)) return;
+
+            if (!FlyShelf.Classes.LicenseManager.CanConvertImageToPdf())
+            {
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    FlyShelf.Classes.UpgradePrompt.ShowImageToPdfLimit());
+                return;
+            }
 
 
 
@@ -585,6 +600,7 @@ namespace FlyShelf.ViewModels
 
 
                         FlyShelf.Windows.ToastWindow.ShowToast($"Image → PDF converted! ✅ {Path.GetFileName(outputPdf)}");
+                        FlyShelf.Classes.LicenseManager.RecordImageToPdf();
 
 
 

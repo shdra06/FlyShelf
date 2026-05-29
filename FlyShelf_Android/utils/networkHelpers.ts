@@ -2,6 +2,48 @@
 // Simplified: Trust Firebase data, try-then-fallback pattern, no redundant health checks
 import { decrypt as aesDecrypt } from './syncCrypto';
 
+/** Validate if a pairing key is exactly 32-character hex string */
+export const isValidPairingKey = (key: string | null | undefined): boolean => {
+  if (!key) return false;
+  return /^[a-f0-9]{32}$/i.test(key);
+};
+
+/** Validate device URLs to prevent SSRF and external injections */
+export const isValidDeviceUrl = (urlStr: string | null | undefined): boolean => {
+  if (!urlStr) return false;
+  try {
+    // Basic parse to get host
+    let host = urlStr.trim().replace(/^https?:\/\//i, '').split('/')[0].split(':')[0];
+    host = host.toLowerCase();
+    
+    if (host === 'localhost' || host === '127.0.0.1' || host === '::1') {
+      return __DEV__;
+    }
+    
+    if (host.startsWith('169.254.')) {
+      return false;
+    }
+    
+    if (host.endsWith('trycloudflare.com')) {
+      return true;
+    }
+    
+    // Allow RFC1918 private subnets
+    const isPrivateIp = 
+      /^(192\.168\.\d{1,3}\.\d{1,3})$/.test(host) ||
+      /^(10\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.test(host) ||
+      /^(172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})$/.test(host);
+      
+    if (isPrivateIp) {
+      return true;
+    }
+    
+    return false;
+  } catch {
+    return false;
+  }
+};
+
 /** Decrypt device URLs if they were encrypted by the PC */
 export const decryptDevice = async (device: any): Promise<any> => {
   if (!device) return device;
@@ -111,7 +153,7 @@ export const getDeviceUrls = (device: any): string[] => {
       const trimmed = part.trim();
       if (!trimmed) continue;
       const normalized = normalizeUrl(trimmed);
-      if (normalized && !seen.has(normalized)) {
+      if (normalized && isValidDeviceUrl(normalized) && !seen.has(normalized)) {
         seen.add(normalized);
         urls.push(normalized);
       }
@@ -137,7 +179,8 @@ export const getDeviceUrls = (device: any): string[] => {
  */
 export const resolveOptimalUrl = async (
   device: any,
-  fetchFn = fetchWithTimeout
+  fetchFn = fetchWithTimeout,
+  pairingKey?: string
 ): Promise<string | null> => {
   if (!device || device === 'Global') return null;
 
@@ -156,9 +199,11 @@ export const resolveOptimalUrl = async (
         if (url.includes('trycloudflare.com')) {
           await new Promise(r => setTimeout(r, 500));
         }
+        const headers: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
+        if (pairingKey) headers['X-Pairing-Key'] = pairingKey;
         const res = await fetchFn(`${url}/api/health`, {
           method: 'GET',
-          headers: { 'X-FlyShelf-Client': 'MobileCompanion' },
+          headers,
         }, 2000);
         if (res.ok) return url;
         throw new Error(`${url} returned ${res.status}`);
@@ -166,8 +211,8 @@ export const resolveOptimalUrl = async (
     );
     return result;
   } catch {
-    // All failed — return LAN URL as best guess (may recover)
-    return urls[0];
+    // All failed — return null (prevents SSRF redirects)
+    return null;
   }
 };
 

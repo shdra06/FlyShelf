@@ -393,6 +393,12 @@ namespace FlyShelf.Windows
 
         private async void SaveSinglePdf_Click(object sender, RoutedEventArgs e)
         {
+            if (!FlyShelf.Classes.LicenseManager.CanSavePdf())
+            {
+                FlyShelf.Classes.UpgradePrompt.ShowPdfSaveLimit(this);
+                return;
+            }
+
             if (sender is not FrameworkElement fe || fe.Tag is not PdfMergeItem item) return;
 
             if (!item.IsValid)
@@ -449,6 +455,7 @@ namespace FlyShelf.Windows
 
             if (success && File.Exists(outputPath))
             {
+                FlyShelf.Classes.LicenseManager.RecordPdfSave();
                 ToastWindow.ShowToast($"✅ Saved {pageIndices.Count} pages → {outputName}");
                 System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{outputPath}\"");
             }
@@ -551,6 +558,12 @@ namespace FlyShelf.Windows
 
         private async void Merge_Click(object sender, RoutedEventArgs e)
         {
+            if (!FlyShelf.Classes.LicenseManager.CanMergePdf())
+            {
+                FlyShelf.Classes.UpgradePrompt.ShowPdfMergeLimit(this);
+                return;
+            }
+
             string baseName = GetOutputFileName();
             string mergeDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
@@ -567,6 +580,12 @@ namespace FlyShelf.Windows
 
         private async void SaveAs_Click(object sender, RoutedEventArgs e)
         {
+            if (!FlyShelf.Classes.LicenseManager.CanMergePdf())
+            {
+                FlyShelf.Classes.UpgradePrompt.ShowPdfMergeLimit(this);
+                return;
+            }
+
             var validItems = MergeItems.Where(m => m.IsValid).ToList();
             int totalSelectedPages = validItems.Sum(m => m.GetSelectedPageIndices().Count);
             if (totalSelectedPages < 1)
@@ -690,6 +709,7 @@ namespace FlyShelf.Windows
 
             if (success && File.Exists(outputPath))
             {
+                FlyShelf.Classes.LicenseManager.RecordPdfMerge();
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     var dataObj = new DataObject();

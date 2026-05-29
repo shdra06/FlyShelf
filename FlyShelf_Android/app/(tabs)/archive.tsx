@@ -15,7 +15,7 @@ import { ref as dbRef, push, set, onValue, query } from 'firebase/database';
 import { colors, font, radius, shadows, space } from '../../styles/theme';
 import AnimatedCard from '../../components/AnimatedCard';
 import AnimatedPressable from '../../components/AnimatedPressable';
-import { decryptDeviceList } from '../../utils/networkHelpers';
+import { decryptDeviceList, isValidPairingKey } from '../../utils/networkHelpers';
 
 type DeviceGroup = { id: string; name: string; deviceNames: string[] };
 
@@ -143,7 +143,10 @@ export default function ConnectScreen() {
         try {
           const res = await fetch(`${url}/api/health`, { 
             method: 'GET', 
-            headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, 
+            headers: { 
+              'X-FlyShelf-Client': 'MobileCompanion',
+              'X-Pairing-Key': pairingKey || ''
+            }, 
             signal: AbortSignal.timeout(2000) 
           });
           if (res.ok) {
@@ -158,7 +161,7 @@ export default function ConnectScreen() {
       return null;
     };
 
-    if (!pairingKey) { setLocalDevices([]); setGlobalDevices([]); setAllFirebaseDevices([]); return; }
+    if (!pairingKey || !isValidPairingKey(pairingKey)) { setLocalDevices([]); setGlobalDevices([]); setAllFirebaseDevices([]); return; }
     const nodesRef = query(dbRef(database, `active_devices/${pairingKey}`));
     const unsubscribeNodes = onValue(nodesRef, async (snapshot) => {
       const locals: any[] = [];
@@ -204,7 +207,14 @@ export default function ConnectScreen() {
           }
           for (const url of localCandidates) {
             try {
-              const res = await fetch(`${url}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(2000) });
+              const res = await fetch(`${url}/api/health`, { 
+                method: 'GET', 
+                headers: { 
+                  'X-FlyShelf-Client': 'MobileCompanion',
+                  'X-Pairing-Key': pairingKey || ''
+                }, 
+                signal: AbortSignal.timeout(2000) 
+              });
               if (res.ok) { localReachable = true; resolvedLocalUrl = url; break; }
             } catch(e) {}
           }
@@ -218,7 +228,14 @@ export default function ConnectScreen() {
         if (hasCloudflare && !localReachable) {
           try {
             const cfUrl = dev.GlobalUrl.endsWith('/') ? dev.GlobalUrl.slice(0, -1) : dev.GlobalUrl;
-            const res = await fetch(`${cfUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(3000) });
+            const res = await fetch(`${cfUrl}/api/health`, { 
+              method: 'GET', 
+              headers: { 
+                'X-FlyShelf-Client': 'MobileCompanion',
+                'X-Pairing-Key': pairingKey || ''
+              }, 
+              signal: AbortSignal.timeout(3000) 
+            });
             if (res.ok) {
               globals.push({ ...dev, resolvedUrl: cfUrl, connectionType: 'cloudflare' });
             } else {
@@ -821,7 +838,7 @@ export default function ConnectScreen() {
         {showEndPicker && <DateTimePicker value={endDate} mode="date" display="default" onChange={(e: any, d?: Date) => { setShowEndPicker(false); if (d) setEndDate(d); }} />}
 
         {/* Source Filters */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 6, marginBottom: 8 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 6, marginBottom: 8 }}>
           {(['All', 'Camera', 'WhatsApp', 'Downloads'] as SourceFilter[]).map(src => (
             <TouchableOpacity key={src} style={[s.sourceChip, sourceFilter === src && s.sourceChipActive]} onPress={() => setSourceFilter(src)}>
               <Text style={[s.sourceChipText, sourceFilter === src && s.sourceChipTextActive]}>
@@ -1019,7 +1036,7 @@ export default function ConnectScreen() {
       </View>
 
       {/* Type Filter Chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, marginBottom: 10 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 6, paddingVertical: 4 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0, marginBottom: 10 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 6, paddingVertical: 4 }}>
         {(['All', 'PDFs', 'Docs', 'Images', 'Videos'] as const).map(t => (
           <TouchableOpacity key={t} style={[s.sourceChip, activeTab === t && s.sourceChipActive]} onPress={() => setActiveTab(t)}>
             <Text style={[s.sourceChipText, activeTab === t && s.sourceChipTextActive]}>
@@ -1212,9 +1229,26 @@ const s = StyleSheet.create({
   dateBtn: { flex: 1, backgroundColor: colors.bg.card, borderRadius: radius.md, padding: 10, borderWidth: 1, borderColor: colors.border.subtle },
   dateLabel: { color: colors.text.tertiary, fontSize: 9, fontFamily: font.bold, marginBottom: 2 },
   dateValue: { color: colors.text.primary, fontSize: 12, fontFamily: font.semibold },
-  sourceChip: { backgroundColor: colors.bg.card, borderRadius: radius.pill, paddingHorizontal: space.md, paddingVertical: 5, borderWidth: 1, borderColor: colors.border.subtle },
+  sourceChip: { 
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bg.card, 
+    borderRadius: radius.pill, 
+    paddingHorizontal: 14, 
+    paddingVertical: 8, 
+    borderWidth: 1, 
+    borderColor: colors.border.subtle,
+    minHeight: 38
+  },
   sourceChipActive: { backgroundColor: colors.accent.successDim, borderColor: colors.accent.success },
-  sourceChipText: { color: colors.text.secondary, fontSize: 12, fontFamily: font.semibold },
+  sourceChipText: { 
+    color: colors.text.secondary, 
+    fontSize: 12, 
+    fontFamily: font.semibold,
+    textAlign: 'center',
+    includeFontPadding: false
+  },
   sourceChipTextActive: { color: colors.accent.success },
   tabRow: { flexDirection: 'row', paddingHorizontal: space.xl, marginBottom: 6, gap: 4, flexWrap: 'wrap' },
   tab: { paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#1C202B', minHeight: 36, justifyContent: 'center' },

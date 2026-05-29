@@ -207,6 +207,12 @@ namespace FlyShelf.Classes
                 return;
             }
 
+            if (!LicenseManager.CanUseTheme(themeName))
+            {
+                UpgradePrompt.ShowThemeLimit();
+                return;
+            }
+
             var theme = AvailableThemes.FirstOrDefault(t =>
                 t.Name.Equals(themeName, StringComparison.OrdinalIgnoreCase));
 
@@ -228,6 +234,13 @@ namespace FlyShelf.Classes
         /// </summary>
         public string? ImportTheme(string zipPath)
         {
+            if (!LicenseManager.IsPro)
+            {
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    UpgradePrompt.ShowThemeLimit());
+                return null;
+            }
+
             if (!File.Exists(zipPath))
             {
                 Logger.LogAction("THEME", $"Import failed: file not found: {zipPath}");
@@ -443,6 +456,12 @@ namespace FlyShelf.Classes
         /// </summary>
         public void ApplyGlassTheme()
         {
+            if (!LicenseManager.CanUseGlassTheme())
+            {
+                UpgradePrompt.ShowThemeLimit();
+                return;
+            }
+
             try
             {
                 if (IsGlassThemeActive) return;

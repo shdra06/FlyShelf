@@ -787,18 +787,30 @@ namespace FlyShelf.ViewModels
             if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath))
                 return null;
 
-            var bmp = new BitmapImage();
-            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, FileOptions.SequentialScan))
+            try
             {
-                bmp.BeginInit();
-                bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
-                bmp.CacheOption = BitmapCacheOption.OnLoad;
-                bmp.DecodePixelWidth = decodeWidth;
-                bmp.StreamSource = fs;
-                bmp.EndInit();
+                byte[] fileBytes = File.ReadAllBytes(filePath);
+                var bmp = new BitmapImage();
+                using (var ms = new MemoryStream(fileBytes))
+                {
+                    bmp.BeginInit();
+                    bmp.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
+                    bmp.CacheOption = BitmapCacheOption.OnLoad;
+                    if (decodeWidth > 0)
+                    {
+                        bmp.DecodePixelWidth = decodeWidth;
+                    }
+                    bmp.StreamSource = ms;
+                    bmp.EndInit();
+                }
+                bmp.Freeze();
+                return bmp;
             }
-            bmp.Freeze();
-            return bmp;
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("THUMB_LOAD_FAIL", $"Failed to load image bytes for {filePath}: {ex.Message}");
+                return null;
+            }
         }
 
         public BitmapSource? GetIcon(string filePath)

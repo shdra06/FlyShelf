@@ -498,6 +498,240 @@ namespace FlyShelf.Windows
             }
         }
 
+        // ═══════════════════════════════════════════════════════════════
+        // LICENSE ACTIVATION UI
+        // ═══════════════════════════════════════════════════════════════
+
+        /// <summary>Refresh the license UI elements (badge, status, panels) based on current tier.</summary>
+        internal void RefreshLicenseUI()
+        {
+            bool isPro = FlyShelf.Classes.LicenseManager.IsPro;
+
+            // Title bar badges
+            if (ProBadgeTitleBar != null)
+                ProBadgeTitleBar.Visibility = isPro ? Visibility.Visible : Visibility.Collapsed;
+            if (FreeBadgeTitleBar != null)
+                FreeBadgeTitleBar.Visibility = isPro ? Visibility.Collapsed : Visibility.Visible;
+
+            // Settings tab — License Key card
+            if (SettingsProBadge != null)
+                SettingsProBadge.Visibility = isPro ? Visibility.Visible : Visibility.Collapsed;
+
+            // Sizing controls locked overlays for Free tier
+            if (ClipboardSizeLockedOverlay != null)
+                ClipboardSizeLockedOverlay.Visibility = isPro ? Visibility.Collapsed : Visibility.Visible;
+            if (FlyShelfSizeLockedOverlay != null)
+                FlyShelfSizeLockedOverlay.Visibility = isPro ? Visibility.Collapsed : Visibility.Visible;
+            if (SmartHistoryCleanupLockedOverlay != null)
+                SmartHistoryCleanupLockedOverlay.Visibility = isPro ? Visibility.Collapsed : Visibility.Visible;
+
+            // Dynamically prefix/unprefix lock indicators on RetentionCombo items (Never is locked for Free)
+            if (RetentionCombo != null)
+            {
+                foreach (System.Windows.Controls.ComboBoxItem item in RetentionCombo.Items)
+                {
+                    string text = item.Content?.ToString() ?? "";
+                    if (item.Tag?.ToString() == "0")
+                    {
+                        if (isPro)
+                        {
+                            if (text.StartsWith("🔒 ")) item.Content = text.Substring(2);
+                        }
+                        else
+                        {
+                            if (!text.StartsWith("🔒 ")) item.Content = "🔒 " + text;
+                        }
+                    }
+                    else
+                    {
+                        // Remove lock from 14 and 30 days since they are now free
+                        if (text.StartsWith("🔒 ")) item.Content = text.Substring(2);
+                    }
+                }
+            }
+
+            if (SettingsLicenseDesc != null)
+            {
+                if (isPro)
+                {
+                    SettingsLicenseDesc.Text = $"Active: {FlyShelf.Classes.LicenseManager.MaskedKey}";
+                    if (SettingsLicenseKeyInput != null) SettingsLicenseKeyInput.Visibility = Visibility.Collapsed;
+                    if (SettingsActivateBtn != null)
+                    {
+                        SettingsActivateBtn.Content = "Deactivate";
+                        SettingsActivateBtn.Appearance = Wpf.Ui.Controls.ControlAppearance.Secondary;
+                    }
+                }
+                else
+                {
+                    SettingsLicenseDesc.Text = "Activate Pro to unlock unlimited features.";
+                    if (SettingsLicenseKeyInput != null) SettingsLicenseKeyInput.Visibility = Visibility.Visible;
+                    if (SettingsActivateBtn != null)
+                    {
+                        SettingsActivateBtn.Content = "Activate";
+                        SettingsActivateBtn.Appearance = Wpf.Ui.Controls.ControlAppearance.Primary;
+                    }
+                }
+            }
+            if (SettingsLicenseError != null) SettingsLicenseError.Visibility = Visibility.Collapsed;
+
+            // Buy Premium buttons — hide for Pro, show for Free
+            if (SettingsBuyPremiumBtn != null)
+                SettingsBuyPremiumBtn.Visibility = isPro ? Visibility.Collapsed : Visibility.Visible;
+            if (AboutBuyPremiumLink != null)
+                AboutBuyPremiumLink.Visibility = isPro ? Visibility.Collapsed : Visibility.Visible;
+
+            // About tab license card
+            if (LicenseStatusTitle != null)
+            {
+                if (isPro)
+                {
+                    LicenseStatusTitle.Text = "FlyShelf Pro";
+                    LicenseStatusDesc.Text = $"Activated on {FlyShelf.Classes.LicenseManager.ActivatedAt}";
+                    LicenseStatusBadgeText.Text = "PRO";
+                    LicenseStatusBadge.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(40, 245, 158, 11));
+                    LicenseStatusBadgeText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11));
+                    LicenseStatusPanel.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(26, 245, 158, 11));
+                    LicenseActivationPanel.Visibility = Visibility.Collapsed;
+                    LicenseDeactivatePanel.Visibility = Visibility.Visible;
+                    ActiveKeyDisplay.Text = FlyShelf.Classes.LicenseManager.MaskedKey;
+                }
+                else
+                {
+                    LicenseStatusTitle.Text = "Free Tier";
+                    LicenseStatusDesc.Text = "Upgrade to Pro to unlock unlimited features";
+                    LicenseStatusBadgeText.Text = "FREE";
+                    LicenseStatusBadge.Background = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.SubtleFillColorTertiary");
+                    LicenseStatusBadgeText.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorTertiary");
+                    LicenseStatusPanel.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(26, 16, 185, 129));
+                    LicenseActivationPanel.Visibility = Visibility.Visible;
+                    LicenseDeactivatePanel.Visibility = Visibility.Collapsed;
+                }
+            }
+
+            // Clear any error text
+            if (LicenseErrorText != null)
+                LicenseErrorText.Visibility = Visibility.Collapsed;
+        }
+
+        private void ActivateLicense_Click(object sender, RoutedEventArgs e)
+        {
+            string key = LicenseKeyInput?.Text?.Trim() ?? "";
+
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                LicenseErrorText.Text = "Please enter a license key.";
+                LicenseErrorText.Visibility = Visibility.Visible;
+                return;
+            }
+
+            bool success = FlyShelf.Classes.LicenseManager.ActivateLicense(key);
+
+            if (success)
+            {
+                LicenseErrorText.Visibility = Visibility.Collapsed;
+                LicenseKeyInput.Text = "";
+                RefreshLicenseUI();
+                FlyShelf.Windows.ToastWindow.ShowToast("Pro license activated successfully!");
+            }
+            else
+            {
+                LicenseErrorText.Text = "Invalid license key. Please check and try again.";
+                LicenseErrorText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
+                LicenseErrorText.Visibility = Visibility.Visible;
+            }
+        }
+
+        /// <summary>Settings tab license key — handles both Activate and Deactivate.</summary>
+        private void SettingsActivateLicense_Click(object sender, RoutedEventArgs e)
+        {
+            if (FlyShelf.Classes.LicenseManager.IsPro)
+            {
+                // Currently Pro → Deactivate
+                var result = System.Windows.MessageBox.Show(
+                    "Are you sure you want to deactivate your Pro license?\nYou can reactivate anytime with your key.",
+                    "Deactivate License",
+                    System.Windows.MessageBoxButton.YesNo,
+                    System.Windows.MessageBoxImage.Question);
+
+                if (result == System.Windows.MessageBoxResult.Yes)
+                {
+                    FlyShelf.Classes.LicenseManager.DeactivateLicense();
+                    RefreshLicenseUI();
+                    FlyShelf.Windows.ToastWindow.ShowToast("License deactivated — reverted to Free tier.");
+                }
+            }
+            else
+            {
+                // Currently Free → Activate
+                string key = SettingsLicenseKeyInput?.Text?.Trim() ?? "";
+
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    SettingsLicenseError.Text = "Please enter a license key.";
+                    SettingsLicenseError.Visibility = Visibility.Visible;
+                    return;
+                }
+
+                bool success = FlyShelf.Classes.LicenseManager.ActivateLicense(key);
+
+                if (success)
+                {
+                    SettingsLicenseError.Visibility = Visibility.Collapsed;
+                    SettingsLicenseKeyInput.Text = "";
+                    RefreshLicenseUI();
+                    FlyShelf.Windows.ToastWindow.ShowToast("Pro license activated successfully!");
+                }
+                else
+                {
+                    SettingsLicenseError.Text = "Invalid license key. Please check and try again.";
+                    SettingsLicenseError.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
+                    SettingsLicenseError.Visibility = Visibility.Visible;
+                }
+            }
+        }
+
+        private void DeactivateLicense_Click(object sender, RoutedEventArgs e)
+        {
+            var result = System.Windows.MessageBox.Show(
+                "Are you sure you want to deactivate your Pro license?\nYou can reactivate anytime with your key.",
+                "Deactivate License",
+                System.Windows.MessageBoxButton.YesNo,
+                System.Windows.MessageBoxImage.Question);
+
+            if (result == System.Windows.MessageBoxResult.Yes)
+            {
+                FlyShelf.Classes.LicenseManager.DeactivateLicense();
+                RefreshLicenseUI();
+                FlyShelf.Windows.ToastWindow.ShowToast("License deactivated — reverted to Free tier.");
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // BUY PREMIUM — Opens payment page in default browser
+        // ═══════════════════════════════════════════════════════════════
+
+        private void BuyPremium_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            try
+            {
+                string deviceId = FlyShelf.Classes.SettingsManager.Current.DeviceId ?? "";
+                // TODO: Update this URL once you deploy to Firebase Hosting
+                string paymentUrl = $"https://advance-sync.web.app/?deviceId={Uri.EscapeDataString(deviceId)}";
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = paymentUrl,
+                    UseShellExecute = true
+                });
+                FlyShelf.Windows.ToastWindow.ShowToast("🛒 Opening payment page in your browser...");
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Classes.Logger.LogAction("LICENSE", $"Failed to open payment URL: {ex.Message}");
+                FlyShelf.Windows.ToastWindow.ShowToast("❌ Could not open browser. Please visit our website to purchase.");
+            }
+        }
+
         // ═══ Device Send, Archive, Merge & Selection moved to HubWindow.SettingsHandlers.cs ═══
     }
 }

@@ -31,7 +31,8 @@ namespace FlyShelf.Classes
         private static int _maxLoadedItemCount = 0;
 
         /// <summary>Maximum items to retain in history. Oldest items are evicted beyond this cap.</summary>
-        private const int MAX_HISTORY_ITEMS = 500;
+        private static int MAX_HISTORY_ITEMS => FlyShelf.Classes.LicenseManager.GetHistoryCap();
+        private const int ABSOLUTE_MAX_ITEMS = 2500;
         /// <summary>Compact after this many journal entries to prevent unbounded file growth.</summary>
         private const int COMPACTION_THRESHOLD = 100;
 

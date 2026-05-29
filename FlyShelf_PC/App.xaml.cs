@@ -125,6 +125,7 @@ public partial class App : Application
         // ------------------------------------------------------------------
 
         FlyShelf.Classes.SettingsManager.Load();
+        FlyShelf.Classes.LicenseManager.Load();
         
         // ═══ INTERNAL CLOCK: Sync with NTP before any Firebase/networking ═══
         // Protects against wrong system clock causing auth failures and dead heartbeats
@@ -338,6 +339,9 @@ public partial class App : Application
                     
                     // One-time cleanup: purge old GUID-based device entries from Firebase
                     _ = FlyShelf.Classes.CloudDiscoveryManager.CleanupStaleDevices();
+                    
+                    // Revalidate Pro license on server (checks for revoked keys)
+                    _ = FlyShelf.Classes.LicenseManager.RevalidateLicenseAsync();
                     
                     // Dump full network diagnostics at startup for remote debugging
                     _ = System.Threading.Tasks.Task.Run(async () =>

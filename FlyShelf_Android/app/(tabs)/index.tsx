@@ -18,6 +18,8 @@ import { getSecureItem, setSecureItem } from '../../utils/secureStorage';
 import * as MediaLibrary from 'expo-media-library';
 import { Image } from 'expo-image';
 
+import * as Crypto from 'expo-crypto';
+
 import * as Linking from 'expo-linking';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
@@ -26,7 +28,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ═══ Extracted Modules ═══
 import { ClipItem, DOWNLOAD_BASE, SYNC_CACHE_BASE, CONVERTED_BASE, IMAGE_CACHE_BASE, getDownloadPath } from '../../utils/clipTypes';
-import { fetchWithTimeout, getConnectionType, connectionColors, resolveOptimalUrl, getDeviceUrls, getMediaUrl, decryptDevice, decryptDeviceList } from '../../utils/networkHelpers';
+import { fetchWithTimeout, getConnectionType, connectionColors, resolveOptimalUrl, getDeviceUrls, getMediaUrl, decryptDevice, decryptDeviceList, isValidPairingKey, isValidDeviceUrl } from '../../utils/networkHelpers';
 import { encrypt as aesEncrypt, decrypt as aesDecrypt } from '../../utils/syncCrypto';
 import { NetworkClock } from '../../utils/networkClock';
 import { styles } from '../../styles/syncStyles';
@@ -42,11 +44,6 @@ const { AdvanceOverlay } = NativeModules;
 const normalizeTextForFingerprint = (text: string): string => {
   if (!text) return '';
   return text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
-};
-
-const isValidPairingKey = (key: string | null | undefined): boolean => {
-  if (!key) return false;
-  return /^[a-fA-F0-9]{32}$/.test(key);
 };
 
 // ════════════════════════════════════════════════════════
@@ -384,7 +381,7 @@ export default function SyncScreen() {
       for (const url of candidates) {
         try {
           const res = await fetchWithTimeout(`${url}/api/health`,
-            { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }, 2000);
+            { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }, 2000);
           if (res.ok) {
             cachedPcUrlRef.current = url;
             cachedPcUrlTimestampRef.current = now;
@@ -401,7 +398,7 @@ export default function SyncScreen() {
       if (lastCfUrl && lastCfUrl.includes('trycloudflare.com')) {
         try {
           const res = await fetchWithTimeout(`${lastCfUrl}/api/health`,
-            { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }, 3000);
+            { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }, 3000);
           if (res.ok) {
             cachedPcUrlRef.current = lastCfUrl;
             cachedPcUrlTimestampRef.current = now;
@@ -415,7 +412,7 @@ export default function SyncScreen() {
     const pc = activeDevicesRef.current.find((d: any) => d.DeviceType === 'PC');
     if (pc) {
       const urls = getDeviceUrls(pc);
-      const resolved = urls.length === 1 ? urls[0] : await resolveOptimalUrl(pc);
+      const resolved = urls.length === 1 ? urls[0] : await resolveOptimalUrl(pc, fetchWithTimeout, pairingKeyRef.current);
       if (resolved) {
         cachedPcUrlRef.current = resolved;
         cachedPcUrlTimestampRef.current = now;
@@ -425,7 +422,7 @@ export default function SyncScreen() {
 
     // Priority 5: Direct Firebase query for PC nodes (handles cold start / stale state)
     const pk = pairingKeyRef.current;
-    if (pk) {
+    if (pk && isValidPairingKey(pk)) {
       try {
         const nodesSnap = await get(ref(database, `nodes/${pk}`));
         if (nodesSnap.exists()) {
@@ -436,7 +433,7 @@ export default function SyncScreen() {
               const urls = getDeviceUrls(node);
               for (const url of urls) {
                 try {
-                  const res = await fetchWithTimeout(`${url}/api/health`, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }, 2500);
+                  const res = await fetchWithTimeout(`${url}/api/health`, { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk } }, 2500);
                   if (res.ok) {
                     cachedPcUrlRef.current = url;
                     cachedPcUrlTimestampRef.current = now;
@@ -503,8 +500,11 @@ export default function SyncScreen() {
           try { AdvanceOverlay.syncNativeDB(JSON.stringify(mapped)); } catch(e) {}
         }
       }
-      // Cap overlay tracker to prevent unbounded growth
-      if (pushedToOverlayRef.current.size > 500) pushedToOverlayRef.current.clear();
+      // Cap overlay tracker to prevent unbounded growth using sliding window slice
+      if (pushedToOverlayRef.current.size > 500) {
+        const items = Array.from(pushedToOverlayRef.current);
+        pushedToOverlayRef.current = new Set(items.slice(-200));
+      }
     }
   }, [clips, isFloatingBallEnabled, localWipeTimestamp, localDeletedIds]);
 
@@ -605,7 +605,8 @@ export default function SyncScreen() {
   // ─── Peer Relay ───
   useEffect(() => {
     if (!deviceName) return;
-    const peerRef = query(ref(database, `peer_transfers/${deviceName}`));
+    const safeDeviceName = (deviceName || 'Phone').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const peerRef = query(ref(database, `peer_transfers/${safeDeviceName}`));
     const unsubscribePeer = onValue(peerRef, async (snapshot) => {
       if (snapshot.exists() && Platform.OS !== 'web') {
         const data = snapshot.val();
@@ -634,7 +635,7 @@ export default function SyncScreen() {
             updates[key] = null;
           }
         }
-        if (Object.keys(updates).length > 0) await update(ref(database, `peer_transfers/${deviceName}`), updates);
+        if (Object.keys(updates).length > 0) await update(ref(database, `peer_transfers/${safeDeviceName}`), updates);
       }
     });
     return () => unsubscribePeer();
@@ -817,7 +818,7 @@ export default function SyncScreen() {
   useEffect(() => {
     if (!isGlobalSyncEnabled) return;
     const pk = contextPairingKey || pairingKeyRef.current;
-    if (!pk) { syncLog('FIREBASE', 'No pairing key yet — waiting for context to load...'); return; }
+    if (!pk || !isValidPairingKey(pk)) { syncLog('FIREBASE', 'No pairing key yet or invalid key format — waiting for context to load...'); return; }
     pairingKeyRef.current = pk;
 
     // ─── Startup Cleanup: Purge stale entries older than 1 hour (one-time) ───
@@ -865,7 +866,7 @@ export default function SyncScreen() {
               if (!trimmed) continue;
               try {
                 const lanUrl = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
-                const res = await fetch(`${lanUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(1500) });
+                const res = await fetch(`${lanUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk }, signal: AbortSignal.timeout(1500) });
                 if (res.ok) {
                   rawDevices[i] = { ...dev, _lanVerified: true, _lanUrl: lanUrl };
                   break;
@@ -904,7 +905,7 @@ export default function SyncScreen() {
             if (!trimmed) continue;
             try {
               const probeUrl = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed.split(':')[0] + ':8999'}`;
-              const res = await fetch(`${probeUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(2000) });
+              const res = await fetch(`${probeUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk }, signal: AbortSignal.timeout(2000) });
               if (res.ok) {
                 rawDevices.push({ DeviceName: 'PC (LAN)', DeviceType: 'PC', IsOnline: true, Url: probeUrl, LocalIp: probeUrl, _key: 'local_direct', _lanVerified: true, _lanUrl: probeUrl, Timestamp: NetworkClock.now() });
                 break;
@@ -920,7 +921,7 @@ export default function SyncScreen() {
             const existingLan = rawDevices.some(d => d._lanUrl === manualUrl);
             if (!existingLan) {
               try {
-                const res = await fetch(`${manualUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion' }, signal: AbortSignal.timeout(1500) });
+                const res = await fetch(`${manualUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk }, signal: AbortSignal.timeout(1500) });
                 if (res.ok) {
                   const pcIdx = rawDevices.findIndex(d => d.DeviceType === 'PC');
                   if (pcIdx >= 0) rawDevices[pcIdx] = { ...rawDevices[pcIdx], _lanVerified: true, _lanUrl: manualUrl, LocalIp: manualUrl };
@@ -1178,7 +1179,10 @@ export default function SyncScreen() {
                             const ctrl = new AbortController();
                             const timer = setTimeout(() => ctrl.abort(), 3000);
                             const h = await fetch(`${candidate}/api/health`, {
-                              headers: { 'X-FlyShelf-Client': 'MobileCompanion' },
+                              headers: { 
+                                'X-FlyShelf-Client': 'MobileCompanion',
+                                'X-Pairing-Key': pairingKeyRef.current || ''
+                              },
                               signal: ctrl.signal,
                             });
                             clearTimeout(timer);
@@ -1312,7 +1316,10 @@ export default function SyncScreen() {
                     const ctrl = new AbortController();
                     const timer = setTimeout(() => ctrl.abort(), 3000);
                     const h = await fetch(`${candidate}/api/health`, {
-                      headers: { 'X-FlyShelf-Client': 'MobileCompanion' },
+                      headers: { 
+                        'X-FlyShelf-Client': 'MobileCompanion',
+                        'X-Pairing-Key': pairingKeyRef.current || ''
+                      },
                       signal: ctrl.signal,
                     });
                     clearTimeout(timer);
@@ -1755,7 +1762,12 @@ export default function SyncScreen() {
             } else if (latest.Type === 'Image' || latest.Type === 'ImageLink') {
               const mediaUrl = getMediaUrlForItem(latest);
               if (mediaUrl) {
-                const { uri } = await FileSystem.downloadAsync(mediaUrl, SYNC_CACHE_BASE + 'clip_sync_global.png', { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } });
+                const { uri } = await FileSystem.downloadAsync(mediaUrl, SYNC_CACHE_BASE + 'clip_sync_global.png', {
+                  headers: {
+                    'X-FlyShelf-Client': 'MobileCompanion',
+                    'X-Pairing-Key': pairingKeyRef.current || ''
+                  }
+                });
                 const b64 = await FileSystem.readAsStringAsync(uri, { encoding: (FileSystem as any).EncodingType.Base64 });
                 await Clipboard.setImageAsync(b64);
                 Platform.OS === 'android' && ToastAndroid.show("Image Copied Natively", ToastAndroid.SHORT);
@@ -1784,12 +1796,28 @@ export default function SyncScreen() {
           if (fileInfo.exists) { setDownloadedItems(prev => new Set(prev).add(item.id!)); setIncomingTransferProgress(p => { const n = {...p}; delete n[transferId]; return n; }); return; }
           if ((item.Title || '').toLowerCase().endsWith('.apk')) return;
           try {
-            const headRes = await fetch(mediaUrl, { method: 'HEAD', headers: { 'X-FlyShelf-Client': 'MobileCompanion' } });
+            const headRes = await fetch(mediaUrl, { 
+              method: 'HEAD', 
+              headers: { 
+                'X-FlyShelf-Client': 'MobileCompanion',
+                'X-Pairing-Key': pairingKeyRef.current || ''
+              } 
+            });
             const sizeStr = headRes.headers.get('content-length');
             if (sizeStr) { const sizeBytes = parseInt(sizeStr); const isLocalRoute = !mediaUrl.includes('firebasestorage.googleapis.com'); if (!isLocalRoute && sizeBytes > 100 * 1024 * 1024) return; }
           } catch(e) {}
           setIncomingTransferProgress(p => ({...p, [transferId]: 0}));
-          const resumable = FileSystem.createDownloadResumable(mediaUrl, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }, (dp) => { const pct = dp.totalBytesExpectedToWrite > 0 ? dp.totalBytesWritten / dp.totalBytesExpectedToWrite : 0; setIncomingTransferProgress(p => ({...p, [transferId]: pct})); });
+          const resumable = FileSystem.createDownloadResumable(
+            mediaUrl, 
+            localUri, 
+            { 
+              headers: { 
+                'X-FlyShelf-Client': 'MobileCompanion',
+                'X-Pairing-Key': pairingKeyRef.current || ''
+              } 
+            }, 
+            (dp) => { const pct = dp.totalBytesExpectedToWrite > 0 ? dp.totalBytesWritten / dp.totalBytesExpectedToWrite : 0; setIncomingTransferProgress(p => ({...p, [transferId]: pct})); }
+          );
           const dlResult = await resumable.downloadAsync();
           setIncomingTransferProgress(p => { const n = {...p}; delete n[transferId]; return n; });
           if (dlResult && dlResult.status === 200) {
@@ -1973,7 +2001,7 @@ export default function SyncScreen() {
         }
         const activePc = activeDevices.find((d: any) => d.DeviceType === 'PC');
         if (activePc) {
-          const opt = await resolveOptimalUrl(activePc);
+          const opt = await resolveOptimalUrl(activePc, fetchWithTimeout, pairingKeyRef.current);
           if (opt) {
             targetUrl = opt;
           } else if (lastWorkingPcUrlRef.current) {
@@ -1982,8 +2010,29 @@ export default function SyncScreen() {
         }
         const pdfUrls = mergeQueue.map(item => getMediaUrlForItem(item)).filter(u => u.startsWith('http'));
         if (pdfUrls.length < 2) { Alert.alert('Error', `Local: ${localErr.message}\nPC: No HTTP URLs available.`); return; }
-        const res = await fetchWithTimeout(`${targetUrl}/api/merge_pdfs`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-FlyShelf-Client': 'MobileCompanion' }, body: JSON.stringify({ urls: pdfUrls, sourceDevice: deviceName || 'Mobile' }) }, 30000);
-        if (res.ok) { const body = await res.json(); if (body.downloadUrl) { const mergedUrl = body.downloadUrl.startsWith('http') ? body.downloadUrl : `${targetUrl}${body.downloadUrl}`; const localUri = CONVERTED_BASE + `merged_${NetworkClock.now()}.pdf`; await FileSystem.downloadAsync(mergedUrl, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }); await Sharing.shareAsync(localUri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Merged PDF' }); } } else Alert.alert('Merge Failed');
+        const res = await fetchWithTimeout(`${targetUrl}/api/merge_pdfs`, { 
+          method: 'POST', 
+          headers: { 
+            'Content-Type': 'application/json', 
+            'X-FlyShelf-Client': 'MobileCompanion',
+            'X-Pairing-Key': pairingKeyRef.current || ''
+          }, 
+          body: JSON.stringify({ urls: pdfUrls, sourceDevice: deviceName || 'Mobile' }) 
+        }, 30000);
+        if (res.ok) { 
+          const body = await res.json(); 
+          if (body.downloadUrl) { 
+            const mergedUrl = body.downloadUrl.startsWith('http') ? body.downloadUrl : `${targetUrl}${body.downloadUrl}`; 
+            const localUri = CONVERTED_BASE + `merged_${NetworkClock.now()}.pdf`; 
+            await FileSystem.downloadAsync(mergedUrl, localUri, { 
+              headers: { 
+                'X-FlyShelf-Client': 'MobileCompanion',
+                'X-Pairing-Key': pairingKeyRef.current || ''
+              } 
+            }); 
+            await Sharing.shareAsync(localUri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: 'Merged PDF' }); 
+          } 
+        } else Alert.alert('Merge Failed');
       }
     } catch (e) { Alert.alert('Merge Error'); }
     exitMultiSelect();
@@ -2287,7 +2336,8 @@ export default function SyncScreen() {
   const generateMyPairingCode = async () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
     let code = '';
-    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    const randomBytes = Crypto.getRandomBytes(6);
+    for (let i = 0; i < 6; i++) code += chars[randomBytes[i] % chars.length];
     try {
       const myDeviceId = `Mobile_${(deviceName || 'Phone').replace(/[^a-zA-Z0-9_]/g, '_')}`;
 
@@ -2990,7 +3040,7 @@ export default function SyncScreen() {
                         <TouchableOpacity onPress={async () => {
                           const contentStr = item.Raw || item.Title || '';
                           if (item.Type === 'Image' || item.Type === 'ImageLink') {
-                            try { const src = item.CachedUri || mediaUrl || item.Raw; if (src) { if (src.startsWith('file://') || src.startsWith('/')) { const b64 = await FileSystem.readAsStringAsync(src.startsWith('file://') ? src : `file://${src}`, { encoding: FileSystem.EncodingType.Base64 }); await Clipboard.setImageAsync(b64); } else { const localUri = `${SYNC_CACHE_BASE}copy_${Date.now()}.png`; const dl = await FileSystem.downloadAsync(src, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }); const b64 = await FileSystem.readAsStringAsync(dl.uri, { encoding: FileSystem.EncodingType.Base64 }); await Clipboard.setImageAsync(b64); } if (Platform.OS === 'android') ToastAndroid.show("Image Copied", ToastAndroid.SHORT); } } catch(e) { await Clipboard.setStringAsync(contentStr); if (Platform.OS === 'android') ToastAndroid.show("URL Copied", ToastAndroid.SHORT); }
+                            try { const src = item.CachedUri || mediaUrl || item.Raw; if (src) { if (src.startsWith('file://') || src.startsWith('/')) { const b64 = await FileSystem.readAsStringAsync(src.startsWith('file://') ? src : `file://${src}`, { encoding: FileSystem.EncodingType.Base64 }); await Clipboard.setImageAsync(b64); } else { const localUri = `${SYNC_CACHE_BASE}copy_${Date.now()}.png`; const dl = await FileSystem.downloadAsync(src, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }); const b64 = await FileSystem.readAsStringAsync(dl.uri, { encoding: FileSystem.EncodingType.Base64 }); await Clipboard.setImageAsync(b64); } if (Platform.OS === 'android') ToastAndroid.show("Image Copied", ToastAndroid.SHORT); } } catch(e) { await Clipboard.setStringAsync(contentStr); if (Platform.OS === 'android') ToastAndroid.show("URL Copied", ToastAndroid.SHORT); }
                           } else { await Clipboard.setStringAsync(contentStr); if (Platform.OS === 'android') ToastAndroid.show("Copied!", ToastAndroid.SHORT); }
                           setActiveOptionsId(null);
                         }} style={[styles.actionBtnIcon, {backgroundColor: '#4A62EB33'}]}>
@@ -3081,7 +3131,7 @@ export default function SyncScreen() {
             {(() => { const sel = getSelectedClips(); const allPdf = sel.length >= 2 && sel.every(c => c.Type === 'Pdf' || (c.Title || '').toLowerCase().endsWith('.pdf')); if (allPdf) return (<TouchableOpacity style={{backgroundColor: '#EF4444', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4}} onPress={openMergeModal}><IconSymbol name="doc.on.doc" size={14} color="#FFF" /><Text style={{color: '#FFF', fontSize: 12, fontWeight: '700'}}>Merge PDFs</Text></TouchableOpacity>); return null; })()}
             <TouchableOpacity style={{backgroundColor: '#10B981', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4}} onPress={async () => {
               try { const selected = clips.filter(c => selectedItemIds.has(c.id || '')); if (selected.length === 0) return; const item = selected[0]; const mUrl = getMediaUrlForItem(item);
-              if (mUrl.startsWith('http')) { const safeName = (item.Title || `file_${Date.now()}`).replace(/[^a-zA-Z0-9.-]/g, '_'); const localUri = DOWNLOAD_BASE + safeName; const fileInfo = await FileSystem.getInfoAsync(localUri); let uri = localUri; if (!fileInfo.exists) { if (Platform.OS === 'android') ToastAndroid.show('Downloading for share...', ToastAndroid.SHORT); const dl = await FileSystem.downloadAsync(mUrl, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }); uri = dl.uri; } await Sharing.shareAsync(uri, { dialogTitle: `Share ${safeName}` }); } else { const text = item.Raw || item.Title || ''; await Sharing.shareAsync(text, { dialogTitle: 'Share' }).catch(() => { Clipboard.setStringAsync(text); if (Platform.OS === 'android') ToastAndroid.show('Copied', ToastAndroid.SHORT); }); }
+              if (mUrl.startsWith('http')) { const safeName = (item.Title || `file_${Date.now()}`).replace(/[^a-zA-Z0-9.-]/g, '_'); const localUri = DOWNLOAD_BASE + safeName; const fileInfo = await FileSystem.getInfoAsync(localUri); let uri = localUri; if (!fileInfo.exists) { if (Platform.OS === 'android') ToastAndroid.show('Downloading for share...', ToastAndroid.SHORT); const dl = await FileSystem.downloadAsync(mUrl, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }); uri = dl.uri; } await Sharing.shareAsync(uri, { dialogTitle: `Share ${safeName}` }); } else { const text = item.Raw || item.Title || ''; await Sharing.shareAsync(text, { dialogTitle: 'Share' }).catch(() => { Clipboard.setStringAsync(text); if (Platform.OS === 'android') ToastAndroid.show('Copied', ToastAndroid.SHORT); }); }
               } catch(e) { if (Platform.OS === 'android') ToastAndroid.show('Share failed', ToastAndroid.SHORT); }
             }}><IconSymbol name="square.and.arrow.up" size={14} color="#FFF" /><Text style={{color: '#FFF', fontSize: 12, fontWeight: '700'}}>Share</Text></TouchableOpacity>
             <TouchableOpacity style={{backgroundColor: '#4A62EB', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4}} onPress={openForceSyncModal}><IconSymbol name="bolt.fill" size={14} color="#FFF" /><Text style={{color: '#FFF', fontSize: 12, fontWeight: '700'}}>Force Sync</Text></TouchableOpacity>
@@ -3175,16 +3225,16 @@ export default function SyncScreen() {
       <Modal visible={!!expandedImage} transparent={true} animationType="fade" onRequestClose={() => setExpandedImage(null)}>
         <View style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center'}}>
           <TouchableOpacity style={{position: 'absolute', top: 60, right: 20, zIndex: 10, padding: 10, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, width: 44, height: 44, alignItems: 'center', justifyContent: 'center'}} onPress={() => setExpandedImage(null)}><IconSymbol name="xmark" size={24} color="#FFF" /></TouchableOpacity>
-          {expandedImage && <Image source={{uri: expandedImage, headers: { 'X-FlyShelf-Client': 'MobileCompanion' }}} style={{width: '100%', height: '80%'}} contentFit="contain" />}
+          {expandedImage && <Image source={{uri: expandedImage, headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' }}} style={{width: '100%', height: '80%'}} contentFit="contain" />}
           {expandedImage && (
             <View style={{position: 'absolute', bottom: 50, flexDirection: 'row', gap: 30, zIndex: 10}}>
               <TouchableOpacity style={{backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 30, width: 60, height: 60, alignItems: 'center', justifyContent: 'center'}} onPress={async () => {
                 if (Platform.OS === 'web') return;
-                try { const safeName = `image_${Date.now()}.jpg`; const localUri = DOWNLOAD_BASE + safeName; const dl = await FileSystem.downloadAsync(expandedImage, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }); const perm = await MediaLibrary.requestPermissionsAsync(); if (perm.status === 'granted') { await MediaLibrary.saveToLibraryAsync(dl.uri); if (Platform.OS === 'android') ToastAndroid.show("Saved to Gallery", ToastAndroid.SHORT); } } catch(e) {}
+                try { const safeName = `image_${Date.now()}.jpg`; const localUri = DOWNLOAD_BASE + safeName; const dl = await FileSystem.downloadAsync(expandedImage, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }); const perm = await MediaLibrary.requestPermissionsAsync(); if (perm.status === 'granted') { await MediaLibrary.saveToLibraryAsync(dl.uri); if (Platform.OS === 'android') ToastAndroid.show("Saved to Gallery", ToastAndroid.SHORT); } } catch(e) {}
               }}><IconSymbol name="arrow.down" size={26} color="#FFF" /></TouchableOpacity>
               <TouchableOpacity style={{backgroundColor: '#4A62EB', borderRadius: 30, width: 60, height: 60, alignItems: 'center', justifyContent: 'center'}} onPress={async () => {
                 if (Platform.OS === 'web') return;
-                try { const safeName = `image_share_${Date.now()}.jpg`; const localUri = SYNC_CACHE_BASE + safeName; const dl = await FileSystem.downloadAsync(expandedImage, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion' } }); if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(dl.uri); } catch(e) {}
+                try { const safeName = `image_share_${Date.now()}.jpg`; const localUri = SYNC_CACHE_BASE + safeName; const dl = await FileSystem.downloadAsync(expandedImage, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }); if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(dl.uri); } catch(e) {}
               }}><IconSymbol name="square.and.arrow.up" size={26} color="#FFF" /></TouchableOpacity>
             </View>
           )}

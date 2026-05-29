@@ -30,6 +30,13 @@ namespace FlyShelf.Classes
         /// </summary>
         public static void Enqueue(ClipboardItem item, string channel = "firebase")
         {
+            // SECURITY: Password items must NEVER be synced to any device
+            if (item.IsPassword)
+            {
+                Logger.LogAction("SYNC_QUEUE", "🔒 Blocked password item from sync queue — password items are never synced");
+                return;
+            }
+
             _queue.Enqueue(new SyncJob
             {
                 Item = item,

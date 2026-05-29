@@ -188,6 +188,12 @@ namespace FlyShelf.Windows
                     if (RetentionCombo != null)
                     {
                         int retention = SettingsManager.Current.ClipboardRetentionDays;
+                        if (retention == 0 && !LicenseManager.IsPro)
+                        {
+                            retention = 7;
+                            SettingsManager.Current.ClipboardRetentionDays = 7;
+                            SettingsManager.Save();
+                        }
                         for (int i = 0; i < RetentionCombo.Items.Count; i++)
                         {
                             if (RetentionCombo.Items[i] is ComboBoxItem cbi && cbi.Tag?.ToString() == retention.ToString())
@@ -198,6 +204,34 @@ namespace FlyShelf.Windows
                         }
                         if (RetentionCombo.SelectedIndex < 0) RetentionCombo.SelectedIndex = 0; // default to 7 days
                     }
+
+                    // Correct ThemeDisplayMode and ActiveThemeName if Free user bypassed
+                    if (!LicenseManager.IsPro)
+                    {
+                        bool changed = false;
+                        if (SettingsManager.Current.ThemeDisplayMode == "glass")
+                        {
+                            SettingsManager.Current.ThemeDisplayMode = "mica";
+                            changed = true;
+                        }
+                        string activeThemeName = SettingsManager.Current.ActiveThemeName ?? "";
+                        if (!string.IsNullOrEmpty(activeThemeName) && !LicenseManager.CanUseTheme(activeThemeName))
+                        {
+                            SettingsManager.Current.ActiveThemeName = "";
+                            if (SettingsManager.Current.ThemeDisplayMode == "theme")
+                            {
+                                SettingsManager.Current.ThemeDisplayMode = "mica";
+                            }
+                            changed = true;
+                        }
+                        if (changed)
+                        {
+                            SettingsManager.Save();
+                        }
+                    }
+
+                    // Initialize license UI (Pro badge, status card)
+                    RefreshLicenseUI();
                 }, System.Windows.Threading.DispatcherPriority.Background);
             };
             Unloaded += (s, ev) =>
@@ -446,12 +480,47 @@ namespace FlyShelf.Windows
             }
         }
 
+        private bool _isRetentionChanging = false;
         private void RetentionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            if (_isRetentionChanging) return;
+
             if (RetentionCombo.SelectedItem is ComboBoxItem selected && selected.Tag != null)
             {
                 if (int.TryParse(selected.Tag.ToString(), out int days))
                 {
+                    if (days == 0 && !LicenseManager.IsPro)
+                    {
+                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                            Windows.ToastWindow.ShowToast("🔒 Unlock Premium to use this option!"));
+
+                        _isRetentionChanging = true;
+                        try
+                        {
+                            for (int i = 0; i < RetentionCombo.Items.Count; i++)
+                            {
+                                if (RetentionCombo.Items[i] is ComboBoxItem cbi && cbi.Tag?.ToString() == "7")
+                                {
+                                    RetentionCombo.SelectedIndex = i;
+                                    break;
+                                }
+                            }
+                        }
+                        finally
+                        {
+                            _isRetentionChanging = false;
+                        }
+
+                        MessageBox.Show(
+                            "Disabling auto-cleanup (Never delete unpinned history) is a Pro feature.\n\nUpgrade to Pro to unlock the Never option!",
+                            "FlyShelf — Pro Feature",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information);
+
+                        UpgradePrompt.ShowActivationDialog(this);
+                        return;
+                    }
+
                     SettingsManager.Current.ClipboardRetentionDays = days;
                     SettingsManager.Save();
                 }
@@ -470,6 +539,13 @@ namespace FlyShelf.Windows
             SettingsManager.Current.MiniFormWidth = 260;
             SettingsManager.Current.MiniFormHeight = 260;
             SettingsManager.Save();
+        }
+
+        private void SizingLockedCard_MouseDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            ToastWindow.ShowToast("🔒 Unlock Premium to use this option!");
+            UpgradePrompt.ShowActivationDialog(this);
+            e.Handled = true;
         }
 
         // Clipboard +/- steppers

@@ -31,7 +31,7 @@ namespace FlyShelf
         {
             // Close other modes
             if (_isNotesActive) CloseNotesPanel(immediate: true);
-            if (_isSearchActive) CloseSearch();
+            if (_isSearchActive) CloseSearch(switchingPanel: true);
             if (_isFilterBarActive) ToggleFilterBar(false);
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
 
@@ -64,7 +64,9 @@ namespace FlyShelf
             EmptyStatePanel.Visibility = Visibility.Collapsed;
             TodoPanel.Visibility = Visibility.Visible;
 
-            // Highlight the todo button
+            // Swap todo button to clipboard icon (acts as "go back" button)
+            TodoToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.ClipboardTextLtr24 };
+            TodoToggleBtn.ToolTip = "Back to Clipboard";
             TodoToggleBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x8B, 0x5C, 0xF6));
 
             // Animate in
@@ -95,7 +97,9 @@ namespace FlyShelf
         {
             if (!_isTodoActive) return;
 
-            // Remove highlight
+            // Restore todo button icon and tooltip
+            TodoToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.CheckboxChecked24 };
+            TodoToggleBtn.ToolTip = "To-Do List";
             TodoToggleBtn.ClearValue(ForegroundProperty);
 
             _isTodoActive = false;
@@ -168,8 +172,16 @@ namespace FlyShelf
             // Update progress label
             UpdateTodoProgress(day);
 
-            // Focus the first item text box or focus the panel
-            FocusTodoActiveTextBox();
+            // Auto-create a first item if empty, so the user can start typing immediately
+            if (day.Items.Count == 0)
+            {
+                _lastTodoItemAddedTime = DateTime.MinValue; // Reset cooldown
+                AddNewTodoItemAndFocus();
+            }
+            else
+            {
+                FocusTodoItem(day.Items.Last());
+            }
         }
 
         private void TodoDayItem_Click(object sender, MouseButtonEventArgs e)
@@ -242,7 +254,23 @@ namespace FlyShelf
             if (day == null) return;
             int total = day.Items.Count;
             int done = day.Items.Count(i => i.IsDone);
-            TodoProgressText.Text = total == 0 ? "0 done" : $"{done}/{total} done";
+
+            if (total == 0)
+            {
+                TodoProgressText.Text = "🌱 0%";
+                return;
+            }
+
+            int pct = (int)Math.Round(100.0 * done / total);
+            string emoji = pct switch
+            {
+                100 => "🔥",
+                >= 75 => "⚡",
+                >= 50 => "✨",
+                >= 25 => "💪",
+                _ => "🌱"
+            };
+            TodoProgressText.Text = $"{emoji} {pct}% · {done}/{total}";
         }
 
         // ═══════════════════════════════════════════════════════════
@@ -274,6 +302,7 @@ namespace FlyShelf
 
             _lastTodoItemAddedTime = DateTime.Now;
             var newItem = TodoManager.AddItem(_selectedTodoDay);
+            if (newItem == null) return;
             UpdateTodoProgress(_selectedTodoDay);
 
             FocusTodoItem(newItem);
@@ -283,6 +312,7 @@ namespace FlyShelf
         {
             Dispatcher.InvokeAsync(() =>
             {
+                TodoListItemsControl.UpdateLayout(); // Force container generation!
                 var container = TodoListItemsControl.ItemContainerGenerator.ContainerFromItem(item);
                 if (container is ContentPresenter cp)
                 {
@@ -320,6 +350,20 @@ namespace FlyShelf
             }
         }
 
+        private void TodoItemDeleteMenu_Click(object sender, RoutedEventArgs e)
+        {
+            // Context menu: walk up from MenuItem → ContextMenu → PlacementTarget (the TodoCard Border)
+            if (sender is MenuItem mi
+                && mi.Parent is ContextMenu cm
+                && cm.PlacementTarget is FrameworkElement card
+                && card.DataContext is TodoItem item
+                && _selectedTodoDay != null)
+            {
+                TodoManager.RemoveItem(_selectedTodoDay, item);
+                UpdateTodoProgress(_selectedTodoDay);
+            }
+        }
+
         private void TodoItemText_TextChanged(object sender, TextChangedEventArgs e)
         {
             TodoManager.MarkDirty();
@@ -339,6 +383,14 @@ namespace FlyShelf
             {
                 if (e.Key == Key.Enter)
                 {
+                    // Shift+Enter → insert newline (multi-line support)
+                    if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+                    {
+                        // Let the TextBox handle the newline insertion naturally
+                        // (AcceptsReturn must be True on the TextBox for this to work)
+                        return;
+                    }
+
                     e.Handled = true;
 
                     // If key is repeating (held down), ignore it to prevent holding enter from spamming

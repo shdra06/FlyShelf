@@ -132,8 +132,16 @@ namespace FlyShelf.Classes
 
         public static TodoDay? GetDay(DateTime date) => _days.FirstOrDefault(d => d.Date.Date == date.Date);
 
-        public static TodoItem AddItem(TodoDay day, string text = "")
+        public static TodoItem? AddItem(TodoDay day, string text = "")
         {
+            int maxItems = LicenseManager.GetTodoDailyLimit();
+            if (maxItems < int.MaxValue && day.Items.Count >= maxItems)
+            {
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    UpgradePrompt.ShowTodoLimit());
+                return null;
+            }
+
             var item = new TodoItem { Text = text, CreatedAt = DateTime.Now };
             day.Items.Add(item);
             ScheduleSave();
