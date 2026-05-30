@@ -10,7 +10,8 @@
   <meta name="author" content="Shivendra (shdra06)">
   
   <!-- Share same style sheet for branding parity -->
-  <link rel="stylesheet" href="style.css">
+  <link rel="shortcut icon" href="favicon.png" type="image/x-icon">
+  <link rel="stylesheet" href="style.css?v=8.5.2">
   
   <!-- Ionicons -->
   <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
@@ -56,7 +57,7 @@
     
     .payment-tab-row {
       display: flex;
-      background: rgba(255, 255, 255, 0.03);
+      background: var(--bg-card);
       border: 1px solid var(--border-light);
       border-radius: 12px;
       padding: 4px;
@@ -81,9 +82,9 @@
     }
     
     .payment-tab.active {
-      background: rgba(255, 255, 255, 0.08);
-      color: #fff;
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: var(--color-cyan);
+      color: var(--btn-text);
+      border: 1px solid var(--color-cyan);
     }
     
     .payment-tab.razorpay.active {
@@ -97,11 +98,11 @@
     }
     
     .input-field-glow {
-      background: rgba(255, 255, 255, 0.03);
+      background: var(--bg-card);
       border: 1px solid var(--border-light);
       border-radius: 10px;
       padding: 12px 16px;
-      color: #fff;
+      color: var(--text-primary);
       font-family: inherit;
       font-size: 0.9rem;
       outline: none;
@@ -209,7 +210,7 @@
     }
     
     .license-glow-box {
-      background: rgba(255, 255, 255, 0.03);
+      background: var(--bg-card);
       border: 1px dashed rgba(0, 210, 255, 0.4);
       padding: 16px;
       border-radius: 12px;
@@ -254,7 +255,7 @@
   <!-- Navbar -->
   <nav class="navbar glass" id="main-nav">
     <div class="nav-brand" onclick="window.location.href='index.html'">
-      <div class="brand-icon">⚡</div>
+      <img src="favicon.png" alt="FlyShelf Logo" style="width: 24px; height: 24px; margin-right: 8px; border-radius: 6px; vertical-align: middle; box-shadow: 0 0 10px rgba(0, 210, 255, 0.4);"/>
       <span>FlyShelf</span>
     </div>
     <ul class="nav-links">
@@ -382,7 +383,7 @@
         <div style="font-size: 3rem; color: var(--color-cyan);"><ion-icon name="flask-outline"></ion-icon></div>
         <h4 style="font-size: 1.25rem; font-weight: 800; color: var(--text-primary);">Sandbox Payment Portal</h4>
         <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">This is the local FlyShelf checkout sandbox. To test the license generation and C# app auto-activation, click the confirm payment button below.</p>
-        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border-light); padding: 12px; border-radius: 8px; font-size: 0.78rem; text-align: left; color: var(--text-secondary);">
+        <div style="background: var(--bg-card); border: 1px solid var(--border-light); padding: 12px; border-radius: 8px; font-size: 0.78rem; text-align: left; color: var(--text-secondary);">
           <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Email:</span><strong id="confirm-email" style="color: var(--text-primary);">test@flyshelf.app</strong></div>
           <div style="display:flex; justify-content:space-between;"><span>Amount:</span><strong id="confirm-amount" style="color:var(--color-cyan);">₹299</strong></div>
         </div>
@@ -436,7 +437,7 @@
       <div style="display: flex; gap: 10px; align-items: center;">
         <input type="email" id="recovery-email" placeholder="your@email.com" 
           class="input-field-glow" 
-          style="flex: 1; padding: 12px 16px; border-radius: 10px; font-size: 0.9rem; border: 1px solid var(--border-light); background: rgba(255,255,255,0.03); color: var(--text-primary);" />
+          style="flex: 1; padding: 12px 16px; border-radius: 10px; font-size: 0.9rem; border: 1px solid var(--border-light); background: var(--bg-card); color: var(--text-primary);" />
         <button id="btn-recover-key" 
           style="padding: 12px 20px; border-radius: 10px; border: none; background: linear-gradient(135deg, #00d2ff, #0b72e7); color: #fff; font-weight: 700; font-size: 0.82rem; cursor: pointer; white-space: nowrap; transition: all 0.2s ease;">
           Recover Key
@@ -452,6 +453,13 @@
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       
+      /* Glass blur lazy visibility (performance) */
+      const glassEls = document.querySelectorAll('.glass');
+      const glassObs = new IntersectionObserver((entries) => {
+        entries.forEach(e => e.target.classList.toggle('glass--visible', e.isIntersecting));
+      }, { rootMargin: '200px 0px 200px 0px', threshold: 0 });
+      glassEls.forEach(el => glassObs.observe(el));
+
       const tabInr = document.getElementById('tab-inr');
       const tabUsd = document.getElementById('tab-usd');
       const priceDisplayUsd = document.getElementById('price-display-usd');

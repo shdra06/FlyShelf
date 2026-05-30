@@ -7,7 +7,39 @@
 
 /* --- THEME DEFINITIONS & CUSTOM VARIABLE SETS --- */
 :root {
-  /* Default: Midnight Theme variables */
+  /* Default: Light Theme variables */
+  --bg-darker: #f4f6f9;
+  --bg-main: #ffffff;
+  --bg-card: rgba(255, 255, 255, 0.7);
+  --bg-card-hover: rgba(255, 255, 255, 0.9);
+  --bg-glass: rgba(255, 255, 255, 0.75);
+  
+  --color-cyan: #0284c7;
+  --color-blue: #0369a1;
+  --color-emerald: #16a34a;
+  --color-purple: #7c3aed;
+  --color-amber: #ea580c;
+  --color-red: #dc2626;
+  
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  
+  --border-light: rgba(15, 23, 42, 0.08);
+  --shadow-main: 0 12px 40px -10px rgba(15, 23, 42, 0.08);
+  --shadow-neon: 0 0 25px rgba(2, 132, 199, 0.12);
+  --transition-smooth: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.5s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.5s cubic-bezier(0.16, 1, 0.3, 1), background 0.5s cubic-bezier(0.16, 1, 0.3, 1), color 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-fast: transform 0.25s ease, opacity 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease, color 0.25s ease;
+  --btn-text: #ffffff;
+
+  /* Premium high-performance static backgrounds */
+  --bg-blob-cyan: rgba(2, 132, 199, 0.05);
+  --bg-blob-purple: rgba(124, 58, 237, 0.05);
+  --bg-blob-emerald: rgba(22, 163, 74, 0.04);
+}
+
+body.dark-mode {
+  /* Dark Mode overrides (Original Midnight variables) */
   --bg-darker: #06070a;
   --bg-main: #0c0e15;
   --bg-card: rgba(20, 24, 38, 0.55);
@@ -28,94 +60,129 @@
   --border-light: rgba(255, 255, 255, 0.07);
   --shadow-main: 0 12px 40px -10px rgba(0, 0, 0, 0.6);
   --shadow-neon: 0 0 25px rgba(0, 210, 255, 0.25);
-  --transition-smooth: all 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  --transition-fast: all 0.25s ease;
-
-  /* Premium high-performance static backgrounds */
+  --btn-text: #02040a;
+  
   --bg-blob-cyan: rgba(0, 210, 255, 0.15);
   --bg-blob-purple: rgba(158, 0, 255, 0.15);
   --bg-blob-emerald: rgba(61, 220, 132, 0.12);
 }
 
-/* Ocean Theme Class */
+/* ==========================================
+   WORKSPACE THEME SWATCHES (ADAPTIVE)
+   ========================================== */
+
+/* Ocean Theme Swatch */
 body.theme-ocean {
+  --bg-darker: #f0f7ff;
+  --bg-main: #ffffff;
+  --bg-card: rgba(219, 234, 254, 0.5);
+  --bg-card-hover: rgba(219, 234, 254, 0.7);
+  --bg-glass: rgba(239, 246, 255, 0.8);
+  --color-cyan: #0284c7;
+  --color-blue: #0369a1;
+  --border-light: rgba(30, 41, 59, 0.08);
+}
+body.dark-mode.theme-ocean {
   --bg-darker: #020710;
   --bg-main: #051022;
   --bg-card: rgba(10, 24, 45, 0.55);
   --bg-card-hover: rgba(14, 32, 60, 0.7);
   --bg-glass: rgba(5, 12, 26, 0.82);
-  
   --color-cyan: #00f0ff;
   --color-blue: #06b6d4;
   --color-emerald: #08f0a0;
   --color-purple: #0ea5e9;
   --color-amber: #f59e0b;
   --shadow-neon: 0 0 25px rgba(6, 182, 212, 0.25);
-
   --bg-blob-cyan: rgba(0, 240, 255, 0.15);
   --bg-blob-purple: rgba(6, 182, 212, 0.15);
   --bg-blob-emerald: rgba(8, 240, 160, 0.12);
 }
 
-/* Sunset Theme Class */
+/* Sunset Theme Swatch */
 body.theme-sunset {
+  --bg-darker: #fff7ed;
+  --bg-main: #ffffff;
+  --bg-card: rgba(254, 215, 170, 0.45);
+  --bg-card-hover: rgba(254, 215, 170, 0.65);
+  --bg-glass: rgba(255, 247, 237, 0.8);
+  --color-cyan: #ea580c;
+  --color-blue: #db2777;
+  --border-light: rgba(124, 45, 18, 0.08);
+}
+body.dark-mode.theme-sunset {
   --bg-darker: #0c0303;
   --bg-main: #180707;
   --bg-card: rgba(45, 15, 15, 0.55);
   --bg-card-hover: rgba(60, 20, 20, 0.7);
   --bg-glass: rgba(26, 7, 7, 0.82);
-  
   --color-cyan: #f97316;
   --color-blue: #ea580c;
   --color-emerald: #f43f5e;
   --color-purple: #ec4899;
   --color-amber: #ffb703;
   --shadow-neon: 0 0 25px rgba(244, 63, 94, 0.25);
-
   --bg-blob-cyan: rgba(249, 115, 22, 0.15);
   --bg-blob-purple: rgba(236, 72, 153, 0.15);
   --bg-blob-emerald: rgba(244, 63, 94, 0.12);
 }
 
-/* Emerald Theme Class */
+/* Emerald Theme Swatch */
 body.theme-emerald {
+  --bg-darker: #f0fdf4;
+  --bg-main: #ffffff;
+  --bg-card: rgba(220, 252, 231, 0.5);
+  --bg-card-hover: rgba(220, 252, 231, 0.7);
+  --bg-glass: rgba(240, 253, 244, 0.8);
+  --color-cyan: #16a34a;
+  --color-blue: #059669;
+  --border-light: rgba(20, 83, 45, 0.08);
+}
+body.dark-mode.theme-emerald {
   --bg-darker: #020a05;
   --bg-main: #051e0f;
   --bg-card: rgba(10, 45, 20, 0.55);
   --bg-card-hover: rgba(14, 60, 26, 0.7);
   --bg-glass: rgba(5, 26, 12, 0.82);
-  
   --color-cyan: #10b981;
   --color-blue: #059669;
   --color-emerald: #34d399;
   --color-purple: #064e3b;
   --color-amber: #f59e0b;
   --shadow-neon: 0 0 25px rgba(52, 211, 153, 0.25);
-
   --bg-blob-cyan: rgba(16, 185, 129, 0.15);
   --bg-blob-purple: rgba(6, 78, 59, 0.15);
   --bg-blob-emerald: rgba(52, 211, 147, 0.12);
 }
 
-/* Lavender Theme Class */
+/* Lavender Theme Swatch */
 body.theme-lavender {
+  --bg-darker: #faf5ff;
+  --bg-main: #ffffff;
+  --bg-card: rgba(243, 232, 255, 0.5);
+  --bg-card-hover: rgba(243, 232, 255, 0.7);
+  --bg-glass: rgba(250, 245, 255, 0.8);
+  --color-cyan: #7c3aed;
+  --color-blue: #9333ea;
+  --border-light: rgba(88, 28, 135, 0.08);
+}
+body.dark-mode.theme-lavender {
   --bg-darker: #0a0312;
   --bg-main: #150624;
   --bg-card: rgba(35, 12, 60, 0.55);
   --bg-card-hover: rgba(46, 16, 78, 0.7);
   --bg-glass: rgba(21, 6, 36, 0.82);
-  
   --color-cyan: #a78bfa;
   --color-blue: #8b5cf6;
   --color-emerald: #c084fc;
   --color-purple: #7c3aed;
   --color-amber: #ff9d00;
   --shadow-neon: 0 0 25px rgba(192, 132, 252, 0.25);
-
   --bg-blob-cyan: rgba(167, 139, 250, 0.15);
   --bg-blob-purple: rgba(124, 58, 237, 0.15);
   --bg-blob-emerald: rgba(192, 132, 252, 0.12);
 }
+
 
 /* --- RESET & GLOBAL RULES --- */
 * {
@@ -157,12 +224,16 @@ body {
 /* --- CORE REUSABLE UTILITIES --- */
 .glass {
   background: var(--bg-glass);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
   border: 1px solid var(--border-light);
   border-radius: 20px;
   box-shadow: var(--shadow-main);
   transition: var(--transition-smooth);
+  /* Blur is applied only to visible elements via .glass--visible (JS IntersectionObserver) */
+}
+
+.glass.glass--visible {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .glass:hover {
@@ -196,7 +267,7 @@ body {
 
 .btn-cyan {
   background: linear-gradient(135deg, var(--color-cyan), var(--color-blue));
-  color: #02040a;
+  color: var(--btn-text);
   border: none;
   box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);
 }
@@ -264,6 +335,8 @@ body {
   background-size: 60px 60px;
   z-index: -1;
   pointer-events: none;
+  will-change: auto;
+  contain: strict;
 }
 
 /* --- PREMIUM NAVIGATION BAR --- */
@@ -282,7 +355,9 @@ body {
   z-index: 1000;
   border-radius: 35px;
   border: 1px solid var(--border-light);
-  background: rgba(12, 14, 21, 0.5);
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   transition: var(--transition-smooth);
 }
 
@@ -397,7 +472,7 @@ body {
   gap: 15px;
   padding: 10px 25px;
   border-radius: 40px;
-  background: rgba(20, 24, 38, 0.35);
+  background: var(--bg-card);
   border: 1px solid var(--border-light);
 }
 
@@ -468,7 +543,7 @@ body {
   gap: 15px;
   padding: 15px 25px;
   border-radius: 16px;
-  background: rgba(20, 24, 38, 0.3);
+  background: var(--bg-card);
   border: 1px solid var(--border-light);
   transition: var(--transition-smooth);
 }
@@ -476,7 +551,7 @@ body {
 .platform-card:hover {
   border-color: rgba(255, 255, 255, 0.15);
   transform: translateY(-2px);
-  background: rgba(20, 24, 38, 0.55);
+  background: var(--bg-card-hover);
 }
 
 .platform-icon {
@@ -971,7 +1046,7 @@ body {
   place-content: center;
   font-size: 1.5rem;
   margin-bottom: 5px;
-  will-change: transform, box-shadow;
+  /* will-change applied on hover via parent */
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.4s ease, border-color 0.4s ease;
   position: relative;
 }
@@ -1068,7 +1143,7 @@ body {
   overflow-x: auto;
   border-radius: 20px;
   border: 1px solid var(--border-light);
-  background: rgba(20, 24, 38, 0.25);
+  background: var(--bg-card);
   box-shadow: var(--shadow-main);
 }
 
@@ -1813,12 +1888,12 @@ footer {
   opacity: 0;
   transform: translateY(30px);
   transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform, opacity;
 }
 
 .scroll-reveal.visible {
   opacity: 1;
   transform: translateY(0);
+  will-change: auto;
 }
 
 /* --- PREMIUM DESKTOP WIDGET PDF MERGER CLONE --- */
@@ -1838,7 +1913,6 @@ footer {
   flex-direction: column;
   gap: 12px;
   overflow: hidden;
-  will-change: transform;
 }
 
 /* Top bar style */
@@ -2141,7 +2215,6 @@ footer {
   pointer-events: none;
   font-family: inherit;
   animation: pulse-coupon 2s infinite ease-in-out;
-  will-change: transform, box-shadow;
 }
 
 @keyframes pulse-coupon {
@@ -2169,5 +2242,150 @@ footer {
   box-shadow: 0 16px 36px -10px rgba(0, 210, 255, 0.35), 0 0 25px rgba(0, 210, 255, 0.15) !important;
 }
 
+/* --- COMPACT UTILITIES GRID (2x2 Layout next to PDF Merger) --- */
+.compact-utilities-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 900px) {
+  .compact-utilities-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.compact-utilities-grid .widget-card {
+  padding: 20px !important;
+}
+
+.compact-utilities-grid .widget-title {
+  font-size: 1.05rem !important;
+}
+
+.compact-utilities-grid .widget-desc {
+  font-size: 0.76rem !important;
+  margin-bottom: 5px;
+}
+
+.compact-utilities-grid .widget-card-header {
+  margin-bottom: 15px !important;
+}
+
+/* Compact specific widgets tweaks */
+.compact-utilities-grid .timer-display {
+  width: 90px !important;
+  height: 90px !important;
+  margin-top: 10px !important;
+}
+
+.compact-utilities-grid .timer-circle-svg {
+  width: 90px !important;
+  height: 90px !important;
+}
+
+.compact-utilities-grid .timer-text {
+  font-size: 1.1rem !important;
+}
+
+.compact-utilities-grid .color-swatch-box {
+  height: 50px !important;
+}
+
+.compact-utilities-grid .utm-input-area {
+  min-height: 50px !important;
+  font-size: 0.72rem !important;
+}
+
+.compact-utilities-grid .snippet-widget-box {
+  gap: 8px !important;
+}
+
+/* --- PREMIUM CIRCULAR GLASS THEME TOGGLE BUTTON --- */
+.theme-toggle-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border-light);
+  color: var(--text-primary);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  font-size: 1.25rem;
+  padding: 0;
+  outline: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.theme-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: scale(1.08);
+  color: var(--color-cyan);
+  box-shadow: 0 0 15px rgba(0, 210, 255, 0.25);
+}
+
+.theme-toggle-btn:active {
+  transform: scale(0.92);
+}
+
+.theme-toggle-btn ion-icon {
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.theme-toggle-btn:hover ion-icon {
+  transform: rotate(25deg);
+}
+
+/* Adaptive variations depending on mode status */
+body.dark-mode .theme-toggle-btn {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+body:not(.dark-mode) .theme-toggle-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary);
+}
+
+body:not(.dark-mode) .theme-toggle-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.15);
+  color: var(--color-cyan);
+  box-shadow: 0 0 15px rgba(2, 132, 199, 0.18);
+}
+
+/* ==============================================
+   PERFORMANCE: Navbar always gets blur (always visible)
+   ============================================== */
+.navbar.glass {
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* PERFORMANCE: Contain paint for heavy fixed backgrounds */
+.bg-mesh {
+  contain: layout style;
+}
+
+/* ==============================================
+   PERFORMANCE: Reduce motion for accessibility & perf
+   ============================================== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .scroll-reveal {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
 
 

@@ -6,12 +6,56 @@
 document.addEventListener('DOMContentLoaded', () => {
 
   /* ==========================================
-     0. BRAND WORKSPACE THEME SWITCHER
+     0. LIGHT/DARK THEME TOGGLER & PERSISTENCE
+     ========================================== */
+  const modeToggleBtn = document.getElementById('theme-toggle-btn');
+  const modeToggleIcon = document.getElementById('theme-toggle-icon');
+  
+  let currentMode = 'light';
+  try {
+    currentMode = localStorage.getItem('flyshelf-mode') || 'light';
+  } catch (err) {
+    console.warn('LocalStorage access is blocked in this browser context:', err);
+  }
+  
+  applyMode(currentMode);
+  
+  if (modeToggleBtn) {
+    modeToggleBtn.addEventListener('click', () => {
+      console.log('Theme toggle button clicked! Current mode:', currentMode);
+      currentMode = currentMode === 'light' ? 'dark' : 'light';
+      applyMode(currentMode);
+      console.log('Theme updated successfully! New mode:', currentMode);
+    });
+  }
+  
+  function applyMode(mode) {
+    if (mode === 'dark') {
+      document.body.classList.add('dark-mode');
+      if (modeToggleIcon) modeToggleIcon.setAttribute('name', 'sunny-outline');
+    } else {
+      document.body.classList.remove('dark-mode');
+      if (modeToggleIcon) modeToggleIcon.setAttribute('name', 'moon-outline');
+    }
+    try {
+      localStorage.setItem('flyshelf-mode', mode);
+    } catch (err) {
+      console.warn('Failed to persist flyshelf-mode setting to LocalStorage:', err);
+    }
+  }
+
+  /* ==========================================
+     0.1 BRAND WORKSPACE THEME SWITCHER
      ========================================== */
   const swatches = document.querySelectorAll('.theme-swatch');
   
-  // Load saved theme from LocalStorage
-  const savedTheme = localStorage.getItem('flyshelf-theme') || 'midnight';
+  let savedTheme = 'midnight';
+  try {
+    savedTheme = localStorage.getItem('flyshelf-theme') || 'midnight';
+  } catch (err) {
+    console.warn('LocalStorage access for theme swatches is blocked:', err);
+  }
+  
   applyTheme(savedTheme);
   
   swatches.forEach(swatch => {
@@ -22,8 +66,12 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   
   function applyTheme(themeName) {
-    // Remove other theme classes from body and apply selected
+    // Remove other theme-* classes from body while preserving dark-mode class
+    const isDarkMode = document.body.classList.contains('dark-mode');
     document.body.className = '';
+    if (isDarkMode) {
+      document.body.classList.add('dark-mode');
+    }
     if (themeName !== 'midnight') {
       document.body.classList.add(`theme-${themeName}`);
     }
@@ -37,9 +85,13 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
     
-    // Save selection
-    localStorage.setItem('flyshelf-theme', themeName);
+    try {
+      localStorage.setItem('flyshelf-theme', themeName);
+    } catch (err) {
+      console.warn('Failed to persist flyshelf-theme setting to LocalStorage:', err);
+    }
   }
+
 
   /* ==========================================
      1. SCROLL REVEAL UTILITY (INTERSECTION OBSERVER)
@@ -58,6 +110,28 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   revealElements.forEach(el => revealObserver.observe(el));
+
+
+  /* ==========================================
+     1.1. GLASS BLUR LAZY VISIBILITY (PERFORMANCE)
+     Only apply expensive backdrop-filter blur to .glass
+     elements that are currently within the viewport.
+     ========================================== */
+  const glassElements = document.querySelectorAll('.glass');
+  const glassObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('glass--visible');
+      } else {
+        entry.target.classList.remove('glass--visible');
+      }
+    });
+  }, {
+    rootMargin: '200px 0px 200px 0px', // pre-load 200px above/below viewport
+    threshold: 0
+  });
+
+  glassElements.forEach(el => glassObserver.observe(el));
 
 
   /* ==========================================

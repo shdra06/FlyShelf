@@ -71,7 +71,8 @@
   </script>
   
   <!-- Favicon / Styling CSS -->
-  <link rel="stylesheet" href="style.css">
+  <link rel="shortcut icon" href="favicon.png" type="image/x-icon">
+  <link rel="stylesheet" href="style.css?v=8.5.2">
   
   <!-- Ionicons for Modern Clean Icons -->
   <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
@@ -86,7 +87,7 @@
   <!-- Premium Glass Navigation Bar -->
   <nav class="navbar glass" id="main-nav">
     <div class="nav-brand">
-      <div class="brand-icon">⚡</div>
+      <img src="favicon.png" alt="FlyShelf Logo" style="width: 24px; height: 24px; margin-right: 8px; border-radius: 6px; vertical-align: middle; box-shadow: 0 0 10px rgba(0, 210, 255, 0.4);"/>
       <span>FlyShelf</span>
     </div>
     <ul class="nav-links">
@@ -96,7 +97,12 @@
       <li><a href="#features">Features</a></li>
       <li><a href="pricing.html" style="color: var(--color-cyan); font-weight: 700;">Buy Pro</a></li>
     </ul>
-    <a href="#download" class="btn-premium btn-cyan" style="padding: 10px 20px; font-size: 0.85rem;">Download</a>
+    <div style="display: flex; align-items: center; gap: 15px;">
+      <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Mode">
+        <ion-icon name="moon-outline" id="theme-toggle-icon"></ion-icon>
+      </button>
+      <a href="#download" class="btn-premium btn-cyan" style="padding: 10px 20px; font-size: 0.85rem;">Download</a>
+    </div>
   </nav>
 
   <!-- Hero Section -->
@@ -358,15 +364,15 @@
         </div>
       </div>
       
-      <!-- COLUMN 2: SECURED ACTIONS -->
-      <div style="display: flex; flex-direction: column; gap: 30px;">
+      <!-- COLUMN 2: COMPACT UTILITIES GRID (2x2 Layout) -->
+      <div class="compact-utilities-grid">
         
         <!-- WIDGET B: COUNTDOWN SPEED TIMER -->
         <div class="widget-card glass">
           <div class="widget-card-header">
             <div>
-              <h3 class="widget-title">⏱️ Speed Countdown Command</h3>
-              <p class="widget-desc">Type '/10s' or '/5s' to trigger high-glow countdown visualizer.</p>
+              <h3 class="widget-title">⏱️ Speed Countdown</h3>
+              <p class="widget-desc">Type '/10s' to trigger visualizer.</p>
             </div>
             <span class="badge badge-cyan">Interactive</span>
           </div>
@@ -391,8 +397,8 @@
         <div class="widget-card glass">
           <div class="widget-card-header">
             <div>
-              <h3 class="widget-title">🎨 Context Color Picker</h3>
-              <p class="widget-desc">Type any HSL, RGB, or HEX code to preview and convert.</p>
+              <h3 class="widget-title">🎨 Color Picker</h3>
+              <p class="widget-desc">HEX, RGB, or HSL code previewer.</p>
             </div>
             <span class="badge badge-emerald">Interactive</span>
           </div>
@@ -414,7 +420,7 @@
           <div class="widget-card-header">
             <div>
               <h3 class="widget-title">🔍 URL Tracking Sanitizer</h3>
-              <p class="widget-desc">Strip UTM & analytics query markers instantly.</p>
+              <p class="widget-desc">Strip UTM marketing query markers instantly.</p>
             </div>
             <span class="badge badge-amber">Interactive</span>
           </div>
@@ -434,8 +440,8 @@
         <div class="widget-card glass">
           <div class="widget-card-header">
             <div>
-              <h3 class="widget-title">📋 Smart Text Snippet Shortcuts</h3>
-              <p class="widget-desc">Type a slash shortcut or click a tag to expand pre-defined text blocks instantly.</p>
+              <h3 class="widget-title">📋 Text Snippet Shortcuts</h3>
+              <p class="widget-desc">Slash shortcut tag text block expander.</p>
             </div>
             <span class="badge badge-purple">Interactive</span>
           </div>
@@ -443,7 +449,7 @@
             <div class="snippet-widget-box" style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
               <div class="snippet-input-group" style="display: flex; gap: 10px; width: 100%;">
                 <input type="text" class="timer-field" id="snippet-shortcut-input" placeholder="Type /address..." value="/address" style="flex: 1;">
-                <button class="btn-timer-trigger" id="btn-expand-snippet" style="background: var(--color-purple); color: #fff; box-shadow: 0 4px 15px rgba(158,0,255,0.25);"><ion-icon name="flash-outline"></ion-icon></button>
+                <button class="btn-timer-trigger" id="btn-expand-snippet" style="background: var(--color-purple); color: var(--text-primary); box-shadow: 0 4px 15px rgba(158,0,255,0.25);"><ion-icon name="flash-outline"></ion-icon></button>
               </div>
               
               <!-- Quick Tags -->
@@ -678,39 +684,39 @@
         <ul style="list-style: none; padding-left: 0; display: flex; flex-direction: column; gap: 12px; font-size: 0.85rem; color: var(--text-secondary);">
           <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
             <span>Clipboard History Capacity</span>
-            <strong style="color: #fff;">500 Items</strong>
+            <strong style="color: var(--text-primary);">500 Items</strong>
           </li>
           <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
             <span>Daily PDF Merges</span>
-            <strong style="color: #fff;">20 Files/day</strong>
+            <strong style="color: var(--text-primary);">20 Files/day</strong>
           </li>
           <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
             <span>Daily PDF Saves / Image-to-PDF</span>
-            <strong style="color: #fff;">10 Files/day</strong>
+            <strong style="color: var(--text-primary);">10 Files/day</strong>
           </li>
           <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
             <span>Daily Document Conversions</span>
-            <strong style="color: #fff;">10 Docs/day</strong>
+            <strong style="color: var(--text-primary);">10 Docs/day</strong>
           </li>
           <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
             <span>Daily OCR & Table Extractions</span>
-            <strong style="color: #fff;">30 OCR • 15 Table</strong>
+            <strong style="color: var(--text-primary);">30 OCR • 15 Table</strong>
           </li>
           <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
             <span>Daily QR Scans & To-Do entries</span>
-            <strong style="color: #fff;">20 QR • 25 Tasks</strong>
+            <strong style="color: var(--text-primary);">20 QR • 25 Tasks</strong>
           </li>
           <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
             <span>Max Active Pinned Clips</span>
-            <strong style="color: #fff;">20 Pins</strong>
+            <strong style="color: var(--text-primary);">20 Pins</strong>
           </li>
           <li style="display: flex; justify-content: space-between; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 8px;">
             <span>Built-in Workspace Notes Retention</span>
-            <strong style="color: #fff;">30 Days</strong>
+            <strong style="color: var(--text-primary);">30 Days</strong>
           </li>
           <li style="display: flex; justify-content: space-between;">
             <span>Personalization & Themes</span>
-            <strong style="color: #fff;">Default Theme only</strong>
+            <strong style="color: var(--text-primary);">Default Theme only</strong>
           </li>
         </ul>
       </div>
@@ -918,6 +924,6 @@
   </footer>
 
   <!-- Script logic hook -->
-  <script src="app.js"></script>
+  <script src="app.js?v=8.5.2"></script>
 </body>
 </html>
