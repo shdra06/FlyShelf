@@ -79,6 +79,7 @@ FlyShelf_Mobile.apk
 *.png
 !FlyShelf_PC/Resources/**/*.png
 !FlyShelf_Android/assets/**/*.png
+!MicrosoftBuild/Assets/**/*.png
 
 # ─── Firebase Security Credentials ────────────────────────────
 FlyShelf_PC/Classes/FirebaseSecrets.cs
@@ -93,4 +94,7 @@ flyshelf-web/out/
 
 # ─── Payment Backend — Secrets & Build Artifacts ─────────────
 FlyShelf_Payment/functions/.env
-FlyShelf_Payment/functions/node_modules/
+FlyShelf_Payment/functions/node_modules/
+
+# ─── Microsoft Store Build Output ─────────────────────────────
+MicrosoftBuild/Output/

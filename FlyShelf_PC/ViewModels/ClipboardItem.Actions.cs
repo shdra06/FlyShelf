@@ -12,10 +12,11 @@ namespace FlyShelf.ViewModels
     {
 
         public void OpenSandbox()
-
-
-
         {
+#if MSIX_STORE
+            FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Code sandbox is not available in the Store version. Download the full version from flyshelf.app");
+            return;
+#else
 
 
 
@@ -160,21 +161,10 @@ namespace FlyShelf.ViewModels
 
 
             catch (Exception ex)
-
-
-
             {
-
-
-
                 FlyShelf.Classes.Logger.LogAction("DEBUG", $"Sandbox Launch Failed: {ex.Message}");
-
-
-
             }
-
-
-
+#endif
         }
 
 

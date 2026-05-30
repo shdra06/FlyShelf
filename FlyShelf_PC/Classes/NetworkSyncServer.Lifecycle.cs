@@ -178,6 +178,7 @@ namespace FlyShelf.Classes
                 // Natively trigger Cloudflare alongside HTTP Socket conditionally
                 // If we used a TCP proxy, Cloudflare tunnels to publicPort which the TcpProxy handles.
                 // If we bound directly, Cloudflare tunnels to publicPort which HttpListener handles.
+#if !MSIX_STORE
                 if (SettingsManager.Current.EnableGlobalCloudflare)
                 {
                     if (LicenseManager.CanUseCloudflare())
@@ -190,6 +191,7 @@ namespace FlyShelf.Classes
                         SettingsManager.Save();
                     }
                 }
+#endif
                 _ = CloudDiscoveryManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl);
 
                 // Heartbeat: reduced from 60s to 300s — Firebase writes are now throttled

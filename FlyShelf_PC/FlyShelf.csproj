@@ -32,7 +32,16 @@
   <!-- Microsoft Store build: pass /p:StorePublish=true to define MSIX_STORE -->
   <PropertyGroup Condition="'$(StorePublish)' == 'true'">
     <DefineConstants>$(DefineConstants);MSIX_STORE</DefineConstants>
+    <WindowsPackageType>MSIX</WindowsPackageType>
+    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
+    <AppxPackageDir>..\MicrosoftBuild\Output\</AppxPackageDir>
   </PropertyGroup>
+
+  <!-- MSIX assets — only included for Store builds -->
+  <ItemGroup Condition="'$(StorePublish)' == 'true'">
+    <Content Include="..\MicrosoftBuild\Assets\**" Link="Assets\%(RecursiveDir)%(FileName)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
   <!-- Prevent process crash from unobserved async Task exceptions -->
   <ItemGroup>

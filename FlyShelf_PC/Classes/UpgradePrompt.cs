@@ -243,12 +243,16 @@ namespace FlyShelf.Classes
                 try
                 {
                     string deviceId = FlyShelf.Classes.SettingsManager.Current.DeviceId ?? "";
+#if MSIX_STORE
+                    FlyShelf.Windows.ToastWindow.ShowToast("ℹ️ Pro upgrade is available at flyshelf.app");
+#else
                     string paymentUrl = $"https://fly-shelf.vercel.app/pricing.html?deviceId={Uri.EscapeDataString(deviceId)}";
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = paymentUrl,
                         UseShellExecute = true
                     });
+#endif
                 }
                 catch { }
             };
