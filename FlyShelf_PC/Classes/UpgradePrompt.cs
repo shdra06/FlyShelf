@@ -243,7 +243,7 @@ namespace FlyShelf.Classes
                 try
                 {
                     string deviceId = FlyShelf.Classes.SettingsManager.Current.DeviceId ?? "";
-                    string paymentUrl = $"https://shdra06.github.io/FlyShelf/pricing.html?deviceId={Uri.EscapeDataString(deviceId)}";
+                    string paymentUrl = $"https://fly-shelf.vercel.app/pricing.html?deviceId={Uri.EscapeDataString(deviceId)}";
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
                     {
                         FileName = paymentUrl,
