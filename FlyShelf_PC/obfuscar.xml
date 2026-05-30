@@ -1,0 +1,30 @@
+<?xml version='1.0'?>
+<Obfuscator>
+  <Var name="InPath" value="E:\exeapps\FlyShelf\FlyShelf_PC\bin\Release\net10.0-windows10.0.19041.0\win-x64" />
+  <Var name="OutPath" value="E:\exeapps\FlyShelf\FlyShelf_PC\bin\Obfuscated" />
+  
+  <!-- Obfuscation settings -->
+  <Var name="RenameProperties" value="true" />
+  <Var name="RenameEvents" value="true" />
+  <Var name="RenameFields" value="true" />
+  <Var name="HidePrivateApi" value="true" />
+  <Var name="HideStrings" value="true" />
+  <Var name="UseUnicodeNames" value="true" />
+  <Var name="OptimizeMethods" value="true" />
+  <Var name="SuppressIldasm" value="true" />
+  
+  <Module file="FlyShelf.dll">
+    <!-- Skip WPF/XAML-generated code -->
+    <SkipNamespace name="XamlGeneratedNamespace" />
+    
+    <!-- Skip types that WPF reflects on -->
+    <SkipType name="FlyShelf.App" skipMethods="true" />
+    <SkipType name="FlyShelf.MainWindow" skipMethods="false" skipFields="false" />
+    
+    <!-- Skip public entry points -->
+    <SkipMethod type="*" attrib="public" rx="^(InitializeComponent|OnStartup|OnExit)" />
+    
+    <!-- Skip XAML event handlers (use 'public' since 'private' isn't supported) -->
+    <SkipMethod type="*" attrib="public" rx="^(.*_Click|.*_Loaded|.*_Changed|.*_Checked|.*_Unchecked|.*_Selected|.*_Toggled|.*_MouseDown|.*_KeyDown|.*_PreviewKeyDown|.*_MouseEnter|.*_MouseLeave|.*_TextChanged|.*_Drop|.*_DragOver|.*_SelectionChanged|.*_Scroll|.*_Closing|.*_Activated|.*_Deactivated)" />
+  </Module>
+</Obfuscator>

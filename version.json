@@ -2,7 +2,7 @@
     "pc_version":  "2.0.0",
     "pc_changelog":  "v2.0.0 â€” Security Hardened Release\n\nâ€¢ SECURITY: Removed HMAC secret from public frontend JavaScript\nâ€¢ SECURITY: Added runtime assembly integrity check (anti-tamper)\nâ€¢ SECURITY: HMAC re-validation on license.json load (anti-tampering)\nâ€¢ SECURITY: Replay attack protection on payment API\nâ€¢ SECURITY: CORS restricted to trusted origins only\nâ€¢ SECURITY: Device limit enforced (max 3 devices per key)\nâ€¢ SECURITY: Removed key generation from desktop binary\nâ€¢ SECURITY: ConfuserEx obfuscation applied",
     "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v2.0.0/FlyShelf.exe",
-    "pc_sha256":  "18d71893ccb42357702c097fe52f175ac8c73fbdfe348ba3f7f8766570f26714",
+    "pc_sha256":  "d4abacf16085a4acfd7372c01cedef9a6180e1b8dbde4ff7c3513fedc73528a1",
     "android_version":  "7.1.0",
     "android_changelog":  "v7.1.0 â€” Version Sync\n\nâ€¢ Bumped version to sync with Desktop client release.",
     "android_download":  "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"
