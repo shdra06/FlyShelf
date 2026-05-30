@@ -1,0 +1,9 @@
+﻿{
+    "pc_version":  "2.0.1",
+    "pc_changelog":  "v2.0.1 â€“ Maintenance Update\n\nâ€¢ FIX: Category filter now persists after deleting items\nâ€¢ FIX: Empty state tutorial background clears correctly after first clipboard entry\nâ€¢ UI: Dark Mode label removed from settings (always dark)\nâ€¢ UI: Gravity Cat theme removed from mascot list\nâ€¢ DEFAULT: FlyShelf theme now selected by default on first install\nâ€¢ DEFAULT: Widget alignment defaults to left-most position\nâ€¢ RELEASE: Dev diagnostics (System Logs) removed from user-facing builds\nâ€¢ RELEASE: Logger suppressed in production for cleaner performance",
+    "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v2.0.1/FlyShelf.exe",
+    "pc_sha256":  "4260dab7fa31aba1e636225aab48e5dff6df80ddd05c8809010a999663d69fd6",
+    "android_version":  "7.1.0",
+    "android_changelog":  "v7.1.0 Ã¢â‚¬â€ Version Sync\n\nÃ¢â‚¬Â¢ Bumped version to sync with Desktop client release.",
+    "android_download":  "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"
+}
