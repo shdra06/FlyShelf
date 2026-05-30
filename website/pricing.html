@@ -509,92 +509,104 @@
       // RAZORPAY STANDARD CHECKOUT
       // ═══════════════════════════════════════════
 
-      function openRazorpayCheckout(email) {
+      async function openRazorpayCheckout(email) {
         // Disable button to prevent double-click
         btnSubmitPayment.disabled = true;
         btnSubmitPayment.innerHTML = '<div class="payment-loader" style="width:20px;height:20px;border-width:2px;margin:0;"></div> Processing...';
 
-        const options = {
-          key: 'rzp_test_SvQt1qHdE79jnX', // Razorpay Test Key ID
-          amount: 29900, // ₹299 in paise
-          currency: 'INR',
-          name: 'FlyShelf Pro',
-          description: 'Lifetime Pro License — One-time Payment',
-          prefill: {
-            email: email
-          },
-          notes: {
-            product: 'FlyShelf Pro Lifetime',
-            deviceId: deviceId,
-            email: email
-          },
-          theme: {
-            color: '#0b72e7'
-          },
-          handler: async function(response) {
-            // ── PAYMENT SUCCESS ──
-            // response.razorpay_payment_id — the payment ID from Razorpay
-            console.log('Payment successful:', response.razorpay_payment_id);
-            
-            // Show processing modal
-            checkoutModal.style.display = 'flex';
-            modalStageLoading.style.display = 'flex';
-            modalStageApproval.style.display = 'none';
-            modalStageSuccess.style.display = 'none';
-            loaderHeadline.textContent = 'Payment Captured!';
-            loaderDesc.textContent = 'Generating your license key...';
+        try {
+          const backendUrl = 'https://flyshelf-official-pay.web.app';
+          const orderRes = await fetch(`${backendUrl}/api/createOrder`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, deviceId })
+          });
 
-            // Generate the license key
-            generatedKey = await generateProKey();
+          if (!orderRes.ok) {
+            const errData = await orderRes.json().catch(() => ({}));
+            throw new Error(errData.error || 'Failed to create payment order. Please try again.');
+          }
 
-            // Store payment record in Firebase RTDB (fire-and-forget)
-            try {
-              const fbUrl = 'https://advance-sync-default-rtdb.firebaseio.com';
-              await fetch(`${fbUrl}/payments/${response.razorpay_payment_id}.json`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  gateway: 'razorpay',
-                  paymentId: response.razorpay_payment_id,
-                  orderId: response.razorpay_order_id || '',
-                  amount: 29900,
-                  currency: 'INR',
-                  email: email,
-                  deviceId: deviceId,
-                  licenseKey: generatedKey,
-                  status: 'completed',
-                  timestamp: new Date().toISOString()
-                })
-              });
-              console.log('Payment record saved to Firebase RTDB');
-            } catch (fbErr) {
-              console.warn('Firebase record save failed (non-critical):', fbErr);
-            }
+          const orderData = await orderRes.json();
 
-            // Show success after a brief moment
-            setTimeout(() => {
-              modalStageLoading.style.display = 'none';
-              modalStageSuccess.style.display = 'flex';
-              licenseKeyOutput.textContent = generatedKey;
-              btnActivateDeeplink.href = `flyshelf://activate?key=${generatedKey}`;
-              confirmEmail.textContent = email;
-              confirmAmount.textContent = '₹299';
-            }, 1500);
+          const options = {
+            key: orderData.keyId,
+            amount: orderData.amount,
+            currency: orderData.currency,
+            name: 'FlyShelf Pro',
+            description: 'Lifetime Pro License — One-time Payment',
+            order_id: orderData.orderId,
+            prefill: {
+              email: email
+            },
+            theme: {
+              color: '#0b72e7'
+            },
+            handler: async function(response) {
+              // ── PAYMENT SUCCESS ──
+              console.log('Payment successful:', response.razorpay_payment_id);
+              
+              // Show processing modal
+              checkoutModal.style.display = 'flex';
+              modalStageLoading.style.display = 'flex';
+              modalStageApproval.style.display = 'none';
+              modalStageSuccess.style.display = 'none';
+              loaderHeadline.textContent = 'Payment Captured!';
+              loaderDesc.textContent = 'Generating your license key...';
 
-            // Reset button
-            btnSubmitPayment.disabled = false;
-            btnSubmitPayment.innerHTML = '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
-          },
-          modal: {
-            ondismiss: function() {
-              // User closed the Razorpay popup
+              try {
+                // Verify signature on backend
+                const verifyRes = await fetch(`${backendUrl}/api/verifyPayment`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_signature: response.razorpay_signature,
+                    email: email,
+                    deviceId: deviceId
+                  })
+                });
+
+                if (!verifyRes.ok) {
+                  throw new Error('Payment signature verification failed.');
+                }
+
+                const verifyData = await verifyRes.json();
+
+                if (verifyData.success) {
+                  generatedKey = verifyData.licenseKey;
+                  
+                  // Show success modal
+                  modalStageLoading.style.display = 'none';
+                  modalStageSuccess.style.display = 'flex';
+                  licenseKeyOutput.textContent = generatedKey;
+                  btnActivateDeeplink.href = `flyshelf://activate?key=${generatedKey}`;
+                  confirmEmail.textContent = email;
+                  confirmAmount.textContent = '₹299';
+                } else {
+                  alert('Verification failed. Please contact support.');
+                  modalStageLoading.style.display = 'none';
+                }
+              } catch (verifyErr) {
+                console.error(verifyErr);
+                alert('Verification error. Please contact support.');
+                modalStageLoading.style.display = 'none';
+              }
+
+              // Reset button
               btnSubmitPayment.disabled = false;
               btnSubmitPayment.innerHTML = '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
+            },
+            modal: {
+              ondismiss: function() {
+                // User closed the Razorpay popup
+                btnSubmitPayment.disabled = false;
+                btnSubmitPayment.innerHTML = '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
+              }
             }
-          }
-        };
+          };
 
-        try {
           const rzp = new Razorpay(options);
           
           rzp.on('payment.failed', function(response) {
@@ -605,9 +617,10 @@
           });
 
           rzp.open();
+
         } catch (err) {
-          console.error('Razorpay init error:', err);
-          alert('Could not initialize payment. Please try again.');
+          console.error(err);
+          alert(err.message || 'Could not initialize payment. Please try again.');
           btnSubmitPayment.disabled = false;
           btnSubmitPayment.innerHTML = '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
         }
