@@ -127,6 +127,9 @@ public partial class App : Application
         FlyShelf.Classes.SettingsManager.Load();
         FlyShelf.Classes.LicenseManager.Load();
         
+        // ═══ SECURITY v2.0.0: Verify binary hasn't been patched ═══
+        FlyShelf.Classes.LicenseManager.VerifyAssemblyIntegrity();
+        
         // ═══ INTERNAL CLOCK: Sync with NTP before any Firebase/networking ═══
         // Protects against wrong system clock causing auth failures and dead heartbeats
         _ = FlyShelf.Classes.NetworkClock.InitializeAsync();

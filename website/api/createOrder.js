@@ -1,19 +1,29 @@
 const Razorpay = require('razorpay');
 
-module.exports = async (req, res) => {
-  // Handle CORS
-  res.setHeader('Access-Control-Allow-Credentials', true);
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
-  res.setHeader(
-    'Access-Control-Allow-Headers',
-    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
-  );
+// ═══════════════════════════════════════════════════════════════════
+// CORS — Restricted to trusted origins only (security audit v2.0.0)
+// ═══════════════════════════════════════════════════════════════════
+const ALLOWED_ORIGINS = [
+  'https://fly-shelf.vercel.app',
+  'https://shdra06.github.io',
+  'https://flyshelf.app'
+];
 
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
+function setCorsHeaders(req, res) {
+  const origin = req.headers.origin || '';
+  if (ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  } else {
+    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGINS[0]);
   }
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
+module.exports = async (req, res) => {
+  setCorsHeaders(req, res);
+
 
   try {
     if (req.method !== 'POST') {

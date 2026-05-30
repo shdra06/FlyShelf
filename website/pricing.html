@@ -262,8 +262,9 @@
       <li><a href="index.html#smart-actions">Smart Tools</a></li>
       <li><a href="index.html#dilemma">The Dilemma</a></li>
       <li><a href="index.html#features">Features</a></li>
+      <li><a href="index.html#download" style="color: var(--color-cyan); font-weight: 700;">Download Free</a></li>
     </ul>
-    <a href="index.html#download" class="btn-premium btn-outline" style="padding: 10px 20px; font-size: 0.85rem;">Download App</a>
+    <a href="pricing.html" class="btn-premium btn-cyan" style="padding: 10px 20px; font-size: 0.85rem; box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);">Buy Pro</a>
   </nav>
 
   <!-- Hero Header -->
@@ -657,37 +658,11 @@
       });
 
       // ═══════════════════════════════════════════
-      // CRYPTOGRAPHIC KEY GENERATOR (Web Crypto API)
-      // Matches C# LicenseManager offline validation
+      // KEY GENERATION — Server-side only (security hardened v2.0.0)
+      // All license key generation now happens exclusively on the
+      // Vercel backend (api/verifyPayment.js) after payment verification.
+      // HMAC secret is NEVER exposed to the client.
       // ═══════════════════════════════════════════
-
-      async function computeChecksum(input) {
-        const encoder = new TextEncoder();
-        const secretData = encoder.encode('FS_Pro_Kx9m4R7vQ2nE8wLp_2026');
-        const inputData = encoder.encode(input);
-        
-        const cryptoKey = await window.crypto.subtle.importKey(
-          'raw', secretData,
-          { name: 'HMAC', hash: 'SHA-256' },
-          false, ['sign']
-        );
-        
-        const signature = await window.crypto.subtle.sign('HMAC', cryptoKey, inputData);
-        const hashArray = Array.from(new Uint8Array(signature));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase();
-        return hashHex.substring(0, 4);
-      }
-
-      async function generateProKey() {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let randomPart = '';
-        for (let i = 0; i < 12; i++) {
-          randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        const checksum = await computeChecksum(randomPart);
-        const payload = randomPart + checksum;
-        return `FS-PRO-${payload.substring(0, 4)}-${payload.substring(4, 8)}-${payload.substring(8, 12)}-${payload.substring(12, 16)}`;
-      }
 
     });
   </script>

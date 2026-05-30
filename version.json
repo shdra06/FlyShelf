@@ -1,9 +1,9 @@
 {
-    "pc_version":  "8.5.1",
-    "pc_changelog":  "v8.5.1 – License Key Compatibility Patch\n\n• Fixed: Key validation updated to support newly generated license keys following HMAC algorithm secret rotation.",
-    "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v8.5.1/FlyShelf.exe",
-    "pc_sha256":  "7b4670260a885b66b97d6fa57e0b83f2912b24cd9cd771239123713d6d8a566d",
+    "pc_version":  "2.0.0",
+    "pc_changelog":  "v2.0.0 — Security Hardened Release\n\n• SECURITY: Removed HMAC secret from public frontend JavaScript\n• SECURITY: Added runtime assembly integrity check (anti-tamper)\n• SECURITY: HMAC re-validation on license.json load (anti-tampering)\n• SECURITY: Replay attack protection on payment API\n• SECURITY: CORS restricted to trusted origins only\n• SECURITY: Device limit enforced (max 3 devices per key)\n• SECURITY: Removed key generation from desktop binary\n• SECURITY: ConfuserEx obfuscation applied",
+    "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v2.0.0/FlyShelf.exe",
+    "pc_sha256":  "61612999DA28057AA27CAFF68DEA14685462DCCB1DDD0304018A97AB5BA53398",
     "android_version":  "7.1.0",
-    "android_changelog":  "v7.1.0 – Version Sync\n\n• Bumped version to sync with Desktop client release.",
+    "android_changelog":  "v7.1.0 — Version Sync\n\n• Bumped version to sync with Desktop client release.",
     "android_download":  "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"
 }

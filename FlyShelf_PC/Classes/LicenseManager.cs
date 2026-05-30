@@ -1,12 +1,14 @@
 // ═══════════════════════════════════════════════════════════════════
-// LicenseManager — Freemium tier management for FlyShelf
-// Manages Pro/Free state, daily usage counters, license key validation.
+// LicenseManager — Freemium tier management for FlyShelf v2.0.0
+// Security-hardened: HMAC re-validation on load, anti-tamper,
+// assembly integrity checks, enforced device limits.
 // Uses NetworkClock (NTP-synced) for tamper-resistant time.
 // Persists to %AppData%/FlyShelf/license.json
 // ═══════════════════════════════════════════════════════════════════
 using System;
 using System.IO;
 using System.Net.Http;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -447,27 +449,12 @@ namespace FlyShelf.Classes
             Logger.LogAction("LICENSE", "License deactivated — reverted to Free tier");
         }
 
-        /// <summary>
-        /// Generate a valid Pro license key. 
-        /// This is used by the developer/admin to create keys for distribution.
-        /// In production, this would be on a server — here it's exposed for manual key generation.
-        /// </summary>
-        public static string GenerateProKey()
-        {
-            // Generate 12 random alphanumeric chars
-            const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-            var random = new Random();
-            var sb = new StringBuilder(12);
-            for (int i = 0; i < 12; i++)
-                sb.Append(chars[random.Next(chars.Length)]);
-
-            string randomPart = sb.ToString();
-            string checksum = ComputeChecksum(randomPart);
-
-            // Format: FS-PRO-XXXX-XXXX-XXXX-XXXX
-            string payload = randomPart + checksum; // 16 chars total
-            return $"FS-PRO-{payload.Substring(0, 4)}-{payload.Substring(4, 4)}-{payload.Substring(8, 4)}-{payload.Substring(12, 4)}";
-        }
+        // ═══════════════════════════════════════════════════════════════
+        // NOTE: GenerateProKey() has been REMOVED from the desktop app
+        // as of v2.0.0 security hardening. Key generation now happens
+        // exclusively on the Vercel backend (api/verifyPayment.js).
+        // This prevents decompilers from extracting a ready-made keygen.
+        // ═══════════════════════════════════════════════════════════════
 
         // ═══════════════════════════════════════════════════════════════
         // INTERNAL — Persistence
@@ -495,6 +482,21 @@ namespace FlyShelf.Classes
                         if (loaded != null)
                         {
                             _data = loaded;
+
+                            // ═══ SECURITY v2.0.0: Re-validate HMAC checksum on load ═══
+                            // Prevents license.json tampering (editing Tier to "pro" by hand)
+                            if (_data.Tier == "pro" && !string.IsNullOrEmpty(_data.LicenseKey))
+                            {
+                                if (!ValidateKeyChecksum(_data.LicenseKey))
+                                {
+                                    Logger.LogAction("LICENSE", "⚠️ HMAC checksum failed on load — license.json may be tampered. Reverting to Free.");
+                                    _data.LicenseKey = "";
+                                    _data.Tier = "free";
+                                    _data.ActivatedAt = "";
+                                    // Save the clean state back
+                                    try { SaveInternal(); } catch { }
+                                }
+                            }
                         }
                     }
                 }
@@ -507,25 +509,51 @@ namespace FlyShelf.Classes
             }
         }
 
+        /// <summary>
+        /// Validates that a key's HMAC checksum is correct without activating it.
+        /// Used on load to detect tampering of license.json.
+        /// </summary>
+        private static bool ValidateKeyChecksum(string key)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(key)) return false;
+                key = key.Trim().ToUpperInvariant();
+                if (!key.StartsWith("FS-PRO-")) return false;
+                string payload = key.Replace("FS-PRO-", "").Replace("-", "");
+                if (payload.Length != 16) return false;
+                string randomPart = payload.Substring(0, 12);
+                string checksum = payload.Substring(12, 4);
+                string expected = ComputeChecksum(randomPart);
+                return checksum.Equals(expected, StringComparison.OrdinalIgnoreCase);
+            }
+            catch { return false; }
+        }
+
         private static void Save()
         {
             lock (_lock)
             {
-                try
+                SaveInternal();
+            }
+        }
+
+        private static void SaveInternal()
+        {
+            try
+            {
+                Directory.CreateDirectory(_appDataDir);
+                string json = JsonSerializer.Serialize(_data, new JsonSerializerOptions
                 {
-                    Directory.CreateDirectory(_appDataDir);
-                    string json = JsonSerializer.Serialize(_data, new JsonSerializerOptions
-                    {
-                        WriteIndented = true
-                    });
-                    string tmpPath = _licensePath + ".tmp";
-                    File.WriteAllText(tmpPath, json);
-                    File.Move(tmpPath, _licensePath, overwrite: true);
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogAction("LICENSE", $"Failed to save license: {ex.Message}");
-                }
+                    WriteIndented = true
+                });
+                string tmpPath = _licensePath + ".tmp";
+                File.WriteAllText(tmpPath, json);
+                File.Move(tmpPath, _licensePath, overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("LICENSE", $"Failed to save license: {ex.Message}");
             }
         }
 
@@ -632,6 +660,7 @@ namespace FlyShelf.Classes
                 }
 
                 // 3. Check how many devices have activated this key
+                // ═══ ENFORCED DEVICE LIMIT (security audit v2.0.0) ═══
                 string devicesUrl = $"{dbUrl}/licenses/activations/{safeKey}.json?shallow=true";
                 var devicesResponse = await _httpClient.GetAsync(devicesUrl);
                 if (devicesResponse.IsSuccessStatusCode)
@@ -641,11 +670,14 @@ namespace FlyShelf.Classes
                     int deviceCount = devicesJson.Split("true", StringSplitOptions.None).Length - 1;
                     Logger.LogAction("LICENSE_SERVER", $"Key activated on {deviceCount} device(s)");
 
-                    // Max 3 devices per key
+                    // Max 3 devices per key — ENFORCED
                     if (deviceCount > 3)
                     {
-                        Logger.LogAction("LICENSE_SERVER", $"⚠️ Key used on {deviceCount} devices (max 3) — flagging");
-                        // Don't deactivate immediately — just log. You can enforce later.
+                        Logger.LogAction("LICENSE_SERVER", $"⚠️ Key used on {deviceCount} devices (max 3) — DEACTIVATING this device");
+                        DeactivateLicense();
+                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                            Windows.ToastWindow.ShowToast("⚠️ License limit exceeded (max 3 devices). Please contact support."));
+                        return;
                     }
                 }
             }
@@ -688,6 +720,76 @@ namespace FlyShelf.Classes
             catch (Exception ex)
             {
                 Logger.LogAction("LICENSE_SERVER", $"Revalidation failed (non-fatal): {ex.Message}");
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // ANTI-TAMPER: Runtime Assembly Integrity Check (v2.0.0)
+        // Detects if the compiled binary has been patched/modified.
+        // Call this on startup to catch dnSpy-style IL patching.
+        // ═══════════════════════════════════════════════════════════════
+
+        private static string _expectedAssemblyHash = null;
+        private static bool _integrityChecked = false;
+
+        /// <summary>
+        /// Computes a SHA-256 hash of the running assembly and checks it against
+        /// a stored baseline. On first run, stores the hash. On subsequent runs,
+        /// if the hash changes, the binary has been patched.
+        /// </summary>
+        public static void VerifyAssemblyIntegrity()
+        {
+            if (_integrityChecked) return;
+            _integrityChecked = true;
+
+            try
+            {
+                // Use process path for single-file deployment (Assembly.Location is empty)
+                string assemblyPath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
+                if (string.IsNullOrEmpty(assemblyPath) || !File.Exists(assemblyPath))
+                {
+                    Logger.LogAction("INTEGRITY", "Assembly path unavailable — skipping integrity check");
+                    return;
+                }
+
+                // Compute SHA-256 of the running binary
+                using var sha = SHA256.Create();
+                using var stream = File.OpenRead(assemblyPath);
+                byte[] hashBytes = sha.ComputeHash(stream);
+                string currentHash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+
+                // Check stored hash
+                string hashFile = Path.Combine(_appDataDir, ".assembly_hash");
+                if (File.Exists(hashFile))
+                {
+                    string storedHash = File.ReadAllText(hashFile).Trim();
+                    if (!string.IsNullOrEmpty(storedHash) && storedHash != currentHash)
+                    {
+                        // Binary has been modified since last known-good state!
+                        Logger.LogAction("INTEGRITY", $"⚠️ ASSEMBLY TAMPERED! Stored: {storedHash}, Current: {currentHash}");
+                        // Deactivate license as a defensive measure
+                        if (_data.Tier == "pro")
+                        {
+                            _data.Tier = "free";
+                            _data.LicenseKey = "";
+                            _data.ActivatedAt = "";
+                            Save();
+                            Logger.LogAction("INTEGRITY", "License deactivated due to binary tampering detection");
+                            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                Windows.ToastWindow.ShowToast("⚠️ Application integrity check failed. Please re-download FlyShelf."));
+                        }
+                        return;
+                    }
+                }
+
+                // Store/update the hash on clean runs
+                Directory.CreateDirectory(_appDataDir);
+                File.WriteAllText(hashFile, currentHash);
+                Logger.LogAction("INTEGRITY", $"✅ Assembly integrity verified: {currentHash.Substring(0, 12)}...");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("INTEGRITY", $"Integrity check failed (non-fatal): {ex.Message}");
             }
         }
     }
