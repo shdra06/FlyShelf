@@ -1,6 +1,6 @@
 ================================================================================
   FLYSHELF — COMPLETE UPDATE & RELEASE GUIDE
-  Last Updated: 29 May 2026
+  Last Updated: 30 May 2026
 ================================================================================
 
   This guide covers every step needed to ship a new FlyShelf PC update.
@@ -205,24 +205,73 @@
 
 
 ================================================================================
-  6. STEP 5 — PUSH TO PUBLIC REPO
+  6. STEP 5 — PUSH TO PUBLIC REPO (SAFE — NO SOURCE CODE!)
 ================================================================================
 
-  The public repo hosts releases, website, and version.json.
-  It shares the SAME git history as the private repo.
+  ⚠️  CRITICAL: The public repo must NEVER contain source code.
+  DO NOT run "git push public main" — that leaks EVERYTHING.
+
+  The public repo ONLY gets: website/, version.json, and docs.
+  All source code (FlyShelf_PC/, FlyShelf_Android/, etc.) stays private.
 
   Remote name: public
   Remote URL:  https://github.com/shdra06/FlyShelf.git
 
-  Commands:
 
-    > git push public main
+  ── HOW IT WORKS ──────────────────────────────────────────────────────
 
-  WAIT for this to complete before creating the release.
+  We create a temporary orphan branch (no history), add ONLY the public
+  files, force-push it to the public repo, then delete the temp branch.
+  This guarantees no source code or secrets ever touch the public repo.
 
-  NOTE: Both repos get the exact same commit. The private repo is just
-  not visible to the public. The public repo is where GitHub Pages serves
-  your website and where users download releases.
+
+  ── COMMANDS (run these in order) ─────────────────────────────────────
+
+    > cd E:\exeapps\FlyShelf
+
+    # 1. Create a clean orphan branch (no history)
+    > git checkout --orphan temp-public
+
+    # 2. Unstage everything
+    > git reset HEAD -- .
+
+    # 3. Stage ONLY the public-safe files
+    > git add website/ version.json README.md LICENSE PRIVACY.md PRIVACY_POLICY.md
+
+    # 4. Commit
+    > git commit -m "v2.0.0 — Public Release"
+
+    # 5. Force-push to public repo (replaces ALL history)
+    > git push public temp-public:main --force
+
+    # 6. Switch back to your working branch
+    > git checkout main --force
+
+    # 7. Delete the temp branch
+    > git branch -D temp-public
+
+
+  ── WHAT GOES TO THE PUBLIC REPO ──────────────────────────────────────
+
+    ✅ website/         → Landing page, pricing, payment APIs
+    ✅ version.json     → Update checker for desktop app
+    ✅ README.md        → Project description
+    ✅ LICENSE          → License file
+    ✅ PRIVACY.md       → Privacy policy
+    ✅ PRIVACY_POLICY.md
+
+  ── WHAT STAYS PRIVATE (NEVER pushed to public) ───────────────────────
+
+    ❌ FlyShelf_PC/     → All C# source code
+    ❌ FlyShelf_Android/ → All mobile source code
+    ❌ FlyShelf_Payment/ → Firebase Cloud Functions
+    ❌ *.json (firebase rules, database exports)
+    ❌ *.mp4, *.py, *.bat (debug files, scripts)
+    ❌ RELEASE_GUIDE.txt → This file (internal)
+    ❌ confuser.crproj  → Obfuscation config
+
+
+  WAIT for the push to complete before creating the GitHub release.
 
 
 ================================================================================
@@ -455,7 +504,7 @@
 ================================================================================
 
   ┌─────────────────────────────────────────────────────────────────────┐
-  │  FULL RELEASE IN 6 COMMANDS                                        │
+  │  FULL RELEASE IN 8 COMMANDS                                        │
   ├─────────────────────────────────────────────────────────────────────┤
   │                                                                     │
   │  1. Edit version in 3 files (csproj, version.json, index.html)     │
@@ -465,18 +514,25 @@
   │                                                                     │
   │  3. cd E:\exeapps\FlyShelf                                         │
   │     git add -A                                                      │
-  │     git commit -m "v8.6.0 – Release Title"                         │
+  │     git commit -m "v2.1.0 – Release Title"                         │
   │                                                                     │
-  │  4. git push origin main                                            │
+  │  4. git push origin main          (private — all source code)       │
   │                                                                     │
-  │  5. git push public main                                            │
+  │  5. SAFE PUBLIC PUSH (no source code leaked):                       │
+  │     git checkout --orphan temp-public                                │
+  │     git reset HEAD -- .                                              │
+  │     git add website/ version.json README.md LICENSE PRIVACY.md PRIVACY_POLICY.md │
+  │     git commit -m "v2.1.0 — Public Release"                        │
+  │     git push public temp-public:main --force                        │
+  │     git checkout main --force                                       │
+  │     git branch -D temp-public                                       │
   │                                                                     │
   │  6. $env:GITHUB_TOKEN = ""                                          │
-  │     gh release create v8.6.0 ^                                      │
+  │     gh release create v2.1.0 ^                                      │
   │       "FlyShelf_PC/FINAL/FlyShelf.exe" ^                            │
   │       "FlyShelf_PC/FINAL/FlyShelf.exe.sha256" ^                     │
   │       --repo shdra06/FlyShelf ^                                     │
-  │       --title "v8.6.0 - Release Title" ^                            │
+  │       --title "v2.1.0 - Release Title" ^                            │
   │       --notes "Changelog here"                                      │
   │                                                                     │
   └─────────────────────────────────────────────────────────────────────┘
