@@ -515,7 +515,7 @@
         btnSubmitPayment.innerHTML = '<div class="payment-loader" style="width:20px;height:20px;border-width:2px;margin:0;"></div> Processing...';
 
         try {
-          const backendUrl = 'https://flyshelf-official-pay.web.app';
+          const backendUrl = window.location.origin;
           const orderRes = await fetch(`${backendUrl}/api/createOrder`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
