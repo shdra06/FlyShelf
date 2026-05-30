@@ -232,6 +232,7 @@ namespace FlyShelf.Windows
 
                     // Initialize license UI (Pro badge, status card)
                     RefreshLicenseUI();
+                    UpdateAlignButtonsVisualState();
                 }, System.Windows.Threading.DispatcherPriority.Background);
             };
             Unloaded += (s, ev) =>
@@ -727,6 +728,67 @@ namespace FlyShelf.Windows
             {
                 MessageBox.Show($"Failed to clean history: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        private void UpdateAlignButtonsVisualState()
+        {
+            if (AlignAutoBtn == null || AlignLeftBtn == null || AlignStartBtn == null || AlignTrayBtn == null || AlignCustomBtn == null)
+                return;
+
+            int align = SettingsManager.Current.WidgetTaskbarAlignment;
+            
+            // Set appearance of active button to Primary, others to Secondary
+            AlignAutoBtn.Appearance = align == -1 ? Wpf.Ui.Controls.ControlAppearance.Primary : Wpf.Ui.Controls.ControlAppearance.Secondary;
+            AlignLeftBtn.Appearance = align == 0 ? Wpf.Ui.Controls.ControlAppearance.Primary : Wpf.Ui.Controls.ControlAppearance.Secondary;
+            AlignStartBtn.Appearance = align == 1 ? Wpf.Ui.Controls.ControlAppearance.Primary : Wpf.Ui.Controls.ControlAppearance.Secondary;
+            AlignTrayBtn.Appearance = align == 2 ? Wpf.Ui.Controls.ControlAppearance.Primary : Wpf.Ui.Controls.ControlAppearance.Secondary;
+            AlignCustomBtn.Appearance = align == 3 ? Wpf.Ui.Controls.ControlAppearance.Primary : Wpf.Ui.Controls.ControlAppearance.Secondary;
+
+            // Show/hide relevant sliders
+            if (PixelOffsetContainer != null)
+                PixelOffsetContainer.Visibility = align != 3 ? Visibility.Visible : Visibility.Collapsed;
+            if (PercentagePositionContainer != null)
+                PercentagePositionContainer.Visibility = align == 3 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void AlignAuto_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsManager.Current.WidgetTaskbarAlignment = -1;
+            SettingsManager.Save();
+            UpdateAlignButtonsVisualState();
+        }
+
+        private void AlignLeft_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsManager.Current.WidgetTaskbarAlignment = 0;
+            SettingsManager.Save();
+            UpdateAlignButtonsVisualState();
+        }
+
+        private void AlignStart_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsManager.Current.WidgetTaskbarAlignment = 1;
+            SettingsManager.Save();
+            UpdateAlignButtonsVisualState();
+        }
+
+        private void AlignTray_Click(object sender, RoutedEventArgs e)
+        {
+            SettingsManager.Current.WidgetTaskbarAlignment = 2;
+            SettingsManager.Save();
+            UpdateAlignButtonsVisualState();
+        }
+
+        private void AlignCustom_Click(object sender, RoutedEventArgs e)
+        {
+            int currentOffset = SettingsManager.Current.WidgetHorizontalOffset;
+            if (currentOffset < 0 || currentOffset > 100)
+            {
+                SettingsManager.Current.WidgetHorizontalOffset = 50; // default to center (50%)
+            }
+            SettingsManager.Current.WidgetTaskbarAlignment = 3;
+            SettingsManager.Save();
+            UpdateAlignButtonsVisualState();
         }
 
         // ═══ Logs, Diagnostics & Drag-Drop moved to HubWindow.Logs.cs ═══

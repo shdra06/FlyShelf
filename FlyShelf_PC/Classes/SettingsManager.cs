@@ -45,8 +45,8 @@ namespace FlyShelf.Classes
         private double _quickLookHeight = 0;
         public double QuickLookHeight { get => _quickLookHeight; set => SetProperty(ref _quickLookHeight, value); }
 
-        private int _widgetTaskbarAlignment = 0;
-        public int WidgetTaskbarAlignment { get => _widgetTaskbarAlignment; set => SetProperty(ref _widgetTaskbarAlignment, value); } // 0=Left, 1=Center, 2=Right
+        private int _widgetTaskbarAlignment = -1;
+        public int WidgetTaskbarAlignment { get => _widgetTaskbarAlignment; set => SetProperty(ref _widgetTaskbarAlignment, value); } // -1=Auto, 0=Far Left, 1=After Start, 2=Before Tray, 3=Custom Slider
         
         // Tier 1 Settings
         private bool _enableLocalNetworkSync = false;
@@ -117,7 +117,7 @@ namespace FlyShelf.Classes
         private int _widgetHorizontalOffset = 0;
         public int WidgetHorizontalOffset { get => _widgetHorizontalOffset; set => SetProperty(ref _widgetHorizontalOffset, value); }
 
-        private int _version = 1;
+        private int _version = 2;
         public int Version { get => _version; set => SetProperty(ref _version, value); }
 
         // Auto-Cleanup: 7=7 days, 14=14 days, 30=30 days, 0=Never
@@ -209,6 +209,26 @@ namespace FlyShelf.Classes
                             Logger.LogAction("SETTINGS_MIGRATION", $"Upgrading config version from {version} to 1.");
                             Current.Version = 1;
                             Save(); // Persist the migrated settings with version 1
+                        }
+                        // ═══ v1→v2 Migration: Default to FlyShelf theme on startup ═══
+                        // Existing installs may have ThemeDisplayMode="mica" and empty ActiveThemeName
+                        // from earlier free-tier downgrades. Set them to the "FlyShelf Default" theme
+                        // which is allowed for all users (free + pro).
+                        if (version < 2)
+                        {
+                            Logger.LogAction("SETTINGS_MIGRATION", $"Upgrading config version from {version} to 2 — enabling FlyShelf Default theme.");
+                            Current.ActiveThemeName = "FlyShelf Default";
+                            Current.ThemeDisplayMode = "theme";
+                            Current.Version = 2;
+                            // Write synchronously to guarantee persistence before DebouncedSave can race
+                            try
+                            {
+                                var migJson = JsonSerializer.Serialize(Current, new JsonSerializerOptions { WriteIndented = true });
+                                string tmpPath = path + ".tmp";
+                                File.WriteAllText(tmpPath, migJson);
+                                File.Move(tmpPath, path, true);
+                            }
+                            catch { }
                         }
                     }
                 }

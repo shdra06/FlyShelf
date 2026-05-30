@@ -1263,7 +1263,7 @@
                                 </Border>
 
                                 <!-- ROW 1, COL 0: Drag Behavior -->
-                                <Border Grid.Row="1" Grid.Column="0" Style="{StaticResource PremiumSettingStyle}">
+                                <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Style="{StaticResource PremiumSettingStyle}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
@@ -1286,35 +1286,6 @@
                                         </StackPanel>
                                         <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=KeepItemOnDragOut, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                     </Grid>
-                                </Border>
-
-                                <!-- ROW 1, COL 2: Widget Position (Auto) -->
-                                <Border Grid.Row="1" Grid.Column="2" Style="{StaticResource PremiumSettingStyle}">
-                                    <StackPanel>
-                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                            <Border Width="32" Height="32" CornerRadius="8" Margin="0,0,10,0">
-                                                <Border.Background>
-                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                        <GradientStop Color="#0EA5E9" Offset="0"/>
-                                                        <GradientStop Color="#38BDF8" Offset="1"/>
-                                                    </LinearGradientBrush>
-                                                </Border.Background>
-                                                <ui:SymbolIcon Symbol="ResizeLarge24" Foreground="White" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <TextBlock Text="Widget Position" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                        <TextBlock Text="Automatic — adapts to your Windows taskbar alignment." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="11" Margin="0,0,0,8" TextWrapping="Wrap" LineHeight="16"/>
-                                        <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="8" Padding="10,8">
-                                            <StackPanel>
-                                                <TextBlock FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextWrapping="Wrap" LineHeight="17">
-                                                    <Run Text="📌" /> <Run Text="Center taskbar" FontWeight="SemiBold"/> <Run Text="→ Widget on the left"/>
-                                                </TextBlock>
-                                                <TextBlock FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextWrapping="Wrap" LineHeight="17" Margin="0,2,0,0">
-                                                    <Run Text="📌" /> <Run Text="Left taskbar" FontWeight="SemiBold"/> <Run Text="→ Widget beside system tray"/>
-                                                </TextBlock>
-                                            </StackPanel>
-                                        </Border>
-                                    </StackPanel>
                                 </Border>
 
                                 <!-- ROW 2: Full-width Clipboard Size card -->
@@ -1569,11 +1540,11 @@
                                 </Grid>
                             </Border>
 
-                            <!-- Widget Position Offset — only visible when taskbar widget is enabled -->
+                            <!-- Widget Positioning & Customization Settings -->
                             <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12"
                                     Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableTaskbarWidget, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <StackPanel VerticalAlignment="Center">
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
                                         <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
                                             <Border.Background>
                                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
@@ -1583,25 +1554,60 @@
                                             </Border.Background>
                                             <ui:SymbolIcon Symbol="ArrowMove24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Border>
-                                        <TextBlock Text="Widget Position Offset" FontWeight="Bold" FontSize="14" Foreground="#818CF8" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Widget Positioning" FontWeight="Bold" FontSize="14" Foreground="#818CF8" VerticalAlignment="Center"/>
                                     </StackPanel>
-                                    <TextBlock Text="Nudge the widget left or right if it overlaps your taskbar icons. Use 0 for default positioning." 
-                                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,6" TextWrapping="Wrap" LineHeight="17"/>
-                                    <Grid Margin="38,0,16,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Slider Grid.Column="0" Minimum="-200" Maximum="200" 
-                                                Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=WidgetHorizontalOffset, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
-                                                TickFrequency="10" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" MinWidth="50" Margin="12,0,0,0" VerticalAlignment="Center" HorizontalAlignment="Right"
-                                                   FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}">
-                                            <TextBlock.Text>
-                                                <Binding Source="{x:Static settings:SettingsManager.Current}" Path="WidgetHorizontalOffset" StringFormat="{}{0}px"/>
-                                            </TextBlock.Text>
-                                        </TextBlock>
-                                    </Grid>
+                                    <TextBlock Text="Select how the widget is positioned on your taskbar. Choose an alignment preset or select Custom to place it anywhere." 
+                                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,8" TextWrapping="Wrap" LineHeight="17"/>
+                                    
+                                    <!-- Preset Button Row -->
+                                    <UniformGrid Rows="1" Margin="38,4,16,12" HorizontalAlignment="Stretch">
+                                        <ui:Button x:Name="AlignAutoBtn" Content="Auto" Click="AlignAuto_Click" Margin="0,0,4,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+                                        <ui:Button x:Name="AlignLeftBtn" Content="Far Left" Click="AlignLeft_Click" Margin="0,0,4,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+                                        <ui:Button x:Name="AlignStartBtn" Content="After Start" Click="AlignStart_Click" Margin="0,0,4,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+                                        <ui:Button x:Name="AlignTrayBtn" Content="Before Tray" Click="AlignTray_Click" Margin="0,0,4,0" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+                                        <ui:Button x:Name="AlignCustomBtn" Content="Custom" Click="AlignCustom_Click" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"/>
+                                    </UniformGrid>
+
+                                    <!-- Pixels fine-tune offset slider (for modes -1, 0, 1, 2) -->
+                                    <StackPanel x:Name="PixelOffsetContainer">
+                                        <TextBlock Text="Fine-tune Offset (Pixels)" FontWeight="SemiBold" FontSize="11.5" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="38,4,16,4"/>
+                                        <Grid Margin="38,0,16,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Slider Grid.Column="0" Minimum="-200" Maximum="200" 
+                                                    Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=WidgetHorizontalOffset, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                                    TickFrequency="10" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" MinWidth="50" Margin="12,0,0,0" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                                       FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}">
+                                                <TextBlock.Text>
+                                                    <Binding Source="{x:Static settings:SettingsManager.Current}" Path="WidgetHorizontalOffset" StringFormat="{}{0}px"/>
+                                                </TextBlock.Text>
+                                            </TextBlock>
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <!-- Percentage position slider (for custom mode 3) -->
+                                    <StackPanel x:Name="PercentagePositionContainer" Visibility="Collapsed">
+                                        <TextBlock Text="Custom Position (Percentage of Taskbar)" FontWeight="SemiBold" FontSize="11.5" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="38,4,16,4"/>
+                                        <Grid Margin="38,0,16,0">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Slider Grid.Column="0" Minimum="0" Maximum="100" 
+                                                    Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=WidgetHorizontalOffset, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
+                                                    TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                            <TextBlock Grid.Column="1" MinWidth="50" Margin="12,0,0,0" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                                       FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}">
+                                                <TextBlock.Text>
+                                                    <Binding Source="{x:Static settings:SettingsManager.Current}" Path="WidgetHorizontalOffset" StringFormat="{}{0}%"/>
+                                                </TextBlock.Text>
+                                            </TextBlock>
+                                        </Grid>
+                                    </StackPanel>
+
                                 </StackPanel>
                             </Border>
                             <!-- Auto Cleanup -->
@@ -1925,7 +1931,7 @@
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="FlyShelf" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
                                         <Border Background="{DynamicResource MicaWPF.Brushes.SystemAccentColor}" CornerRadius="6" Padding="8,3" Margin="12,0,0,0" VerticalAlignment="Center">
-                                            <TextBlock Text="v1.0.0 Stable" FontSize="11" FontWeight="Bold" Foreground="White"/>
+                                            <TextBlock Text="v2.0.0 Stable" FontSize="11" FontWeight="Bold" Foreground="White"/>
                                         </Border>
                                     </StackPanel>
                                     <TextBlock Text="Cross-device clipboard manager and synchronization hub for power users." FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,4,0,0" TextWrapping="Wrap"/>

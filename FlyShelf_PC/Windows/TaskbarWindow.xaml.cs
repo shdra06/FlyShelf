@@ -81,6 +81,19 @@ namespace FlyShelf.Windows
                         }
                     });
                 }
+                else if (e.PropertyName == nameof(AdvanceSettings.WidgetTaskbarAlignment) ||
+                         e.PropertyName == nameof(AdvanceSettings.WidgetHorizontalOffset))
+                {
+                    Dispatcher.Invoke(() =>
+                    {
+                        if (_isClosed || !SettingsManager.Current.EnableTaskbarWidget) return;
+                        // Invalidate cache immediately to force repositioning
+                        _cachedFreeZoneLeft = -1;
+                        _lastFreeZoneScan = DateTime.MinValue;
+                        _lastWidgetLeft = -1; // Invalidate position cache
+                        UpdatePosition();
+                    });
+                }
             };
 
             // Defer startup activation to AFTER the constructor + Loaded events complete.
@@ -583,15 +596,44 @@ namespace FlyShelf.Windows
 
                 // Position at the very bottom of the screen, flush with the edge
                 int screenX;
-                if (isTaskbarCentered)
+                int alignment = SettingsManager.Current.WidgetTaskbarAlignment;
+                if (alignment == -1)
                 {
-                    // Left side — after the widgets area
+                    if (isTaskbarCentered)
+                    {
+                        // Left side — after the widgets area
+                        screenX = (int)monitorArea.Left + 8;
+                    }
+                    else
+                    {
+                        // Right side — beside where system tray would be
+                        screenX = (int)(monitorArea.Right) - physicalWidth - 8;
+                    }
+                }
+                else if (alignment == 0) // Far Left
+                {
                     screenX = (int)monitorArea.Left + 8;
                 }
-                else
+                else if (alignment == 1) // After Start
                 {
-                    // Right side — beside where system tray would be
+                    if (isTaskbarCentered)
+                    {
+                        screenX = (int)monitorArea.Left + (int)(160 * dpiScale) + 8;
+                    }
+                    else
+                    {
+                        screenX = (int)monitorArea.Left + (int)(180 * dpiScale) + 8;
+                    }
+                }
+                else if (alignment == 2) // Before Tray
+                {
                     screenX = (int)(monitorArea.Right) - physicalWidth - 8;
+                }
+                else // 3 (Custom Percentage)
+                {
+                    int range = (int)(monitorArea.Width - physicalWidth);
+                    if (range < 0) range = 0;
+                    screenX = (int)monitorArea.Left + (int)((SettingsManager.Current.WidgetHorizontalOffset / 100.0) * range);
                 }
 
                 int screenY = (int)(monitorArea.Bottom) - physicalHeight;
@@ -609,8 +651,11 @@ namespace FlyShelf.Windows
                 // HWND_BOTTOM = 1 to keep behind all app windows (like the taskbar when auto-hidden)
                 const int HWND_BOTTOM = 1;
 
-                // Apply user's manual horizontal offset
-                screenX += SettingsManager.Current.WidgetHorizontalOffset;
+                // Apply user's manual horizontal offset (only for presets, not custom percentage)
+                if (alignment != 3)
+                {
+                    screenX += SettingsManager.Current.WidgetHorizontalOffset;
+                }
 
                 if (screenX != _lastWidgetLeft || screenY != _lastWidgetTop ||
                     physicalWidth != _lastWidgetW || physicalHeight != _lastWidgetH)
@@ -759,8 +804,11 @@ namespace FlyShelf.Windows
                 if (Math.Abs(this.Height - targetLogicalHeight) > 0.01)
                     this.Height = targetLogicalHeight;
 
-                // Apply user's manual horizontal offset
-                containerPos.X += SettingsManager.Current.WidgetHorizontalOffset;
+                // Apply user's manual horizontal offset (only for presets, not custom percentage)
+                if (SettingsManager.Current.WidgetTaskbarAlignment != 3)
+                {
+                    containerPos.X += SettingsManager.Current.WidgetHorizontalOffset;
+                }
 
                 // Only call SetWindowPos if the container position/size actually changed — avoids flicker
                 if (containerPos.X != _lastWidgetLeft || containerPos.Y != _lastWidgetTop ||
@@ -840,6 +888,54 @@ namespace FlyShelf.Windows
             // Cache for 5 seconds to avoid expensive enumeration every 500ms
             if (_cachedFreeZoneLeft >= 0 && (DateTime.Now - _lastFreeZoneScan).TotalSeconds < 5)
                 return (_cachedFreeZoneLeft, _cachedFreeZoneWidth);
+
+            int alignment = SettingsManager.Current.WidgetTaskbarAlignment;
+            if (alignment != -1)
+            {
+                int targetLeft = 0;
+                if (alignment == 0) // Far Left
+                {
+                    targetLeft = (int)(8 * dpiScale);
+                }
+                else if (alignment == 1) // After Start
+                {
+                    if (isTaskbarCentered)
+                    {
+                        int widgetsRight = DetectWidgetsButtonRight(taskbarHandle);
+                        targetLeft = (widgetsRight > 0 ? widgetsRight : (int)(160 * dpiScale)) + 8;
+                    }
+                    else
+                    {
+                        targetLeft = (int)(180 * dpiScale) + 8;
+                    }
+                }
+                else if (alignment == 2) // Before Tray
+                {
+                    IntPtr trayHwnd = FindWindowEx(taskbarHandle, IntPtr.Zero, "TrayNotifyWnd", null);
+                    if (trayHwnd != IntPtr.Zero)
+                    {
+                        GetWindowRect(trayHwnd, out RECT trayRect);
+                        POINT trayPt = new POINT { X = trayRect.Left, Y = trayRect.Top };
+                        ScreenToClient(taskbarHandle, ref trayPt);
+                        targetLeft = trayPt.X - physicalWidth - 8;
+                    }
+                    else
+                    {
+                        targetLeft = taskbarWidth - physicalWidth - (int)(12 * dpiScale) - 8;
+                    }
+                }
+                else // 3 (Custom Percentage)
+                {
+                    int range = taskbarWidth - physicalWidth;
+                    if (range < 0) range = 0;
+                    targetLeft = (int)((SettingsManager.Current.WidgetHorizontalOffset / 100.0) * range);
+                }
+
+                _cachedFreeZoneLeft = targetLeft;
+                _cachedFreeZoneWidth = physicalWidth;
+                _lastFreeZoneScan = DateTime.Now;
+                return (targetLeft, physicalWidth);
+            }
 
             // FAST PATH: When centered taskbar + Widgets button OFF, skip unreliable EnumChildWindows
             // gap detection entirely. Win11's XAML Islands taskbar renders all icons inside a single
