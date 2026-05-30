@@ -50,7 +50,9 @@ const normalizeTextForFingerprint = (text: string): string => {
 // MAIN SCREEN
 // ════════════════════════════════════════════════════════
 export default function SyncScreen() {
-  const { pcLocalIp, deviceName, setDeviceName, isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, addPairedDevice, pairedDevices, pairingKey: contextPairingKey, regeneratePairingKey } = useSettings();
+  const { pcLocalIp, deviceName, setDeviceName, isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, addPairedDevice, pairedDevices, updatePairedDeviceLicensing, pairingKey: contextPairingKey, regeneratePairingKey } = useSettings();
+
+  const isPairedPcPro = pairedDevices.some(d => d.deviceType === 'PC' && d.isPro);
 
   useEffect(() => {
     if (Platform.OS === 'android' && AdvanceOverlay && isFloatingBallEnabled) {
@@ -932,6 +934,15 @@ export default function SyncScreen() {
           }
         }
         setActiveDevices(rawDevices);
+        const activePc = rawDevices.find(d => d.DeviceType === 'PC');
+        if (activePc) {
+          const isPro = !!activePc.IsPro;
+          const licenseKey = activePc.LicenseKey || '';
+          const pcPair = pairedDevices.find(d => d.deviceType === 'PC');
+          if (pcPair) {
+            updatePairedDeviceLicensing(pcPair.deviceId, isPro, licenseKey);
+          }
+        }
         // If no PC found at all, immediately try Firebase clipboard listener
         if (!rawDevices.some(d => d.DeviceType === 'PC')) {
           syncLog('FIREBASE', 'No PC found — activating Firebase clipboard listener immediately');
@@ -945,7 +956,7 @@ export default function SyncScreen() {
       if (firebaseUnsubFeedRef.current) { firebaseUnsubFeedRef.current(); firebaseUnsubFeedRef.current = null; }
       if (firebaseFallbackTimerRef.current) { clearTimeout(firebaseFallbackTimerRef.current); firebaseFallbackTimerRef.current = null; }
     };
-  }, [isGlobalSyncEnabled, contextPairingKey]);
+  }, [isGlobalSyncEnabled, contextPairingKey, pairedDevices]);
 
   // ─── Last proven-working PC URL (set by poll on successful /api/sync) ───
   const lastWorkingPcUrlRef = useRef<string>('');
@@ -2242,6 +2253,8 @@ export default function SyncScreen() {
 
     const urls = [local, globalUrl].filter(u => u && u.startsWith('http')) as string[];
     let paired = false, workingUrl = '';
+    let pairedPcIsPro = false;
+    let pairedPcLicenseKey = '';
 
     for (const url of urls) {
       try {
@@ -2255,7 +2268,16 @@ export default function SyncScreen() {
             deviceType: 'Mobile',
           }),
         }, 6000);
-        if (res.ok) { paired = true; workingUrl = url; break; }
+        if (res.ok) {
+          try {
+            const data = await res.json();
+            pairedPcIsPro = !!data.isPro;
+            pairedPcLicenseKey = data.licenseKey || '';
+          } catch {}
+          paired = true;
+          workingUrl = url;
+          break;
+        }
       } catch {}
     }
 
@@ -2289,6 +2311,8 @@ export default function SyncScreen() {
       deviceName: pcName || 'Unknown Device',
       deviceType: deviceType as 'PC' | 'Mobile' | 'Browser',
       pairedAt: NetworkClock.now(),
+      isPro: pairedPcIsPro,
+      licenseKey: pairedPcLicenseKey,
     });
 
     setIsPairing(false);
@@ -2395,6 +2419,8 @@ export default function SyncScreen() {
                   deviceName: dev.DeviceName || 'PC',
                   deviceType: 'PC',
                   pairedAt: NetworkClock.now(),
+                  isPro: !!dev.IsPro,
+                  licenseKey: dev.LicenseKey || '',
                 });
                 // Save their connection URLs for fast LAN sync
                 if (dev.LocalIp) await setSecureItem('pairedLocalUrl', dev.LocalIp.startsWith('http') ? dev.LocalIp : `http://${dev.LocalIp}`);
@@ -2765,7 +2791,7 @@ export default function SyncScreen() {
           {pairedPcName && (
             <View style={{marginTop: 12, padding: 10, backgroundColor: '#10B98111', borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 8}}>
               <View style={{width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981'}} />
-              <Text style={{color: '#10B981', fontSize: 13, fontWeight: '600'}}>Paired with {pairedPcName}</Text>
+              <Text style={{color: '#10B981', fontSize: 13, fontWeight: '600'}}>Paired with {pairedPcName}{isPairedPcPro ? ' (Pro)' : ' (Free)'}</Text>
             </View>
           )}
 
@@ -2795,7 +2821,7 @@ export default function SyncScreen() {
             <Text style={styles.title}>FlyShelf</Text>
             <View style={styles.statusRow}>
               <View style={[styles.indicator, { backgroundColor: pairingKeyRef.current ? (pairedPcName ? '#10B981' : '#4A62EB') : '#EF4444' }]} />
-              <Text style={styles.statusText}>{pairingKeyRef.current ? (pairedPcName ? `Connected to ${pairedPcName}` : 'Cloud Active') : '⚠ Not Paired'}</Text>
+              <Text style={styles.statusText}>{pairingKeyRef.current ? (pairedPcName ? `Connected to ${pairedPcName}${isPairedPcPro ? ' (Pro)' : ' (Free)'}` : 'Cloud Active') : '⚠ Not Paired'}</Text>
             </View>
           </View>
           <View style={{flexDirection: 'row', gap: 10}}>

@@ -149,7 +149,9 @@ namespace FlyShelf.Classes
                         deviceId = SettingsManager.Current.DeviceId ?? Environment.MachineName,
                         localUrl = DisplayUrl,
                         globalUrl = GlobalUrl ?? "",
-                        pin = SettingsManager.Current.WebClientPinToken
+                        pin = SettingsManager.Current.WebClientPinToken,
+                        isPro = LicenseManager.IsPro,
+                        licenseKey = LicenseManager.IsPro ? LicenseManager.MaskedKey : ""
                     };
                     byte[] json = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response));
                     res.StatusCode = 200;

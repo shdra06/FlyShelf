@@ -79,6 +79,12 @@ namespace FlyShelf.Windows
                 }
             }
 
+#if !DEBUG
+            // Release builds: hide developer-only UI (System Logs tab, Network live logs button)
+            if (LogsNavItem != null) LogsNavItem.Visibility = Visibility.Collapsed;
+            if (NetworkLiveLogsBtn != null) NetworkLiveLogsBtn.Visibility = Visibility.Collapsed;
+#endif
+
             // Wire up UpdateManager events
             _updateManager.StatusChanged += (msg) => Dispatcher.Invoke(() =>
             {

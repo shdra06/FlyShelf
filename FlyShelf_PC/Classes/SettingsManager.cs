@@ -45,7 +45,7 @@ namespace FlyShelf.Classes
         private double _quickLookHeight = 0;
         public double QuickLookHeight { get => _quickLookHeight; set => SetProperty(ref _quickLookHeight, value); }
 
-        private int _widgetTaskbarAlignment = -1;
+        private int _widgetTaskbarAlignment = 0;
         public int WidgetTaskbarAlignment { get => _widgetTaskbarAlignment; set => SetProperty(ref _widgetTaskbarAlignment, value); } // -1=Auto, 0=Far Left, 1=After Start, 2=Before Tray, 3=Custom Slider
         
         // Tier 1 Settings
@@ -131,7 +131,7 @@ namespace FlyShelf.Classes
         /// <summary>
         /// Controls clipboard background mode: "mica" (system blur), "desktop" (Windows wallpaper), or "theme" (custom theme).
         /// </summary>
-        private string _themeDisplayMode = "theme";
+        private string _themeDisplayMode = "desktop";
         public string ThemeDisplayMode { get => _themeDisplayMode; set => SetProperty(ref _themeDisplayMode, value); }
 
         private bool _themeAnimationsEnabled = true;
@@ -218,7 +218,7 @@ namespace FlyShelf.Classes
                         {
                             Logger.LogAction("SETTINGS_MIGRATION", $"Upgrading config version from {version} to 2 — enabling FlyShelf Default theme.");
                             Current.ActiveThemeName = "FlyShelf Default";
-                            Current.ThemeDisplayMode = "theme";
+                            Current.ThemeDisplayMode = "desktop";
                             Current.Version = 2;
                             // Write synchronously to guarantee persistence before DebouncedSave can race
                             try

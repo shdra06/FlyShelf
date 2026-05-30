@@ -338,9 +338,31 @@ export default function SettingsScreen() {
                         {device.deviceType === 'PC' ? '💻' : device.deviceType === 'Mobile' ? '📱' : '🌐'}
                       </Text>
                       <View style={{ flex: 1 }}>
-                        <Text style={{ color: '#FFF', fontSize: 15, fontWeight: '600' }}>{device.deviceName}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ color: '#FFF', fontSize: 15, fontWeight: '600' }}>{device.deviceName}</Text>
+                          {device.deviceType === 'PC' && (
+                            <View style={{
+                              backgroundColor: device.isPro ? '#10B98122' : '#2A2F3A',
+                              borderRadius: 6,
+                              paddingHorizontal: 6,
+                              paddingVertical: 2,
+                              borderWidth: 1,
+                              borderColor: device.isPro ? '#10B98144' : '#3F4450'
+                            }}>
+                              <Text style={{
+                                color: device.isPro ? '#10B981' : '#8A8F98',
+                                fontSize: 9,
+                                fontWeight: '700',
+                                textTransform: 'uppercase'
+                              }}>
+                                {device.isPro ? 'Pro' : 'Free'}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
                         <Text style={{ color: '#8A8F98', fontSize: 11, marginTop: 2 }}>
                           {device.deviceType} • Paired {new Date(device.pairedAt).toLocaleDateString()}
+                          {device.isPro && device.licenseKey ? ` • Key: ${device.licenseKey}` : ''}
                         </Text>
                       </View>
                       <TouchableOpacity

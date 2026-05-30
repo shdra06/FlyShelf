@@ -507,6 +507,86 @@ namespace FlyShelf.Windows
         {
             bool isPro = FlyShelf.Classes.LicenseManager.IsPro;
 
+            // Runtime dynamic correction if downgraded/deactivated to Free tier
+            if (!isPro)
+            {
+                bool settingsChanged = false;
+
+                // 1. Correct Theme display mode and active mascot theme
+                if (FlyShelf.Classes.SettingsManager.Current.ThemeDisplayMode == "glass")
+                {
+                    FlyShelf.Classes.SettingsManager.Current.ThemeDisplayMode = "mica";
+                    FlyShelf.Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                    FlyShelf.Classes.ThemeManager.Instance.RemoveGlassTheme();
+                    settingsChanged = true;
+                }
+
+                string activeThemeName = FlyShelf.Classes.SettingsManager.Current.ActiveThemeName ?? "";
+                if (!string.IsNullOrEmpty(activeThemeName) && !FlyShelf.Classes.LicenseManager.CanUseTheme(activeThemeName))
+                {
+                    FlyShelf.Classes.SettingsManager.Current.ActiveThemeName = "";
+                    if (FlyShelf.Classes.SettingsManager.Current.ThemeDisplayMode == "theme")
+                    {
+                        FlyShelf.Classes.SettingsManager.Current.ThemeDisplayMode = "mica";
+                        FlyShelf.Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                    }
+                    FlyShelf.Classes.ThemeManager.Instance.SetActiveTheme(null);
+                    settingsChanged = true;
+                }
+
+                // 2. Correct history retention if set to Pro-only "Never"
+                if (FlyShelf.Classes.SettingsManager.Current.ClipboardRetentionDays == 0)
+                {
+                    FlyShelf.Classes.SettingsManager.Current.ClipboardRetentionDays = 7;
+                    settingsChanged = true;
+                }
+
+                // 3. Correct Cloudflare global tunnel
+                if (FlyShelf.Classes.SettingsManager.Current.EnableGlobalCloudflare)
+                {
+                    FlyShelf.Classes.SettingsManager.Current.EnableGlobalCloudflare = false;
+                    settingsChanged = true;
+                    
+                    // Stop Cloudflare tunnel dynamically!
+                    var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
+                    if (mainWin != null && mainWin.ViewModel?.LocalServer != null)
+                    {
+                        mainWin.ViewModel.LocalServer.Stop();
+                        // If they still want local LAN sync to be running:
+                        if (FlyShelf.Classes.SettingsManager.Current.EnableLocalNetworkSync)
+                        {
+                            mainWin.ViewModel.LocalServer.Start();
+                        }
+                    }
+                }
+
+                if (settingsChanged)
+                {
+                    FlyShelf.Classes.SettingsManager.Save();
+                }
+
+                // Re-select the correct items in ComboBoxes if needed
+                if (RetentionCombo != null)
+                {
+                    for (int i = 0; i < RetentionCombo.Items.Count; i++)
+                    {
+                        var item = RetentionCombo.Items[i] as System.Windows.Controls.ComboBoxItem;
+                        if (item?.Tag?.ToString() == FlyShelf.Classes.SettingsManager.Current.ClipboardRetentionDays.ToString())
+                        {
+                            RetentionCombo.SelectedIndex = i;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Restart sniffer to update dynamic watchers based on new license state
+            var mainWinSniffer = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
+            if (mainWinSniffer != null && mainWinSniffer.ViewModel?.Sniffer != null)
+            {
+                mainWinSniffer.ViewModel.Sniffer.StartSniffing();
+            }
+
             // Title bar badges
             if (ProBadgeTitleBar != null)
                 ProBadgeTitleBar.Visibility = isPro ? Visibility.Visible : Visibility.Collapsed;
@@ -612,6 +692,9 @@ namespace FlyShelf.Windows
             // Clear any error text
             if (LicenseErrorText != null)
                 LicenseErrorText.Visibility = Visibility.Collapsed;
+
+            // Re-populate theme combo box to update lock symbols when license changes
+            PopulateThemeCombo();
         }
 
         private void ActivateLicense_Click(object sender, RoutedEventArgs e)

@@ -30,7 +30,7 @@ module.exports = async (req, res) => {
       return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    const { email, deviceId } = req.body;
+    const { email, deviceId, region } = req.body;
     if (!email || !deviceId) {
       return res.status(400).json({ error: 'Missing email or deviceId' });
     }
@@ -46,14 +46,20 @@ module.exports = async (req, res) => {
 
     const receiptId = `rcpt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     
+    // Determine currency and amount based on region
+    const isInternational = region === 'USD';
+    const currency = isInternational ? 'USD' : 'INR';
+    const amount = isInternational ? 999 : 29900; // $9.99 (999 cents) or ₹299 (29900 paise)
+
     const order = await razorpay.orders.create({
-      amount: 29900, // ₹299 in paise
-      currency: 'INR',
+      amount,
+      currency,
       receipt: receiptId,
       notes: {
         email,
         deviceId,
-        product: 'FlyShelf Pro Lifetime'
+        product: 'FlyShelf Pro Lifetime',
+        region: currency
       }
     });
 

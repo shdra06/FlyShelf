@@ -90,7 +90,7 @@
                     <ui:NavigationViewItem Content="Settings" Tag="Settings" PreviewMouseLeftButtonDown="Nav_Click">
                         <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Settings24"/></ui:NavigationViewItem.Icon>
                     </ui:NavigationViewItem>
-                    <ui:NavigationViewItem Content="System Logs" Tag="Logs" PreviewMouseLeftButtonDown="Nav_Click">
+                    <ui:NavigationViewItem x:Name="LogsNavItem" Content="System Logs" Tag="Logs" PreviewMouseLeftButtonDown="Nav_Click">
                         <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Document24"/></ui:NavigationViewItem.Icon>
                     </ui:NavigationViewItem>
                     <ui:NavigationViewItem Content="About" Tag="About" PreviewMouseLeftButtonDown="Nav_Click">
@@ -765,7 +765,7 @@
                                         <ui:Button Content="🔄 Force Sync" Padding="8,3" 
                                                    Click="ForcePeerSync_Click" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center"
                                                    ToolTip="Re-fetch all peer URLs from Firebase and reconnect"/>
-                                        <ui:Button Content="📡 Live Logs" Padding="8,3"
+                                        <ui:Button x:Name="NetworkLiveLogsBtn" Content="📡 Live Logs" Padding="8,3"
                                                    Click="OpenNetworkLogs_Click" FontSize="10" Margin="4,0,0,0" VerticalAlignment="Center"
                                                    ToolTip="View live logs from this device and all paired devices"/>
                                     </StackPanel>
@@ -1709,8 +1709,8 @@
                                             </StackPanel>
                                         </Border>
 
-                                        <!-- Color Scheme -->
-                                        <Border Grid.Column="4" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="14">
+                                        <!-- Color Scheme (hidden — always Dark Mode) -->
+                                        <Border Grid.Column="4" Visibility="Collapsed" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="14">
                                             <StackPanel>
                                                 <TextBlock Text="Color Scheme" FontWeight="SemiBold" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,10"/>
                                                 <Border Height="60" CornerRadius="8" Margin="0,0,0,10">

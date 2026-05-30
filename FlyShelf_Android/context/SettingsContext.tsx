@@ -8,6 +8,8 @@ export type PairedDevice = {
   deviceName: string;
   deviceType: 'PC' | 'Mobile' | 'Browser';
   pairedAt: number; // timestamp
+  isPro?: boolean;
+  licenseKey?: string;
 };
 
 type SettingsContextType = {
@@ -30,6 +32,7 @@ type SettingsContextType = {
   pairedDevices: PairedDevice[];
   addPairedDevice: (device: PairedDevice) => Promise<void>;
   removePairedDevice: (deviceId: string) => Promise<void>;
+  updatePairedDeviceLicensing: (deviceId: string, isPro: boolean, licenseKey: string) => Promise<void>;
   pairingKey: string;
   regeneratePairingKey: () => Promise<string>;
 };
@@ -53,6 +56,7 @@ const SettingsContext = createContext<SettingsContextType>({
   pairedDevices: [],
   addPairedDevice: async () => {},
   removePairedDevice: async () => {},
+  updatePairedDeviceLicensing: async () => {},
   pairingKey: '',
   regeneratePairingKey: async () => '',
 });
@@ -196,6 +200,23 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   };
 
+  const updatePairedDeviceLicensing = async (deviceId: string, isPro: boolean, licenseKey: string) => {
+    setPairedDevicesState(prev => {
+      const idx = prev.findIndex(d => d.deviceId === deviceId);
+      if (idx === -1) return prev;
+      if (prev[idx].isPro === isPro && prev[idx].licenseKey === licenseKey) return prev;
+      
+      const updated = [...prev];
+      updated[idx] = {
+        ...updated[idx],
+        isPro,
+        licenseKey
+      };
+      AsyncStorage.setItem('@pairedDevices', JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  };
+
   const regeneratePairingKey = async (): Promise<string> => {
     const newKey = generatePairingKey();
     setPairingKeyState(newKey);
@@ -204,7 +225,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   return (
-    <SettingsContext.Provider value={{ pcLocalIp, setPcLocalIp, deviceName, setDeviceName, deviceId, isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, setFloatingBallEnabled, defaultTargetDeviceName, setDefaultTargetDeviceName, floatingBallSize, setFloatingBallSize, floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, addPairedDevice, removePairedDevice, pairingKey, regeneratePairingKey }}>
+    <SettingsContext.Provider value={{ pcLocalIp, setPcLocalIp, deviceName, setDeviceName, deviceId, isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, setFloatingBallEnabled, defaultTargetDeviceName, setDefaultTargetDeviceName, floatingBallSize, setFloatingBallSize, floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, addPairedDevice, removePairedDevice, updatePairedDeviceLicensing, pairingKey, regeneratePairingKey }}>
       {children}
     </SettingsContext.Provider>
   );

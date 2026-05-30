@@ -125,6 +125,10 @@ namespace FlyShelf
             {
                 int exStyle = GetWindowLong(helper.Handle, GWL_EXSTYLE);
                 SetWindowLong(helper.Handle, GWL_EXSTYLE, exStyle | WS_EX_NOACTIVATE | WS_EX_LAYERED);
+
+                // Force rounded corners on all devices (VMs, Win10-style DWM, etc.)
+                int cornerPref = 2; // DWMWCP_ROUND
+                DwmSetWindowAttribute(helper.Handle, 33, ref cornerPref, sizeof(int)); // DWMWA_WINDOW_CORNER_PREFERENCE
             }
         }
 

@@ -66,7 +66,9 @@ namespace FlyShelf.Classes
                     TlsThumbprint = NetworkSyncServer.Instance?.TlsThumbprint ?? "",
                     IsOnline = isOnline,
                     Timestamp = NetworkClock.UtcNowMs,
-                    UrlsEncrypted = true   // Signal to peers that URLs need decryption
+                    UrlsEncrypted = true,   // Signal to peers that URLs need decryption
+                    IsPro = LicenseManager.IsPro,
+                    LicenseKey = LicenseManager.IsPro ? LicenseManager.MaskedKey : ""
                 };
 
                 string json = JsonSerializer.Serialize(payload);

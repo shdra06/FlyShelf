@@ -114,8 +114,8 @@ namespace FlyShelf
                 TodoPanel.Opacity = 0;
                 TodoPanel.Visibility = Visibility.Collapsed;
                 ShelfListView.Visibility = Visibility.Visible;
-                if (_viewModel.DroppedItems.Count == 0)
-                    EmptyStatePanel.Visibility = Visibility.Visible;
+                // Let the XAML DataTrigger on DroppedItems.Count control visibility
+                EmptyStatePanel.ClearValue(VisibilityProperty);
                 return;
             }
 
@@ -135,8 +135,8 @@ namespace FlyShelf
                 {
                     TodoPanel.Visibility = Visibility.Collapsed;
                     ShelfListView.Visibility = Visibility.Visible;
-                    if (_viewModel.DroppedItems.Count == 0)
-                        EmptyStatePanel.Visibility = Visibility.Visible;
+                    // Let the XAML DataTrigger on DroppedItems.Count control visibility
+                    EmptyStatePanel.ClearValue(VisibilityProperty);
                 }
             };
             TodoPanel.BeginAnimation(OpacityProperty, fadeAnim);

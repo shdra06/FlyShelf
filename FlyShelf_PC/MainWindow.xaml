@@ -1254,7 +1254,7 @@
                                                 <ControlTemplate TargetType="Button">
                                                     <Border Width="26" Height="26" CornerRadius="13"
                                                             Background="#D0181818" BorderBrush="#40FFFFFF" BorderThickness="1"
-                                                            ToolTip="Rotate 90u00B0">
+                                                            ToolTip="Rotate 90°">
                                                         <ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="13" Foreground="#A78BFA"
                                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                     </Border>

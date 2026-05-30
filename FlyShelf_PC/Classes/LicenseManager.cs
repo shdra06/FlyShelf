@@ -433,6 +433,17 @@ namespace FlyShelf.Classes
 
             Logger.LogAction("LICENSE", $"Pro license activated: {MaskedKey}");
 
+            // Push updated licensing properties to active_devices so companion apps are updated in real-time
+            if (NetworkSyncServer.Instance != null && NetworkSyncServer.Instance.ServerUrl != "Not Running" && NetworkSyncServer.Instance.ServerUrl != "Offline")
+            {
+                _ = CloudDiscoveryManager.PushTunnelUrl(
+                    NetworkSyncServer.Instance.GlobalUrl ?? NetworkSyncServer.Instance.ServerUrl ?? "offline",
+                    true,
+                    NetworkSyncServer.Instance.ServerUrl ?? "",
+                    forceWrite: true
+                );
+            }
+
             // Fire-and-forget: register activation on server (non-blocking)
             _ = ValidateKeyOnServerAsync(key, deviceId);
 
@@ -447,6 +458,17 @@ namespace FlyShelf.Classes
             _data.ActivatedAt = "";
             Save();
             Logger.LogAction("LICENSE", "License deactivated — reverted to Free tier");
+
+            // Push updated licensing properties to active_devices so companion apps are updated in real-time
+            if (NetworkSyncServer.Instance != null && NetworkSyncServer.Instance.ServerUrl != "Not Running" && NetworkSyncServer.Instance.ServerUrl != "Offline")
+            {
+                _ = CloudDiscoveryManager.PushTunnelUrl(
+                    NetworkSyncServer.Instance.GlobalUrl ?? NetworkSyncServer.Instance.ServerUrl ?? "offline",
+                    true,
+                    NetworkSyncServer.Instance.ServerUrl ?? "",
+                    forceWrite: true
+                );
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════

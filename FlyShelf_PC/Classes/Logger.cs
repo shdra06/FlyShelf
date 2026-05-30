@@ -8,6 +8,14 @@ namespace FlyShelf.Classes
 {
     public static class Logger
     {
+#if DEBUG
+        /// <summary>Logging is active in Debug builds for development diagnostics.</summary>
+        public static bool IsEnabled = true;
+#else
+        /// <summary>Logging is suppressed in Release builds for clean user experience.</summary>
+        public static bool IsEnabled = false;
+#endif
+
         private static readonly string LogDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
         private static readonly string LogFile = Path.Combine(LogDirectory, "activity_log.txt");
         private static readonly string NetLogFile = Path.Combine(LogDirectory, "network_diagnostics.txt");
@@ -33,6 +41,8 @@ namespace FlyShelf.Classes
 
         static Logger()
         {
+            if (!IsEnabled) return; // Skip all disk I/O setup in Release builds
+
             if (!Directory.Exists(LogDirectory))
             {
                 Directory.CreateDirectory(LogDirectory);
@@ -67,6 +77,7 @@ namespace FlyShelf.Classes
 
         public static void LogAction(string actionType, string details)
         {
+            if (!IsEnabled) return;
             try
             {
                 // Use NTP-corrected time if available, otherwise fall back to system time
@@ -137,6 +148,7 @@ namespace FlyShelf.Classes
         /// </summary>
         public static void DumpNetworkDiagnostics()
         {
+            if (!IsEnabled) return;
             try
             {
                 var sb = new System.Text.StringBuilder();

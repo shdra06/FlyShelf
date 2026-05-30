@@ -82,6 +82,7 @@ namespace FlyShelf.Classes
 
         public void Log(string category, string message, string color = null)
         {
+            if (!Logger.IsEnabled) return; // Suppress in Release builds
             // Only show network-related categories in the live monitor
             if (!IsNetworkCategory(category)) return;
 

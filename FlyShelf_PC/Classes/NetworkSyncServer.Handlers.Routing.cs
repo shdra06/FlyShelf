@@ -220,7 +220,15 @@ namespace FlyShelf.Classes
                         string remoteIp = req.RemoteEndPoint?.Address?.ToString() ?? "";
                         if (!string.IsNullOrEmpty(deviceId)) DevicePairingManager.TouchDevice(deviceId, remoteIp);
 
-                        var info = new { status = "ok", localUrl = DisplayUrl, globalUrl = GlobalUrl ?? "", pin = SettingsManager.Current.WebClientPinToken, deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName };
+                        var info = new { 
+                            status = "ok", 
+                            localUrl = DisplayUrl, 
+                            globalUrl = GlobalUrl ?? "", 
+                            pin = SettingsManager.Current.WebClientPinToken, 
+                            deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
+                            isPro = LicenseManager.IsPro,
+                            licenseKey = LicenseManager.IsPro ? LicenseManager.MaskedKey : ""
+                        };
                         byte[] json = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(info));
                         res.StatusCode = 200; res.ContentType = "application/json";
                         res.OutputStream.Write(json, 0, json.Length);

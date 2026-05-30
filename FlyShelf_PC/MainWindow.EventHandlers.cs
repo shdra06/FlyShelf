@@ -637,6 +637,15 @@ namespace FlyShelf
                     _viewModel.RemoveItem(item);
                 }
 
+                // FILTER PERSISTENCE: Reapply category/search filters synchronously after removal.
+                // Without this, the filter delegate on the CollectionView can be lost during the
+                // subsequent UpdateLayout() + VirtualizationCacheLength manipulation, causing the
+                // user to suddenly see all items instead of the filtered subset.
+                if (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox.Text)))
+                {
+                    ReapplyActiveFilters();
+                }
+
                 log.Add($"  AFTER REMOVE: Offset={sv?.VerticalOffset:F2}  Extent={sv?.ExtentHeight:F2}  ScrollableH={sv?.ScrollableHeight:F2}");
 
                 // Immediate scroll restore — the permanent 250px bottom padding
@@ -691,6 +700,13 @@ namespace FlyShelf
                     sv.UpdateLayout();
                     log.Add($"  CACHE → 3,3  Offset={sv.VerticalOffset:F2}  Extent={sv.ExtentHeight:F2}");
 
+                    // FILTER PERSISTENCE: Reapply filters after cache restoration + UpdateLayout,
+                    // which is the transition most likely to reset the CollectionView filter.
+                    if (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox.Text)))
+                    {
+                        ReapplyActiveFilters();
+                    }
+
                     // Correct any drift from cache restoration
                     if (capturedIndex >= 0 && capturedIndex < ShelfListView.Items.Count)
                     {
@@ -743,6 +759,13 @@ namespace FlyShelf
                 {
                     // No anchor — just restore cache and force mouse re-evaluation
                     VirtualizingPanel.SetCacheLength(ShelfListView, new VirtualizationCacheLength(3, 3));
+
+                    // FILTER PERSISTENCE: Also reapply filters in the no-anchor path
+                    if (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox.Text)))
+                    {
+                        ReapplyActiveFilters();
+                    }
+
                     ForceMouseReEvaluation();
                 }
 

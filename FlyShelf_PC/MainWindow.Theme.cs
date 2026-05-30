@@ -309,7 +309,7 @@ namespace FlyShelf
 
                     // For GIF wallpapers, use a themed color directly (can't extract from animated)
                     WallpaperFrostHeader.Visibility = Visibility.Collapsed; // No frost for GIF (looks odd)
-                    var themeColor = Color.FromRgb(255, 140, 0); // Cozy dark orange / Gravity Cat
+                    var themeColor = Color.FromRgb(255, 140, 0); // Cozy dark orange fallback for animated wallpapers
                     var centerColor = Color.FromArgb(30, themeColor.R, themeColor.G, themeColor.B);
                     var edgeColor = Color.FromArgb(120, (byte)(themeColor.R / 5), (byte)(themeColor.G / 5), (byte)(themeColor.B / 5));
                     WallpaperRadialBrush.GradientStops[0].Color = centerColor;

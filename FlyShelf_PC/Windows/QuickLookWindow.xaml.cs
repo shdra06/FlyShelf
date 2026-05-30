@@ -75,6 +75,10 @@ namespace FlyShelf.Windows
                         ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(217, 119, 6))  // Amber
                         : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x6B, 0x72, 0x80)); // Gray
                     HelperText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x80, 0x11, 0x11, 0x11));
+                    if (QrContentBar != null) QrContentBar.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xE5, 0xE5, 0xE6, 0xE8));
+                    if (QrContentBar != null) QrContentBar.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x20, 0x00, 0x00, 0x00));
+                    if (QrContentText != null) QrContentText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x11, 0x11, 0x11));
+                    if (CopyQrBtn != null) CopyQrBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x37, 0x7C, 0xF6));
                 }
             }
             catch { }
@@ -90,7 +94,7 @@ namespace FlyShelf.Windows
 
             try
             {
-                if (_item.ItemType == FlyShelf.ViewModels.ClipboardItemType.Image)
+                if (_item.ItemType == FlyShelf.ViewModels.ClipboardItemType.Image || _item.ItemType == FlyShelf.ViewModels.ClipboardItemType.QRCode)
                 {
                     PreviewImage.Visibility = Visibility.Visible;
                     if (ImageModeGrid != null) ImageModeGrid.Visibility = Visibility.Visible;
@@ -183,7 +187,16 @@ namespace FlyShelf.Windows
                         }
 
                         this.Width = targetW;
-                        this.Height = targetH + 40; // Add header height back
+                        if (_item.ItemType == FlyShelf.ViewModels.ClipboardItemType.QRCode)
+                        {
+                            this.Height = targetH + 80; // Add header and QR content bar height back
+                            if (QrContentBar != null) QrContentBar.Visibility = Visibility.Visible;
+                            if (QrContentText != null) QrContentText.Text = _item.RawContent;
+                        }
+                        else
+                        {
+                            this.Height = targetH + 40; // Add header height back
+                        }
                         
                         _isImageLoaded = true;
                         RotateBtn.Visibility = Visibility.Visible;
@@ -682,6 +695,21 @@ namespace FlyShelf.Windows
             {
                 System.Windows.Clipboard.SetText(_ocrResult.Text);
                 FlyShelf.Windows.ToastWindow.ShowToast("All Image Text Copied to Clipboard! 📋");
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast("Copy failed: " + ex.Message);
+            }
+        }
+
+        private void CopyQrButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_item == null || string.IsNullOrWhiteSpace(_item.RawContent)) return;
+
+            try
+            {
+                System.Windows.Clipboard.SetText(_item.RawContent);
+                FlyShelf.Windows.ToastWindow.ShowToast("QR Code Text Copied! 📋");
             }
             catch (Exception ex)
             {

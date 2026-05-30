@@ -448,8 +448,14 @@ namespace FlyShelf.Windows
                 else if (savedMode == "desktop")
                     selectedIdx = 2;
 
+                // Blocklisted themes — removed from the product
+                var blockedThemes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Gravity Cat" };
+
                 foreach (var theme in themes)
                 {
+                    // Skip blocklisted themes
+                    if (blockedThemes.Contains(theme.Name)) continue;
+
                     // Skip themes with no resolved animation files (e.g. "FlyShelf Default" template)
                     bool hasRealSprites = theme.Animations.Values.Any(a => 
                         !string.IsNullOrEmpty(a.ResolvedFilePath) && System.IO.File.Exists(a.ResolvedFilePath));

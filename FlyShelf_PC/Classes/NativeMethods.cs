@@ -43,6 +43,8 @@ public static partial class NativeMethods
     internal const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
     internal const int DWMWA_COLOR_DARK_GRAY = 0x002D2D2D;
     internal const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
+    internal const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
+    internal const int DWMWCP_ROUND = 2; // Force rounded corners on all devices/VMs
 
     // Keyboard Hook
     internal const int WH_KEYBOARD_LL = 13;
@@ -529,6 +531,10 @@ public static partial class NativeMethods
             var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
             if (hwnd != IntPtr.Zero)
             {
+                // Force rounded corners on ALL devices (VMs, older Win11 builds, etc.)
+                int cornerPref = DWMWCP_ROUND;
+                DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref cornerPref, sizeof(int));
+
                 int darkValue = isLight ? 0 : 1;
                 DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref darkValue, sizeof(int));
 

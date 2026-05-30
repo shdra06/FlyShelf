@@ -90,6 +90,20 @@
                         </ui:Button>
                     </StackPanel>
                     
+                    <!-- QR Code Decoded Content Bar -->
+                    <Border x:Name="QrContentBar" VerticalAlignment="Bottom" Height="40" Background="#A01A1A1A" BorderBrush="#20FFFFFF" BorderThickness="0,1,0,0" Visibility="Collapsed">
+                        <Grid Margin="12,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:SymbolIcon Symbol="QRCode24" Foreground="#60A5FA" FontSize="18" VerticalAlignment="Center" Margin="0,0,8,0" Grid.Column="0"/>
+                            <TextBlock x:Name="QrContentText" Text="QR Code Text..." Foreground="White" VerticalAlignment="Center" FontSize="12" TextTrimming="CharacterEllipsis" Grid.Column="1"/>
+                            <ui:Button x:Name="CopyQrBtn" Click="CopyQrButton_Click" Content="Copy Text" Appearance="Secondary" Padding="8,3" FontSize="10.5" VerticalAlignment="Center" Grid.Column="2"/>
+                        </Grid>
+                    </Border>
+                    
                     <!-- Instruction Overlay (fades out) -->
                     <TextBlock x:Name="HelperText" Text="Drag image to drop natively" Foreground="#80FFFFFF" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,10" FontSize="12" IsHitTestVisible="False">
                     <TextBlock.Triggers>

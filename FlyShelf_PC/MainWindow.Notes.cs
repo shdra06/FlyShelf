@@ -259,8 +259,8 @@ namespace FlyShelf
                 NotesPanel.Opacity = 0;
                 NotesPanel.Visibility = Visibility.Collapsed;
                 ShelfListView.Visibility = Visibility.Visible;
-                if (_viewModel.DroppedItems.Count == 0)
-                    EmptyStatePanel.Visibility = Visibility.Visible;
+                // Let the XAML DataTrigger on DroppedItems.Count control visibility
+                EmptyStatePanel.ClearValue(VisibilityProperty);
                 return;
             }
 
@@ -273,8 +273,8 @@ namespace FlyShelf
                     NotesPanel.Visibility = Visibility.Collapsed;
                     ShelfListView.Visibility = Visibility.Visible;
                     // Restore empty state if needed
-                    if (_viewModel.DroppedItems.Count == 0)
-                        EmptyStatePanel.Visibility = Visibility.Visible;
+                    // Let the XAML DataTrigger on DroppedItems.Count control visibility
+                    EmptyStatePanel.ClearValue(VisibilityProperty);
                 }
             };
             NotesPanel.BeginAnimation(OpacityProperty, fadeAnim);
