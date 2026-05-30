@@ -1,0 +1,9 @@
+﻿{
+    "pc_version":  "2.0.0",
+    "pc_changelog":  "v2.0.0 â€” Major Release\n\nâ€¢ NEW: Quick Look button on Hub clipboard image cards\nâ€¢ NEW: Hub thumbnail loading (fixes blank images in Hub)\nâ€¢ SECURITY: Obfuscation applied via Obfuscar\nâ€¢ SECURITY: Assembly integrity checks\nâ€¢ SECURITY: HMAC re-validation on license load\nâ€¢ UI: Version badge updated to v2.0.0\nâ€¢ FIX: Thumbnail retry with fail count capping",
+    "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v2.0.0/FlyShelf.exe",
+    "pc_sha256":  "b141940db4dff18b007260443401c95a501d90cdb16f4617eee283ab4d10e627",
+    "android_version":  "7.1.0",
+    "android_changelog":  "v7.1.0 â€” Version Sync\n\nâ€¢ Bumped version to sync with Desktop client release.",
+    "android_download":  "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"
+}

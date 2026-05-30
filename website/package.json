@@ -1,0 +1,8 @@
+{
+  "name": "flyshelf-website-payment",
+  "version": "1.0.0",
+  "description": "FlyShelf Pro payment backend serverless functions",
+  "dependencies": {
+    "razorpay": "^2.9.2"
+  }
+}
