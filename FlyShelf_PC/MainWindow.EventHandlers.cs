@@ -210,32 +210,23 @@ namespace FlyShelf
             var settings = FlyShelf.Classes.SettingsManager.Current;
             settings.EnableIncomingSync = !settings.EnableIncomingSync;
 
-            if (settings.EnableIncomingSync)
+            // IMPORTANT: Toggling incoming/outgoing individually NEVER kills connections.
+            // Connections (Cloudflare, LAN, PeerManager) stay alive at all times.
+            // The toggle is a pure data-flow gate checked at the moment content arrives.
+            // Only the "Both" toggle (full offline) kills connections.
+            if (settings.EnableIncomingSync && !settings.EnableCloudDiscovery)
             {
-                if (!settings.EnableCloudDiscovery)
-                {
-                    settings.EnableCloudDiscovery = true;
-                    settings.EnableGlobalCloudflare = true;
-                    settings.EnableLocalLAN = true;
-                }
-            }
-            else
-            {
-                if (!settings.EnableOutgoingSync)
-                {
-                    settings.EnableCloudDiscovery = false;
-                    settings.EnableGlobalCloudflare = false;
-                    settings.EnableLocalLAN = false;
-                }
+                // Re-enable connections if they were killed by the "Both" off toggle
+                settings.EnableCloudDiscovery = true;
+                settings.EnableGlobalCloudflare = true;
+                settings.EnableLocalLAN = true;
+                TriggerInstantResync();
             }
 
             FlyShelf.Classes.SettingsManager.Save();
             UpdateSyncButtonHighlights();
 
-            if (settings.EnableIncomingSync || settings.EnableOutgoingSync)
-            {
-                TriggerInstantResync();
-            }
+            FlyShelf.Classes.Logger.LogAction("SYNC_TOGGLE", $"Incoming sync: {(settings.EnableIncomingSync ? "ON" : "OFF")} (connections preserved)");
         }
 
         private void SyncOutgoing_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
@@ -243,32 +234,23 @@ namespace FlyShelf
             var settings = FlyShelf.Classes.SettingsManager.Current;
             settings.EnableOutgoingSync = !settings.EnableOutgoingSync;
 
-            if (settings.EnableOutgoingSync)
+            // IMPORTANT: Toggling outgoing NEVER kills connections.
+            // Cloudflare tunnel, LAN server, and PeerManager stay alive.
+            // EnableOutgoingSync is a pure soft-gate checked in HandleDropInternal
+            // (DropHandler.cs lines 236, 485, 712) before any content is pushed.
+            if (settings.EnableOutgoingSync && !settings.EnableCloudDiscovery)
             {
-                if (!settings.EnableCloudDiscovery)
-                {
-                    settings.EnableCloudDiscovery = true;
-                    settings.EnableGlobalCloudflare = true;
-                    settings.EnableLocalLAN = true;
-                }
-            }
-            else
-            {
-                if (!settings.EnableIncomingSync)
-                {
-                    settings.EnableCloudDiscovery = false;
-                    settings.EnableGlobalCloudflare = false;
-                    settings.EnableLocalLAN = false;
-                }
+                // Re-enable connections if they were killed by the "Both" off toggle
+                settings.EnableCloudDiscovery = true;
+                settings.EnableGlobalCloudflare = true;
+                settings.EnableLocalLAN = true;
+                TriggerInstantResync();
             }
 
             FlyShelf.Classes.SettingsManager.Save();
             UpdateSyncButtonHighlights();
 
-            if (settings.EnableIncomingSync || settings.EnableOutgoingSync)
-            {
-                TriggerInstantResync();
-            }
+            FlyShelf.Classes.Logger.LogAction("SYNC_TOGGLE", $"Outgoing sync: {(settings.EnableOutgoingSync ? "ON" : "OFF")} (connections preserved)");
         }
 
         private void SyncBoth_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)

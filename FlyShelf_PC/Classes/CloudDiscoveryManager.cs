@@ -102,7 +102,10 @@ namespace FlyShelf.Classes
             }
 
             if (!SettingsManager.Current.EnableCloudDiscovery)
+            {
+                Logger.LogAction("PEER SYNC", "⚠️ PushToCloudHub skipped — EnableCloudDiscovery is OFF");
                 return;
+            }
 
             // CRITICAL: Do not sync unless device has been explicitly paired
             if (!DevicePairingManager.HasPairingKey)

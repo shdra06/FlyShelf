@@ -64,7 +64,7 @@
                                             
                                             <!-- Image Actions -->
                                             <ui:MenuItem Header="Extract Text from Image (OCR)" Icon="{ui:SymbolIcon TextDescription24}" Foreground="#A855F7" Command="{Binding PlacementTarget.Tag.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                                            <ui:MenuItem Header="Extract Table Data (Gemini AI)" Icon="{ui:SymbolIcon Table24}" Foreground="#A855F7" Command="{Binding PlacementTarget.Tag.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                            <ui:MenuItem Header="Extract Table Data" Icon="{ui:SymbolIcon Table24}" Foreground="#A855F7" Command="{Binding PlacementTarget.Tag.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             <ui:MenuItem Header="Convert Image to PDF" Icon="{ui:SymbolIcon Document24}" Foreground="#F59E0B" Command="{Binding PlacementTarget.Tag.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             <ui:MenuItem Header="Scan QR Code" Icon="{ui:SymbolIcon QrCode24}" Foreground="#A855F7" Command="{Binding PlacementTarget.Tag.ManualScanQRCodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" CommandParameter="{Binding}" Visibility="{Binding IsImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                                             
@@ -654,8 +654,8 @@
                                                 </ui:Button.Style>
                                             </ui:Button>
 
-                                            <!-- Extract Table Data (Gemini) -->
-                                            <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Extract Table Data (Gemini)" Command="{Binding DataContext.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
+                                            <!-- Extract Table Data -->
+                                            <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Extract Table Data" Command="{Binding DataContext.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
                                                 <ui:Button.Icon><ui:SymbolIcon Symbol="Table24" FontSize="14" Foreground="#8B5CF6" /></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">

@@ -147,22 +147,9 @@ namespace FlyShelf.Windows
             if (string.IsNullOrEmpty(_extractionMethod)) return;
 
             MethodBadge.Visibility = Visibility.Visible;
-            if (_extractionMethod.Contains("OCR", StringComparison.OrdinalIgnoreCase))
-            {
-                MethodBadgeText.Text = "⚡ Windows OCR";
-                MethodBadge.Background = new SolidColorBrush(Color.FromArgb(26, 16, 185, 129));
-                MethodBadgeText.Foreground = new SolidColorBrush(Color.FromRgb(52, 211, 153));
-            }
-            else if (_extractionMethod.Contains("Gemini", StringComparison.OrdinalIgnoreCase))
-            {
-                MethodBadgeText.Text = "✨ Gemini AI";
-                MethodBadge.Background = new SolidColorBrush(Color.FromArgb(26, 139, 92, 246));
-                MethodBadgeText.Foreground = new SolidColorBrush(Color.FromRgb(167, 139, 250));
-            }
-            else
-            {
-                MethodBadgeText.Text = _extractionMethod;
-            }
+            MethodBadgeText.Text = "⚡ Powered by FlyShelf";
+            MethodBadge.Background = new SolidColorBrush(Color.FromArgb(26, 0, 210, 255));
+            MethodBadgeText.Foreground = new SolidColorBrush(Color.FromRgb(0, 210, 255));
         }
 
         // ═══════════════════════════════════════════════════════════════════
