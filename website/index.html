@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>FlyShelf — Best Cross-Device Clipboard Manager for Windows PC & Android</title>
+  <title>FlyShelf — Best Clipboard Manager for Windows PC </title>
   
   <!-- Advanced SEO Engine Meta Tags -->
-  <meta name="description" content="FlyShelf is the ultimate premium licensed, cross-device clipboard manager and P2P file share tool for Windows PC & Android. Sync your copy-paste history, files, and screenshots instantly over LAN and Cloud tunnels safely.">
+  <meta name="description" content="FlyShelf is the ultimate premium, cross-device clipboard manager and P2P file share tool for Windows PC & Android. Sync your copy-paste history, files, and screenshots instantly over LAN and Cloud tunnels safely.">
   <meta name="keywords" content="clipboard manager, cross-device clipboard sync, best clipboard manager for pc, windows clipboard history, android clipboard sync, copy paste sync utility, flyshelf github, shdra06 flyshelf, P2P file transfer, premium clipboard sync, universal copy paste app">
   <meta name="author" content="Shivendra (shdra06)">
   <link rel="canonical" href="https://shdra06.github.io/FlyShelf/" />
@@ -72,11 +72,15 @@
   
   <!-- Favicon / Styling CSS -->
   <link rel="shortcut icon" href="favicon.png" type="image/x-icon">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://unpkg.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="style.css?v=8.5.2">
   
   <!-- Ionicons for Modern Clean Icons -->
   <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
-  <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+  <script nomodule defer src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
 </head>
 <body>
 
@@ -85,7 +89,7 @@
   <div class="grid-bg"></div>
 
   <!-- Premium Glass Navigation Bar -->
-  <nav class="navbar glass" id="main-nav">
+  <nav class="navbar glass" id="main-nav" aria-label="Main navigation">
     <div class="nav-brand">
       <img src="favicon.png" alt="FlyShelf Logo" style="width: 24px; height: 24px; margin-right: 8px; border-radius: 6px; vertical-align: middle; box-shadow: 0 0 10px rgba(0, 210, 255, 0.4);"/>
       <span>FlyShelf</span>
@@ -186,7 +190,7 @@
           </div>
           <div class="mockup-body" id="pc-clipboard-items">
             <!-- Simulated Clipboard Items -->
-            <div class="sync-card" data-content="npm i -g @flyshelf/cli" data-type="Code (Terminal)" data-badge="TERM">
+            <div class="sync-card" role="button" tabindex="0" data-content="npm i -g @flyshelf/cli" data-type="Code (Terminal)" data-badge="TERM">
               <div class="sync-card-left">
                 <div class="sync-card-icon"><ion-icon name="terminal-outline"></ion-icon></div>
                 <div class="sync-card-text">
@@ -197,7 +201,7 @@
               <span class="badge badge-cyan">TERM</span>
             </div>
             
-            <div class="sync-card" data-content="https://flyshelf.app/docs/pairing-guide" data-type="URL" data-badge="LINK">
+            <div class="sync-card" role="button" tabindex="0" data-content="https://flyshelf.app/docs/pairing-guide" data-type="URL" data-badge="LINK">
               <div class="sync-card-left">
                 <div class="sync-card-icon"><ion-icon name="link-outline"></ion-icon></div>
                 <div class="sync-card-text">
@@ -208,7 +212,7 @@
               <span class="badge badge-purple">LINK</span>
             </div>
             
-            <div class="sync-card" data-content="invoice_report_q1.pdf" data-type="File (PDF)" data-badge="PDF">
+            <div class="sync-card" role="button" tabindex="0" data-content="invoice_report_q1.pdf" data-type="File (PDF)" data-badge="PDF">
               <div class="sync-card-left">
                 <div class="sync-card-icon"><ion-icon name="document-text-outline"></ion-icon></div>
                 <div class="sync-card-text">
@@ -224,22 +228,22 @@
       
       <!-- Middle Pipeline SVG & Pathway Selectors -->
       <div class="sync-pathway">
-        <svg class="pipeline-svg" viewBox="0 0 200 100">
+        <svg class="pipeline-svg" viewBox="0 0 200 100" aria-hidden="true">
           <!-- Flow Line Paths -->
           <path id="flow-path" class="flow-line active-lane lane-lan" d="M 0 50 Q 100 0 200 50" />
           <circle id="flow-particle" class="flow-packet" r="6" cx="0" cy="50" />
         </svg>
         
         <div class="pathway-selectors">
-          <div class="selector-pill lan-pill active" data-path="lan" id="path-lan">
+          <div class="selector-pill lan-pill active" role="button" tabindex="0" data-path="lan" id="path-lan">
             <span>Direct P2P LAN</span>
             <div class="pill-dot"></div>
           </div>
-          <div class="selector-pill cloud-pill" data-path="cloud" id="path-cloud">
+          <div class="selector-pill cloud-pill" role="button" tabindex="0" data-path="cloud" id="path-cloud">
             <span>Cloudflare Tunnel</span>
             <div class="pill-dot"></div>
           </div>
-          <div class="selector-pill fb-pill" data-path="firebase" id="path-firebase">
+          <div class="selector-pill fb-pill" role="button" tabindex="0" data-path="firebase" id="path-firebase">
             <span>Firebase RTDB</span>
             <div class="pill-dot"></div>
           </div>
@@ -290,24 +294,24 @@
             <!-- Header bar with buttons -->
             <div class="widget-top-bar">
               <div class="top-bar-left">
-                <button class="top-bar-btn"><ion-icon name="search-outline"></ion-icon></button>
-                <button class="top-bar-btn"><ion-icon name="document-text-outline"></ion-icon></button>
-                <button class="top-bar-btn"><ion-icon name="checkbox-outline"></ion-icon></button>
-                <button class="top-bar-btn"><ion-icon name="funnel-outline"></ion-icon></button>
+                <button class="top-bar-btn" aria-label="Search"><ion-icon name="search-outline"></ion-icon></button>
+                <button class="top-bar-btn" aria-label="Documents"><ion-icon name="document-text-outline"></ion-icon></button>
+                <button class="top-bar-btn" aria-label="Select"><ion-icon name="checkbox-outline"></ion-icon></button>
+                <button class="top-bar-btn" aria-label="Filter"><ion-icon name="funnel-outline"></ion-icon></button>
               </div>
               <div class="top-bar-right">
-                <button class="top-bar-btn"><ion-icon name="ellipsis-horizontal-outline"></ion-icon></button>
-                <button class="top-bar-btn close-btn"><ion-icon name="close-outline"></ion-icon></button>
+                <button class="top-bar-btn" aria-label="More options"><ion-icon name="ellipsis-horizontal-outline"></ion-icon></button>
+                <button class="top-bar-btn close-btn" aria-label="Close"><ion-icon name="close-outline"></ion-icon></button>
               </div>
             </div>
 
             <!-- Categories / Filter Row -->
             <div class="widget-filter-row">
-              <button class="filter-pill"><ion-icon name="image-outline"></ion-icon> Img</button>
-              <button class="filter-pill"><ion-icon name="pin-outline"></ion-icon> Pin</button>
-              <button class="filter-pill active"><ion-icon name="document-text"></ion-icon> PDF</button>
-              <button class="filter-pill"><ion-icon name="document-outline"></ion-icon> Doc</button>
-              <button class="filter-pill-clear"><ion-icon name="close-outline"></ion-icon></button>
+              <button class="filter-pill" aria-label="Filter images"><ion-icon name="image-outline"></ion-icon> Img</button>
+              <button class="filter-pill" aria-label="Filter pinned"><ion-icon name="pin-outline"></ion-icon> Pin</button>
+              <button class="filter-pill active" aria-label="Filter PDFs"><ion-icon name="document-text"></ion-icon> PDF</button>
+              <button class="filter-pill" aria-label="Filter documents"><ion-icon name="document-outline"></ion-icon> Doc</button>
+              <button class="filter-pill-clear" aria-label="Clear filter"><ion-icon name="close-outline"></ion-icon></button>
             </div>
 
             <!-- PDF Queue List (Inner glassmorphic scroll box) -->
@@ -319,8 +323,8 @@
                   <span class="pdf-file-name">dummy 1.pdf</span>
                 </div>
                 <div class="pdf-item-controls">
-                  <button class="pdf-ctrl-btn move-up" title="Move Up"><ion-icon name="arrow-up-outline"></ion-icon></button>
-                  <button class="pdf-ctrl-btn move-down" title="Move Down"><ion-icon name="arrow-down-outline"></ion-icon></button>
+                  <button class="pdf-ctrl-btn move-up" title="Move Up" aria-label="Move up"><ion-icon name="arrow-up-outline"></ion-icon></button>
+                  <button class="pdf-ctrl-btn move-down" title="Move Down" aria-label="Move down"><ion-icon name="arrow-down-outline"></ion-icon></button>
                 </div>
               </div>
 
@@ -379,11 +383,11 @@
           <div class="widget-body">
             <div class="timer-widget-box">
               <div class="timer-input-group">
-                <input type="text" class="timer-field" id="timer-cmd-input" placeholder="/10s" value="/10s">
-                <button class="btn-timer-trigger" id="btn-timer-run"><ion-icon name="play-outline"></ion-icon></button>
+                <input type="text" class="timer-field" id="timer-cmd-input" placeholder="/10s" value="/10s" aria-label="Timer command">
+                <button class="btn-timer-trigger" id="btn-timer-run" aria-label="Start timer"><ion-icon name="play-outline"></ion-icon></button>
               </div>
               <div class="timer-display">
-                <svg class="timer-circle-svg" viewBox="0 0 120 120">
+                <svg class="timer-circle-svg" viewBox="0 0 120 120" aria-hidden="true">
                   <circle class="timer-circle-bg" cx="60" cy="60" r="54"></circle>
                   <circle class="timer-circle-progress" id="timer-progress-ring" cx="60" cy="60" r="54"></circle>
                 </svg>
@@ -405,7 +409,7 @@
           <div class="widget-body">
             <div class="color-widget-box">
               <div class="color-swatch-box" id="live-color-swatch"></div>
-              <input type="text" class="color-input-field" id="color-code-field" value="#00d2ff">
+              <input type="text" class="color-input-field" id="color-code-field" value="#00d2ff" aria-label="Color code">
               <div class="color-pills-row">
                 <button class="color-pill-btn" id="btn-copy-hex">HEX</button>
                 <button class="color-pill-btn" id="btn-copy-rgb">RGB</button>
@@ -427,7 +431,7 @@
           <div class="widget-body">
             <div class="utm-widget-box">
               <div class="utm-input-container">
-                <textarea class="utm-input-area" id="utm-url-input">https://flyshelf.app/docs?utm_source=newsletter&utm_medium=email&utm_campaign=launch_v6&fbclid=ab12cd34ef56</textarea>
+                <textarea class="utm-input-area" id="utm-url-input" aria-label="URL to sanitize">https://flyshelf.app/docs?utm_source=newsletter&utm_medium=email&utm_campaign=launch_v6&fbclid=ab12cd34ef56</textarea>
               </div>
               <div class="utm-action-row">
                 <button class="btn-utm-scrub" id="btn-utm-scrub-trigger">Sanitize Link</button>
@@ -448,8 +452,8 @@
           <div class="widget-body">
             <div class="snippet-widget-box" style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
               <div class="snippet-input-group" style="display: flex; gap: 10px; width: 100%;">
-                <input type="text" class="timer-field" id="snippet-shortcut-input" placeholder="Type /address..." value="/address" style="flex: 1;">
-                <button class="btn-timer-trigger" id="btn-expand-snippet" style="background: var(--color-purple); color: var(--text-primary); box-shadow: 0 4px 15px rgba(158,0,255,0.25);"><ion-icon name="flash-outline"></ion-icon></button>
+                <input type="text" class="timer-field" id="snippet-shortcut-input" placeholder="Type /address..." value="/address" style="flex: 1;" aria-label="Snippet shortcut">
+                <button class="btn-timer-trigger" id="btn-expand-snippet" style="background: var(--color-purple); color: var(--text-primary); box-shadow: 0 4px 15px rgba(158,0,255,0.25);" aria-label="Expand snippet"><ion-icon name="flash-outline"></ion-icon></button>
               </div>
               
               <!-- Quick Tags -->
@@ -461,7 +465,7 @@
               
               <!-- Expanded output area -->
               <div class="utm-input-container" style="margin-top: 5px;">
-                <textarea class="utm-input-area" id="snippet-expanded-output" readonly style="min-height: 80px; width: 100%; color: var(--color-cyan); border-color: rgba(0, 210, 255, 0.15);" placeholder="Expanded text snippet will appear here..."></textarea>
+                <textarea class="utm-input-area" id="snippet-expanded-output" readonly style="min-height: 80px; width: 100%; color: var(--color-cyan); border-color: rgba(0, 210, 255, 0.15);" placeholder="Expanded text snippet will appear here..." aria-label="Expanded snippet output"></textarea>
               </div>
             </div>
           </div>
@@ -543,25 +547,25 @@
         <!-- Header bar with buttons -->
         <div class="widget-top-bar" style="margin-bottom: 8px;">
           <div class="top-bar-left">
-            <button class="top-bar-btn"><ion-icon name="search-outline"></ion-icon></button>
-            <button class="top-bar-btn"><ion-icon name="document-text-outline"></ion-icon></button>
-            <button class="top-bar-btn"><ion-icon name="checkbox-outline"></ion-icon></button>
-            <button class="top-bar-btn"><ion-icon name="funnel-outline"></ion-icon></button>
+            <button class="top-bar-btn" aria-label="Search"><ion-icon name="search-outline"></ion-icon></button>
+            <button class="top-bar-btn" aria-label="Documents"><ion-icon name="document-text-outline"></ion-icon></button>
+            <button class="top-bar-btn" aria-label="Select"><ion-icon name="checkbox-outline"></ion-icon></button>
+            <button class="top-bar-btn" aria-label="Filter"><ion-icon name="funnel-outline"></ion-icon></button>
           </div>
           <div class="sumo-title" style="font-size:0.8rem; font-weight:700; color:#fff; display:flex; align-items:center; gap:4px; margin-left: 10px; margin-right: 10px;"><span style="color:var(--color-cyan);">⚡</span> FlyShelf</div>
           <div class="top-bar-right">
-            <button class="top-bar-btn"><ion-icon name="ellipsis-horizontal-outline"></ion-icon></button>
-            <button class="top-bar-btn close-btn" id="btn-close-sumo"><ion-icon name="close-outline"></ion-icon></button>
+            <button class="top-bar-btn" aria-label="More options"><ion-icon name="ellipsis-horizontal-outline"></ion-icon></button>
+            <button class="top-bar-btn close-btn" id="btn-close-sumo" aria-label="Close dashboard"><ion-icon name="close-outline"></ion-icon></button>
           </div>
         </div>
 
         <!-- Categories / Filter Row -->
         <div class="widget-filter-row" style="margin-bottom: 8px;">
-          <button class="filter-pill active"><ion-icon name="image-outline"></ion-icon> Img</button>
-          <button class="filter-pill"><ion-icon name="pin-outline"></ion-icon> Pin</button>
-          <button class="filter-pill"><ion-icon name="document-text-outline"></ion-icon> PDF</button>
-          <button class="filter-pill"><ion-icon name="document-outline"></ion-icon> Doc</button>
-          <button class="filter-pill-clear"><ion-icon name="close-outline"></ion-icon></button>
+          <button class="filter-pill active" aria-label="Filter images"><ion-icon name="image-outline"></ion-icon> Img</button>
+          <button class="filter-pill" aria-label="Filter pinned"><ion-icon name="pin-outline"></ion-icon> Pin</button>
+          <button class="filter-pill" aria-label="Filter PDFs"><ion-icon name="document-text-outline"></ion-icon> PDF</button>
+          <button class="filter-pill" aria-label="Filter documents"><ion-icon name="document-outline"></ion-icon> Doc</button>
+          <button class="filter-pill-clear" aria-label="Clear filter"><ion-icon name="close-outline"></ion-icon></button>
         </div>
 
         <!-- Inner Glass List Container -->
@@ -611,12 +615,12 @@
       <table class="comparison-table">
         <thead>
           <tr>
-            <th>Feature</th>
-            <th class="highlight-col">⚡ FlyShelf</th>
-            <th>Win + V</th>
-            <th>Ditto</th>
-            <th>PastePaw</th>
-            <th>ClipClip</th>
+            <th scope="col">Feature</th>
+            <th scope="col" class="highlight-col">⚡ FlyShelf</th>
+            <th scope="col">Win + V</th>
+            <th scope="col">Ditto</th>
+            <th scope="col">PastePaw</th>
+            <th scope="col">ClipClip</th>
           </tr>
         </thead>
         <tbody>

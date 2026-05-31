@@ -3,7 +3,6 @@
    Unified Master Website Styling (Vanilla CSS)
 */
 
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
 
 /* --- THEME DEFINITIONS & CUSTOM VARIABLE SETS --- */
 :root {
@@ -787,7 +786,6 @@ body {
   transform: translateY(20px);
   opacity: 0;
   animation: slide-in-phone-item 0.5s forwards cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform, opacity;
 }
 
 .phone-card.empty-feed {
@@ -971,9 +969,8 @@ body {
   padding: 16px;
   transition: var(--transition-smooth);
   z-index: 10;
-  will-change: transform, opacity;
   border-radius: 20px;
-  background: linear-gradient(135deg, rgba(74, 20, 140, 0.55), rgba(136, 14, 79, 0.55)), url('astronaut_bg.png');
+  background: linear-gradient(135deg, rgba(74, 20, 140, 0.55), rgba(136, 14, 79, 0.55)), url('astronaut_bg.webp');
   background-size: cover;
   background-position: center;
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -1259,175 +1256,6 @@ tr th.highlight-col {
   display: flex;
   flex-direction: column;
   justify-content: center;
-}
-
-/* A. THE PDF MERGER VISUALIZER (CUSTOM ORDER & MERGE SIMULATOR) */
-.pdf-merger-box {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  position: relative;
-}
-
-.pdf-queue {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 180px;
-  overflow-y: auto;
-}
-
-.pdf-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 14px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--border-light);
-  font-size: 0.82rem;
-  transition: var(--transition-fast);
-}
-
-.pdf-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.pdf-item-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.pdf-file-icon {
-  color: #ff3b30;
-  font-size: 1.1rem;
-}
-
-.pdf-file-name {
-  font-weight: 600;
-}
-
-.pdf-controls {
-  display: flex;
-  gap: 8px;
-}
-
-.pdf-ctrl-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-size: 0.8rem;
-}
-
-.pdf-ctrl-btn:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.pdf-merge-action-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 10px;
-}
-
-.pdf-status-log {
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  font-family: 'Fira Code', monospace;
-}
-
-.btn-merge-action {
-  background: linear-gradient(135deg, var(--color-purple), #bf55ec);
-  border: none;
-  color: var(--text-primary);
-  padding: 10px 20px;
-  border-radius: 20px;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 4px 15px rgba(158, 0, 255, 0.2);
-  transition: var(--transition-smooth);
-}
-
-.btn-merge-action:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 0 15px rgba(158, 0, 255, 0.2);
-}
-
-.btn-merge-action:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* Merger progress overlay */
-.pdf-merger-loader {
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  background: var(--bg-card);
-  border-radius: 12px;
-  border: 1px dashed var(--color-purple);
-  animation: pulse-merging 1.5s infinite alternate;
-}
-
-.loader-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(158, 0, 255, 0.1);
-  border-top-color: var(--color-purple);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 15px;
-}
-
-.pdf-output-card {
-  display: none;
-  background: linear-gradient(135deg, rgba(158, 0, 255, 0.05), rgba(0, 210, 255, 0.05));
-  border: 1px solid var(--color-purple);
-  box-shadow: 0 0 15px rgba(158, 0, 255, 0.2);
-  padding: 15px;
-  border-radius: 12px;
-  align-items: center;
-  justify-content: space-between;
-  animation: slide-in-phone-item 0.4s forwards;
-}
-
-.output-meta {
-  text-align: left;
-}
-
-.output-title {
-  font-weight: 700;
-  font-size: 0.88rem;
-  color: var(--text-primary);
-}
-
-.output-size {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-}
-
-.btn-output-dl {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--border-light);
-  color: var(--text-primary);
-  padding: 6px 12px;
-  font-size: 0.75rem;
-  font-weight: 700;
-  border-radius: 14px;
-  cursor: pointer;
-  transition: var(--transition-fast);
-}
-
-.btn-output-dl:hover {
-  background: var(--text-primary);
-  color: #000;
 }
 
 /* B. SPEED COMMAND COUNTDOWN TIMER */
@@ -1903,7 +1731,7 @@ footer {
   max-width: 380px;
   margin: 0 auto;
   border-radius: 20px;
-  background: linear-gradient(135deg, rgba(74, 20, 140, 0.4), rgba(136, 14, 79, 0.4)), url('astronaut_bg.png');
+  background: linear-gradient(135deg, rgba(74, 20, 140, 0.4), rgba(136, 14, 79, 0.4)), url('astronaut_bg.webp');
   background-size: cover;
   background-position: center;
   border: 1px solid rgba(255, 255, 255, 0.1);

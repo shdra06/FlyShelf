@@ -22,10 +22,8 @@ document.addEventListener('DOMContentLoaded', () => {
   
   if (modeToggleBtn) {
     modeToggleBtn.addEventListener('click', () => {
-      console.log('Theme toggle button clicked! Current mode:', currentMode);
       currentMode = currentMode === 'light' ? 'dark' : 'light';
       applyMode(currentMode);
-      console.log('Theme updated successfully! New mode:', currentMode);
     });
   }
   
