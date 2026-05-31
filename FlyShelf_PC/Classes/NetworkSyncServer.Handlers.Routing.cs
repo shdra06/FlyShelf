@@ -211,6 +211,10 @@ namespace FlyShelf.Classes
                 {
                     await HandlePairRequest(req, res);
                 }
+                else if (path == "/api/peer_announce" && req.HttpMethod == "POST")
+                {
+                    await HandlePeerAnnounce(req, res);
+                }
                 else if (path == "/api/discover" && req.HttpMethod == "GET")
                 {
                     string pairingKey = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"];

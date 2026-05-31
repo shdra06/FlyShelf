@@ -163,6 +163,27 @@ namespace FlyShelf.Classes
                 TransportSwitched?.Invoke(peer.DeviceId, peer.Transport);
                 PeerConnected?.Invoke(peer.DeviceId, peer.Transport);
             }
+            else
+            {
+                // Primary failover failed — try ALL cached URLs before falling back to Firebase (30s poll)
+                // This handles cases where both LAN and CF URLs may have changed since the failover attempt
+                if (lanEnabled && !string.IsNullOrEmpty(peer.LanUrl) && oldTransport != "LAN")
+                {
+                    recovered = await TryConnect(peer, peer.LanUrl, "LAN");
+                }
+                if (!recovered && !string.IsNullOrEmpty(peer.CloudflareUrl) && oldTransport != "Cloudflare")
+                {
+                    recovered = await TryConnect(peer, peer.CloudflareUrl, "Cloudflare");
+                }
+
+                if (recovered)
+                {
+                    Logger.LogAction("PEER", $"✅ {peer.DeviceName} recovered via cached {peer.Transport} (second attempt)");
+                    TransportSwitched?.Invoke(peer.DeviceId, peer.Transport);
+                    PeerConnected?.Invoke(peer.DeviceId, peer.Transport);
+                }
+                // If still dead → DiscoveryLoop (30s) will check Firebase as last resort
+            }
         }
 
         /// <summary>

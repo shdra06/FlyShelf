@@ -503,6 +503,63 @@ namespace FlyShelf.Classes
 
             await Handshake(peer);
         }
+        /// <summary>
+        /// Called when a remote peer POSTs to /api/peer_announce.
+        /// The peer is telling us "I'm alive, here are my URLs" — so we can connect back instantly
+        /// without waiting for Firebase SSE.
+        /// </summary>
+        public async Task HandlePeerAnnounce(string deviceId, string deviceName, string lanUrl, string cloudflareUrl)
+        {
+            if (deviceId == _myDeviceId) return;
+
+            Logger.LogAction("PEER", $"📢 Peer announce from {deviceName}: LAN={lanUrl} CF={cloudflareUrl}");
+
+            if (_peers.TryGetValue(deviceId, out var existing))
+            {
+                // Update URLs
+                if (!string.IsNullOrEmpty(lanUrl)) existing.LanUrl = lanUrl;
+                if (!string.IsNullOrEmpty(cloudflareUrl)) existing.CloudflareUrl = cloudflareUrl;
+                if (!string.IsNullOrEmpty(deviceName)) existing.DeviceName = deviceName;
+
+                // If already alive with active WebSocket, just update URLs — no re-handshake needed
+                if (existing.IsAlive && existing.LiveSocket?.State == System.Net.WebSockets.WebSocketState.Open)
+                {
+                    Logger.LogAction("PEER", $"📢 {deviceName} already connected — URLs updated");
+                    SaveUrlCache();
+                    return;
+                }
+
+                // Peer is known but dead — reset and handshake with the fresh URLs
+                existing.IsAlive = false;
+                existing.ConsecutiveFailures = 0;
+                try { existing.WsCts?.Cancel(); } catch { }
+                try { existing.LiveSocket?.Dispose(); } catch { }
+                existing.LiveSocket = null;
+            }
+            else
+            {
+                // Brand new peer announcing itself
+                var newPeer = new PeerConnection
+                {
+                    DeviceId = deviceId,
+                    DeviceName = deviceName,
+                    LanUrl = lanUrl,
+                    CloudflareUrl = cloudflareUrl
+                };
+                _peers[deviceId] = newPeer;
+                existing = newPeer;
+            }
+
+            SaveUrlCache();
+
+            // Handshake back — this establishes our connection TO the announcing peer
+            await Handshake(existing);
+
+            if (existing.IsAlive)
+            {
+                Logger.LogAction("PEER", $"📢 ✅ Reverse connection to {deviceName} established via {existing.Transport}");
+            }
+        }
 
         // ═══ Handshake, WebSocket & Cleanup moved to PeerManager.Connection.cs ═══
     }

@@ -186,6 +186,76 @@ namespace FlyShelf.Classes
             }
         }
 
+        // ═══ Peer Announce Handler — Instant P2P Reverse Discovery ═══
+        /// <summary>
+        /// Called when a remote peer POSTs to /api/peer_announce after discovering us.
+        /// The peer sends its own URLs so we can connect back instantly (no Firebase round-trip).
+        /// Validates the pairing key, registers the peer in PeerManager, and returns our own URLs.
+        /// </summary>
+        private async Task HandlePeerAnnounce(HttpListenerRequest req, HttpListenerResponse res)
+        {
+            try
+            {
+                string body;
+                using (var reader = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8))
+                {
+                    body = await reader.ReadToEndAsync();
+                }
+
+                var data = JsonSerializer.Deserialize<JsonElement>(body);
+                string pairingKey = data.TryGetProperty("pairingKey", out var pk) ? pk.GetString() : "";
+                string deviceId = data.TryGetProperty("deviceId", out var di) ? di.GetString() : "";
+                string deviceName = data.TryGetProperty("deviceName", out var dn) ? dn.GetString() : "";
+                string lanUrl = data.TryGetProperty("lanUrl", out var lu) ? lu.GetString() : "";
+                string cloudflareUrl = data.TryGetProperty("cloudflareUrl", out var cu) ? cu.GetString() : "";
+
+                // Validate pairing key
+                if (string.IsNullOrEmpty(pairingKey) || !DevicePairingManager.IsDevicePaired(pairingKey))
+                {
+                    Logger.LogAction("PEER_ANNOUNCE", $"⛔ Rejected announce from {deviceName} — invalid pairing key");
+                    byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Invalid pairing key\"}");
+                    res.StatusCode = 403;
+                    res.ContentType = "application/json";
+                    res.OutputStream.Write(err, 0, err.Length);
+                    res.Close();
+                    return;
+                }
+
+                Logger.LogAction("PEER_ANNOUNCE", $"📢 Received announce from {deviceName} (LAN={lanUrl} CF={cloudflareUrl})");
+
+                // Handle the announce in PeerManager (creates/updates peer, handshakes back if needed)
+                if (PeerManager.Instance != null)
+                {
+                    _ = Task.Run(() => PeerManager.Instance.HandlePeerAnnounce(deviceId, deviceName, lanUrl, cloudflareUrl));
+                }
+
+                // Return our own URLs so the announcer gets our latest info
+                var response = new
+                {
+                    deviceId = SettingsManager.Current.DeviceId ?? Environment.MachineName,
+                    deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
+                    lanUrl = CloudDiscoveryManager.CachedLocalUrl ?? "",
+                    cloudflareUrl = CloudDiscoveryManager.CachedGlobalUrl ?? ""
+                };
+                byte[] json = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response));
+                res.StatusCode = 200;
+                res.ContentType = "application/json";
+                res.OutputStream.Write(json, 0, json.Length);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("PEER_ANNOUNCE ERROR", ex.Message);
+                byte[] err = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
+                res.StatusCode = 500;
+                res.ContentType = "application/json";
+                try { res.OutputStream.Write(err, 0, err.Length); } catch { }
+            }
+            finally
+            {
+                try { res.Close(); } catch { }
+            }
+        }
+
         public void InjectReceivedFile(string filePath, string sourceDevice, string transferMethod, string sourceDeviceType = "Mobile", ClipboardItem? placeholder = null)
         {
             _cachedSyncJson = null; // Invalidate sync cache

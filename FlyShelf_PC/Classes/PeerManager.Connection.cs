@@ -139,6 +139,10 @@ namespace FlyShelf.Classes
 
                     // Establish persistent WebSocket for instant liveness detection
                     _ = Task.Run(() => ConnectWebSocket(peer));
+
+                    // Announce ourselves to the peer so they can connect back instantly
+                    // (eliminates the need for Firebase SSE round-trip for reverse discovery)
+                    _ = Task.Run(() => AnnounceSelfToPeer(peer));
                     return true;
                 }
             }
@@ -279,6 +283,81 @@ namespace FlyShelf.Classes
                     Logger.LogAction("WS", $"💀 {peer.DeviceName} WebSocket dropped and HTTP health check failed — instant death detection");
                     await HandlePeerDeath(peer);
                 }
+            }
+        }
+
+        /// <summary>
+        /// After successful handshake, tell the peer about us so they can connect back.
+        /// POST /api/peer_announce with our deviceId, name, and URLs.
+        /// Fire-and-forget — the handshake already succeeded, this enables reverse connection.
+        /// </summary>
+        private async Task AnnounceSelfToPeer(PeerConnection peer)
+        {
+            try
+            {
+                string myLanUrl = CloudDiscoveryManager.CachedLocalUrl ?? "";
+                string myCfUrl = CloudDiscoveryManager.CachedGlobalUrl ?? "";
+                string myName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
+                string pk = DevicePairingManager.EnsurePairingKey();
+
+                var payload = new
+                {
+                    deviceId = _myDeviceId,
+                    deviceName = myName,
+                    lanUrl = myLanUrl,
+                    cloudflareUrl = myCfUrl,
+                    pairingKey = pk
+                };
+
+                string json = JsonSerializer.Serialize(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+                string announceUrl = $"{peer.ActiveUrl.TrimEnd('/')}/api/peer_announce";
+
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(8));
+                var resp = await _sharedClient.PostAsync(announceUrl, content, cts.Token);
+
+                if (resp.IsSuccessStatusCode)
+                {
+                    // Parse response — peer sends back THEIR latest URLs
+                    try
+                    {
+                        string respJson = await resp.Content.ReadAsStringAsync();
+                        if (!string.IsNullOrEmpty(respJson) && respJson.StartsWith("{"))
+                        {
+                            using var doc = JsonDocument.Parse(respJson);
+                            var root = doc.RootElement;
+
+                            // Update peer URLs if they sent back newer ones
+                            if (root.TryGetProperty("lanUrl", out var peerLan))
+                            {
+                                string newLan = peerLan.GetString() ?? "";
+                                if (!string.IsNullOrEmpty(newLan) && newLan.StartsWith("http") && newLan != peer.LanUrl)
+                                {
+                                    peer.LanUrl = newLan;
+                                    SaveUrlCache();
+                                }
+                            }
+                            if (root.TryGetProperty("cloudflareUrl", out var peerCf))
+                            {
+                                string newCf = peerCf.GetString() ?? "";
+                                if (!string.IsNullOrEmpty(newCf) && newCf.Contains("trycloudflare") && newCf != peer.CloudflareUrl)
+                                {
+                                    peer.CloudflareUrl = newCf;
+                                    SaveUrlCache();
+                                }
+                            }
+                        }
+                    }
+                    catch { /* Response parsing is best-effort */ }
+
+                    Logger.LogAction("PEER", $"📢 Announced ourselves to {peer.DeviceName} via {peer.Transport}");
+                }
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal — the handshake already succeeded, announce is for reverse discovery
+                Logger.LogAction("PEER", $"📢 Announce to {peer.DeviceName} failed (non-fatal): {ex.Message}");
             }
         }
 

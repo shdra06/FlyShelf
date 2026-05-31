@@ -315,8 +315,8 @@
         <div style="margin-top: auto; padding-top: 15px; border-top: 1px solid var(--border-light); display: flex; justify-content: space-between; align-items: center;">
           <span style="font-weight: 700;">Total Price:</span>
           <div style="text-align: right;">
-            <span id="price-display-usd" style="font-size: 1.75rem; font-weight: 800; color: var(--text-primary); display: none;">$9.99</span>
-            <span id="price-display-inr" style="font-size: 1.75rem; font-weight: 800; color: var(--text-primary);">₹299</span>
+            <span id="price-display-usd" style="font-size: 1.75rem; font-weight: 800; color: var(--text-primary);">$9.99</span>
+            <span id="price-display-inr" style="font-size: 1.75rem; font-weight: 800; color: var(--text-primary); display: none;">₹299</span>
             <div style="font-size: 0.65rem; color: var(--text-muted);">One-time payment</div>
           </div>
         </div>
@@ -328,10 +328,10 @@
         
         <!-- Region Tabs -->
         <div class="payment-tab-row">
-          <button class="payment-tab razorpay active" id="tab-inr">
+          <button class="payment-tab razorpay" id="tab-inr">
             🇮🇳 India (Razorpay)
           </button>
-          <button class="payment-tab razorpay" id="tab-usd">
+          <button class="payment-tab razorpay active" id="tab-usd">
             🌐 International ($9.99)
           </button>
         </div>
@@ -346,20 +346,20 @@
         <!-- Payment details and buy button -->
         <div style="margin-top: auto; display: flex; flex-direction: column; gap: 15px;">
           <!-- India / Razorpay form details -->
-          <div id="razorpay-details" style="font-size: 0.72rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 6px; padding: 5px 0;">
+          <div id="razorpay-details" style="font-size: 0.72rem; color: var(--text-secondary); display: none; flex-direction: column; gap: 6px; padding: 5px 0;">
             <div style="display: flex; justify-content: space-between;"><span>Payment Gateway:</span><strong>Razorpay Secure</strong></div>
             <div style="display: flex; justify-content: space-between;"><span>Supported Methods:</span><strong>UPI (GPay/PhonePe), NetBanking, Cards</strong></div>
           </div>
           
           <!-- International / Razorpay USD form details -->
-          <div id="paypal-details" style="font-size: 0.72rem; color: var(--text-secondary); display: none; flex-direction: column; gap: 6px; padding: 5px 0;">
+          <div id="paypal-details" style="font-size: 0.72rem; color: var(--text-secondary); display: flex; flex-direction: column; gap: 6px; padding: 5px 0;">
             <div style="display: flex; justify-content: space-between;"><span>Payment Gateway:</span><strong>Razorpay International</strong></div>
             <div style="display: flex; justify-content: space-between;"><span>Supported Methods:</span><strong>Visa, Mastercard, AmEx, International Cards</strong></div>
           </div>
           
           <!-- Submit Button -->
           <button class="btn-checkout-pay btn-razorpay" id="btn-submit-payment">
-            <ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay
+            <ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card
           </button>
         </div>
       </div>
@@ -484,7 +484,7 @@
       const btnActivateDeeplink = document.getElementById('btn-activate-deeplink');
       const btnCloseModal = document.getElementById('btn-close-modal');
       
-      let selectedRegion = 'INR';
+      let selectedRegion = 'USD';
       let generatedKey = '';
 
       // Get deviceId from URL params (passed from desktop app)
