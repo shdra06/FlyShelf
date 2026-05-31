@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -14,7 +14,7 @@ namespace FlyShelf.ViewModels
         public void OpenSandbox()
         {
 #if MSIX_STORE
-            FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Code sandbox is not available in the Store version. Download the full version from flyshelf.app");
+            FlyShelf.Windows.ToastWindow.ShowToast("âš ï¸ Code sandbox is not available in the Store version. Download the full version from https://fly-shelf.vercel.app/");
             return;
 #else
 
@@ -175,7 +175,7 @@ namespace FlyShelf.ViewModels
 
         {
 #if MSIX_STORE
-            FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Terminal execution is not available in the Store version.");
+            FlyShelf.Windows.ToastWindow.ShowToast("âš ï¸ Terminal execution is not available in the Store version.");
             return;
 #else
 
@@ -428,7 +428,7 @@ namespace FlyShelf.ViewModels
 
         {
 #if MSIX_STORE
-            FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Elevated terminal is not available in the Store version.");
+            FlyShelf.Windows.ToastWindow.ShowToast("âš ï¸ Elevated terminal is not available in the Store version.");
             return;
 #else
 
@@ -509,7 +509,7 @@ namespace FlyShelf.ViewModels
 
         {
 #if MSIX_STORE
-            FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Code compilation is not available in the Store version.");
+            FlyShelf.Windows.ToastWindow.ShowToast("âš ï¸ Code compilation is not available in the Store version.");
             return;
 #else
 
@@ -671,7 +671,7 @@ namespace FlyShelf.ViewModels
                         var zipInfo = new FileInfo(tempZip);
                         long folderSize = Directory.GetFiles(FilePath, "*", SearchOption.AllDirectories)
                             .Sum(f => { try { return new FileInfo(f).Length; } catch { return 0L; } });
-                        FormattedSize = $"{FormatBytes(folderSize)} → {FormatBytes(zipInfo.Length)} zipped";
+                        FormattedSize = $"{FormatBytes(folderSize)} â†’ {FormatBytes(zipInfo.Length)} zipped";
                         PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(FormattedSize)));
                         FlyShelf.Classes.Logger.LogAction("FOLDER ZIP", $"Created zip on demand: {tempZip}");
                     }
@@ -679,7 +679,7 @@ namespace FlyShelf.ViewModels
                     // Show toast on UI thread
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
-                        FlyShelf.Windows.ToastWindow.ShowToast("📦 Zip archive created!");
+                        FlyShelf.Windows.ToastWindow.ShowToast("ðŸ“¦ Zip archive created!");
                     });
                 }
                 catch (Exception ex)
@@ -687,7 +687,7 @@ namespace FlyShelf.ViewModels
                     FlyShelf.Classes.Logger.LogAction("ZIP CREATE ERR", ex.Message);
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
-                        FlyShelf.Windows.ToastWindow.ShowToast($"❌ Zip creation failed: {ex.Message}");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"âŒ Zip creation failed: {ex.Message}");
                     });
                 }
             });
@@ -701,7 +701,7 @@ namespace FlyShelf.ViewModels
         {
             if (!HasZipArchive)
             {
-                FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No zip archive to sync. Create one first.");
+                FlyShelf.Windows.ToastWindow.ShowToast("âš ï¸ No zip archive to sync. Create one first.");
                 return;
             }
 
@@ -710,24 +710,25 @@ namespace FlyShelf.ViewModels
                 var peerCount = FlyShelf.Classes.PeerManager.Instance.AliveCount;
                 if (peerCount == 0)
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No LAN peers connected.");
+                    FlyShelf.Windows.ToastWindow.ShowToast("âš ï¸ No LAN peers connected.");
                     return;
                 }
 
-                FlyShelf.Windows.ToastWindow.ShowToast("📡 Syncing zip via LAN...");
+                FlyShelf.Windows.ToastWindow.ShowToast("ðŸ“¡ Syncing zip via LAN...");
                 int delivered = await FlyShelf.Classes.PeerManager.Instance.PushFileToAllPeers(
                     ZippedArchivePath, FileName ?? "Archive", "Archive");
 
                 if (delivered > 0)
-                    FlyShelf.Windows.ToastWindow.ShowToast($"📡 Synced to {delivered} LAN peer(s)!");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"ðŸ“¡ Synced to {delivered} LAN peer(s)!");
                 else
-                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Failed to sync to any LAN peer.");
+                    FlyShelf.Windows.ToastWindow.ShowToast("âš ï¸ Failed to sync to any LAN peer.");
             }
             catch (Exception ex)
             {
                 FlyShelf.Classes.Logger.LogAction("LAN SYNC ERR", ex.Message);
-                FlyShelf.Windows.ToastWindow.ShowToast($"❌ LAN sync failed: {ex.Message}");
+                FlyShelf.Windows.ToastWindow.ShowToast($"âŒ LAN sync failed: {ex.Message}");
             }
         }
     }
 }
+

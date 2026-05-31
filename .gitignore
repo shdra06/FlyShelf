@@ -80,6 +80,7 @@ FlyShelf_Mobile.apk
 !FlyShelf_PC/Resources/**/*.png
 !FlyShelf_Android/assets/**/*.png
 !MicrosoftBuild/Assets/**/*.png
+!website/**/*.png
 
 # ─── Firebase Security Credentials ────────────────────────────
 FlyShelf_PC/Classes/FirebaseSecrets.cs
