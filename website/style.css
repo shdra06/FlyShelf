@@ -1594,10 +1594,11 @@ tr th.highlight-col {
 /* --- THE PREMIUM FOOTER --- */
 footer {
   padding: 80px 20px 40px 20px;
-  border-top: 1px solid var(--border-light);
-  background: rgba(6, 7, 10, 0.9);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: #06070a;
   position: relative;
   z-index: 10;
+  color: #e2e8f0;
 }
 
 .footer-container {
@@ -1614,10 +1615,15 @@ footer {
   max-width: 320px;
 }
 
+.footer-brand-col .nav-brand span {
+  color: #f3f5f9;
+}
+
 .footer-desc {
   font-size: 0.88rem;
-  color: var(--text-secondary);
+  color: #94a3b8;
   margin-top: 15px;
+  line-height: 1.6;
 }
 
 .footer-nav-col h4 {
@@ -1625,7 +1631,7 @@ footer {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: var(--text-primary);
+  color: #f3f5f9;
   margin-bottom: 20px;
 }
 
@@ -1638,19 +1644,19 @@ footer {
 
 .footer-links a {
   font-size: 0.88rem;
-  color: var(--text-secondary);
+  color: #94a3b8;
   text-decoration: none;
   transition: var(--transition-fast);
 }
 
 .footer-links a:hover {
-  color: var(--text-primary);
+  color: #00d2ff;
 }
 
 .footer-bottom {
   max-width: 1200px;
   margin: 60px auto 0 auto;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   padding-top: 30px;
   display: flex;
   justify-content: space-between;
@@ -1658,7 +1664,7 @@ footer {
   flex-wrap: wrap;
   gap: 20px;
   font-size: 0.8rem;
-  color: var(--text-muted);
+  color: #64748b;
 }
 
 /* --- KEYFRAME ANIMATION SET --- */
