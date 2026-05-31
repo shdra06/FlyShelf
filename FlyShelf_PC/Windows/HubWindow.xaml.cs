@@ -239,6 +239,14 @@ namespace FlyShelf.Windows
                     // Initialize license UI (Pro badge, status card)
                     RefreshLicenseUI();
                     UpdateAlignButtonsVisualState();
+
+                    // Force-sync Widget Positioning section visibility on load
+                    if (WidgetPositioningSection != null)
+                    {
+                        WidgetPositioningSection.Visibility = SettingsManager.Current.EnableTaskbarWidget
+                            ? Visibility.Visible
+                            : Visibility.Collapsed;
+                    }
                 }, System.Windows.Threading.DispatcherPriority.Background);
             };
             Unloaded += (s, ev) =>
@@ -412,7 +420,18 @@ namespace FlyShelf.Windows
                 if (AboutGrid != null) AboutGrid.Visibility = tag == "About" ? Visibility.Visible : Visibility.Collapsed;
                 
                 if (tag == "Logs") RefreshLogs_Click(null, null);
-                if (tag == "Settings") PopulateThemeCombo();
+                if (tag == "Settings")
+                {
+                    PopulateThemeCombo();
+                    UpdateAlignButtonsVisualState();
+                    // Force-sync widget positioning section visibility
+                    if (WidgetPositioningSection != null)
+                    {
+                        WidgetPositioningSection.Visibility = SettingsManager.Current.EnableTaskbarWidget
+                            ? Visibility.Visible
+                            : Visibility.Collapsed;
+                    }
+                }
                 if (tag == "Network")
                 {
                     RefreshDevices_Click(null, null);
@@ -788,13 +807,31 @@ namespace FlyShelf.Windows
         private void AlignCustom_Click(object sender, RoutedEventArgs e)
         {
             int currentOffset = SettingsManager.Current.WidgetHorizontalOffset;
-            if (currentOffset < 0 || currentOffset > 100)
+            // Reset to center (50%) if the current offset is out of range for percentage mode,
+            // or if it's 0 (which places widget behind Start button — invisible)
+            if (currentOffset <= 0 || currentOffset > 100)
             {
                 SettingsManager.Current.WidgetHorizontalOffset = 50; // default to center (50%)
             }
             SettingsManager.Current.WidgetTaskbarAlignment = 3;
             SettingsManager.Save();
             UpdateAlignButtonsVisualState();
+        }
+
+        private void TaskbarWidgetToggle_Changed(object sender, RoutedEventArgs e)
+        {
+            // Force-update Widget Positioning section visibility from code-behind
+            // as a robust fallback in case the XAML BooleanToVisibilityConverter binding doesn't fire
+            if (WidgetPositioningSection != null)
+            {
+                WidgetPositioningSection.Visibility = SettingsManager.Current.EnableTaskbarWidget
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            }
+            if (SettingsManager.Current.EnableTaskbarWidget)
+            {
+                UpdateAlignButtonsVisualState();
+            }
         }
 
         // ═══ Logs, Diagnostics & Drag-Drop moved to HubWindow.Logs.cs ═══

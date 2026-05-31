@@ -1536,12 +1536,12 @@
                                         <TextBlock Text="Show the FlyShelf quick-access widget embedded in your taskbar. System tray icon stays visible regardless." 
                                                    Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
                                     </StackPanel>
-                                    <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableTaskbarWidget, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    <ui:ToggleSwitch x:Name="TaskbarWidgetToggle" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableTaskbarWidget, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Checked="TaskbarWidgetToggle_Changed" Unchecked="TaskbarWidgetToggle_Changed" />
                                 </Grid>
                             </Border>
 
                             <!-- Widget Positioning & Customization Settings -->
-                            <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12"
+                            <Border x:Name="WidgetPositioningSection" Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12"
                                     Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableTaskbarWidget, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <StackPanel VerticalAlignment="Center">
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,8">

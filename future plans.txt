@@ -1,0 +1,115 @@
+═══════════════════════════════════════════════════════════════════
+                    FLYSHELF — FUTURE PLANS
+═══════════════════════════════════════════════════════════════════
+
+Last Updated: 2026-05-31
+
+
+───────────────────────────────────────────────────────────────────
+  IMAGE EDITING FEATURES (New — requires SixLabors.ImageSharp)
+───────────────────────────────────────────────────────────────────
+
+Library: SixLabors.ImageSharp (Apache 2.0 license — no copyleft)
+NuGet:   dotnet add package SixLabors.ImageSharp
+
+[ ] Image Cropping
+    - Interactive crop overlay in QuickLook window with drag handles
+    - Crop to selection, crop to aspect ratio presets (1:1, 4:3, 16:9)
+    - Save cropped image as new file or overwrite original
+
+[ ] Image Resizing
+    - Resize to specific dimensions or percentage
+    - Maintain aspect ratio option
+    - Batch resize for multiple selected images
+
+[ ] Image Flipping / Mirroring
+    - Horizontal flip
+    - Vertical flip
+    - Add flip buttons next to existing Rotate button in QuickLook
+
+[ ] Image Filters & Adjustments
+    - Brightness / Contrast sliders
+    - Grayscale conversion
+    - Blur / Sharpen
+    - Sepia / Invert
+    - Auto-enhance (auto levels)
+
+[ ] Image Format Conversion
+    - Right-click context menu: "Convert to PNG / JPG / WebP / BMP"
+    - Batch format conversion for multiple selected images
+    - Quality slider for JPEG compression
+
+[ ] Image Compression / Optimization
+    - Reduce file size while maintaining quality
+    - Show before/after file size comparison
+
+
+───────────────────────────────────────────────────────────────────
+  PDF IMPROVEMENTS (Uses existing PdfSharp — no new dependency)
+───────────────────────────────────────────────────────────────────
+
+[ ] Multi-Image → Multi-Page PDF
+    - Select multiple images → "Combine as PDF" 
+    - Currently only works via merge workflow, make it a direct action
+    - Extend ConversionUtils.cs to accept image list
+
+[ ] PDF Splitting (Per-Page Export)
+    - Split a PDF into individual page files
+    - "Extract All Pages" button in PdfMergeWindow
+    - Output: Page_1.pdf, Page_2.pdf, etc.
+
+[ ] PDF Password Protection
+    - Encrypt PDF with password before saving/sharing
+    - PdfSharp supports AES encryption
+
+[ ] PDF Compression
+    - Optimize PDF file size (compress embedded images)
+    - Show size reduction percentage
+
+[ ] PDF Thumbnails
+    - Generate thumbnail previews for PDF files in clipboard history
+    - Replace current WebBrowser-based preview with native rendering
+
+
+───────────────────────────────────────────────────────────────────
+  ADVANCED FEATURES (Longer term)
+───────────────────────────────────────────────────────────────────
+
+[ ] Image Annotation / Drawing
+    - Draw arrows, rectangles, circles on images
+    - Add text labels / callouts
+    - Blur/redact sensitive areas (faces, text)
+    - Useful for screenshots before sharing
+
+[ ] OCR on PDFs
+    - Currently OCR only works on images
+    - Render PDF pages as images → run OCR → extract text
+    - Makes scanned PDFs searchable
+
+[ ] Batch Operations
+    - Batch rename files
+    - Batch convert formats
+    - Batch resize images
+    - Apply same operation to all selected items
+
+[ ] Screenshot / Screen Capture Tool
+    - Built-in screen capture (region, window, full screen)
+    - Auto-add captured screenshot to clipboard history
+    - Hotkey trigger (e.g., Win+Shift+S alternative)
+
+[ ] Scan-to-PDF (Hardware Scanner)
+    - WIA (Windows Image Acquisition) integration
+    - Scan documents directly into FlyShelf
+    - Auto-crop and auto-rotate scanned pages
+    - NOTE: Heavy feature, low priority for clipboard manager
+
+
+───────────────────────────────────────────────────────────────────
+  NOTES
+───────────────────────────────────────────────────────────────────
+
+- Inspired by analysis of simon-knuth/scanner (MPL-2.0 UWP app)
+- Decision: Don't copy Scanner app code (UWP-locked, license burden)
+- Use SixLabors.ImageSharp instead — one library fills all image gaps
+- PdfSharp already in project — extend for PDF improvements
+- All features should integrate with existing QuickLook and context menus

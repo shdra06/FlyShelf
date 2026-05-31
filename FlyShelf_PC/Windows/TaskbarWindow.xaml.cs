@@ -65,14 +65,48 @@ namespace FlyShelf.Windows
             {
                 if (e.PropertyName == nameof(AdvanceSettings.EnableTaskbarWidget))
                 {
-                    Dispatcher.Invoke(() =>
+                    Dispatcher.Invoke(async () =>
                     {
                         if (_isClosed) return;
                         if (SettingsManager.Current.EnableTaskbarWidget)
                         {
+                            // Ensure _mainWindow reference is set (may be null if widget was OFF at startup)
+                            if (_mainWindow == null)
+                            {
+                                _mainWindow = Application.Current.MainWindow as MainWindow;
+                                if (_mainWindow != null)
+                                {
+                                    Widget.SetMainWindow(_mainWindow);
+                                }
+                            }
+
                             Show();
-                            SetupWindow();
                             _timer.Start();
+
+                            // Retry SetupWindow with delays — taskbar HWND may not respond immediately
+                            for (int attempt = 1; attempt <= 3; attempt++)
+                            {
+                                if (_isClosed || !SettingsManager.Current.EnableTaskbarWidget) return;
+                                try
+                                {
+                                    SetupWindow();
+                                    var interop = new System.Windows.Interop.WindowInteropHelper(this);
+                                    if (interop.Handle != IntPtr.Zero)
+                                    {
+                                        bool isEmbedded = NativeMethods.GetParent(interop.Handle) != IntPtr.Zero;
+                                        if (isEmbedded || _isFloatingMode)
+                                        {
+                                            Classes.Logger.LogAction("WIDGET", $"Toggle-ON embed succeeded on attempt {attempt}");
+                                            break;
+                                        }
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Classes.Logger.LogAction("WIDGET", $"Toggle-ON embed attempt {attempt} failed: {ex.Message}");
+                                }
+                                await Task.Delay(600);
+                            }
                         }
                         else
                         {
