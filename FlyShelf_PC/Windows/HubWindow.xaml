@@ -1056,100 +1056,7 @@
                             </ItemsControl>
                             <TextBlock x:Name="NoGroupsText" Text="No groups - create one to sync across devices" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
 
-                            <!-- LIVE NETWORK MONITOR -->
-                            <StackPanel Orientation="Horizontal" Margin="0,24,0,14">
-                                <ui:SymbolIcon Symbol="DocumentText24" FontSize="18" Foreground="#F472B6" Margin="0,0,8,0"/>
-                                <TextBlock Text="Live Network Monitor" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" />
-                            </StackPanel>
 
-                            <Border Style="{StaticResource PremiumSettingStyle}">
-                                <StackPanel>
-                                    <!-- Live Stats Row -->
-                                    <Grid Margin="0,0,0,16">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="8"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="8"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="8"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-
-                                        <!-- HTTP Requests Counter -->
-                                        <Border Grid.Column="0" Background="#0A60A5FA" BorderBrush="#1560A5FA" BorderThickness="1" CornerRadius="10" Padding="12,10">
-                                            <StackPanel HorizontalAlignment="Center">
-                                                <TextBlock Text="{Binding Source={x:Static settings:NetworkActivityLog.Instance}, Path=HttpRequestCount}" FontSize="22" FontWeight="Bold" Foreground="#60A5FA" HorizontalAlignment="Center"/>
-                                                <TextBlock Text="HTTP Reqs" FontSize="10" Foreground="#60A5FA" Opacity="0.7" HorizontalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-
-                                        <!-- Downloads Counter -->
-                                        <Border Grid.Column="2" Background="#0A34D399" BorderBrush="#1534D399" BorderThickness="1" CornerRadius="10" Padding="12,10">
-                                            <StackPanel HorizontalAlignment="Center">
-                                                <TextBlock Text="{Binding Source={x:Static settings:NetworkActivityLog.Instance}, Path=DownloadCount}" FontSize="22" FontWeight="Bold" Foreground="#34D399" HorizontalAlignment="Center"/>
-                                                <TextBlock Text="Downloads" FontSize="10" Foreground="#34D399" Opacity="0.7" HorizontalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-
-                                        <!-- Errors Counter -->
-                                        <Border Grid.Column="4" Background="#0AEF4444" BorderBrush="#15EF4444" BorderThickness="1" CornerRadius="10" Padding="12,10">
-                                            <StackPanel HorizontalAlignment="Center">
-                                                <TextBlock Text="{Binding Source={x:Static settings:NetworkActivityLog.Instance}, Path=ErrorCount}" FontSize="22" FontWeight="Bold" Foreground="#EF4444" HorizontalAlignment="Center"/>
-                                                <TextBlock Text="Errors" FontSize="10" Foreground="#EF4444" Opacity="0.7" HorizontalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-
-                                        <!-- Server Status -->
-                                        <Border Grid.Column="6" Background="#0A8B5CF6" BorderBrush="#158B5CF6" BorderThickness="1" CornerRadius="10" Padding="12,10">
-                                            <StackPanel HorizontalAlignment="Center">
-                                                <TextBlock Text="{Binding Source={x:Static settings:NetworkActivityLog.Instance}, Path=ServerStatus}" FontSize="14" FontWeight="Bold" Foreground="#8B5CF6" HorizontalAlignment="Center"/>
-                                                <TextBlock Text="Server" FontSize="10" Foreground="#8B5CF6" Opacity="0.7" HorizontalAlignment="Center"/>
-                                            </StackPanel>
-                                        </Border>
-                                    </Grid>
-
-                                    <!-- Last Activity -->
-                                    <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="8" Padding="12,8" Margin="0,0,0,12">
-                                        <StackPanel Orientation="Horizontal">
-                                            <ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" Foreground="#10B981" Margin="0,0,8,0"/>
-                                            <TextBlock Text="{Binding Source={x:Static settings:NetworkActivityLog.Instance}, Path=LastActivity}" FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                    </Border>
-
-                                    <!-- Action Buttons: Send & Copy -->
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                        <ui:Button x:Name="SendLogsToDashboardBtn" Padding="14,8" Click="SendLogsToDashboard_Click" Margin="0,0,8,0">
-                                            <StackPanel Orientation="Horizontal">
-                                                <ui:SymbolIcon Symbol="ArrowUpload24" FontSize="14" Margin="0,0,6,0"/>
-                                                <TextBlock Text="Send Logs to Dashboard" FontWeight="SemiBold" FontSize="12"/>
-                                            </StackPanel>
-                                        </ui:Button>
-                                        <ui:Button Padding="14,8" Click="CopyNetworkLogs_Click">
-                                            <StackPanel Orientation="Horizontal">
-                                                <ui:SymbolIcon Symbol="Copy24" FontSize="14" Margin="0,0,6,0"/>
-                                                <TextBlock Text="Copy Logs" FontWeight="SemiBold" FontSize="12"/>
-                                            </StackPanel>
-                                        </ui:Button>
-                                    </StackPanel>
-
-                                    <!-- Live Event Feed -->
-                                    <TextBlock Text="Event Feed" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,0,0,8"/>
-                                    <Border Background="#06000000" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="10" Height="280" ClipToBounds="True">
-                                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False">
-                                            <ItemsControl ItemsSource="{Binding Source={x:Static settings:NetworkActivityLog.Instance}, Path=Entries}">
-                                                <ItemsControl.ItemTemplate>
-                                                    <DataTemplate>
-                                                        <TextBlock Text="{Binding Display}" FontFamily="Consolas" FontSize="11.5" 
-                                                                   Foreground="{Binding ColorBrush}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
-                                                                   Padding="8,3" ToolTip="{Binding Message}"/>
-                                                    </DataTemplate>
-                                                </ItemsControl.ItemTemplate>
-                                            </ItemsControl>
-                                        </ScrollViewer>
-                                    </Border>
-                                </StackPanel>
-                            </Border>
 
                         </StackPanel>
                     </ScrollViewer>
@@ -1868,26 +1775,134 @@
                             </ui:Button>
                         </StackPanel>
 
-                        <!-- Server Troubleshooting (moved from Network tab) -->
-                        <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#15EF4444" BorderThickness="1" CornerRadius="12" Padding="16,12" Margin="0,6,0,10">
-                            <StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <Border Width="24" Height="24" CornerRadius="6" Background="#1AEF4444" Margin="0,0,8,0">
-                                        <ui:SymbolIcon Symbol="WrenchScrewdriver24" FontSize="12" Foreground="#EF4444" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <!-- 2-Column Diagnostics & Live Network Monitor Dashboard -->
+                        <Grid Margin="0,6,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="12"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Column 0: Live Network Monitor -->
+                            <Border Grid.Column="0" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#15F472B6" BorderThickness="1" CornerRadius="12" Padding="16,12">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <Border Width="24" Height="24" CornerRadius="6" Background="#1AF472B6" Margin="0,0,8,0">
+                                            <ui:SymbolIcon Symbol="DocumentText24" FontSize="12" Foreground="#F472B6" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock Text="Live Network Monitor" FontWeight="Bold" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <!-- Live Stats Row -->
+                                    <Grid Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="4"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="4"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="4"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- HTTP Requests Counter -->
+                                        <Border Grid.Column="0" Background="#0A60A5FA" BorderBrush="#1560A5FA" BorderThickness="1" CornerRadius="8" Padding="6,4">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding Source={x:Static settings:NetworkActivityLog.Instance}, Path=HttpRequestCount}" FontSize="14" FontWeight="Bold" Foreground="#60A5FA" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="HTTP Reqs" FontSize="8" Foreground="#60A5FA" Opacity="0.7" HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Downloads Counter -->
+                                        <Border Grid.Column="2" Background="#0A34D399" BorderBrush="#1534D399" BorderThickness="1" CornerRadius="8" Padding="6,4">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding Source={x:Static settings:NetworkActivityLog.Instance}, Path=DownloadCount}" FontSize="14" FontWeight="Bold" Foreground="#34D399" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="Downloads" FontSize="8" Foreground="#34D399" Opacity="0.7" HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Errors Counter -->
+                                        <Border Grid.Column="4" Background="#0AEF4444" BorderBrush="#15EF4444" BorderThickness="1" CornerRadius="8" Padding="6,4">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding Source={x:Static settings:NetworkActivityLog.Instance}, Path=ErrorCount}" FontSize="14" FontWeight="Bold" Foreground="#EF4444" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="Errors" FontSize="8" Foreground="#EF4444" Opacity="0.7" HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Server Status -->
+                                        <Border Grid.Column="6" Background="#0A8B5CF6" BorderBrush="#158B5CF6" BorderThickness="1" CornerRadius="8" Padding="6,4">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding Source={x:Static settings:NetworkActivityLog.Instance}, Path=ServerStatus}" FontSize="10" FontWeight="Bold" Foreground="#8B5CF6" HorizontalAlignment="Center"/>
+                                                <TextBlock Text="Server" FontSize="8" Foreground="#8B5CF6" Opacity="0.7" HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </Grid>
+
+                                    <!-- Last Activity Status Bar -->
+                                    <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="6" Padding="8,4" Margin="0,0,0,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="ArrowSync24" FontSize="10" Foreground="#10B981" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="{Binding Source={x:Static settings:NetworkActivityLog.Instance}, Path=LastActivity}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                        </StackPanel>
                                     </Border>
-                                    <TextBlock Text="Server Troubleshooting" FontWeight="Bold" FontSize="13" Foreground="#EF4444" VerticalAlignment="Center"/>
+
+                                    <!-- Action Buttons -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <ui:Button x:Name="SendLogsToDashboardBtn" Padding="8,4" Click="SendLogsToDashboard_Click" Margin="0,0,6,0">
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:SymbolIcon Symbol="ArrowUpload24" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Send Logs" FontWeight="SemiBold" FontSize="10"/>
+                                            </StackPanel>
+                                        </ui:Button>
+                                        <ui:Button Padding="8,4" Click="CopyNetworkLogs_Click">
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:SymbolIcon Symbol="Copy24" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Copy Logs" FontWeight="SemiBold" FontSize="10"/>
+                                            </StackPanel>
+                                        </ui:Button>
+                                    </StackPanel>
+
+                                    <!-- Live Event Feed -->
+                                    <Border Background="#06000000" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="8" Height="150" ClipToBounds="True">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" CanContentScroll="False">
+                                            <ItemsControl ItemsSource="{Binding Source={x:Static settings:NetworkActivityLog.Instance}, Path=Entries}">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <TextBlock Text="{Binding Display}" FontFamily="Consolas" FontSize="10" 
+                                                                   Foreground="{Binding ColorBrush}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"
+                                                                   Padding="6,2" ToolTip="{Binding Message}"/>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                        </ScrollViewer>
+                                    </Border>
                                 </StackPanel>
-                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
-                                    <ui:Button Content="🔄 Restart Server" Padding="10,5" Click="RestartServer_Click" Margin="0,0,6,0" FontSize="11"/>
-                                    <ui:Button Content="📋 Copy Diagnostics" Padding="10,5" Click="CopyServerDiagnostics_Click" FontSize="11"/>
+                            </Border>
+
+                            <!-- Column 2: Server Troubleshooting -->
+                            <Border Grid.Column="2" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#15EF4444" BorderThickness="1" CornerRadius="12" Padding="16,12">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <Border Width="24" Height="24" CornerRadius="6" Background="#1AEF4444" Margin="0,0,8,0">
+                                            <ui:SymbolIcon Symbol="WrenchScrewdriver24" FontSize="12" Foreground="#EF4444" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock Text="Server Troubleshooting" FontWeight="Bold" FontSize="13" Foreground="#EF4444" VerticalAlignment="Center"/>
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <ui:Button Content="🔄 Restart Server" Padding="10,5" Click="RestartServer_Click" Margin="0,0,6,0" FontSize="11"/>
+                                        <ui:Button Content="📋 Copy Diagnostics" Padding="10,5" Click="CopyServerDiagnostics_Click" FontSize="11"/>
+                                    </StackPanel>
+
+                                    <!-- Server diagnostics textbox -->
+                                    <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="8" Padding="10" Height="192">
+                                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                                            <TextBlock Name="ServerDiagnosticsLog" FontFamily="Consolas" FontSize="10" Foreground="#10B981" TextWrapping="Wrap" Text="Click 'Restart Server' to see diagnostics..." />
+                                        </ScrollViewer>
+                                    </Border>
                                 </StackPanel>
-                                <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="8" Padding="10" MaxHeight="150">
-                                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
-                                        <TextBlock Name="ServerDiagnosticsLog" FontFamily="Consolas" FontSize="10" Foreground="#10B981" TextWrapping="Wrap" Text="Click 'Restart Server' to see diagnostics..." />
-                                    </ScrollViewer>
-                                </Border>
-                            </StackPanel>
-                        </Border>
+                            </Border>
+                        </Grid>
 
 
                     </StackPanel>

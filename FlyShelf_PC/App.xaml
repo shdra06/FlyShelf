@@ -125,6 +125,7 @@
                         <ScaleTransform ScaleX="1" ScaleY="1" />
                     </Setter.Value>
                 </Setter>
+                <Setter Property="Opacity" Value="0.88" />
                 <Style.Triggers>
                     <Trigger Property="IsMouseOver" Value="True">
                         <Trigger.EnterActions>
@@ -134,6 +135,9 @@
                                         <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
                                     </DoubleAnimation>
                                     <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1.02" Duration="0:0:0.2">
+                                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                    <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.2">
                                         <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
                                     </DoubleAnimation>
                                 </Storyboard>
@@ -146,6 +150,9 @@
                                         <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
                                     </DoubleAnimation>
                                     <DoubleAnimation Storyboard.TargetProperty="RenderTransform.ScaleY" To="1" Duration="0:0:0.25">
+                                        <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                    <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0.88" Duration="0:0:0.25">
                                         <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
                                     </DoubleAnimation>
                                 </Storyboard>

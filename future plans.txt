@@ -103,6 +103,131 @@ NuGet:   dotnet add package SixLabors.ImageSharp
     - Auto-crop and auto-rotate scanned pages
     - NOTE: Heavy feature, low priority for clipboard manager
 
+───────────────────────────────────────────────────────────────────
+  UI / ANIMATION / THEME IMPROVEMENTS (No new dependencies needed)
+───────────────────────────────────────────────────────────────────
+
+Design Reference: flyshelf_ui_design_bible.md (in Gemini brain folder)
+Inspiration: Rainmeter skins (Mond, Frost Glass, Droptop 4),
+             Paste (macOS), Fluent Design 2, Discord/Spotify dark mode
+
+--- Phase 1: Quick Wins (Biggest Visual Impact) ---
+
+[ ] Window Show/Hide Animation
+    - Add QuinticEase opacity (0→1) + scale (0.96→1.0) storyboard
+    - Duration: 250ms show, 180ms hide
+    - Currently MainWindow has Opacity="0" with no storyboard (abrupt)
+
+[ ] Tab/View Transition Animations
+    - Crossfade (opacity) between clipboard/notes/settings/network views
+    - Duration: 300ms, CubicEase EaseInOut
+    - Currently tabs switch instantly with no transition
+
+[ ] Color Transitions on Hover
+    - Replace instant property setters with ColorAnimation (150ms)
+    - Smooth fade between normal → hover → pressed background colors
+    - Currently all hover effects use instant triggers
+
+[ ] Copy Confirmation Flash
+    - Brief green tint (#22C55E at 20% opacity) on card when copied
+    - 150ms fade-in, 500ms hold, 300ms fade-out
+    - Gives satisfying visual feedback
+
+--- Phase 2: Polish (Premium Feel) ---
+
+[ ] Item Entrance Animation
+    - New clipboard items slide down + fade in (300ms)
+    - Use BackEase EaseOut with Amplitude=0.3 for subtle spring
+    - TranslateY from -12 to 0 + Opacity 0 to 1
+
+[ ] Skeleton Shimmer Loading States
+    - For image thumbnails while loading
+    - Gradient sweep animation (1500ms loop, SineEase)
+    - Replace empty space with animated placeholder
+
+[ ] Animated GlassTheme Hover States
+    - GlassTheme.xaml currently uses instant triggers
+    - Add ColorAnimation storyboards for glass card hover/press
+    - Smooth glass border brightness change on hover
+
+[ ] DropShadow Elevation on Hover
+    - Cards "lift" with animated shadow (BlurRadius 8→16, Opacity 0.25→0.35)
+    - Duration: 150ms hover in, 200ms hover out
+    - Creates depth/layering feel like Rainmeter widgets
+
+[ ] Search Bar Focus Animation
+    - Expand width slightly + glow border on focus
+    - Accent color border fade-in (CubicEase, 200ms)
+
+--- Phase 3: Delight (Competitive Edge) ---
+
+[ ] Spring/Bounce Animations
+    - BackEase for item entrance, slight overshoot on selection
+    - ElasticEase for special interactions (pin, unpin)
+    - Adds playful premium feel
+
+[ ] Ambient Glow on Selected Card
+    - Subtle indigo (#6366F1) outer glow on selected item
+    - Like Rainmeter's neon accent effects
+    - Opacity animation on selection change
+
+[ ] Smooth List Reorder
+    - Animated repositioning when items are pinned/unpinned
+    - Items slide to new positions instead of instant jump
+    - Duration: 250ms, CubicEase EaseInOut
+
+[ ] Context Menu Entrance
+    - Fade + scale from click point (200ms)
+    - Currently appears instantly
+
+[ ] Theme-Aware Accent Extraction
+    - Pull dominant color from wallpaper for adaptive accent
+    - Rainmeter skins do this — wallpaper bleeds into UI
+
+--- Animation Timing Reference ---
+
+    Hover enter:        150ms   CubicEase EaseOut
+    Hover exit:         200ms   CubicEase EaseInOut
+    Card selection:     200ms   CubicEase EaseOut
+    Window appear:      250ms   QuinticEase EaseOut
+    Window dismiss:     180ms   CubicEase EaseIn
+    Tab switch:         300ms   CubicEase EaseInOut
+    Item entrance:      300ms   BackEase EaseOut (Amplitude=0.3)
+    Item exit:          200ms   CubicEase EaseIn
+    Copy flash:         150ms in, 500ms hold, 300ms out
+    Skeleton shimmer:   1500ms  SineEase loop
+    Search filter:      100ms   Instant response
+
+--- Color Palette Reference ("Indigo Night") ---
+
+    Base Background:    #0F0F14
+    Surface:            #1A1A2E
+    Surface Elevated:   #242442
+    Surface Pressed:    #2E2E52
+    Border Subtle:      #2D2D3F
+    Border Strong:      #3F3F5C
+    Text Primary:       #F8FAFC
+    Text Secondary:     #A1A1B5
+    Text Muted:         #6B6B80
+    Accent (Indigo):    #6366F1  (already in use)
+    Glass BG:           #0DFFFFFF  (5% white overlay)
+    Glass Border:       #1FFFFFFF  (12% white)
+    Glass Hover BG:     #14FFFFFF  (8% white)
+    Glass Hover Border: #33FFFFFF  (20% white)
+
+--- Typography Reference ---
+
+    Primary Font:       Segoe UI Variable (Win11 system)
+    Fallback:           Inter (bundle for Win10)
+    Monospace:           Cascadia Code (code snippets)
+    Window Title:       14px SemiBold
+    Section Header:     13px SemiBold
+    Card Content:       13px Regular
+    Metadata:           11px Regular
+    Search Input:       14px Regular
+    Category Label:     12px Medium
+    Keyboard Hint:      11px Medium
+
 
 ───────────────────────────────────────────────────────────────────
   NOTES
@@ -113,3 +238,7 @@ NuGet:   dotnet add package SixLabors.ImageSharp
 - Use SixLabors.ImageSharp instead — one library fills all image gaps
 - PdfSharp already in project — extend for PDF improvements
 - All features should integrate with existing QuickLook and context menus
+- UI improvements require NO new dependencies (all WPF native storyboards)
+- Full design reference: flyshelf_ui_design_bible.md
+- Research sources: Rainmeter skins, Fluent Design 2, Paste macOS,
+  Discord/Spotify/Notion UX, clipboard manager competitors
