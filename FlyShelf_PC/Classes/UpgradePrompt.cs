@@ -236,21 +236,7 @@ namespace FlyShelf.Classes
             buyLink.Inlines.Add(linkRun);
             buyLink.MouseLeftButtonUp += (s, ev) =>
             {
-                try
-                {
-                    string deviceId = FlyShelf.Classes.SettingsManager.Current.DeviceId ?? "";
-#if MSIX_STORE
-                    FlyShelf.Windows.ToastWindow.ShowToast("Pro upgrade is available at https://fly-shelf.vercel.app/");
-#else
-                    string paymentUrl = $"https://fly-shelf.vercel.app/pricing.html?deviceId={Uri.EscapeDataString(deviceId)}";
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                    {
-                        FileName = paymentUrl,
-                        UseShellExecute = true
-                    });
-#endif
-                }
-                catch { }
+                OpenSecureCheckout(dialog);
             };
             Grid.SetRow(buyLink, 4);
             grid.Children.Add(buyLink);
@@ -382,6 +368,62 @@ namespace FlyShelf.Classes
             if (result == MessageBoxResult.Yes)
             {
                 ShowActivationDialog(resolvedOwner);
+            }
+        }
+
+        // ═════════════════════════════════════════════════════════════
+        // SECURE CHECKOUT DISCLOSURE (Policy 10.8 Compliant)
+        // ═════════════════════════════════════════════════════════════
+
+        public static void OpenSecureCheckout(Window? owner = null)
+        {
+            try
+            {
+                var resolvedOwner = ResolveActiveOwner(owner);
+                string deviceId = FlyShelf.Classes.SettingsManager.Current.DeviceId ?? "";
+                string paymentUrl = $"https://fly-shelf.vercel.app/pricing.html?deviceId={Uri.EscapeDataString(deviceId)}";
+
+                string msg = "Secure External Checkout\n\n" +
+                             "You are proceeding to our secure payment gateway to complete your upgrade purchase:\n" +
+                             "https://fly-shelf.vercel.app/pricing.html\n\n" +
+                             "• This transaction is processed outside of the Microsoft Store.\n" +
+                             "• Microsoft gift cards, store credits, and family safety controls (such as 'Ask to Buy') are not supported.\n" +
+                             "• Customer support, billing queries, and refund requests are managed directly by FlyShelf.\n\n" +
+                             "Would you like to open the secure checkout page in your browser?";
+
+                MessageBoxResult result;
+                if (resolvedOwner != null)
+                {
+                    result = MessageBox.Show(
+                        resolvedOwner,
+                        msg,
+                        "FlyShelf - Secure Checkout",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Information);
+                }
+                else
+                {
+                    result = MessageBox.Show(
+                        msg,
+                        "FlyShelf - Secure Checkout",
+                        MessageBoxButton.YesNo,
+                        MessageBoxImage.Information);
+                }
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = paymentUrl,
+                        UseShellExecute = true
+                    });
+                    FlyShelf.Windows.ToastWindow.ShowToast("🛒 Opening payment page in your browser...");
+                }
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Classes.Logger.LogAction("LICENSE", $"Failed to open checkout: {ex.Message}");
+                FlyShelf.Windows.ToastWindow.ShowToast("❌ Could not open browser. Please visit our website to upgrade.");
             }
         }
     }

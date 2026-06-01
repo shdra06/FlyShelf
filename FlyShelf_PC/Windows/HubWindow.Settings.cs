@@ -794,30 +794,9 @@ namespace FlyShelf.Windows
         // BUY PREMIUM â€” Opens payment page in default browser
         // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
-        private void BuyPremium_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+                private void BuyPremium_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            try
-            {
-                string deviceId = FlyShelf.Classes.SettingsManager.Current.DeviceId ?? "";
-                // TODO: Update this URL once you deploy to Firebase Hosting
-#if MSIX_STORE
-                FlyShelf.Windows.ToastWindow.ShowToast("â„¹ï¸ Pro upgrade is available at https://fly-shelf.vercel.app/");
-                return;
-#else
-                string paymentUrl = $"https://fly-shelf.vercel.app/pricing.html?deviceId={Uri.EscapeDataString(deviceId)}";
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = paymentUrl,
-                    UseShellExecute = true
-                });
-#endif
-                FlyShelf.Windows.ToastWindow.ShowToast("ðŸ›’ Opening payment page in your browser...");
-            }
-            catch (Exception ex)
-            {
-                FlyShelf.Classes.Logger.LogAction("LICENSE", $"Failed to open payment URL: {ex.Message}");
-                FlyShelf.Windows.ToastWindow.ShowToast("âŒ Could not open browser. Please visit our website to purchase.");
-            }
+            FlyShelf.Classes.UpgradePrompt.OpenSecureCheckout(this);
         }
 
         // â•â•â• Device Send, Archive, Merge & Selection moved to HubWindow.SettingsHandlers.cs â•â•â•
