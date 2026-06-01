@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -671,7 +671,7 @@ namespace FlyShelf.ViewModels
                         var zipInfo = new FileInfo(tempZip);
                         long folderSize = Directory.GetFiles(FilePath, "*", SearchOption.AllDirectories)
                             .Sum(f => { try { return new FileInfo(f).Length; } catch { return 0L; } });
-                        FormattedSize = $"{FormatBytes(folderSize)} â†’ {FormatBytes(zipInfo.Length)} zipped";
+                        FormattedSize = $"{FormatBytes(folderSize)} -> {FormatBytes(zipInfo.Length)} zipped";
                         PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(FormattedSize)));
                         FlyShelf.Classes.Logger.LogAction("FOLDER ZIP", $"Created zip on demand: {tempZip}");
                     }
@@ -679,7 +679,7 @@ namespace FlyShelf.ViewModels
                     // Show toast on UI thread
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
-                        FlyShelf.Windows.ToastWindow.ShowToast("ðŸ“¦ Zip archive created!");
+                        FlyShelf.Windows.ToastWindow.ShowToast("Zip archive created!");
                     });
                 }
                 catch (Exception ex)

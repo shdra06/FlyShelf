@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Quick Look" Height="500" Width="400"
-        WindowStyle="None" AllowsTransparency="False" Background="#1C1C1C"
+        WindowStyle="None" AllowsTransparency="False" Background="{DynamicResource ThemeWindowFallback}"
         Topmost="True" ResizeMode="CanResizeWithGrip"
         WindowStartupLocation="CenterScreen" 
         MouseLeftButtonDown="Window_MouseLeftButtonDown"
@@ -15,7 +15,7 @@
     </WindowChrome.WindowChrome>
     <Grid>
         <!-- Dynamic Frame -->
-        <Border x:Name="OuterBorder" CornerRadius="12" Background="#1C1C1C" BorderBrush="#30FFFFFF" BorderThickness="1" ClipToBounds="True">
+        <Border x:Name="OuterBorder" CornerRadius="12" Background="{DynamicResource ThemeWindowFallback}" BorderBrush="#30FFFFFF" BorderThickness="1" ClipToBounds="True">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="40" />
@@ -24,7 +24,7 @@
                 
                 <!-- Header Bar -->
                 <Grid x:Name="HeaderGrid" Grid.Row="0" Background="#90111111" MouseLeftButtonDown="Window_MouseLeftButtonDown">
-                    <TextBlock x:Name="HeaderTitle" Text="Quick Look" Foreground="#888888" VerticalAlignment="Center" Margin="14,0,0,0" FontWeight="Medium" FontSize="11.5" IsHitTestVisible="False"/>
+                    <TextBlock x:Name="HeaderTitle" Text="Quick Look" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center" Margin="14,0,0,0" FontWeight="Medium" FontSize="11.5" IsHitTestVisible="False"/>
                     
                     <!-- Action Buttons (right side) -->
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
@@ -42,17 +42,17 @@
                         </ui:Button>
                         <!-- Copy All OCR Text Button -->
                         <ui:Button x:Name="CopyAllOcrBtn" Click="CopyAllOcrButton_Click" Appearance="Secondary" 
-                                   Foreground="#A855F7" Padding="5,3" Margin="0,0,4,0" ToolTip="Copy all detected text"
+                                   Foreground="{DynamicResource GeminiAccentColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Copy all detected text"
                                    Visibility="Collapsed">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Copy24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                         <!-- Pin Button (toggle always on top) -->
                         <ui:Button x:Name="PinBtn" Click="PinButton_Click" Appearance="Secondary" 
-                                   Foreground="#F59E0B" Padding="5,3" Margin="0,0,4,0" ToolTip="Pin on top">
+                                   Foreground="{DynamicResource PinActiveColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Pin on top">
                             <ui:Button.Icon><ui:SymbolIcon x:Name="PinIcon" Symbol="Pin24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                         <!-- Close -->
-                        <ui:Button x:Name="CloseBtn" Click="CloseButton_Click" Appearance="Secondary" Foreground="#EF4444" Padding="5,3" ToolTip="Close">
+                        <ui:Button x:Name="CloseBtn" Click="CloseButton_Click" Appearance="Secondary" Foreground="{DynamicResource DangerColor}" Padding="5,3" ToolTip="Close">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                     </StackPanel>
@@ -81,8 +81,8 @@
                     <!-- Document Mode (Fallback when all else fails) -->
                     <StackPanel x:Name="DocumentPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
                         <ui:SymbolIcon x:Name="DocIcon" Symbol="Document24" FontSize="120" Foreground="#60A5FA" HorizontalAlignment="Center"/>
-                        <TextBlock x:Name="DocTitle" Text="Document Name" FontSize="18" FontWeight="SemiBold" Foreground="White" Margin="0,15,0,5" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="300"/>
-                        <TextBlock x:Name="DocSize" Text="PDF Document - 2.4 MB" FontSize="13" Foreground="#888888" TextAlignment="Center"/>
+                        <TextBlock x:Name="DocTitle" Text="Document Name" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextPrimary}" Margin="0,15,0,5" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="300"/>
+                        <TextBlock x:Name="DocSize" Text="PDF Document - 2.4 MB" FontSize="13" Foreground="{DynamicResource ThemeTextMuted}" TextAlignment="Center"/>
                         <ui:Button Content="Open Native Tool" Appearance="Primary" Margin="0,20,0,0" HorizontalAlignment="Center" Click="OpenFile_Click">
                             <ui:Button.Icon>
                                 <ui:SymbolIcon Symbol="Open24"/>
@@ -99,7 +99,7 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <ui:SymbolIcon Symbol="QRCode24" Foreground="#60A5FA" FontSize="18" VerticalAlignment="Center" Margin="0,0,8,0" Grid.Column="0"/>
-                            <TextBlock x:Name="QrContentText" Text="QR Code Text..." Foreground="White" VerticalAlignment="Center" FontSize="12" TextTrimming="CharacterEllipsis" Grid.Column="1"/>
+                            <TextBlock x:Name="QrContentText" Text="QR Code Text..." Foreground="{DynamicResource ThemeTextPrimary}" VerticalAlignment="Center" FontSize="12" TextTrimming="CharacterEllipsis" Grid.Column="1"/>
                             <ui:Button x:Name="CopyQrBtn" Click="CopyQrButton_Click" Content="Copy Text" Appearance="Secondary" Padding="8,3" FontSize="10.5" VerticalAlignment="Center" Grid.Column="2"/>
                         </Grid>
                     </Border>

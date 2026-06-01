@@ -27,13 +27,19 @@ namespace FlyShelf.ViewModels
         {
             try
             {
+                Classes.Logger.LogAction("TABLE_DEBUG", $"ExtractTable called. FilePath: '{FilePath}', IsImagePreview: {IsImagePreview}, CanExtractTable: {FlyShelf.Classes.LicenseManager.CanExtractTable()}, FileExists: {(string.IsNullOrEmpty(FilePath) ? "false" : System.IO.File.Exists(FilePath).ToString())}");
+
                 if (!FlyShelf.Classes.LicenseManager.CanExtractTable())
                 {
                     FlyShelf.Classes.UpgradePrompt.ShowTableExtractLimit();
                     return;
                 }
 
-                if (!IsImagePreview || string.IsNullOrEmpty(FilePath)) return;
+                if (!IsImagePreview || string.IsNullOrEmpty(FilePath))
+                {
+                    Classes.Logger.LogAction("TABLE_DEBUG", $"Returned early due to guards. IsImagePreview: {IsImagePreview}, FilePathIsEmpty: {string.IsNullOrEmpty(FilePath)}");
+                    return;
+                }
 
                 FlyShelf.Windows.ToastWindow.ShowToast("Extracting Table from Image... ⏳");
 
@@ -42,8 +48,10 @@ namespace FlyShelf.ViewModels
 
                 await System.Threading.Tasks.Task.Run(async () =>
                 {
+                    Classes.Logger.LogAction("TABLE_DEBUG", "Background processing thread started.");
                     // ═══ FlyShelf Smart Table Detection Engine ═══
                     try
+
                     {
                         using (var stream = File.OpenRead(FilePath))
                         {
@@ -103,215 +111,299 @@ namespace FlyShelf.ViewModels
                                     return;
                                 }
 
-                                // ── STEP 2: Adaptive Row Clustering ──
-                                // Sort by Y coordinate and use adaptive threshold based on
-                                // statistical analysis of vertical gaps between words
-                                var sorted = allWords.OrderBy(w => w.Y).ToList();
-
-                                // Calculate robust median height using middle 80% of values
-                                var heights = sorted.Select(w => w.H).OrderBy(h => h).ToList();
-                                int trimCount = Math.Max(1, heights.Count / 10);
-                                var trimmedHeights = heights.Skip(trimCount).Take(heights.Count - 2 * trimCount).ToList();
-                                double medianHeight = trimmedHeights.Count > 0
-                                    ? trimmedHeights[trimmedHeights.Count / 2]
-                                    : heights[heights.Count / 2];
-
-                                // Adaptive threshold: use 60% of median height for tight tables,
-                                // but also consider the actual gap distribution
-                                var yGaps = new List<double>();
-                                for (int i = 1; i < sorted.Count; i++)
+                                // ── STEP 2: Clustered Row and Cell Detection ──
+                                // Cluster words into rows using robust vertical overlap clustering
+                                var extractedRows = new List<ExtractedRow>();
+                                
+                                // Sort words by Y center first to process top-to-bottom
+                                var wordsList = allWords.Select(w => new ExtractedWord
                                 {
-                                    double gap = sorted[i].Y - sorted[i - 1].Y;
-                                    if (gap > 0) yGaps.Add(gap);
-                                }
+                                    Text = w.Text,
+                                    X = w.X,
+                                    Y = w.Y,
+                                    W = w.W,
+                                    H = w.H
+                                }).OrderBy(w => w.CenterY).ToList();
 
-                                double rowThreshold;
-                                if (yGaps.Count > 2)
+                                foreach (var word in wordsList)
                                 {
-                                    yGaps.Sort();
-                                    // Find the natural break point between intra-row and inter-row gaps
-                                    // using Otsu's method (bimodal threshold)
-                                    double bestThreshold = medianHeight * 0.6;
-                                    double bestVariance = double.MinValue;
-                                    var distinctGaps = yGaps.Distinct().OrderBy(g => g).ToList();
+                                    // Find if this word overlaps vertically with an existing row
+                                    ExtractedRow? targetRow = null;
+                                    double maxOverlap = 0;
 
-                                    foreach (var t in distinctGaps)
+                                    foreach (var row in extractedRows)
                                     {
-                                        var below = yGaps.Where(g => g <= t).ToList();
-                                        var above = yGaps.Where(g => g > t).ToList();
-                                        if (below.Count == 0 || above.Count == 0) continue;
-
-                                        double w0 = (double)below.Count / yGaps.Count;
-                                        double w1 = (double)above.Count / yGaps.Count;
-                                        double m0 = below.Average();
-                                        double m1 = above.Average();
-                                        double variance = w0 * w1 * (m0 - m1) * (m0 - m1);
-
-                                        if (variance > bestVariance)
+                                        double overlap = Math.Max(0, Math.Min(word.Bottom, row.MaxBottom) - Math.Max(word.Y, row.MinY));
+                                        double minH = Math.Min(word.H, row.MaxBottom - row.MinY);
+                                        
+                                        if (minH > 0)
                                         {
-                                            bestVariance = variance;
-                                            bestThreshold = t;
+                                            double overlapRatio = overlap / minH;
+                                            if (overlapRatio >= 0.4) // 40% vertical overlap threshold
+                                            {
+                                                if (overlap > maxOverlap)
+                                                {
+                                                    maxOverlap = overlap;
+                                                    targetRow = row;
+                                                }
+                                            }
                                         }
                                     }
-                                    rowThreshold = bestThreshold;
-                                }
-                                else
-                                {
-                                    rowThreshold = medianHeight * 0.6;
-                                }
 
-                                // Cluster words into rows
-                                var rows = new List<List<(string Text, double X, double W, double Right, double CenterX)>>();
-                                var currentRow = new List<(string Text, double X, double W, double Right, double CenterX)>();
-                                double lastY = sorted[0].Y;
-
-                                foreach (var word in sorted)
-                                {
-                                    if (Math.Abs(word.Y - lastY) > rowThreshold && currentRow.Count > 0)
+                                    if (targetRow != null)
                                     {
-                                        rows.Add(currentRow.OrderBy(w => w.X).ToList());
-                                        currentRow = new List<(string Text, double X, double W, double Right, double CenterX)>();
+                                        targetRow.Words.Add(word);
+                                        targetRow.MinY = Math.Min(targetRow.MinY, word.Y);
+                                        targetRow.MaxBottom = Math.Max(targetRow.MaxBottom, word.Bottom);
                                     }
-                                    currentRow.Add((word.Text, word.X, word.W, word.Right, word.CenterX));
-                                    lastY = word.Y;
+                                    else
+                                    {
+                                        var newRow = new ExtractedRow();
+                                        newRow.Words.Add(word);
+                                        newRow.MinY = word.Y;
+                                        newRow.MaxBottom = word.Bottom;
+                                        extractedRows.Add(newRow);
+                                    }
                                 }
-                                if (currentRow.Count > 0)
-                                    rows.Add(currentRow.OrderBy(w => w.X).ToList());
 
-                                if (rows.Count < 2)
+                                // Sort the clustered rows by their vertical CenterY
+                                extractedRows = extractedRows.OrderBy(r => r.CenterY).ToList();
+
+                                if (extractedRows.Count < 2)
                                 {
                                     Classes.Logger.LogAction("TABLE_OCR", "Only 1 row detected - not a table");
                                     return;
                                 }
 
-                                // ── STEP 3: Advanced Column Detection using X-Projection Profiles ──
-                                // Detect columns by projecting words horizontally and locating empty vertical gutters.
-                                int widthInt = preprocessed.PixelWidth;
-                                int[] xProfile = new int[widthInt];
+                                // Calculate robust median height to determine space threshold
+                                var sortedHeights = wordsList.Select(w => w.H).OrderBy(h => h).ToList();
+                                double globalMedianHeight = sortedHeights.Count > 0 ? sortedHeights[sortedHeights.Count / 2] : 15.0;
+                                double maxSpaceWidth = globalMedianHeight * 0.9; // Dynamic space threshold for cell merging
 
-                                // Exclude spanned/merged headers or text blocks (width > 30% of total image width)
-                                foreach (var word in allWords)
+                                foreach (var row in extractedRows)
                                 {
-                                    if (word.W > widthInt * 0.3)
-                                        continue;
+                                    var sortedWords = row.Words.OrderBy(w => w.X).ToList();
+                                    if (sortedWords.Count == 0) continue;
 
-                                    int left = Math.Clamp((int)word.X, 0, widthInt - 1);
-                                    int right = Math.Clamp((int)word.Right, 0, widthInt - 1);
-
-                                    for (int i = left; i <= right; i++)
+                                    var currentCellWords = new List<ExtractedWord> { sortedWords[0] };
+                                    
+                                    for (int i = 1; i < sortedWords.Count; i++)
                                     {
-                                        xProfile[i]++;
-                                    }
-                                }
-
-                                // Locate continuous empty vertical gutters (valleys where xProfile is 0)
-                                var gutters = new List<(int Start, int End)>();
-                                bool inGutter = false;
-                                int gutterStart = 0;
-
-                                for (int i = 0; i < widthInt; i++)
-                                {
-                                    bool isGutter = xProfile[i] == 0;
-                                    if (isGutter)
-                                    {
-                                        if (!inGutter)
+                                        var prevWord = sortedWords[i - 1];
+                                        var currWord = sortedWords[i];
+                                        
+                                        double gap = currWord.X - prevWord.Right;
+                                        
+                                        if (gap < maxSpaceWidth)
                                         {
-                                            gutterStart = i;
-                                            inGutter = true;
+                                            currentCellWords.Add(currWord);
+                                        }
+                                        else
+                                        {
+                                            row.Cells.Add(CreateCellFromWords(currentCellWords));
+                                            currentCellWords = new List<ExtractedWord> { currWord };
                                         }
                                     }
-                                    else
+                                    if (currentCellWords.Count > 0)
                                     {
-                                        if (inGutter)
-                                        {
-                                            gutters.Add((gutterStart, i - 1));
-                                            inGutter = false;
-                                        }
+                                        row.Cells.Add(CreateCellFromWords(currentCellWords));
                                     }
                                 }
-                                if (inGutter)
-                                {
-                                    gutters.Add((gutterStart, widthInt - 1));
-                                }
 
-                                // Filter and extract column separators
-                                double minTextX = allWords.Min(w => w.X);
-                                double maxTextX = allWords.Max(w => w.Right);
-
+                                // ── STEP 3: Advanced Column Separator Estimation ──
+                                int maxCells = extractedRows.Max(r => r.Cells.Count);
                                 var separators = new List<double>();
-                                foreach (var gutter in gutters)
+                                int numCols = 1;
+
+                                if (maxCells >= 2)
                                 {
-                                    double center = (gutter.Start + gutter.End) / 2.0;
-                                    int gutterWidth = gutter.End - gutter.Start + 1;
+                                    // Collect all separators from reference rows (rows that contain exactly maxCells)
+                                    var referenceRows = extractedRows.Where(r => r.Cells.Count == maxCells).ToList();
+                                    
+                                    int numSeps = maxCells - 1;
+                                    var sepLists = new List<double>[numSeps];
+                                    for (int i = 0; i < numSeps; i++) sepLists[i] = new List<double>();
 
-                                    // Ignore gutters that are too narrow (less than 5 pixels)
-                                    if (gutterWidth < 5)
-                                        continue;
-
-                                    // Separator must be strictly between active text boundaries
-                                    if (center > minTextX && center < maxTextX)
+                                    foreach (var row in referenceRows)
                                     {
-                                        separators.Add(center);
-                                    }
-                                }
-                                separators = separators.OrderBy(s => s).ToList();
-
-                                int numCols = separators.Count + 1;
-
-                                // Fallback: if projection profile found only 1 column, segment horizontally based on max words
-                                if (numCols < 2 && rows.Count >= 2)
-                                {
-                                    int maxRowWords = rows.Max(r => r.Count);
-                                    if (maxRowWords >= 2)
-                                    {
-                                        double span = maxTextX - minTextX;
-                                        double colWidth = span / maxRowWords;
-                                        separators.Clear();
-                                        for (int i = 1; i < maxRowWords; i++)
+                                        for (int i = 0; i < numSeps; i++)
                                         {
-                                            separators.Add(minTextX + i * colWidth);
+                                            double sep = (row.Cells[i].Right + row.Cells[i + 1].Left) / 2.0;
+                                            sepLists[i].Add(sep);
                                         }
-                                        numCols = separators.Count + 1;
+                                    }
+
+                                    // Average the separator positions to get global separators
+                                    for (int i = 0; i < numSeps; i++)
+                                    {
+                                        if (sepLists[i].Count > 0)
+                                        {
+                                            separators.Add(sepLists[i].Average());
+                                        }
+                                    }
+                                    separators = separators.OrderBy(s => s).ToList();
+                                    numCols = separators.Count + 1;
+                                }
+
+                                // Fallback: if columns are 1, segment width-wise or by max cells
+                                if (numCols < 2 && extractedRows.Count >= 2)
+                                {
+                                    double minTextX = wordsList.Min(w => w.X);
+                                    double maxTextX = wordsList.Max(w => w.Right);
+                                    double span = maxTextX - minTextX;
+                                    int fallbackCols = Math.Max(2, maxCells);
+
+                                    double colWidth = span / fallbackCols;
+                                    separators.Clear();
+                                    for (int i = 1; i < fallbackCols; i++)
+                                    {
+                                        separators.Add(minTextX + i * colWidth);
+                                    }
+                                    numCols = separators.Count + 1;
+                                }
+
+                                // ── STEP 4: Build Grid Matrix and Assign Cells ──
+                                var grid = new string[extractedRows.Count, numCols];
+                                for (int r = 0; r < extractedRows.Count; r++)
+                                {
+                                    for (int c = 0; c < numCols; c++)
+                                    {
+                                        grid[r, c] = "";
                                     }
                                 }
 
-                                if (numCols < 2)
+                                for (int ri = 0; ri < extractedRows.Count; ri++)
                                 {
-                                    Classes.Logger.LogAction("TABLE_OCR", "Could not detect column structure");
-                                    return;
-                                }
-
-                                // ── STEP 4: Assign words to cells with smart bucketing ──
-                                var jsonDict = new Dictionary<string, object>();
-
-                                for (int ri = 0; ri < rows.Count; ri++)
-                                {
-                                    var buckets = new string[numCols];
-                                    for (int c = 0; c < numCols; c++) buckets[c] = "";
-
-                                    foreach (var word in rows[ri])
+                                    var row = extractedRows[ri];
+                                    foreach (var cell in row.Cells)
                                     {
-                                        // Use word center for more accurate column assignment
-                                        double wc = word.CenterX;
+                                        double cx = (cell.Left + cell.Right) / 2.0;
                                         int col = 0;
                                         for (int si = 0; si < separators.Count; si++)
                                         {
-                                            if (wc > separators[si]) col = si + 1;
+                                            if (cx > separators[si]) col = si + 1;
                                             else break;
                                         }
                                         if (col >= numCols) col = numCols - 1;
 
-                                        buckets[col] += (buckets[col].Length > 0 ? " " : "") + word.Text;
+                                        if (grid[ri, col].Length > 0)
+                                        {
+                                            grid[ri, col] += " " + cell.Text;
+                                        }
+                                        else
+                                        {
+                                            grid[ri, col] = cell.Text;
+                                        }
+                                    }
+                                }
+
+                                // ── STEP 5: Post-Processing Alphanumeric & Numeric Type Corrections ──
+                                for (int c = 0; c < numCols; c++)
+                                {
+                                    int totalNonEmpty = 0;
+                                    int numericCount = 0;
+                                    int dateCount = 0;
+
+                                    for (int r = 0; r < extractedRows.Count; r++)
+                                    {
+                                        string text = grid[r, c].Trim();
+                                        if (string.IsNullOrEmpty(text)) continue;
+
+                                        totalNonEmpty++;
+
+                                        int numChars = 0;
+                                        int letterChars = 0;
+                                        foreach (char ch in text)
+                                        {
+                                            if (char.IsDigit(ch) || ch == '.' || ch == ',' || ch == '$' || ch == '%' || char.IsWhiteSpace(ch))
+                                                numChars++;
+                                            else if (char.IsLetter(ch))
+                                                letterChars++;
+                                        }
+                                        
+                                        int oSubstitutions = text.Count(ch => ch == 'o' || ch == 'O');
+                                        if (numChars + oSubstitutions > letterChars)
+                                        {
+                                            numericCount++;
+                                        }
+
+                                        int slashOrDash = text.Count(ch => ch == '/' || ch == '-');
+                                        if (slashOrDash >= 2 && text.Any(char.IsDigit))
+                                        {
+                                            dateCount++;
+                                        }
                                     }
 
+                                    if (totalNonEmpty > 0)
+                                    {
+                                        bool isNumeric = (double)numericCount / totalNonEmpty >= 0.4;
+                                        bool isDate = (double)dateCount / totalNonEmpty >= 0.4;
+
+                                        if (isNumeric)
+                                        {
+                                            Classes.Logger.LogAction("TABLE_EXTRACT", $"Column {c} identified as NUMERIC. Applying corrections.");
+                                            for (int r = 0; r < extractedRows.Count; r++)
+                                            {
+                                                if (r == 0 && totalNonEmpty > 1 && !grid[r, c].Any(char.IsDigit))
+                                                    continue; // Skip header
+
+                                                string text = grid[r, c];
+                                                if (string.IsNullOrEmpty(text)) continue;
+
+                                                var corrected = new System.Text.StringBuilder();
+                                                foreach (char ch in text)
+                                                {
+                                                    if (ch == 'o' || ch == 'O')
+                                                        corrected.Append('0');
+                                                    else
+                                                        corrected.Append(ch);
+                                                }
+                                                
+                                                string cleaned = corrected.ToString()
+                                                    .Replace(" ,", ",")
+                                                    .Replace(" .", ".")
+                                                    .Replace(", ", ",")
+                                                    .Replace(". ", ".");
+
+                                                grid[r, c] = cleaned;
+                                            }
+                                        }
+                                        else if (isDate)
+                                        {
+                                            Classes.Logger.LogAction("TABLE_EXTRACT", $"Column {c} identified as DATE. Applying corrections.");
+                                            for (int r = 0; r < extractedRows.Count; r++)
+                                            {
+                                                if (r == 0 && totalNonEmpty > 1 && !grid[r, c].Any(char.IsDigit))
+                                                    continue; // Skip header
+
+                                                string text = grid[r, c];
+                                                if (string.IsNullOrEmpty(text)) continue;
+
+                                                string cleaned = text
+                                                    .Replace(" /", "/")
+                                                    .Replace("/ ", "/")
+                                                    .Replace(" -", "-")
+                                                    .Replace("- ", "-");
+                                                grid[r, c] = cleaned;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ── STEP 6: Serialize Grid to Final JSON Payload ──
+                                var jsonDict = new Dictionary<string, object>();
+                                for (int ri = 0; ri < extractedRows.Count; ri++)
+                                {
                                     for (int ci = 0; ci < numCols; ci++)
-                                        jsonDict[$"({ri},{ci})"] = new { text = buckets[ci].Trim(), conf = 0.92 };
+                                    {
+                                        jsonDict[$"({ri},{ci})"] = new { text = grid[ri, ci].Trim(), conf = 0.92 };
+                                    }
                                 }
 
                                 finalJsonPayload = System.Text.Json.JsonSerializer.Serialize(jsonDict);
                                 extractionMethod = "FlyShelf";
 
-                                Classes.Logger.LogAction("TABLE_EXTRACT", $"Smart OCR: {rows.Count}x{numCols} table ({separators.Count} separators)");
+                                Classes.Logger.LogAction("TABLE_EXTRACT", $"Smart Clustered OCR: {extractedRows.Count}x{numCols} table ({separators.Count} separators)");
                             }
                         }
                     }
@@ -374,7 +466,8 @@ namespace FlyShelf.ViewModels
             using (global::Windows.Graphics.Imaging.BitmapBuffer buffer = bgra8Bitmap.LockBuffer(global::Windows.Graphics.Imaging.BitmapBufferAccessMode.ReadWrite))
             using (global::Windows.Foundation.IMemoryBufferReference reference = buffer.CreateReference())
             {
-                ((IMemoryBufferByteAccess)reference).GetBuffer(out byte* dataInBytes, out uint capacity);
+                var byteAccess = WinRT.CastExtensions.As<IMemoryBufferByteAccess>(reference);
+                byteAccess.GetBuffer(out byte* dataInBytes, out uint capacity);
                 global::Windows.Graphics.Imaging.BitmapPlaneDescription bufferLayout = buffer.GetPlaneDescription(0);
 
                 // 1. Populate grayscale and integral image
@@ -442,6 +535,54 @@ namespace FlyShelf.ViewModels
             }
 
             return bgra8Bitmap;
+        }
+
+        private class ExtractedWord
+        {
+            public string Text { get; set; } = "";
+            public double X { get; set; }
+            public double Y { get; set; }
+            public double W { get; set; }
+            public double H { get; set; }
+            public double Right => X + W;
+            public double Bottom => Y + H;
+            public double CenterX => X + W / 2.0;
+            public double CenterY => Y + H / 2.0;
+        }
+
+        private class ExtractedCell
+        {
+            public string Text { get; set; } = "";
+            public double Left { get; set; }
+            public double Right { get; set; }
+            public double Top { get; set; }
+            public double Bottom { get; set; }
+        }
+
+        private class ExtractedRow
+        {
+            public double MinY { get; set; } = double.MaxValue;
+            public double MaxBottom { get; set; } = double.MinValue;
+            public List<ExtractedWord> Words { get; set; } = new();
+            public List<ExtractedCell> Cells { get; set; } = new();
+            public double CenterY => (MinY + MaxBottom) / 2.0;
+        }
+
+        private static ExtractedCell CreateCellFromWords(List<ExtractedWord> words)
+        {
+            double left = words.Min(w => w.X);
+            double right = words.Max(w => w.Right);
+            double top = words.Min(w => w.Y);
+            double bottom = words.Max(w => w.Bottom);
+            string text = string.Join(" ", words.Select(w => w.Text));
+            return new ExtractedCell
+            {
+                Text = text,
+                Left = left,
+                Right = right,
+                Top = top,
+                Bottom = bottom
+            };
         }
     }
 }

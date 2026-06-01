@@ -1,4 +1,4 @@
-﻿// ---------------------------------------------------------------
+// ---------------------------------------------------------------
 // HubWindow â€” Diagnostics, Filters, Merge, Scroll & Lifecycle
 // RunDiagnostics, Server restart, Filter/Search, Pin/Delete,
 // Merge PDFs, Browser-style Smooth Scroll, OnClosed
@@ -615,17 +615,17 @@ namespace FlyShelf.Windows
                     {
                         if (isPro)
                         {
-                            if (text.StartsWith("ðŸ”’ ")) item.Content = text.Substring(2);
+                            if (text.StartsWith("[Locked] ")) item.Content = text.Substring(9);
                         }
                         else
                         {
-                            if (!text.StartsWith("ðŸ”’ ")) item.Content = "ðŸ”’ " + text;
+                            if (!text.StartsWith("[Locked] ")) item.Content = "[Locked] " + text;
                         }
                     }
                     else
                     {
                         // Remove lock from 14 and 30 days since they are now free
-                        if (text.StartsWith("ðŸ”’ ")) item.Content = text.Substring(2);
+                        if (text.StartsWith("[Locked] ")) item.Content = text.Substring(9);
                     }
                 }
             }

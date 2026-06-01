@@ -134,6 +134,10 @@ namespace FlyShelf.Classes
         private string _themeDisplayMode = "desktop";
         public string ThemeDisplayMode { get => _themeDisplayMode; set => SetProperty(ref _themeDisplayMode, value); }
 
+        // ═══ Color Theme System (Midnight/Ocean/Sunset/Emerald/Lavender/Light) ═══
+        private string _colorThemeName = "Default";
+        public string ColorThemeName { get => _colorThemeName; set => SetProperty(ref _colorThemeName, value); }
+
         private bool _themeAnimationsEnabled = true;
         public bool ThemeAnimationsEnabled { get => _themeAnimationsEnabled; set => SetProperty(ref _themeAnimationsEnabled, value); }
 

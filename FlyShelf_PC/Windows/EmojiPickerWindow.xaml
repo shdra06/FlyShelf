@@ -1,4 +1,4 @@
-﻿<controls:MicaWindow x:Class="FlyShelf.Windows.EmojiPickerWindow"
+<controls:MicaWindow x:Class="FlyShelf.Windows.EmojiPickerWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
@@ -42,7 +42,7 @@
             <!-- Pin / Unpin toggle button -->
             <ui:Button x:Name="PinBtn" Grid.Column="1" Appearance="Secondary" Padding="6,4" CornerRadius="8"
                        Click="Pin_Click" ToolTip="Pinned (always on top)" Margin="0,0,4,0"
-                       Foreground="#6366F1">
+                       Foreground="{DynamicResource TypeDefaultColor}">
                 <ui:Button.Icon><ui:SymbolIcon x:Name="PinIcon" Symbol="Pin24" FontSize="12"/></ui:Button.Icon>
             </ui:Button>
 

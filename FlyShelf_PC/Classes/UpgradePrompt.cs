@@ -1,7 +1,7 @@
-﻿// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-// UpgradePrompt â€” Shows upgrade dialogs when free-tier limits are hit.
+// ═══════════════════════════════════════════════════════════════════
+// UpgradePrompt — Shows upgrade dialogs when free-tier limits are hit.
 // Also provides the license activation dialog.
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+// ═══════════════════════════════════════════════════════════════════
 using System;
 using System.Linq;
 using System.Windows;
@@ -14,9 +14,9 @@ namespace FlyShelf.Classes
 {
     public static class UpgradePrompt
     {
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // ═════════════════════════════════════════════════════════════
         // LIMIT REACHED PROMPTS
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // ═════════════════════════════════════════════════════════════
 
         public static void ShowPdfMergeLimit(Window? owner = null)
         {
@@ -24,7 +24,7 @@ namespace FlyShelf.Classes
                 "PDF Merge Limit Reached",
                 $"You've used {LicenseManager.FREE_PDF_MERGE_DAILY}/{LicenseManager.FREE_PDF_MERGE_DAILY} free PDF merges today.",
                 "Upgrade to FlyShelf Pro for unlimited PDF merges!",
-                "ðŸ“„",
+                "",
                 owner);
         }
 
@@ -34,7 +34,7 @@ namespace FlyShelf.Classes
                 "PDF Save Limit Reached",
                 $"You've used {LicenseManager.FREE_PDF_SAVE_DAILY}/{LicenseManager.FREE_PDF_SAVE_DAILY} free PDF page extractions today.",
                 "Upgrade to FlyShelf Pro for unlimited page extraction!",
-                "ðŸ“„",
+                "",
                 owner);
         }
 
@@ -44,17 +44,17 @@ namespace FlyShelf.Classes
                 "Document Conversion Limit Reached",
                 $"You've used {LicenseManager.FREE_DOC_CONVERT_DAILY}/{LicenseManager.FREE_DOC_CONVERT_DAILY} free document conversions today.",
                 "Upgrade to FlyShelf Pro for unlimited conversions!",
-                "â™»ï¸",
+                "",
                 owner);
         }
 
         public static void ShowImageToPdfLimit(Window? owner = null)
         {
             ShowLimitDialog(
-                "Image â†’ PDF Limit Reached",
+                "Image to PDF Limit Reached",
                 $"You've used {LicenseManager.FREE_IMAGE_TO_PDF_DAILY}/{LicenseManager.FREE_IMAGE_TO_PDF_DAILY} free image-to-PDF conversions today.",
                 "Upgrade to FlyShelf Pro for unlimited conversions!",
-                "ðŸ–¼ï¸",
+                "",
                 owner);
         }
 
@@ -64,7 +64,7 @@ namespace FlyShelf.Classes
                 "QR Scan Limit Reached",
                 $"You've used {LicenseManager.FREE_QR_SCAN_DAILY}/{LicenseManager.FREE_QR_SCAN_DAILY} free QR scans today.",
                 "Upgrade to FlyShelf Pro for unlimited QR scanning!",
-                "ðŸ“·",
+                "",
                 owner);
         }
 
@@ -74,7 +74,7 @@ namespace FlyShelf.Classes
                 "OCR Limit Reached",
                 $"You've used {LicenseManager.FREE_OCR_DAILY}/{LicenseManager.FREE_OCR_DAILY} free OCR extractions today.",
                 "Upgrade to FlyShelf Pro for unlimited text extraction!",
-                "ðŸ”",
+                "",
                 owner);
         }
 
@@ -84,63 +84,63 @@ namespace FlyShelf.Classes
                 "Table Extraction Limit Reached",
                 $"You've used {LicenseManager.FREE_TABLE_EXTRACT_DAILY}/{LicenseManager.FREE_TABLE_EXTRACT_DAILY} free table extractions today.",
                 "Upgrade to FlyShelf Pro for unlimited table extraction!",
-                "ðŸ“Š",
+                "",
                 owner);
         }
 
         public static void ShowThemeLimit(Window? owner = null)
         {
             ShowLimitDialog(
-                "Custom Themes â€” Pro Feature",
+                "Custom Themes - Pro Feature",
                 "Custom themes are available for FlyShelf Pro users.",
                 "Upgrade to unlock all themes including Glass UI!",
-                "ðŸŽ¨",
+                "",
                 owner);
         }
 
         public static void ShowCustomWallpaperLimit(Window? owner = null)
         {
             ShowLimitDialog(
-                "Custom Wallpaper â€” Pro Feature",
+                "Custom Wallpaper - Pro Feature",
                 "Setting a custom clipboard wallpaper is a Pro feature.",
                 "Upgrade to FlyShelf Pro to personalize your wallpaper!",
-                "ðŸ–¼ï¸",
+                "",
                 owner);
         }
 
         public static void ShowCloudflareLimit(Window? owner = null)
         {
             ShowLimitDialog(
-                "Global Sync â€” Pro Feature",
+                "Global Sync - Pro Feature",
                 "Cloudflare tunnel (internet-wide sync) is available for FlyShelf Pro users.",
                 "Upgrade to sync your clipboard across the internet!",
-                "ðŸŒ",
+                "",
                 owner);
         }
 
         public static void ShowPinLimit()
         {
-            FlyShelf.Windows.ToastWindow.ShowToast($"ðŸ“Œ Pin limit reached ({LicenseManager.FREE_PIN_LIMIT} max). Upgrade to Pro for unlimited pins!");
+            FlyShelf.Windows.ToastWindow.ShowToast($"Pin limit reached ({LicenseManager.FREE_PIN_LIMIT} max). Upgrade to Pro for unlimited pins!");
         }
 
         public static void ShowTodoLimit()
         {
-            FlyShelf.Windows.ToastWindow.ShowToast($"âœ… To-do limit reached ({LicenseManager.FREE_TODO_DAILY} items/day). Upgrade to Pro for unlimited!");
+            FlyShelf.Windows.ToastWindow.ShowToast($"To-do limit reached ({LicenseManager.FREE_TODO_DAILY} items/day). Upgrade to Pro for unlimited!");
         }
 
         public static void ShowNoteHistoryLimit()
         {
-            FlyShelf.Windows.ToastWindow.ShowToast($"ðŸ“ Notes older than {LicenseManager.FREE_NOTE_DAYS} days are only available in Pro.");
+            FlyShelf.Windows.ToastWindow.ShowToast($"Notes older than {LicenseManager.FREE_NOTE_DAYS} days are only available in Pro.");
         }
 
         public static void ShowCustomSnifferLimit()
         {
-            FlyShelf.Windows.ToastWindow.ShowToast("ðŸ“ Custom sniffer folders are a Pro feature. Upgrade to add more folders!");
+            FlyShelf.Windows.ToastWindow.ShowToast("Custom sniffer folders are a Pro feature. Upgrade to add more folders!");
         }
 
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // ═════════════════════════════════════════════════════════════
         // ACTIVATION DIALOG
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // ═════════════════════════════════════════════════════════════
 
         /// <summary>
         /// Shows the license key activation dialog. Returns true if activation succeeded.
@@ -172,7 +172,7 @@ namespace FlyShelf.Classes
             // Title
             var title = new TextBlock
             {
-                Text = "ðŸ”‘ Enter Your License Key",
+                Text = "Enter Your License Key",
                 FontSize = 18,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = Brushes.White,
@@ -228,11 +228,7 @@ namespace FlyShelf.Classes
                 Cursor = Cursors.Hand,
                 Margin = new Thickness(0, 0, 0, 12)
             };
-            buyLink.Inlines.Add(new System.Windows.Documents.Run("ðŸ›’ ")
-            {
-                FontSize = 13
-            });
-            var linkRun = new System.Windows.Documents.Run("Don't have a key? Buy FlyShelf Pro (â‚¹299)")
+            var linkRun = new System.Windows.Documents.Run("Don't have a key? Buy FlyShelf Pro")
             {
                 Foreground = new SolidColorBrush(Color.FromRgb(0x8B, 0x5C, 0xF6)),
                 TextDecorations = TextDecorations.Underline
@@ -244,7 +240,7 @@ namespace FlyShelf.Classes
                 {
                     string deviceId = FlyShelf.Classes.SettingsManager.Current.DeviceId ?? "";
 #if MSIX_STORE
-                    FlyShelf.Windows.ToastWindow.ShowToast("â„¹ï¸ Pro upgrade is available at https://fly-shelf.vercel.app/");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Pro upgrade is available at https://fly-shelf.vercel.app/");
 #else
                     string paymentUrl = $"https://fly-shelf.vercel.app/pricing.html?deviceId={Uri.EscapeDataString(deviceId)}";
                     System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
@@ -280,7 +276,7 @@ namespace FlyShelf.Classes
 
             var activateBtn = new Button
             {
-                Content = "âœ“ Activate",
+                Content = "Activate",
                 Padding = new Thickness(20, 8, 20, 8),
                 FontWeight = FontWeights.SemiBold,
                 Background = new LinearGradientBrush(
@@ -296,21 +292,21 @@ namespace FlyShelf.Classes
                 string key = keyInput.Text.Trim();
                 if (string.IsNullOrEmpty(key))
                 {
-                    statusLabel.Text = "âš  Please enter a license key.";
+                    statusLabel.Text = "Please enter a license key.";
                     statusLabel.Foreground = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B));
                     return;
                 }
 
                 if (LicenseManager.ActivateLicense(key))
                 {
-                    statusLabel.Text = "âœ… License activated! Welcome to FlyShelf Pro!";
+                    statusLabel.Text = "License activated! Welcome to FlyShelf Pro!";
                     statusLabel.Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E));
-                    FlyShelf.Windows.ToastWindow.ShowToast("ðŸŽ‰ FlyShelf Pro activated! All features unlocked!");
+                    FlyShelf.Windows.ToastWindow.ShowToast("FlyShelf Pro activated! All features unlocked!");
                     dialog.DialogResult = true;
                 }
                 else
                 {
-                    statusLabel.Text = "âŒ Invalid license key. Please check and try again.";
+                    statusLabel.Text = "Invalid license key. Please check and try again.";
                     statusLabel.Foreground = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
                 }
             };
@@ -324,9 +320,9 @@ namespace FlyShelf.Classes
             return dialog.ShowDialog() == true;
         }
 
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-        // INTERNAL â€” Generic limit dialog builder
-        // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        // ═════════════════════════════════════════════════════════════
+        // INTERNAL - Generic limit dialog builder
+        // ═════════════════════════════════════════════════════════════
 
         private static Window? ResolveActiveOwner(Window? owner)
         {
@@ -363,21 +359,22 @@ namespace FlyShelf.Classes
         {
             var resolvedOwner = ResolveActiveOwner(owner);
 
+            string prefix = string.IsNullOrEmpty(emoji) ? "" : $"{emoji} ";
             MessageBoxResult result;
             if (resolvedOwner != null)
             {
                 result = MessageBox.Show(
                     resolvedOwner,
-                    $"{emoji} {message}\n\n{upgradeMessage}\n\nYour daily limits will reset at midnight.\n\nWould you like to enter a license key to upgrade?",
-                    $"FlyShelf â€” {title}",
+                    $"{prefix}{message}\n\n{upgradeMessage}\n\nYour daily limits will reset at midnight.\n\nWould you like to enter a license key to upgrade?",
+                    $"FlyShelf - {title}",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Information);
             }
             else
             {
                 result = MessageBox.Show(
-                    $"{emoji} {message}\n\n{upgradeMessage}\n\nYour daily limits will reset at midnight.\n\nWould you like to enter a license key to upgrade?",
-                    $"FlyShelf â€” {title}",
+                    $"{prefix}{message}\n\n{upgradeMessage}\n\nYour daily limits will reset at midnight.\n\nWould you like to enter a license key to upgrade?",
+                    $"FlyShelf - {title}",
                     MessageBoxButton.YesNo,
                     MessageBoxImage.Information);
             }
@@ -389,4 +386,3 @@ namespace FlyShelf.Classes
         }
     }
 }
-

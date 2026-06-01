@@ -423,6 +423,7 @@ namespace FlyShelf.Windows
                 if (tag == "Settings")
                 {
                     PopulateThemeCombo();
+                    HighlightActiveColorTheme();
                     UpdateAlignButtonsVisualState();
                     // Force-sync widget positioning section visibility
                     if (WidgetPositioningSection != null)

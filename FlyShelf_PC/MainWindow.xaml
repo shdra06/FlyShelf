@@ -27,10 +27,10 @@
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
 
             <Style x:Key="PremiumHeaderButtonStyle" TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
-                <Setter Property="Background" Value="#14FFFFFF"/>
-                <Setter Property="BorderBrush" Value="#18FFFFFF"/>
+                <Setter Property="Background" Value="{DynamicResource ThemeHeaderBtnBg}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource ThemeHeaderBtnBorder}"/>
                 <Setter Property="BorderThickness" Value="1"/>
-                <Setter Property="Foreground" Value="#CCFFFFFF"/>
+                <Setter Property="Foreground" Value="{DynamicResource ThemeHeaderBtnFg}"/>
                 <Setter Property="Padding" Value="8,6"/>
                 <Setter Property="CornerRadius" Value="10"/>
                 <Setter Property="Height" Value="34"/>
@@ -39,13 +39,17 @@
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
                 <Setter Property="Focusable" Value="False"/>
                 <Style.Resources>
-                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#22FFFFFF"/>
-                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#35FFFFFF"/>
-                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#F0FFFFFF"/>
+                    <!-- Default state: must also override the template's internal resource keys -->
+                    <SolidColorBrush x:Key="ButtonBackground" Color="{DynamicResource ThemeHeaderBtnBgColor}"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrush" Color="{DynamicResource ThemeHeaderBtnBorderColor}"/>
+
+                    <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="{DynamicResource ThemeHeaderBtnBgHoverColor}"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="{DynamicResource ThemeHeaderBtnBorderHoverColor}"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{DynamicResource ThemeHeaderBtnFgHoverColor}"/>
                     
-                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#0CFFFFFF"/>
-                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#25FFFFFF"/>
-                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="#BBFFFFFF"/>
+                    <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="{DynamicResource ThemeHeaderBtnBgPressedColor}"/>
+                    <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="{DynamicResource ThemeHeaderBtnBorderPressedColor}"/>
+                    <SolidColorBrush x:Key="ButtonForegroundPressed" Color="{DynamicResource ThemeHeaderBtnFgPressedColor}"/>
                 </Style.Resources>
             </Style>
 
@@ -131,7 +135,7 @@
                 <MenuItem Header="📊 Extract Table Data" 
                           Command="{Binding PlacementTarget.Tag.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                          Foreground="#A855F7"
+                          Foreground="{DynamicResource GeminiAccentColor}"
                           Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 <MenuItem Header="Convert Image to PDF" 
                           Command="{Binding PlacementTarget.Tag.ConvertImageToPdfCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
@@ -140,7 +144,7 @@
                 <MenuItem Header="Scan QR Code" 
                           Command="{Binding PlacementTarget.Tag.ManualScanQRCodeCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
-                          Foreground="#A855F7"
+                          Foreground="{DynamicResource GeminiAccentColor}"
                           Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
                 <!-- ═══ PDF: Open + Convert ═══ -->
@@ -175,7 +179,7 @@
 
 
                 <!-- ═══ Universal: Delete ═══ -->
-                <MenuItem Header="Delete" Click="DeleteContextMenu_Click" Foreground="#EF4444"/>
+                <MenuItem Header="Delete" Click="DeleteContextMenu_Click" Foreground="{DynamicResource DangerColor}"/>
             </ContextMenu>
         </ResourceDictionary>
     </controls:MicaWindow.Resources>
@@ -285,7 +289,7 @@
                             </TextBox>
                         </Grid>
                         <!-- Clear search button -->
-                        <ui:Button Grid.Column="1" Focusable="False" Appearance="Secondary" Foreground="#9CA3AF" Click="ClearSearch_Click" ToolTip="Clear Search" Margin="2,0,0,0" Padding="4,2" CornerRadius="6">
+                        <ui:Button Grid.Column="1" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource SubtleTextColor}" Click="ClearSearch_Click" ToolTip="Clear Search" Margin="2,0,0,0" Padding="4,2" CornerRadius="6">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss12" FontSize="10"/></ui:Button.Icon>
                         </ui:Button>
                     </Grid>
@@ -312,7 +316,7 @@
                                  </Style.Triggers>
                              </Style>
                          </Grid.Style>
-                         <ui:SymbolIcon Symbol="ArrowDown24" Foreground="#10B981" RenderTransformOrigin="0.5,0.5" HorizontalAlignment="Center" VerticalAlignment="Center">
+                         <ui:SymbolIcon Symbol="ArrowDown24" Foreground="{DynamicResource SyncIncomingColor}" RenderTransformOrigin="0.5,0.5" HorizontalAlignment="Center" VerticalAlignment="Center">
                              <ui:SymbolIcon.RenderTransform>
                                  <TranslateTransform x:Name="ArrowTranslate" Y="0"/>
                              </ui:SymbolIcon.RenderTransform>
@@ -371,7 +375,31 @@
                       <ui:Button x:Name="MoreBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="MoreBtn_Click" ToolTip="More Options" Margin="0,0,6,0">
                           <ui:Button.Icon><ui:SymbolIcon Symbol="MoreHorizontal24" /></ui:Button.Icon>
                       </ui:Button>
-                      
+
+                      <!-- ═══ Update Available Badge ═══ -->
+                      <Border x:Name="UpdateBadge" Visibility="Collapsed" Cursor="Hand"
+                              CornerRadius="8" Margin="0,0,6,0" Padding="6,4" VerticalAlignment="Center"
+                              MouseLeftButtonDown="UpdateBadge_Click"
+                              ToolTip="Update available — click to open Hub">
+                          <Border.Background>
+                              <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                  <GradientStop Color="#2810B981" Offset="0"/>
+                                  <GradientStop Color="#1834D399" Offset="1"/>
+                              </LinearGradientBrush>
+                          </Border.Background>
+                          <Border.BorderBrush>
+                              <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                  <GradientStop Color="#5010B981" Offset="0"/>
+                                  <GradientStop Color="#3034D399" Offset="1"/>
+                              </LinearGradientBrush>
+                          </Border.BorderBrush>
+                          <Border.BorderThickness>1</Border.BorderThickness>
+                          <StackPanel Orientation="Horizontal">
+                              <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="13" Foreground="#10B981" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                              <TextBlock x:Name="UpdateBadgeText" Text="Update" FontSize="10" FontWeight="SemiBold" Foreground="#34D399" VerticalAlignment="Center"/>
+                          </StackPanel>
+                      </Border>
+
                       <ui:Button Style="{StaticResource PremiumHeaderButtonStyle}" Click="CloseWindow_Click" ToolTip="Hide (Esc)">
                           <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" Filled="True"/></ui:Button.Icon>
                       </ui:Button>
@@ -392,30 +420,30 @@
                 </Border.Effect>
                 <UniformGrid Rows="1" HorizontalAlignment="Center" MaxWidth="420" Width="{Binding ActualWidth, ElementName=TopHeaderGrid}">
                     <Border x:Name="FilterBtn_Images" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="Images"
-                            Background="#18F472B6" BorderBrush="#30F472B6" BorderThickness="1" Padding="0,5">
+                            Background="{DynamicResource FilterImageBg}" BorderBrush="{DynamicResource FilterImageBorder}" BorderThickness="1" Padding="0,5">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="Image24" Foreground="#F472B6" FontSize="13" Margin="0,0,4,0"/>
+                            <ui:SymbolIcon Symbol="Image24" Foreground="{DynamicResource TypeImageColor}" FontSize="13" Margin="0,0,4,0"/>
                             <TextBlock Text="Img" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <Border x:Name="FilterBtn_Pinned" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="Pinned"
-                            Background="#18FBBF24" BorderBrush="#30FBBF24" BorderThickness="1" Padding="0,5">
+                            Background="{DynamicResource FilterPinnedBg}" BorderBrush="{DynamicResource FilterPinnedBorder}" BorderThickness="1" Padding="0,5">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="Pin24" Foreground="#FBBF24" Filled="True" FontSize="13" Margin="0,0,4,0"/>
+                            <ui:SymbolIcon Symbol="Pin24" Foreground="{DynamicResource PinActiveColor}" Filled="True" FontSize="13" Margin="0,0,4,0"/>
                             <TextBlock Text="Pin" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <Border x:Name="FilterBtn_Pdf" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="PDF"
-                            Background="#18EF4444" BorderBrush="#30EF4444" BorderThickness="1" Padding="0,5">
+                            Background="{DynamicResource FilterPdfBg}" BorderBrush="{DynamicResource FilterPdfBorder}" BorderThickness="1" Padding="0,5">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="#EF4444" FontSize="13" Margin="0,0,4,0"/>
+                            <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="{DynamicResource DangerColor}" FontSize="13" Margin="0,0,4,0"/>
                             <TextBlock Text="PDF" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <Border x:Name="FilterBtn_Docs" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="Docs"
-                            Background="#1860A5FA" BorderBrush="#3060A5FA" BorderThickness="1" Padding="0,5">
+                            Background="{DynamicResource FilterDocsBg}" BorderBrush="{DynamicResource FilterDocsBorder}" BorderThickness="1" Padding="0,5">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="Document24" Foreground="#60A5FA" FontSize="13" Margin="0,0,4,0"/>
+                            <ui:SymbolIcon Symbol="Document24" Foreground="{DynamicResource DeviceLaptopColor}" FontSize="13" Margin="0,0,4,0"/>
                             <TextBlock Text="Doc" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
@@ -442,14 +470,14 @@
                 <UniformGrid Rows="1" HorizontalAlignment="Center" MaxWidth="420" Width="{Binding ActualWidth, ElementName=TopHeaderGrid}">
                     <!-- Incoming Toggle -->
                     <Border x:Name="SyncBtn_Incoming" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="SyncIncoming_Click" Tag="Incoming"
-                            Background="#1810B981" BorderBrush="#3010B981" BorderThickness="1" Padding="6,5">
+                            Background="{DynamicResource SyncIncomingBg}" BorderBrush="{DynamicResource SyncIncomingBorder}" BorderThickness="1" Padding="6,5">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center">
-                                <ui:SymbolIcon Symbol="ArrowDownload24" Foreground="#10B981" FontSize="13" Margin="0,0,4,0"/>
+                                <ui:SymbolIcon Symbol="ArrowDownload24" Foreground="{DynamicResource SyncIncomingColor}" FontSize="13" Margin="0,0,4,0"/>
                                 <TextBlock Text="In" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                             </StackPanel>
                             <Ellipse x:Name="SyncDot_Incoming" Grid.Column="1" Width="8" Height="8" Margin="6,0,2,0" VerticalAlignment="Center"
@@ -458,14 +486,14 @@
                     </Border>
                     <!-- Outgoing Toggle -->
                     <Border x:Name="SyncBtn_Outgoing" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="SyncOutgoing_Click" Tag="Outgoing"
-                            Background="#183B82F6" BorderBrush="#303B82F6" BorderThickness="1" Padding="6,5">
+                            Background="{DynamicResource SyncOutgoingBg}" BorderBrush="{DynamicResource SyncOutgoingBorder}" BorderThickness="1" Padding="6,5">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center">
-                                <ui:SymbolIcon Symbol="ArrowUpload24" Foreground="#3B82F6" FontSize="13" Margin="0,0,4,0"/>
+                                <ui:SymbolIcon Symbol="ArrowUpload24" Foreground="{DynamicResource InfoColor}" FontSize="13" Margin="0,0,4,0"/>
                                 <TextBlock Text="Out" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                             </StackPanel>
                             <Ellipse x:Name="SyncDot_Outgoing" Grid.Column="1" Width="8" Height="8" Margin="6,0,2,0" VerticalAlignment="Center"
@@ -474,14 +502,14 @@
                     </Border>
                     <!-- Both Master Toggle -->
                     <Border x:Name="SyncBtn_Both" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="SyncBoth_Click" Tag="Both"
-                            Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1" Padding="6,5">
+                            Background="{DynamicResource SyncBothBg}" BorderBrush="{DynamicResource SyncBothBorder}" BorderThickness="1" Padding="6,5">
                         <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center">
-                                <ui:SymbolIcon Symbol="ArrowSync24" Foreground="#8B5CF6" FontSize="13" Margin="0,0,4,0"/>
+                                <ui:SymbolIcon Symbol="ArrowSync24" Foreground="{DynamicResource TypeTextColor}" FontSize="13" Margin="0,0,4,0"/>
                                 <TextBlock Text="Both" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                             </StackPanel>
                             <Ellipse x:Name="SyncDot_Both" Grid.Column="1" Width="8" Height="8" Margin="6,0,2,0" VerticalAlignment="Center"
@@ -526,7 +554,7 @@
                     <StackPanel Orientation="Horizontal">
                         <!-- Emoji Picker -->
                         <ui:Button x:Name="EmojiBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,4,0"
-                                   Background="#22EAB308" BorderBrush="#35EAB308" Padding="0">
+                                   Background="{DynamicResource EmojiButtonBg}" BorderBrush="{DynamicResource EmojiButtonBorder}" Padding="0">
                             <ui:Button.Resources>
                                 <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#38EAB308"/>
                                 <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#75EAB308"/>
@@ -541,13 +569,13 @@
                         </ui:Button>
 
                         <!-- Merge PDF button — hidden by default, replaces emoji space when PDFs selected -->
-                        <ui:Button x:Name="MergePdfToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,4,0" Background="#30EF4444" Foreground="#EF4444" BorderBrush="#50EF4444">
+                        <ui:Button x:Name="MergePdfToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,4,0" Background="{DynamicResource DangerBgHover}" Foreground="{DynamicResource DangerColor}" BorderBrush="{DynamicResource DangerBorder}">
                             <ui:Button.Resources>
                                 <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28EF4444"/>
                                 <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#60EF4444"/>
                                 <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FECDD3"/>
                             </ui:Button.Resources>
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24" Foreground="#EF4444"/></ui:Button.Icon>
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24" Foreground="{DynamicResource DangerColor}"/></ui:Button.Icon>
                         </ui:Button>
                         
                         <!-- Global Sync Toggle -->
@@ -561,13 +589,13 @@
                         </ui:Button>
 
                         <!-- Unpin toolbar button — hidden by default, replaces sync space when pinned items selected -->
-                        <ui:Button x:Name="UnpinToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="UnpinSelectedBtn_Click" ToolTip="Unpin Selected Items" Margin="0,0,4,0" Background="#30F59E0B" Foreground="#F59E0B" BorderBrush="#50F59E0B">
+                        <ui:Button x:Name="UnpinToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="UnpinSelectedBtn_Click" ToolTip="Unpin Selected Items" Margin="0,0,4,0" Background="#30F59E0B" Foreground="{DynamicResource WarningColor}" BorderBrush="#50F59E0B">
                             <ui:Button.Resources>
                                 <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28F59E0B"/>
                                 <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#60F59E0B"/>
                                 <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FDE68A"/>
                             </ui:Button.Resources>
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="PinOff24" Foreground="#F59E0B"/></ui:Button.Icon>
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="PinOff24" Foreground="{DynamicResource WarningColor}"/></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Shortcuts Button -->
@@ -583,7 +611,7 @@
 
                         <!-- Clear Shelf Button -->
                         <ui:Button x:Name="ClearAllToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ClearAllToolbar_Click" ToolTip="Clear Shelf (Delete Unpinned)" Margin="0,0,4,0"
-                                   Background="#30EF4444" Foreground="#EF4444" BorderBrush="#50EF4444">
+                                   Background="{DynamicResource DangerBgHover}" Foreground="{DynamicResource DangerColor}" BorderBrush="{DynamicResource DangerBorder}">
                             <ui:Button.Resources>
                                 <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28EF4444"/>
                                 <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#60EF4444"/>
@@ -592,7 +620,7 @@
                                 <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#1AEF4444"/>
                                 <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#30EF4444"/>
                             </ui:Button.Resources>
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" Foreground="#EF4444"/></ui:Button.Icon>
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" Foreground="{DynamicResource DangerColor}"/></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Open Settings Hub -->
@@ -621,15 +649,15 @@
                     <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.15" Color="#000000"/>
                 </Border.Effect>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                    <ui:SymbolIcon Symbol="Warning24" Foreground="#F59E0B" FontSize="15" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                    <ui:SymbolIcon Symbol="Warning24" Foreground="{DynamicResource WarningColor}" FontSize="15" Margin="0,0,8,0" VerticalAlignment="Center"/>
                     <TextBlock Text="Clear all clips?" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0"
                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
                     <!-- Confirm button (red danger pill) -->
                     <Border CornerRadius="7" Margin="0,0,6,0" Cursor="Hand" MouseLeftButtonDown="ClearShelf_Confirm"
                             Background="#28EF4444" BorderBrush="#40EF4444" BorderThickness="1" Padding="12,5">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="Delete24" Foreground="#EF4444" Filled="True" FontSize="13" Margin="0,0,5,0"/>
-                            <TextBlock Text="Confirm" FontSize="11" FontWeight="SemiBold" Foreground="#EF4444" VerticalAlignment="Center"/>
+                            <ui:SymbolIcon Symbol="Delete24" Foreground="{DynamicResource DangerColor}" Filled="True" FontSize="13" Margin="0,0,5,0"/>
+                            <TextBlock Text="Confirm" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource DangerColor}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <!-- Cancel button (neutral pill) -->
@@ -905,7 +933,7 @@
                                             <Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#10B981" PreviewMouseLeftButtonDown="RunTerminalSpecific_Click" ToolTip="Run Script">
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource SyncIncomingColor}" PreviewMouseLeftButtonDown="RunTerminalSpecific_Click" ToolTip="Run Script">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Play24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
@@ -927,7 +955,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#60A5FA" PreviewMouseLeftButtonDown="OpenSpecific_Click" ToolTip="Open">
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource DeviceLaptopColor}" PreviewMouseLeftButtonDown="OpenSpecific_Click" ToolTip="Open">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Open24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
@@ -949,7 +977,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#FBBF24" ToolTip="Show in Explorer"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource PinActiveColor}" ToolTip="Show in Explorer"
                                                Command="{Binding DataContext.OpenFileLocationCommand, ElementName=ShelfListView}" CommandParameter="{Binding}">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -965,7 +993,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#FBBF24" ToolTip="Open Folder"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource PinActiveColor}" ToolTip="Open Folder"
                                                Command="{Binding DataContext.OpenFileLocationCommand, ElementName=ShelfListView}" CommandParameter="{Binding}">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -994,7 +1022,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#06B6D4" ToolTip="Convert to .zip"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource CyanAccentColor}" ToolTip="Convert to .zip"
                                                PreviewMouseLeftButtonDown="ConvertToZip_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="FolderZip24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1023,7 +1051,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#22C55E" ToolTip="Sync via LAN"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource SuccessColor}" ToolTip="Sync via LAN"
                                                PreviewMouseLeftButtonDown="SyncZipLan_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Send24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1041,7 +1069,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#EF4444" 
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource DangerColor}" 
                                                Command="{Binding DataContext.ConvertImageToPdfCommand, ElementName=ShelfListView}" CommandParameter="{Binding}" ToolTip="Convert Image to PDF">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1058,7 +1086,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#F472B6" PreviewMouseLeftButtonDown="QuickLookSpecific_Click" ToolTip="Quick Look">
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource TypeImageColor}" PreviewMouseLeftButtonDown="QuickLookSpecific_Click" ToolTip="Quick Look">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
@@ -1073,7 +1101,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#10B981" ToolTip="Search on Google"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource SyncIncomingColor}" ToolTip="Search on Google"
                                                PreviewMouseLeftButtonDown="GoogleSearchSpecific_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1091,7 +1119,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#0EA5E9" ToolTip="Sanitize URL (Remove trackers)"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource SanitizeColor}" ToolTip="Sanitize URL (Remove trackers)"
                                                PreviewMouseLeftButtonDown="SanitizeUrlSpecific_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Shield24" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1109,7 +1137,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#F59E0B" ToolTip="Protect as Password"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource WarningColor}" ToolTip="Protect as Password"
                                                PreviewMouseLeftButtonDown="MakePasswordSpecific_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Key24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1149,7 +1177,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#F59E0B" ToolTip="Rename Password Label"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource WarningColor}" ToolTip="Rename Password Label"
                                                PreviewMouseLeftButtonDown="RenamePasswordSpecific_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Edit24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1157,7 +1185,7 @@
 
                                 <!-- ═══ Delete ═══ -->
                                 <Border Style="{StaticResource ActionPillStyle}" Padding="0">
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="#EF4444" PreviewMouseLeftButtonDown="DeleteSpecific_Click" ToolTip="Delete">
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource DangerColor}" PreviewMouseLeftButtonDown="DeleteSpecific_Click" ToolTip="Delete">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
@@ -1253,9 +1281,9 @@
                                             <Setter.Value>
                                                 <ControlTemplate TargetType="Button">
                                                     <Border Width="26" Height="26" CornerRadius="13"
-                                                            Background="#D0181818" BorderBrush="#40FFFFFF" BorderThickness="1"
+                                                            Background="{DynamicResource ThemeOverlayButtonBg}" BorderBrush="{DynamicResource ThemeOverlayBorderStrong}" BorderThickness="1"
                                                             ToolTip="Rotate 90°">
-                                                        <ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="13" Foreground="#A78BFA"
+                                                        <ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="13" Foreground="{DynamicResource TypeGroupColor}"
                                                                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                     </Border>
                                                 </ControlTemplate>
@@ -1404,7 +1432,7 @@
                                                                 Background="{DynamicResource ChevronBg}" BorderBrush="{DynamicResource ChevronBorder}" BorderThickness="1.5">
                                                             <!-- PERF: DropShadowEffect removed — was per-item software shader -->
                                                             <!-- Toggle Icon: Blue chevron down when collapsed, Red chevron up when expanded -->
-                                                            <ui:SymbolIcon x:Name="ChevronIcon" Symbol="ChevronDown24" FontSize="13" Foreground="#3B82F6"
+                                                            <ui:SymbolIcon x:Name="ChevronIcon" Symbol="ChevronDown24" FontSize="13" Foreground="{DynamicResource InfoColor}"
                                                                            HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,0.5,0,0"/>
                                                         </Border>
                                                     </Grid>
@@ -1612,8 +1640,8 @@
                                                 </Style>
                                             </ui:SymbolIcon.Style>
                                         </ui:SymbolIcon>
-                                        <TextBlock Text="{Binding SourceDeviceName}" Foreground="#9CA3AF" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center" />
-                                        <TextBlock Text="·" Foreground="#4B5563" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding SourceDeviceName}" Foreground="{DynamicResource SubtleTextColor}" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                        <TextBlock Text="·" Foreground="{DynamicResource SeparatorDotColor}" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center" />
                                         <TextBlock FontSize="8" FontWeight="SemiBold" VerticalAlignment="Center">
                                             <TextBlock.Style>
                                                 <Style TargetType="TextBlock">
@@ -1652,7 +1680,7 @@
                                 
                                 <!-- File Transfer / Download Progress Panel -->
                                 <StackPanel Margin="0,4,0,0" Visibility="{Binding IsTransferring, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                    <ProgressBar Value="{Binding TransferProgress}" Minimum="0" Maximum="100" Height="4" Foreground="#10B981" Background="#15FFFFFF" BorderThickness="0">
+                                    <ProgressBar Value="{Binding TransferProgress}" Minimum="0" Maximum="100" Height="4" Foreground="{DynamicResource SyncIncomingColor}" Background="#15FFFFFF" BorderThickness="0">
                                         <ProgressBar.Style>
                                             <Style TargetType="ProgressBar">
                                                 <Setter Property="Template">
@@ -1668,7 +1696,7 @@
                                             </Style>
                                         </ProgressBar.Style>
                                     </ProgressBar>
-                                    <TextBlock Text="{Binding TransferStatusText}" FontSize="10.5" Foreground="#10B981" Margin="0,3,0,0" FontWeight="Medium" Opacity="0.9"/>
+                                    <TextBlock Text="{Binding TransferStatusText}" FontSize="10.5" Foreground="{DynamicResource SyncIncomingColor}" Margin="0,3,0,0" FontWeight="Medium" Opacity="0.9"/>
                                 </StackPanel>
 
                                 <!-- Inline Audio Player Panel -->
@@ -1941,7 +1969,7 @@
                         </BeginStoryboard>
                     </EventTrigger>
                 </Border.Triggers>
-                <ui:SymbolIcon Symbol="ClipboardPaste24" FontSize="28" Foreground="#40FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <ui:SymbolIcon Symbol="ClipboardPaste24" FontSize="28" Foreground="{DynamicResource ThemeEmptyIcon}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Border>
             <TextBlock Text="Your shelf is empty" Opacity="0.45" FontWeight="SemiBold" FontSize="14" TextAlignment="Center"/>
             <TextBlock Opacity="0.28" FontSize="11.5" Margin="0,10,0,0" TextAlignment="Center" LineHeight="20">

@@ -9,8 +9,8 @@
     
     <Grid Margin="16,8,16,8">
         <Border x:Name="ToastBorder" CornerRadius="24" Padding="0"
-                BorderThickness="1" BorderBrush="#18FFFFFF"
-                Background="#E8101018" MinWidth="220" MaxWidth="460">
+                BorderThickness="1" BorderBrush="{DynamicResource ThemeToastBorder}"
+                Background="{DynamicResource ThemeToastBg}" MinWidth="220" MaxWidth="460">
             <Border.Effect>
                 <DropShadowEffect x:Name="ToastShadow" BlurRadius="16" Opacity="0.30" ShadowDepth="2" Direction="270" Color="#000000" />
             </Border.Effect>
@@ -20,16 +20,16 @@
             
             <Grid>
                 <!-- Subtle inner glow border for depth -->
-                <Border CornerRadius="24" BorderThickness="1" BorderBrush="#08FFFFFF" Margin="0"/>
+                <Border CornerRadius="24" BorderThickness="1" BorderBrush="{DynamicResource ThemeToastInnerGlow}" Margin="0"/>
                 
 
                 
                 <!-- Content -->
                 <StackPanel Orientation="Horizontal" Margin="16,8,20,8" VerticalAlignment="Center">
-                    <ui:SymbolIcon x:Name="ToastIcon" Symbol="CheckmarkCircle24" Foreground="#818CF8" FontSize="16" 
+                    <ui:SymbolIcon x:Name="ToastIcon" Symbol="CheckmarkCircle24" Foreground="{DynamicResource ThemeAccentLight}" FontSize="16" 
                                    Margin="0,0,10,0" VerticalAlignment="Center"/>
                     <TextBlock x:Name="MessageText" Text="" FontSize="12.5" FontWeight="Medium" 
-                               Foreground="#E8E8EE" VerticalAlignment="Center" TextWrapping="NoWrap" 
+                               Foreground="{DynamicResource ThemeTextPrimary}" VerticalAlignment="Center" TextWrapping="NoWrap" 
                                TextTrimming="CharacterEllipsis" MaxWidth="380"/>
                 </StackPanel>
             </Grid>

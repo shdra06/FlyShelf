@@ -1,0 +1,111 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Emerald Theme — Rich Green -->
+
+    <!-- Accent colors -->
+    <SolidColorBrush x:Key="ThemeAccent"          Color="#059669"/>
+    <SolidColorBrush x:Key="ThemeAccentLight"     Color="#34D399"/>
+    <SolidColorBrush x:Key="ThemeAccentDark"      Color="#047857"/>
+    <SolidColorBrush x:Key="ThemeAccentBg"        Color="#20059669"/>
+    <SolidColorBrush x:Key="ThemeAccentBgHover"   Color="#40059669"/>
+    <SolidColorBrush x:Key="ThemeAccentBorder"    Color="#50059669"/>
+    <Color x:Key="ThemeAccentColor">#059669</Color>
+    <Color x:Key="ThemeAccentLightColor">#34D399</Color>
+    <Color x:Key="ThemeAccentDarkColor">#047857</Color>
+
+    <!-- Header button chrome -->
+    <SolidColorBrush x:Key="ThemeHeaderBtnBg"             Color="#55000000"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBorder"         Color="#30FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnFg"             Color="#E8FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBgHover"        Color="#70000000"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBorderHover"    Color="#50FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnFgHover"        Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBgPressed"      Color="#40000000"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBorderPressed"  Color="#25FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnFgPressed"      Color="#D0FFFFFF"/>
+    <Color x:Key="ThemeHeaderBtnBgColor">#55000000</Color>
+    <Color x:Key="ThemeHeaderBtnBorderColor">#30FFFFFF</Color>
+    <Color x:Key="ThemeHeaderBtnBgHoverColor">#70000000</Color>
+    <Color x:Key="ThemeHeaderBtnBorderHoverColor">#50FFFFFF</Color>
+    <Color x:Key="ThemeHeaderBtnFgHoverColor">#FFFFFF</Color>
+    <Color x:Key="ThemeHeaderBtnBgPressedColor">#40000000</Color>
+    <Color x:Key="ThemeHeaderBtnBorderPressedColor">#25FFFFFF</Color>
+    <Color x:Key="ThemeHeaderBtnFgPressedColor">#D0FFFFFF</Color>
+
+    <!-- Overlay chrome -->
+    <SolidColorBrush x:Key="ThemeOverlayBg"           Color="#12FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeOverlayBgHover"      Color="#22FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeOverlayBgSelected"   Color="#15FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeOverlayBgPressed"    Color="#0AFFFFFF"/>
+    <SolidColorBrush x:Key="ThemeOverlayBorder"       Color="#18FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeOverlayBorderHover"  Color="#30FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeOverlayBorderStrong" Color="#40FFFFFF"/>
+
+    <!-- Text -->
+    <SolidColorBrush x:Key="ThemeTextPrimary"     Color="#F1F5F9"/>
+    <SolidColorBrush x:Key="ThemeTextSecondary"   Color="#94A3B8"/>
+    <SolidColorBrush x:Key="ThemeTextMuted"       Color="#64748B"/>
+    <SolidColorBrush x:Key="ThemeTextOnAccent"    Color="#FFFFFF"/>
+
+    <!-- Separator / Shadow / Window -->
+    <SolidColorBrush x:Key="ThemeSeparator"       Color="#20FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeShadow"          Color="#000000"/>
+    <SolidColorBrush x:Key="ThemeWindowFallback"  Color="#0C1C14"/>
+    <SolidColorBrush x:Key="ThemeCodePreviewBg"   Color="#FF1E1E1E"/>
+
+    <!-- Chevron -->
+    <SolidColorBrush x:Key="ThemeChevronBg"          Color="#CC202024"/>
+    <SolidColorBrush x:Key="ThemeChevronBorder"      Color="#33FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeChevronBgHover"     Color="#E62C2C32"/>
+    <SolidColorBrush x:Key="ThemeChevronBorderHover" Color="#66FFFFFF"/>
+
+    <!-- Overlay buttons -->
+    <SolidColorBrush x:Key="ThemeOverlayButtonBg"     Color="#D0181818"/>
+    <SolidColorBrush x:Key="ThemeOverlayButtonBorder" Color="#40FFFFFF"/>
+
+    <!-- Floating bar -->
+    <SolidColorBrush x:Key="ThemeFloatingBarBg"       Color="#D0181818"/>
+    <SolidColorBrush x:Key="ThemeFloatingBarBorder"   Color="#30FFFFFF"/>
+
+    <!-- Toast -->
+    <SolidColorBrush x:Key="ThemeToastBg"          Color="#E8101018"/>
+    <SolidColorBrush x:Key="ThemeToastBorder"      Color="#18FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeToastInnerGlow"   Color="#08FFFFFF"/>
+
+    <!-- Empty state icon -->
+    <SolidColorBrush x:Key="ThemeEmptyIcon"        Color="#40FFFFFF"/>
+
+    <!-- Transfer / progress -->
+    <SolidColorBrush x:Key="ThemeTransferProgress" Color="#34D399"/>
+    <SolidColorBrush x:Key="ThemeTransferText"     Color="#6EE7B7"/>
+
+    <!-- System accent overrides -->
+    <Color x:Key="SystemAccentColor">#059669</Color>
+    <Color x:Key="SystemAccentColorLight1">#34D399</Color>
+    <Color x:Key="SystemAccentColorLight2">#6EE7B7</Color>
+    <Color x:Key="SystemAccentColorLight3">#A7F3D0</Color>
+    <Color x:Key="SystemAccentColorDark1">#047857</Color>
+    <Color x:Key="SystemAccentColorDark2">#065F46</Color>
+    <Color x:Key="SystemAccentColorDark3">#064E3B</Color>
+    <SolidColorBrush x:Key="SystemAccentColorBrush"       Color="#059669"/>
+    <SolidColorBrush x:Key="SystemAccentColorLight1Brush" Color="#34D399"/>
+    <SolidColorBrush x:Key="SystemAccentColorLight2Brush" Color="#6EE7B7"/>
+    <SolidColorBrush x:Key="SystemAccentColorLight3Brush" Color="#A7F3D0"/>
+    <SolidColorBrush x:Key="SystemAccentColorDark1Brush"  Color="#047857"/>
+    <SolidColorBrush x:Key="SystemAccentColorDark2Brush"  Color="#065F46"/>
+    <SolidColorBrush x:Key="SystemAccentColorDark3Brush"  Color="#064E3B"/>
+
+    <!-- MicaWPF accent overrides -->
+    <Color x:Key="MicaWPF.Colors.SystemAccentColor">#059669</Color>
+    <Color x:Key="MicaWPF.Colors.SystemAccentColorLight1">#34D399</Color>
+    <Color x:Key="MicaWPF.Colors.SystemAccentColorLight2">#6EE7B7</Color>
+    <Color x:Key="MicaWPF.Colors.SystemAccentColorDark1">#047857</Color>
+    <Color x:Key="MicaWPF.Colors.SystemAccentColorDark2">#065F46</Color>
+    <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColor"       Color="#059669"/>
+    <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColorLight1" Color="#34D399"/>
+    <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColorLight2" Color="#6EE7B7"/>
+    <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColorDark1"  Color="#047857"/>
+
+    <!-- Theme marker -->
+    <SolidColorBrush x:Key="FlyShelf.ColorThemeMarker" Color="#059669"/>
+</ResourceDictionary>

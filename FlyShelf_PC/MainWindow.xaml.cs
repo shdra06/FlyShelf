@@ -140,6 +140,9 @@ namespace FlyShelf
             InitializeComponent();
             this.Width = _viewModel.CurrentFlyShelfWidth;
 
+            // Load shortcuts at startup
+            Classes.ShortcutManager.Load();
+
             this.PreviewKeyDown += Window_PreviewKeyDown;
 
             // Register global hotkeys EAGERLY in constructor — do NOT wait for Loaded event.
@@ -263,6 +266,13 @@ namespace FlyShelf
             {
                 if (e.PropertyName == nameof(Classes.AdvanceSettings.ClipboardWallpaperPath))
                     Dispatcher.InvokeAsync(() => ApplyWallpaper());
+                else if (e.PropertyName == nameof(Classes.AdvanceSettings.ColorThemeName))
+                {
+                    string newTheme = Classes.SettingsManager.Current.ColorThemeName;
+                    if (string.IsNullOrEmpty(newTheme) || newTheme.Equals("Default", System.StringComparison.OrdinalIgnoreCase))
+                        return; // Default is handled by RemoveColorTheme, not ApplyColorTheme
+                    Dispatcher.InvokeAsync(() => Classes.ThemeManager.Instance.ApplyColorTheme(newTheme));
+                }
                 else if (e.PropertyName == nameof(Classes.AdvanceSettings.EnableBlurBehind) ||
                          e.PropertyName == nameof(Classes.AdvanceSettings.ThemeDisplayMode))
                 {
@@ -306,6 +316,31 @@ namespace FlyShelf
 
             // Calculate initial toolbar buttons visibility based on current mode
             UpdateToolbarButtonsVisibility();
+
+            // ═══ Update Available Badge ═══
+            // Subscribe to the static cross-window event from UpdateManager
+            Classes.UpdateManager.GlobalUpdateStatusChanged += (hasUpdate) =>
+            {
+                Dispatcher.InvokeAsync(() =>
+                {
+                    if (UpdateBadge != null)
+                    {
+                        UpdateBadge.Visibility = hasUpdate ? Visibility.Visible : Visibility.Collapsed;
+                        if (hasUpdate && UpdateBadgeText != null)
+                        {
+                            UpdateBadgeText.Text = $"v{Classes.UpdateManager.GlobalLatestVersion}";
+                        }
+                    }
+                });
+            };
+
+            // Check if an update was already detected before this window loaded
+            if (Classes.UpdateManager.GlobalUpdateAvailable && UpdateBadge != null)
+            {
+                UpdateBadge.Visibility = Visibility.Visible;
+                if (UpdateBadgeText != null)
+                    UpdateBadgeText.Text = $"v{Classes.UpdateManager.GlobalLatestVersion}";
+            }
         }
 
         private void DeleteContextMenu_Click(object sender, RoutedEventArgs e)
@@ -583,6 +618,7 @@ namespace FlyShelf
                     }
 
                     Classes.ThemeManager.Instance.Initialize();
+                    Classes.ThemeManager.Instance.RestoreColorTheme();
                     Classes.AnimationTriggerService.Instance.Initialize();
 
                     // ═══ Unified Header Mascot Event Routing ═══

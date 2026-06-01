@@ -61,7 +61,7 @@
                 Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
             <StackPanel Orientation="Horizontal">
-                <ui:SymbolIcon Symbol="Info24" FontSize="14" Foreground="#8B5CF6" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                <ui:SymbolIcon Symbol="Info24" FontSize="14" Foreground="{DynamicResource TypeTextColor}" Margin="0,0,10,0" VerticalAlignment="Center"/>
                 <TextBlock Text="Type /trigger in any text field, copy it, and FlyShelf replaces the clipboard with your expansion text. Paste normally with Ctrl+V."
                            FontSize="11" TextWrapping="Wrap" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
                            VerticalAlignment="Center" MaxWidth="380"/>
@@ -124,7 +124,7 @@
                                                         </LinearGradientBrush>
                                                     </Border.Background>
                                                     <TextBlock Text="{Binding Trigger}" FontSize="11.5" FontWeight="Bold" FontFamily="Cascadia Code, Consolas, Segoe UI"
-                                                               Foreground="#A78BFA" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                               Foreground="{DynamicResource TypeGroupColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
                                             </Grid>
 
@@ -144,7 +144,7 @@
                                                     <ui:Button.Icon><ui:SymbolIcon Symbol="Edit24" FontSize="14"/></ui:Button.Icon>
                                                 </ui:Button>
                                                 <ui:Button Appearance="Transparent" Tag="{Binding}" Click="DeleteShortcut_Click" 
-                                                           ToolTip="Remove" Foreground="#EF4444" Padding="5,4">
+                                                           ToolTip="Remove" Foreground="{DynamicResource DangerColor}" Padding="5,4">
                                                     <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" FontSize="14"/></ui:Button.Icon>
                                                 </ui:Button>
                                             </StackPanel>

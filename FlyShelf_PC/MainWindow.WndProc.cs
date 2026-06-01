@@ -167,9 +167,9 @@ namespace FlyShelf
             try
             {
                 var now = DateTime.UtcNow;
-                if ((now - _lastClipboardCaptureTime).TotalMilliseconds < 300)
+                if ((now - _lastClipboardCaptureTime).TotalMilliseconds < 150)
                 {
-                    Classes.Logger.LogAction("CLIPBOARD", "Skipped clipboard update: Cooldown (300ms) active.");
+                    Classes.Logger.LogAction("CLIPBOARD", "Skipped clipboard update: Cooldown (150ms) active.");
                     return;
                 }
 
@@ -237,16 +237,20 @@ namespace FlyShelf
                         Classes.Logger.LogAction("SHORTCUTS", $"Expanding '{matchedShortcut.Trigger}' → '{matchedShortcut.Label}'");
                         try
                         {
-                            _isWritingClipboard = true;
+                            SetWritingClipboard(true);
                             Application.Current.Dispatcher.Invoke(() =>
                             {
                                 Clipboard.SetText(matchedShortcut.Expansion);
                             });
                         }
-                        finally
+                        catch { }
+                        
+                        _ = Task.Run(async () =>
                         {
-                            _isWritingClipboard = false;
-                        }
+                            await Task.Delay(500); // Allow WM_CLIPBOARDUPDATE to arrive and be ignored
+                            SetWritingClipboard(false);
+                        });
+
                         _lastClipboardCaptureTime = DateTime.UtcNow;
 
                         // Auto-paste: simulate Ctrl+V after a brief delay so the clipboard is ready.
@@ -254,14 +258,10 @@ namespace FlyShelf
                         _ = Task.Run(async () =>
                         {
                             await Task.Delay(80);
-                            var inputs = new INPUT_SC[]
-                            {
-                                new INPUT_SC { type = INPUT_KEYBOARD_SC, u = new INPUTUNION_SC { ki = new KEYBDINPUT_SC { wVk = VK_CONTROL_SC } } },
-                                new INPUT_SC { type = INPUT_KEYBOARD_SC, u = new INPUTUNION_SC { ki = new KEYBDINPUT_SC { wVk = VK_V_SC } } },
-                                new INPUT_SC { type = INPUT_KEYBOARD_SC, u = new INPUTUNION_SC { ki = new KEYBDINPUT_SC { wVk = VK_V_SC, dwFlags = KEYEVENTF_KEYUP_SC } } },
-                                new INPUT_SC { type = INPUT_KEYBOARD_SC, u = new INPUTUNION_SC { ki = new KEYBDINPUT_SC { wVk = VK_CONTROL_SC, dwFlags = KEYEVENTF_KEYUP_SC } } },
-                            };
-                            SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT_SC>());
+                            keybd_event((byte)VK_CONTROL, 0, 0, 0);
+                            keybd_event((byte)VK_V, 0, 0, 0);
+                            keybd_event((byte)VK_V, 0, KEYEVENTF_KEYUP, 0);
+                            keybd_event((byte)VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
                         });
 
                         Application.Current.Dispatcher.InvokeAsync(() =>

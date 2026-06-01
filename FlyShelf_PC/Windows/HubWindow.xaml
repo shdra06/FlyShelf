@@ -35,48 +35,109 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
         
-        <!-- Application Native TitleBar -->
-        <Grid Grid.Row="0" Margin="16,10,16,0" WindowChrome.IsHitTestVisibleInChrome="False">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="Auto"/>
-            </Grid.ColumnDefinitions>
-            <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <Image Source="/Resources/FlyShelfIcon.png" Width="22" Height="22" Margin="0,0,12,0" RenderOptions.BitmapScalingMode="HighQuality"/>
-                <TextBlock Text="FlyShelf" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
-                <TextBlock Text="Desktop Hub" FontSize="15" FontWeight="Normal" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center" Margin="6,0,0,0" Opacity="0.6"/>
-                <!-- PRO Badge (visible only for Pro users) -->
-                <Border x:Name="ProBadgeTitleBar" Visibility="Collapsed" CornerRadius="4" Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                            <GradientStop Color="#F59E0B" Offset="0"/>
-                            <GradientStop Color="#EF4444" Offset="1"/>
-                        </LinearGradientBrush>
-                    </Border.Background>
-                    <TextBlock Text="PRO" FontSize="10" FontWeight="Black" Foreground="White" VerticalAlignment="Center"/>
-                </Border>
-                <!-- FREE badge (visible for Free users) -->
-                <Border x:Name="FreeBadgeTitleBar" CornerRadius="4" Padding="6,2" Margin="8,0,0,0" VerticalAlignment="Center" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}">
-                    <TextBlock Text="FREE" FontSize="10" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center"/>
-                </Border>
-            </StackPanel>
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" WindowChrome.IsHitTestVisibleInChrome="True">
-                <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="6" Padding="8,3" Margin="0,0,4,0">
-                    <TextBlock x:Name="VersionBadgeText" Text="v1.0.0" FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Opacity="0.7"/>
-                </Border>
-            </StackPanel>
-        </Grid>
-        <Border Grid.Row="0" VerticalAlignment="Bottom" Height="1" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="16,0"/>
-
-        <!-- Core Split Layout -->
-        <Grid Grid.Row="1">
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <!-- PREMIUM HEADER — Brand Identity + Navigation            -->
+        <!-- ═══════════════════════════════════════════════════════ -->
+        <Grid Grid.Row="0">
             <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
-            <!-- Dynamic Navigation Framework -->
-            <ui:NavigationView x:Name="RootNavigation" Grid.Row="0" PaneDisplayMode="Top" IsBackButtonVisible="Collapsed" WindowChrome.IsHitTestVisibleInChrome="True">
+            <!-- ROW 0: Brand Identity Bar -->
+            <Grid Grid.Row="0" Margin="20,12,20,0" WindowChrome.IsHitTestVisibleInChrome="False">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Left: App branding -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- App Icon with subtle glow border -->
+                    <Border Width="30" Height="30" CornerRadius="8" Margin="0,0,12,0">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#1A1A2E" Offset="0"/>
+                                <GradientStop Color="#16213E" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <Image Source="/Resources/FlyShelfIcon.png" Width="20" Height="20" 
+                               RenderOptions.BitmapScalingMode="HighQuality" 
+                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+
+                    <!-- Brand text with weight hierarchy -->
+                    <TextBlock Text="FlyShelf" FontSize="16" FontWeight="Bold" 
+                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
+                               VerticalAlignment="Center"/>
+                    <TextBlock Text="Hub" FontSize="16" FontWeight="Light" 
+                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
+                               VerticalAlignment="Center" Margin="5,0,0,0" Opacity="0.7"/>
+
+                    <!-- PRO Badge (gradient pill — only for Pro users) -->
+                    <Border x:Name="ProBadgeTitleBar" Visibility="Collapsed" 
+                            CornerRadius="6" Padding="8,3,8,3" Margin="10,0,0,0" VerticalAlignment="Center">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#F59E0B" Offset="0"/>
+                                <GradientStop Color="#F97316" Offset="0.5"/>
+                                <GradientStop Color="#EF4444" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <TextBlock Text="PRO" FontSize="10" FontWeight="Black" Foreground="White" 
+                                   VerticalAlignment="Center"/>
+                    </Border>
+
+                    <!-- FREE badge (subtle muted pill) -->
+                    <Border x:Name="FreeBadgeTitleBar" CornerRadius="6" Padding="8,3,8,3" 
+                            Margin="10,0,0,0" VerticalAlignment="Center"
+                            Background="#12FFFFFF" BorderBrush="#18FFFFFF" BorderThickness="1">
+                        <TextBlock Text="FREE" FontSize="10" FontWeight="SemiBold" 
+                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
+                                   VerticalAlignment="Center" Opacity="0.65"/>
+                    </Border>
+                </StackPanel>
+
+                <!-- Right: Version pill + status dot -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" 
+                            WindowChrome.IsHitTestVisibleInChrome="True">
+                    <!-- Subtle status dot (green = online) -->
+                    <Ellipse Width="6" Height="6" Margin="0,0,8,0" VerticalAlignment="Center">
+                        <Ellipse.Fill>
+                            <SolidColorBrush Color="#10B981"/>
+                        </Ellipse.Fill>
+                    </Ellipse>
+                    <Border Background="#0AFFFFFF" CornerRadius="6" Padding="10,4,10,4" 
+                            BorderBrush="#10FFFFFF" BorderThickness="1">
+                        <TextBlock x:Name="VersionBadgeText" Text="v1.0.0" FontSize="11" 
+                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
+                                   Opacity="0.6"/>
+                    </Border>
+                </StackPanel>
+            </Grid>
+
+            <!-- ROW 1: Accent separator line -->
+            <Grid Grid.Row="1" Margin="20,10,20,0" Height="1">
+                <Border Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Opacity="0.4"/>
+                <!-- Subtle gradient accent in center -->
+                <Border HorizontalAlignment="Left" Width="60" CornerRadius="1">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="#6366F1" Offset="0"/>
+                            <GradientStop Color="#8B5CF6" Offset="0.5"/>
+                            <GradientStop Color="Transparent" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                </Border>
+            </Grid>
+
+            <!-- ROW 2: Navigation Tabs -->
+            <ui:NavigationView x:Name="RootNavigation" Grid.Row="2" PaneDisplayMode="Top" 
+                               IsBackButtonVisible="Collapsed" 
+                               WindowChrome.IsHitTestVisibleInChrome="True"
+                               Margin="4,2,4,0">
                 <ui:NavigationView.MenuItems>
                     <ui:NavigationViewItem Content="Clipboard" Tag="History" IsActive="True" PreviewMouseLeftButtonDown="Nav_Click">
                         <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Clipboard24"/></ui:NavigationViewItem.Icon>
@@ -90,7 +151,7 @@
                     <ui:NavigationViewItem Content="Settings" Tag="Settings" PreviewMouseLeftButtonDown="Nav_Click">
                         <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Settings24"/></ui:NavigationViewItem.Icon>
                     </ui:NavigationViewItem>
-                    <ui:NavigationViewItem x:Name="LogsNavItem" Content="System Logs" Tag="Logs" PreviewMouseLeftButtonDown="Nav_Click">
+                    <ui:NavigationViewItem x:Name="LogsNavItem" Content="Logs" Tag="Logs" PreviewMouseLeftButtonDown="Nav_Click">
                         <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Document24"/></ui:NavigationViewItem.Icon>
                     </ui:NavigationViewItem>
                     <ui:NavigationViewItem Content="About" Tag="About" PreviewMouseLeftButtonDown="Nav_Click">
@@ -98,6 +159,7 @@
                     </ui:NavigationViewItem>
                 </ui:NavigationView.MenuItems>
             </ui:NavigationView>
+        </Grid>
 
             <!-- Embedded Content Grid (Hosts selected frames natively) -->
             <Grid Grid.Row="1" Margin="16,8,16,16">
@@ -1641,6 +1703,143 @@
                                 </StackPanel>
                             </Border>
 
+                            <!-- ═ ═ ═ COLOR THEME ═ ═ ═ -->
+                            <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,12,0,20">
+                                <StackPanel>
+                                    <!-- Header -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                                        <Border Width="32" Height="32" CornerRadius="8" Margin="0,0,10,0">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#6366F1" Offset="0"/>
+                                                    <GradientStop Color="#EC4899" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <ui:SymbolIcon Symbol="Color24" Foreground="White" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <StackPanel VerticalAlignment="Center">
+                                            <TextBlock Text="Color Theme" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                            <TextBlock Text="Switch between color palettes for the entire app" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+
+                                    <!-- Theme Grid: 3 columns × 3 rows -->
+                                    <UniformGrid Rows="3" Columns="3" x:Name="ColorThemeGrid">
+                                        <!-- Midnight -->
+                                        <Border x:Name="ThemeBtn_Midnight" Margin="0,0,6,6" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                                Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                                                BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                                                MouseLeftButtonDown="ColorTheme_Click" Tag="Midnight">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                                                    <Ellipse Width="14" Height="14" Fill="#6366F1" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#818CF8" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#1E1B4B"/>
+                                                </StackPanel>
+                                                <TextBlock Text="Midnight" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center"
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Ocean -->
+                                        <Border x:Name="ThemeBtn_Ocean" Margin="0,0,6,6" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                                Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                                                BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                                                MouseLeftButtonDown="ColorTheme_Click" Tag="Ocean">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                                                    <Ellipse Width="14" Height="14" Fill="#0891B2" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#22D3EE" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#0C2D48"/>
+                                                </StackPanel>
+                                                <TextBlock Text="Ocean" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center"
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Sunset -->
+                                        <Border x:Name="ThemeBtn_Sunset" Margin="0,0,0,6" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                                Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                                                BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                                                MouseLeftButtonDown="ColorTheme_Click" Tag="Sunset">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                                                    <Ellipse Width="14" Height="14" Fill="#EA580C" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#FB923C" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#431407"/>
+                                                </StackPanel>
+                                                <TextBlock Text="Sunset" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center"
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Emerald -->
+                                        <Border x:Name="ThemeBtn_Emerald" Margin="0,0,6,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                                Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                                                BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                                                MouseLeftButtonDown="ColorTheme_Click" Tag="Emerald">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                                                    <Ellipse Width="14" Height="14" Fill="#059669" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#34D399" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#052E16"/>
+                                                </StackPanel>
+                                                <TextBlock Text="Emerald" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center"
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Lavender -->
+                                        <Border x:Name="ThemeBtn_Lavender" Margin="0,0,6,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                                Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                                                BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                                                MouseLeftButtonDown="ColorTheme_Click" Tag="Lavender">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                                                    <Ellipse Width="14" Height="14" Fill="#7C3AED" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#A78BFA" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#2E1065"/>
+                                                </StackPanel>
+                                                <TextBlock Text="Lavender" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center"
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Light -->
+                                        <Border x:Name="ThemeBtn_Light" Margin="0,0,0,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                                Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                                                BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                                                MouseLeftButtonDown="ColorTheme_Click" Tag="Light">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                                                    <Ellipse Width="14" Height="14" Fill="#4F46E5" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#E0E7FF" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#F8FAFC"/>
+                                                </StackPanel>
+                                                <TextBlock Text="Light" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center"
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Default (Reset) -->
+                                        <Border x:Name="ThemeBtn_Default" Margin="0,0,6,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                                Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                                                BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                                                MouseLeftButtonDown="ColorTheme_Click" Tag="Default">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                                                    <Ellipse Width="14" Height="14" Fill="#9CA3AF" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#6B7280" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#374151"/>
+                                                </StackPanel>
+                                                <TextBlock Text="Default" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center"
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </UniformGrid>
+                                </StackPanel>
+                            </Border>
+
                             <!-- ═ ═ ═ MASCOT THEMES ═ ═ ═ -->
                             <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,20">
                                 <StackPanel>
@@ -1738,12 +1937,8 @@
 
                  <!-- 5. SYSTEM LOGS TAB -->
                 <Grid x:Name="LogsGrid" Visibility="Collapsed">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-                    
-                    <StackPanel Grid.Row="0">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel>
                         <StackPanel Margin="0,0,0,6">
                             <TextBlock Text="System Logs" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
                             <TextBlock Text="Unified execution log — clipboard events, network sync, server diagnostics, and fault traces." FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,4,0,0" TextWrapping="Wrap" />
@@ -1906,24 +2101,7 @@
 
 
                     </StackPanel>
-                    <!-- Unified log viewer -->
-                    <Border Grid.Row="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Padding="0" Margin="0,0,0,8" ClipToBounds="True">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-                            <Border Grid.Row="0" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" Padding="16,8">
-                                <StackPanel Orientation="Horizontal">
-                                    <Ellipse Width="10" Height="10" Fill="#EF4444" Margin="0,0,6,0"/>
-                                    <Ellipse Width="10" Height="10" Fill="#F59E0B" Margin="0,0,6,0"/>
-                                    <Ellipse Width="10" Height="10" Fill="#10B981" Margin="0,0,12,0"/>
-                                    <TextBlock Text="flyshelf_unified.log" FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" FontFamily="Consolas"/>
-                                </StackPanel>
-                            </Border>
-                            <TextBox Grid.Row="1" x:Name="LogsTextBox" IsReadOnly="True" Background="Transparent" BorderThickness="0" FontFamily="Consolas" FontSize="13" Foreground="#10B981" TextWrapping="NoWrap" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto" AcceptsReturn="True" SelectionBrush="#3310B981" Padding="16,12" />
-                        </Grid>
-                    </Border>
+                    </ScrollViewer>
                 </Grid>
 
                 <!-- 6. ABOUT TAB -->
@@ -2287,7 +2465,7 @@
                 </Grid>
 
             </Grid>
-        </Grid>
+
 
     </Grid>
 </controls:MicaWindow>

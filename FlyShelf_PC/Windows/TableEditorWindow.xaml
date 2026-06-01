@@ -35,13 +35,13 @@
             <Border x:Name="MethodBadge" Grid.Column="1" CornerRadius="12" Padding="12,6" 
                     VerticalAlignment="Center" Background="#1A8B5CF6" Visibility="Collapsed">
                 <TextBlock x:Name="MethodBadgeText" FontSize="11" FontWeight="SemiBold" 
-                           Foreground="#A78BFA"/>
+                           Foreground="{DynamicResource TypeGroupColor}"/>
             </Border>
         </Grid>
 
         <!-- ═══ TOOLBAR ═══ -->
         <Border Grid.Row="1" Margin="24,16,24,0" Padding="8,6" CornerRadius="8" 
-                Background="#08FFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1">
+                Background="{DynamicResource ThemeOverlayBgPressed}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1">
             <Border.Resources>
                 <!-- Premium Glass Button Style for Toolbar Buttons -->
                 <Style TargetType="{x:Type ui:Button}">
@@ -150,7 +150,7 @@
                     <ui:Button Content="💾 Save" Appearance="Transparent" Padding="10,6" FontSize="12"
                                Click="SaveToFile_Click" Margin="0,2,8,2" ToolTip="Save to file (Ctrl+S)"/>
 
-                    <Border Width="1" Height="20" Background="#1AFFFFFF" Margin="4,0,8,0"/>
+                    <Border Width="1" Height="20" Background="{DynamicResource ThemeOverlayBorder}" Margin="4,0,8,0"/>
 
                     <!-- Edit Group -->
                     <TextBlock Text="EDIT" FontSize="10" FontWeight="Bold" Opacity="0.4" 
@@ -166,13 +166,13 @@
                                Padding="8,5" FontSize="11" Click="InsertColLeft_Click" 
                                Margin="0,2,4,2" ToolTip="Insert column left of selected cell"/>
                     <ui:Button Content="✕ Row" Appearance="Transparent" Padding="8,5" FontSize="11"
-                               Click="DelRow_Click" Foreground="#EF4444" Margin="0,2,2,2" 
+                               Click="DelRow_Click" Foreground="{DynamicResource DangerColor}" Margin="0,2,2,2" 
                                ToolTip="Delete selected row (or last row)"/>
                     <ui:Button Content="✕ Col" Appearance="Transparent" Padding="8,5" FontSize="11"
-                               Click="DelCol_Click" Foreground="#EF4444" Margin="0,2,2,2" 
+                               Click="DelCol_Click" Foreground="{DynamicResource DangerColor}" Margin="0,2,2,2" 
                                ToolTip="Delete selected column (or last column)"/>
                     
-                    <Border Width="1" Height="20" Background="#1AFFFFFF" Margin="4,0,8,0"/>
+                    <Border Width="1" Height="20" Background="{DynamicResource ThemeOverlayBorder}" Margin="4,0,8,0"/>
                     
                     <ui:Button Content="↩ Undo" Appearance="Transparent" Padding="8,5" FontSize="11"
                                Click="Undo_Click" Margin="0,2,2,2" ToolTip="Undo last change (Ctrl+Z)"/>
@@ -197,7 +197,7 @@
 
             <!-- Left: Source Image Panel (hidden by default, shown when image path provided) -->
             <Border x:Name="ImagePanel" Grid.Column="0" CornerRadius="8" 
-                    Background="#0AFFFFFF" BorderBrush="#15FFFFFF" BorderThickness="1" 
+                    Background="{DynamicResource ThemeOverlayBgPressed}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1" 
                     Visibility="Collapsed" ClipToBounds="True">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -222,7 +222,7 @@
                           ShowsPreview="True"/>
 
             <!-- Right: Table Grid -->
-            <Border Grid.Column="2" Background="#0CFFFFFF" BorderBrush="#12FFFFFF" 
+            <Border Grid.Column="2" Background="{DynamicResource ThemeOverlayBgPressed}" BorderBrush="{DynamicResource ThemeOverlayBorder}" 
                     BorderThickness="1" CornerRadius="8" Padding="0" ClipToBounds="True">
                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
                     <Grid x:Name="TableGrid">

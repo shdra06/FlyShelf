@@ -180,7 +180,7 @@
                                                 <GradientStop Color="#08EF4444" Offset="1"/>
                                             </LinearGradientBrush>
                                         </Border.Background>
-                                        <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="#EF4444" FontSize="17" />
+                                        <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="{DynamicResource DangerColor}" FontSize="17" />
                                     </Border>
                                     <!-- Page count badge -->
                                     <Border CornerRadius="7" HorizontalAlignment="Right" VerticalAlignment="Bottom" 
@@ -238,13 +238,13 @@
 
                                     <!-- Save single -->
                                     <ui:Button Appearance="Transparent" Tag="{Binding}" Click="SaveSinglePdf_Click" 
-                                               ToolTip="Save selected pages" Foreground="#22C55E" Padding="5,4" Margin="0,0,2,0">
+                                               ToolTip="Save selected pages" Foreground="{DynamicResource SuccessColor}" Padding="5,4" Margin="0,0,2,0">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Save24" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
 
                                     <!-- Delete -->
                                     <ui:Button Appearance="Transparent" Tag="{Binding}" Click="Remove_Click" 
-                                               ToolTip="Remove from list" Foreground="#EF4444" Padding="5,4">
+                                               ToolTip="Remove from list" Foreground="{DynamicResource DangerColor}" Padding="5,4">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </StackPanel>

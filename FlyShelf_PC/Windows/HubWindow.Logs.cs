@@ -25,51 +25,18 @@ namespace FlyShelf.Windows
     {
         private void RefreshLogs_Click(object? sender, RoutedEventArgs? e)
         {
+            // Unified log viewer was removed — logs are accessed via Send All Logs / Copy Logs buttons.
+            // This method is kept as a refresh entry point that re-populates the server diagnostics panel.
             try
             {
-                var sb = new System.Text.StringBuilder();
-                string logsDir = System.IO.Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");
-
-                // 1. Main activity log
-                string logFile = System.IO.Path.Combine(logsDir, "activity_log.txt");
-                if (System.IO.File.Exists(logFile))
+                if (ServerDiagnosticsLog != null)
                 {
-                    string activityLog = System.IO.File.ReadAllText(logFile);
-                    sb.AppendLine("════════════════════════════════════════════════════════════");
-                    sb.AppendLine("  ACTIVITY LOG");
-                    sb.AppendLine("════════════════════════════════════════════════════════════");
-                    sb.AppendLine(activityLog);
+                    ServerDiagnosticsLog.Text = GetServerDiagnostics();
                 }
-
-                // 2. Network diagnostics log
-                string netLogFile = Logger.GetNetworkLogPath();
-                if (System.IO.File.Exists(netLogFile))
-                {
-                    string netLog = System.IO.File.ReadAllText(netLogFile);
-                    sb.AppendLine();
-                    sb.AppendLine("════════════════════════════════════════════════════════════");
-                    sb.AppendLine("  NETWORK DIAGNOSTICS");
-                    sb.AppendLine("════════════════════════════════════════════════════════════");
-                    sb.AppendLine(netLog);
-                }
-
-                // 3. Server bind/troubleshooting diagnostics
-                string serverDiag = GetServerDiagnostics();
-                if (!string.IsNullOrWhiteSpace(serverDiag) && !serverDiag.StartsWith("No"))
-                {
-                    sb.AppendLine();
-                    sb.AppendLine("════════════════════════════════════════════════════════════");
-                    sb.AppendLine("  SERVER TROUBLESHOOTING");
-                    sb.AppendLine("════════════════════════════════════════════════════════════");
-                    sb.AppendLine(serverDiag);
-                }
-
-                LogsTextBox.Text = sb.Length > 0 ? sb.ToString() : "No logs recorded yet.";
-                LogsTextBox.ScrollToEnd();
             }
             catch (Exception ex)
             {
-                LogsTextBox.Text = $"Failed to parse logs: {ex.Message}";
+                Logger.LogAction("LOGS", $"Refresh failed: {ex.Message}");
             }
         }
 

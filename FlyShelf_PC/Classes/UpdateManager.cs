@@ -32,6 +32,12 @@ namespace FlyShelf.Classes
         public string ExpectedHash { get; private set; } = ""; // SHA-256 hash for integrity verification
         public bool IsUpdateAvailable { get; private set; }
 
+        // ═══ Static cross-window notification ═══
+        // Allows MainWindow clipboard badge to react without a direct reference
+        public static bool GlobalUpdateAvailable { get; private set; }
+        public static string GlobalLatestVersion { get; private set; } = "";
+        public static event Action<bool>? GlobalUpdateStatusChanged;
+
         // Events for UI binding
         public event Action<int> DownloadProgressChanged; // 0-100
         public event Action<string> StatusChanged;
@@ -183,6 +189,8 @@ namespace FlyShelf.Classes
                 var latest = new Version(LatestVersion);
 
                 IsUpdateAvailable = latest > current;
+                GlobalUpdateAvailable = IsUpdateAvailable;
+                GlobalLatestVersion = LatestVersion;
 
                 if (IsUpdateAvailable)
                 {
@@ -196,6 +204,7 @@ namespace FlyShelf.Classes
                 }
 
                 UpdateCheckCompleted?.Invoke(IsUpdateAvailable);
+                GlobalUpdateStatusChanged?.Invoke(IsUpdateAvailable);
                 return IsUpdateAvailable;
             }
             catch (Exception ex)

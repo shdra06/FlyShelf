@@ -510,6 +510,248 @@ namespace FlyShelf.Classes
         }
 
         // ═══════════════════════════════════════════════════════════════
+        // COLOR THEME SYSTEM — Dynamic ResourceDictionary swap for
+        // accent/surface/text colors (Midnight/Ocean/Sunset/Emerald/Lavender/Light)
+        // ═══════════════════════════════════════════════════════════════
+
+        private const string ColorThemePrefix = "pack://application:,,,/Resources/Themes/Theme.";
+        private static readonly string[] ValidColorThemes = { "Midnight", "Ocean", "Sunset", "Emerald", "Lavender", "Light" };
+        private System.Windows.ResourceDictionary? _activeColorThemeDict;
+
+        /// <summary>
+        /// Returns the name of the currently loaded color theme.
+        /// </summary>
+        public string ActiveColorTheme => SettingsManager.Current.ColorThemeName ?? "Default";
+
+        /// <summary>
+        /// Returns the list of available color theme names.
+        /// </summary>
+        public static IReadOnlyList<string> AvailableColorThemes => ValidColorThemes;
+
+        /// <summary>
+        /// Switch to a named color theme. Swaps the theme ResourceDictionary at runtime.
+        /// </summary>
+        public void ApplyColorTheme(string themeName)
+        {
+            try
+            {
+                // Validate theme name
+                if (string.IsNullOrEmpty(themeName) || !Array.Exists(ValidColorThemes, t => t.Equals(themeName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    // "Default" means remove the theme overlay — don't fall back to Midnight
+                    if (!string.IsNullOrEmpty(themeName) && themeName.Equals("Default", StringComparison.OrdinalIgnoreCase))
+                    {
+                        RemoveColorTheme();
+                        return;
+                    }
+                    Logger.LogAction("COLOR_THEME", $"Invalid color theme: '{themeName}', falling back to Default");
+                    RemoveColorTheme();
+                    return;
+                }
+
+                // Normalize casing
+                themeName = Array.Find(ValidColorThemes, t => t.Equals(themeName, StringComparison.OrdinalIgnoreCase)) ?? "Default";
+                if (themeName.Equals("Default", StringComparison.OrdinalIgnoreCase))
+                {
+                    RemoveColorTheme();
+                    return;
+                }
+
+                var app = System.Windows.Application.Current;
+                if (app == null) return;
+
+                // Remove the existing color theme dictionary
+                RemoveColorThemeDict(app);
+
+                // Build the new theme source URI
+                string themeSource = $"{ColorThemePrefix}{themeName}.xaml";
+
+                // Load and add the new theme dictionary
+                var dict = new System.Windows.ResourceDictionary
+                {
+                    Source = new Uri(themeSource, UriKind.Absolute)
+                };
+                app.Resources.MergedDictionaries.Add(dict);
+                _activeColorThemeDict = dict;
+
+                // Persist the choice
+                SettingsManager.Current.ColorThemeName = themeName;
+
+                // Auto-apply matching wallpaper for dark themes
+                // Light and Default use desktop wallpaper (handled by clearing path)
+                ApplyColorThemeWallpaper(themeName);
+
+                Logger.LogAction("COLOR_THEME", $"Applied color theme: '{themeName}'");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("COLOR_THEME", $"Failed to apply color theme '{themeName}': {ex.Message}");
+            }
+        }
+
+        // ═══ Color Theme Wallpaper ═══
+
+        /// <summary>
+        /// Map of color theme names to their embedded wallpaper resource names.
+        /// Light and Default have no wallpaper (use desktop).
+        /// </summary>
+        private static readonly Dictionary<string, string> ThemeWallpaperMap = new(StringComparer.OrdinalIgnoreCase)
+        {
+            { "Midnight", "Resources/Wallpapers/Theme_Midnight.png" },
+            { "Ocean",    "Resources/Wallpapers/Theme_Ocean.png" },
+            { "Sunset",   "Resources/Wallpapers/Theme_Sunset.png" },
+            { "Emerald",  "Resources/Wallpapers/Theme_Emerald.png" },
+            { "Lavender", "Resources/Wallpapers/Theme_Lavender.png" },
+        };
+
+        /// <summary>
+        /// Applies the matching wallpaper for a color theme. For themes with embedded wallpapers
+        /// (Midnight, Ocean, Sunset, Emerald, Lavender), extracts to AppData and sets the path.
+        /// For Light/Default, clears the wallpaper.
+        /// </summary>
+        private void ApplyColorThemeWallpaper(string themeName)
+        {
+            try
+            {
+                if (!ThemeWallpaperMap.TryGetValue(themeName, out string resourcePath))
+                {
+                    // Light or Default — clear wallpaper (use desktop or no wallpaper)
+                    // Don't clear if user manually set a custom wallpaper that's not a theme wallpaper
+                    string currentWp = SettingsManager.Current.ClipboardWallpaperPath ?? "";
+                    if (currentWp.Contains("ColorThemeWallpapers", StringComparison.OrdinalIgnoreCase))
+                    {
+                        SettingsManager.Current.ClipboardWallpaperPath = "";
+                    }
+                    return;
+                }
+
+                // Extract the embedded wallpaper to AppData if not already present
+                string wallpaperPath = ExtractColorThemeWallpaper(themeName, resourcePath);
+                if (!string.IsNullOrEmpty(wallpaperPath))
+                {
+                    SettingsManager.Current.ClipboardWallpaperPath = wallpaperPath;
+                    Logger.LogAction("COLOR_THEME", $"Applied wallpaper for '{themeName}': {wallpaperPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("COLOR_THEME", $"Wallpaper apply failed for '{themeName}': {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Extracts an embedded wallpaper resource to %AppData%/FlyShelf/ColorThemeWallpapers/.
+        /// Returns the filesystem path. Skips extraction if file already exists.
+        /// </summary>
+        private string ExtractColorThemeWallpaper(string themeName, string resourcePath)
+        {
+            try
+            {
+                string wallpaperDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "FlyShelf", "ColorThemeWallpapers");
+                Directory.CreateDirectory(wallpaperDir);
+
+                string destPath = Path.Combine(wallpaperDir, $"Theme_{themeName}.png");
+
+                // Skip if already extracted
+                if (File.Exists(destPath))
+                    return destPath;
+
+                // Load from embedded resource via pack URI
+                string packUri = $"pack://application:,,,/{resourcePath.Replace('\\', '/')}";
+                var streamInfo = System.Windows.Application.GetResourceStream(new Uri(packUri, UriKind.Absolute));
+                if (streamInfo?.Stream == null)
+                {
+                    Logger.LogAction("COLOR_THEME", $"Wallpaper resource not found: {packUri}");
+                    return "";
+                }
+
+                using (var fs = new FileStream(destPath, FileMode.Create, FileAccess.Write))
+                {
+                    streamInfo.Stream.CopyTo(fs);
+                }
+                streamInfo.Stream.Dispose();
+
+                Logger.LogAction("COLOR_THEME", $"Extracted wallpaper: {destPath}");
+                return destPath;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("COLOR_THEME", $"Extract wallpaper failed: {ex.Message}");
+                return "";
+            }
+        }
+
+        /// <summary>
+        /// Removes the current color theme ResourceDictionary from the app's merged dictionaries.
+        /// </summary>
+        private void RemoveColorThemeDict(System.Windows.Application app)
+        {
+            try
+            {
+                System.Windows.ResourceDictionary? toRemove = null;
+                foreach (var d in app.Resources.MergedDictionaries)
+                {
+                    if (d.Source != null && d.Source.OriginalString.StartsWith(ColorThemePrefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        toRemove = d;
+                        break;
+                    }
+                }
+                if (toRemove != null)
+                {
+                    app.Resources.MergedDictionaries.Remove(toRemove);
+                }
+                _activeColorThemeDict = null;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("COLOR_THEME", $"Error removing color theme dict: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Restore the saved color theme on startup. Call after Initialize().
+        /// </summary>
+        public void RestoreColorTheme()
+        {
+            string savedTheme = SettingsManager.Current.ColorThemeName ?? "Default";
+            if (savedTheme.Equals("Default", StringComparison.OrdinalIgnoreCase))
+            {
+                RemoveColorTheme();
+                return;
+            }
+            ApplyColorTheme(savedTheme);
+        }
+
+        /// <summary>
+        /// Removes the current color theme dictionary, restoring the app to palette defaults
+        /// with the user's desktop wallpaper applied.
+        /// </summary>
+        public void RemoveColorTheme()
+        {
+            try
+            {
+                var app = System.Windows.Application.Current;
+                if (app == null) return;
+                RemoveColorThemeDict(app);
+                SettingsManager.Current.ColorThemeName = "Default";
+
+                // Switch to desktop wallpaper mode — the original FlyShelf look
+                SettingsManager.Current.ThemeDisplayMode = "desktop";
+                SetActiveTheme(null); // Clear mascot
+
+                Logger.LogAction("COLOR_THEME", "Color theme removed — using palette defaults with desktop wallpaper");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("COLOR_THEME", $"Error removing color theme: {ex.Message}");
+            }
+        }
+
+
+        // ═══════════════════════════════════════════════════════════════
         // INTERNAL: FileSystemWatcher for hot-reload
         // ═══════════════════════════════════════════════════════════════
 

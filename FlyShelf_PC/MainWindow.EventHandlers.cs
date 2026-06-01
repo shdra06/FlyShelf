@@ -1341,6 +1341,16 @@ namespace FlyShelf
             return null;
         }
 
+        /// <summary>
+        /// Handles the Update Badge click — opens the Hub Window so the user can see
+        /// update details and trigger the download.
+        /// </summary>
+        private void UpdateBadge_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            OpenApp_Click(null, null);
+        }
+
     }
 }
 

@@ -14,7 +14,7 @@
         <Border x:Name="TimerContainer" Width="140" Height="170" 
                 CornerRadius="70,70,16,16" 
                 Background="#EE1A1A1E" 
-                BorderBrush="#25FFFFFF" BorderThickness="1.5"
+                BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1.5"
                 VerticalAlignment="Center" HorizontalAlignment="Center"
                 MouseLeftButtonDown="TitleBar_MouseDown">
             <Border.Effect>
@@ -36,7 +36,7 @@
                     <!-- Circular progress ring -->
                     <Grid Width="96" Height="96" HorizontalAlignment="Center">
                         <!-- Background track -->
-                        <Ellipse Width="96" Height="96" StrokeThickness="4" Stroke="#15FFFFFF" Fill="Transparent"/>
+                        <Ellipse Width="96" Height="96" StrokeThickness="4" Stroke="{DynamicResource ThemeOverlayBorder}" Fill="Transparent"/>
                         
                         <!-- Glow effect behind arc -->
                         <Ellipse Name="GlowRing" Width="88" Height="88" StrokeThickness="0" Fill="Transparent" Opacity="0.15">
@@ -97,7 +97,7 @@
 
                         <!-- Reset button -->
                         <Border Name="ResetBtnBorder" Grid.Column="2" CornerRadius="12" Cursor="Hand" MouseLeftButtonDown="Reset_Click"
-                                MinWidth="40" Padding="8,4" Background="#15FFFFFF" Opacity="0.6" Height="26">
+                                MinWidth="40" Padding="8,4" Background="{DynamicResource ThemeOverlayBgSelected}" Opacity="0.6" Height="26">
                             <TextBlock Text="Reset" FontSize="11" TextAlignment="Center" VerticalAlignment="Center"
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
                         </Border>

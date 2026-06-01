@@ -705,6 +705,78 @@ namespace FlyShelf.Windows
                 ToastWindow.ShowToast($"❌ Delete failed: {ex.Message}");
             }
         }
+
+        // ═══ Color Theme Handlers ═══
+
+        private void ColorTheme_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Border border && border.Tag is string themeName)
+            {
+                if (themeName.Equals("Default", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Reset: remove color theme dictionary entirely
+                    ThemeManager.Instance.RemoveColorTheme();
+                    SettingsManager.Current.ColorThemeName = "Default";
+                    SettingsManager.Save();
+                    HighlightActiveColorTheme();
+                    ToastWindow.ShowToast("🎨 Theme reset to default");
+                }
+                else
+                {
+                    ThemeManager.Instance.ApplyColorTheme(themeName);
+                    SettingsManager.Save();
+                    HighlightActiveColorTheme();
+                    ToastWindow.ShowToast($"🎨 Color theme: {themeName}");
+                }
+            }
+        }
+
+        internal void HighlightActiveColorTheme()
+        {
+            try
+            {
+                string active = SettingsManager.Current.ColorThemeName ?? "Midnight";
+                var defaultBrush = Application.Current.FindResource("MicaWPF.Brushes.ControlStrokeColorDefault") as Brush
+                                   ?? new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF));
+
+                // Map theme name → accent color for the active border
+                var themeAccents = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "Midnight", Color.FromRgb(99, 102, 241) },
+                    { "Ocean",    Color.FromRgb(8, 145, 178)  },
+                    { "Sunset",   Color.FromRgb(234, 88, 12)  },
+                    { "Emerald",  Color.FromRgb(5, 150, 105)  },
+                    { "Lavender", Color.FromRgb(124, 58, 237) },
+                    { "Light",    Color.FromRgb(79, 70, 229)  },
+                    { "Default",  Color.FromRgb(156, 163, 175) },
+                };
+
+                // Find all theme buttons (including Default)
+                var buttons = new[] { ThemeBtn_Midnight, ThemeBtn_Ocean, ThemeBtn_Sunset, ThemeBtn_Emerald, ThemeBtn_Lavender, ThemeBtn_Light, ThemeBtn_Default };
+
+                foreach (var btn in buttons)
+                {
+                    if (btn == null) continue;
+                    string btnTheme = btn.Tag?.ToString() ?? "";
+                    bool isActive = btnTheme.Equals(active, StringComparison.OrdinalIgnoreCase);
+
+                    if (isActive && themeAccents.TryGetValue(btnTheme, out var accentColor))
+                    {
+                        btn.BorderBrush = new SolidColorBrush(accentColor);
+                        btn.BorderThickness = new Thickness(2);
+                    }
+                    else
+                    {
+                        btn.BorderBrush = defaultBrush;
+                        btn.BorderThickness = new Thickness(1);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("COLOR_THEME_UI", $"HighlightActiveColorTheme failed: {ex.Message}");
+            }
+        }
     }
 
     public class GroupDisplayItem

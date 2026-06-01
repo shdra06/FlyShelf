@@ -412,12 +412,7 @@ public partial class App : Application
         {
             try
             {
-                // Temporarily disable the flyout clipboard's mouse shake summon gesture if the main clipboard window is open/in view
-                if (_mainWinInstance != null && _mainWinInstance.IsHubWindowOpen)
-                {
-                    _shakeCount = 0;
-                    return;
-                }
+                // Note: Shake-to-spawn works even when the Hub (settings) window is open.
 
                 if (!FlyShelf.Classes.SettingsManager.Current.EnableShakeToOpen)
                 {

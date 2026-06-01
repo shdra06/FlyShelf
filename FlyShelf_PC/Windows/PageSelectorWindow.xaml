@@ -1,4 +1,4 @@
-﻿<controls:MicaWindow x:Class="FlyShelf.Windows.PageSelectorWindow"
+<controls:MicaWindow x:Class="FlyShelf.Windows.PageSelectorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
@@ -23,13 +23,13 @@
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Margin="0,0,0,8" Orientation="Horizontal" WindowChrome.IsHitTestVisibleInChrome="False">
-            <ui:SymbolIcon Symbol="Grid24" Foreground="#3B82F6" FontSize="22" Margin="0,0,10,0" />
+            <ui:SymbolIcon Symbol="Grid24" Foreground="{DynamicResource InfoColor}" FontSize="22" Margin="0,0,10,0" />
             <TextBlock x:Name="HeaderText" Text="Select Pages" FontSize="17" FontWeight="SemiBold" 
                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
         </StackPanel>
 
         <!-- Info bar -->
-        <Border Grid.Row="1" Background="#10FFFFFF" CornerRadius="6" Padding="12,8" Margin="0,0,0,8">
+        <Border Grid.Row="1" Background="{DynamicResource ThemeOverlayBg}" CornerRadius="6" Padding="12,8" Margin="0,0,0,8">
             <StackPanel Orientation="Horizontal">
                 <TextBlock x:Name="SelectionInfo" Text="0 of 0 pages selected" FontSize="13" 
                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
@@ -49,13 +49,13 @@
             <TextBlock Text="Range:" FontSize="12" VerticalAlignment="Center" Opacity="0.6" Margin="4,0,4,0"
                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
             <TextBox x:Name="RangeInput" Width="120" FontSize="12" VerticalContentAlignment="Center"
-                     Background="#0AFFFFFF" BorderBrush="#18FFFFFF" Padding="6,4"
+                     Background="{DynamicResource ThemeOverlayBgPressed}" BorderBrush="{DynamicResource ThemeOverlayBorder}" Padding="6,4"
                      ToolTip="e.g. 1-5, 8, 10-12" KeyDown="RangeInput_KeyDown"/>
             <ui:Button Content="Apply" Appearance="Transparent" FontSize="12" Padding="8,4" Margin="4,0,0,0" Click="ApplyRange_Click"/>
         </StackPanel>
 
         <!-- Page grid with column headers -->
-        <Border Grid.Row="3" Background="#08FFFFFF" BorderBrush="#12FFFFFF" BorderThickness="1" CornerRadius="8" Padding="8">
+        <Border Grid.Row="3" Background="{DynamicResource ThemeOverlayBgPressed}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1" CornerRadius="8" Padding="8">
             <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <Grid>
                     <Grid.RowDefinitions>
