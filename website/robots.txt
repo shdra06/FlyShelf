@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# Direct links to sitemaps to accelerate crawl routines
+Sitemap: https://shdra06.github.io/FlyShelf/sitemap.xml
