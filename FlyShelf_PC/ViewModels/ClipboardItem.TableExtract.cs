@@ -56,7 +56,40 @@ namespace FlyShelf.ViewModels
                         using (var stream = File.OpenRead(FilePath))
                         {
                             var decoder = await global::Windows.Graphics.Imaging.BitmapDecoder.CreateAsync(stream.AsRandomAccessStream());
-                            var softwareBitmap = await decoder.GetSoftwareBitmapAsync();
+                            
+                            // Premium Safeguard: Downscale huge images to a max of 1600px to avoid OutOfMemory / LOH fragmentation
+                            uint originalWidth = decoder.OrientedPixelWidth;
+                            uint originalHeight = decoder.OrientedPixelHeight;
+                            uint targetWidth = originalWidth;
+                            uint targetHeight = originalHeight;
+                            uint maxDimension = 1600;
+
+                            global::Windows.Graphics.Imaging.SoftwareBitmap softwareBitmap;
+                            if (originalWidth > maxDimension || originalHeight > maxDimension)
+                            {
+                                double scale = (double)maxDimension / Math.Max(originalWidth, originalHeight);
+                                targetWidth = (uint)(originalWidth * scale);
+                                targetHeight = (uint)(originalHeight * scale);
+                                
+                                var transform = new global::Windows.Graphics.Imaging.BitmapTransform
+                                {
+                                    ScaledWidth = targetWidth,
+                                    ScaledHeight = targetHeight,
+                                    InterpolationMode = global::Windows.Graphics.Imaging.BitmapInterpolationMode.Linear
+                                };
+                                softwareBitmap = await decoder.GetSoftwareBitmapAsync(
+                                    decoder.BitmapPixelFormat,
+                                    decoder.BitmapAlphaMode,
+                                    transform,
+                                    global::Windows.Graphics.Imaging.ExifOrientationMode.RespectExifOrientation,
+                                    global::Windows.Graphics.Imaging.ColorManagementMode.ColorManageToSRgb
+                                );
+                                Classes.Logger.LogAction("TABLE_EXTRACT", $"Scaled image from {originalWidth}x{originalHeight} to {targetWidth}x{targetHeight} for optimal OCR performance.");
+                            }
+                            else
+                            {
+                                softwareBitmap = await decoder.GetSoftwareBitmapAsync();
+                            }
 
                             var ocrEngine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(
                                 new global::Windows.Globalization.Language("en-US"));
@@ -67,6 +100,9 @@ namespace FlyShelf.ViewModels
                             if (ocrEngine == null)
                             {
                                 Classes.Logger.LogAction("TABLE_OCR", "No OCR engine available - install English language pack");
+                                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                                    FlyShelf.Windows.ToastWindow.ShowToast("Table Extraction requires Windows English OCR Pack. Please enable it in Settings.")
+                                );
                                 return;
                             }
 

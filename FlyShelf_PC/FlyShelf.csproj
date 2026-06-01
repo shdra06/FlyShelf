@@ -43,6 +43,11 @@
     <Content Include="..\MicrosoftBuild\Assets\**" Link="Assets\%(RecursiveDir)%(FileName)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <!-- Bundled cloudflared secure agent — only included for Store builds to keep standalone EXE under 90MB -->
+  <ItemGroup Condition="'$(StorePublish)' == 'true' AND Exists('..\MicrosoftBuild\agent\cloudflared.exe')">
+    <Content Include="..\MicrosoftBuild\agent\cloudflared.exe" Link="agent\cloudflared.exe" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <!-- Prevent process crash from unobserved async Task exceptions -->
   <ItemGroup>
     <RuntimeHostConfigurationOption Include="System.Threading.Tasks.TaskScheduler.ThrowUnobservedTaskExceptions" Value="false" />

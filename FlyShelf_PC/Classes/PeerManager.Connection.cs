@@ -149,6 +149,23 @@ namespace FlyShelf.Classes
             catch (Exception ex)
             {
                 Logger.LogAction("PEER", $"{transport} handshake {peer.DeviceName} for URL '{testUrl}': {ex.Message}");
+                if (transport == "Cloudflare")
+                {
+                    string msg = ex.Message.ToLower();
+                    bool isHostError = msg.Contains("no such host is known") || 
+                                       msg.Contains("name or service not known") || 
+                                       msg.Contains("timed out") || 
+                                       msg.Contains("connection refused") || 
+                                       msg.Contains("canceled");
+                    
+                    peer.ConsecutiveFailures++;
+                    if (peer.ConsecutiveFailures >= 5 || isHostError)
+                    {
+                        Logger.LogAction("PEER", $"⚠️ Invalidating stale Cloudflare URL for {peer.DeviceName} (failures: {peer.ConsecutiveFailures}, reason: {ex.Message})");
+                        peer.CloudflareUrl = "";
+                        SaveUrlCache();
+                    }
+                }
             }
             return false;
         }

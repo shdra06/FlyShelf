@@ -18,8 +18,26 @@ echo [0/5] Terminating any active FlyShelf processes...
 taskkill /f /im FlyShelf.exe >nul 2>&1
 timeout /t 1 /nobreak >nul
 
-:: ─── Step 1: Copy MSIX assets into project ───
-echo [1/5] Staging MSIX manifest and assets into project directory...
+:: ─── Step 1: Staging MSIX manifest and assets ───
+echo [1/5] Staging MSIX manifest, assets, and checking secure agent...
+
+:: Validate presence of cloudflared.exe for Store compliance
+if not exist "%~dp0agent\cloudflared.exe" (
+    echo.
+    echo    ======================================================================
+    echo    ⚠️  WARNING: MicrosoftBuild\agent\cloudflared.exe is MISSING!
+    echo.
+    echo    To comply with Microsoft Store Policy 10.2.1, the secure Cloudflare 
+    echo    agent must be bundled inside the package. 
+    echo    Please place 'cloudflared.exe' in:
+    echo       %~dp0agent\cloudflared.exe
+    echo.
+    echo    The build will proceed, but Global Sync will be inactive at runtime.
+    echo    ======================================================================
+    echo.
+) else (
+    echo    ✓ Secure agent found in agent\cloudflared.exe (will be bundled)
+)
 
 :: Copy Package.appxmanifest to project root (required by SDK)
 copy /Y "%~dp0Package.appxmanifest" "%~dp0..\FlyShelf_PC\Package.appxmanifest" >nul

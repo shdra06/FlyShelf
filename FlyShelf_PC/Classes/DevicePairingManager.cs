@@ -268,6 +268,11 @@ namespace FlyShelf.Classes
                 }
             }
 
+            // Auto-align and enable incoming/outgoing sync gates when pairing completes
+            SettingsManager.Current.EnableIncomingSync = true;
+            SettingsManager.Current.EnableOutgoingSync = true;
+            SettingsManager.Save();
+
             Save();
             OnDevicePaired?.Invoke(deviceName);
             return true;

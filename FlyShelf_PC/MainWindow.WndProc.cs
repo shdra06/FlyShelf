@@ -235,6 +235,12 @@ namespace FlyShelf
                     if (matchedShortcut != null)
                     {
                         Classes.Logger.LogAction("SHORTCUTS", $"Expanding '{matchedShortcut.Trigger}' → '{matchedShortcut.Label}'");
+                        
+                        // Premium Safeguard: Detect target window integrity/elevation
+                        IntPtr targetWindow = GetForegroundWindow();
+                        bool isElevated = IsTargetProcessElevatedOrAccessDenied(targetWindow);
+                        Classes.Logger.LogAction("SHORTCUTS", $"Target window elevated: {isElevated}");
+
                         try
                         {
                             SetWritingClipboard(true);
@@ -253,21 +259,32 @@ namespace FlyShelf
 
                         _lastClipboardCaptureTime = DateTime.UtcNow;
 
-                        // Auto-paste: simulate Ctrl+V after a brief delay so the clipboard is ready.
-                        // The user just Ctrl+C'd the /trigger (text is still selected), so Ctrl+V replaces it in-place.
-                        _ = Task.Run(async () =>
+                        if (isElevated)
                         {
-                            await Task.Delay(80);
-                            keybd_event((byte)VK_CONTROL, 0, 0, 0);
-                            keybd_event((byte)VK_V, 0, 0, 0);
-                            keybd_event((byte)VK_V, 0, KEYEVENTF_KEYUP, 0);
-                            keybd_event((byte)VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
-                        });
+                            // Premium Fallback: Display manual paste instructions if auto-paste is blocked by UIPI
+                            Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                Windows.ToastWindow.ShowToast($"✦ {matchedShortcut.Label} Copied! (Manual Ctrl+V needed in Admin app)");
+                            });
+                        }
+                        else
+                        {
+                            // Standard: Auto-paste: simulate Ctrl+V after a brief delay so the clipboard is ready.
+                            _ = Task.Run(async () =>
+                            {
+                                await Task.Delay(80);
+                                keybd_event((byte)VK_CONTROL, 0, 0, 0);
+                                keybd_event((byte)VK_V, 0, 0, 0);
+                                keybd_event((byte)VK_V, 0, KEYEVENTF_KEYUP, 0);
+                                keybd_event((byte)VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
+                            });
 
-                        Application.Current.Dispatcher.InvokeAsync(() =>
-                        {
-                            Windows.ToastWindow.ShowToast($"✦ {matchedShortcut.Label}");
-                        });
+                            Application.Current.Dispatcher.InvokeAsync(() =>
+                            {
+                                Windows.ToastWindow.ShowToast($"✦ {matchedShortcut.Label} Auto-Pasted! ✦");
+                            });
+                        }
+                        
                         return; // Don't create a clipboard card for the trigger text
                     }
                 }
@@ -335,6 +352,98 @@ namespace FlyShelf
                 }
             }
             catch (Exception cbEx) { Classes.Logger.LogAction("CLIPBOARD", $"Deferred handler error: {cbEx.Message}"); }
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // TARGET ELEVATION DETECTION (UIPI SAFEGUARDS)
+        // ═══════════════════════════════════════════════════════
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr OpenProcess(uint processAccess, bool bInheritHandle, uint processId);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool CloseHandle(IntPtr hObject);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
+
+        [DllImport("advapi32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool GetTokenInformation(
+            IntPtr TokenHandle,
+            int TokenInformationClass,
+            IntPtr TokenInformation,
+            int TokenInformationLength,
+            out int ReturnLength);
+
+        private const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+        private const uint TOKEN_QUERY = 0x0008;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct TOKEN_ELEVATION
+        {
+            public uint TokenIsElevated;
+        }
+
+        private bool IsTargetProcessElevatedOrAccessDenied(IntPtr hWnd)
+        {
+            if (hWnd == IntPtr.Zero) return false;
+            
+            uint processId;
+            GetWindowThreadProcessId(hWnd, out processId);
+            if (processId == 0) return false;
+
+            // Step 1: Try to open process. If access is denied (error 5), it is elevated/higher integrity
+            IntPtr hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
+            if (hProcess == IntPtr.Zero)
+            {
+                int error = Marshal.GetLastWin32Error();
+                if (error == 5) // ERROR_ACCESS_DENIED
+                {
+                    return true;
+                }
+                return false;
+            }
+
+            // Step 2: Open process token to check elevation explicitly
+            IntPtr hToken = IntPtr.Zero;
+            try
+            {
+                if (!OpenProcessToken(hProcess, TOKEN_QUERY, out hToken))
+                {
+                    int error = Marshal.GetLastWin32Error();
+                    if (error == 5) return true; // Access Denied
+                }
+                else
+                {
+                    TOKEN_ELEVATION elevationType;
+                    int size = Marshal.SizeOf<TOKEN_ELEVATION>();
+                    IntPtr pElevationType = Marshal.AllocHGlobal(size);
+                    try
+                    {
+                        // 20 is TokenElevation in the enum
+                        if (GetTokenInformation(hToken, 20, pElevationType, size, out _))
+                        {
+                            elevationType = Marshal.PtrToStructure<TOKEN_ELEVATION>(pElevationType);
+                            return elevationType.TokenIsElevated != 0;
+                        }
+                    }
+                    finally
+                    {
+                        Marshal.FreeHGlobal(pElevationType);
+                    }
+                }
+            }
+            catch { }
+            finally
+            {
+                if (hToken != IntPtr.Zero) CloseHandle(hToken);
+                CloseHandle(hProcess);
+            }
+
+            return false;
         }
     }
 }

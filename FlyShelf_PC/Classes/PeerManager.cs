@@ -246,32 +246,11 @@ namespace FlyShelf.Classes
 
                     string name = dev.TryGetProperty("DeviceName", out var dn) ? dn.GetString() ?? "" : "";
 
-                    // Skip devices that are NOT in the local paired devices list
-                    // This filters out stale/ghost entries (e.g., unpaired phones still lingering in Firebase)
-                    if (pairedDeviceIds.Count > 0 && !pairedDeviceIds.Contains(devId) && !pairedDeviceNames.Contains(name))
+                    // Self-healing: If device is in the Firebase room but not in local paired list, trust it and auto-register
+                    if (!pairedDeviceIds.Contains(devId) && !pairedDeviceNames.Contains(name))
                     {
-                        // Only log + delete once per unknown device to avoid spam
-                        if (_prunedGhosts.Add(devId))
-                        {
-                            Logger.LogAction("PEER", $"⭐ Skipping unpaired device in Firebase: {name} ({devId}) — not in local paired list");
-
-                            // Actively delete the ghost entry from Firebase
-                            _ = Task.Run(async () =>
-                            {
-                                try
-                                {
-                                    string deleteUrl = await CloudDiscoveryManager.AuthUrlPublic($"active_devices/{_myPairingKey}/{prop.Name}.json");
-                                    using var delClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-                                    await delClient.DeleteAsync(deleteUrl);
-                                    Logger.LogAction("PEER", $"🗑️ Deleted ghost device from Firebase: {name} ({prop.Name})");
-                                }
-                                catch (Exception ex)
-                                {
-                                    Logger.LogAction("PEER", $"Failed to delete ghost {name}: {ex.Message}");
-                                }
-                            });
-                        }
-                        continue;
+                        Logger.LogAction("PEER", $"⭐ Auto-registering trusted peer from Firebase room: {name} ({devId})");
+                        DevicePairingManager.TryPairDevice(_myPairingKey, devId, name, devId.Contains("PC") || devId.Contains("LAPTOP") || devId.Contains("DESKTOP") ? "PC" : "Mobile", "cloud");
                     }
 
                     totalPeers++;
@@ -443,28 +422,11 @@ namespace FlyShelf.Classes
             var pairedDeviceIds = new HashSet<string>(pairedDevices.Select(d => d.DeviceId), StringComparer.OrdinalIgnoreCase);
             var pairedDeviceNames = new HashSet<string>(pairedDevices.Select(d => d.DeviceName), StringComparer.OrdinalIgnoreCase);
 
-            if (pairedDeviceIds.Count > 0 && !pairedDeviceIds.Contains(deviceId) && !pairedDeviceNames.Contains(deviceName))
+            // Self-healing: If device is in the Firebase room but not in local paired list, trust it and auto-register
+            if (!pairedDeviceIds.Contains(deviceId) && !pairedDeviceNames.Contains(deviceName))
             {
-                lock (_prunedGhosts)
-                {
-                    if (!_prunedGhosts.Add(deviceId))
-                        return;
-                }
-
-                Logger.LogAction("PEER", $"⭐ Skipping unpaired device URL update: {deviceName} ({deviceId})");
-                // Actively delete the ghost entry from Firebase
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        string deleteUrl = await CloudDiscoveryManager.AuthUrlPublic($"active_devices/{_myPairingKey}/{deviceId}.json");
-                        using var delClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
-                        await delClient.DeleteAsync(deleteUrl);
-                        Logger.LogAction("PEER", $"🗑️ Deleted ghost device from Firebase: {deviceName} ({deviceId})");
-                    }
-                    catch { }
-                });
-                return;
+                Logger.LogAction("PEER", $"⭐ Auto-registering trusted peer during real-time update: {deviceName} ({deviceId})");
+                DevicePairingManager.TryPairDevice(_myPairingKey, deviceId, deviceName, deviceId.Contains("PC") || deviceId.Contains("LAPTOP") || deviceId.Contains("DESKTOP") ? "PC" : "Mobile", "cloud");
             }
 
             Logger.LogAction("PEER", $"📡 Target URL update for {deviceName}: LAN={lan} CF={cf}");

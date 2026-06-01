@@ -147,6 +147,37 @@ namespace FlyShelf.Classes
         // Auto-Start on Windows Boot
         private bool _autoStartEnabled = true;
         public bool AutoStartEnabled { get => _autoStartEnabled; set => SetProperty(ref _autoStartEnabled, value); }
+
+        /// <summary>
+        /// Reflection-based property copying to keep the static Current reference stable.
+        /// </summary>
+        public void CopyFrom(AdvanceSettings source)
+        {
+            if (source == null) return;
+            foreach (var prop in typeof(AdvanceSettings).GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+            {
+                if (prop.CanWrite && prop.CanRead)
+                {
+                    if (prop.Name == nameof(CustomSnifferPaths))
+                    {
+                        var sourceList = prop.GetValue(source) as System.Collections.ObjectModel.ObservableCollection<string>;
+                        var destList = prop.GetValue(this) as System.Collections.ObjectModel.ObservableCollection<string>;
+                        if (sourceList != null && destList != null)
+                        {
+                            destList.Clear();
+                            foreach (var item in sourceList)
+                            {
+                                destList.Add(item);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        prop.SetValue(this, prop.GetValue(source));
+                    }
+                }
+            }
+        }
     }
 
     public static class SettingsManager
@@ -207,7 +238,7 @@ namespace FlyShelf.Classes
                     var settings = JsonSerializer.Deserialize<AdvanceSettings>(json);
                     if (settings != null)
                     {
-                        Current = settings;
+                        Current.CopyFrom(settings);
                         if (version < 1)
                         {
                             Logger.LogAction("SETTINGS_MIGRATION", $"Upgrading config version from {version} to 1.");
@@ -267,12 +298,7 @@ namespace FlyShelf.Classes
 
         public static void ResetToDefaults()
         {
-            Current = new AdvanceSettings();
-            Current.PropertyChanged += (s, e) => DebouncedSave();
-            if (Current.CustomSnifferPaths != null)
-            {
-                Current.CustomSnifferPaths.CollectionChanged += (s, e) => DebouncedSave();
-            }
+            Current.CopyFrom(new AdvanceSettings());
             Save();
         }
 

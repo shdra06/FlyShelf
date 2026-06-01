@@ -1,5 +1,25 @@
 User-agent: *
 Allow: /
+Disallow: /api/
 
-# Direct links to sitemaps to accelerate crawl routines
-Sitemap: https://shdra06.github.io/FlyShelf/sitemap.xml
+# Block AI Training Crawlers (preserve content rights)
+User-agent: GPTBot
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+User-agent: CCBot
+Disallow: /
+
+User-agent: Google-Extended
+Disallow: /
+
+# Allow AI Search/Retrieval Bots (drive citation traffic)
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: PerplexityBot
+Allow: /
+
+Sitemap: https://fly-shelf.vercel.app/sitemap.xml
