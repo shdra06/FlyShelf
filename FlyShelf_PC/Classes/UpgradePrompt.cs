@@ -14,6 +14,8 @@ namespace FlyShelf.Classes
 {
     public static class UpgradePrompt
     {
+        private static Window? _activeDialog;
+
         // ═════════════════════════════════════════════════════════════
         // LIMIT REACHED PROMPTS
         // ═════════════════════════════════════════════════════════════
@@ -147,6 +149,13 @@ namespace FlyShelf.Classes
         /// </summary>
         public static bool ShowActivationDialog(Window? owner = null)
         {
+            if (_activeDialog != null && _activeDialog.IsLoaded)
+            {
+                _activeDialog.Activate();
+                _activeDialog.Focus();
+                return true;
+            }
+
             var resolvedOwner = ResolveActiveOwner(owner);
 
             var dialog = new Window
@@ -160,6 +169,9 @@ namespace FlyShelf.Classes
                 WindowStyle = WindowStyle.ToolWindow,
                 Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1A, 0x2E))
             };
+
+            dialog.Closed += (s, e) => _activeDialog = null;
+            _activeDialog = dialog;
 
             var grid = new Grid { Margin = new Thickness(24) };
             grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -258,7 +270,7 @@ namespace FlyShelf.Classes
                 BorderThickness = new Thickness(0),
                 Cursor = Cursors.Hand
             };
-            cancelBtn.Click += (s, e) => dialog.DialogResult = false;
+            cancelBtn.Click += (s, e) => dialog.Close();
 
             var activateBtn = new Button
             {
@@ -288,7 +300,7 @@ namespace FlyShelf.Classes
                     statusLabel.Text = "License activated! Welcome to FlyShelf Pro!";
                     statusLabel.Foreground = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E));
                     FlyShelf.Windows.ToastWindow.ShowToast("FlyShelf Pro activated! All features unlocked!");
-                    dialog.DialogResult = true;
+                    dialog.Close();
                 }
                 else
                 {
@@ -303,7 +315,8 @@ namespace FlyShelf.Classes
             grid.Children.Add(buttonPanel);
 
             dialog.Content = grid;
-            return dialog.ShowDialog() == true;
+            dialog.Show();
+            return true;
         }
 
         // ═════════════════════════════════════════════════════════════
