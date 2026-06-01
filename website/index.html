@@ -81,6 +81,19 @@
   <!-- Ionicons for Modern Clean Icons -->
   <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
   <script nomodule defer src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+
+  <style>
+  .hero-screenshot { max-width: 800px; width: 100%; border-radius: 16px; box-shadow: 0 25px 80px rgba(0,0,0,0.5), 0 0 40px rgba(0,210,255,0.1); border: 1px solid rgba(255,255,255,0.08); margin-top: 40px; }
+  .feature-strip { overflow-x: auto; }
+  .strip-items { display: flex; justify-content: center; gap: 30px; padding: 40px 20px; flex-wrap: wrap; }
+  .strip-item { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap; }
+  .strip-item ion-icon { font-size: 1.2rem; color: var(--color-cyan); }
+  @media (max-width: 768px) {
+    .showcase-section > div > div { grid-template-columns: 1fr !important; }
+    .strip-items { gap: 16px; }
+    [style*='grid-template-columns: repeat(4'] { grid-template-columns: repeat(2, 1fr) !important; }
+  }
+  </style>
 </head>
 <body>
 
@@ -109,7 +122,7 @@
     </div>
   </nav>
 
-  <!-- Hero Section -->
+  <!-- Hero Section (COMPACT) -->
   <header class="hero" id="hero-header">
     <div class="hero-tag scroll-reveal">
       <span></span> Ecosystem Version 2.5.0 is Live
@@ -119,7 +132,7 @@
       <span class="gradient-text-cyan-purple">Everywhere. Instantly.</span>
     </h1>
     <p class="lead scroll-reveal">
-      An ultra-premium, zero-friction clipboard synchronization and productivity platform. Copy text, links, code blocks, screenshots, or files on one device and watch them globally appear in milliseconds.
+      Copy once on any device. Paste everywhere instantly. Secure P2P sync for Windows &amp; Android.
     </p>
 
     <!-- Swatch Theme Switcher (From Next.js) -->
@@ -146,25 +159,164 @@
         Get Android APK
       </a>
     </div>
-    
-    <!-- Platform Status Badges -->
-    <div class="platform-row scroll-reveal">
-      <div class="platform-card win">
-        <div class="platform-icon"><ion-icon name="logo-windows"></ion-icon></div>
-        <div class="platform-info">
-          <div class="platform-name">Windows PC</div>
-          <div class="platform-ver">v2.5.0</div>
-        </div>
-      </div>
-      <div class="platform-card android">
-        <div class="platform-icon"><ion-icon name="logo-android"></ion-icon></div>
-        <div class="platform-info">
-          <div class="platform-name">Android Mobile</div>
-          <div class="platform-ver">v7.1.0</div>
-        </div>
-      </div>
+
+    <!-- Hero Screenshot -->
+    <div style="display: flex; justify-content: center;">
+      <img src="img_clipboard.png" alt="FlyShelf Clipboard Manager Screenshot" class="hero-screenshot">
     </div>
   </header>
+
+  <!-- FEATURE ICON STRIP -->
+  <section class="feature-strip">
+    <div class="strip-items">
+      <div class="strip-item"><ion-icon name="clipboard-outline"></ion-icon><span>Smart Clipboard</span></div>
+      <div class="strip-item"><ion-icon name="sync-outline"></ion-icon><span>Cross-Device Sync</span></div>
+      <div class="strip-item"><ion-icon name="color-palette-outline"></ion-icon><span>7 Color Themes</span></div>
+      <div class="strip-item"><ion-icon name="document-text-outline"></ion-icon><span>PDF Tools</span></div>
+      <div class="strip-item"><ion-icon name="scan-outline"></ion-icon><span>OCR & Tables</span></div>
+      <div class="strip-item"><ion-icon name="shield-checkmark-outline"></ion-icon><span>100% Private</span></div>
+    </div>
+  </section>
+
+  <!-- SHOWCASE SECTION A: Cross-Device Sync (image LEFT) -->
+  <section class="showcase-section scroll-reveal" style="padding: 60px 20px; max-width: 1100px; margin: 0 auto;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;">
+      <!-- IMAGE side -->
+      <div>
+        <img src="img_sync.png" alt="Cross-device sync between Windows PC and Android" style="width: 100%; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08);">
+      </div>
+      <!-- TEXT side -->
+      <div>
+        <span class="badge badge-cyan" style="margin-bottom: 12px; display: inline-block;">P2P Encrypted</span>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 16px;">Sync Across Every Device</h2>
+        <ul style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 14px;">
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">⚡</span>
+            <span><strong>Direct P2P LAN sync</strong> — files transfer at 100+ Mbps over WiFi</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">🌐</span>
+            <span><strong>Cloudflare Tunnel fallback</strong> — worldwide sync through secure proxies</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">🔥</span>
+            <span><strong>Firebase RTDB relay</strong> — lightweight text sync when direct connection unavailable</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">🔒</span>
+            <span><strong>End-to-end encrypted</strong> — DPAPI + SyncCrypto for all transfers</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SHOWCASE SECTION B: Smart Tools (image RIGHT) -->
+  <section class="showcase-section scroll-reveal" style="padding: 60px 20px; max-width: 1100px; margin: 0 auto;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;">
+      <!-- TEXT side -->
+      <div>
+        <span class="badge badge-cyan" style="margin-bottom: 12px; display: inline-block;">Built-in Power Tools</span>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 16px;">Intelligent Productivity Tools</h2>
+        <ul style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 14px;">
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">📊</span>
+            <span><strong>Extract tables from screenshots</strong> — Bradley-Roth AI + Gemini fallback</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">🔍</span>
+            <span><strong>OCR text extraction</strong> — Windows OCR engine, handles images up to 4000px</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">📦</span>
+            <span><strong>PDF Merger</strong> — drag-to-reorder, page selection, multi-file merge</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">📷</span>
+            <span><strong>QR Code scanner</strong> — decode QR codes from clipboard images</span>
+          </li>
+        </ul>
+      </div>
+      <!-- IMAGE side -->
+      <div>
+        <img src="img_tools.png" alt="FlyShelf intelligent productivity tools" style="width: 100%; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08);">
+      </div>
+    </div>
+  </section>
+
+  <!-- SHOWCASE SECTION C: Themes (image LEFT) -->
+  <section class="showcase-section scroll-reveal" style="padding: 60px 20px; max-width: 1100px; margin: 0 auto;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;">
+      <!-- IMAGE side -->
+      <div>
+        <img src="img_themes.png" alt="FlyShelf 7 premium color themes" style="width: 100%; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08);">
+      </div>
+      <!-- TEXT side -->
+      <div>
+        <span class="badge badge-cyan" style="margin-bottom: 12px; display: inline-block;">Personalization</span>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 16px;">7 Premium Color Themes</h2>
+        <ul style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 14px;">
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">🌌</span>
+            <span><strong>Midnight, Ocean, Sunset, Emerald, Lavender, Light + Default</strong></span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">🖼️</span>
+            <span><strong>Custom wallpaper backdrop</strong> — with frosted glass header</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">🎭</span>
+            <span><strong>Mascot theme packs</strong> — with animated sprite companions</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">🔄</span>
+            <span><strong>Hot-reload</strong> — themes apply instantly without restart</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- SHOWCASE SECTION D: Everything Else (image RIGHT) -->
+  <section class="showcase-section scroll-reveal" style="padding: 60px 20px; max-width: 1100px; margin: 0 auto;">
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;">
+      <!-- TEXT side -->
+      <div>
+        <span class="badge badge-cyan" style="margin-bottom: 12px; display: inline-block;">All-in-One Workspace</span>
+        <h2 style="font-size: 2rem; font-weight: 800; margin-bottom: 16px;">Every Feature You Need</h2>
+        <ul style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 14px;">
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">📝</span>
+            <span><strong>Quick Notes</strong> — per-day bullets with image embeds & freeform mode</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">✅</span>
+            <span><strong>To-Do Lists</strong> — daily task lists with done/undone toggle</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">🔤</span>
+            <span><strong>Text Shortcuts</strong> — /trigger text expansion with auto-paste</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">⏱️</span>
+            <span><strong>Speed Timer</strong> — type /5 or timer 30 min to launch countdown</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">😊</span>
+            <span><strong>Emoji Picker</strong> — 800+ searchable color emojis</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span style="font-size: 1.1rem;">🔒</span>
+            <span><strong>Password Manager</strong> — mask, view, edit clipboard passwords</span>
+          </li>
+        </ul>
+      </div>
+      <!-- IMAGE side -->
+      <div>
+        <img src="img_clipboard.png" alt="FlyShelf all-in-one workspace features" style="width: 100%; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08);">
+      </div>
+    </div>
+  </section>
 
   <!-- SECTION 1: THE SYNC SPACE (UNIVERSAL PIPELINE SIMULATOR) -->
   <section class="sync-space-section scroll-reveal" id="simulator">
@@ -475,50 +627,6 @@
     </div>
   </section>
 
-  <!-- SECTION: THE CLIPBOARD DILEMMA (From Next.js) -->
-  <section class="dilemma-section scroll-reveal" id="dilemma">
-    <div class="section-header">
-      <span class="badge badge-purple">Product Friction</span>
-      <h2>The Clipboard Dilemma</h2>
-      <p>Why default Windows solutions and legacy clipboard managers leave you frustrated:</p>
-    </div>
-    
-    <div class="problem-grid">
-      <div class="problem-card glass">
-        <div class="problem-icon cyan"><ion-icon name="desktop-outline"></ion-icon></div>
-        <h3>Outdated Interfaces</h3>
-        <p>Legacy managers rely on clunky, early-2000s layouts that disrupt focus and break modern desktop aesthetics.</p>
-      </div>
-      
-      <div class="problem-card glass">
-        <div class="problem-icon purple"><ion-icon name="cloud-offline-outline"></ion-icon></div>
-        <h3>Isolated Systems</h3>
-        <p>Built-in clipboard utilities lack seamless native sync channels to bridge history between PC and Android.</p>
-      </div>
-      
-      <div class="problem-card glass">
-        <div class="problem-icon red"><ion-icon name="shield-half-outline"></ion-icon></div>
-        <h3>Privacy Exposure</h3>
-        <p>Commercial SaaS alternatives require online accounts and route sensitive copy-paste text through public clouds.</p>
-      </div>
-
-      <div class="problem-card glass">
-        <div class="problem-icon amber"><ion-icon name="checkbox-outline"></ion-icon></div>
-        <h3>Productivity</h3>
-        <ul style="list-style: none; padding-left: 0; margin-top: 2px; display: flex; flex-direction: column; gap: 8px;">
-          <li style="display: flex; gap: 6px; align-items: flex-start;">
-            <span style="color: var(--color-amber); line-height: 1;">•</span>
-            <span>No built-in notes: Forced to switch to heavy external apps just to write down brief thoughts.</span>
-          </li>
-          <li style="display: flex; gap: 6px; align-items: flex-start;">
-            <span style="color: var(--color-amber); line-height: 1;">•</span>
-            <span>No integrated to-do lists: No direct checklist triggers to capture actionable clipboard tasks.</span>
-          </li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
   <!-- SECTION 2: "MOUSE SHAKE" GESTURE SUMMON DEMO -->
   <section class="summon-section scroll-reveal" id="summon">
     <div class="section-header">
@@ -601,7 +709,88 @@
     </div>
   </section>
 
-
+  <!-- FEATURE ICON GRID (4x3) -->
+  <section class="scroll-reveal" id="features" style="padding: 60px 20px; max-width: 1100px; margin: 0 auto;">
+    <div class="section-header">
+      <span class="badge badge-emerald">Complete Toolkit</span>
+      <h2>Every Feature, One App</h2>
+      <p>30+ productivity tools built right into your clipboard manager.</p>
+    </div>
+    <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 30px;">
+      <!-- 1 -->
+      <div class="glass" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06);">
+        <div style="font-size: 1.8rem; margin-bottom: 8px;">📋</div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Clipboard History</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Up to 2,500 items</div>
+      </div>
+      <!-- 2 -->
+      <div class="glass" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06);">
+        <div style="font-size: 1.8rem; margin-bottom: 8px;">🔄</div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Cross-Device Sync</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">PC ↔ Android P2P</div>
+      </div>
+      <!-- 3 -->
+      <div class="glass" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06);">
+        <div style="font-size: 1.8rem; margin-bottom: 8px;">📦</div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">PDF Merger</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Drag, reorder, merge</div>
+      </div>
+      <!-- 4 -->
+      <div class="glass" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06);">
+        <div style="font-size: 1.8rem; margin-bottom: 8px;">🔍</div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">OCR Extraction</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Text from images</div>
+      </div>
+      <!-- 5 -->
+      <div class="glass" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06);">
+        <div style="font-size: 1.8rem; margin-bottom: 8px;">📊</div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Table Extraction</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">AI-powered detection</div>
+      </div>
+      <!-- 6 -->
+      <div class="glass" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06);">
+        <div style="font-size: 1.8rem; margin-bottom: 8px;">📝</div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Quick Notes</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Per-day bullet notes</div>
+      </div>
+      <!-- 7 -->
+      <div class="glass" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06);">
+        <div style="font-size: 1.8rem; margin-bottom: 8px;">✅</div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">To-Do Lists</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Daily task tracking</div>
+      </div>
+      <!-- 8 -->
+      <div class="glass" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06);">
+        <div style="font-size: 1.8rem; margin-bottom: 8px;">🔤</div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Text Shortcuts</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">/trigger expansion</div>
+      </div>
+      <!-- 9 -->
+      <div class="glass" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06);">
+        <div style="font-size: 1.8rem; margin-bottom: 8px;">⏱️</div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Speed Timer</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Search bar countdown</div>
+      </div>
+      <!-- 10 -->
+      <div class="glass" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06);">
+        <div style="font-size: 1.8rem; margin-bottom: 8px;">😊</div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Emoji Picker</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">800+ searchable</div>
+      </div>
+      <!-- 11 -->
+      <div class="glass" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06);">
+        <div style="font-size: 1.8rem; margin-bottom: 8px;">🎨</div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">7 Color Themes</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Dynamic theming</div>
+      </div>
+      <!-- 12 -->
+      <div class="glass" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06);">
+        <div style="font-size: 1.8rem; margin-bottom: 8px;">🔒</div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Password Vault</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Masked clipboard text</div>
+      </div>
+    </div>
+  </section>
 
   <!-- SECTION: COMPARISON MATRIX (From Next.js) -->
   <section class="comparison-section scroll-reveal" id="compare">
@@ -803,55 +992,6 @@
     </div>
   </section>
 
-
-
-  <!-- SECTION 5: DETAILED PRODUCT FEATURES -->
-  <section class="features-section scroll-reveal" id="features">
-    <div class="section-header">
-      <span class="badge badge-cyan">Feature Deep-Dive</span>
-      <h2>Engineered for Power Users</h2>
-      <p>Every corner is engineered to eliminate friction, optimize speed, and enhance your digital clipboard flow.</p>
-    </div>
-    
-    <div class="features-grid">
-      <div class="feature-card glass">
-        <div class="feature-icon-box"><ion-icon name="scan-outline"></ion-icon></div>
-        <h3>Mica Sumner Overlay</h3>
-        <p>A Windows desktop summoning hub using beautiful Windows 11 Mica blur and Acrylic backdrops. Out of sight, summonable instantly via <code>Alt + c</code>.</p>
-      </div>
-      
-      <div class="feature-card glass">
-        <div class="feature-icon-box"><ion-icon name="phone-portrait-outline"></ion-icon></div>
-        <h3>Kotlin Foreground Service</h3>
-        <p>The Android companion uses a secure, energy-efficient native foreground service ensuring background clip listeners stay alive even under strict screen locks.</p>
-      </div>
-      
-      <div class="feature-card glass">
-        <div class="feature-icon-box"><ion-icon name="eye-outline"></ion-icon></div>
-        <h3>Spacebar QuickLook</h3>
-        <p>Preview any document, image, or zip archive in seconds. Simply select any card on the shelf and tap Spacebar, exactly like macOS QuickLook.</p>
-      </div>
-      
-      <div class="feature-card glass">
-        <div class="feature-icon-box"><ion-icon name="flash-outline"></ion-icon></div>
-        <h3>Auto-Classification Badges</h3>
-        <p>Smart regex engines analyze text and files, marking them with tags (JSON, C++, PYTHON, LINK, TERM) for structured context-sorting.</p>
-      </div>
-      
-      <div class="feature-card glass">
-        <div class="feature-icon-box"><ion-icon name="pin-outline"></ion-icon></div>
-        <h3>Atomic Pin History</h3>
-        <p>Items marked as pinned survive bulk logs cleanup. Saves are fully debounced to avoid disk thrashing and written atomically via temporary buffers.</p>
-      </div>
-      
-      <div class="feature-card glass">
-        <div class="feature-icon-box"><ion-icon name="apps-outline"></ion-icon></div>
-        <h3>Taskbar Mini Widget</h3>
-        <p>Keep a minimal, glassmorphic card pinned directly to your Windows Taskbar for real-time tracking of active inputs.</p>
-      </div>
-    </div>
-  </section>
-
   <!-- SECTION 6: PRIVACY SHIELD BANNER -->
   <section class="privacy-section scroll-reveal">
     <div class="privacy-banner glass">
@@ -931,4 +1071,3 @@
   <script src="app.js?v=2.5.0"></script>
 </body>
 </html>
-
