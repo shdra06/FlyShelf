@@ -95,6 +95,14 @@ namespace FlyShelf.Classes
         private string _clipboardWallpaperPath = "";
         public string ClipboardWallpaperPath { get => _clipboardWallpaperPath; set => SetProperty(ref _clipboardWallpaperPath, value); }
 
+        /// <summary>
+        /// Tracks a user-chosen custom wallpaper that takes priority over desktop/theme wallpapers.
+        /// Set when user picks a wallpaper via "Choose Wallpaper", cleared when they click "Remove Wallpaper".
+        /// This persists across mode switches (mica/desktop/glass/theme).
+        /// </summary>
+        private string _manualWallpaperPath = "";
+        public string ManualWallpaperPath { get => _manualWallpaperPath; set => SetProperty(ref _manualWallpaperPath, value); }
+
         private bool _enableBlurBehind = true;
         public bool EnableBlurBehind { get => _enableBlurBehind; set => SetProperty(ref _enableBlurBehind, value); }
 

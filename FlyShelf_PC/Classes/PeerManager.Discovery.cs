@@ -220,6 +220,9 @@ namespace FlyShelf.Classes
                             }
 
                             // 3. Auto-pair the device locally if not already registered
+                            // Guard: skip UDP broadcasts with empty DeviceId or DeviceName
+                            if (string.IsNullOrWhiteSpace(packet.DeviceId) || string.IsNullOrWhiteSpace(packet.DeviceName)) continue;
+
                             bool isPaired = DevicePairingManager.IsDevicePaired(pairingKey);
                             if (isPaired)
                             {

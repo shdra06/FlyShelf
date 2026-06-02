@@ -246,6 +246,9 @@ namespace FlyShelf.Classes
 
                     string name = dev.TryGetProperty("DeviceName", out var dn) ? dn.GetString() ?? "" : "";
 
+                    // Guard: skip ghost entries with empty DeviceId or DeviceName
+                    if (string.IsNullOrWhiteSpace(devId) || string.IsNullOrWhiteSpace(name)) continue;
+
                     // Self-healing: If device is in the Firebase room but not in local paired list, trust it and auto-register
                     if (!pairedDeviceIds.Contains(devId) && !pairedDeviceNames.Contains(name))
                     {
@@ -403,6 +406,9 @@ namespace FlyShelf.Classes
         public async Task HandlePeerUrlUpdate(string deviceId, string deviceName, string localUrl, string globalUrl)
         {
             if (deviceId == _myDeviceId) return;
+
+            // Guard: reject updates with empty DeviceId or DeviceName (ghost entries)
+            if (string.IsNullOrWhiteSpace(deviceId) || string.IsNullOrWhiteSpace(deviceName)) return;
 
             // 1. Decrypt URLs safely (supports multi-key decryption)
             string lan = DecryptUrlSafe(localUrl);

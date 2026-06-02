@@ -407,8 +407,77 @@ namespace FlyShelf
         /// </summary>
         public void ToggleMainClipboard()
         {
+            // ═══ VIRTUAL DESKTOP CHECK ═══
+            // Detect if the window is stuck on another virtual desktop (rare — VDM API is unreliable for overlay windows)
+            bool isOnOtherDesktop = false;
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    var vdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                    int hr = vdm.IsWindowOnCurrentVirtualDesktop(hwnd, out bool onCurrent);
+                    if (hr == 0 && !onCurrent)
+                        isOnOtherDesktop = true;
+                }
+            }
+            catch { }
+
+            if (isOnOtherDesktop)
+            {
+                if (_isNotesActive) CloseNotesPanel(immediate: true);
+                if (_isTodoActive) CloseTodoPanel(immediate: true);
+                _isCurrentlySummoned = false;
+                _isAnimatingHide = false;
+            }
+
+            // ═══ ZOMBIE STATE DETECTOR ═══
+            // The VDM API is unreliable for windows with ShowInTaskbar=False + Topmost=True
+            // (returns Guid.Empty and onCurrent=true even when the window is stuck on another desktop).
+            // Detect the zombie state directly: window is offscreen, invisible, and not summoned.
+            // This happens when Notes/Todo was open (WS_EX_APPWINDOW pinned window to a desktop),
+            // then closed, then user switched desktops. DWM still renders on the old desktop.
+            bool zombieRecovered = false;
+            if (!isOnOtherDesktop && !_isCurrentlySummoned && this.Left < -10000 && this.Opacity < 0.01)
+            {
+                // Close any lingering panels (skip if already closed)
+                if (_isNotesActive) CloseNotesPanel(immediate: true);
+                if (_isTodoActive) CloseTodoPanel(immediate: true);
+
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    // ═══ FAST DESKTOP RESET using native Win32 ═══
+                    // 1. Hide via native call (no WPF layout pass)
+                    Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
+
+                    // 2. Add WS_EX_APPWINDOW to force desktop association with current VD
+                    int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                    SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle | WS_EX_APPWINDOW) & ~WS_EX_NOACTIVATE);
+
+                    // 3. Show via native call (creates desktop association because APPWINDOW is set)
+                    Classes.NativeMethods.ShowWindow(hwnd, 5 /*SW_SHOW*/);
+
+                    // 4. Immediately restore overlay style — desktop association is already locked in
+                    exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                    SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle & ~WS_EX_APPWINDOW) | WS_EX_NOACTIVATE);
+
+                    // 5. Single SetWindowPos: apply style change + force topmost in one call
+                    Classes.NativeMethods.SetWindowPos(hwnd,
+                        -1 /*HWND_TOPMOST*/, 0, 0, 0, 0,
+                        Classes.NativeMethods.SWP_NOMOVE | Classes.NativeMethods.SWP_NOSIZE |
+                        Classes.NativeMethods.SWP_NOACTIVATE | 0x0020 /*SWP_FRAMECHANGED*/);
+                }
+
+                _isAnimatingHide = false;
+                _isCurrentlySummoned = false;
+                zombieRecovered = true;
+                Classes.Logger.LogAction("VD_DIAG", "ZOMBIE: Fast desktop reset done.");
+            }
+
             // If the overlay is already visible and in Mode 1, hide it
-            if (_isCurrentlySummoned && _viewModel.CurrentMode == 1 && !_isAnimatingHide)
+            // BUT: skip this if we just did a zombie recovery — we want to SHOW, not hide.
+            if (!zombieRecovered && _isCurrentlySummoned && _viewModel.CurrentMode == 1 && !_isAnimatingHide)
             {
                 AnimateAndHide();
             }

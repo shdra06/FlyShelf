@@ -195,7 +195,7 @@ namespace FlyShelf.Classes
                 _states[sv] = state;
             }
 
-            long now = Environment.TickCount64;
+            long now = (long)(System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
             state.IsTouchpad = isTouchpad;
             state.LastInputTime = now;
 
@@ -243,7 +243,7 @@ namespace FlyShelf.Classes
         private static void OnRendering(object? sender, EventArgs e)
         {
             bool anyAnimating = false;
-            long now = Environment.TickCount64;
+            long now = (long)(System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
 
             var scrollKeys = _states.Keys.ToList();
             var completed = new List<ScrollViewer>();

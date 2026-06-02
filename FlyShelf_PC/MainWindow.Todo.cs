@@ -65,9 +65,8 @@ namespace FlyShelf
             TodoPanel.Visibility = Visibility.Visible;
 
             // Swap todo button to clipboard icon (acts as "go back" button)
-            TodoToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.ClipboardTextLtr24 };
+            TodoToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Clipboard24 };
             TodoToggleBtn.ToolTip = "Back to Clipboard";
-            TodoToggleBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x8B, 0x5C, 0xF6));
 
             // Animate in
             var slideAnim = new DoubleAnimation(-12, 0, new Duration(TimeSpan.FromMilliseconds(200)))
@@ -98,7 +97,7 @@ namespace FlyShelf
             if (!_isTodoActive) return;
 
             // Restore todo button icon and tooltip
-            TodoToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.CheckboxChecked24 };
+            TodoToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.TaskListSquareLtr24 };
             TodoToggleBtn.ToolTip = "To-Do List";
             TodoToggleBtn.ClearValue(ForegroundProperty);
 

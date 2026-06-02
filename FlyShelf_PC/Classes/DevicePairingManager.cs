@@ -221,6 +221,14 @@ namespace FlyShelf.Classes
         /// </summary>
         public static bool TryPairDevice(string pairingKey, string deviceId, string deviceName, string deviceType, string remoteIP)
         {
+            // Guard: reject pairing attempts with empty/whitespace DeviceId or DeviceName
+            // This prevents ghost entries from stale Firebase room presences being persisted locally
+            if (string.IsNullOrWhiteSpace(deviceId) || string.IsNullOrWhiteSpace(deviceName))
+            {
+                Logger.LogAction("PAIR", $"❌ Rejected pairing attempt with empty/whitespace DeviceId='{deviceId}' or DeviceName='{deviceName}'");
+                return false;
+            }
+
             string expectedKey = EnsurePairingKey();
             if (pairingKey != expectedKey)
             {

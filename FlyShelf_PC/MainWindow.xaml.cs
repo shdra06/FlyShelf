@@ -714,6 +714,7 @@ namespace FlyShelf
                                 {
                                     // ═══ MICA BLUR MODE ═══
                                     // Pure system Acrylic/Mica blur — no wallpaper, no mascot
+                                    // (manual wallpaper is NOT applied in mica mode — mica is intentionally wallpaper-free)
                                     Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
                                     RestoreMicaBlur();
                                     Classes.Logger.LogAction("THEME", "Mode: Mica Blur — pure system backdrop");
@@ -722,6 +723,7 @@ namespace FlyShelf
                                 {
                                     // ═══ GLASS MODE ═══
                                     // Glassmorphism UI — frosted buttons, translucent cards, and optional Acrylic blur
+                                    // (manual wallpaper is NOT applied in glass mode — glass is intentionally wallpaper-free)
                                     Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
                                     RestoreAcrylicBlur();
                                     Classes.ThemeManager.Instance.ApplyGlassTheme();
@@ -730,19 +732,30 @@ namespace FlyShelf
                                 else if (displayMode == "desktop")
                                 {
                                     // ═══ FLYSHELF (DESKTOP WALLPAPER) MODE ═══
-                                    // Clipboard gets the user's Windows desktop wallpaper, NO system blur
+                                    // Manual wallpaper takes top priority until explicitly removed
                                     ApplyNonMicaBackground();
-                                    string desktopWp = GetDesktopWallpaperPath();
-                                    if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
+                                    string manualWp = Classes.SettingsManager.Current.ManualWallpaperPath ?? "";
+                                    if (!string.IsNullOrEmpty(manualWp) && System.IO.File.Exists(manualWp))
                                     {
-                                        Classes.SettingsManager.Current.ClipboardWallpaperPath = desktopWp;
+                                        Classes.SettingsManager.Current.ClipboardWallpaperPath = manualWp;
                                         ApplyWallpaper();
-                                        Classes.Logger.LogAction("THEME", $"Mode: FlyShelf — desktop wallpaper: {desktopWp}");
+                                        Classes.Logger.LogAction("THEME", $"Mode: FlyShelf — manual wallpaper (priority): {manualWp}");
                                     }
                                     else
                                     {
-                                        Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
-                                        Classes.Logger.LogAction("THEME", "Mode: FlyShelf — no desktop wallpaper found, solid dark bg");
+                                        // Fallback to desktop wallpaper
+                                        string desktopWp = GetDesktopWallpaperPath();
+                                        if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
+                                        {
+                                            Classes.SettingsManager.Current.ClipboardWallpaperPath = desktopWp;
+                                            ApplyWallpaper();
+                                            Classes.Logger.LogAction("THEME", $"Mode: FlyShelf — desktop wallpaper: {desktopWp}");
+                                        }
+                                        else
+                                        {
+                                            Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                                            Classes.Logger.LogAction("THEME", "Mode: FlyShelf — no desktop wallpaper found, solid dark bg");
+                                        }
                                     }
                                 }
                                 else // displayMode == "theme"
@@ -756,19 +769,31 @@ namespace FlyShelf
                                         return;
                                     }
 
-                                    string? themeWp = Classes.ThemeManager.Instance.GetWallpaperPath();
-                                    if (!string.IsNullOrEmpty(themeWp) && System.IO.File.Exists(themeWp))
+                                    // Manual wallpaper takes priority over theme wallpaper
+                                    string manualWpTheme = Classes.SettingsManager.Current.ManualWallpaperPath ?? "";
+                                    if (!string.IsNullOrEmpty(manualWpTheme) && System.IO.File.Exists(manualWpTheme))
                                     {
-                                        ApplyNonMicaBackground(); // Disable system blur for custom wallpaper
-                                        Classes.SettingsManager.Current.ClipboardWallpaperPath = themeWp;
+                                        ApplyNonMicaBackground();
+                                        Classes.SettingsManager.Current.ClipboardWallpaperPath = manualWpTheme;
                                         ApplyWallpaper();
-                                        Classes.Logger.LogAction("THEME", $"Mode: Theme '{theme.Name}' — wallpaper: {themeWp}");
+                                        Classes.Logger.LogAction("THEME", $"Mode: Theme '{theme.Name}' — manual wallpaper (priority): {manualWpTheme}");
                                     }
                                     else
                                     {
-                                        Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
-                                        RestoreMicaBlur(); // No custom wallpaper: preserve system Acrylic blur!
-                                        Classes.Logger.LogAction("THEME", $"Mode: Theme '{theme.Name}' — no custom wallpaper, keeping Acrylic blur active");
+                                        string? themeWp = Classes.ThemeManager.Instance.GetWallpaperPath();
+                                        if (!string.IsNullOrEmpty(themeWp) && System.IO.File.Exists(themeWp))
+                                        {
+                                            ApplyNonMicaBackground(); // Disable system blur for custom wallpaper
+                                            Classes.SettingsManager.Current.ClipboardWallpaperPath = themeWp;
+                                            ApplyWallpaper();
+                                            Classes.Logger.LogAction("THEME", $"Mode: Theme '{theme.Name}' — wallpaper: {themeWp}");
+                                        }
+                                        else
+                                        {
+                                            Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                                            RestoreMicaBlur(); // No custom wallpaper: preserve system Acrylic blur!
+                                            Classes.Logger.LogAction("THEME", $"Mode: Theme '{theme.Name}' — no custom wallpaper, keeping Acrylic blur active");
+                                        }
                                     }
 
                                     // Start mascot idle animation
@@ -806,30 +831,49 @@ namespace FlyShelf
                     }
                     else if (startupMode == "desktop")
                     {
-                        // Desktop wallpaper mode — no system blur
+                        // Desktop wallpaper mode — manual wallpaper takes priority
                         ApplyNonMicaBackground();
-                        _cachedDesktopWallpaperPath = null; // Force re-read
-                        string desktopWp = GetDesktopWallpaperPath();
-                        if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
+                        string manualWp = Classes.SettingsManager.Current.ManualWallpaperPath ?? "";
+                        if (!string.IsNullOrEmpty(manualWp) && System.IO.File.Exists(manualWp))
                         {
-                            Classes.SettingsManager.Current.ClipboardWallpaperPath = desktopWp;
-                            ApplyWallpaper();
-                        }
-                    }
-                    else if (startupMode == "theme")
-                    {
-                        // Custom theme mode
-                        string? startupWp = Classes.ThemeManager.Instance.GetWallpaperPath();
-                        if (!string.IsNullOrEmpty(startupWp) && System.IO.File.Exists(startupWp))
-                        {
-                            ApplyNonMicaBackground();
-                            Classes.SettingsManager.Current.ClipboardWallpaperPath = startupWp;
+                            Classes.SettingsManager.Current.ClipboardWallpaperPath = manualWp;
                             ApplyWallpaper();
                         }
                         else
                         {
-                            Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
-                            RestoreMicaBlur(); // No custom wallpaper: keep system Acrylic blur active!
+                            _cachedDesktopWallpaperPath = null; // Force re-read
+                            string desktopWp = GetDesktopWallpaperPath();
+                            if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
+                            {
+                                Classes.SettingsManager.Current.ClipboardWallpaperPath = desktopWp;
+                                ApplyWallpaper();
+                            }
+                        }
+                    }
+                    else if (startupMode == "theme")
+                    {
+                        // Custom theme mode — manual wallpaper takes priority
+                        string manualWpTheme = Classes.SettingsManager.Current.ManualWallpaperPath ?? "";
+                        if (!string.IsNullOrEmpty(manualWpTheme) && System.IO.File.Exists(manualWpTheme))
+                        {
+                            ApplyNonMicaBackground();
+                            Classes.SettingsManager.Current.ClipboardWallpaperPath = manualWpTheme;
+                            ApplyWallpaper();
+                        }
+                        else
+                        {
+                            string? startupWp = Classes.ThemeManager.Instance.GetWallpaperPath();
+                            if (!string.IsNullOrEmpty(startupWp) && System.IO.File.Exists(startupWp))
+                            {
+                                ApplyNonMicaBackground();
+                                Classes.SettingsManager.Current.ClipboardWallpaperPath = startupWp;
+                                ApplyWallpaper();
+                            }
+                            else
+                            {
+                                Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                                RestoreMicaBlur(); // No custom wallpaper: keep system Acrylic blur active!
+                            }
                         }
                     }
                     else

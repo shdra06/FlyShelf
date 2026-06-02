@@ -498,6 +498,41 @@
                                         <!-- Filter Chips — Compact horizontal icon pills -->
                     <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
                         <StackPanel.Resources>
+                            <!-- Dynamic accent brushes with opacity for a beautiful glassy highlight -->
+                            <SolidColorBrush x:Key="CheckedBackgroundBrush" Color="{DynamicResource MicaWPF.Colors.SystemAccentColor}" Opacity="0.15"/>
+                            <SolidColorBrush x:Key="CheckedHoverBackgroundBrush" Color="{DynamicResource MicaWPF.Colors.SystemAccentColor}" Opacity="0.22"/>
+
+                            <!-- Inner TextBlock style: animates text color, opacity, and weight based on checked/hover state -->
+                            <Style TargetType="TextBlock">
+                                <Setter Property="FontSize" Value="11.5"/>
+                                <Setter Property="FontWeight" Value="Medium"/>
+                                <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=IsChecked}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=IsMouseOver}" Value="True">
+                                        <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+
+                            <!-- Inner SymbolIcon style: dampens opacity when unchecked for cleaner visual hierarchy -->
+                            <Style TargetType="ui:SymbolIcon">
+                                <Setter Property="FontSize" Value="13"/>
+                                <Setter Property="Margin" Value="0,0,5,0"/>
+                                <Setter Property="Opacity" Value="0.65"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=IsChecked}" Value="True">
+                                        <Setter Property="Opacity" Value="1.0"/>
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=IsMouseOver}" Value="True">
+                                        <Setter Property="Opacity" Value="0.85"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+
                             <Style x:Key="FilterChipStyle" TargetType="RadioButton">
                                 <Setter Property="Margin" Value="0,0,4,0"/>
                                 <Setter Property="Cursor" Value="Hand"/>
@@ -510,9 +545,34 @@
                                                 <ContentPresenter x:Name="ChipContent" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                             <ControlTemplate.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
+                                                <!-- Hover state for unchecked chip -->
+                                                <MultiTrigger>
+                                                    <MultiTrigger.Conditions>
+                                                        <Condition Property="IsMouseOver" Value="True"/>
+                                                        <Condition Property="IsChecked" Value="False"/>
+                                                    </MultiTrigger.Conditions>
                                                     <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
-                                                </Trigger>
+                                                </MultiTrigger>
+                                                
+                                                <!-- Checked state (non-hovered) -->
+                                                <MultiTrigger>
+                                                    <MultiTrigger.Conditions>
+                                                        <Condition Property="IsChecked" Value="True"/>
+                                                        <Condition Property="IsMouseOver" Value="False"/>
+                                                    </MultiTrigger.Conditions>
+                                                    <Setter TargetName="ChipBorder" Property="Background" Value="{StaticResource CheckedBackgroundBrush}"/>
+                                                    <Setter TargetName="ChipBorder" Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.SystemAccentColor}"/>
+                                                </MultiTrigger>
+
+                                                <!-- Checked & Hovered state -->
+                                                <MultiTrigger>
+                                                    <MultiTrigger.Conditions>
+                                                        <Condition Property="IsChecked" Value="True"/>
+                                                        <Condition Property="IsMouseOver" Value="True"/>
+                                                    </MultiTrigger.Conditions>
+                                                    <Setter TargetName="ChipBorder" Property="Background" Value="{StaticResource CheckedHoverBackgroundBrush}"/>
+                                                    <Setter TargetName="ChipBorder" Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.SystemAccentColorLight1}"/>
+                                                </MultiTrigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </Setter.Value>
@@ -521,48 +581,48 @@
                         </StackPanel.Resources>
 
                         <RadioButton IsChecked="True" Checked="Filter_Checked" Tag="All" Style="{StaticResource FilterChipStyle}">
-                            <TextBlock Text="All" FontSize="11.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                            <TextBlock Text="All"/>
                         </RadioButton>
                         <RadioButton Checked="Filter_Checked" Tag="Text" Style="{StaticResource FilterChipStyle}">
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="TextDescription24" Foreground="#8B5CF6" FontSize="13" Margin="0,0,5,0"/>
-                                <TextBlock Text="Text" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                <ui:SymbolIcon Symbol="TextDescription24" Foreground="#8B5CF6"/>
+                                <TextBlock Text="Text"/>
                             </StackPanel>
                         </RadioButton>
                         <RadioButton Checked="Filter_Checked" Tag="Code" Style="{StaticResource FilterChipStyle}">
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="Code24" Foreground="#10B981" FontSize="13" Margin="0,0,5,0"/>
-                                <TextBlock Text="Code" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                <ui:SymbolIcon Symbol="Code24" Foreground="#10B981"/>
+                                <TextBlock Text="Code"/>
                             </StackPanel>
                         </RadioButton>
                         <RadioButton Checked="Filter_Checked" Tag="Image" Style="{StaticResource FilterChipStyle}">
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="Image24" Foreground="#F472B6" FontSize="13" Margin="0,0,5,0"/>
-                                <TextBlock Text="Images" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                <ui:SymbolIcon Symbol="Image24" Foreground="#F472B6"/>
+                                <TextBlock Text="Images"/>
                             </StackPanel>
                         </RadioButton>
                         <RadioButton Checked="Filter_Checked" Tag="Pdf" Style="{StaticResource FilterChipStyle}">
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="#EF4444" FontSize="13" Margin="0,0,5,0"/>
-                                <TextBlock Text="PDFs" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="#EF4444"/>
+                                <TextBlock Text="PDFs"/>
                             </StackPanel>
                         </RadioButton>
                         <RadioButton Checked="Filter_Checked" Tag="Document" Style="{StaticResource FilterChipStyle}">
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="Document24" Foreground="#60A5FA" FontSize="13" Margin="0,0,5,0"/>
-                                <TextBlock Text="Docs" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                <ui:SymbolIcon Symbol="Document24" Foreground="#60A5FA"/>
+                                <TextBlock Text="Docs"/>
                             </StackPanel>
                         </RadioButton>
                         <RadioButton Checked="Filter_Checked" Tag="Url" Style="{StaticResource FilterChipStyle}">
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="Link24" Foreground="#0EA5E9" FontSize="13" Margin="0,0,5,0"/>
-                                <TextBlock Text="Links" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                <ui:SymbolIcon Symbol="Link24" Foreground="#0EA5E9"/>
+                                <TextBlock Text="Links"/>
                             </StackPanel>
                         </RadioButton>
                         <RadioButton Checked="Filter_Checked" Tag="Video" Style="{StaticResource FilterChipStyle}">
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="Video24" Foreground="#F59E0B" FontSize="13" Margin="0,0,5,0"/>
-                                <TextBlock Text="Videos" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                <ui:SymbolIcon Symbol="Video24" Foreground="#F59E0B"/>
+                                <TextBlock Text="Videos"/>
                             </StackPanel>
                         </RadioButton>
                     </StackPanel>

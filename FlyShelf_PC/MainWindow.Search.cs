@@ -506,6 +506,13 @@ namespace FlyShelf
         {
             if (OverflowPopup != null)
             {
+                // If already open, close it
+                if (OverflowPopup.IsOpen)
+                {
+                    OverflowPopup.IsOpen = false;
+                    return;
+                }
+
                 // If the popup was closed very recently (within 200ms), it means
                 // the user clicked the MoreBtn to close it, and the StaysOpen="False"
                 // behavior triggered a close before this click handler fired.

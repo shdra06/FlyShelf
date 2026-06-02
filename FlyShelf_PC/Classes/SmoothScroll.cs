@@ -30,7 +30,7 @@ namespace FlyShelf.Classes
         private const double ScrollFriction      = 0.94;   // Per-frame decay (smooth luxurious glide for mouse wheel sweeps)
         private const double MaxVelocity         = 45.0;   // Maximum speed cap in pixels/frame (reduced from 90.0 to force more drawing steps, stable scrolling, and prevent high-speed stroboscopic jumps)
         private const double TouchpadMul         = 0.33;   // Touchpad micro-step scale multiplier (decreased from 0.55 to reduce input gain)
-        private const double MouseMul            = 0.45;   // Mouse wheel step scale multiplier (decreased from 0.65)
+        private const double MouseMul            = 0.06;   // Mouse wheel step scale multiplier (reduced from 0.45 to target ~120px scroll distance per notch)
         private const double MinImpulse          = 0.3;    // Minimum impulse threshold for micro-scrolls
         private const double MinVelocity         = 0.25;   // Velocity below this → complete stop (prevents sub-pixel crawl and end-of-scroll micro jitter)
         private const double DeltaCapTouchpad    = 80.0;   // Clamps raw trackpad delta packets to absorb speed spikes
@@ -213,7 +213,7 @@ namespace FlyShelf.Classes
                 _states[sv] = state;
             }
 
-            long now = Environment.TickCount64;
+            long now = (long)(System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
             state.IsTouchpad = isTouchpad;
             state.LastInputTime = now;
 
@@ -273,7 +273,7 @@ namespace FlyShelf.Classes
             if (!state.IsAnimating)
             {
                 state.IsAnimating = true;
-                state.LastFrameTick = Environment.TickCount64;
+                state.LastFrameTick = System.Diagnostics.Stopwatch.GetTimestamp();
                 state.TrueOffset = sv.VerticalOffset;  // Seed from current real position
                 EnableStaticCanvas(sv);
             }
@@ -296,7 +296,7 @@ namespace FlyShelf.Classes
         private static void OnRendering(object? sender, EventArgs e)
         {
             bool anyAnimating = false;
-            long now = Environment.TickCount64;
+            long now = (long)(System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
 
             var scrollKeys = _states.Keys.ToList();
             var completed = new List<ScrollViewer>();
@@ -330,13 +330,14 @@ namespace FlyShelf.Classes
                 }
 
                 // Frame-time compensation: normalize velocity against 60 FPS baseline (16.667ms)
-                long elapsed = now - state.LastFrameTick;
-                if (elapsed <= 0) elapsed = 1;
-                double timeScale = elapsed / TargetFrameMs;
+                long currentTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+                double elapsedMs = (double)(currentTimestamp - state.LastFrameTick) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                if (elapsedMs <= 0) elapsedMs = 1.0;
+                double timeScale = elapsedMs / TargetFrameMs;
                 
                 // Clamp time scale to avoid huge jumps on lag spikes
                 timeScale = Math.Min(timeScale, 3.0);
-                state.LastFrameTick = now;
+                state.LastFrameTick = currentTimestamp;
 
                 // Apply velocity vector with frame-time compensation
                 double displacement = state.Velocity * timeScale;

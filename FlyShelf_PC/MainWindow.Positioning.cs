@@ -18,9 +18,173 @@ namespace FlyShelf
 
         private bool _borderColorSet = false;
 
+        private bool MoveToCurrentVirtualDesktop(IntPtr hwnd, bool force = false)
+        {
+            try
+            {
+                var vdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                
+                // Check if already on the current desktop — skip when force=true
+                // because IsWindowOnCurrentVirtualDesktop can return stale/wrong results
+                // when the window has been parked offscreen with Opacity=0.
+                if (!force)
+                {
+                    if (vdm.IsWindowOnCurrentVirtualDesktop(hwnd, out bool onCurrent) == 0 && onCurrent)
+                    {
+                        Classes.Logger.LogAction("DESKTOP", "Window already on current virtual desktop.");
+                        return true;
+                    }
+                }
+                else
+                {
+                    Classes.Logger.LogAction("DESKTOP", "Force mode — skipping IsWindowOnCurrentVirtualDesktop check.");
+                }
+
+                // Get current foreground window desktop ID — but EXCLUDE our own window!
+                // If GetForegroundWindow returns our HWND, GetWindowDesktopId gives us the
+                // OLD desktop's GUID, causing MoveWindowToDesktop to be a no-op.
+                IntPtr fg = GetForegroundWindow();
+                Guid desktopId = Guid.Empty;
+                if (fg != IntPtr.Zero && fg != hwnd)
+                {
+                    vdm.GetWindowDesktopId(fg, out desktopId);
+                    Classes.Logger.LogAction("DESKTOP", $"Foreground window 0x{fg:X} GUID: {desktopId}");
+                }
+                else
+                {
+                    Classes.Logger.LogAction("DESKTOP", $"Foreground window is self or null (fg=0x{fg:X}), skipping.");
+                }
+
+                // Fallback: search other visible windows on current desktop
+                if (desktopId == Guid.Empty)
+                {
+                    Classes.Logger.LogAction("DESKTOP", "Enumerating windows to find current desktop GUID...");
+                    EnumWindows((wnd, param) =>
+                    {
+                        if (wnd != hwnd && IsWindowVisible(wnd))
+                        {
+                            if (vdm.IsWindowOnCurrentVirtualDesktop(wnd, out bool isCurrent) == 0 && isCurrent)
+                            {
+                                if (vdm.GetWindowDesktopId(wnd, out Guid id) == 0 && id != Guid.Empty)
+                                {
+                                    desktopId = id;
+                                    return false; // Stop enumeration
+                                }
+                            }
+                        }
+                        return true;
+                    }, IntPtr.Zero);
+                    Classes.Logger.LogAction("DESKTOP", $"EnumWindows result GUID: {desktopId}");
+                }
+
+                if (desktopId != Guid.Empty)
+                {
+                    int hr = vdm.MoveWindowToDesktop(hwnd, ref desktopId);
+                    Classes.Logger.LogAction("DESKTOP", $"MoveWindowToDesktop HR=0x{hr:X8}");
+                    if (hr == 0)
+                    {
+                        Classes.Logger.LogAction("DESKTOP", "Successfully moved window to current virtual desktop.");
+                        return true;
+                    }
+                }
+                else
+                {
+                    Classes.Logger.LogAction("DESKTOP", "Could not determine current desktop GUID. COM move skipped.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("DESKTOP_ERR", $"MoveToCurrentVirtualDesktop error: {ex.Message}");
+            }
+
+            // ═══ ULTIMATE FALLBACK ═══
+            // If COM move failed (empty desktop, no reference windows, etc.),
+            // use Hide+Show — Windows re-associates the window with the calling
+            // thread's active desktop when Show() is called.
+            try
+            {
+                Classes.Logger.LogAction("DESKTOP", "COM move failed. Using Hide+Show fallback.");
+                this.Hide();
+                this.Left = -20000;
+                this.Top = -20000;
+                this.Show();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("DESKTOP_ERR", $"Hide+Show fallback error: {ex.Message}");
+            }
+            return false;
+        }
+
         public void ShowNearPosition(double targetX, double targetY, int mode = 0, bool isPersistent = false, bool stealFocus = true)
         {
             Classes.Logger.LogAction("TELEMETRY", $"ShowNearPosition entered, mode={mode}, isPersistent={isPersistent}, stealFocus={stealFocus}");
+            
+            // Check if the window is on another virtual desktop!
+            bool isOnOtherDesktop = false;
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    var vdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                    int hr = vdm.IsWindowOnCurrentVirtualDesktop(hwnd, out bool onCurrent);
+                    if (hr == 0 && !onCurrent)
+                    {
+                        isOnOtherDesktop = true;
+                    }
+                }
+            }
+            catch { }
+
+            if (isOnOtherDesktop)
+            {
+                Classes.Logger.LogAction("TELEMETRY", "ShowNearPosition: Window on another desktop. Resetting to current.");
+                
+                // 1. Close notes and todo panels — restores window style (removes WS_EX_APPWINDOW)
+                CloseNotesPanel(immediate: true);
+                CloseTodoPanel(immediate: true);
+
+                // 2. Hide + Show to re-create on the current desktop
+                this.Hide();
+                this.Left = -20000;
+                this.Top = -20000;
+                this.Show();
+                Classes.Logger.LogAction("DESKTOP", "Hide+Show completed in ShowNearPosition.");
+
+                // 3. Reset state
+                this.WindowState = WindowState.Normal;
+                _isCurrentlySummoned = false;
+                _isAnimatingHide = false;
+            }
+
+            // ═══ ZOMBIE STATE DETECTOR ═══
+            // Same as in ToggleMainClipboard — catch windows stuck offscreen/invisible
+            // after a desktop switch with Notes/Todo that the VDM API can't detect.
+            if (!isOnOtherDesktop && !_isCurrentlySummoned && this.Left < -10000 && this.Opacity < 0.01)
+            {
+                if (_isNotesActive) CloseNotesPanel(immediate: true);
+                if (_isTodoActive) CloseTodoPanel(immediate: true);
+
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    // Fast native desktop reset (same as ToggleMainClipboard)
+                    Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
+                    int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                    SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle | WS_EX_APPWINDOW) & ~WS_EX_NOACTIVATE);
+                    Classes.NativeMethods.ShowWindow(hwnd, 5 /*SW_SHOW*/);
+                    exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                    SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle & ~WS_EX_APPWINDOW) | WS_EX_NOACTIVATE);
+                    Classes.NativeMethods.SetWindowPos(hwnd,
+                        -1 /*HWND_TOPMOST*/, 0, 0, 0, 0,
+                        Classes.NativeMethods.SWP_NOMOVE | Classes.NativeMethods.SWP_NOSIZE |
+                        Classes.NativeMethods.SWP_NOACTIVATE | 0x0020 /*SWP_FRAMECHANGED*/);
+                }
+                _isAnimatingHide = false;
+            }
+
             if (mode == 0)
             {
                 EnsureClipboardMode();
@@ -638,9 +802,10 @@ namespace FlyShelf
                                         {
                                             Dispatcher.InvokeAsync(() =>
                                             {
-                                                // Coalesce / discard if it was evicted or cancelled in the meantime
-                                                if (!item.IsLoadingHighQuality) return;
-
+                                                // Always apply a successfully loaded bitmap.
+                                                // Previous coalesce guard discarded valid bitmaps when
+                                                // OptimizeMemoryUsage reset IsLoadingHighQuality between
+                                                // Task.Run completion and this Dispatcher callback.
                                                 item.Icon = bmp;
                                                 item.IsLoadedHighQuality = true;
                                                 item.IsLoadingHighQuality = false;

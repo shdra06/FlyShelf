@@ -109,23 +109,27 @@ namespace FlyShelf
             else if (msg == Classes.NativeMethods.WM_SETTINGCHANGE)
             {
                 _cachedDesktopWallpaperPath = null;
-                // Only re-apply if we're in FlyShelf desktop wallpaper mode
+                // Only re-apply desktop wallpaper if we're in FlyShelf mode AND no manual wallpaper is set
                 if ((Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica") == "desktop")
                 {
-                    Dispatcher.InvokeAsync(() =>
+                    string manualWp = Classes.SettingsManager.Current.ManualWallpaperPath ?? "";
+                    if (string.IsNullOrEmpty(manualWp) || !System.IO.File.Exists(manualWp))
                     {
-                        try
+                        Dispatcher.InvokeAsync(() =>
                         {
-                            string desktopWp = GetDesktopWallpaperPath();
-                            if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
+                            try
                             {
-                                Classes.SettingsManager.Current.ClipboardWallpaperPath = desktopWp;
-                                _currentLoadedWallpaperPath = ""; // Force reload
-                                ApplyWallpaper();
+                                string desktopWp = GetDesktopWallpaperPath();
+                                if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
+                                {
+                                    Classes.SettingsManager.Current.ClipboardWallpaperPath = desktopWp;
+                                    _currentLoadedWallpaperPath = ""; // Force reload
+                                    ApplyWallpaper();
+                                }
                             }
-                        }
-                        catch { }
-                    });
+                            catch { }
+                        });
+                    }
                 }
             }
             else if (msg == WM_CLIPBOARDUPDATE)

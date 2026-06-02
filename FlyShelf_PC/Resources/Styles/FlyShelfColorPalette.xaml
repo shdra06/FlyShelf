@@ -29,25 +29,25 @@
     <Color x:Key="ThemeAccentDarkColor">#5C6F94</Color>
 
     <!-- ═══ THEME-VARIABLE: UI Chrome (overridden per theme + light) ═══ -->
-    <!-- Default: matches WPF-UI's native dark theme button look. Themes override. -->
-    <SolidColorBrush x:Key="ThemeHeaderBtnBg"         Color="#0FFFFFFF"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnBorder"      Color="#12FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnFg"          Color="#E4FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnBgHover"     Color="#15FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnBorderHover" Color="#18FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnFgHover"     Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnBgPressed"   Color="#08FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnBorderPressed" Color="#10FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnFgPressed"   Color="#C0FFFFFF"/>
+    <!-- Default (Dark/Mica): frosted translucent buttons — clearly visible on dark Mica. Themes override. -->
+    <SolidColorBrush x:Key="ThemeHeaderBtnBg"         Color="#16FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBorder"      Color="#20FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnFg"          Color="#E5FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBgHover"     Color="#2AFFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBorderHover" Color="#40FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnFgHover"     Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBgPressed"   Color="#12FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBorderPressed" Color="#30FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnFgPressed"   Color="#DDFFFFFF"/>
     <!-- Color keys for WPF-UI Button internal template state bindings -->
-    <Color x:Key="ThemeHeaderBtnBgColor">#0FFFFFFF</Color>
-    <Color x:Key="ThemeHeaderBtnBorderColor">#12FFFFFF</Color>
-    <Color x:Key="ThemeHeaderBtnBgHoverColor">#15FFFFFF</Color>
-    <Color x:Key="ThemeHeaderBtnBorderHoverColor">#18FFFFFF</Color>
-    <Color x:Key="ThemeHeaderBtnFgHoverColor">#FFFFFF</Color>
-    <Color x:Key="ThemeHeaderBtnBgPressedColor">#08FFFFFF</Color>
-    <Color x:Key="ThemeHeaderBtnBorderPressedColor">#10FFFFFF</Color>
-    <Color x:Key="ThemeHeaderBtnFgPressedColor">#C0FFFFFF</Color>
+    <Color x:Key="ThemeHeaderBtnBgColor">#16FFFFFF</Color>
+    <Color x:Key="ThemeHeaderBtnBorderColor">#20FFFFFF</Color>
+    <Color x:Key="ThemeHeaderBtnBgHoverColor">#2AFFFFFF</Color>
+    <Color x:Key="ThemeHeaderBtnBorderHoverColor">#40FFFFFF</Color>
+    <Color x:Key="ThemeHeaderBtnFgHoverColor">#FFFFFFFF</Color>
+    <Color x:Key="ThemeHeaderBtnBgPressedColor">#12FFFFFF</Color>
+    <Color x:Key="ThemeHeaderBtnBorderPressedColor">#30FFFFFF</Color>
+    <Color x:Key="ThemeHeaderBtnFgPressedColor">#DDFFFFFF</Color>
 
     <SolidColorBrush x:Key="ThemeOverlayBg"       Color="#0AFFFFFF"/>
     <SolidColorBrush x:Key="ThemeOverlayBgHover"  Color="#15FFFFFF"/>

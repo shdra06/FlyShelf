@@ -194,6 +194,7 @@ namespace FlyShelf.Windows
             };
             if (dialog.ShowDialog() == true)
             {
+                SettingsManager.Current.ManualWallpaperPath = dialog.FileName;
                 SettingsManager.Current.ClipboardWallpaperPath = dialog.FileName;
                 SettingsManager.Save();
                 ApplyTheme();
@@ -202,6 +203,7 @@ namespace FlyShelf.Windows
 
         private void RemoveWallpaper_Click(object sender, RoutedEventArgs e)
         {
+            SettingsManager.Current.ManualWallpaperPath = "";
             SettingsManager.Current.ClipboardWallpaperPath = "";
             SettingsManager.Save();
             ApplyTheme();

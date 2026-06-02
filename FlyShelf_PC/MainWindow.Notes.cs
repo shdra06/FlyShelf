@@ -88,9 +88,8 @@ namespace FlyShelf
             RenderOptions.SetClearTypeHint(HeaderAndFiltersStack, ClearTypeHint.Enabled);
 
             // Swap notes button to clipboard icon (acts as "go back" button)
-            NotesToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.ClipboardTextLtr24 };
+            NotesToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Clipboard24 };
             NotesToggleBtn.ToolTip = "Back to Clipboard";
-            NotesToggleBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x8B, 0x5C, 0xF6));
 
             // Animate in
             var slideAnim = new DoubleAnimation(-12, 0, new Duration(TimeSpan.FromMilliseconds(200)))
@@ -242,9 +241,9 @@ namespace FlyShelf
             NoteManager.SaveNow();
 
             // Restore notes button icon and tooltip
-            NotesToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Notepad24 };
+            NotesToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.List24 };
             NotesToggleBtn.ToolTip = "Quick Notes";
-            NotesToggleBtn.Foreground = (Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
+            NotesToggleBtn.ClearValue(ForegroundProperty);
 
             // ─── HEADER: Restore original transparent/Mica background ───
             HeaderAndFiltersStack.Background = _originalHeaderBg ?? Brushes.Transparent;

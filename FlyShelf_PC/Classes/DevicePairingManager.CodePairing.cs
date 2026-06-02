@@ -1,4 +1,4 @@
-﻿// ---------------------------------------------------------------
+// ---------------------------------------------------------------
 // DevicePairingManager — Code-Based Pairing, Handshake & Persistence
 // ConnectByCode, WriteHandshakeToFirebase, CheckForHandshakes, Load, Save
 // Split from DevicePairingManager.cs for modularity
@@ -212,7 +212,10 @@ namespace FlyShelf.Classes
                     string devName = prop.Value.TryGetProperty("deviceName", out var dn) ? dn.GetString() ?? "" : "";
                     string devType = prop.Value.TryGetProperty("deviceType", out var dt) ? dt.GetString() ?? "PC" : "PC";
 
-                    if (devId == myDeviceId || string.IsNullOrEmpty(devId)) continue;
+                    if (devId == myDeviceId || string.IsNullOrWhiteSpace(devId)) continue;
+
+                    // Guard: skip handshake entries with empty DeviceName
+                    if (string.IsNullOrWhiteSpace(devName)) continue;
 
                     // Check if we already have this device
                     bool alreadyPaired;
@@ -256,7 +259,20 @@ namespace FlyShelf.Classes
                 {
                     string fileContent = File.ReadAllText(_storagePath);
                     string json = SecureStorage.Decrypt(fileContent);
-                    _pairedDevices = JsonSerializer.Deserialize<List<PairedDevice>>(json) ?? new();
+                    var loaded = JsonSerializer.Deserialize<List<PairedDevice>>(json) ?? new();
+
+                    // Self-healing: purge any invalid/nameless devices that were persisted by older versions
+                    int originalCount = loaded.Count;
+                    _pairedDevices = loaded.Where(d =>
+                        !string.IsNullOrWhiteSpace(d.DeviceId) &&
+                        !string.IsNullOrWhiteSpace(d.DeviceName)).ToList();
+
+                    if (_pairedDevices.Count < originalCount)
+                    {
+                        Logger.LogAction("PAIR", $"🧹 Purged {originalCount - _pairedDevices.Count} invalid/nameless device(s) from storage.");
+                        Save();
+                    }
+
                     Logger.LogAction("PAIR", $"Loaded {_pairedDevices.Count} paired device(s)");
                 }
             }
