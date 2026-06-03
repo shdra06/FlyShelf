@@ -332,7 +332,7 @@
       
       <!-- CARD 1: ORDER SUMMARY -->
       <div class="widget-card glass checkout-card">
-        <h3 style="font-size: 1.25rem; font-weight: 800; border-bottom: 1px solid var(--border-light); padding-bottom: 15px; margin-bottom: 5px;">💼 FlyShelf Pro Lifetime</h3>
+        <h3 style="font-size: 1.25rem; font-weight: 800; border-bottom: 1px solid var(--border-light); padding-bottom: 15px; margin-bottom: 5px;"><span class="title-icon-wrap" style="color: var(--color-cyan);"><ion-icon name="briefcase"></ion-icon></span> FlyShelf Pro Lifetime</h3>
         <p style="font-size: 0.85rem; color: var(--text-secondary);">One-time purchase. Free lifetime updates. Valid on up to 3 personal devices.</p>
         
         <ul style="list-style: none; padding-left: 0; display: flex; flex-direction: column; gap: 12px; font-size: 0.85rem; color: var(--text-secondary); margin-top: 10px;">
@@ -370,15 +370,15 @@
       
       <!-- CARD 2: SECURE SECURE CHECKOUT -->
       <div class="widget-card glass checkout-card" style="box-shadow: 0 12px 40px -10px rgba(0, 210, 255, 0.15);">
-        <h3 style="font-size: 1.25rem; font-weight: 800; border-bottom: 1px solid var(--border-light); padding-bottom: 15px;">🔒 Secure Checkout</h3>
+        <h3 style="font-size: 1.25rem; font-weight: 800; border-bottom: 1px solid var(--border-light); padding-bottom: 15px;"><span class="title-icon-wrap" style="color: var(--color-cyan);"><ion-icon name="lock-closed"></ion-icon></span> Secure Checkout</h3>
         
         <!-- Region Tabs -->
         <div class="payment-tab-row">
           <button class="payment-tab razorpay" id="tab-inr">
-            🇮🇳 India (Razorpay)
+            <ion-icon name="pin-outline"></ion-icon> India (Razorpay)
           </button>
           <button class="payment-tab razorpay active" id="tab-usd">
-            🌐 International ($9.99)
+            <ion-icon name="globe-outline"></ion-icon> International ($9.99)
           </button>
         </div>
         
@@ -459,7 +459,7 @@
         </div>
         
         <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 15px; border-top: 1px solid var(--border-light); padding-top: 12px;">
-          💡 <strong>Clipboard Magic:</strong> Copying this key (Ctrl+C) while your FlyShelf PC app is running in the background will automatically activate it!
+          <ion-icon name="bulb-outline" style="color: var(--color-amber); font-size: 0.95rem; vertical-align: middle; margin-right: 2px;"></ion-icon> <strong>Clipboard Magic:</strong> Copying this key (Ctrl+C) while your FlyShelf PC app is running in the background will automatically activate it!
         </div>
         
         <button class="color-pill-btn-clear" id="btn-close-modal" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:0.75rem; margin-top: 10px;">Close Window</button>
@@ -473,8 +473,8 @@
   <!-- ═══════════════════════════════════════════ -->
   <div style="max-width: 600px; margin: 0 auto 80px auto; padding: 0 20px;">
     <div class="widget-card glass" style="padding: 30px; text-align: center;">
-      <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 6px;">
-        🔑 Lost Your License Key?
+      <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <span class="title-icon-wrap" style="color: var(--color-cyan); margin-right: 0;"><ion-icon name="key"></ion-icon></span> Lost Your License Key?
       </h3>
       <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 20px;">
         If you already paid but didn't receive your key (power cut, browser crash, etc.), enter the email you used during checkout to recover it.
@@ -790,7 +790,7 @@
           const email = recoveryEmail.value.trim();
           if (!email || !email.includes('@')) {
             recoveryResult.style.display = 'block';
-            recoveryResult.innerHTML = '<p style="color: #ff6b6b; font-size: 0.85rem;">⚠️ Please enter a valid email address.</p>';
+            recoveryResult.innerHTML = '<p style="color: #ff6b6b; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 6px;"><ion-icon name="warning-outline" style="font-size: 1.1rem;"></ion-icon> Please enter a valid email address.</p>';
             return;
           }
 
@@ -815,7 +815,7 @@
               const key = data.licenseKey;
               recoveryResult.innerHTML = `
                 <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 20px; margin-top: 5px;">
-                  <p style="color: var(--color-emerald); font-weight: 700; font-size: 0.85rem; margin-bottom: 10px;">✅ License key found!</p>
+                  <p style="color: var(--color-emerald); font-weight: 700; font-size: 0.85rem; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;"><ion-icon name="checkmark-circle-outline" style="font-size: 1.1rem;"></ion-icon> License key found!</p>
                   <div class="license-glow-box" style="font-size: 1rem; margin-bottom: 12px;">${key}</div>
                   <button id="btn-copy-recovered" 
                     style="padding: 8px 20px; border-radius: 8px; border: none; background: var(--color-emerald); color: #000; font-weight: 700; font-size: 0.78rem; cursor: pointer;">
@@ -835,10 +835,10 @@
                 }, 1800);
               });
             } else {
-              recoveryResult.innerHTML = `<p style="color: #ff6b6b; font-size: 0.85rem;">❌ ${data.error || 'No key found for this email.'}</p>`;
+              recoveryResult.innerHTML = `<p style="color: #ff6b6b; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 6px;"><ion-icon name="close-circle-outline" style="font-size: 1.1rem;"></ion-icon> ${data.error || 'No key found for this email.'}</p>`;
             }
           } catch (err) {
-            recoveryResult.innerHTML = '<p style="color: #ff6b6b; font-size: 0.85rem;">❌ Connection error. Please try again.</p>';
+            recoveryResult.innerHTML = '<p style="color: #ff6b6b; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 6px;"><ion-icon name="close-circle-outline" style="font-size: 1.1rem;"></ion-icon> Connection error. Please try again.</p>';
           } finally {
             btnRecoverKey.disabled = false;
             btnRecoverKey.textContent = originalText;

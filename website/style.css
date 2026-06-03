@@ -2222,4 +2222,77 @@ body:not(.dark-mode) .theme-toggle-btn:hover {
   }
 }
 
+/* Premium Icon Badges & Wrappers (replacing emojis) */
+.icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  margin-right: 12px;
+  vertical-align: middle;
+}
+
+/* Color thematic styles for badges */
+.icon-badge.cyan {
+  color: var(--color-cyan);
+  background: rgba(0, 210, 255, 0.08);
+  border-color: rgba(0, 210, 255, 0.2);
+  box-shadow: 0 0 10px rgba(0, 210, 255, 0.05);
+}
+.icon-badge.emerald {
+  color: var(--color-emerald);
+  background: rgba(61, 220, 132, 0.08);
+  border-color: rgba(61, 220, 132, 0.2);
+  box-shadow: 0 0 10px rgba(61, 220, 132, 0.05);
+}
+.icon-badge.purple {
+  color: var(--color-purple);
+  background: rgba(158, 0, 255, 0.08);
+  border-color: rgba(158, 0, 255, 0.2);
+  box-shadow: 0 0 10px rgba(158, 0, 255, 0.05);
+}
+.icon-badge.amber {
+  color: var(--color-amber);
+  background: rgba(255, 157, 0, 0.08);
+  border-color: rgba(255, 157, 0, 0.2);
+  box-shadow: 0 0 10px rgba(255, 157, 0, 0.05);
+}
+.icon-badge.red {
+  color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.08);
+  border-color: rgba(255, 107, 107, 0.2);
+}
+
+/* Inline title icon wrappers */
+.title-icon-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  margin-right: 8px;
+  color: var(--color-cyan);
+  font-size: 1.3rem;
+}
+
+/* Checkmarks and Crosses in Comparison Table */
+.matrix-icon {
+  font-size: 1.25rem;
+  vertical-align: middle;
+}
+.matrix-icon.check {
+  color: var(--color-emerald);
+}
+.matrix-icon.cross {
+  color: var(--text-secondary);
+  opacity: 0.3;
+}
+
+
 

@@ -287,6 +287,15 @@ namespace FlyShelf
                 if (e.Action == NotifyCollectionChangedAction.Add ||
                     e.Action == NotifyCollectionChangedAction.Reset)
                 {
+                    // CRITICAL: On Reset events (from AddRange/InsertRange), WPF's ListCollectionView
+                    // internally rebuilds and DROPS the Filter delegate. Reapply SYNCHRONOUSLY here
+                    // to prevent even a single frame of unfiltered items appearing.
+                    if (e.Action == NotifyCollectionChangedAction.Reset &&
+                        (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox?.Text))))
+                    {
+                        ReapplyActiveFilters();
+                    }
+
                     Dispatcher.InvokeAsync(() =>
                     {
                         if (MergePdfToolbarBtn.Visibility == Visibility.Visible)
@@ -294,13 +303,18 @@ namespace FlyShelf
                             DismissMergeState();
                         }
 
-                        // Robustness fix: Reapply active filters only when new items are added, to keep UI stable
+                        // Safety net: reapply filters deferred as well
                         ReapplyActiveFilters();
                     }, System.Windows.Threading.DispatcherPriority.Background);
                 }
                 else if (e.Action == NotifyCollectionChangedAction.Remove)
                 {
-                    // For removals, auto-dismiss merge state if needed and reapply active filters to ensure persistence
+                    // For removals, reapply filters synchronously to prevent filter loss
+                    if (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox?.Text)))
+                    {
+                        ReapplyActiveFilters();
+                    }
+
                     Dispatcher.InvokeAsync(() =>
                     {
                         if (MergePdfToolbarBtn.Visibility == Visibility.Visible)

@@ -596,7 +596,7 @@ namespace FlyShelf
                 }
                 log.Add($"  Anchor: idx={anchorIndex}  Y={anchorOffsetInViewport:F1}");
 
-                int deletedIndex = items.Count > 0 ? _viewModel.DroppedItems.IndexOf(items[0]) : -1;
+                int deletedIndex = items.Count > 0 ? ShelfListView.Items.IndexOf(items[0]) : -1;
                 log.Add($"  Deleting: idx={deletedIndex}  count={items.Count}");
 
                 // Calculate the corrected anchor index after deletion

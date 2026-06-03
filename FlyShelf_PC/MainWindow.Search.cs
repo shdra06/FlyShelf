@@ -224,9 +224,19 @@ namespace FlyShelf
 
             if (string.IsNullOrWhiteSpace(queryClean))
             {
-                view.Filter = null;
+                // CRITICAL: If a category filter is active, DON'T clear the CollectionView filter!
+                // Restore the category predicate instead. Otherwise the filter bar shows
+                // "Pinned/PDF/etc" but all items appear unfiltered.
+                if (_activeCategoryFilter != null)
+                {
+                    ReapplyActiveFilters();
+                }
+                else
+                {
+                    view.Filter = null;
+                }
                 view.CustomSort = null;
-                _viewModel.IsSearchActive = false;
+                _viewModel.IsSearchActive = _activeCategoryFilter != null;
             }
             else
             {
@@ -296,13 +306,6 @@ namespace FlyShelf
         private void ToggleFilterBar(bool show)
         {
             if (SortFilterInlineBar == null) return;
-
-            try
-            {
-                string logPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? ".", "filter_clear_debug.log");
-                System.IO.File.AppendAllText(logPath, $"[LOG] ToggleFilterBar({show}) called at {DateTime.Now:HH:mm:ss.fff}. StackTrace:\n{Environment.StackTrace}\n\n");
-            }
-            catch { }
 
             _isFilterBarActive = show;
 
@@ -442,17 +445,14 @@ namespace FlyShelf
 
         private void ClearCategoryFilter()
         {
-            try
-            {
-                string logPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? ".", "filter_clear_debug.log");
-                System.IO.File.AppendAllText(logPath, $"[LOG] ClearCategoryFilter called at {DateTime.Now:HH:mm:ss.fff}. StackTrace:\n{Environment.StackTrace}\n\n");
-            }
-            catch { }
-
             _activeCategoryFilter = null;
 
             var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
             if (view != null) view.Filter = null;
+            if (ShelfListView != null && ShelfListView.Items.CanFilter)
+            {
+                ShelfListView.Items.Filter = null;
+            }
             _viewModel.IsSearchActive = false;
 
             // Reset button color
@@ -470,45 +470,59 @@ namespace FlyShelf
 
         internal void ReapplyActiveFilters()
         {
-            var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
-            if (view == null) return;
+            try
+            {
+                var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
+                var listView = ShelfListView?.Items;
 
-            if (_activeCategoryFilter != null)
-            {
-                string category = _activeCategoryFilter;
-                view.Filter = obj =>
+                Predicate<object>? filterPredicate = null;
+
+                if (_activeCategoryFilter != null)
                 {
-                    if (obj is FlyShelf.ViewModels.ClipboardItem item)
+                    string category = _activeCategoryFilter;
+                    filterPredicate = obj =>
                     {
-                        return category switch
+                        if (obj is FlyShelf.ViewModels.ClipboardItem item)
                         {
-                            "Images" => item.IsImagePreview,
-                            "Pinned" => item.IsPinned,
-                            "PDF" => item.IsPdfPreview,
-                            "Docs" => item.IsDocPreview,
-                            _ => true
-                        };
-                    }
-                    return false;
-                };
-                view.Refresh();
-            }
-            else if (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox.Text))
-            {
-                string q = SearchTextBox.Text.Trim().ToLowerInvariant();
-                view.Filter = obj =>
+                            return category switch
+                            {
+                                "Images" => item.IsImagePreview,
+                                "Pinned" => item.IsPinned,
+                                "PDF" => item.IsPdfPreview,
+                                "Docs" => item.IsDocPreview,
+                                _ => true
+                            };
+                        }
+                        return false;
+                    };
+                }
+                else if (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox.Text))
                 {
-                    if (obj is FlyShelf.ViewModels.ClipboardItem item)
+                    string q = SearchTextBox.Text.Trim().ToLowerInvariant();
+                    filterPredicate = obj =>
                     {
-                        if (!string.IsNullOrEmpty(item.RawContent) && item.RawContent.ToLowerInvariant().Contains(q))
-                            return true;
-                        if (!string.IsNullOrEmpty(item.FileName) && item.FileName.ToLowerInvariant().Contains(q))
-                            return true;
-                    }
-                    return false;
-                };
-                view.Refresh();
+                        if (obj is FlyShelf.ViewModels.ClipboardItem item)
+                        {
+                            if (!string.IsNullOrEmpty(item.RawContent) && item.RawContent.ToLowerInvariant().Contains(q))
+                                return true;
+                            if (!string.IsNullOrEmpty(item.FileName) && item.FileName.ToLowerInvariant().Contains(q))
+                                return true;
+                        }
+                        return false;
+                    };
+                }
+
+                if (view != null)
+                {
+                    view.Filter = filterPredicate;
+                }
+
+                if (listView != null && listView.CanFilter)
+                {
+                    listView.Filter = filterPredicate;
+                }
             }
+            catch { }
         }
 
         private void OverflowPopup_Closed(object sender, EventArgs e)
