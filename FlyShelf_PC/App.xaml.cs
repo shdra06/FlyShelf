@@ -426,7 +426,7 @@ public partial class App : Application
                     POINT pt;
                     if (GetCursorPos(out pt))
                     {
-                        if (Environment.TickCount64 - _lastClipboardLaunchTime < 5000)
+                        if (Environment.TickCount64 - _lastClipboardLaunchTime < 1500)
                         {
                             _shakeCount = 0;
                             return;
@@ -460,9 +460,21 @@ public partial class App : Application
                             int deltaY = currentY - _lastShakeY;
                             double distSq = (double)(deltaX * deltaX + deltaY * deltaY);
 
-                            // Lowered displacement threshold from 60 to 45 (6.7px) for much higher responsiveness
-                            if (distSq >= 45)
+                            // Lowered displacement threshold from 45 to 25 (5.0px) for much higher responsiveness
+                            if (distSq >= 25)
                             {
+                                // Ignore strictly or primarily vertical movements (e.g. scrolling/selecting text vertically)
+                                if (Math.Abs(deltaY) > Math.Abs(deltaX) * 1.5)
+                                {
+                                    _shakeCount = 0;
+                                    _lastSigDirX = 0;
+                                    _lastSigDirY = 0;
+                                    _lastShakeX = currentX;
+                                    _lastShakeY = currentY;
+                                    _lastShakeTime = currentTime;
+                                    return;
+                                }
+
                                 bool reversed = false;
 
                                 // Dot product of current direction vector and last direction vector.
@@ -565,6 +577,17 @@ public partial class App : Application
             }
         }
         catch { }
+
+        // Spawn offset: position window completely to the right side of the cursor and lower it
+        double safeWidth = 260;
+        if (_mainWinInstance?.DataContext is ViewModels.FlyShelfViewModel vm)
+        {
+            safeWidth = vm.CurrentFlyShelfWidth;
+        }
+        if (safeWidth <= 0) safeWidth = 260;
+
+        logicalX = logicalX + (safeWidth / 2) + 50; // Entirely to the right of the cursor
+        logicalY += 100; // Lowered by 100 logical pixels
 
         _mainWinInstance.ShowNearPosition(logicalX, logicalY, mode, isPersistent, stealFocus);
     }

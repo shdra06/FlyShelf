@@ -702,7 +702,7 @@ namespace FlyShelf
 
             if (SearchToggleBtn != null)
             {
-                SearchToggleBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
+                SearchToggleBtn.Visibility = Visibility.Visible;
             }
 
             if (OpenSettingsBtn != null)
@@ -712,22 +712,27 @@ namespace FlyShelf
 
             if (NotesToggleBtn != null)
             {
-                NotesToggleBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
+                NotesToggleBtn.Visibility = (_isTodoActive || !isMini) ? Visibility.Visible : Visibility.Collapsed;
             }
 
             if (TodoToggleBtn != null)
             {
-                TodoToggleBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
+                TodoToggleBtn.Visibility = (_isTodoActive || !isMini) ? Visibility.Visible : Visibility.Collapsed;
             }
 
             if (TodoStopwatchBtn != null)
             {
-                TodoStopwatchBtn.Visibility = (!isMini && _isTodoActive) ? Visibility.Visible : Visibility.Collapsed;
+                TodoStopwatchBtn.Visibility = _isTodoActive ? Visibility.Visible : Visibility.Collapsed;
             }
 
             if (SortFilterBtn != null)
             {
-                SortFilterBtn.Visibility = (isMini || _isTodoActive) ? Visibility.Collapsed : Visibility.Visible;
+                SortFilterBtn.Visibility = _isTodoActive ? Visibility.Collapsed : Visibility.Visible;
+            }
+
+            if (MoreBtn != null)
+            {
+                MoreBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
             }
 
             if (ShelfListView != null)

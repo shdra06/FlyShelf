@@ -379,7 +379,7 @@
                      </ui:Button>
 
                       <!-- More Options Button (always visible) -->
-                      <ui:Button x:Name="MoreBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="MoreBtn_Click" ToolTip="More Options" Margin="0,0,6,0">
+                      <ui:Button x:Name="MoreBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="MoreBtn_Click" ToolTip="More Options" Margin="0,0,6,0" Visibility="Collapsed">
                           <ui:Button.Icon><ui:SymbolIcon Symbol="MoreHorizontal24" /></ui:Button.Icon>
                       </ui:Button>
 
