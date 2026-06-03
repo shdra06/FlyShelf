@@ -92,6 +92,17 @@ namespace FlyShelf.Classes
                             if (root.TryGetProperty("version", out var ver))
                                 peer.Version = ver.GetString() ?? "";
 
+                            // Extract device ID for loopback detection
+                            if (root.TryGetProperty("deviceId", out var idProp))
+                            {
+                                string returnedId = idProp.GetString() ?? "";
+                                if (returnedId == _myDeviceId)
+                                {
+                                    Logger.LogAction("PEER", $"🔌 Loopback connection detected (health returned our own DeviceId '{_myDeviceId}') — rejecting handshake.");
+                                    return false;
+                                }
+                            }
+
                             // Extract deviceType
                             if (root.TryGetProperty("deviceType", out var dtProp))
                                 peer.DeviceType = dtProp.GetString() ?? "";

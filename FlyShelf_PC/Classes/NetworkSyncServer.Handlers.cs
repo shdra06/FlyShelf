@@ -134,6 +134,7 @@ namespace FlyShelf.Classes
             string text;
             string sourceDevice;
             string itemType = null;
+            string sourceDeviceId = req.Headers["X-Source-DeviceId"] ?? "";
             using (var reader = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8))
             {
                 text = await reader.ReadToEndAsync();
@@ -160,11 +161,25 @@ namespace FlyShelf.Classes
                     {
                         sourceDevice = srcProp.GetString() ?? sourceDevice;
                     }
+                    if (root.TryGetProperty("sourceDeviceId", out var sdidProp))
+                    {
+                        sourceDeviceId = sdidProp.GetString() ?? sourceDeviceId;
+                    }
                 }
                 catch
                 {
                     // Not valid JSON — treat entire body as plain text (legacy sender)
                 }
+            }
+
+            // Loopback check
+            if (!string.IsNullOrEmpty(sourceDeviceId) && sourceDeviceId == SettingsManager.Current.DeviceId)
+            {
+                Logger.LogAction("SYNC_GATE", "Ignored loopback sync_text from self");
+                res.StatusCode = 200;
+                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"loopback_ignored\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                res.Close();
+                return;
             }
 
             // Respond instantly — don't make Android wait for UI processing
@@ -276,6 +291,17 @@ namespace FlyShelf.Classes
 
         private async Task HandleFileUpload(HttpListenerRequest req, HttpListenerResponse res)
         {
+            // ── Loopback/Echo Prevention Gate ──
+            string sourceDeviceId = req.Headers["X-Source-DeviceId"] ?? req.QueryString["sourceDeviceId"] ?? "";
+            if (!string.IsNullOrEmpty(sourceDeviceId) && sourceDeviceId == SettingsManager.Current.DeviceId)
+            {
+                Logger.LogAction("SYNC_GATE", "Ignored loopback sync_file from self");
+                res.StatusCode = 200;
+                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"loopback_ignored\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                res.Close();
+                return;
+            }
+
             // ── Incoming Sync Gate ──
             if (!SettingsManager.Current.EnableIncomingSync)
             {
@@ -488,6 +514,17 @@ namespace FlyShelf.Classes
 
         private async Task HandleArchiveUpload(HttpListenerRequest req, HttpListenerResponse res)
         {
+            // ── Loopback/Echo Prevention Gate ──
+            string sourceDeviceId = req.Headers["X-Source-DeviceId"] ?? req.QueryString["sourceDeviceId"] ?? "";
+            if (!string.IsNullOrEmpty(sourceDeviceId) && sourceDeviceId == SettingsManager.Current.DeviceId)
+            {
+                Logger.LogAction("SYNC_GATE", "Ignored loopback archive_upload from self");
+                res.StatusCode = 200;
+                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"loopback_ignored\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                res.Close();
+                return;
+            }
+
             // ── Incoming Sync Gate ──
             if (!SettingsManager.Current.EnableIncomingSync)
             {
@@ -624,6 +661,17 @@ namespace FlyShelf.Classes
         // ─── Relay Upload: Android uploads file → PC saves + pushes Cloudflare URL to Firebase ───
         private async Task HandleRelayUpload(HttpListenerRequest req, HttpListenerResponse res)
         {
+            // ── Loopback/Echo Prevention Gate ──
+            string sourceDeviceId = req.Headers["X-Source-DeviceId"] ?? "";
+            if (!string.IsNullOrEmpty(sourceDeviceId) && sourceDeviceId == SettingsManager.Current.DeviceId)
+            {
+                Logger.LogAction("SYNC_GATE", "Ignored loopback relay_upload from self");
+                res.StatusCode = 200;
+                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"loopback_ignored\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                res.Close();
+                return;
+            }
+
             // ── Incoming Sync Gate ──
             if (!SettingsManager.Current.EnableIncomingSync)
             {

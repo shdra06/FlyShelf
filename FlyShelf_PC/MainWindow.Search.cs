@@ -297,6 +297,13 @@ namespace FlyShelf
         {
             if (SortFilterInlineBar == null) return;
 
+            try
+            {
+                string logPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? ".", "filter_clear_debug.log");
+                System.IO.File.AppendAllText(logPath, $"[LOG] ToggleFilterBar({show}) called at {DateTime.Now:HH:mm:ss.fff}. StackTrace:\n{Environment.StackTrace}\n\n");
+            }
+            catch { }
+
             _isFilterBarActive = show;
 
             if (show)
@@ -435,6 +442,13 @@ namespace FlyShelf
 
         private void ClearCategoryFilter()
         {
+            try
+            {
+                string logPath = System.IO.Path.Combine(System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? ".", "filter_clear_debug.log");
+                System.IO.File.AppendAllText(logPath, $"[LOG] ClearCategoryFilter called at {DateTime.Now:HH:mm:ss.fff}. StackTrace:\n{Environment.StackTrace}\n\n");
+            }
+            catch { }
+
             _activeCategoryFilter = null;
 
             var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);

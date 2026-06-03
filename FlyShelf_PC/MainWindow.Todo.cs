@@ -68,6 +68,8 @@ namespace FlyShelf
             TodoToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Clipboard24 };
             TodoToggleBtn.ToolTip = "Back to Clipboard";
 
+            UpdateToolbarButtonsVisibility();
+
             // Animate in
             var slideAnim = new DoubleAnimation(-12, 0, new Duration(TimeSpan.FromMilliseconds(200)))
             {
@@ -105,6 +107,7 @@ namespace FlyShelf
             Title = "FlyShelf";
 
             UpdateWindowActivationStyle();
+            UpdateToolbarButtonsVisibility();
 
             if (immediate)
             {
@@ -408,6 +411,12 @@ namespace FlyShelf
                     AddNewTodoItemAndFocus();
                 }
             }
+        }
+
+        private void TodoStopwatch_Click(object sender, RoutedEventArgs e)
+        {
+            var tw = new FlyShelf.Windows.TimerWindow("5m");
+            tw.Show();
         }
     }
 }

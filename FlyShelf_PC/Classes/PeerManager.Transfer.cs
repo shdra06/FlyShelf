@@ -508,6 +508,7 @@ namespace FlyShelf.Classes
             finReq.Headers.TryAddWithoutValidation("X-File-Name", Uri.EscapeDataString(fileName));
             finReq.Headers.TryAddWithoutValidation("X-Total-Chunks", totalChunks.ToString());
             finReq.Headers.TryAddWithoutValidation("X-Source-Device", SettingsManager.Current.DeviceName ?? "");
+            finReq.Headers.TryAddWithoutValidation("X-Source-DeviceId", _myDeviceId);
             finReq.Headers.TryAddWithoutValidation("X-Item-Type", itemType);
             finReq.Content = new StringContent("", Encoding.UTF8, "application/json");
 

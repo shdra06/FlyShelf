@@ -368,6 +368,16 @@
                          <ui:Button.Icon><ui:FontIcon Glyph="&#xE71C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" /></ui:Button.Icon>
                      </ui:Button>
 
+                     <!-- Stopwatch Button (only visible in To-Do list mode) -->
+                     <ui:Button x:Name="TodoStopwatchBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="TodoStopwatch_Click" ToolTip="Stopwatch Timer" Margin="0,0,6,0" Visibility="Collapsed">
+                         <ui:Button.Resources>
+                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
+                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
+                             <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#C4B5FD"/>
+                         </ui:Button.Resources>
+                         <ui:Button.Icon><ui:SymbolIcon Symbol="Timer24" /></ui:Button.Icon>
+                     </ui:Button>
+
                       <!-- More Options Button (always visible) -->
                       <ui:Button x:Name="MoreBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="MoreBtn_Click" ToolTip="More Options" Margin="0,0,6,0">
                           <ui:Button.Icon><ui:SymbolIcon Symbol="MoreHorizontal24" /></ui:Button.Icon>
@@ -2525,8 +2535,8 @@
                         <ItemsControl x:Name="TodoListItemsControl">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <!-- Todo Card -->
-                                    <Border x:Name="TodoCard" CornerRadius="8" Margin="6,0,6,4" Padding="0" ClipToBounds="True"
+                                    <!-- Todo Card (expanded and roomier by default) -->
+                                    <Border x:Name="TodoCard" CornerRadius="8" Margin="6,0,6,5" Padding="0" ClipToBounds="True" MinHeight="52"
                                             BorderThickness="1" BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}"
                                             Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}">
                                         <Border.ContextMenu>
@@ -2540,7 +2550,7 @@
                                                 </MenuItem>
                                             </ContextMenu>
                                         </Border.ContextMenu>
-                                        <Grid Margin="8,6,6,6">
+                                        <Grid Margin="10,8,8,8">
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
@@ -2626,11 +2636,32 @@
                                                 </TextBlock.Style>
                                             </TextBlock>
 
-                                            <!-- Time showing when the task was assigned/created -->
-                                            <TextBlock Grid.Column="2" Text="{Binding CreatedAtDisplay}" FontSize="10" 
-                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
-                                                       VerticalAlignment="Center" Margin="6,0,8,0" IsHitTestVisible="False" Opacity="0.8"/>
-
+                                            <!-- Time & Delete Button (vertically stacked, stretched delete button) -->
+                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="8,0,4,0" HorizontalAlignment="Right" MinWidth="54">
+                                                <!-- Time showing when the task was assigned/created -->
+                                                <TextBlock Text="{Binding CreatedAtDisplay}" FontSize="9.5" 
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
+                                                           HorizontalAlignment="Center" IsHitTestVisible="False" Opacity="0.8"/>
+                                                
+                                                <!-- Delete button -->
+                                                <Border x:Name="TodoItemDeleteBtn" CornerRadius="5" Cursor="Hand" Margin="0,5,0,0" Padding="0,3.5"
+                                                        MouseLeftButtonDown="TodoItemDelete_Click" ToolTip="Delete Task">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="#1AEF4444"/>
+                                                            <Setter Property="BorderBrush" Value="#30EF4444"/>
+                                                            <Setter Property="BorderThickness" Value="1"/>
+                                                            <Style.Triggers>
+                                                                <Trigger Property="IsMouseOver" Value="True">
+                                                                    <Setter Property="Background" Value="#30EF4444"/>
+                                                                    <Setter Property="BorderBrush" Value="#60EF4444"/>
+                                                                </Trigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <ui:SymbolIcon Symbol="Delete16" Foreground="#EF4444" FontSize="11" HorizontalAlignment="Center"/>
+                                                </Border>
+                                            </StackPanel>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>

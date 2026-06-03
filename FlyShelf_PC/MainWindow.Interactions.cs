@@ -699,12 +699,12 @@ namespace FlyShelf
         {
             if (_viewModel == null) return;
             bool isMini = _viewModel.CurrentMode == 0;
-            
+
             if (SearchToggleBtn != null)
             {
-                SearchToggleBtn.Visibility = Visibility.Visible;
+                SearchToggleBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
             }
-            
+
             if (OpenSettingsBtn != null)
             {
                 OpenSettingsBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
@@ -718,6 +718,16 @@ namespace FlyShelf
             if (TodoToggleBtn != null)
             {
                 TodoToggleBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
+            }
+
+            if (TodoStopwatchBtn != null)
+            {
+                TodoStopwatchBtn.Visibility = (!isMini && _isTodoActive) ? Visibility.Visible : Visibility.Collapsed;
+            }
+
+            if (SortFilterBtn != null)
+            {
+                SortFilterBtn.Visibility = (isMini || _isTodoActive) ? Visibility.Collapsed : Visibility.Visible;
             }
 
             if (ShelfListView != null)

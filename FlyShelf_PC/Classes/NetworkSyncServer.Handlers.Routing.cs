@@ -186,6 +186,13 @@ namespace FlyShelf.Classes
                         return;
                     }
                     string peerDeviceId = req.Headers["X-Device-Id"] ?? req.QueryString["deviceId"] ?? "unknown";
+                    if (peerDeviceId == SettingsManager.Current.DeviceId)
+                    {
+                        Logger.LogAction("WS", $"⛔ Loopback WebSocket connection rejected from self ({peerDeviceId})");
+                        res.StatusCode = 403;
+                        res.Close();
+                        return;
+                    }
                     Logger.LogAction("WS", $"✅ Peer WebSocket accepted from {peerDeviceId}");
                     var wsContext = await context.AcceptWebSocketAsync(null);
                     _ = Task.Run(() => HandlePeerWebSocket(wsContext.WebSocket, peerDeviceId));
@@ -388,6 +395,12 @@ namespace FlyShelf.Classes
 
                                 if (envelopeType == "SyncText")
                                 {
+                                    string sourceDeviceId = root.TryGetProperty("sourceDeviceId", out var idProp) ? idProp.GetString() ?? "" : "";
+                                    if (sourceDeviceId == SettingsManager.Current.DeviceId)
+                                    {
+                                        Logger.LogAction("WS", "Ignored loopback WS SyncText from self");
+                                        continue;
+                                    }
                                     string itemType = root.TryGetProperty("itemType", out var itProp) ? itProp.GetString() : "Text";
                                     string title = root.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : "";
                                     string data = root.TryGetProperty("data", out var dataProp) ? dataProp.GetString() : "";
@@ -410,6 +423,24 @@ namespace FlyShelf.Classes
                                     string itemType = root.TryGetProperty("itemType", out var itProp) ? itProp.GetString() : "File";
                                     string title = root.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : "";
                                     string sourceDeviceName = root.TryGetProperty("sourceDeviceName", out var nameProp) ? nameProp.GetString() : "Remote PC";
+                                    string sourceDeviceId = root.TryGetProperty("sourceDeviceId", out var idProp) ? idProp.GetString() ?? "" : "";
+
+                                    // Loopback check
+                                    if (sourceDeviceId == SettingsManager.Current.DeviceId)
+                                    {
+                                        Logger.LogAction("WS", $"Ignored loopback WS SyncFileStart from self: {fileName}");
+                                        // Drain the WebSocket bytes to keep it alive
+                                        long bytesSkipped = 0;
+                                        while (bytesSkipped < fileSize)
+                                        {
+                                            long remain = fileSize - bytesSkipped;
+                                            int toRead = (int)Math.Min(buffer.Length, remain);
+                                            var skipResult = await ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, toRead), CancellationToken.None);
+                                            if (skipResult.MessageType == WebSocketMessageType.Close) return;
+                                            bytesSkipped += skipResult.Count;
+                                        }
+                                        continue;
+                                    }
 
                                     Logger.LogAction("WS", $"Received SyncFileStart: {fileName} ({fileSize} bytes) from {sourceDeviceName}");
 
