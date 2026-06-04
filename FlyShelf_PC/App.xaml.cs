@@ -441,7 +441,7 @@ public partial class App : Application
                             _shakeStartY = currentY;
                         }
 
-                        if (currentTime - _lastShakeTime > 650) // Increased turn reset to 650ms for slower/natural reversals
+                        if (currentTime - _lastShakeTime > 900) // Increased turn reset to 900ms for slower/natural/regular interval shaking
                         {
                             if (_shakeCount > 0)
                             {
@@ -460,21 +460,9 @@ public partial class App : Application
                             int deltaY = currentY - _lastShakeY;
                             double distSq = (double)(deltaX * deltaX + deltaY * deltaY);
 
-                            // Lowered displacement threshold from 45 to 25 (5.0px) for much higher responsiveness
-                            if (distSq >= 25)
+                            // Lowered displacement threshold to 16 (4.0px) for much higher responsiveness (including diagonal shakes)
+                            if (distSq >= 16)
                             {
-                                // Ignore strictly or primarily vertical movements (e.g. scrolling/selecting text vertically)
-                                if (Math.Abs(deltaY) > Math.Abs(deltaX) * 1.5)
-                                {
-                                    _shakeCount = 0;
-                                    _lastSigDirX = 0;
-                                    _lastSigDirY = 0;
-                                    _lastShakeX = currentX;
-                                    _lastShakeY = currentY;
-                                    _lastShakeTime = currentTime;
-                                    return;
-                                }
-
                                 bool reversed = false;
 
                                 // Dot product of current direction vector and last direction vector.
