@@ -19,7 +19,7 @@ export const NetworkClock = {
 
   /** Returns NTP-corrected current time in milliseconds */
   now(): number {
-    return Date.now() + clockOffsetMs;
+    return Math.round(Date.now() + clockOffsetMs);
   },
 
   /** Returns NTP-corrected current Date object */

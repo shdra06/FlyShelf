@@ -1,41 +1,41 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <defs>
-    <!-- Background Gradient (Classic Dark Slate) -->
+    <!-- Background Gradient (Royal Midnight Navy) -->
     <linearGradient id="bgGrad" x1="512" y1="0" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#1F2934"/>
-      <stop offset="100%" stop-color="#10151B"/>
+      <stop offset="0%" stop-color="#141B2E"/>
+      <stop offset="100%" stop-color="#0B0E1B"/>
     </linearGradient>
 
     <!-- Top Wing Lower Leaf -->
     <linearGradient id="topLower" x1="300" y1="330" x2="640" y2="330" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#2E9BD8"/>
-      <stop offset="100%" stop-color="#43D5E2"/>
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#1D4ED8"/>
     </linearGradient>
 
     <!-- Top Wing Upper Leaf -->
     <linearGradient id="topUpper" x1="260" y1="240" x2="750" y2="240" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#50C6E3"/>
-      <stop offset="50%" stop-color="#74E4E9"/>
-      <stop offset="100%" stop-color="#91F4F0"/>
+      <stop offset="0%" stop-color="#DDF3FF"/>
+      <stop offset="50%" stop-color="#A3DAFF"/>
+      <stop offset="100%" stop-color="#54A3FF"/>
     </linearGradient>
 
     <!-- Middle Wing Lower Leaf -->
     <linearGradient id="midLower" x1="290" y1="550" x2="560" y2="550" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#1E4DCB"/>
-      <stop offset="100%" stop-color="#2578DE"/>
+      <stop offset="0%" stop-color="#1E3A8A"/>
+      <stop offset="100%" stop-color="#172554"/>
     </linearGradient>
 
     <!-- Middle Wing Upper Leaf -->
     <linearGradient id="midUpper" x1="300" y1="460" x2="660" y2="460" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#3B8FE7"/>
-      <stop offset="100%" stop-color="#48B9F3"/>
+      <stop offset="0%" stop-color="#60A5FA"/>
+      <stop offset="100%" stop-color="#2563EB"/>
     </linearGradient>
 
     <!-- Dot Gradient -->
     <linearGradient id="dotGrad" x1="380" y1="680" x2="274" y2="810" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#2674DD"/>
-      <stop offset="100%" stop-color="#1E4CCF"/>
+      <stop offset="0%" stop-color="#3B82F6"/>
+      <stop offset="100%" stop-color="#1E3A8A"/>
     </linearGradient>
   </defs>
 

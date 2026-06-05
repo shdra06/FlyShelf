@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.IO;
+using FlyShelf.Classes;
 
 namespace FlyShelf.Windows
 {

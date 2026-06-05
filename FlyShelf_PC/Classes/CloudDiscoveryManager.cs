@@ -371,7 +371,7 @@ namespace FlyShelf.Classes
                                     if (!remaining.Contains(devId)) continue;
 
                                     bool isOnline = dev.TryGetProperty("IsOnline", out var io) && io.GetBoolean();
-                                    long ts = dev.TryGetProperty("Timestamp", out var tsv) ? tsv.GetInt64() : 0;
+                                    long ts = dev.TryGetProperty("Timestamp", out var tsv) ? (long)tsv.GetDouble() : 0;
                                     long offlineFor = now - ts;
 
                                     // Only auto-complete if offline for more than 1 hour

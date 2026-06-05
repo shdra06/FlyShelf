@@ -98,4 +98,5 @@ FlyShelf_Payment/functions/.env
 FlyShelf_Payment/functions/node_modules/
 
 # ─── Microsoft Store Build Output ─────────────────────────────
-MicrosoftBuild/Output/
+MicrosoftBuild/Output/
+FlyShelf_Mobile_All.apk

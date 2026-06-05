@@ -700,7 +700,7 @@
         </Canvas>
 
         <ListView Name="ShelfListView" Grid.Row="1" ItemsSource="{Binding DroppedItems}" Background="#01000000" BorderThickness="0" Margin="12,0,2,12" Padding="0,0,0,250"
-                  Focusable="True" KeyboardNavigation.DirectionalNavigation="Contained"
+                  Focusable="True" KeyboardNavigation.DirectionalNavigation="Contained" FocusVisualStyle="{x:Null}"
                   UseLayoutRounding="True" SnapsToDevicePixels="True"
                   TextOptions.TextFormattingMode="Display"
                   TextOptions.TextRenderingMode="ClearType"

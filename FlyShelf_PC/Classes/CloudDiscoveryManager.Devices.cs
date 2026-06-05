@@ -149,7 +149,7 @@ namespace FlyShelf.Classes
                                 // TTL check: treat devices with heartbeat older than 2 minutes as offline
                                 if (online && prop.Value.TryGetProperty("Timestamp", out var ts))
                                 {
-                                    long deviceTs = ts.GetInt64();
+                                    long deviceTs = (long)ts.GetDouble();
                                     long nowMs = NetworkClock.UtcNowMs;
                                     if (nowMs - deviceTs > 120_000) online = false;
                                 }
@@ -200,7 +200,7 @@ namespace FlyShelf.Classes
                                 // Only delete if genuinely stale (no heartbeat in 24 hours)
                                 long deviceTs = 0;
                                 if (prop.Value.TryGetProperty("Timestamp", out var ts))
-                                    deviceTs = ts.GetInt64();
+                                    deviceTs = (long)ts.GetDouble();
 
                                 if (deviceTs > 0 && (nowMs - deviceTs) < STALE_THRESHOLD_MS)
                                 {
