@@ -315,7 +315,7 @@ namespace FlyShelf.Classes
                         ? $"{fileInfo.Length / 1_073_741_824.0:F1} GB"
                         : $"{fileInfo.Length / 1_048_576.0:F1} MB";
 
-                    try { MainWindow.SetWritingClipboard(true); System.Windows.Clipboard.SetFileDropList(new System.Collections.Specialized.StringCollection { filePath }); await System.Threading.Tasks.Task.Delay(100); } catch { } finally { MainWindow.SetWritingClipboard(false); }
+                    ClipboardHelper.SafeSetFileDropList(new System.Collections.Specialized.StringCollection { filePath }, suppressEcho: true, echoDelayMs: 100);
                     FlyShelf.Windows.ToastWindow.ShowToast($"✅ {cloudItem.Title} ({sizeStr}) from {cloudItem.SourceDeviceName}");
 
                     var clip = new ClipboardItem(filePath);

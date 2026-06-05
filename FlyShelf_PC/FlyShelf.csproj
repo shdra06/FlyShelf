@@ -59,6 +59,7 @@
 
     <PackageReference Include="MicaWPF" Version="6.3.2" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
     <PackageReference Include="PDFsharp" Version="6.2.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.8" />
     <PackageReference Include="WPF-UI" Version="4.2.0" />
@@ -66,6 +67,10 @@
     <PackageReference Include="XamlAnimatedGif" Version="2.3.0" />
     <PackageReference Include="ZXing.Net.Bindings.Windows.Compatibility" Version="0.16.14" />
 
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Models\**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

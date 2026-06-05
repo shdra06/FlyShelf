@@ -1047,7 +1047,10 @@ namespace FlyShelf
                 }
                 else if (item.SmartActionType == "CopyQRText")
                 {
-                    try { System.Windows.Clipboard.SetText(item.RawContent); FlyShelf.Windows.ToastWindow.ShowToast("QR Text Copied!"); } catch { }
+                    if (Classes.ClipboardHelper.SafeSetText(item.RawContent))
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowToast("QR Text Copied!");
+                    }
                 }
 
             }
@@ -1081,20 +1084,7 @@ namespace FlyShelf
                             item.FileName = cleanUrl;
                             
                             // 1. Write the clean URL to the OS system clipboard safely
-                            try
-                            {
-                                SetWritingClipboard(true);
-                                System.Windows.Clipboard.SetText(cleanUrl);
-                            }
-                            catch { }
-                            finally
-                            {
-                                _ = System.Threading.Tasks.Task.Run(async () =>
-                                {
-                                    await System.Threading.Tasks.Task.Delay(500);
-                                    SetWritingClipboard(false);
-                                });
-                            }
+                            Classes.ClipboardHelper.SafeSetText(cleanUrl, suppressEcho: true, echoDelayMs: 500);
 
                             // 2. Persist updated history to disk
                             _viewModel.PersistHistoryPublic();

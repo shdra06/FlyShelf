@@ -95,7 +95,7 @@ namespace FlyShelf.Windows
             {
                 if (string.IsNullOrEmpty(activeUrl))
                 {
-                    Clipboard.SetText($"âš  Device '{deviceName}' has no active URL â€” cannot fetch remote data.\nDevice may be offline. Try Force Sync first.");
+                    ClipboardHelper.SafeSetText($"âš  Device '{deviceName}' has no active URL â€” cannot fetch remote data.\nDevice may be offline. Try Force Sync first.");
                     ToastWindow.ShowToast($"âš  {deviceName} is offline");
                     btn.Content = "âŒ Offline";
                     await Task.Delay(1500);
@@ -255,11 +255,11 @@ namespace FlyShelf.Windows
                         }
                         sb.AppendLine($"\nâ€” {count} log entries (health noise filtered)");
                     }
-                    else { sb.AppendLine($"  âŒ HTTP {logResp.StatusCode}: {logJson}"); }
+                    else { sb.AppendLine($"  â Œ HTTP {logResp.StatusCode}: {logJson}"); }
                 }
-                catch (Exception ex) { sb.AppendLine($"  âŒ Failed to fetch logs: {ex.Message}"); }
+                catch (Exception ex) { sb.AppendLine($"  â Œ Failed to fetch logs: {ex.Message}"); }
 
-                Clipboard.SetText(sb.ToString());
+                ClipboardHelper.SafeSetText(sb.ToString());
                 ToastWindow.ShowToast($"ðŸ“‹ Full diagnostic from {deviceName} copied!");
                 btn.Content = "âœ… Copied";
                 await Task.Delay(1500);
@@ -331,7 +331,7 @@ namespace FlyShelf.Windows
                     $"Is Admin: {new System.Security.Principal.WindowsPrincipal(System.Security.Principal.WindowsIdentity.GetCurrent()).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator)}\n" +
                     $"Time: {DateTime.Now:yyyy-MM-dd HH:mm:ss}\n" +
                     $"======================================\n\n{diagnostics}";
-                Clipboard.SetText(systemInfo);
+                ClipboardHelper.SafeSetText(systemInfo);
                 ToastWindow.ShowToast("ðŸ“‹ Server diagnostics copied â€” share this with the developer!");
             }
             catch (Exception ex) { ToastWindow.ShowToast($"âŒ Failed: {ex.Message}"); }

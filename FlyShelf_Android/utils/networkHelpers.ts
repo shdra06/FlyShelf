@@ -62,6 +62,10 @@ export const decryptDevice = async (device: any): Promise<any> => {
         const dec = await aesDecrypt(decrypted.Url);
         if (dec) decrypted.Url = dec;
       }
+      if (decrypted.TlsUrl) {
+        const dec = await aesDecrypt(decrypted.TlsUrl);
+        if (dec) decrypted.TlsUrl = dec;
+      }
       decrypted.UrlsEncrypted = false; // Decrypted successfully
     } catch {}
     return decrypted;

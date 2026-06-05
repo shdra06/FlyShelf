@@ -296,8 +296,10 @@ namespace FlyShelf.Windows
                 string globalUrl = _viewModel.LocalServer?.GlobalUrl ?? "";
                 string pin = SettingsManager.Current.WebClientPinToken;
                 string payload = DevicePairingManager.BuildQRPayload(localUrl, globalUrl, pin);
-                System.Windows.Clipboard.SetText(payload);
-                Windows.ToastWindow.ShowToast("Pairing info copied! 📋");
+                if (ClipboardHelper.SafeSetText(payload))
+                {
+                    Windows.ToastWindow.ShowToast("Pairing info copied! 📋");
+                }
             }
             catch { }
         }
@@ -394,8 +396,14 @@ namespace FlyShelf.Windows
         {
             if (sender is FrameworkElement fe && fe.DataContext is ViewModels.ClipboardItem item && item.HasDetectedColor)
             {
-                try { System.Windows.Clipboard.SetText(Classes.ColorHelper.ToHex(item.ColorR, item.ColorG, item.ColorB)); Windows.ToastWindow.ShowToast($"Hex copied: {item.DetectedColor} 🎨"); }
-                catch { Windows.ToastWindow.ShowToast("Clipboard busy — try again"); }
+                if (ClipboardHelper.SafeSetText(Classes.ColorHelper.ToHex(item.ColorR, item.ColorG, item.ColorB)))
+                {
+                    Windows.ToastWindow.ShowToast($"Hex copied: {item.DetectedColor} 🎨");
+                }
+                else
+                {
+                    Windows.ToastWindow.ShowToast("Clipboard busy — try again");
+                }
             }
         }
 
@@ -404,8 +412,14 @@ namespace FlyShelf.Windows
             if (sender is FrameworkElement fe && fe.DataContext is ViewModels.ClipboardItem item && item.HasDetectedColor)
             {
                 string rgb = Classes.ColorHelper.ToRgb(item.ColorR, item.ColorG, item.ColorB);
-                try { System.Windows.Clipboard.SetText(rgb); Windows.ToastWindow.ShowToast($"RGB copied: {rgb} 🎨"); }
-                catch { Windows.ToastWindow.ShowToast("Clipboard busy — try again"); }
+                if (ClipboardHelper.SafeSetText(rgb))
+                {
+                    Windows.ToastWindow.ShowToast($"RGB copied: {rgb} 🎨");
+                }
+                else
+                {
+                    Windows.ToastWindow.ShowToast("Clipboard busy — try again");
+                }
             }
         }
 
@@ -414,8 +428,14 @@ namespace FlyShelf.Windows
             if (sender is FrameworkElement fe && fe.DataContext is ViewModels.ClipboardItem item && item.HasDetectedColor)
             {
                 string hsl = Classes.ColorHelper.ToHsl(item.ColorR, item.ColorG, item.ColorB);
-                try { System.Windows.Clipboard.SetText(hsl); Windows.ToastWindow.ShowToast($"HSL copied: {hsl} 🎨"); }
-                catch { Windows.ToastWindow.ShowToast("Clipboard busy — try again"); }
+                if (ClipboardHelper.SafeSetText(hsl))
+                {
+                    Windows.ToastWindow.ShowToast($"HSL copied: {hsl} 🎨");
+                }
+                else
+                {
+                    Windows.ToastWindow.ShowToast("Clipboard busy — try again");
+                }
             }
         }
 

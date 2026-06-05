@@ -274,14 +274,7 @@ namespace FlyShelf.Classes
                 _viewModel.MarkAsCloudSourced(txtFp);
                 
                 // Suppress clipboard monitor during our write
-                try 
-                { 
-                    MainWindow.SetWritingClipboard(true);
-                    System.Windows.Clipboard.SetText(capturedText);
-                    await System.Threading.Tasks.Task.Delay(500);
-                } 
-                catch { }
-                finally { MainWindow.SetWritingClipboard(false); }
+                ClipboardHelper.SafeSetText(capturedText, suppressEcho: true, echoDelayMs: 500);
                 
                 FlyShelf.Windows.ToastWindow.ShowToast($"Text from {capturedSource} via {capturedTransport.transport}! 📱");
                 // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
@@ -620,7 +613,7 @@ namespace FlyShelf.Classes
                         {
                             var fileList = new System.Collections.Specialized.StringCollection();
                             lock (batchList) { foreach (var f in batchList) fileList.Add(f); }
-                            System.Windows.Clipboard.SetFileDropList(fileList);
+                            ClipboardHelper.SafeSetFileDropList(fileList);
                             FlyShelf.Windows.ToastWindow.ShowToast($"📋 {rawName} copied to clipboard");
                             
                             // Insert proper file entry into FlyShelf (clickable → opens in default app)
@@ -769,27 +762,35 @@ namespace FlyShelf.Classes
                         RelayedVia = deviceName
                     };
 
-                    string json = System.Text.Json.JsonSerializer.Serialize(payload);
-                    var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-                    var fbRes = await _httpClient.PostAsync(
-                        await FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/clipboard.json"), content);
-
-                    if (fbRes.IsSuccessStatusCode)
+                    string pairingKey = DevicePairingManager.EnsurePairingKey();
+                    if (!string.IsNullOrEmpty(pairingKey))
                     {
-                        string fbBody = await fbRes.Content.ReadAsStringAsync();
-                        try
+                        string json = System.Text.Json.JsonSerializer.Serialize(payload);
+                        var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+                        var fbRes = await _httpClient.PostAsync(
+                            await FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/clipboard/{pairingKey}.json"), content);
+
+                        if (fbRes.IsSuccessStatusCode)
                         {
-                            var fbObj = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(fbBody);
-                            if (fbObj != null && fbObj.TryGetValue("name", out string? entryKey) && !string.IsNullOrEmpty(entryKey))
+                            string fbBody = await fbRes.Content.ReadAsStringAsync();
+                            try
                             {
-                                _ = Task.Run(async () =>
+                                var fbObj = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(fbBody);
+                                if (fbObj != null && fbObj.TryGetValue("name", out string? entryKey) && !string.IsNullOrEmpty(entryKey))
                                 {
-                                    await Task.Delay(24 * 60 * 60_000);
-                                    try { await _httpClient.DeleteAsync(await FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/clipboard/{entryKey}.json")); } catch { }
-                                });
+                                    _ = Task.Run(async () =>
+                                    {
+                                        await Task.Delay(24 * 60 * 60_000);
+                                        try { await _httpClient.DeleteAsync(await FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/clipboard/{pairingKey}/{entryKey}.json")); } catch { }
+                                    });
+                                }
                             }
+                            catch (Exception ex) { Logger.LogAction("RELAY", $"Firebase response parse failed: {ex.Message}"); }
                         }
-                        catch (Exception ex) { Logger.LogAction("RELAY", $"Firebase response parse failed: {ex.Message}"); }
+                    }
+                    else
+                    {
+                        Logger.LogAction("RELAY", "Cannot push relay to Firebase: pairingKey is empty.");
                     }
                 }
 

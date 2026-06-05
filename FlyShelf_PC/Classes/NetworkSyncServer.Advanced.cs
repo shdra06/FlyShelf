@@ -14,6 +14,8 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using FlyShelf.ViewModels;
+using PdfSharp.Pdf;
+using PdfSharp.Pdf.IO;
 
 namespace FlyShelf.Classes
 {
@@ -200,7 +202,7 @@ namespace FlyShelf.Classes
                     try
                     {
                         var fileList = new System.Collections.Specialized.StringCollection { finalPath };
-                        System.Windows.Clipboard.SetFileDropList(fileList);
+                        ClipboardHelper.SafeSetFileDropList(fileList);
                         
                         var clip = new ClipboardItem
                         {
@@ -459,6 +461,273 @@ namespace FlyShelf.Classes
             return null;
         }
 #pragma warning restore CA2022
+
+        private async Task HandleMergePdfs(HttpListenerRequest req, HttpListenerResponse res)
+        {
+            if (!LicenseManager.CanMergePdf())
+            {
+                res.StatusCode = 402; // Payment Required
+                byte[] errBytes = Encoding.UTF8.GetBytes("{\"error\":\"Daily PDF merge limit reached on Free tier.\"}");
+                res.ContentType = "application/json";
+                await res.OutputStream.WriteAsync(errBytes, 0, errBytes.Length);
+                res.Close();
+                return;
+            }
+
+            try
+            {
+                string body;
+                using (var reader = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8))
+                {
+                    body = await reader.ReadToEndAsync();
+                }
+
+                using var doc = JsonDocument.Parse(body);
+                var root = doc.RootElement;
+                if (!root.TryGetProperty("urls", out var urlsProp) || urlsProp.ValueKind != JsonValueKind.Array)
+                {
+                    res.StatusCode = 400;
+                    byte[] errBytes = Encoding.UTF8.GetBytes("{\"error\":\"Invalid request: 'urls' array is required.\"}");
+                    res.ContentType = "application/json";
+                    await res.OutputStream.WriteAsync(errBytes, 0, errBytes.Length);
+                    res.Close();
+                    return;
+                }
+
+                var urls = new List<string>();
+                foreach (var element in urlsProp.EnumerateArray())
+                {
+                    string urlStr = element.GetString() ?? "";
+                    if (!string.IsNullOrEmpty(urlStr))
+                    {
+                        urls.Add(urlStr);
+                    }
+                }
+
+                if (urls.Count < 2)
+                {
+                    res.StatusCode = 400;
+                    byte[] errBytes = Encoding.UTF8.GetBytes("{\"error\":\"At least two URLs are required to merge.\"}");
+                    res.ContentType = "application/json";
+                    await res.OutputStream.WriteAsync(errBytes, 0, errBytes.Length);
+                    res.Close();
+                    return;
+                }
+
+                string mergeTempDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Merges");
+                Directory.CreateDirectory(mergeTempDir);
+
+                var localFiles = new List<string>();
+                var tempFilesCreated = new List<string>();
+
+                foreach (var url in urls)
+                {
+                    string localPath = "";
+
+                    // Optimization: Bypass download if URL points to our own download server and path exists
+                    if (url.Contains("/download?path="))
+                    {
+                        try
+                        {
+                            int qIdx = url.IndexOf("?path=");
+                            if (qIdx != -1)
+                            {
+                                string pathParam = url.Substring(qIdx + 6);
+                                int ampIdx = pathParam.IndexOf('&');
+                                if (ampIdx != -1)
+                                {
+                                    pathParam = pathParam.Substring(0, ampIdx);
+                                }
+                                string decodedPath = Uri.UnescapeDataString(pathParam);
+                                if (File.Exists(decodedPath) && IsPathAllowed(decodedPath))
+                                {
+                                    localPath = decodedPath;
+                                }
+                            }
+                        }
+                        catch {}
+                    }
+
+                    // Download if not resolved locally
+                    if (string.IsNullOrEmpty(localPath))
+                    {
+                        try
+                        {
+                            // Strip query parameters for extension detection
+                            string cleanUrl = url;
+                            int qMarkIdx = url.IndexOf('?');
+                            if (qMarkIdx != -1) cleanUrl = url.Substring(0, qMarkIdx);
+                            string ext = Path.GetExtension(cleanUrl).ToLower();
+                            if (string.IsNullOrEmpty(ext)) ext = ".pdf"; // default fallback
+
+                            string tempFile = Path.Combine(mergeTempDir, Guid.NewGuid().ToString() + ext);
+                            using (var downloadRes = await _httpClient.GetAsync(url))
+                            {
+                                downloadRes.EnsureSuccessStatusCode();
+                                using (var fs = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None))
+                                {
+                                    await downloadRes.Content.CopyToAsync(fs);
+                                }
+                            }
+                            localPath = tempFile;
+                            tempFilesCreated.Add(tempFile);
+                        }
+                        catch (Exception dlEx)
+                        {
+                            Logger.LogAction("MERGE PDF DOWNLOAD ERR", $"Failed to download URL '{url}': {dlEx.Message}");
+                        }
+                    }
+
+                    if (!string.IsNullOrEmpty(localPath) && File.Exists(localPath))
+                    {
+                        // Convert image to PDF if necessary
+                        string ext = Path.GetExtension(localPath).ToLower();
+                        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg")
+                        {
+                            try
+                            {
+                                string pdfPath = ConversionUtils.ConvertImageToPdf(localPath);
+                                if (File.Exists(pdfPath))
+                                {
+                                    localPath = pdfPath;
+                                    tempFilesCreated.Add(pdfPath); // also clean up the generated PDF later
+                                }
+                            }
+                            catch (Exception imgEx)
+                            {
+                                Logger.LogAction("MERGE PDF IMG CONVERT ERR", $"Failed to convert image '{localPath}': {imgEx.Message}");
+                            }
+                        }
+                        else if (ext == ".doc" || ext == ".docx")
+                        {
+                            try
+                            {
+                                string pdfPath = await ConversionUtils.ConvertDocToPdfAsync(localPath);
+                                if (!string.IsNullOrEmpty(pdfPath) && File.Exists(pdfPath))
+                                {
+                                    localPath = pdfPath;
+                                    tempFilesCreated.Add(pdfPath); // also clean up the generated PDF later
+                                }
+                            }
+                            catch (Exception docEx)
+                            {
+                                Logger.LogAction("MERGE PDF DOC CONVERT ERR", $"Failed to convert doc '{localPath}': {docEx.Message}");
+                            }
+                        }
+
+                        // Ensure it's a PDF now
+                        if (Path.GetExtension(localPath).Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+                        {
+                            localFiles.Add(localPath);
+                        }
+                    }
+                }
+
+                if (localFiles.Count < 2)
+                {
+                    res.StatusCode = 400;
+                    byte[] errBytes = Encoding.UTF8.GetBytes("{\"error\":\"Could not resolve at least two valid PDF files to merge.\"}");
+                    res.ContentType = "application/json";
+                    await res.OutputStream.WriteAsync(errBytes, 0, errBytes.Length);
+                    res.Close();
+                    return;
+                }
+
+                // Merge the files
+                string mergeDir = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                    "Downloads", "FlyShelf", "Merged");
+                Directory.CreateDirectory(mergeDir);
+                string baseName = $"Merged_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+                string outputPath = Path.Combine(mergeDir, baseName);
+
+                bool mergeSuccess = await Task.Run(() =>
+                {
+                    try
+                    {
+                        using (PdfDocument outputDocument = new PdfDocument())
+                        {
+                            foreach (var filePath in localFiles)
+                            {
+                                using (PdfDocument inputDocument = PdfReader.Open(filePath, PdfDocumentOpenMode.Import))
+                                {
+                                    for (int idx = 0; idx < inputDocument.PageCount; idx++)
+                                    {
+                                        PdfPage page = inputDocument.Pages[idx];
+                                        outputDocument.AddPage(page);
+                                    }
+                                }
+                            }
+                            outputDocument.Save(outputPath);
+                        }
+                        return true;
+                    }
+                    catch (Exception mergeEx)
+                    {
+                        Logger.LogAction("PDF MERGE ERR", $"Merge process failed: {mergeEx.Message}");
+                        return false;
+                    }
+                });
+
+                // Clean up temporary downloaded / converted files
+                foreach (var tempFile in tempFilesCreated)
+                {
+                    try
+                    {
+                        if (File.Exists(tempFile))
+                        {
+                            File.Delete(tempFile);
+                        }
+                    }
+                    catch {}
+                }
+
+                if (mergeSuccess && File.Exists(outputPath))
+                {
+                    LicenseManager.RecordPdfMerge();
+
+                    // Register to local clipboard shelf on dispatcher
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        var dataObj = new System.Windows.DataObject();
+                        var dropList = new System.Collections.Specialized.StringCollection { outputPath };
+                        dataObj.SetFileDropList(dropList);
+                        _viewModel.HandleDrop(dataObj, true);
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Merged PDF: {baseName} ✅");
+                    });
+
+                    string pairingKey = DevicePairingManager.EnsurePairingKey();
+                    string downloadUrl = $"/download?path={Uri.EscapeDataString(outputPath)}";
+                    if (!string.IsNullOrEmpty(pairingKey))
+                    {
+                        downloadUrl += $"&key={Uri.EscapeDataString(pairingKey)}";
+                    }
+
+                    string json = JsonSerializer.Serialize(new { success = true, downloadUrl, fileName = baseName });
+                    byte[] buffer = Encoding.UTF8.GetBytes(json);
+                    res.ContentType = "application/json; charset=utf-8";
+                    res.ContentLength64 = buffer.Length;
+                    res.StatusCode = 200;
+                    await res.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                }
+                else
+                {
+                    res.StatusCode = 500;
+                    byte[] errBytes = Encoding.UTF8.GetBytes("{\"error\":\"Failed to save merged PDF document.\"}");
+                    res.ContentType = "application/json";
+                    await res.OutputStream.WriteAsync(errBytes, 0, errBytes.Length);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("MERGE PDF ROUTE ERROR", ex.Message);
+                res.StatusCode = 500;
+            }
+            finally
+            {
+                res.Close();
+            }
+        }
 
         // Helper: detect if a remote IP is on the same LAN (private range)
         private static bool IsLanAddress(string remoteIp)

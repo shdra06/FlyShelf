@@ -70,27 +70,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                                try
-
-                                {
-
-                                    FlyShelf.MainWindow.SetWritingClipboard(true);
-
-                                    System.Windows.Clipboard.SetText(result.Text);
-
-                                }
-
-                                catch { }
-
-                                _ = System.Threading.Tasks.Task.Run(async () =>
-
-                                {
-
-                                    await System.Threading.Tasks.Task.Delay(500);
-
-                                    FlyShelf.MainWindow.SetWritingClipboard(false);
-
-                                });
+                                FlyShelf.Classes.ClipboardHelper.SafeSetText(result.Text, suppressEcho: true, echoDelayMs: 500);
 
 
 
@@ -464,17 +444,7 @@ $word.Quit();
                             this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs("RawContent"));
                             this.PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs("IsImagePreview"));
 
-                            try
-                            {
-                                FlyShelf.MainWindow.SetWritingClipboard(true);
-                                System.Windows.Clipboard.SetText(result.Text);
-                            }
-                            catch { }
-                            _ = System.Threading.Tasks.Task.Run(async () =>
-                            {
-                                await System.Threading.Tasks.Task.Delay(500);
-                                FlyShelf.MainWindow.SetWritingClipboard(false);
-                            });
+                            FlyShelf.Classes.ClipboardHelper.SafeSetText(result.Text, suppressEcho: true, echoDelayMs: 500);
 
                             FlyShelf.Windows.ToastWindow.ShowToast("QR Code Extracted & Copied! 📋");
                             FlyShelf.Classes.LicenseManager.RecordQrScan();

@@ -36,6 +36,8 @@ namespace FlyShelf.Classes
                 string encryptedGlobalUrl = "";
                 string encryptedLocalIp = "";
                 string encryptedUrl = "";
+                string encryptedTlsUrl = "";
+                string tlsUrl = NetworkSyncServer.Instance?.TlsUrl ?? "";
                 try
                 {
                     if (url.Contains("trycloudflare.com"))
@@ -45,6 +47,8 @@ namespace FlyShelf.Classes
                     string plainUrl = localIp.Contains("http") ? localIp : url;
                     if (!string.IsNullOrEmpty(plainUrl))
                         encryptedUrl = SyncCrypto.Encrypt(plainUrl) ?? "";
+                    if (!string.IsNullOrEmpty(tlsUrl))
+                        encryptedTlsUrl = SyncCrypto.Encrypt(tlsUrl) ?? "";
                 }
                 catch
                 {
@@ -52,6 +56,7 @@ namespace FlyShelf.Classes
                     encryptedGlobalUrl = url.Contains("trycloudflare.com") ? url : "";
                     encryptedLocalIp = localIp;
                     encryptedUrl = localIp.Contains("http") ? localIp : url;
+                    encryptedTlsUrl = tlsUrl;
                 }
 
                 var payload = new
@@ -62,7 +67,7 @@ namespace FlyShelf.Classes
                     Url = encryptedUrl,
                     LocalIp = encryptedLocalIp,
                     GlobalUrl = encryptedGlobalUrl,
-                    TlsUrl = NetworkSyncServer.Instance?.TlsUrl ?? "",
+                    TlsUrl = encryptedTlsUrl,
                     TlsThumbprint = NetworkSyncServer.Instance?.TlsThumbprint ?? "",
                     IsOnline = isOnline,
                     Timestamp = NetworkClock.UtcNowMs,

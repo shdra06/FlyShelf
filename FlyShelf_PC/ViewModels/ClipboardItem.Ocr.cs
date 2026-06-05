@@ -75,27 +75,7 @@ namespace FlyShelf.ViewModels
 
                                 {
 
-                                    try
-
-                                    {
-
-                                        FlyShelf.MainWindow.SetWritingClipboard(true);
-
-                                        System.Windows.Clipboard.SetText(result.Text);
-
-                                    }
-
-                                    catch { }
-
-                                    _ = System.Threading.Tasks.Task.Run(async () =>
-
-                                    {
-
-                                        await System.Threading.Tasks.Task.Delay(500);
-
-                                        FlyShelf.MainWindow.SetWritingClipboard(false);
-
-                                    });
+                                    FlyShelf.Classes.ClipboardHelper.SafeSetText(result.Text, suppressEcho: true, echoDelayMs: 500);
 
                                     FlyShelf.Windows.ToastWindow.ShowToast("OCR Text Copied to Clipboard! 📋");
                                     FlyShelf.Classes.LicenseManager.RecordOcrExtraction();

@@ -67,17 +67,18 @@ namespace FlyShelf.Windows
                 string cfHtml = header + htmlStart + fragment + htmlEnd;
                 string tsv = BuildTsv();
 
-                MainWindow.SetWritingClipboard(true);
-                try
+                var dataObj = new DataObject();
+                dataObj.SetData(DataFormats.Html, cfHtml);
+                dataObj.SetData(DataFormats.Text, tsv);
+                
+                if (ClipboardHelper.SafeSetDataObject(dataObj, true))
                 {
-                    var dataObj = new DataObject();
-                    dataObj.SetData(DataFormats.Html, cfHtml);
-                    dataObj.SetData(DataFormats.Text, tsv);
-                    Clipboard.SetDataObject(dataObj, true);
+                    ToastWindow.ShowToast("Table copied! Paste into Word 📋");
                 }
-                finally { MainWindow.SetWritingClipboard(false); }
-
-                ToastWindow.ShowToast("Table copied! Paste into Word 📋");
+                else
+                {
+                    ToastWindow.ShowToast("Clipboard busy — try again");
+                }
             }
             catch (Exception ex)
             {
@@ -88,38 +89,38 @@ namespace FlyShelf.Windows
 
         private void ExportCsv_Click(object sender, RoutedEventArgs e)
         {
-            MainWindow.SetWritingClipboard(true);
-            try
+            if (ClipboardHelper.SafeSetText(BuildCsv()))
             {
-                Clipboard.SetText(BuildCsv());
                 ToastWindow.ShowToast("Table copied as CSV 📋");
             }
-            catch { ToastWindow.ShowToast("Clipboard busy — try again"); }
-            finally { MainWindow.SetWritingClipboard(false); }
+            else
+            {
+                ToastWindow.ShowToast("Clipboard busy — try again");
+            }
         }
 
         private void ExportTsv_Click(object sender, RoutedEventArgs e)
         {
-            MainWindow.SetWritingClipboard(true);
-            try
+            if (ClipboardHelper.SafeSetText(BuildTsv()))
             {
-                Clipboard.SetText(BuildTsv());
                 ToastWindow.ShowToast("Table copied as TSV 📋");
             }
-            catch { ToastWindow.ShowToast("Clipboard busy — try again"); }
-            finally { MainWindow.SetWritingClipboard(false); }
+            else
+            {
+                ToastWindow.ShowToast("Clipboard busy — try again");
+            }
         }
 
         private void ExportMarkdown_Click(object sender, RoutedEventArgs e)
         {
-            MainWindow.SetWritingClipboard(true);
-            try
+            if (ClipboardHelper.SafeSetText(BuildMarkdown()))
             {
-                Clipboard.SetText(BuildMarkdown());
                 ToastWindow.ShowToast("Table copied as Markdown 📋");
             }
-            catch { ToastWindow.ShowToast("Clipboard busy — try again"); }
-            finally { MainWindow.SetWritingClipboard(false); }
+            else
+            {
+                ToastWindow.ShowToast("Clipboard busy — try again");
+            }
         }
 
         private void SaveToFile_Click(object sender, RoutedEventArgs e)

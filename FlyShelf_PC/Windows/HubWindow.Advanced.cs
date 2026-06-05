@@ -207,7 +207,10 @@ namespace FlyShelf.Windows
                 string copyUrl = !string.IsNullOrEmpty(device.GlobalUrl) ? device.GlobalUrl : device.LocalIp;
                 if (!string.IsNullOrEmpty(copyUrl))
                 {
-                    try { Clipboard.SetText(copyUrl); info += "\n\n✅ URL copied to clipboard!"; } catch { }
+                    if (Classes.ClipboardHelper.SafeSetText(copyUrl))
+                    {
+                        info += "\n\n✅ URL copied to clipboard!";
+                    }
                 }
 
                 MessageBox.Show(info, $"Device Info — {device.DeviceName}", MessageBoxButton.OK, MessageBoxImage.Information);

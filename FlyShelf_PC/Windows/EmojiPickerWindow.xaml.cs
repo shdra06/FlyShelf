@@ -224,7 +224,7 @@ namespace FlyShelf.Windows
             {
                 try
                 {
-                    Clipboard.SetText(emoji);
+                    FlyShelf.Classes.ClipboardHelper.SafeSetText(emoji);
 
                     // Auto-paste into the target window (like Windows emoji picker)
                     if (_targetWindow != IntPtr.Zero)

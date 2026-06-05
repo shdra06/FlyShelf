@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Background Linear Gradient -->
+    <linearGradient id="bgGrad" x1="512" y1="0" x2="512" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#1E2933"/>
+      <stop offset="100%" stop-color="#11141C"/>
+    </linearGradient>
+
+    <!-- Top Wing Base Gradient -->
+    <linearGradient id="topWingBaseGrad" x1="545.6" y1="146.5" x2="475.4" y2="468.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#44a4d6"/>
+      <stop offset="100%" stop-color="#1a4c73"/>
+    </linearGradient>
+
+    <!-- Top Wing Highlight Gradient (Layered Crease) -->
+    <linearGradient id="topWingHighlightGrad" x1="545.6" y1="146.5" x2="475.4" y2="468.5" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#aafcff" stop-opacity="1.0"/>
+      <stop offset="40%" stop-color="#8efcfb" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#4cc0eb" stop-opacity="0.05"/>
+    </linearGradient>
+
+    <!-- Middle Wing Base Gradient -->
+    <linearGradient id="midWingBaseGrad" x1="471.8" y1="409.0" x2="445.2" y2="664.0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#3b76df"/>
+      <stop offset="100%" stop-color="#19338f"/>
+    </linearGradient>
+
+    <!-- Middle Wing Highlight Gradient (Layered Crease) -->
+    <linearGradient id="midWingHighlightGrad" x1="471.8" y1="409.0" x2="445.2" y2="664.0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#8efcfb" stop-opacity="0.95"/>
+      <stop offset="50%" stop-color="#50a8df" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#2752ca" stop-opacity="0.05"/>
+    </linearGradient>
+
+    <!-- Spherical 3D Dot Radial Gradient -->
+    <radialGradient id="dotSphericalGrad" cx="35%" cy="35%" r="65%" fx="30%" fy="30%">
+      <stop offset="0%" stop-color="#aafcff"/>
+      <stop offset="35%" stop-color="#2d84e6"/>
+      <stop offset="75%" stop-color="#2045cc"/>
+      <stop offset="100%" stop-color="#0f1e66"/>
+    </radialGradient>
+  </defs>
+
+  <!-- Background Squircle -->
+  <rect x="0" y="0" width="1024" height="1024" rx="225" ry="225" fill="url(#bgGrad)"/>
+
+  <!-- Top Wing Shape Base -->
+  <path d="M 240.0,329.0 C 288.3,184.3 298.4,184.4 784.0,203.0 C 834.0,559.6 190.0,197.0 240.0,426.0 L 240.0,329.0 Z" fill="url(#topWingBaseGrad)"/>
+
+  <!-- Top Wing Highlight Overlay -->
+  <path d="M 240.0,329.0 C 288.3,184.3 298.4,184.4 784.0,203.0 C 735.5,369.6 288.9,178.1 240.0,375.0 L 240.0,329.0 Z" fill="url(#topWingHighlightGrad)"/>
+
+  <!-- Middle Wing Shape Base -->
+  <path d="M 240.0,531.0 C 244.9,516.8 247.2,500.8 255.0,488.0 C 264.3,472.6 276.0,457.0 291.0,447.0 C 308.6,435.2 329.8,425.3 351.0,424.0 C 445.2,418.0 542.7,422.4 637.0,425.0 C 650.8,425.4 665.9,426.5 678.0,433.0 C 682.1,435.2 678.0,442.4 678.0,447.0 C 674.4,465.5 673.2,485.2 667.0,503.0 C 662.5,516.0 655.5,529.1 646.0,539.0 C 629.7,555.9 610.9,572.3 590.0,583.0 C 573.1,591.6 552.9,595.1 534.0,596.0 C 465.8,599.4 395.2,591.4 327.0,596.0 C 310.9,597.1 294.5,604.1 281.0,613.0 C 265.4,623.3 255.3,641.0 241.0,653.0 L 240.0,531.0 Z" fill="url(#midWingBaseGrad)"/>
+
+  <!-- Middle Wing Highlight Overlay -->
+  <path d="M 240.0,531.0 C 244.9,516.8 247.2,500.8 255.0,488.0 C 264.3,472.6 276.0,457.0 291.0,447.0 C 308.6,435.2 329.8,425.3 351.0,424.0 C 445.2,418.0 542.7,422.4 637.0,425.0 C 650.8,425.4 665.9,426.5 678.0,433.0 C 682.1,435.2 678.0,442.4 678.0,447.0 C 588.5,583.4 341.9,434.5 240.0,580.0 L 240.0,531.0 Z" fill="url(#midWingHighlightGrad)"/>
+
+  <!-- Spherical Dot Shape -->
+  <circle cx="326.9" cy="743.5" r="88.5" fill="url(#dotSphericalGrad)"/>
+</svg>

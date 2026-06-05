@@ -161,7 +161,7 @@ namespace FlyShelf.Windows
                 header.AppendLine();
                 header.Append(report);
 
-                Clipboard.SetText(header.ToString());
+                Classes.ClipboardHelper.SafeSetText(header.ToString());
                 ToastWindow.ShowToast("📋 All logs copied to clipboard (health-check noise filtered) — paste and send!");
             }
             catch (Exception ex)
@@ -175,7 +175,7 @@ namespace FlyShelf.Windows
             try
             {
                 string logs = Logger.GetRecentNetworkLogs(200);
-                Clipboard.SetText(logs);
+                Classes.ClipboardHelper.SafeSetText(logs);
                 ToastWindow.ShowToast("📋 Network logs copied to clipboard (last 200 lines)");
             }
             catch (Exception ex)

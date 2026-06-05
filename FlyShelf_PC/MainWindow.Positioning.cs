@@ -404,9 +404,29 @@ namespace FlyShelf
             }
             catch { }
 
-            // 3. Activate while still offscreen — this is the slow Win32 call that causes
-            //    layout stalls. Doing it offscreen means the stall is invisible.
-            if (stealFocus) this.Activate();
+            // 3. Activation strategy:
+            //    stealFocus=true  → Activate() to take keyboard focus (used by Notes/Todo panels)
+            //    stealFocus=false → SetWindowPos with SWP_NOACTIVATE to bring to front without
+            //                       stealing focus from the active app (native Win+V clipboard behavior)
+            if (stealFocus)
+            {
+                this.Activate();
+            }
+            else
+            {
+                try
+                {
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        Classes.NativeMethods.SetWindowPos(hwnd,
+                            -1 /*HWND_TOPMOST*/, 0, 0, 0, 0,
+                            Classes.NativeMethods.SWP_NOMOVE | Classes.NativeMethods.SWP_NOSIZE |
+                            Classes.NativeMethods.SWP_NOACTIVATE | Classes.NativeMethods.SWP_SHOWWINDOW);
+                    }
+                }
+                catch { }
+            }
 
             // 4. Start the opacity animation BEFORE moving onscreen.
             //    The animation clock starts ticking from opacity=0. When we move the window

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -406,8 +406,10 @@ namespace FlyShelf.Windows
             try
             {
                 var text = string.Join(Environment.NewLine, _filteredLogs.Select(l => $"[{l.DeviceName}] {l.LogText}"));
-                Clipboard.SetText(text);
-                ToastWindow.ShowToast($"📋 Copied {_filteredLogs.Count} log entries");
+                if (ClipboardHelper.SafeSetText(text))
+                {
+                    ToastWindow.ShowToast($"📋 Copied {_filteredLogs.Count} log entries");
+                }
             }
             catch { }
         }

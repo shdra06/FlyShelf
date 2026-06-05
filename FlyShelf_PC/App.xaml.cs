@@ -463,6 +463,22 @@ public partial class App : Application
                             // Lowered displacement threshold to 16 (4.0px) for much higher responsiveness (including diagonal shakes)
                             if (distSq >= 16)
                             {
+                                // Ignore strictly vertical movements (between 80 and 90 degrees) to block vertical shakes
+                                if (Math.Abs(deltaY) >= Math.Abs(deltaX) * 5.67)
+                                {
+                                    if (_shakeCount > 0)
+                                    {
+                                        FlyShelf.Classes.Logger.LogAction("SHAKE", $"Reset: strictly vertical movement (80°-90°) detected (Delta: {deltaX}, {deltaY}). Resetting count from {_shakeCount} to 0.");
+                                    }
+                                    _shakeCount = 0;
+                                    _lastSigDirX = 0;
+                                    _lastSigDirY = 0;
+                                    _lastShakeX = currentX;
+                                    _lastShakeY = currentY;
+                                    _lastShakeTime = currentTime;
+                                    return;
+                                }
+
                                 bool reversed = false;
 
                                 // Dot product of current direction vector and last direction vector.

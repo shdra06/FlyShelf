@@ -444,7 +444,7 @@ namespace FlyShelf.ViewModels
                 {
                     string content = !string.IsNullOrEmpty(item.RawContent) ? item.RawContent : item.FileName;
                     if (!string.IsNullOrEmpty(content))
-                        System.Windows.Clipboard.SetText(content);
+                        Classes.ClipboardHelper.SafeSetText(content);
                     FlyShelf.Windows.ToastWindow.ShowToast("Copied to clipboard! 📋");
                     try { Classes.AnimationTriggerService.Instance.OnCopy(); } catch { }
                 }

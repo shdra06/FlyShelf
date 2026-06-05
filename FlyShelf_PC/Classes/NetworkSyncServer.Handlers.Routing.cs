@@ -332,6 +332,7 @@ namespace FlyShelf.Classes
                     else if (path == "/api/upload_finalize" && req.HttpMethod == "POST") { await HandleChunkFinalize(req, res); }
                     else if (path == "/api/relay_upload" && req.HttpMethod == "POST") { await HandleRelayUpload(req, res); }
                     else if (path == "/api/convert_to_pdf" && req.HttpMethod == "POST") { await HandleConvertToPdf(req, res); }
+                    else if (path == "/api/merge_pdfs" && req.HttpMethod == "POST") { await HandleMergePdfs(req, res); }
                     else if (path == "/logs" && req.HttpMethod == "GET") { ServeLogDashboard(res); }
                     else if (path == "/api/logs/stream" && req.HttpMethod == "GET") { await ServeLogStream(req, res); }
                     else if (path == "/api/logs" && req.HttpMethod == "GET") { ServeLogsJson(req, res); }

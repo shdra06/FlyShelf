@@ -261,18 +261,11 @@ namespace FlyShelf.ViewModels
                 // Clipboard writeback
                 if (forceClipboardSync && files.Length <= 10)
                 {
-                    Application.Current.Dispatcher.InvokeAsync(async () =>
+                    Application.Current.Dispatcher.InvokeAsync(() =>
                     {
-                        try
-                        {
-                            MainWindow.SetWritingClipboard(true);
-                            var dropList = new System.Collections.Specialized.StringCollection();
-                            dropList.Add(files[0]);
-                            System.Windows.Clipboard.SetFileDropList(dropList);
-                            await System.Threading.Tasks.Task.Delay(500);
-                        }
-                        catch { }
-                        finally { MainWindow.SetWritingClipboard(false); }
+                        var dropList = new System.Collections.Specialized.StringCollection();
+                        dropList.Add(files[0]);
+                        Classes.ClipboardHelper.SafeSetFileDropList(dropList, suppressEcho: true, echoDelayMs: 500);
                     });
                 }
             }
@@ -439,7 +432,6 @@ namespace FlyShelf.ViewModels
                                 Classes.Logger.LogAction("DEDUP", $"Found duplicate image: {duplicateImage.FilePath}. Removing older duplicate.");
                                 RemoveItem(duplicateImage);
                             }
-
                             item.ScanForQRCodeAsync(tempFile);
                             OnPropertyChanged(nameof(ShelfVisibility));
 
@@ -448,37 +440,17 @@ namespace FlyShelf.ViewModels
 
                             if (!forceClipboardSync)
                             {
-                                try
-                                {
-                                    MainWindow.SetWritingClipboard(true);
-                                    var dataObj = new System.Windows.DataObject();
-                                    dataObj.SetImage(bitmap);
-                                    var dropList = new System.Collections.Specialized.StringCollection();
-                                    dropList.Add(tempFile);
-                                    dataObj.SetFileDropList(dropList);
-                                    System.Windows.Clipboard.SetDataObject(dataObj, true);
-                                }
-                                catch { }
-                                _ = System.Threading.Tasks.Task.Run(async () =>
-                                {
-                                    await System.Threading.Tasks.Task.Delay(500);
-                                    MainWindow.SetWritingClipboard(false);
-                                });
+                                var dataObj = new System.Windows.DataObject();
+                                dataObj.SetImage(bitmap);
+                                var dropList = new System.Collections.Specialized.StringCollection();
+                                dropList.Add(tempFile);
+                                dataObj.SetFileDropList(dropList);
+                                Classes.ClipboardHelper.SafeSetDataObject(dataObj, true, suppressEcho: true, echoDelayMs: 500);
                             }
                             
                             if (forceClipboardSync)
                             {
-                                try
-                                {
-                                    MainWindow.SetWritingClipboard(true);
-                                    System.Windows.Clipboard.SetImage(item.Icon);
-                                }
-                                catch { }
-                                _ = System.Threading.Tasks.Task.Run(async () =>
-                                {
-                                    await System.Threading.Tasks.Task.Delay(500);
-                                    MainWindow.SetWritingClipboard(false);
-                                });
+                                Classes.ClipboardHelper.SafeSetImage(item.Icon, suppressEcho: true, echoDelayMs: 500);
                             }
 
                             // Cloud discovery sync (with echo prevention logic)
@@ -738,17 +710,7 @@ namespace FlyShelf.ViewModels
 
                         if (capturedForceSync)
                         {
-                            try
-                            {
-                                MainWindow.SetWritingClipboard(true);
-                                System.Windows.Clipboard.SetText(item.RawContent);
-                            }
-                            catch { }
-                            _ = System.Threading.Tasks.Task.Run(async () =>
-                            {
-                                await System.Threading.Tasks.Task.Delay(500);
-                                MainWindow.SetWritingClipboard(false);
-                            });
+                            Classes.ClipboardHelper.SafeSetText(item.RawContent, suppressEcho: true, echoDelayMs: 500);
                         }
 
                         OnPropertyChanged(nameof(ShelfVisibility));

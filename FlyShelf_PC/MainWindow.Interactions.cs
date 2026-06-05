@@ -101,10 +101,6 @@ namespace FlyShelf
 
             try
             {
-                // Use the safety-timer version so the flag stays true until the clipboard
-                // change notification has been processed (prevents duplicate-to-top reorder)
-                SetWritingClipboard(true);
-
                 if (!string.IsNullOrEmpty(clipboardObj.FilePath))
                 {
                     var dataObj = new DataObject();
@@ -149,17 +145,11 @@ namespace FlyShelf
                         dataObj.SetData("Preferred DropEffect", dropEffect);
                     }
 
-                    for(int retry=0; retry<3; retry++) {
-                        try { System.Windows.Clipboard.SetDataObject(dataObj, true); break; }
-                        catch { await System.Threading.Tasks.Task.Delay(15); }
-                    }
+                    Classes.ClipboardHelper.SafeSetDataObject(dataObj, true, suppressEcho: true, echoDelayMs: 2000);
                 }
                 else if (!string.IsNullOrEmpty(clipboardObj.RawContent))
                 {
-                    for(int retry=0; retry<3; retry++) {
-                        try { System.Windows.Clipboard.SetText(clipboardObj.RawContent); break; }
-                        catch { await System.Threading.Tasks.Task.Delay(15); }
-                    }
+                    Classes.ClipboardHelper.SafeSetText(clipboardObj.RawContent, suppressEcho: true, echoDelayMs: 2000);
                 }
             }
             catch { }
@@ -541,7 +531,7 @@ namespace FlyShelf
                     }
                 }
 
-                ShowNearPosition(targetX, targetY, 1, false, true); // mode = 1, isPersistent = false, stealFocus = true
+                ShowNearPosition(targetX, targetY, 1, false, false); // mode = 1, isPersistent = false, stealFocus = false (native clipboard behavior: don't steal focus from active app)
             }
         }
 

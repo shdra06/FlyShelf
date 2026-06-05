@@ -935,6 +935,26 @@ namespace FlyShelf
                     Classes.Logger.LogAction("TELEMETRY", $"Startup height hardcoded to cache: {_lastActualHeight}");
                 }
             }, System.Windows.Threading.DispatcherPriority.Loaded);
+
+            // Pre-load ONNX models in the background after the app is fully idle
+            Dispatcher.InvokeAsync(() =>
+            {
+                Task.Run(() =>
+                {
+                    try
+                    {
+                        var tempDetector = new Classes.OnnxTableDetector();
+                        var tempRecognizer = new Classes.OnnxTextRecognizer();
+                        tempDetector.Initialize();
+                        tempRecognizer.Initialize();
+                        Classes.Logger.LogAction("ONNX_INIT", "ONNX Models pre-loaded successfully in background thread.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Classes.Logger.LogAction("ONNX_INIT_FAIL", $"Lazy loading failed: {ex.Message}");
+                    }
+                });
+            }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
 
         // ═══ Theme/Wallpaper/Backdrop methods moved to MainWindow.Theme.cs ═══

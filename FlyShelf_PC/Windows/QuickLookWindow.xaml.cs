@@ -599,9 +599,9 @@ namespace FlyShelf.Windows
                             uint ocrW = (uint)softwareBitmap.PixelWidth;
                             uint ocrH = (uint)softwareBitmap.PixelHeight;
 
-                            // For small images, upscale 2x for better OCR text detection.
+                            // For small/medium images, upscale 2x for better OCR text detection.
                             // The OCR engine struggles with text smaller than ~12px.
-                            if (ocrW < 1500 && ocrH < 1500)
+                            if (Math.Max(ocrW, ocrH) < 2200)
                             {
                                 try
                                 {
@@ -693,8 +693,14 @@ namespace FlyShelf.Windows
 
             try
             {
-                System.Windows.Clipboard.SetText(_ocrResult.Text);
-                FlyShelf.Windows.ToastWindow.ShowToast("All Image Text Copied to Clipboard! 📋");
+                if (ClipboardHelper.SafeSetText(_ocrResult.Text))
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("All Image Text Copied to Clipboard! 📋");
+                }
+                else
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("Clipboard busy — try again");
+                }
             }
             catch (Exception ex)
             {
@@ -708,8 +714,14 @@ namespace FlyShelf.Windows
 
             try
             {
-                System.Windows.Clipboard.SetText(_item.RawContent);
-                FlyShelf.Windows.ToastWindow.ShowToast("QR Code Text Copied! 📋");
+                if (ClipboardHelper.SafeSetText(_item.RawContent))
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("QR Code Text Copied! 📋");
+                }
+                else
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("Clipboard busy — try again");
+                }
             }
             catch (Exception ex)
             {
@@ -864,8 +876,10 @@ namespace FlyShelf.Windows
                     {
                         try
                         {
-                            System.Windows.Clipboard.SetText(wordText);
-                            FlyShelf.Windows.ToastWindow.ShowToast($"Copied: {wordText}");
+                            if (ClipboardHelper.SafeSetText(wordText))
+                            {
+                                FlyShelf.Windows.ToastWindow.ShowToast($"Copied: {wordText}");
+                            }
                         }
                         catch { }
                     };
@@ -878,8 +892,10 @@ namespace FlyShelf.Windows
                     {
                         try
                         {
-                            System.Windows.Clipboard.SetText(fullLineText);
-                            FlyShelf.Windows.ToastWindow.ShowToast("Copied full line");
+                            if (ClipboardHelper.SafeSetText(fullLineText))
+                            {
+                                FlyShelf.Windows.ToastWindow.ShowToast("Copied full line");
+                            }
                         }
                         catch { }
                     };
@@ -968,8 +984,10 @@ namespace FlyShelf.Windows
             try
             {
                 string combined = string.Join(" ", _selectedWordTexts);
-                System.Windows.Clipboard.SetText(combined);
-                FlyShelf.Windows.ToastWindow.ShowToast($"Copied {_selectedWordTexts.Count} word{(_selectedWordTexts.Count > 1 ? "s" : "")}");
+                if (ClipboardHelper.SafeSetText(combined))
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Copied {_selectedWordTexts.Count} word{(_selectedWordTexts.Count > 1 ? "s" : "")}");
+                }
             }
             catch { }
         }

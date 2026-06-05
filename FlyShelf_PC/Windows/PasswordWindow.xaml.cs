@@ -85,8 +85,14 @@ namespace FlyShelf.Windows
 
             try
             {
-                Clipboard.SetText(currentPassword);
-                FlyShelf.Windows.ToastWindow.ShowToast("Password copied! 🔑");
+                if (FlyShelf.Classes.ClipboardHelper.SafeSetText(currentPassword))
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("Password copied! 🔑");
+                }
+                else
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("Clipboard busy — try again");
+                }
 
                 // Visual feedback on the icon
                 CopyIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Checkmark24;

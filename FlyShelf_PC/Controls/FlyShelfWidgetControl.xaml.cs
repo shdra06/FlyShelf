@@ -78,7 +78,7 @@ namespace FlyShelf.Controls
                 }
                 else
                 {
-                    _mainWindow.ShowNearPosition(logicalX, logicalY, 1, false);
+                    _mainWindow.ShowNearPosition(logicalX, logicalY, 1, false, false);
                 }
             }
         }

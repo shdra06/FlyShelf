@@ -319,7 +319,11 @@ namespace FlyShelf.Windows
         {
             if (sender is System.Windows.Controls.Button btn && btn.Tag is string url && !string.IsNullOrWhiteSpace(url))
             {
-                try { Clipboard.SetText(url); btn.Content = "Copied!"; System.Threading.Tasks.Task.Delay(1500).ContinueWith(_ => Dispatcher.Invoke(() => btn.Content = "Copy")); } catch { }
+                if (ClipboardHelper.SafeSetText(url))
+                {
+                    btn.Content = "Copied!";
+                    System.Threading.Tasks.Task.Delay(1500).ContinueWith(_ => Dispatcher.Invoke(() => btn.Content = "Copy"));
+                }
             }
         }
 

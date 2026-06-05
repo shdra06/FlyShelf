@@ -60,19 +60,16 @@ namespace FlyShelf
                             var item = _viewModel.DroppedItems[index];
                             
                             // Set clipboard directly — guard against echo
-                            SetWritingClipboard(true);
-                            try
+                            if (!string.IsNullOrEmpty(item.RawContent))
                             {
-                                if (!string.IsNullOrEmpty(item.RawContent))
-                                    System.Windows.Clipboard.SetText(item.RawContent);
-                                else if (!string.IsNullOrEmpty(item.FilePath))
-                                {
-                                    var dropList = new System.Collections.Specialized.StringCollection();
-                                    dropList.Add(item.FilePath);
-                                    System.Windows.Clipboard.SetFileDropList(dropList);
-                                }
+                                Classes.ClipboardHelper.SafeSetText(item.RawContent, suppressEcho: true, echoDelayMs: 600);
                             }
-                            catch { }
+                            else if (!string.IsNullOrEmpty(item.FilePath))
+                            {
+                                var dropList = new System.Collections.Specialized.StringCollection();
+                                dropList.Add(item.FilePath);
+                                Classes.ClipboardHelper.SafeSetFileDropList(dropList, suppressEcho: true, echoDelayMs: 600);
+                            }
 
                             // Force-restore focus using AttachThreadInput trick
                             uint targetThreadId = GetWindowThreadProcessId(targetWindow, out _);
@@ -90,7 +87,6 @@ namespace FlyShelf
                             keybd_event((byte)VK_MENU, 0, KEYEVENTF_KEYUP, 0);
 
                             // Fire Ctrl+V after a short async pause for key state to propagate
-                            // Also clear the clipboard write guard after delay
                             _ = Task.Run(async () =>
                             {
                                 await Task.Delay(50);
@@ -98,8 +94,6 @@ namespace FlyShelf
                                 keybd_event((byte)VK_V, 0, 0, 0);
                                 keybd_event((byte)VK_V, 0, KEYEVENTF_KEYUP, 0);
                                 keybd_event((byte)VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
-                                await Task.Delay(500); // Absorb WM_CLIPBOARDUPDATE
-                                SetWritingClipboard(false);
                             });
                         }
                     });
@@ -245,21 +239,7 @@ namespace FlyShelf
                         bool isElevated = IsTargetProcessElevatedOrAccessDenied(targetWindow);
                         Classes.Logger.LogAction("SHORTCUTS", $"Target window elevated: {isElevated}");
 
-                        try
-                        {
-                            SetWritingClipboard(true);
-                            Application.Current.Dispatcher.Invoke(() =>
-                            {
-                                Clipboard.SetText(matchedShortcut.Expansion);
-                            });
-                        }
-                        catch { }
-                        
-                        _ = Task.Run(async () =>
-                        {
-                            await Task.Delay(500); // Allow WM_CLIPBOARDUPDATE to arrive and be ignored
-                            SetWritingClipboard(false);
-                        });
+                        Classes.ClipboardHelper.SafeSetText(matchedShortcut.Expansion, suppressEcho: true, echoDelayMs: 500);
 
                         _lastClipboardCaptureTime = DateTime.UtcNow;
 

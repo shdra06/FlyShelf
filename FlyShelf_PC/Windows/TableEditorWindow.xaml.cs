@@ -537,7 +537,11 @@ namespace FlyShelf.Windows
                     // Cell context menu
                     var cellMenu = new ContextMenu();
                     var copyItem = new MenuItem { Header = "Copy Cell", InputGestureText = "Ctrl+C" };
-                    copyItem.Click += (s, e) => { if (!string.IsNullOrEmpty(tb.SelectedText)) Clipboard.SetText(tb.SelectedText); else Clipboard.SetText(tb.Text); };
+                    copyItem.Click += (s, e) => 
+                    { 
+                        string textToCopy = !string.IsNullOrEmpty(tb.SelectedText) ? tb.SelectedText : tb.Text;
+                        ClipboardHelper.SafeSetText(textToCopy);
+                    };
                     var clearItem = new MenuItem { Header = "Clear Cell" };
                     clearItem.Click += (s, e) => { PushUndoState(); tb.Text = ""; };
                     var insertRowAbove = new MenuItem { Header = "Insert Row Above" };
