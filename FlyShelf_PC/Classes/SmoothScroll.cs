@@ -103,6 +103,7 @@ namespace FlyShelf.Classes
             public long LastInputTime;
             public double PendingImpulse;  // Coalesced impulse — drained once per render frame
             public double TrueOffset;      // Sub-pixel precise position (never sent to ScrollViewer)
+            public double LastSetOffset;   // ScrollViewer offset after last write in the animation loop
         }
 
         private static void EnableStaticCanvas(ScrollViewer sv)
@@ -275,6 +276,7 @@ namespace FlyShelf.Classes
                 state.IsAnimating = true;
                 state.LastFrameTick = System.Diagnostics.Stopwatch.GetTimestamp();
                 state.TrueOffset = sv.VerticalOffset;  // Seed from current real position
+                state.LastSetOffset = sv.VerticalOffset;
                 EnableStaticCanvas(sv);
             }
 
@@ -309,6 +311,17 @@ namespace FlyShelf.Classes
                 {
                     completed.Add(sv);
                     continue;
+                }
+
+                // ═══ SYNCHRONIZE WITH WPF LAYOUT SHIFTS ═══
+                // If WPF's layout engine shifted the viewport offset (e.g. due to virtualization 
+                // recycling or asynchronous image loading changes), absorb the delta to prevent 
+                // fighting the layout engine, which causes scroll friction and jitter.
+                double actualOffset = sv.VerticalOffset;
+                double wpfDelta = actualOffset - state.LastSetOffset;
+                if (Math.Abs(wpfDelta) > 0.001)
+                {
+                    state.TrueOffset += wpfDelta;
                 }
 
                 // ═══ DRAIN COALESCED INPUT ═══
@@ -349,6 +362,7 @@ namespace FlyShelf.Classes
                 // we can scroll with perfect sub-pixel precision. This completely eliminates low-velocity
                 // frame-skipping and stutter, rendering at the screen's maximum high-FPS.
                 sv.ScrollToVerticalOffset(state.TrueOffset);
+                state.LastSetOffset = state.TrueOffset;
 
                 // Exponential deceleration (friction decay)
                 double friction = state.IsTouchpad 
@@ -380,6 +394,7 @@ namespace FlyShelf.Classes
                     double finalOffset = Math.Round(state.TrueOffset);
                     sv.ScrollToVerticalOffset(finalOffset);
                     state.TrueOffset = finalOffset;
+                    state.LastSetOffset = finalOffset;
                 }
                 else
                 {

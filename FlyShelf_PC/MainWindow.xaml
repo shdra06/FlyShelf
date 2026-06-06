@@ -1761,16 +1761,16 @@
                         <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
                              <Setter TargetName="InnerHighlightBorder" Property="Padding" Value="3" />
                              <Setter TargetName="ItemIcon" Property="Stretch" Value="Uniform" />
-                             <Setter TargetName="ItemIcon" Property="Height" Value="NaN" />
+                             <Setter TargetName="ItemIcon" Property="Height" Value="165" />
                              <Setter TargetName="ItemIcon" Property="MaxHeight" Value="165" />
-                             <Setter TargetName="ItemIcon" Property="Width" Value="NaN" />
+                             <Setter TargetName="ItemIcon" Property="Width" Value="180" />
                              <Setter TargetName="ItemIcon" Property="Grid.ColumnSpan" Value="2" />
                              <Setter TargetName="ItemIcon" Property="HorizontalAlignment" Value="Center" />
                              <Setter TargetName="ItemIcon" Property="Margin" Value="0" />
                              <Setter TargetName="GifItemIcon" Property="Stretch" Value="Uniform" />
-                             <Setter TargetName="GifItemIcon" Property="Height" Value="NaN" />
+                             <Setter TargetName="GifItemIcon" Property="Height" Value="165" />
                              <Setter TargetName="GifItemIcon" Property="MaxHeight" Value="165" />
-                             <Setter TargetName="GifItemIcon" Property="Width" Value="NaN" />
+                             <Setter TargetName="GifItemIcon" Property="Width" Value="180" />
                              <Setter TargetName="GifItemIcon" Property="Grid.ColumnSpan" Value="2" />
                              <Setter TargetName="GifItemIcon" Property="HorizontalAlignment" Value="Center" />
                              <Setter TargetName="GifItemIcon" Property="Margin" Value="0" />
@@ -1780,6 +1780,8 @@
                              <Setter TargetName="IconBorder" Property="Background" Value="Transparent" />
                              <Setter TargetName="IconBorder" Property="Padding" Value="0" />
                              <Setter TargetName="IconBorder" Property="CornerRadius" Value="11" />
+                             <Setter TargetName="IconBorder" Property="Width" Value="180" />
+                             <Setter TargetName="IconBorder" Property="Height" Value="165" />
                              <Setter TargetName="ImagePlaceholderBorder" Property="Margin" Value="0" />
                              <Setter TargetName="ImagePlaceholderBorder" Property="Grid.ColumnSpan" Value="2" />
                              <Setter TargetName="ImagePlaceholderBorder" Property="HorizontalAlignment" Value="Center" />

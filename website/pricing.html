@@ -743,11 +743,11 @@
                   })
                 });
 
-                if (!verifyRes.ok) {
-                  throw new Error('Payment signature verification failed.');
-                }
-
                 const verifyData = await verifyRes.json();
+
+                if (!verifyRes.ok) {
+                  throw new Error(verifyData.error || `Server returned ${verifyRes.status}`);
+                }
 
                 if (verifyData.success) {
                   generatedKey = verifyData.licenseKey;
@@ -770,12 +770,12 @@
                   confirmEmail.textContent = email;
                   confirmAmount.textContent = region === 'USD' ? '$9.99' : '₹299';
                 } else {
-                  alert('Verification failed. Please contact support.');
+                  alert('Verification failed: ' + (verifyData.error || 'Unknown error'));
                   modalStageLoading.style.display = 'none';
                 }
               } catch (verifyErr) {
                 console.error(verifyErr);
-                alert('Verification error. Please contact support.');
+                alert('Verification error: ' + verifyErr.message);
                 modalStageLoading.style.display = 'none';
               }
 
