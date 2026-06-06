@@ -29,7 +29,7 @@ namespace FlyShelf.Classes
         // ═══ Natural Velocity Physics Constants (Clipboard Specs) ═══
         private const double ScrollFriction      = 0.94;   // Per-frame decay (smooth luxurious glide for mouse wheel sweeps)
         private const double MaxVelocity         = 45.0;   // Maximum speed cap in pixels/frame (reduced from 90.0 to force more drawing steps, stable scrolling, and prevent high-speed stroboscopic jumps)
-        private const double TouchpadMul         = 0.33;   // Touchpad micro-step scale multiplier (decreased from 0.55 to reduce input gain)
+        private const double TouchpadMul         = 0.07;   // Touchpad micro-step scale multiplier (adjusted for continuous linear input mapping)
         private const double MouseMul            = 0.06;   // Mouse wheel step scale multiplier (reduced from 0.45 to target ~120px scroll distance per notch)
         private const double MinImpulse          = 0.3;    // Minimum impulse threshold for micro-scrolls
         private const double MinVelocity         = 0.05;   // Velocity below this → complete stop (prevents sub-pixel crawl and end-of-scroll micro jitter)
@@ -223,40 +223,10 @@ namespace FlyShelf.Classes
 
             if (state.IsTouchpad)
             {
-                // Quantized range-mapped touchpad scrolling: 
-                // Classifies touchpad raw displacement into 5 discrete motion ranges to provide 
-                // highly consistent, controlled, and buttery-smooth movement, avoiding erratic delta spikes.
-                double rawAbs = Math.Abs(rawDelta);
-                double baseImpulse;
-
-                if (rawAbs <= 5.0)
-                {
-                    // Crawling: ultra-smooth, fine adjustments
-                    baseImpulse = 1.20;
-                }
-                else if (rawAbs <= 15.0)
-                {
-                    // Micro-scroll: slow, controlled crawling
-                    baseImpulse = 2.60;
-                }
-                else if (rawAbs <= 32.0)
-                {
-                    // Medium-slow scroll
-                    baseImpulse = 5.50;
-                }
-                else if (rawAbs <= 60.0)
-                {
-                    // Medium swipe
-                    baseImpulse = 12.00;
-                }
-                else
-                {
-                    // Fast flick
-                    baseImpulse = 22.00;
-                }
-
-                // Final impulse is scaled by the touchpad sensitivity dial TouchpadMul
-                impulse = Math.Sign(rawDelta) * baseImpulse * TouchpadMul;
+                // Continuous, linear trackpad scroll mapping to mirror the mouse wheel's consistency 
+                // and respond natively to fine trackpad acceleration/deceleration.
+                double capped = Math.Sign(rawDelta) * Math.Min(Math.Abs(rawDelta), DeltaCapTouchpad);
+                impulse = capped * TouchpadMul;
             }
             else
             {
@@ -352,45 +322,76 @@ namespace FlyShelf.Classes
                 timeScale = Math.Min(timeScale, 3.0);
                 state.LastFrameTick = currentTimestamp;
 
-                // Apply velocity vector with frame-time compensation
-                double displacement = state.Velocity * timeScale;
-                state.TrueOffset += displacement;
-                state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
-
-                // ═══ SUB-PIXEL SCROLLING ═══
-                // With Ideal text formatting and Dynamic Grayscale rendering active during scroll,
-                // we can scroll with perfect sub-pixel precision. This completely eliminates low-velocity
-                // frame-skipping and stutter, rendering at the screen's maximum high-FPS.
-                sv.ScrollToVerticalOffset(state.TrueOffset);
-                state.LastSetOffset = state.TrueOffset;
-
-                // Exponential deceleration (friction decay)
-                double friction = state.IsTouchpad 
-                    ? 0.88  // Decays slower to bridge trackpad input gaps
-                    : ScrollFriction; // Luxurious free coasting glide for mouse wheel sweeps
-
-                state.Velocity *= Math.Pow(friction, timeScale);
-
-                // Stop if at boundary or velocity is negligible
+                // Stop if at boundary
                 bool atBound = (state.TrueOffset <= 0 && state.Velocity < 0) ||
                                (state.TrueOffset >= sv.ScrollableHeight && state.Velocity > 0);
 
-                if (Math.Abs(state.Velocity) < MinVelocity || atBound)
+                if (atBound)
                 {
                     state.Velocity = 0.0;
+                    state.TrueOffset = Math.Clamp(Math.Round(state.TrueOffset), 0, sv.ScrollableHeight);
+                    sv.ScrollToVerticalOffset(state.TrueOffset);
+                    state.LastSetOffset = state.TrueOffset;
                     state.IsAnimating = false;
                     completed.Add(sv);
+                    continue;
+                }
 
-                    // ═══ FINAL PIXEL SNAP ═══
-                    // Snap to the nearest integer pixel upon complete stop to ensure
-                    // that static text is pixel-perfect and uses razor-sharp ClearType.
-                    double finalOffset = Math.Round(state.TrueOffset);
-                    sv.ScrollToVerticalOffset(finalOffset);
-                    state.TrueOffset = finalOffset;
-                    state.LastSetOffset = finalOffset;
+                // Check if user has stopped active scrolling and scroller should transition to critically damped spring settling
+                long nowMs = (long)(System.Diagnostics.Stopwatch.GetTimestamp() * 1000.0 / System.Diagnostics.Stopwatch.Frequency);
+                bool isCoasting = (nowMs - state.LastInputTime) > 100;
+                double settleThreshold = state.IsTouchpad ? 0.6 : 1.2;
+
+                if (isCoasting && Math.Abs(state.Velocity) < settleThreshold)
+                {
+                    double target = Math.Clamp(Math.Round(state.TrueOffset), 0, sv.ScrollableHeight);
+                    double x = state.TrueOffset - target;
+
+                    // If we are extremely close to target and velocity is negligible, complete the animation
+                    if (Math.Abs(x) < 0.01 && Math.Abs(state.Velocity) < 0.02)
+                    {
+                        state.Velocity = 0.0;
+                        state.TrueOffset = target;
+                        sv.ScrollToVerticalOffset(state.TrueOffset);
+                        state.LastSetOffset = state.TrueOffset;
+                        state.IsAnimating = false;
+                        completed.Add(sv);
+                    }
+                    else
+                    {
+                        // Critically damped spring-damper to ease smoothly to the target integer pixel
+                        double omega = state.IsTouchpad ? 0.3 : 0.22;
+                        double exp = Math.Exp(-omega * timeScale);
+                        double A = x;
+                        double B = state.Velocity + omega * A;
+
+                        double newX = (A + B * timeScale) * exp;
+                        double newV = (B - omega * (A + B * timeScale)) * exp;
+
+                        state.TrueOffset = Math.Clamp(target + newX, 0, sv.ScrollableHeight);
+                        state.Velocity = newV;
+
+                        sv.ScrollToVerticalOffset(state.TrueOffset);
+                        state.LastSetOffset = state.TrueOffset;
+                        anyAnimating = true;
+                    }
                 }
                 else
                 {
+                    // Apply velocity vector with frame-time compensation
+                    double displacement = state.Velocity * timeScale;
+                    state.TrueOffset += displacement;
+                    state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
+
+                    sv.ScrollToVerticalOffset(state.TrueOffset);
+                    state.LastSetOffset = state.TrueOffset;
+
+                    // Exponential deceleration (friction decay)
+                    double friction = state.IsTouchpad 
+                        ? 0.88  // Decays slower to bridge trackpad input gaps
+                        : ScrollFriction; // Luxurious free coasting glide for mouse wheel sweeps
+
+                    state.Velocity *= Math.Pow(friction, timeScale);
                     anyAnimating = true;
                 }
             }
