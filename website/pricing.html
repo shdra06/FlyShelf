@@ -468,7 +468,12 @@
       <div id="modal-stage-success" style="display: none; flex-direction: column; gap: 15px; text-align: center;">
         <div class="success-icon-badge"><ion-icon name="checkmark-outline"></ion-icon></div>
         <h4 style="font-size: 1.35rem; font-weight: 800; color: var(--text-primary);">Purchase Successful!</h4>
-        <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; max-width: 360px; margin: 0 auto;">Your Pro license has been securely registered and <strong>emailed to you</strong>. Copy your key below to activate Pro instantly.</p>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; max-width: 360px; margin: 0 auto;">Your Pro license key has been <strong>emailed to you</strong> and is shown below. Copy it to activate Pro instantly.</p>
+        
+        <!-- Email confirmation badge -->
+        <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 20px; padding: 6px 14px; font-size: 0.72rem; color: var(--color-emerald); font-weight: 600; margin: 0 auto;">
+          <ion-icon name="mail-outline" style="font-size: 0.9rem;"></ion-icon> Confirmation email sent
+        </div>
         
         <!-- Valid generated C# License Key -->
         <div class="license-glow-box" id="license-key-output">FS-PRO-XXXX-XXXX-XXXX-XXXX</div>
@@ -519,32 +524,7 @@
     </div>
   </div>
 
-  <!-- ═══════════════════════════════════════════ -->
-  <!-- KEY RECOVERY SECTION                       -->
-  <!-- ═══════════════════════════════════════════ -->
-  <div style="max-width: 600px; margin: 0 auto 80px auto; padding: 0 20px;">
-    <div class="widget-card glass" style="padding: 30px; text-align: center;">
-      <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-        <span class="title-icon-wrap" style="color: var(--color-cyan); margin-right: 0;"><ion-icon name="key"></ion-icon></span> Lost Your License Key?
-      </h3>
-      <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 20px;">
-        If you already paid but didn't receive your key (power cut, browser crash, etc.), enter the email you used during checkout and we'll send it to your inbox.
-      </p>
-      
-      <div style="display: flex; gap: 10px; align-items: center;">
-        <input type="email" id="recovery-email" placeholder="your@email.com" 
-          class="input-field-glow" 
-          style="flex: 1; padding: 12px 16px; border-radius: 10px; font-size: 0.9rem; border: 1px solid var(--border-light); background: var(--bg-card); color: var(--text-primary);" />
-        <button id="btn-recover-key" 
-          style="padding: 12px 20px; border-radius: 10px; border: none; background: linear-gradient(135deg, #00d2ff, #0b72e7); color: #fff; font-weight: 700; font-size: 0.82rem; cursor: pointer; white-space: nowrap; transition: all 0.2s ease;">
-          Send to Email
-        </button>
-      </div>
-      
-      <!-- Recovery Result -->
-      <div id="recovery-result" style="display: none; margin-top: 20px; text-align: center;"></div>
-    </div>
-  </div>
+
 
   <!-- JavaScript: Real Razorpay Checkout -->
   <script>
@@ -770,12 +750,12 @@
                   confirmEmail.textContent = email;
                   confirmAmount.textContent = region === 'USD' ? '$9.99' : '₹299';
                 } else {
-                  alert('Verification failed: ' + (verifyData.error || 'Unknown error'));
+                  alert('Verification could not be completed. Your payment is safe — please contact support@flyshelf.app');
                   modalStageLoading.style.display = 'none';
                 }
               } catch (verifyErr) {
                 console.error(verifyErr);
-                alert('Verification error: ' + verifyErr.message);
+                alert('Something went wrong verifying your payment. Your money is safe — please contact support@flyshelf.app if your key doesn\'t arrive by email.');
                 modalStageLoading.style.display = 'none';
               }
 
@@ -927,60 +907,7 @@
         });
       }
 
-      // ═══════════════════════════════════════════
-      // KEY RECOVERY — Lost your key?
-      // ═══════════════════════════════════════════
-      const btnRecoverKey = document.getElementById('btn-recover-key');
-      const recoveryEmail = document.getElementById('recovery-email');
-      const recoveryResult = document.getElementById('recovery-result');
 
-      if (btnRecoverKey) {
-        btnRecoverKey.addEventListener('click', async () => {
-          const email = recoveryEmail.value.trim();
-          if (!email || !email.includes('@')) {
-            recoveryResult.style.display = 'block';
-            recoveryResult.innerHTML = '<p style="color: #ff6b6b; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 6px;"><ion-icon name="warning-outline" style="font-size: 1.1rem;"></ion-icon> Please enter a valid email address.</p>';
-            return;
-          }
-
-          // Show loading state
-          btnRecoverKey.disabled = true;
-          const originalText = btnRecoverKey.textContent;
-          btnRecoverKey.textContent = 'Searching...';
-          recoveryResult.style.display = 'block';
-          recoveryResult.innerHTML = '<div class="payment-loader" style="width:20px;height:20px;border-width:2px;margin:10px auto;"></div>';
-
-          try {
-            const backendUrl = window.location.origin;
-            const response = await fetch(`${backendUrl}/api/recoverKey`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email })
-            });
-
-            const data = await response.json();
-
-            if (response.ok && data.success) {
-              recoveryResult.innerHTML = `
-                <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 20px; margin-top: 5px;">
-                  <p style="color: var(--color-emerald); font-weight: 700; font-size: 0.85rem; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;"><ion-icon name="mail-outline" style="font-size: 1.1rem;"></ion-icon> Key sent to your email!</p>
-                  <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5; margin: 0;">
-                    ${escapeHTML(data.message)}
-                  </p>
-                  <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 10px;">If you don't see it within a few minutes, check your spam/junk folder.</p>
-                </div>
-              `;
-            } else {
-              recoveryResult.innerHTML = `<p style="color: #ff6b6b; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 6px;"><ion-icon name="close-circle-outline" style="font-size: 1.1rem;"></ion-icon> ${escapeHTML(data.error) || 'No key found for this email.'}</p>`;
-            }
-          } catch (err) {
-            recoveryResult.innerHTML = '<p style="color: #ff6b6b; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 6px;"><ion-icon name="close-circle-outline" style="font-size: 1.1rem;"></ion-icon> Connection error. Please try again.</p>';
-          } finally {
-            btnRecoverKey.disabled = false;
-            btnRecoverKey.textContent = originalText;
-          }
-        });
-      }
 
     });
   </script>

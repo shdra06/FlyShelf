@@ -149,9 +149,14 @@ module.exports = async (req, res) => {
         body: JSON.stringify({ email, paymentId: razorpay_payment_id, generatedAt: new Date().toISOString() })
       }).catch(dbErr => console.warn('License key write failed:', dbErr));
 
-      // ─── Send confirmation email (best-effort) ───
+      // ─── Send confirmation email (with 1 retry for transient failures) ───
       try {
-        const emailResult = await sendPurchaseEmail(email, licenseKey, razorpay_payment_id);
+        let emailResult = await sendPurchaseEmail(email, licenseKey, razorpay_payment_id);
+        if (emailResult && emailResult.error) {
+          console.warn('[verifyPayment] Email attempt 1 failed, retrying in 1s...');
+          await new Promise(r => setTimeout(r, 1000));
+          emailResult = await sendPurchaseEmail(email, licenseKey, razorpay_payment_id);
+        }
         console.log('[verifyPayment] Email result:', JSON.stringify(emailResult));
       } catch (emailErr) {
         console.warn('[verifyPayment] Email send failed:', emailErr.message);
