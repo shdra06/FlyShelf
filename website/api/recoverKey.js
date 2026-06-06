@@ -54,7 +54,11 @@ module.exports = async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    const dbUrl = process.env.FIREBASE_RTDB_URL || 'https://flyshelf-official-pay-default-rtdb.firebaseio.com';
+    const dbUrl = process.env.FIREBASE_RTDB_URL;
+    if (!dbUrl) {
+      console.error('[recoverKey] FIREBASE_RTDB_URL not configured');
+      return res.status(500).json({ error: 'Database not configured.' });
+    }
 
     // Hash the email for rate limit key (don't store raw email)
     const emailHash = crypto.createHash('sha256').update(normalizedEmail).digest('hex').substring(0, 16);

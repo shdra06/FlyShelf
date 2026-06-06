@@ -88,7 +88,11 @@ module.exports = async (req, res) => {
     // Check if this payment_id has already been processed.
     // If so, return the existing license key — don't generate a new one.
     // ═══════════════════════════════════════════════════════════════
-    const dbUrl = process.env.FIREBASE_RTDB_URL || 'https://flyshelf-official-pay-default-rtdb.firebaseio.com';
+    const dbUrl = process.env.FIREBASE_RTDB_URL;
+    if (!dbUrl) {
+      console.error('[verifyPayment] FIREBASE_RTDB_URL not configured');
+      return res.status(500).json({ error: 'Database not configured.' });
+    }
     
     try {
       const existingRes = await fetch(`${dbUrl}/payments/${razorpay_payment_id}.json`);

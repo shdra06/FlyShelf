@@ -94,7 +94,11 @@ module.exports = async (req, res) => {
     console.log(`[webhook] payment.captured: ${paymentId} | ${amount / 100} ${currency}`);
 
     // ─── Step 3: Check if already processed (idempotency) ───
-    const dbUrl = process.env.FIREBASE_RTDB_URL || 'https://flyshelf-official-pay-default-rtdb.firebaseio.com';
+    const dbUrl = process.env.FIREBASE_RTDB_URL;
+    if (!dbUrl) {
+      console.error('[webhook] FIREBASE_RTDB_URL not configured');
+      return res.status(500).json({ error: 'Database not configured.' });
+    }
 
     try {
       const existingRes = await fetch(`${dbUrl}/payments/${paymentId}.json`);

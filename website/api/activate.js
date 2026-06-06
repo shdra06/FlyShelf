@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 
 const HMAC_SECRET = process.env.HMAC_SECRET;
 const JWT_SECRET = process.env.JWT_SECRET;
-const DB_URL = process.env.FIREBASE_RTDB_URL || 'https://flyshelf-official-pay-default-rtdb.firebaseio.com';
+const DB_URL = process.env.FIREBASE_RTDB_URL;
 const MAX_DEVICES = 3;
 const TOKEN_EXPIRY_DAYS = 7;
 
