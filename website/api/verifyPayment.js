@@ -135,25 +135,21 @@ module.exports = async (req, res) => {
         timestamp: new Date().toISOString()
       };
       
-      // Store payment record — MUST succeed before returning key
-      const writeRes = await fetch(`${dbUrl}/payments/${razorpay_payment_id}.json`, {
+      // Store payment record (best-effort — don't block key delivery)
+      await fetch(`${dbUrl}/payments/${razorpay_payment_id}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(record)
-      });
-      if (!writeRes.ok) {
-        console.error('[verifyPayment] Critical: payment record write failed');
-        return res.status(500).json({ error: 'Failed to store payment record. Contact support.' });
-      }
+      }).catch(err => console.warn('[verifyPayment] Payment record write failed:', err.message));
       
       const safeKey = licenseKey.replace(/\./g, '_').replace(/\//g, '_');
-      await fetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
+      fetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, paymentId: razorpay_payment_id, generatedAt: new Date().toISOString() })
       }).catch(dbErr => console.warn('License key write failed:', dbErr));
 
-      // ─── Send confirmation email (awaited — must complete before Vercel kills the function) ───
+      // ─── Send confirmation email (best-effort) ───
       try {
         const emailResult = await sendPurchaseEmail(email, licenseKey, razorpay_payment_id);
         console.log('[verifyPayment] Email result:', JSON.stringify(emailResult));
@@ -162,8 +158,7 @@ module.exports = async (req, res) => {
       }
 
     } catch (dbErr) {
-      console.error('[verifyPayment] Critical: payment record write failed:', dbErr.message);
-      return res.status(500).json({ error: 'Failed to store payment record. Contact support.' });
+      console.warn('[verifyPayment] DB write error (non-blocking):', dbErr.message);
     }
 
     return res.status(200).json({
