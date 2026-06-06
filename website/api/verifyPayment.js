@@ -1,5 +1,13 @@
 const crypto = require('crypto');
-const { sendPurchaseEmail } = require('./_email');
+
+// Safe import — if nodemailer isn't available, email is skipped (not fatal)
+let sendPurchaseEmail;
+try {
+  sendPurchaseEmail = require('./_email').sendPurchaseEmail;
+} catch (e) {
+  console.warn('[verifyPayment] _email module not available:', e.message);
+  sendPurchaseEmail = async () => ({ skipped: true, reason: 'module_unavailable' });
+}
 
 // ═══════════════════════════════════════════════════════════════════
 // HMAC secret for license-key checksum — MUST be set as env var.
@@ -77,9 +85,7 @@ module.exports = async (req, res) => {
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest("hex");
 
-    const sigBuffer = Buffer.from(razorpay_signature, 'hex');
-    const expectedBuffer = Buffer.from(expectedSignature, 'hex');
-    if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
+    if (expectedSignature !== razorpay_signature) {
       return res.status(400).json({ error: 'Payment signature mismatch.' });
     }
 
