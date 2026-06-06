@@ -95,12 +95,14 @@ namespace FlyShelf.Classes
         /// </summary>
         private async Task DiscoveryLoop(CancellationToken ct)
         {
-            Logger.LogAction("PEER", "🔍 Discovery loop started (30s interval)");
+            Logger.LogAction("PEER", "🔍 Discovery loop started (exponential backoff: 30s→5min)");
             while (!ct.IsCancellationRequested)
             {
                 try
                 {
-                    await Task.Delay(DISCOVERY_MS, ct);
+                    // Add random jitter (0-10s) to prevent thundering herd at synchronized boot
+                    int jitter = _jitterRng.Next(0, 10_000);
+                    await Task.Delay(_discoveryBackoffMs + jitter, ct);
                 }
                 catch (OperationCanceledException) { return; }
 
@@ -110,22 +112,47 @@ namespace FlyShelf.Classes
                 {
                     try
                     {
+                        int prevAlive = AliveCount;
                         await DiscoverAndHandshake();
+
+                        // Exponential backoff: if peers are still dead, double the interval
+                        if (_peers.Values.Any(p => !p.IsAlive))
+                        {
+                            int prev = _discoveryBackoffMs;
+                            _discoveryBackoffMs = Math.Min(_discoveryBackoffMs * 2, DISCOVERY_MAX_MS);
+                            if (_discoveryBackoffMs != prev)
+                                Logger.LogAction("PEER", $"🔍 Discovery backoff: {prev / 1000}s → {_discoveryBackoffMs / 1000}s (peers still dead)");
+                        }
+                        else if (AliveCount > prevAlive)
+                        {
+                            // Peer recovered — reset backoff to base
+                            _discoveryBackoffMs = DISCOVERY_MS;
+                            Logger.LogAction("PEER", $"🔍 Discovery backoff reset to {DISCOVERY_MS / 1000}s (peer recovered)");
+                        }
                     }
                     catch (Exception ex)
                     {
                         Logger.LogAction("PEER", $"Discovery loop error: {ex.Message}");
                     }
                 }
+                else
+                {
+                    // All peers alive — keep backoff at base
+                    _discoveryBackoffMs = DISCOVERY_MS;
+                }
             }
         }
 
         /// <summary>
         /// Marks a peer as dead, closes its WebSocket, fires PeerDisconnected event,
-        /// and attempts immediate failover to alternate transport.
+        /// and attempts immediate failover to alternate transport concurrently.
         /// </summary>
         private async Task HandlePeerDeath(PeerConnection peer)
         {
+            // FIX R8: Death guard — prevent duplicate HandlePeerDeath from concurrent threads
+            // (HeartbeatLoop, MonitorWebSocket, and HandlePeerFailure can all trigger this)
+            if (!peer.IsAlive) return;
+
             string oldTransport = peer.Transport;
             peer.IsAlive = false;
             peer.Transport = "offline";
@@ -140,51 +167,23 @@ namespace FlyShelf.Classes
             PeerDisconnected?.Invoke(peer.DeviceId);
             Logger.LogAction("PEER", $"❌ {peer.DeviceName} disconnected (was {oldTransport})");
 
-            // Attempt immediate failover to alternate transport
-            bool recovered = false;
-            bool lanEnabled = SettingsManager.Current.EnableLocalLAN;
+            // Delegate connection probing concurrently to Handshake
+            await Handshake(peer);
 
-            if (oldTransport == "LAN" && !string.IsNullOrEmpty(peer.CloudflareUrl))
-            {
-                // Was LAN, try Cloudflare
-                Logger.LogAction("PEER", $"🔄 Attempting Cloudflare failover for {peer.DeviceName}...");
-                recovered = await TryConnect(peer, peer.CloudflareUrl, "Cloudflare");
-            }
-            else if (oldTransport == "Cloudflare" && lanEnabled && !string.IsNullOrEmpty(peer.LanUrl))
-            {
-                // Was Cloudflare, try LAN
-                Logger.LogAction("PEER", $"🔄 Attempting LAN failover for {peer.DeviceName}...");
-                recovered = await TryConnect(peer, peer.LanUrl, "LAN");
-            }
-
-            if (recovered)
+            if (peer.IsAlive)
             {
                 Logger.LogAction("PEER", $"✅ {peer.DeviceName} recovered via {peer.Transport}");
-                TransportSwitched?.Invoke(peer.DeviceId, peer.Transport);
-                PeerConnected?.Invoke(peer.DeviceId, peer.Transport);
-            }
-            else
-            {
-                // Primary failover failed — try ALL cached URLs before falling back to Firebase (30s poll)
-                // This handles cases where both LAN and CF URLs may have changed since the failover attempt
-                if (lanEnabled && !string.IsNullOrEmpty(peer.LanUrl) && oldTransport != "LAN")
+                if (peer.Transport != oldTransport)
                 {
-                    recovered = await TryConnect(peer, peer.LanUrl, "LAN");
-                }
-                if (!recovered && !string.IsNullOrEmpty(peer.CloudflareUrl) && oldTransport != "Cloudflare")
-                {
-                    recovered = await TryConnect(peer, peer.CloudflareUrl, "Cloudflare");
-                }
-
-                if (recovered)
-                {
-                    Logger.LogAction("PEER", $"✅ {peer.DeviceName} recovered via cached {peer.Transport} (second attempt)");
                     TransportSwitched?.Invoke(peer.DeviceId, peer.Transport);
-                    PeerConnected?.Invoke(peer.DeviceId, peer.Transport);
                 }
-                // If still dead → DiscoveryLoop (30s) will check Firebase as last resort
             }
         }
+
+        // Exponential backoff for DiscoveryLoop — prevents Firebase saturation when peers are offline
+        private int _discoveryBackoffMs = DISCOVERY_MS; // Start at 30s, doubles up to DISCOVERY_MAX_MS
+        private const int DISCOVERY_MAX_MS = 300_000;    // Cap at 5 minutes
+        private static readonly Random _jitterRng = new();
 
         /// <summary>
         /// Called when a data transfer to a peer fails. Increments failure count
@@ -226,6 +225,7 @@ namespace FlyShelf.Classes
             _urlCleanedFromFirebase = false;
             _urlRequestSent = false;
             _lastUrlRequestTime = DateTime.MinValue; // Reset URL request throttle to send instantly
+            _discoveryBackoffMs = DISCOVERY_MS; // Reset discovery backoff to base on manual resync
 
             string globalUrl = CloudDiscoveryManager.CachedGlobalUrl;
             string localUrl = CloudDiscoveryManager.CachedLocalUrl;

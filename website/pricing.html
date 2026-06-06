@@ -268,6 +268,32 @@
       text-shadow: 0 0 10px rgba(0, 210, 255, 0.3);
       margin: 15px 0;
       position: relative;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .license-glow-box:hover {
+      border-color: rgba(0, 210, 255, 0.7);
+      box-shadow: 0 0 20px rgba(0, 210, 255, 0.15);
+    }
+    
+    .license-glow-box::after {
+      content: 'Click to copy';
+      position: absolute;
+      bottom: -18px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.6rem;
+      color: var(--text-muted);
+      font-family: inherit;
+      letter-spacing: 0;
+      font-weight: 400;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    
+    .license-glow-box:hover::after {
+      opacity: 1;
     }
     
     .btn-deeplink {
@@ -442,7 +468,7 @@
       <div id="modal-stage-success" style="display: none; flex-direction: column; gap: 15px; text-align: center;">
         <div class="success-icon-badge"><ion-icon name="checkmark-outline"></ion-icon></div>
         <h4 style="font-size: 1.35rem; font-weight: 800; color: var(--text-primary);">Purchase Successful!</h4>
-        <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; max-width: 360px; margin: 0 auto;">Your Pro license has been securely registered in our database. Copy your key below to activate Pro instantly.</p>
+        <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; max-width: 360px; margin: 0 auto;">Your Pro license has been securely registered and <strong>emailed to you</strong>. Copy your key below to activate Pro instantly.</p>
         
         <!-- Valid generated C# License Key -->
         <div class="license-glow-box" id="license-key-output">FS-PRO-XXXX-XXXX-XXXX-XXXX</div>
@@ -469,6 +495,31 @@
   </div>
 
   <!-- ═══════════════════════════════════════════ -->
+  <!-- RECENTLY ORDERED — Cached key (10 min)     -->
+  <!-- ═══════════════════════════════════════════ -->
+  <div id="recent-order-section" style="max-width: 600px; margin: 0 auto 30px auto; padding: 0 20px; display: none;">
+    <div class="widget-card glass" style="padding: 30px; text-align: center; border: 1px solid rgba(61, 220, 132, 0.2); box-shadow: 0 8px 30px rgba(61, 220, 132, 0.08);">
+      <h3 style="font-size: 1.1rem; font-weight: 800; margin-bottom: 6px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <span class="title-icon-wrap" style="color: var(--color-emerald); margin-right: 0;"><ion-icon name="checkmark-circle"></ion-icon></span> Recently Purchased
+      </h3>
+      <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 15px;">
+        Your license key from the recent purchase. <span id="recent-order-timer" style="color: var(--color-cyan); font-weight: 600;"></span>
+      </p>
+      <div class="license-glow-box" id="recent-order-key" style="font-size: 1rem; margin-bottom: 12px;"></div>
+      <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+        <button id="btn-copy-recent" 
+          style="padding: 8px 20px; border-radius: 8px; border: none; background: var(--color-emerald); color: #000; font-weight: 700; font-size: 0.78rem; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+          <ion-icon name="copy-outline" style="font-size: 1rem;"></ion-icon> Copy Key
+        </button>
+        <a id="recent-order-deeplink" href="#" 
+          style="padding: 8px 20px; border-radius: 8px; border: none; background: linear-gradient(135deg, #00d2ff, #0b72e7); color: #000; font-weight: 700; font-size: 0.78rem; cursor: pointer; text-decoration: none; display: flex; align-items: center; gap: 4px;">
+          <ion-icon name="flash-outline" style="font-size: 1rem;"></ion-icon> Activate App
+        </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════ -->
   <!-- KEY RECOVERY SECTION                       -->
   <!-- ═══════════════════════════════════════════ -->
   <div style="max-width: 600px; margin: 0 auto 80px auto; padding: 0 20px;">
@@ -477,7 +528,7 @@
         <span class="title-icon-wrap" style="color: var(--color-cyan); margin-right: 0;"><ion-icon name="key"></ion-icon></span> Lost Your License Key?
       </h3>
       <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 20px;">
-        If you already paid but didn't receive your key (power cut, browser crash, etc.), enter the email you used during checkout to recover it.
+        If you already paid but didn't receive your key (power cut, browser crash, etc.), enter the email you used during checkout and we'll send it to your inbox.
       </p>
       
       <div style="display: flex; gap: 10px; align-items: center;">
@@ -486,7 +537,7 @@
           style="flex: 1; padding: 12px 16px; border-radius: 10px; font-size: 0.9rem; border: 1px solid var(--border-light); background: var(--bg-card); color: var(--text-primary);" />
         <button id="btn-recover-key" 
           style="padding: 12px 20px; border-radius: 10px; border: none; background: linear-gradient(135deg, #00d2ff, #0b72e7); color: #fff; font-weight: 700; font-size: 0.82rem; cursor: pointer; white-space: nowrap; transition: all 0.2s ease;">
-          Recover Key
+          Send to Email
         </button>
       </div>
       
@@ -498,6 +549,15 @@
   <!-- JavaScript: Real Razorpay Checkout -->
   <script>
     document.addEventListener('DOMContentLoaded', () => {
+
+      // XSS sanitization helper (security audit v3.0)
+      function escapeHTML(str) {
+        if (!str) return '';
+        const d = document.createElement('div');
+        d.textContent = String(str);
+        return d.innerHTML;
+      }
+
       
       /* Glass blur lazy visibility (performance) */
       const glassEls = document.querySelectorAll('.glass');
@@ -692,6 +752,16 @@
                 if (verifyData.success) {
                   generatedKey = verifyData.licenseKey;
                   
+                  // Cache key in localStorage for 10 minutes
+                  try {
+                    localStorage.setItem('flyshelf_recent_purchase', JSON.stringify({
+                      key: generatedKey,
+                      email: email,
+                      timestamp: Date.now()
+                    }));
+                    showRecentOrder();
+                  } catch(e) {}
+                  
                   // Show success modal
                   modalStageLoading.style.display = 'none';
                   modalStageSuccess.style.display = 'flex';
@@ -745,20 +815,30 @@
       // COPY LICENSE KEY
       // ═══════════════════════════════════════════
 
-      btnCopyLicense.addEventListener('click', () => {
-        navigator.clipboard.writeText(generatedKey);
-        
-        const originalText = btnCopyLicense.innerHTML;
-        btnCopyLicense.innerHTML = '<ion-icon name="checkmark-done-outline"></ion-icon> Copied!';
-        btnCopyLicense.style.background = 'var(--color-emerald)';
-        btnCopyLicense.style.color = '#000';
-        
-        setTimeout(() => {
-          btnCopyLicense.innerHTML = originalText;
-          btnCopyLicense.style.background = '';
-          btnCopyLicense.style.color = '';
-        }, 1800);
+      // Click on the key box itself to copy
+      licenseKeyOutput.addEventListener('click', () => {
+        copyAndFlash(licenseKeyOutput, generatedKey);
       });
+
+      btnCopyLicense.addEventListener('click', () => {
+        copyAndFlash(btnCopyLicense, generatedKey);
+      });
+
+      // Reusable copy + flash feedback
+      function copyAndFlash(el, text) {
+        navigator.clipboard.writeText(text);
+        const original = el.innerHTML;
+        const origBg = el.style.background;
+        const origColor = el.style.color;
+        el.innerHTML = '<ion-icon name="checkmark-done-outline" style="vertical-align: middle;"></ion-icon> Copied!';
+        el.style.background = 'var(--color-emerald)';
+        el.style.color = '#000';
+        setTimeout(() => {
+          el.innerHTML = original;
+          el.style.background = origBg;
+          el.style.color = origColor;
+        }, 1800);
+      }
 
       // Close modal
       btnCloseModal.addEventListener('click', () => {
@@ -777,6 +857,75 @@
       // Vercel backend (api/verifyPayment.js) after payment verification.
       // HMAC secret is NEVER exposed to the client.
       // ═══════════════════════════════════════════
+
+      // ═══════════════════════════════════════════
+      // RECENTLY ORDERED — localStorage cache (10 min)
+      // ═══════════════════════════════════════════
+      const recentOrderSection = document.getElementById('recent-order-section');
+      const recentOrderKey = document.getElementById('recent-order-key');
+      const recentOrderTimer = document.getElementById('recent-order-timer');
+      const btnCopyRecent = document.getElementById('btn-copy-recent');
+      const recentOrderDeeplink = document.getElementById('recent-order-deeplink');
+
+      let recentTimerInterval = null;
+
+      function showRecentOrder() {
+        try {
+          const cached = JSON.parse(localStorage.getItem('flyshelf_recent_purchase'));
+          if (!cached || !cached.key) return;
+          
+          const elapsed = Date.now() - cached.timestamp;
+          const TEN_MINUTES = 10 * 60 * 1000;
+          
+          if (elapsed >= TEN_MINUTES) {
+            localStorage.removeItem('flyshelf_recent_purchase');
+            recentOrderSection.style.display = 'none';
+            return;
+          }
+          
+          recentOrderKey.textContent = cached.key;
+          recentOrderDeeplink.href = `flyshelf://activate?key=${cached.key}`;
+          recentOrderSection.style.display = 'block';
+          
+          // Countdown timer
+          if (recentTimerInterval) clearInterval(recentTimerInterval);
+          recentTimerInterval = setInterval(() => {
+            const remaining = TEN_MINUTES - (Date.now() - cached.timestamp);
+            if (remaining <= 0) {
+              localStorage.removeItem('flyshelf_recent_purchase');
+              recentOrderSection.style.display = 'none';
+              clearInterval(recentTimerInterval);
+              return;
+            }
+            const mins = Math.floor(remaining / 60000);
+            const secs = Math.floor((remaining % 60000) / 1000);
+            recentOrderTimer.textContent = `Expires in ${mins}:${secs.toString().padStart(2, '0')}`;
+          }, 1000);
+        } catch(e) {}
+      }
+
+      // Show cached order on page load
+      showRecentOrder();
+
+      // Click on recent key box to copy
+      if (recentOrderKey) {
+        recentOrderKey.addEventListener('click', () => {
+          const key = recentOrderKey.textContent;
+          copyAndFlash(recentOrderKey, key);
+        });
+      }
+
+      // Copy button for recent order
+      if (btnCopyRecent) {
+        btnCopyRecent.addEventListener('click', () => {
+          const key = recentOrderKey.textContent;
+          navigator.clipboard.writeText(key);
+          btnCopyRecent.innerHTML = '<ion-icon name="checkmark-done-outline" style="font-size: 1rem;"></ion-icon> Copied!';
+          setTimeout(() => {
+            btnCopyRecent.innerHTML = '<ion-icon name="copy-outline" style="font-size: 1rem;"></ion-icon> Copy Key';
+          }, 1800);
+        });
+      }
 
       // ═══════════════════════════════════════════
       // KEY RECOVERY — Lost your key?
@@ -812,30 +961,17 @@
             const data = await response.json();
 
             if (response.ok && data.success) {
-              const key = data.licenseKey;
               recoveryResult.innerHTML = `
                 <div style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 20px; margin-top: 5px;">
-                  <p style="color: var(--color-emerald); font-weight: 700; font-size: 0.85rem; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;"><ion-icon name="checkmark-circle-outline" style="font-size: 1.1rem;"></ion-icon> License key found!</p>
-                  <div class="license-glow-box" style="font-size: 1rem; margin-bottom: 12px;">${key}</div>
-                  <button id="btn-copy-recovered" 
-                    style="padding: 8px 20px; border-radius: 8px; border: none; background: var(--color-emerald); color: #000; font-weight: 700; font-size: 0.78rem; cursor: pointer;">
-                    <ion-icon name="copy-outline" style="vertical-align: middle; margin-right: 4px;"></ion-icon> Copy Key
-                  </button>
-                  <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 10px;">Purchased: ${new Date(data.purchasedAt).toLocaleDateString()}</p>
+                  <p style="color: var(--color-emerald); font-weight: 700; font-size: 0.85rem; margin-bottom: 10px; display: flex; align-items: center; justify-content: center; gap: 6px;"><ion-icon name="mail-outline" style="font-size: 1.1rem;"></ion-icon> Key sent to your email!</p>
+                  <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.5; margin: 0;">
+                    ${escapeHTML(data.message)}
+                  </p>
+                  <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 10px;">If you don't see it within a few minutes, check your spam/junk folder.</p>
                 </div>
               `;
-
-              // Wire up copy button for recovered key
-              document.getElementById('btn-copy-recovered')?.addEventListener('click', () => {
-                navigator.clipboard.writeText(key);
-                const btn = document.getElementById('btn-copy-recovered');
-                btn.innerHTML = '<ion-icon name="checkmark-done-outline" style="vertical-align: middle;"></ion-icon> Copied!';
-                setTimeout(() => {
-                  btn.innerHTML = '<ion-icon name="copy-outline" style="vertical-align: middle; margin-right: 4px;"></ion-icon> Copy Key';
-                }, 1800);
-              });
             } else {
-              recoveryResult.innerHTML = `<p style="color: #ff6b6b; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 6px;"><ion-icon name="close-circle-outline" style="font-size: 1.1rem;"></ion-icon> ${data.error || 'No key found for this email.'}</p>`;
+              recoveryResult.innerHTML = `<p style="color: #ff6b6b; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 6px;"><ion-icon name="close-circle-outline" style="font-size: 1.1rem;"></ion-icon> ${escapeHTML(data.error) || 'No key found for this email.'}</p>`;
             }
           } catch (err) {
             recoveryResult.innerHTML = '<p style="color: #ff6b6b; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; gap: 6px;"><ion-icon name="close-circle-outline" style="font-size: 1.1rem;"></ion-icon> Connection error. Please try again.</p>';

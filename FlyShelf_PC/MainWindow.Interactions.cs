@@ -499,36 +499,23 @@ namespace FlyShelf
 
                 if (!positionFound)
                 {
-                    // Fallback to cursor position
-                    Classes.NativeMethods.POINT pt;
-                    if (Classes.NativeMethods.GetCursorPos(out pt))
+                    var workArea = SystemParameters.WorkArea;
+                    double safeWidth = double.IsNaN(this.Width) ? 360 : this.Width;
+                    if (safeWidth <= 0) safeWidth = 320;
+
+                    if (Classes.NativeMethods.IsTaskbarAutoHideEnabled())
                     {
-                        // Convert physical cursor to logical pixels using the monitor of the cursor
-                        double scaleX = 1.0;
-                        double scaleY = 1.0;
-                        try
-                        {
-                            var monitor = Classes.Utils.MonitorUtil.GetMonitorWithCursor();
-                            scaleX = monitor.dpiX / 96.0;
-                            scaleY = monitor.dpiY / 96.0;
-                        }
-                        catch { }
-
-                        if (scaleX <= 0) scaleX = 1.0;
-                        if (scaleY <= 0) scaleY = 1.0;
-
-                        targetX = pt.X / scaleX;
-                        targetY = pt.Y / scaleY;
-                        Classes.Logger.LogAction("SUMMON", $"Spawn fallback at cursor logical X={targetX}, Y={targetY}");
+                        // Spawn fallback in bottom-right corner (mimicking Windows clipboard Win+V)
+                        targetX = workArea.Left + workArea.Width - 16 - (safeWidth / 2);
+                        Classes.Logger.LogAction("SUMMON", $"Spawn fallback (auto-hide enabled, bottom-right) at logical X={targetX}, Y={workArea.Top + workArea.Height}");
                     }
                     else
                     {
-                        // Last resort fallback: screen center
-                        var workArea = SystemParameters.WorkArea;
-                        targetX = workArea.Left + workArea.Width / 2;
-                        targetY = workArea.Top + workArea.Height - 50;
-                        Classes.Logger.LogAction("SUMMON", $"Spawn fallback at workarea center logical X={targetX}, Y={targetY}");
+                        // Spawn fallback in bottom-left corner (where widget rests by default)
+                        targetX = workArea.Left + 16 + (safeWidth / 2);
+                        Classes.Logger.LogAction("SUMMON", $"Spawn fallback (auto-hide disabled, bottom-left) at logical X={targetX}, Y={workArea.Top + workArea.Height}");
                     }
+                    targetY = workArea.Top + workArea.Height;
                 }
 
                 ShowNearPosition(targetX, targetY, 1, false, false); // mode = 1, isPersistent = false, stealFocus = false (native clipboard behavior: don't steal focus from active app)

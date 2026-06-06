@@ -32,8 +32,8 @@
     "pairing_codes": {
       "$code": {
         ".read": "auth != null",
-        ".write": "auth != null",
-        ".validate": "newData.hasChildren(['deviceId', 'pairingKey'])"
+        ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)",
+        ".validate": "newData.hasChildren(['deviceId', 'pairingKey', 'uid'])"
       },
       ".read": false,
       ".write": false
@@ -49,7 +49,7 @@
     "forced_sync": {
       "$deviceId": {
         ".read": "auth != null",
-        ".write": "auth != null"
+        ".write": "auth != null && newData.child('uid').val() === auth.uid"
       },
       ".read": false,
       ".write": false
@@ -57,7 +57,7 @@
     "device_groups": {
       ".read": "auth != null",
       "$groupId": {
-        ".write": "auth != null"
+        ".write": "auth != null && (!data.exists() || data.child('ownerUid').val() === auth.uid)"
       }
     },
     "global_clipboard": {
@@ -81,9 +81,9 @@
       },
       "activations": {
         "$keyId": {
-          ".read": true,
+          ".read": "auth != null",
           "$deviceId": {
-            ".write": true,
+            ".write": "auth != null",
             ".validate": "newData.hasChildren(['deviceId', 'activatedAt'])"
           }
         }

@@ -235,6 +235,7 @@ namespace FlyShelf.Classes
         private static Timer? _saveTimer;
         private static readonly object _lock = new();
         private static volatile bool _isDirty;
+        private static bool _isLoaded;
 
         /// <summary>All note days, sorted newest-first.</summary>
         public static ObservableCollection<NoteDay> Days => _days;
@@ -259,6 +260,7 @@ namespace FlyShelf.Classes
                     if (!File.Exists(_notesPath))
                     {
                         _days = new ObservableCollection<NoteDay>();
+                        _isLoaded = true;
                         return;
                     }
 
@@ -270,6 +272,12 @@ namespace FlyShelf.Classes
 
                     if (loaded != null)
                     {
+                        // Normalize all dates to local timezone to prevent UTC timezone shift bugs
+                        foreach (var d in loaded)
+                        {
+                            d.Date = d.Date.Kind == DateTimeKind.Utc ? d.Date.ToLocalTime().Date : d.Date.Date;
+                        }
+
                         // Sort newest first
                         var sorted = loaded.OrderByDescending(d => d.Date).ToList();
                         _days = new ObservableCollection<NoteDay>(sorted);
@@ -292,10 +300,42 @@ namespace FlyShelf.Classes
                     {
                         _days = new ObservableCollection<NoteDay>();
                     }
+                    _isLoaded = true;
                 }
                 catch (Exception ex)
                 {
                     Logger.LogAction("NOTES", $"Failed to load notes: {ex.Message}");
+                    
+                    // Attempt backup recovery
+                    string backupPath = _notesPath + ".bak";
+                    if (File.Exists(backupPath))
+                    {
+                        try
+                        {
+                            string backupJson = File.ReadAllText(backupPath);
+                            var loadedBackup = JsonSerializer.Deserialize<List<NoteDay>>(backupJson, new JsonSerializerOptions
+                            {
+                                PropertyNameCaseInsensitive = true
+                            });
+                            if (loadedBackup != null)
+                            {
+                                foreach (var d in loadedBackup)
+                                {
+                                    d.Date = d.Date.Kind == DateTimeKind.Utc ? d.Date.ToLocalTime().Date : d.Date.Date;
+                                }
+                                var sorted = loadedBackup.OrderByDescending(d => d.Date).ToList();
+                                _days = new ObservableCollection<NoteDay>(sorted);
+                                _isLoaded = true;
+                                Logger.LogAction("NOTES", "Successfully recovered notes from backup file (.bak)!");
+                                return;
+                            }
+                        }
+                        catch (Exception backupEx)
+                        {
+                            Logger.LogAction("NOTES", $"Backup recovery also failed: {backupEx.Message}");
+                        }
+                    }
+
                     _days = new ObservableCollection<NoteDay>();
                 }
             }
@@ -386,6 +426,29 @@ namespace FlyShelf.Classes
         /// <summary>Immediately persist to disk (atomic write).</summary>
         public static void SaveNow()
         {
+            // DEADLOCK FIX: Snapshot the collection OUTSIDE the lock.
+            // Previously, Dispatcher.Invoke() was called while holding _lock,
+            // causing AB-BA deadlock when the UI thread also needed _lock.
+            if (!_isLoaded) return;
+
+            List<NoteDay> snapshot;
+            try
+            {
+                // Must read ObservableCollection on UI thread if it was created there
+                if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == false)
+                {
+                    snapshot = System.Windows.Application.Current.Dispatcher.Invoke(() => _days.ToList());
+                }
+                else
+                {
+                    snapshot = _days.ToList();
+                }
+            }
+            catch
+            {
+                try { snapshot = _days.ToList(); } catch { return; }
+            }
+
             lock (_lock)
             {
                 try
@@ -393,30 +456,24 @@ namespace FlyShelf.Classes
                     if (!Directory.Exists(_appDataDir))
                         Directory.CreateDirectory(_appDataDir);
 
-                    // Snapshot the data
-                    List<NoteDay> snapshot;
-                    try
-                    {
-                        // Must read ObservableCollection on UI thread if it was created there
-                        if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == false)
-                        {
-                            snapshot = System.Windows.Application.Current.Dispatcher.Invoke(() => _days.ToList());
-                        }
-                        else
-                        {
-                            snapshot = _days.ToList();
-                        }
-                    }
-                    catch
-                    {
-                        snapshot = _days.ToList();
-                    }
-
                     string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
                     {
                         WriteIndented = false,
                         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
                     });
+
+                    // Create backup copy first
+                    if (File.Exists(_notesPath))
+                    {
+                        try
+                        {
+                            File.Copy(_notesPath, _notesPath + ".bak", overwrite: true);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogAction("NOTES", $"Failed to create notes backup: {ex.Message}");
+                        }
+                    }
 
                     // Atomic write: tmp → rename
                     string tmpPath = _notesPath + ".tmp";

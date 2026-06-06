@@ -88,8 +88,76 @@ namespace FlyShelf.Classes
         private readonly List<TaskCompletionSource<string>> _longPollWaiters = new List<TaskCompletionSource<string>>();
         private readonly object _longPollLock = new object();
 
+        // ═══════════════════════════════════════════════════════════════════
+        // SSE: Server-Sent Events for instant push to web clients
+        // Reuses proven pattern from /api/logs/stream
+        // ═══════════════════════════════════════════════════════════════════
+        private readonly ConcurrentDictionary<int, HttpListenerResponse> _sseClipboardClients = new();
+        private int _sseClipboardClientIdCounter = 0;
+
         /// <summary>
-        /// Call this whenever the clipboard changes to instantly unblock all waiting long-poll clients.
+        /// Broadcasts a clipboard change event to all connected SSE web clients.
+        /// </summary>
+        private void BroadcastClipboardToSSE(string payload)
+        {
+            if (_sseClipboardClients.IsEmpty) return;
+            byte[] bytes = Encoding.UTF8.GetBytes($"data: {payload}\n\n");
+            var dead = new List<int>();
+            foreach (var kvp in _sseClipboardClients)
+            {
+                try
+                {
+                    kvp.Value.OutputStream.Write(bytes, 0, bytes.Length);
+                    kvp.Value.OutputStream.Flush();
+                }
+                catch { dead.Add(kvp.Key); }
+            }
+            foreach (var id in dead) _sseClipboardClients.TryRemove(id, out _);
+        }
+
+        /// <summary>
+        /// Handles a single SSE connection for clipboard events.
+        /// Keeps the connection alive with 20s heartbeats until client disconnects.
+        /// </summary>
+        private async Task ServeClipboardEventStream(HttpListenerRequest req, HttpListenerResponse res)
+        {
+            res.StatusCode = 200;
+            res.ContentType = "text/event-stream";
+            res.AddHeader("Cache-Control", "no-cache");
+            res.AddHeader("Connection", "keep-alive");
+            res.AddHeader("X-Accel-Buffering", "no"); // Disable Cloudflare/nginx buffering
+
+            // Send initial connected event
+            byte[] hello = Encoding.UTF8.GetBytes($"data: {{\"type\":\"connected\",\"ts\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}\n\n");
+            await res.OutputStream.WriteAsync(hello, 0, hello.Length);
+            await res.OutputStream.FlushAsync();
+
+            int clientId = Interlocked.Increment(ref _sseClipboardClientIdCounter);
+            _sseClipboardClients[clientId] = res;
+            Logger.LogAction("SSE", $"Clipboard SSE client #{clientId} connected ({_sseClipboardClients.Count} total)");
+
+            try
+            {
+                // Keep alive with 20s heartbeat (Cloudflare has ~100s idle timeout)
+                while (true)
+                {
+                    await Task.Delay(20000);
+                    byte[] heartbeat = Encoding.UTF8.GetBytes(": heartbeat\n\n");
+                    await res.OutputStream.WriteAsync(heartbeat, 0, heartbeat.Length);
+                    await res.OutputStream.FlushAsync();
+                }
+            }
+            catch { /* Client disconnected */ }
+            finally
+            {
+                _sseClipboardClients.TryRemove(clientId, out _);
+                Logger.LogAction("SSE", $"Clipboard SSE client #{clientId} disconnected ({_sseClipboardClients.Count} remaining)");
+            }
+        }
+
+        /// <summary>
+        /// Call this whenever the clipboard changes to instantly push to all connected clients.
+        /// Unblocks long-poll waiters AND broadcasts to SSE clients.
         /// </summary>
         public void NotifyClipboardChanged(string itemType = "clipboard", string title = "")
         {
@@ -97,6 +165,8 @@ namespace FlyShelf.Classes
             _cachedSyncJson = null;
 
             string payload = $"{{\"type\":\"{itemType}\",\"title\":\"{title.Replace("\"", "'").Replace("\n", " ")}\",\"ts\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
+            
+            // 1. Unblock long-poll waiters
             int waiterCount;
             lock (_longPollLock)
             {
@@ -107,7 +177,12 @@ namespace FlyShelf.Classes
                 }
                 _longPollWaiters.Clear();
             }
-            Logger.LogAction("PUSH", $"NotifyClipboardChanged: {itemType} — unblocked {waiterCount} waiting client(s)");
+
+            // 2. Broadcast to SSE clients (instant push)
+            int sseCount = _sseClipboardClients.Count;
+            BroadcastClipboardToSSE(payload);
+
+            Logger.LogAction("PUSH", $"NotifyClipboardChanged: {itemType} — {waiterCount} long-poll, {sseCount} SSE client(s)");
         }
         
         public string ServerUrl { get; private set; } = "Not Running";
@@ -198,9 +273,11 @@ namespace FlyShelf.Classes
             // Valid for 2 years
             var cert = req.CreateSelfSigned(DateTimeOffset.Now.AddDays(-1), DateTimeOffset.Now.AddYears(2));
 
-            // Export with private key
+            // Export with private key (atomic write: tmp → rename to prevent corruption on crash)
             var exported = cert.Export(X509ContentType.Pfx, "advanceclip_tls");
-            File.WriteAllBytes(certPath, exported);
+            string certTmpPath = certPath + ".tmp";
+            File.WriteAllBytes(certTmpPath, exported);
+            File.Move(certTmpPath, certPath, true);
 
             // Re-import from file (ensures proper key storage)
             var finalCert = X509CertificateLoader.LoadPkcs12FromFile(certPath, "advanceclip_tls", X509KeyStorageFlags.Exportable);
@@ -277,6 +354,15 @@ namespace FlyShelf.Classes
                     }
                     CloudDiscoveryManager.CachedGlobalUrl = url; // Cache for file download URL construction
                     CloudDiscoveryManager.CachedTunnelVerified = _cfDaemon.IsTunnelVerified; // Only allow file downloads if verified
+
+                    // Step 1: Instantly notify all CONNECTED peers via P2P WebSocket (<100ms, no Firebase)
+                    _ = Task.Run(async () =>
+                    {
+                        try { await PeerManager.Instance?.BroadcastUrlUpdate(ServerUrl, url); }
+                        catch { /* PeerManager may not be initialized yet */ }
+                    });
+
+                    // Step 2: Write to Firebase for OFFLINE peers to discover later
                     _ = CloudDiscoveryManager.PushTunnelUrl(url, true, ServerUrl);
                 }
             };
@@ -342,6 +428,17 @@ namespace FlyShelf.Classes
                     }
                 }
             };
+        }
+
+        /// <summary>
+        /// Writes a compact JSON response { "ok": ..., "message": "..." } and sets content-type.
+        /// Centralises the boilerplate that was duplicated across every HTTP handler.
+        /// </summary>
+        private static async Task WriteJsonResponse(HttpListenerResponse res, bool ok, string message)
+        {
+            var b = Encoding.UTF8.GetBytes($"{{\"ok\":{(ok ? "true" : "false")},\"message\":\"{message}\"}}");
+            res.ContentType = "application/json";
+            await res.OutputStream.WriteAsync(b, 0, b.Length);
         }
 
         // ═══ Server Lifecycle (Start/Stop/TLS/Proxy) moved to NetworkSyncServer.Lifecycle.cs ═══

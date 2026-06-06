@@ -337,6 +337,7 @@ namespace FlyShelf.ViewModels
         private static readonly Regex _rxSql = new Regex(@"(SELECT\s+.*\s+FROM|INSERT\s+INTO|CREATE\s+(TABLE|DATABASE)|ALTER\s+TABLE|WHERE\s+\w+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex _rxHtml = new Regex(@"<\/?(html|div|span|body|script|style|form|table)[\s>]", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex _rxSlashTimer = new Regex(@"^\/\d+$", RegexOptions.Compiled);
+        private static readonly Regex _rxFunction = new Regex(@"\b(void|int|string|double|float|bool|var|let|const)?\s*\w+\s*\([^)]*\)\s*({|;|=>)");
 
         private int _currentMode = 0; // 0=Mini, 1=Medium, 2=Full
         public int CurrentMode

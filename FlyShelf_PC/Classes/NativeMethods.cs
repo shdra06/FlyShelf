@@ -634,5 +634,36 @@ public static partial class NativeMethods
     }
 
     #endregion
+
+    #region Auto-Hide Detection
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct APPBARDATA
+    {
+        public int cbSize;
+        public IntPtr hWnd;
+        public uint uCallbackMessage;
+        public uint uEdge;
+        public RECT rc;
+        public IntPtr lParam;
+    }
+
+    [DllImport("shell32.dll")]
+    internal static extern IntPtr SHAppBarMessage(uint dwMessage, ref APPBARDATA pData);
+
+    public static bool IsTaskbarAutoHideEnabled()
+    {
+        try
+        {
+            var abd = new APPBARDATA();
+            abd.cbSize = Marshal.SizeOf(typeof(APPBARDATA));
+            IntPtr result = SHAppBarMessage(0x04 /*ABM_GETSTATE*/, ref abd);
+            return (result.ToInt32() & 0x01 /*ABS_AUTOHIDE*/) != 0;
+        }
+        catch { return false; }
+    }
+
+    #endregion
 }
+
 

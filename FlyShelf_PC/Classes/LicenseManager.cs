@@ -28,6 +28,9 @@ namespace FlyShelf.Classes
         public string ActivatedAt { get; set; } = "";
         public string DeviceId { get; set; } = "";
         public DailyUsageData DailyUsage { get; set; } = new();
+        // ═══ Server-side JWT validation (v2.1.0) ═══
+        public string ActivationToken { get; set; } = ""; // JWT from /api/activate
+        public string LastValidated { get; set; } = "";   // ISO timestamp of last successful server validation
     }
 
     public class DailyUsageData
@@ -55,6 +58,11 @@ namespace FlyShelf.Classes
 
         private static LicenseData _data = new();
         private static bool _loaded = false;
+
+        // ═══ Server-side validation endpoint (v2.1.0) ═══
+        private const string VERCEL_API_BASE = "https://fly-shelf.vercel.app/api";
+        private const int REVALIDATION_INTERVAL_DAYS = 7;
+        private const int OFFLINE_GRACE_PERIOD_DAYS = 14;
 
         // ═══ DAILY LIMITS (Free tier) ═══
         // All these features are 100% offline — generous limits cost us nothing
@@ -395,7 +403,7 @@ namespace FlyShelf.Classes
         /// Validate and activate a license key. Returns true if activation succeeds.
         /// Key format: FS-PRO-XXXX-XXXX-XXXX-XXXX (alphanumeric, 16 chars payload)
         /// The last 4 chars are an HMAC checksum of the first 12 chars.
-        /// Validation: 1) Offline HMAC check, 2) Server-side Firebase check (async, non-blocking).
+        /// v2.1.0: Calls server-side /api/activate for JWT token. Falls back to offline activation.
         /// </summary>
         public static bool ActivateLicense(string key)
         {
@@ -410,30 +418,58 @@ namespace FlyShelf.Classes
             string payload = key.Replace("FS-PRO-", "").Replace("-", "");
             if (payload.Length != 16) return false;
 
-            // Validate checksum: first 12 chars are random, last 4 are HMAC checksum
+            // Fast client-side pre-check (prevents sending obviously fake keys to server)
             string randomPart = payload.Substring(0, 12);
             string checksum = payload.Substring(12, 4);
-
             string expectedChecksum = ComputeChecksum(randomPart);
             if (!checksum.Equals(expectedChecksum, StringComparison.OrdinalIgnoreCase))
                 return false;
 
-            // Valid key — activate locally
+            // Valid format — attempt server-side activation
             string deviceId = SettingsManager.Current.DeviceId;
-            // Use NTP-synced time (tamper-resistant), fallback to OS time
             string activationTime = NetworkClock.IsSynced
                 ? NetworkClock.UtcNow.ToString("o")
                 : DateTime.UtcNow.ToString("o");
 
+            // Try server-side activation (blocking — user is waiting for result)
+            string serverToken = null;
+            string serverError = null;
+            try
+            {
+                var result = ActivateOnServerAsync(key, deviceId).GetAwaiter().GetResult();
+                serverToken = result.token;
+                serverError = result.error;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("LICENSE", $"Server activation failed (will activate offline): {ex.Message}");
+            }
+
+            // If server explicitly rejected the key, fail activation
+            if (!string.IsNullOrEmpty(serverError))
+            {
+                Logger.LogAction("LICENSE", $"Server rejected activation: {serverError}");
+                return false;
+            }
+
+            // Activate locally (with or without JWT)
             _data.LicenseKey = key;
             _data.Tier = "pro";
             _data.ActivatedAt = activationTime;
             _data.DeviceId = deviceId;
+            if (!string.IsNullOrEmpty(serverToken))
+            {
+                _data.ActivationToken = serverToken;
+                _data.LastValidated = activationTime;
+                Logger.LogAction("LICENSE", $"Pro license activated with server JWT: {MaskedKey}");
+            }
+            else
+            {
+                Logger.LogAction("LICENSE", $"Pro license activated offline (JWT pending): {MaskedKey}");
+            }
             Save();
 
-            Logger.LogAction("LICENSE", $"Pro license activated: {MaskedKey}");
-
-            // Push updated licensing properties to active_devices so companion apps are updated in real-time
+            // Push updated licensing properties to active_devices
             if (NetworkSyncServer.Instance != null && NetworkSyncServer.Instance.ServerUrl != "Not Running" && NetworkSyncServer.Instance.ServerUrl != "Offline")
             {
                 _ = CloudDiscoveryManager.PushTunnelUrl(
@@ -444,10 +480,52 @@ namespace FlyShelf.Classes
                 );
             }
 
-            // Fire-and-forget: register activation on server (non-blocking)
-            _ = ValidateKeyOnServerAsync(key, deviceId);
+            // If we didn't get a JWT, fire-and-forget legacy Firebase validation
+            if (string.IsNullOrEmpty(serverToken))
+            {
+                _ = ValidateKeyOnServerAsync(key, deviceId);
+            }
 
             return true;
+        }
+
+        /// <summary>
+        /// Call the Vercel /api/activate endpoint to get a signed JWT.
+        /// Returns (token, null) on success, (null, errorCode) on server rejection,
+        /// or (null, null) on network failure.
+        /// </summary>
+        private static async Task<(string token, string error)> ActivateOnServerAsync(string key, string deviceId)
+        {
+            try
+            {
+                var requestBody = JsonSerializer.Serialize(new { key, deviceId });
+                var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync($"{VERCEL_API_BASE}/activate", content);
+
+                string responseJson = await response.Content.ReadAsStringAsync();
+                using var doc = JsonDocument.Parse(responseJson);
+                var root = doc.RootElement;
+
+                if (response.IsSuccessStatusCode && root.TryGetProperty("success", out var success) && success.GetBoolean())
+                {
+                    string jwt = root.GetProperty("token").GetString() ?? "";
+                    return (jwt, null);
+                }
+
+                // Server explicitly rejected
+                string errCode = root.TryGetProperty("error", out var errProp) ? errProp.GetString() ?? "unknown" : "unknown";
+                return (null, errCode);
+            }
+            catch (TaskCanceledException)
+            {
+                // Timeout — treat as network failure
+                return (null, null);
+            }
+            catch (HttpRequestException)
+            {
+                // Network failure — allow offline activation
+                return (null, null);
+            }
         }
 
         /// <summary>Deactivate the current license and revert to free tier.</summary>
@@ -456,6 +534,8 @@ namespace FlyShelf.Classes
             _data.LicenseKey = "";
             _data.Tier = "free";
             _data.ActivatedAt = "";
+            _data.ActivationToken = "";
+            _data.LastValidated = "";
             Save();
             Logger.LogAction("LICENSE", "License deactivated — reverted to Free tier");
 
@@ -496,7 +576,10 @@ namespace FlyShelf.Classes
                 {
                     if (File.Exists(_licensePath))
                     {
-                        string json = File.ReadAllText(_licensePath);
+                        string raw = File.ReadAllText(_licensePath);
+                        // [SECURITY FIX v2.1.0]: Decrypt DPAPI-encrypted license data (M-02)
+                        // Falls back to plaintext for backward compatibility with pre-v2.1.0 license files
+                        string json = SecureStorage.Decrypt(raw);
                         var loaded = JsonSerializer.Deserialize<LicenseData>(json, new JsonSerializerOptions
                         {
                             PropertyNameCaseInsensitive = true
@@ -569,8 +652,10 @@ namespace FlyShelf.Classes
                 {
                     WriteIndented = true
                 });
+                // [SECURITY FIX v2.1.0]: DPAPI-encrypt license data at rest (M-02)
+                string encrypted = SecureStorage.Encrypt(json);
                 string tmpPath = _licensePath + ".tmp";
-                File.WriteAllText(tmpPath, json);
+                File.WriteAllText(tmpPath, encrypted);
                 File.Move(tmpPath, _licensePath, overwrite: true);
             }
             catch (Exception ex)
@@ -619,10 +704,9 @@ namespace FlyShelf.Classes
         private static readonly HttpClient _httpClient = new() { Timeout = TimeSpan.FromSeconds(10) };
 
         /// <summary>
-        /// Register/validate the license key on the server.
-        /// - Records the activation (key + deviceId + timestamp) in Firebase RTDB
-        /// - Checks if the key has been revoked
-        /// - Checks if the key is already activated on too many devices
+        /// Legacy Firebase validation — used for pre-v2.1.0 users without JWT.
+        /// Now uses authenticated Firebase calls (security audit v2.1.0).
+        /// Also attempts JWT migration: if this user has no JWT, tries /api/activate.
         /// Non-blocking — runs in background. If server is unreachable, offline activation stands.
         /// </summary>
         private static async Task ValidateKeyOnServerAsync(string key, string deviceId)
@@ -636,18 +720,26 @@ namespace FlyShelf.Classes
                     return;
                 }
 
-                // Sanitize key for Firebase path (replace dashes)
+                // Get Firebase auth token for authenticated REST calls (security audit v2.1.0)
+                string firebaseAuth = null;
+                try { firebaseAuth = await FirebaseAuthManager.GetIdTokenAsync(); } catch { }
+                // Helper to append ?auth= or &auth= to Firebase REST URLs
+                string AuthUrl(string url)
+                {
+                    if (string.IsNullOrEmpty(firebaseAuth)) return url;
+                    return url.Contains("?") ? $"{url}&auth={firebaseAuth}" : $"{url}?auth={firebaseAuth}";
+                }
+
                 string safeKey = key.Replace("-", "_");
 
                 // 1. Check if key is revoked
-                string revokeUrl = $"{dbUrl}/licenses/revoked/{safeKey}.json";
+                string revokeUrl = AuthUrl($"{dbUrl}/licenses/revoked/{safeKey}.json");
                 var revokeResponse = await _httpClient.GetAsync(revokeUrl);
                 if (revokeResponse.IsSuccessStatusCode)
                 {
                     string revokeJson = await revokeResponse.Content.ReadAsStringAsync();
                     if (revokeJson != "null" && revokeJson.Contains("true", StringComparison.OrdinalIgnoreCase))
                     {
-                        // Key has been revoked — deactivate locally
                         Logger.LogAction("LICENSE_SERVER", $"⚠️ Key {key} has been REVOKED on the server!");
                         DeactivateLicense();
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
@@ -656,92 +748,203 @@ namespace FlyShelf.Classes
                     }
                 }
 
-                // 2. Register this activation
+                // 2. Register this activation (authenticated)
                 string activationTime = NetworkClock.IsSynced
                     ? NetworkClock.UtcNow.ToString("o")
                     : DateTime.UtcNow.ToString("o");
 
-                string activationUrl = $"{dbUrl}/licenses/activations/{safeKey}/{deviceId}.json";
+                string activationUrl = AuthUrl($"{dbUrl}/licenses/activations/{safeKey}/{deviceId}.json");
                 var activationPayload = JsonSerializer.Serialize(new
                 {
                     deviceId,
                     activatedAt = activationTime,
-                    appVersion = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown"
+                    appVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown"
                 });
 
                 var content = new StringContent(activationPayload, Encoding.UTF8, "application/json");
                 var putResponse = await _httpClient.PutAsync(activationUrl, content);
 
                 if (putResponse.IsSuccessStatusCode)
-                {
                     Logger.LogAction("LICENSE_SERVER", $"✅ Activation recorded on server for device {deviceId}");
-                }
                 else
-                {
                     Logger.LogAction("LICENSE_SERVER", $"Server PUT failed: {putResponse.StatusCode}");
-                }
 
-                // 3. Check how many devices have activated this key
-                // ═══ ENFORCED DEVICE LIMIT (security audit v2.0.0) ═══
-                string devicesUrl = $"{dbUrl}/licenses/activations/{safeKey}.json?shallow=true";
+                // 3. Check device limit (authenticated)
+                string devicesUrl = AuthUrl($"{dbUrl}/licenses/activations/{safeKey}.json?shallow=true");
                 var devicesResponse = await _httpClient.GetAsync(devicesUrl);
                 if (devicesResponse.IsSuccessStatusCode)
                 {
                     string devicesJson = await devicesResponse.Content.ReadAsStringAsync();
-                    // shallow=true returns {"deviceId1":true,"deviceId2":true,...}
                     int deviceCount = devicesJson.Split("true", StringSplitOptions.None).Length - 1;
                     Logger.LogAction("LICENSE_SERVER", $"Key activated on {deviceCount} device(s)");
 
-                    // Max 3 devices per key — ENFORCED
                     if (deviceCount > 3)
                     {
-                        Logger.LogAction("LICENSE_SERVER", $"⚠️ Key used on {deviceCount} devices (max 3) — DEACTIVATING this device");
+                        Logger.LogAction("LICENSE_SERVER", $"⚠️ Key used on {deviceCount} devices (max 3) — DEACTIVATING");
                         DeactivateLicense();
                         System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                             Windows.ToastWindow.ShowToast("⚠️ License limit exceeded (max 3 devices). Please contact support."));
                         return;
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                // Server validation is non-blocking — if it fails, offline activation stands
-                Logger.LogAction("LICENSE_SERVER", $"Server validation failed (non-fatal): {ex.Message}");
-            }
-        }
 
-        /// <summary>
-        /// Periodic server check — call occasionally (e.g., on app startup) to verify
-        /// the license hasn't been revoked since last activation.
-        /// </summary>
-        public static async Task RevalidateLicenseAsync()
-        {
-            if (!IsPro || string.IsNullOrEmpty(_data.LicenseKey)) return;
-
-            try
-            {
-                string dbUrl = FirebaseSecrets.DatabaseUrl;
-                if (string.IsNullOrEmpty(dbUrl)) return;
-
-                string safeKey = _data.LicenseKey.Replace("-", "_");
-                string revokeUrl = $"{dbUrl}/licenses/revoked/{safeKey}.json";
-
-                var response = await _httpClient.GetAsync(revokeUrl);
-                if (response.IsSuccessStatusCode)
+                // 4. JWT Migration: If this user has no JWT yet, try to get one from /api/activate
+                if (string.IsNullOrEmpty(_data.ActivationToken))
                 {
-                    string json = await response.Content.ReadAsStringAsync();
-                    if (json != "null" && json.Contains("true", StringComparison.OrdinalIgnoreCase))
+                    Logger.LogAction("LICENSE_SERVER", "No JWT found — attempting silent migration via /api/activate");
+                    try
                     {
-                        Logger.LogAction("LICENSE_SERVER", "License revoked on server — deactivating");
-                        DeactivateLicense();
-                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            Windows.ToastWindow.ShowToast("⚠️ Your license has been revoked. Contact support."));
+                        var (token, error) = await ActivateOnServerAsync(key, deviceId);
+                        if (!string.IsNullOrEmpty(token))
+                        {
+                            _data.ActivationToken = token;
+                            _data.LastValidated = DateTime.UtcNow.ToString("o");
+                            Save();
+                            Logger.LogAction("LICENSE_SERVER", "✅ Silent JWT migration successful");
+                        }
+                        else if (!string.IsNullOrEmpty(error) && error != "unknown")
+                        {
+                            Logger.LogAction("LICENSE_SERVER", $"JWT migration rejected: {error}");
+                        }
+                    }
+                    catch (Exception migEx)
+                    {
+                        Logger.LogAction("LICENSE_SERVER", $"JWT migration failed (non-fatal): {migEx.Message}");
                     }
                 }
             }
             catch (Exception ex)
             {
-                Logger.LogAction("LICENSE_SERVER", $"Revalidation failed (non-fatal): {ex.Message}");
+                Logger.LogAction("LICENSE_SERVER", $"Server validation failed (non-fatal): {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Periodic server check — called on app startup.
+        /// v2.1.0: Uses JWT-based revalidation via /api/revalidate.
+        /// Falls back to legacy Firebase check for pre-JWT users.
+        /// Implements 14-day offline grace period.
+        /// </summary>
+        public static async Task RevalidateLicenseAsync()
+        {
+            if (!IsPro || string.IsNullOrEmpty(_data.LicenseKey)) return;
+
+            string deviceId = _data.DeviceId;
+            if (string.IsNullOrEmpty(deviceId))
+                deviceId = SettingsManager.Current.DeviceId;
+
+            // ═══ JWT-based revalidation (v2.1.0) ═══
+            if (!string.IsNullOrEmpty(_data.ActivationToken))
+            {
+                // Check if revalidation is needed (every 7 days)
+                if (DateTimeOffset.TryParse(_data.LastValidated, out var lastValidated))
+                {
+                    double daysSinceValidation = (DateTimeOffset.UtcNow - lastValidated).TotalDays;
+                    if (daysSinceValidation < REVALIDATION_INTERVAL_DAYS)
+                    {
+                        Logger.LogAction("LICENSE_SERVER", $"JWT still fresh ({daysSinceValidation:F1}d since last validation) — skipping revalidation");
+                        return;
+                    }
+                }
+
+                // Attempt JWT revalidation via Vercel
+                try
+                {
+                    var requestBody = JsonSerializer.Serialize(new { token = _data.ActivationToken, deviceId });
+                    var content = new StringContent(requestBody, Encoding.UTF8, "application/json");
+                    var response = await _httpClient.PostAsync($"{VERCEL_API_BASE}/revalidate", content);
+                    string responseJson = await response.Content.ReadAsStringAsync();
+
+                    using var doc = JsonDocument.Parse(responseJson);
+                    var root = doc.RootElement;
+
+                    if (response.IsSuccessStatusCode && root.TryGetProperty("valid", out var valid) && valid.GetBoolean())
+                    {
+                        // Success — update token and timestamp
+                        string newToken = root.GetProperty("token").GetString() ?? _data.ActivationToken;
+                        _data.ActivationToken = newToken;
+                        _data.LastValidated = DateTime.UtcNow.ToString("o");
+                        Save();
+                        Logger.LogAction("LICENSE_SERVER", "✅ JWT revalidation successful — token refreshed");
+                        return;
+                    }
+
+                    // Server explicitly rejected (revoked, device_limit, etc.)
+                    if (root.TryGetProperty("error", out var errProp))
+                    {
+                        string error = errProp.GetString() ?? "";
+                        if (error == "revoked" || error == "device_limit")
+                        {
+                            Logger.LogAction("LICENSE_SERVER", $"Server rejected revalidation: {error} — deactivating");
+                            DeactivateLicense();
+                            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                Windows.ToastWindow.ShowToast(error == "revoked"
+                                    ? "⚠️ Your license has been revoked. Contact support."
+                                    : "⚠️ License limit exceeded (max 3 devices). Contact support."));
+                            return;
+                        }
+                        if (error == "invalid_token")
+                        {
+                            // Token corrupted — try to re-activate with the key
+                            Logger.LogAction("LICENSE_SERVER", "Invalid JWT — attempting re-activation");
+                            _data.ActivationToken = "";
+                            var (newToken, activateError) = await ActivateOnServerAsync(_data.LicenseKey, deviceId);
+                            if (!string.IsNullOrEmpty(newToken))
+                            {
+                                _data.ActivationToken = newToken;
+                                _data.LastValidated = DateTime.UtcNow.ToString("o");
+                                Save();
+                                Logger.LogAction("LICENSE_SERVER", "✅ Re-activation successful after invalid JWT");
+                            }
+                            else if (!string.IsNullOrEmpty(activateError))
+                            {
+                                Logger.LogAction("LICENSE_SERVER", $"Re-activation rejected: {activateError} — deactivating");
+                                DeactivateLicense();
+                            }
+                            return;
+                        }
+                    }
+                }
+                catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException)
+                {
+                    // Network failure — apply grace period
+                    if (DateTimeOffset.TryParse(_data.LastValidated, out var lastCheck))
+                    {
+                        double daysOffline = (DateTimeOffset.UtcNow - lastCheck).TotalDays;
+                        if (daysOffline >= OFFLINE_GRACE_PERIOD_DAYS)
+                        {
+                            Logger.LogAction("LICENSE_SERVER", $"Offline for {daysOffline:F0}d (grace: {OFFLINE_GRACE_PERIOD_DAYS}d) — showing warning");
+                            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                Windows.ToastWindow.ShowToast("⚠️ Please connect to internet to verify your license."));
+                            // NOTE: We do NOT deactivate — just warn. User can still use the app.
+                        }
+                        else
+                        {
+                            Logger.LogAction("LICENSE_SERVER", $"Revalidation failed (offline {daysOffline:F0}d, grace {OFFLINE_GRACE_PERIOD_DAYS}d) — continuing");
+                        }
+                    }
+                    else
+                    {
+                        Logger.LogAction("LICENSE_SERVER", "Revalidation failed (no LastValidated) — continuing with grace");
+                    }
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("LICENSE_SERVER", $"JWT revalidation error (non-fatal): {ex.Message}");
+                    return;
+                }
+            }
+
+            // ═══ Legacy fallback: Firebase-only check (pre-JWT users) ═══
+            // Also triggers JWT migration via ValidateKeyOnServerAsync
+            try
+            {
+                await ValidateKeyOnServerAsync(_data.LicenseKey, deviceId);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("LICENSE_SERVER", $"Legacy revalidation failed (non-fatal): {ex.Message}");
             }
         }
 
@@ -754,11 +957,6 @@ namespace FlyShelf.Classes
         private static string _expectedAssemblyHash = null;
         private static bool _integrityChecked = false;
 
-        /// <summary>
-        /// Computes a SHA-256 hash of the running assembly and checks it against
-        /// a stored baseline. On first run, stores the hash. On subsequent runs,
-        /// if the hash changes, the binary has been patched.
-        /// </summary>
         public static void VerifyAssemblyIntegrity()
         {
             if (_integrityChecked) return;
@@ -766,7 +964,6 @@ namespace FlyShelf.Classes
 
             try
             {
-                // Use process path for single-file deployment (Assembly.Location is empty)
                 string assemblyPath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
                 if (string.IsNullOrEmpty(assemblyPath) || !File.Exists(assemblyPath))
                 {
@@ -774,31 +971,42 @@ namespace FlyShelf.Classes
                     return;
                 }
 
-                // Compute SHA-256 of the running binary
                 using var sha = SHA256.Create();
                 using var stream = File.OpenRead(assemblyPath);
                 byte[] hashBytes = sha.ComputeHash(stream);
                 string currentHash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
 
-                // Check stored hash
                 string hashFile = Path.Combine(_appDataDir, ".assembly_hash");
                 if (File.Exists(hashFile))
                 {
                     string storedHash = File.ReadAllText(hashFile).Trim();
                     if (!string.IsNullOrEmpty(storedHash) && storedHash != currentHash)
                     {
-                        // Binary has been modified since last known-good state!
-                        Logger.LogAction("INTEGRITY", $"⚠️ ASSEMBLY TAMPERED! Stored: {storedHash}, Current: {currentHash}");
-                        // Deactivate license as a defensive measure
-                        if (_data.Tier == "pro")
+                        // Binary changed — likely a legitimate update, NOT tampering.
+                        // Update the stored hash and verify license server-side in background.
+                        Logger.LogAction("INTEGRITY", $"Binary hash changed (update detected). Old: {storedHash.Substring(0, 12)}..., New: {currentHash.Substring(0, 12)}...");
+                        
+                        // Always update the hash — prevents repeated warnings on every launch
+                        Directory.CreateDirectory(_appDataDir);
+                        File.WriteAllText(hashFile, currentHash);
+                        
+                        // If user has Pro, verify server-side in background (non-blocking)
+                        if (_data.Tier == "pro" && !string.IsNullOrEmpty(_data.LicenseKey))
                         {
-                            _data.Tier = "free";
-                            _data.LicenseKey = "";
-                            _data.ActivatedAt = "";
-                            Save();
-                            Logger.LogAction("INTEGRITY", "License deactivated due to binary tampering detection");
-                            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                                Windows.ToastWindow.ShowToast("⚠️ Application integrity check failed. Please re-download FlyShelf."));
+                            Logger.LogAction("INTEGRITY", "Pro license detected after update — scheduling background revalidation");
+                            _ = Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    await Task.Delay(5000); // Wait for network to initialize
+                                    await RevalidateLicenseAsync();
+                                    Logger.LogAction("INTEGRITY", "Post-update license revalidation completed");
+                                }
+                                catch (Exception ex)
+                                {
+                                    Logger.LogAction("INTEGRITY", $"Post-update revalidation failed (license preserved): {ex.Message}");
+                                }
+                            });
                         }
                         return;
                     }

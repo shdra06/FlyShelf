@@ -19,7 +19,10 @@ namespace FlyShelf.Classes
         public string CloudflareUrl { get; set; } = "";
         public string ActiveUrl { get; set; } = "";
         public string Transport { get; set; } = "offline";  // "LAN", "Cloudflare", "offline"
-        public bool IsAlive { get; set; }
+        // FIX R8: volatile prevents torn reads when accessed from HeartbeatLoop,
+        // MonitorWebSocket, HandlePeerDeath, and Transfer threads concurrently
+        private volatile bool _isAlive;
+        public bool IsAlive { get => _isAlive; set => _isAlive = value; }
         public DateTime LastSeen { get; set; } = DateTime.MinValue;
         public int ConsecutiveFailures { get; set; }
         public string Version { get; set; } = "";

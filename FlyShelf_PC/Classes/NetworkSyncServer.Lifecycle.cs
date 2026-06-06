@@ -194,16 +194,20 @@ namespace FlyShelf.Classes
 #endif
                 _ = CloudDiscoveryManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl);
 
-                // Heartbeat: reduced from 60s to 300s — Firebase writes are now throttled
-                // inside PushTunnelUrl (only writes on URL change). Timer is mainly for
-                // checking pairing handshakes and keeping the tunnel URL fresh in cache.
-                _heartbeatTimer = new System.Timers.Timer(300_000); // 5 minutes
+                // Heartbeat: reduced to 900s (15 min) — URL updates are now handled via
+                // P2P WebSocket directly to connected peers. Firebase writes only happen
+                // at startup and on URL change. Timer is mainly for pairing handshakes.
+                _heartbeatTimer = new System.Timers.Timer(900_000); // 15 minutes
                 _heartbeatTimer.Elapsed += (s, e) =>
                 {
                     // PushTunnelUrl is now smart — it only writes to Firebase if URL changed
                     _ = CloudDiscoveryManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl);
                     // Check for new devices that joined via pairing code
-                    _ = DevicePairingManager.CheckForHandshakes();
+                    // Only poll Firebase for handshakes within 10 min of generating a pairing code
+                    if ((DateTime.UtcNow - DevicePairingManager.LastPairingCodeGeneratedAt).TotalMinutes < 10)
+                    {
+                        _ = DevicePairingManager.CheckForHandshakes();
+                    }
 
                     // Clean up abandoned chunk upload sessions older than 2 hours
                     try
@@ -232,7 +236,7 @@ namespace FlyShelf.Classes
                 };
                 _heartbeatTimer.AutoReset = true;
                 _heartbeatTimer.Start();
-                Logger.LogAction("HEARTBEAT", "Device heartbeat started (300s interval, Firebase writes only on URL change)");
+                Logger.LogAction("HEARTBEAT", "Device heartbeat started (900s interval — URL updates via P2P WebSocket)");
                 // ═══════════════════════════════════════════════════════════════════
                 // TLS LAYER: Start HTTPS proxy on port 9443 → forwards to HTTP server
                 // ═══════════════════════════════════════════════════════════════════
@@ -342,7 +346,8 @@ namespace FlyShelf.Classes
 
                     // === HTTP-AWARE PROXY: Rewrite the Host header ===
                     // HttpListener validates Host header against its prefix.
-                    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                    // Short timeout for header read to prevent Slowloris
+                    using var headerCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
                     // Read HTTP headers efficiently using buffered Span-based memory scanning
                     byte[] buffer = new byte[16384]; // 16KB max header size
@@ -351,7 +356,7 @@ namespace FlyShelf.Classes
 
                     while (totalRead < buffer.Length)
                     {
-                        int read = await clientStream.ReadAsync(buffer, totalRead, buffer.Length - totalRead, cts.Token);
+                        int read = await clientStream.ReadAsync(buffer, totalRead, buffer.Length - totalRead, headerCts.Token);
                         if (read == 0) return; // Client disconnected
                         totalRead += read;
 
@@ -375,18 +380,18 @@ namespace FlyShelf.Classes
 
                     // Send rewritten headers to HttpListener
                     byte[] rewrittenBytes = System.Text.Encoding.ASCII.GetBytes(rewritten);
-                    await targetStream.WriteAsync(rewrittenBytes, 0, rewrittenBytes.Length, cts.Token);
+                    await targetStream.WriteAsync(rewrittenBytes, 0, rewrittenBytes.Length);
 
                     // Send any body bytes that were read along with the header in the initial packets
                     int leftoverBytes = totalRead - headerEndIndex;
                     if (leftoverBytes > 0)
                     {
-                        await targetStream.WriteAsync(buffer, headerEndIndex, leftoverBytes, cts.Token);
+                        await targetStream.WriteAsync(buffer, headerEndIndex, leftoverBytes);
                     }
 
-                    // Now relay the rest bi-directionally (body + response)
-                    var t1 = clientStream.CopyToAsync(targetStream, cts.Token);
-                    var t2 = targetStream.CopyToAsync(clientStream, cts.Token);
+                    // Now relay the rest bi-directionally (body + response) without connection timeout
+                    var t1 = clientStream.CopyToAsync(targetStream);
+                    var t2 = targetStream.CopyToAsync(clientStream);
                     await Task.WhenAny(t1, t2);
                 }
             }
@@ -429,7 +434,17 @@ namespace FlyShelf.Classes
 
                     // Wrap in SslStream — this terminates TLS
                     using var sslStream = new SslStream(networkStream, false);
-                    await sslStream.AuthenticateAsServerAsync(_tlsCert!, false, System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13, false);
+                    var sslOptions = new SslServerAuthenticationOptions
+                    {
+                        ServerCertificate = _tlsCert!,
+                        ClientCertificateRequired = false,
+                        EnabledSslProtocols = System.Security.Authentication.SslProtocols.Tls12 | System.Security.Authentication.SslProtocols.Tls13,
+                        CertificateRevocationCheckMode = X509RevocationMode.NoCheck
+                    };
+                    using (var handshakeCts = new CancellationTokenSource(TimeSpan.FromSeconds(10)))
+                    {
+                        await sslStream.AuthenticateAsServerAsync(sslOptions, handshakeCts.Token);
+                    }
 
                     // Connect to the local HTTP server
                     using var target = new System.Net.Sockets.TcpClient();
@@ -439,7 +454,8 @@ namespace FlyShelf.Classes
                     target.NoDelay = true;
                     var targetStream = target.GetStream();
 
-                    using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
+                    // Short timeout for header read to prevent Slowloris
+                    using var headerCts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
 
                     // Read HTTP headers efficiently using buffered Span-based memory scanning
                     byte[] buffer = new byte[16384]; // 16KB max header size
@@ -448,7 +464,7 @@ namespace FlyShelf.Classes
 
                     while (totalRead < buffer.Length)
                     {
-                        int read = await sslStream.ReadAsync(buffer, totalRead, buffer.Length - totalRead, cts.Token);
+                        int read = await sslStream.ReadAsync(buffer, totalRead, buffer.Length - totalRead, headerCts.Token);
                         if (read == 0) return; // Client disconnected
                         totalRead += read;
 
@@ -471,18 +487,18 @@ namespace FlyShelf.Classes
                         $"Host: localhost:{targetPort}");
 
                     byte[] rewrittenBytes = Encoding.ASCII.GetBytes(rewritten);
-                    await targetStream.WriteAsync(rewrittenBytes, 0, rewrittenBytes.Length, cts.Token);
+                    await targetStream.WriteAsync(rewrittenBytes, 0, rewrittenBytes.Length);
 
                     // Send any body bytes that were read along with the header in the initial TLS packets
                     int leftoverBytes = totalRead - headerEndIndex;
                     if (leftoverBytes > 0)
                     {
-                        await targetStream.WriteAsync(buffer, headerEndIndex, leftoverBytes, cts.Token);
+                        await targetStream.WriteAsync(buffer, headerEndIndex, leftoverBytes);
                     }
 
                     // Bi-directional relay: sslStream ↔ targetStream
-                    var t1 = sslStream.CopyToAsync(targetStream, cts.Token);
-                    var t2 = targetStream.CopyToAsync(sslStream, cts.Token);
+                    var t1 = sslStream.CopyToAsync(targetStream);
+                    var t2 = targetStream.CopyToAsync(sslStream);
                     await Task.WhenAny(t1, t2);
                 }
             }

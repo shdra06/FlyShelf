@@ -363,6 +363,7 @@ namespace FlyShelf.Classes
         /// </summary>
         public static async Task<string> PublishPairingCode()
         {
+            LastPairingCodeGeneratedAt = DateTime.UtcNow;
             string code = GenerateShortCode();
             try
             {
@@ -410,6 +411,9 @@ namespace FlyShelf.Classes
                 // so the phone's TTL check always works regardless of clock drift.
                 string pairingKey = CreatePairingKeyIfNeeded();
                 await CloudDiscoveryManager.RegisterRoomMembershipAsync(pairingKey);
+                // SECURITY: Include uid for Firebase rule ownership validation (M-01 hardening)
+                string uid = "";
+                try { uid = await FirebaseAuthManager.GetUidAsync() ?? ""; } catch { }
                 string jsonPayload = JsonSerializer.Serialize(new
                 {
                     deviceId = SettingsManager.Current.DeviceId,
@@ -419,6 +423,7 @@ namespace FlyShelf.Classes
                     localUrl = CloudDiscoveryManager.CachedLocalUrl ?? "",
                     globalUrl = CloudDiscoveryManager.CachedGlobalUrl ?? "",
                     pin = SettingsManager.Current.WebClientPinToken ?? "",
+                    uid,
                 });
                 // Inject Firebase server timestamp Ã¢â‚¬â€ {".sv":"timestamp"} is resolved server-side
                 var jsonObj = System.Text.Json.Nodes.JsonNode.Parse(jsonPayload).AsObject();

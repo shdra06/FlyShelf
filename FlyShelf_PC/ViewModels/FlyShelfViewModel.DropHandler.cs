@@ -22,7 +22,7 @@ namespace FlyShelf.ViewModels
 {
     public partial class FlyShelfViewModel
     {
-        public void HandleDrop(IDataObject data, bool forceClipboardSync = false, bool skipCloudSync = false)
+        public void HandleDrop(IDataObject data, bool forceClipboardSync = false, bool skipCloudSync = false, string? sourceDevice = null, string? sourceDeviceType = null, string? transferMethod = null)
         {
             string[]? files = null;
             string? text = null;
@@ -86,10 +86,10 @@ namespace FlyShelf.ViewModels
 
             // Route all heavy tasks, zipping, file-saving and collection processing to background thread
             System.Threading.Tasks.Task.Run(() => 
-                HandleDropInternal(files, bitmap, text, forceClipboardSync, skipCloudSync));
+                HandleDropInternal(files, bitmap, text, forceClipboardSync, skipCloudSync, sourceDevice, sourceDeviceType, transferMethod));
         }
 
-        internal void HandleDropInternal(string[]? files, BitmapSource? bitmap, string? text, bool forceClipboardSync, bool skipCloudSync)
+        internal void HandleDropInternal(string[]? files, BitmapSource? bitmap, string? text, bool forceClipboardSync, bool skipCloudSync, string? sourceDevice = null, string? sourceDeviceType = null, string? transferMethod = null)
         {
             if (files != null && files.Length > 0)
             {
@@ -120,6 +120,9 @@ namespace FlyShelf.ViewModels
                 {
                     // Group files together! (No deduplication check)
                     var groupItem = new ClipboardItem(files);
+                    if (sourceDevice != null) groupItem.SourceDeviceName = sourceDevice;
+                    if (sourceDeviceType != null) groupItem.SourceDeviceType = sourceDeviceType;
+                    if (transferMethod != null) groupItem.TransferMethod = transferMethod;
                     
                     Application.Current.Dispatcher.InvokeAsync(() =>
                     {
@@ -153,7 +156,11 @@ namespace FlyShelf.ViewModels
                 var newItems = new List<(ClipboardItem item, string path)>();
                 foreach (string file in files)
                 {
-                    newItems.Add((new ClipboardItem(file), file));
+                    var item = new ClipboardItem(file);
+                    if (sourceDevice != null) item.SourceDeviceName = sourceDevice;
+                    if (sourceDeviceType != null) item.SourceDeviceType = sourceDeviceType;
+                    if (transferMethod != null) item.TransferMethod = transferMethod;
+                    newItems.Add((item, file));
                 }
 
                 // Phase 2: Batch-insert into ObservableCollection on UI thread
@@ -167,6 +174,16 @@ namespace FlyShelf.ViewModels
                     DroppedItems.InsertRange(0, newItems.Select(x => x.item));
                     PruneOldItems();
                     OnPropertyChanged(nameof(ShelfVisibility));
+
+                    if (!string.IsNullOrEmpty(sourceDevice))
+                    {
+                        foreach (var newItem in newItems.Select(x => x.item))
+                        {
+                            string fileFp = $"IMG::{newItem.FormattedSize}";
+                            MarkAsCloudSourced(fileFp);
+                        }
+                        PersistHistory();
+                    }
                 });
 
                 // PERF: Journal each item individually (fast JSONL append)
@@ -274,6 +291,9 @@ namespace FlyShelf.ViewModels
                 FlyShelf.Classes.Logger.LogAction("DRAG IN", "Processing Bitmap image payload (no-dedup)");
                 
                 var item = new ClipboardItem();
+                if (sourceDevice != null) item.SourceDeviceName = sourceDevice;
+                if (sourceDeviceType != null) item.SourceDeviceType = sourceDeviceType;
+                if (transferMethod != null) item.TransferMethod = transferMethod;
                 item._suppressPropertyNotifications = true; // PERF: No listeners yet
                 item.ItemType = ClipboardItemType.Image;
                 item.FileName = $"Screenshot {DateTime.Now:yyyy-MM-dd HHmmss}";
@@ -468,6 +488,14 @@ namespace FlyShelf.ViewModels
                                     FlyShelf.Classes.Logger.LogAction("IMAGE SYNC", "Skipped — image arrived from cloud (echo prevention)");
                                 }
                             }
+
+                            // If it was a remote transfer, make sure we persist history and set cloud-sourced flag!
+                            if (!string.IsNullOrEmpty(sourceDevice))
+                            {
+                                string imgFp = $"IMG::{item.FormattedSize}";
+                                MarkAsCloudSourced(imgFp);
+                                PersistHistory();
+                            }
                         });
                     }
                     catch (Exception ex)
@@ -647,7 +675,8 @@ namespace FlyShelf.ViewModels
                                 {
                                     item.ItemType = ClipboardItemType.Text;
                                     string displayText = capturedText.Trim();
-                                    if (false && DetectIfPasswordOrApiKey(displayText))
+                                    // [SECURITY FIX v2.1.0]: Re-enable sensitive data auto-detection (M-08)
+                                    if (DetectIfPasswordOrApiKey(displayText))
                                     {
                                         item.IsPassword = true;
                                         item.Extension = "PASSWORD";
@@ -673,6 +702,13 @@ namespace FlyShelf.ViewModels
                     else
                     {
                         item._suppressPropertyNotifications = true; // PERF: suppress during construction
+                    }
+
+                    if (item != null)
+                    {
+                        if (sourceDevice != null) item.SourceDeviceName = sourceDevice;
+                        if (sourceDeviceType != null) item.SourceDeviceType = sourceDeviceType;
+                        if (transferMethod != null) item.TransferMethod = transferMethod;
                     }
 
                     // PERF: Un-suppress before insert — item is about to enter the visual tree
@@ -711,6 +747,14 @@ namespace FlyShelf.ViewModels
                         if (capturedForceSync)
                         {
                             Classes.ClipboardHelper.SafeSetText(item.RawContent, suppressEcho: true, echoDelayMs: 500);
+                        }
+
+                        if (!string.IsNullOrEmpty(sourceDevice))
+                        {
+                            string normalizedContent = NormalizeTextForFingerprint(item.RawContent ?? "");
+                            string txtFp = $"TXT::{normalizedContent.Substring(0, Math.Min(200, normalizedContent.Length))}";
+                            MarkAsCloudSourced(txtFp);
+                            PersistHistory();
                         }
 
                         OnPropertyChanged(nameof(ShelfVisibility));
@@ -886,11 +930,7 @@ namespace FlyShelf.ViewModels
             // Matches optional return keyword, function name, parentheses block, and an ending marker (brace, semicolon, arrow)
             try
             {
-                var rxFunction = new System.Text.RegularExpressions.Regex(
-                    @"\b(void|int|string|double|float|bool|var|let|const)?\s*\w+\s*\([^)]*\)\s*({|;|=>)", 
-                    System.Text.RegularExpressions.RegexOptions.Compiled);
-                
-                if (rxFunction.IsMatch(text)) return true;
+                if (_rxFunction.IsMatch(text)) return true;
             }
             catch { }
 

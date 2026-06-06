@@ -60,7 +60,10 @@ namespace FlyShelf.Classes
             {
                 using (var outputs = _session.Run(inputs))
                 {
-                    var resultTensor = outputs.First().AsTensor<float>(); // Shape: [1, features, 8400]
+                    var firstOutput = outputs.FirstOrDefault();
+                    if (firstOutput == null) return null; // Guard: empty model output (corrupt model)
+
+                    var resultTensor = firstOutput.AsTensor<float>(); // Shape: [1, features, 8400]
                     
                     float[] data = resultTensor.ToArray();
                     int numBoxes = resultTensor.Dimensions[2]; // 8400

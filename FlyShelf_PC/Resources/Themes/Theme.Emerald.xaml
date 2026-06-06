@@ -107,5 +107,8 @@
     <SolidColorBrush x:Key="MicaWPF.Brushes.SystemAccentColorDark1"  Color="#047857"/>
 
     <!-- Theme marker -->
-    <SolidColorBrush x:Key="FlyShelf.ColorThemeMarker" Color="#059669"/>
+    <SolidColorBrush x:Key="FlyShelf.ColorThemeMarker" Color="#0D9488"/>
+
+    <!-- Theme-specific logo icon -->
+    <BitmapImage x:Key="ThemeLogoIcon" UriSource="pack://application:,,,/Resources/FlyShelfIcon_EmeraldTeal.png" />
 </ResourceDictionary>

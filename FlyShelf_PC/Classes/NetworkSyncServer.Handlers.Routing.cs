@@ -122,8 +122,8 @@ namespace FlyShelf.Classes
                 // Determine trust level: paired devices and native mobile app are trusted.
                 string clientIp = req.RemoteEndPoint?.Address?.ToString() ?? "unknown";
                 string pairingKeyForRateCheck = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"] ?? "";
-                bool isNativeClient = req.Headers["X-FlyShelf-Client"] == "MobileCompanion" || req.Headers["X-FlyShelf-Client"] == "DesktopSync";
-                bool isTrustedPeer = isNativeClient || DevicePairingManager.IsDevicePaired(pairingKeyForRateCheck);
+                // SECURITY: Trust is established ONLY via cryptographic pairing key — never via spoofable headers
+                bool isTrustedPeer = DevicePairingManager.IsDevicePaired(pairingKeyForRateCheck);
                 bool isWriteEndpoint = req.HttpMethod == "POST";
 
                 if (IsRateLimited(clientIp, isWriteEndpoint, isTrustedPeer))
@@ -235,7 +235,6 @@ namespace FlyShelf.Classes
                             status = "ok", 
                             localUrl = DisplayUrl, 
                             globalUrl = GlobalUrl ?? "", 
-                            pin = SettingsManager.Current.WebClientPinToken, 
                             deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
                             isPro = LicenseManager.IsPro,
                             licenseKey = LicenseManager.IsPro ? LicenseManager.MaskedKey : ""
@@ -256,15 +255,13 @@ namespace FlyShelf.Classes
                 else
                 {
                     // HARD SECURE AUTHENTICATION BARRIER
-                    // SECURITY: User-Agent is trivially spoofable — removed from trust decision.
-                    // Trust is established ONLY via X-FlyShelf-Client header (set by app code, not browsers)
-                    // combined with valid pairing key, OR via valid PIN token.
+                    // SECURITY: Trust established ONLY via cryptographic pairing key OR valid PIN token.
+                    // X-FlyShelf-Client header is NOT used — it's trivially spoofable (just like User-Agent).
                     string providedPin = req.Headers["Authorization"]?.Replace("Bearer ", "") ?? req.QueryString["pin"];
                     string pairingKey = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"];
-                    bool isNativeFlyShelfClient = req.Headers["X-FlyShelf-Client"] == "MobileCompanion" || req.Headers["X-FlyShelf-Client"] == "DesktopSync";
                     bool isPairedDevice = DevicePairingManager.IsDevicePaired(pairingKey);
 
-                    if (!isNativeFlyShelfClient && !isPairedDevice && (string.IsNullOrEmpty(providedPin) || providedPin != SettingsManager.Current.WebClientPinToken))
+                    if (!isPairedDevice && (string.IsNullOrEmpty(providedPin) || providedPin != SettingsManager.Current.WebClientPinToken))
                     {
                         byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"401 Unauthorized - Invalid PIN\"}");
                         res.StatusCode = 401; res.ContentType = "application/json";
@@ -324,6 +321,11 @@ namespace FlyShelf.Classes
                         }
                         catch { res.StatusCode = 500; }
                         finally { lock (_longPollLock) { _longPollWaiters.Remove(tcs); } try { res.Close(); } catch { } }
+                    }
+                    else if (path == "/api/events/stream" && req.HttpMethod == "GET")
+                    {
+                        // SSE endpoint — persistent connection, instant push on clipboard change
+                        await ServeClipboardEventStream(req, res);
                     }
                     else if (path == "/api/sync_text" && req.HttpMethod == "POST") { await HandleTextUpload(req, res); }
                     else if (path == "/api/sync_file" && req.HttpMethod == "POST") { await HandleFileUpload(req, res); }
@@ -415,6 +417,21 @@ namespace FlyShelf.Classes
                                     else
                                     {
                                         Logger.LogAction("WS", $"Incoming sync paused — discarded text from {sourceDeviceName}");
+                                    }
+                                }
+                                else if (envelopeType == "UrlUpdate")
+                                {
+                                    // P2P URL exchange — peer is telling us their URLs changed
+                                    // This eliminates the need for Firebase SSE for connected peers
+                                    string sourceDeviceId = root.TryGetProperty("sourceDeviceId", out var idProp2) ? idProp2.GetString() ?? "" : "";
+                                    string sourceDeviceName = root.TryGetProperty("sourceDeviceName", out var nameProp2) ? nameProp2.GetString() ?? "" : "";
+                                    string newLanUrl = root.TryGetProperty("lanUrl", out var lanProp) ? lanProp.GetString() ?? "" : "";
+                                    string newCfUrl = root.TryGetProperty("cfUrl", out var cfProp) ? cfProp.GetString() ?? "" : "";
+
+                                    if (!string.IsNullOrEmpty(sourceDeviceId) && PeerManager.Instance != null)
+                                    {
+                                        _ = Task.Run(() => PeerManager.Instance.HandlePeerUrlUpdateFromWebSocket(
+                                            sourceDeviceId, sourceDeviceName, newLanUrl, newCfUrl));
                                     }
                                 }
                                 else if (envelopeType == "SyncFileStart")

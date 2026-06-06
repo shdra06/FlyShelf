@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { sendPurchaseEmail } = require('./_email');
 
 // ═══════════════════════════════════════════════════════════════════
 // HMAC secret for license-key checksum — MUST be set as env var.
@@ -33,10 +34,8 @@ function setCorsHeaders(req, res) {
   const origin = req.headers.origin || '';
   if (ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
-    // Allow first trusted origin as default for non-browser requests
-    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGINS[0]);
   }
+  // Do NOT set a default origin for non-matching/non-browser requests
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -78,7 +77,9 @@ module.exports = async (req, res) => {
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest("hex");
 
-    if (expectedSignature !== razorpay_signature) {
+    const sigBuffer = Buffer.from(razorpay_signature, 'hex');
+    const expectedBuffer = Buffer.from(expectedSignature, 'hex');
+    if (sigBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(sigBuffer, expectedBuffer)) {
       return res.status(400).json({ error: 'Payment signature mismatch.' });
     }
 
@@ -87,7 +88,11 @@ module.exports = async (req, res) => {
     // Check if this payment_id has already been processed.
     // If so, return the existing license key — don't generate a new one.
     // ═══════════════════════════════════════════════════════════════
-    const dbUrl = process.env.FIREBASE_RTDB_URL || 'https://flyshelf-official-pay-default-rtdb.firebaseio.com';
+    const dbUrl = process.env.FIREBASE_RTDB_URL;
+    if (!dbUrl) {
+      console.error('[verifyPayment] FIREBASE_RTDB_URL not configured');
+      return res.status(500).json({ error: 'Database not configured.' });
+    }
     
     try {
       const existingRes = await fetch(`${dbUrl}/payments/${razorpay_payment_id}.json`);
@@ -95,7 +100,7 @@ module.exports = async (req, res) => {
         const existingData = await existingRes.json();
         if (existingData && existingData.licenseKey && existingData.status === 'completed') {
           // Payment already processed — return existing key (anti-replay)
-          console.log(`[verifyPayment] Replay detected for ${razorpay_payment_id} — returning existing key`);
+          console.log(`[verifyPayment] Replay detected for ${razorpay_payment_id.substring(0, 8)}... — returning existing key`);
           return res.status(200).json({
             success: true,
             licenseKey: existingData.licenseKey
@@ -115,8 +120,8 @@ module.exports = async (req, res) => {
         gateway: 'razorpay',
         paymentId: razorpay_payment_id,
         orderId: razorpay_order_id,
-        amount: 29900,
-        currency: 'INR',
+        amount: 'verified',
+        currency: 'verified',
         email,
         deviceId,
         licenseKey,
@@ -124,22 +129,35 @@ module.exports = async (req, res) => {
         timestamp: new Date().toISOString()
       };
       
-      // Store payment record (awaited — must succeed for replay protection)
-      await fetch(`${dbUrl}/payments/${razorpay_payment_id}.json`, {
+      // Store payment record — MUST succeed before returning key
+      const writeRes = await fetch(`${dbUrl}/payments/${razorpay_payment_id}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(record)
       });
+      if (!writeRes.ok) {
+        console.error('[verifyPayment] Critical: payment record write failed');
+        return res.status(500).json({ error: 'Failed to store payment record. Contact support.' });
+      }
       
       const safeKey = licenseKey.replace(/\./g, '_').replace(/\//g, '_');
-      fetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
+      await fetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, paymentId: razorpay_payment_id, generatedAt: new Date().toISOString() })
-      }).catch(dbErr => console.warn('License key write failed (non-blocking):', dbErr));
+      }).catch(dbErr => console.warn('License key write failed:', dbErr));
+
+      // ─── Send confirmation email (awaited — must complete before Vercel kills the function) ───
+      try {
+        const emailResult = await sendPurchaseEmail(email, licenseKey, razorpay_payment_id);
+        console.log('[verifyPayment] Email result:', JSON.stringify(emailResult));
+      } catch (emailErr) {
+        console.warn('[verifyPayment] Email send failed:', emailErr.message);
+      }
 
     } catch (dbErr) {
-      console.warn('Firebase RTDB write error:', dbErr);
+      console.error('[verifyPayment] Critical: payment record write failed:', dbErr.message);
+      return res.status(500).json({ error: 'Failed to store payment record. Contact support.' });
     }
 
     return res.status(200).json({
@@ -149,6 +167,6 @@ module.exports = async (req, res) => {
 
   } catch (err) {
     console.error('Vercel verifyPayment Error:', err);
-    return res.status(500).json({ error: err.message || 'Payment verification failed.' });
+    return res.status(500).json({ error: 'Payment verification failed.' });
   }
 };

@@ -1,3 +1,6 @@
+const crypto = require('crypto');
+const { sendRecoveryEmail } = require('./_email');
+
 // ═══════════════════════════════════════════════════════════════════
 // Key Recovery API — Lets users retrieve their license key by email
 //
@@ -5,8 +8,8 @@
 // they can enter their email to get it back.
 //
 // POST /api/recoverKey  { email: "user@example.com" }
-// Returns: { success: true, licenseKey: "FS-PRO-..." } or error
-// ═══════════════════════════════════════════════════════════════════
+// Returns: { success: true, message: "sent to email" }
+// Key is NEVER returned in the response — only emailed (security v3.0)
 
 const ALLOWED_ORIGINS = [
   'https://fly-shelf.vercel.app',
@@ -18,9 +21,8 @@ function setCorsHeaders(req, res) {
   const origin = req.headers.origin || '';
   if (ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGINS[0]);
   }
+  // Do NOT set a default origin for non-matching/non-browser requests
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -40,13 +42,53 @@ module.exports = async (req, res) => {
   try {
     const { email } = req.body;
 
-    if (!email || !email.includes('@')) {
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: 'Please provide a valid email address.' });
+    }
+
+    // Stricter email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
       return res.status(400).json({ error: 'Please provide a valid email address.' });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    const dbUrl = process.env.FIREBASE_RTDB_URL || 'https://flyshelf-official-pay-default-rtdb.firebaseio.com';
+    const dbUrl = process.env.FIREBASE_RTDB_URL;
+    if (!dbUrl) {
+      console.error('[recoverKey] FIREBASE_RTDB_URL not configured');
+      return res.status(500).json({ error: 'Database not configured.' });
+    }
+
+    // Hash the email for rate limit key (don't store raw email)
+    const emailHash = crypto.createHash('sha256').update(normalizedEmail).digest('hex').substring(0, 16);
+
+    // Check rate limit: max 5 recoveries per email per 24 hours
+    try {
+      const rateLimitRes = await fetch(`${dbUrl}/rate_limits/recovery/${emailHash}.json`);
+      if (rateLimitRes.ok) {
+        const rateLimitData = await rateLimitRes.json();
+        if (rateLimitData) {
+          const attempts = Object.values(rateLimitData).filter(
+            ts => (Date.now() - new Date(ts).getTime()) < 86400000
+          );
+          if (attempts.length >= 5) {
+            return res.status(429).json({ error: 'Too many recovery attempts. Please try again in 24 hours.' });
+          }
+        }
+      }
+    } catch (rlErr) {
+      console.warn('[recoverKey] Rate limit check failed:', rlErr.message);
+    }
+
+    // Record this attempt
+    try {
+      await fetch(`${dbUrl}/rate_limits/recovery/${emailHash}/${Date.now()}.json`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(new Date().toISOString())
+      });
+    } catch {}
 
     // ─── Search all payments for this email ───
     // Firebase RTDB doesn't support native queries without indexing,
@@ -88,11 +130,20 @@ module.exports = async (req, res) => {
       });
     }
 
+    // Artificial delay to prevent timing-based email enumeration
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    // ─── Send key via email (NEVER return in response) ───
+    try {
+      await sendRecoveryEmail(latestPayment.email, latestPayment.licenseKey, latestPayment.timestamp);
+    } catch (emailErr) {
+      console.error('[recoverKey] Email send failed:', emailErr.message);
+      return res.status(500).json({ error: 'Failed to send recovery email. Please try again or contact support.' });
+    }
+
     return res.status(200).json({
       success: true,
-      licenseKey: latestPayment.licenseKey,
-      email: latestPayment.email,
-      purchasedAt: latestPayment.timestamp
+      message: 'Your license key has been sent to your email address. Please check your inbox (and spam folder).'
     });
 
   } catch (err) {
@@ -146,11 +197,17 @@ async function fallbackSearch(dbUrl, normalizedEmail, res) {
       });
     }
 
+    // ─── Send key via email (NEVER return in response) ───
+    try {
+      await sendRecoveryEmail(foundPayment.email, foundPayment.licenseKey, foundPayment.timestamp);
+    } catch (emailErr) {
+      console.error('[recoverKey:fallback] Email send failed:', emailErr.message);
+      return res.status(500).json({ error: 'Failed to send recovery email. Please try again or contact support.' });
+    }
+
     return res.status(200).json({
       success: true,
-      licenseKey: foundPayment.licenseKey,
-      email: foundPayment.email,
-      purchasedAt: foundPayment.timestamp
+      message: 'Your license key has been sent to your email address. Please check your inbox (and spam folder).'
     });
 
   } catch (err) {

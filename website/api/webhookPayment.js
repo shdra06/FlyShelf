@@ -52,7 +52,13 @@ module.exports = async (req, res) => {
       .digest('hex');
 
     const receivedSignature = req.headers['x-razorpay-signature'];
-    if (!receivedSignature || expectedSignature !== receivedSignature) {
+    if (!receivedSignature) {
+      console.warn('[webhook] Missing signature — rejecting');
+      return res.status(400).json({ error: 'Invalid webhook signature.' });
+    }
+    const receivedBuffer = Buffer.from(receivedSignature, 'utf8');
+    const expectedBuffer = Buffer.from(expectedSignature, 'utf8');
+    if (receivedBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(receivedBuffer, expectedBuffer)) {
       console.warn('[webhook] Signature mismatch — rejecting');
       return res.status(400).json({ error: 'Invalid webhook signature.' });
     }
@@ -78,10 +84,21 @@ module.exports = async (req, res) => {
     const currency = payment.currency;
     const orderId = payment.order_id;
 
-    console.log(`[webhook] payment.captured: ${paymentId} | ${email} | ₹${amount / 100}`);
+    // Validate payment amount against known valid amounts
+    const VALID_AMOUNTS = [29900, 999]; // INR paise, USD cents
+    if (!VALID_AMOUNTS.includes(amount)) {
+      console.warn(`[webhook] Unexpected amount: ${amount} ${currency}`);
+      return res.status(400).json({ error: 'Invalid payment amount.' });
+    }
+
+    console.log(`[webhook] payment.captured: ${paymentId} | ${amount / 100} ${currency}`);
 
     // ─── Step 3: Check if already processed (idempotency) ───
-    const dbUrl = process.env.FIREBASE_RTDB_URL || 'https://flyshelf-official-pay-default-rtdb.firebaseio.com';
+    const dbUrl = process.env.FIREBASE_RTDB_URL;
+    if (!dbUrl) {
+      console.error('[webhook] FIREBASE_RTDB_URL not configured');
+      return res.status(500).json({ error: 'Database not configured.' });
+    }
 
     try {
       const existingRes = await fetch(`${dbUrl}/payments/${paymentId}.json`);
@@ -98,7 +115,7 @@ module.exports = async (req, res) => {
 
     // ─── Step 4: Generate license key ───
     const licenseKey = generateProKey();
-    console.log(`[webhook] Generated key for ${email}: ${licenseKey.substring(0, 11)}...`);
+    console.log(`[webhook] Generated key for payment ${paymentId}: ${licenseKey.substring(0, 11)}...`);
 
     // ─── Step 5: Store in Firebase ───
     const record = {
@@ -115,11 +132,15 @@ module.exports = async (req, res) => {
       timestamp: new Date().toISOString()
     };
 
-    await fetch(`${dbUrl}/payments/${paymentId}.json`, {
+    const writeRes = await fetch(`${dbUrl}/payments/${paymentId}.json`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(record)
     });
+    if (!writeRes.ok) {
+      console.error('[webhook] Critical: payment record write failed');
+      return res.status(500).json({ error: 'Failed to store payment record.' });
+    }
 
     // Also store under license keys index
     const safeKey = licenseKey.replace(/\./g, '_').replace(/\//g, '_');

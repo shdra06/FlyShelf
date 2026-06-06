@@ -92,11 +92,8 @@ namespace FlyShelf
             NotesToggleBtn.ToolTip = "Back to Clipboard";
 
             // Animate in
-            var slideAnim = new DoubleAnimation(-12, 0, new Duration(TimeSpan.FromMilliseconds(200)))
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-            };
-            var fadeAnim = new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(200)));
+            var slideAnim = Classes.AnimationHelper.SlideIn(fromY: -12, durationMs: 200);
+            var fadeAnim = Classes.AnimationHelper.FadeIn(durationMs: 200);
             if (NotesPanel.RenderTransform is TranslateTransform tt)
                 tt.BeginAnimation(TranslateTransform.YProperty, slideAnim);
             NotesPanel.BeginAnimation(OpacityProperty, fadeAnim);
@@ -264,7 +261,7 @@ namespace FlyShelf
             }
 
             // Animate out
-            var fadeAnim = new DoubleAnimation(1, 0, new Duration(TimeSpan.FromMilliseconds(150)));
+            var fadeAnim = Classes.AnimationHelper.FadeOut();
             fadeAnim.Completed += (s, a) =>
             {
                 if (!_isNotesActive)

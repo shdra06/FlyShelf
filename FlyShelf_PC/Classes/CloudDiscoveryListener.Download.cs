@@ -402,8 +402,8 @@ namespace FlyShelf.Classes
             }
             catch (Exception hashEx)
             {
-                Logger.LogAction("INTEGRITY", $"Hash verification failed: {hashEx.Message}");
-                return true; // Can't verify = assume OK
+                Logger.LogAction("INTEGRITY", $"Hash verification error: {hashEx.Message}");
+                return false; // Fail-closed: can't verify = treat as corrupted, retry download
             }
         }
 

@@ -31,7 +31,7 @@ namespace FlyShelf.Classes
                 string sessionId = req.Headers["X-Upload-Session"] ?? "";
                 string chunkIndexStr = req.Headers["X-Chunk-Index"] ?? "0";
                 
-                if (string.IsNullOrEmpty(sessionId))
+                if (string.IsNullOrEmpty(sessionId) || !System.Text.RegularExpressions.Regex.IsMatch(sessionId, "^[a-zA-Z0-9_-]+$"))
                 {
                     res.StatusCode = 400;
                     res.Close();
@@ -66,18 +66,25 @@ namespace FlyShelf.Classes
 
         private async Task HandleChunkFinalize(HttpListenerRequest req, HttpListenerResponse res)
         {
+            string sessionId = req.Headers["X-Upload-Session"] ?? "";
+            if (string.IsNullOrEmpty(sessionId) || !System.Text.RegularExpressions.Regex.IsMatch(sessionId, "^[a-zA-Z0-9_-]+$"))
+            {
+                res.StatusCode = 400;
+                res.Close();
+                return;
+            }
+
             // ── Loopback/Echo Prevention Gate ──
             string sourceDeviceId = req.Headers["X-Source-DeviceId"] ?? "";
             if (!string.IsNullOrEmpty(sourceDeviceId) && sourceDeviceId == SettingsManager.Current.DeviceId)
             {
                 Logger.LogAction("SYNC_GATE", "Ignored loopback chunk finalization from self");
-                string gateSessionId = req.Headers["X-Upload-Session"] ?? "";
-                if (!string.IsNullOrEmpty(gateSessionId) && _chunkSessions.TryRemove(gateSessionId, out string gateChunkDir))
+                if (_chunkSessions.TryRemove(sessionId, out string gateChunkDir))
                 {
                     try { if (Directory.Exists(gateChunkDir)) Directory.Delete(gateChunkDir, true); } catch { }
                 }
                 res.StatusCode = 200;
-                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"loopback_ignored\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { }
                 res.Close();
                 return;
             }
@@ -86,20 +93,18 @@ namespace FlyShelf.Classes
             if (!SettingsManager.Current.EnableIncomingSync)
             {
                 // Clean up chunk temp directory so it doesn't accumulate
-                string gateSessionId = req.Headers["X-Upload-Session"] ?? "";
-                if (!string.IsNullOrEmpty(gateSessionId) && _chunkSessions.TryRemove(gateSessionId, out string gateChunkDir))
+                if (_chunkSessions.TryRemove(sessionId, out string gateChunkDir))
                 {
                     try { if (Directory.Exists(gateChunkDir)) Directory.Delete(gateChunkDir, true); } catch { }
                 }
                 res.StatusCode = 200;
-                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"sync_paused\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                try { await WriteJsonResponse(res, true, "sync_paused"); } catch { }
                 res.Close();
                 return;
             }
 
             try
             {
-                string sessionId = req.Headers["X-Upload-Session"] ?? "";
                 string encodedName = req.Headers["X-File-Name"] ?? "";
                 string batchName = req.Headers["X-Batch-Name"] ?? "";
                 string originalDateStr = req.Headers["X-Original-Date"];
@@ -107,12 +112,24 @@ namespace FlyShelf.Classes
 
                 string rawName = "uploaded_file.dat";
                 if (!string.IsNullOrEmpty(encodedName))
-                    try { rawName = Uri.UnescapeDataString(encodedName); } catch { }
+                {
+                    try { rawName = Path.GetFileName(Uri.UnescapeDataString(encodedName)); } catch { }
+                }
+                if (string.IsNullOrWhiteSpace(rawName)) rawName = "uploaded_file.dat";
+
                 if (!string.IsNullOrEmpty(batchName))
-                    try { batchName = Uri.UnescapeDataString(batchName); } catch { }
+                {
+                    try { batchName = Path.GetFileName(Uri.UnescapeDataString(batchName)); } catch { }
+                }
                 if (string.IsNullOrWhiteSpace(batchName)) batchName = "FlyShelf_Chunked_Transfer";
+
                 string sourceDevice = req.Headers["X-Source-Device"] ?? "Remote";
-                try { sourceDevice = Uri.UnescapeDataString(sourceDevice); } catch { }
+                if (!string.IsNullOrEmpty(sourceDevice))
+                {
+                    try { sourceDevice = Path.GetFileName(Uri.UnescapeDataString(sourceDevice)); } catch { }
+                }
+                if (string.IsNullOrWhiteSpace(sourceDevice)) sourceDevice = "Remote";
+
                 var chunkTransport = DetectTransport(req);
 
                 if (!_chunkSessions.TryGetValue(sessionId, out string chunkDir) || !Directory.Exists(chunkDir))
@@ -218,6 +235,9 @@ namespace FlyShelf.Classes
                         clip.EvaluateSmartActions();
                         _viewModel.InsertWithDedup(clip);
                         _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
+                        
+                        // Persist history so the synced assembled chunk file survives app restarts
+                        _viewModel.PersistHistoryPublic();
                     }
                     catch { }
                 });
@@ -256,7 +276,13 @@ namespace FlyShelf.Classes
 
             try
             {
-                string fileName = req.QueryString["name"] ?? $"document_{DateTime.Now.Ticks}.docx";
+                string fileName = req.QueryString["name"] ?? "";
+                if (!string.IsNullOrEmpty(fileName))
+                {
+                    try { fileName = Path.GetFileName(Uri.UnescapeDataString(fileName)); } catch { }
+                }
+                if (string.IsNullOrWhiteSpace(fileName)) fileName = $"document_{DateTime.Now.Ticks}.docx";
+
                 string convertDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Conversions");
                 Directory.CreateDirectory(convertDir);
 
@@ -476,6 +502,17 @@ namespace FlyShelf.Classes
 
             try
             {
+                // [SECURITY FIX v2.1.0]: Reject oversized text uploads (DoS prevention)
+                long contentLength = req.ContentLength64;
+                if (contentLength > 10_485_760) // 10MB max
+                {
+                    res.StatusCode = 413;
+                    byte[] errBytes = Encoding.UTF8.GetBytes("{\"error\":\"Request body too large (10MB max)\"}");
+                    res.ContentType = "application/json";
+                    res.OutputStream.Write(errBytes, 0, errBytes.Length);
+                    res.Close();
+                    return;
+                }
                 string body;
                 using (var reader = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8))
                 {
@@ -551,6 +588,12 @@ namespace FlyShelf.Classes
                     // Download if not resolved locally
                     if (string.IsNullOrEmpty(localPath))
                     {
+                        // [SECURITY FIX v2.1.0]: SSRF protection — validate URL before download
+                        if (!IsUrlSafeForDownload(url))
+                        {
+                            Logger.LogAction("MERGE PDF SECURITY", $"Blocked SSRF attempt: {url}");
+                            continue;
+                        }
                         try
                         {
                             // Strip query parameters for extension detection
@@ -743,5 +786,39 @@ namespace FlyShelf.Classes
         }
 
         // ═══ File Download, Pairing & Injection moved to NetworkSyncServer.FileTransfer.cs ═══
+
+        /// <summary>
+        /// [SECURITY v2.1.0] Validates a URL is safe for server-side download.
+        /// Blocks private/loopback IPs, non-HTTP schemes, and cloud metadata endpoints.
+        /// </summary>
+        private static bool IsUrlSafeForDownload(string url)
+        {
+            try
+            {
+                if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
+                // Only allow HTTP/HTTPS
+                if (uri.Scheme != "http" && uri.Scheme != "https") return false;
+                // Block cloud metadata endpoints
+                if (uri.Host == "169.254.169.254" || uri.Host == "metadata.google.internal") return false;
+                // Block loopback and private IPs
+                if (System.Net.IPAddress.TryParse(uri.Host, out var ip))
+                {
+                    if (System.Net.IPAddress.IsLoopback(ip)) return false;
+                    byte[] bytes = ip.GetAddressBytes();
+                    if (bytes.Length == 4)
+                    {
+                        // 10.x.x.x, 172.16-31.x.x, 192.168.x.x
+                        if (bytes[0] == 10) return false;
+                        if (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31) return false;
+                        if (bytes[0] == 192 && bytes[1] == 168) return false;
+                        if (bytes[0] == 127) return false;
+                    }
+                }
+                // Block localhost variants
+                if (uri.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase)) return false;
+                return true;
+            }
+            catch { return false; }
+        }
     }
 }

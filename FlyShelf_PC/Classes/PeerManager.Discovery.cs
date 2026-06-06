@@ -310,12 +310,18 @@ namespace FlyShelf.Classes
         {
             if (string.IsNullOrEmpty(pairingKey) || string.IsNullOrEmpty(sig)) return false;
 
-            // Replay protection: packet must be signed within a 30-second window
+            // Replay protection: packet must be signed within a 60-second window
+            // (widened from 30s to tolerate clock skew on fresh Windows installs or post-sleep)
             long nowMs = NetworkClock.UtcNowMs;
-            if (Math.Abs(nowMs - timestamp) > 30000)
+            long skewMs = Math.Abs(nowMs - timestamp);
+            if (skewMs > 60000)
             {
-                Logger.LogAction("PEER_UDP_WARN", $"Rejected outdated packet from {deviceId} (skew: {Math.Abs(nowMs - timestamp) / 1000.0}s)");
+                Logger.LogAction("PEER_UDP_WARN", $"Rejected outdated packet from {deviceId} (skew: {skewMs / 1000.0}s)");
                 return false;
+            }
+            if (skewMs > 30000)
+            {
+                Logger.LogAction("PEER_UDP_WARN", $"⚠️ High clock skew detected with {deviceId}: {skewMs / 1000.0}s — consider syncing system clocks");
             }
 
             string expected = GenerateDiscoverySignature(deviceId, timestamp, localUrl, pairingKey);

@@ -17,9 +17,11 @@
                 <ResourceDictionary Source="pack://application:,,,/Resources/Styles/ImagePlaceholder.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/Resources/Styles/FlyShelfColorPalette.xaml"/>
                 <ResourceDictionary Source="pack://application:,,,/Resources/Themes/Theme.Midnight.xaml"/>
+                <ResourceDictionary Source="pack://application:,,,/Styles/AltClipboardStyles.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
-
+            <!-- Default app fallback icon -->
+            <BitmapImage x:Key="ThemeLogoIcon" UriSource="pack://application:,,,/Resources/FlyShelfIcon.png" />
 
             <!-- Premium WPF-UI Accent Overrides -->
             <Color x:Key="SystemAccentColor">#6366F1</Color>

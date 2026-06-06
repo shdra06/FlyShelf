@@ -72,7 +72,7 @@ namespace FlyShelf.Classes
                     {
                         try
                         {
-                            var json = File.ReadAllText(_historyPath);
+                            var json = RunWithRetry(() => File.ReadAllText(_historyPath));
                             var snapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(json);
                             if (snapshot != null)
                             {
@@ -95,7 +95,7 @@ namespace FlyShelf.Classes
                             string backupPath = _historyPath + ".bak";
                             if (File.Exists(backupPath))
                             {
-                                var backupJson = File.ReadAllText(backupPath);
+                                var backupJson = RunWithRetry(() => File.ReadAllText(backupPath));
                                 var backupSnapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(backupJson);
                                 if (backupSnapshot != null)
                                 {
@@ -125,7 +125,7 @@ namespace FlyShelf.Classes
                     // Step 2: Replay journal entries on top of snapshot
                     if (File.Exists(_journalPath))
                     {
-                        var lines = File.ReadAllLines(_journalPath);
+                        var lines = RunWithRetry(() => File.ReadAllLines(_journalPath));
                         foreach (var line in lines)
                         {
                             if (string.IsNullOrWhiteSpace(line)) continue;
@@ -213,7 +213,7 @@ namespace FlyShelf.Classes
                     {
                         try
                         {
-                            File.AppendAllText(_journalPath, line);
+                            RunWithRetry(() => File.AppendAllText(_journalPath, line));
                             _journalEntryCount++;
 
                             // Auto-compact when journal gets large
@@ -253,7 +253,7 @@ namespace FlyShelf.Classes
                     {
                         try
                         {
-                            File.AppendAllText(_journalPath, line);
+                            RunWithRetry(() => File.AppendAllText(_journalPath, line));
                             _journalEntryCount++;
                         }
                         catch (Exception ex) { Logger.LogAction("HISTORY_JOURNAL", $"Async delete write failed: {ex.Message}"); }
@@ -331,23 +331,23 @@ namespace FlyShelf.Classes
 
                     // Write to temp file first, then atomic rename for safety
                     var tempPath = _historyPath + ".tmp";
-                    File.WriteAllText(tempPath, json);
+                    RunWithRetry(() => File.WriteAllText(tempPath, json));
 
                     // Create a backup copy before moving the temp file to historyPath
                     if (File.Exists(_historyPath))
                     {
                         try
                         {
-                            File.Copy(_historyPath, _historyPath + ".bak", true);
+                            RunWithRetry(() => File.Copy(_historyPath, _historyPath + ".bak", true));
                         }
                         catch { }
                     }
 
-                    File.Move(tempPath, _historyPath, true);
+                    RunWithRetry(() => File.Move(tempPath, _historyPath, true));
 
                     // Clear journal
                     if (File.Exists(_journalPath))
-                        File.Delete(_journalPath);
+                        RunWithRetry(() => File.Delete(_journalPath));
                     _journalEntryCount = 0;
 
                     Logger.LogAction("HISTORY_COMPACT", $"Compacted {items.Count} items, journal cleared");
@@ -390,7 +390,7 @@ namespace FlyShelf.Classes
                 {
                     try
                     {
-                        var json = File.ReadAllText(_historyPath);
+                        var json = RunWithRetry(() => File.ReadAllText(_historyPath));
                         var snapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(json);
                         if (snapshot != null)
                         {
@@ -411,7 +411,7 @@ namespace FlyShelf.Classes
                 {
                     try
                     {
-                        foreach (var line in File.ReadAllLines(_journalPath))
+                        foreach (var line in RunWithRetry(() => File.ReadAllLines(_journalPath)))
                         {
                             if (string.IsNullOrWhiteSpace(line)) continue;
                             try
@@ -465,7 +465,7 @@ namespace FlyShelf.Classes
                         filePath.Contains(_imagesDir) && 
                         File.Exists(filePath))
                     {
-                        File.Delete(filePath);
+                        RunWithRetry(() => File.Delete(filePath));
                     }
                 }
             }
@@ -587,6 +587,47 @@ namespace FlyShelf.Classes
         /// <summary>
         /// Generates a deterministic ID for a clipboard item (for journal delete tracking).
         /// </summary>
+        private static T RunWithRetry<T>(Func<T> action, int retries = 3, int delayMs = 100)
+        {
+            for (int i = 0; i < retries; i++)
+            {
+                try
+                {
+                    return action();
+                }
+                catch (IOException) when (i < retries - 1)
+                {
+                    Thread.Sleep(delayMs);
+                }
+                catch (UnauthorizedAccessException) when (i < retries - 1)
+                {
+                    Thread.Sleep(delayMs);
+                }
+            }
+            return action();
+        }
+
+        private static void RunWithRetry(Action action, int retries = 3, int delayMs = 100)
+        {
+            for (int i = 0; i < retries; i++)
+            {
+                try
+                {
+                    action();
+                    return;
+                }
+                catch (IOException) when (i < retries - 1)
+                {
+                    Thread.Sleep(delayMs);
+                }
+                catch (UnauthorizedAccessException) when (i < retries - 1)
+                {
+                    Thread.Sleep(delayMs);
+                }
+            }
+            action();
+        }
+
         private static string GetItemId(ViewModels.ClipboardItem item)
         {
             // Use a deterministic hash based on content, NOT object.GetHashCode()

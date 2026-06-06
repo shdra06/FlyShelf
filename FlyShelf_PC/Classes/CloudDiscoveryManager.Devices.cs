@@ -16,6 +16,9 @@ namespace FlyShelf.Classes
 {
     public partial class CloudDiscoveryManager
     {
+        // FIX: Only register room membership once per session — it never changes after pairing
+        private static bool _roomMembershipRegistered = false;
+
         /// <summary>
         /// Push device registration to Firebase. Optimized: only writes when URL actually changes
         /// or when going offline. Reduces Firebase writes from ~1440/day to ~2-5/day per user.
@@ -38,6 +41,7 @@ namespace FlyShelf.Classes
                 string encryptedUrl = "";
                 string encryptedTlsUrl = "";
                 string tlsUrl = NetworkSyncServer.Instance?.TlsUrl ?? "";
+                bool urlsActuallyEncrypted = true;
                 try
                 {
                     if (url.Contains("trycloudflare.com"))
@@ -53,6 +57,7 @@ namespace FlyShelf.Classes
                 catch
                 {
                     // Fallback to plaintext if encryption fails (e.g., no pairing key yet)
+                    urlsActuallyEncrypted = false;
                     encryptedGlobalUrl = url.Contains("trycloudflare.com") ? url : "";
                     encryptedLocalIp = localIp;
                     encryptedUrl = localIp.Contains("http") ? localIp : url;
@@ -71,7 +76,7 @@ namespace FlyShelf.Classes
                     TlsThumbprint = NetworkSyncServer.Instance?.TlsThumbprint ?? "",
                     IsOnline = isOnline,
                     Timestamp = NetworkClock.UtcNowMs,
-                    UrlsEncrypted = true,   // Signal to peers that URLs need decryption
+                    UrlsEncrypted = urlsActuallyEncrypted,   // Signal to peers whether URLs need decryption
                     IsPro = LicenseManager.IsPro,
                     LicenseKey = LicenseManager.IsPro ? LicenseManager.MaskedKey : ""
                 };
@@ -82,7 +87,12 @@ namespace FlyShelf.Classes
                 // Use PUT to register or update our specific Device node (scoped to pairing key)
                 string pairingKey = DevicePairingManager.EnsurePairingKey();
                 if (string.IsNullOrEmpty(pairingKey)) { Logger.LogAction("FIREBASE SYNC", "Skipped device registration — no pairing key"); return; }
-                await RegisterRoomMembershipAsync(pairingKey);
+                // Only register room membership once per session — it never changes
+                if (!_roomMembershipRegistered)
+                {
+                    await RegisterRoomMembershipAsync(pairingKey);
+                    _roomMembershipRegistered = true;
+                }
                 string tunnelNodeUrl = (await AuthUrl($"active_devices/{pairingKey}/{SettingsManager.Current.DeviceId}.json"));
                 var response = await _client.PutAsync(tunnelNodeUrl, content);
                 
@@ -286,7 +296,10 @@ namespace FlyShelf.Classes
             try
             {
                 string url = (await AuthUrl($"device_groups/{groupId}.json"));
-                var payload = new { name, deviceNames };
+                // SECURITY: Include ownerUid for Firebase rule ownership validation (M-01 hardening)
+                string ownerUid = "";
+                try { ownerUid = await FirebaseAuthManager.GetUidAsync() ?? ""; } catch { }
+                var payload = new { name, deviceNames, ownerUid };
                 var json = JsonSerializer.Serialize(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
                 await _client.PutAsync(url, content);

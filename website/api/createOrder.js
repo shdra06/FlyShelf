@@ -13,9 +13,8 @@ function setCorsHeaders(req, res) {
   const origin = req.headers.origin || '';
   if (ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-  } else {
-    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGINS[0]);
   }
+  // Do NOT set a default origin for non-matching/non-browser requests
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -33,6 +32,22 @@ module.exports = async (req, res) => {
     const { email, deviceId, region } = req.body;
     if (!email || !deviceId) {
       return res.status(400).json({ error: 'Missing email or deviceId' });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ error: 'Invalid email format.' });
+    }
+
+    // Validate deviceId
+    if (typeof deviceId !== 'string' || deviceId.length > 128) {
+      return res.status(400).json({ error: 'Invalid deviceId.' });
+    }
+
+    // Validate region
+    if (region && region !== 'USD' && region !== 'INR') {
+      return res.status(400).json({ error: 'Invalid region.' });
     }
 
     const key_id = process.env.RAZORPAY_KEY_ID;

@@ -16,7 +16,7 @@ namespace FlyShelf.Classes
         private static readonly ConcurrentQueue<SyncJob> _queue = new();
         private static readonly SemaphoreSlim _signal = new(0);
         private static CancellationTokenSource? _cts;
-        private static bool _running = false;
+        private static volatile bool _running = false;
 
         private const int MAX_RETRIES = 3;
         private static readonly int[] RETRY_DELAYS_MS = { 1000, 3000, 5000 };

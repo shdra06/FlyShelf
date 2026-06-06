@@ -186,10 +186,16 @@ namespace FlyShelf.Classes
                     Directory.CreateDirectory(dir);
                     string json = JsonSerializer.Serialize(cache);
                     string encrypted = SecureStorage.Encrypt(json);
-                    File.WriteAllText(_urlCacheFile, encrypted);
+                    // FIX R11: Atomic write — write to tmp then rename to prevent corruption
+                    string tmpFile = _urlCacheFile + ".tmp";
+                    File.WriteAllText(tmpFile, encrypted);
+                    File.Move(tmpFile, _urlCacheFile, overwrite: true);
                 }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                Logger.LogAction("PEER", $"⚠️ URL cache save failed: {ex.Message}");
+            }
         }
 
         public bool IsRunning => !_cts.IsCancellationRequested;
@@ -223,9 +229,10 @@ namespace FlyShelf.Classes
 
             try
             {
-                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                // FIX 6: Reuse shared HttpClient instead of creating new one every 30s (prevents socket exhaustion)
                 string url = await CloudDiscoveryManager.AuthUrlPublic($"active_devices/{_myPairingKey}.json");
-                var resp = await client.GetAsync(url);
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                var resp = await _sharedClient.GetAsync(url, cts.Token);
                 if (!resp.IsSuccessStatusCode) return;
 
                 string json = await resp.Content.ReadAsStringAsync();
@@ -302,12 +309,12 @@ namespace FlyShelf.Classes
                 var tasks = _peers.Values.Where(p => !p.IsAlive).Select(Handshake);
                 await Task.WhenAll(tasks);
 
-                // ═ ═ ═ FIX 3: Send urlRequest whenever we have dead peers ═ ═ ═
-                // Don't gate on _urlRequestSent — re-send every 60s if peers are still dead.
-                // This ensures recovery even if the first request was missed.
+                // FIX 1b: Tie SendUrlRequest to discovery backoff interval.
+                // Instead of hardcoded 60s, use the exponential backoff value to match discovery pace.
                 bool hasDeadPeers2 = _peers.Values.Any(p => !p.IsAlive);
+                int urlRequestThrottleSeconds = Math.Max(60, _discoveryBackoffMs / 1000);
                 if (hasDeadPeers2 && AliveCount == 0 && totalPeers > 0
-                    && (DateTime.UtcNow - _lastUrlRequestTime).TotalSeconds > 60)
+                    && (DateTime.UtcNow - _lastUrlRequestTime).TotalSeconds > urlRequestThrottleSeconds)
                 {
                     await SendUrlRequest();
                 }
@@ -339,7 +346,7 @@ namespace FlyShelf.Classes
 
             try
             {
-                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                // FIX 6: Reuse shared HttpClient instead of creating new one per call
 
                 // ═ ═ ═ FIX 4: Write urlRequest under EACH dead peer's path ═ ═ ═
                 // Previously wrote under our OWN device path — the other PC's SSE watcher
@@ -355,7 +362,8 @@ namespace FlyShelf.Classes
                             requestedAt = NetworkClock.UtcNowMs,
                             requestedBy = _myDeviceId
                         });
-                        await client.PutAsync(requestUrl, new StringContent(body, Encoding.UTF8, "application/json"));
+                        using var reqCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                        await _sharedClient.PutAsync(requestUrl, new StringContent(body, Encoding.UTF8, "application/json"), reqCts.Token);
                     }
                     catch { }
                 }

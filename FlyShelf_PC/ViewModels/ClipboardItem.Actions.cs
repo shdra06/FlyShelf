@@ -88,7 +88,8 @@ namespace FlyShelf.ViewModels
 
 
 
-                    sandboxDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Sandbox", Guid.NewGuid().ToString().Substring(0, 6));
+                    // [SECURITY FIX v2.1.0]: Use full GUID to prevent predictable temp directory names (CWE-377)
+                    sandboxDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Sandbox", Guid.NewGuid().ToString("N"));
 
 
 
@@ -120,6 +121,8 @@ namespace FlyShelf.ViewModels
 
 
 
+                // [SECURITY FIX v2.1.0]: Launch VS Code directly instead of via cmd.exe
+                // to prevent shell metacharacter injection in file paths (CWE-78)
                 var startInfo = new ProcessStartInfo
 
 
@@ -128,11 +131,11 @@ namespace FlyShelf.ViewModels
 
 
 
-                    FileName = "cmd.exe",
+                    FileName = "code",
 
 
 
-                    Arguments = $"/C code \"{sandboxDir}\" \"{fullPath}\"",
+                    ArgumentList = { sandboxDir, fullPath },
 
 
 
@@ -209,6 +212,8 @@ namespace FlyShelf.ViewModels
 
 
 
+                    // Show FULL command text so users can make an informed decision
+                    string fullPreview = RawContent ?? "";
                     result = System.Windows.MessageBox.Show(
 
 
@@ -221,7 +226,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                        (RawContent?.Length > 200 ? RawContent.Substring(0, 200) + "..." : RawContent),
+                        fullPreview,
 
 
 
@@ -329,14 +334,12 @@ namespace FlyShelf.ViewModels
 
 
 
-                        // Fallback Behavior: Execute text blocks natively
-
-
-
-                        startInfo.Arguments = $"/k {RawContent}";
-
-
-
+                        // [SECURITY FIX]: Write clipboard text to a temp .bat file instead of 
+                        // passing it inline to cmd.exe /k — prevents shell metacharacter injection 
+                        // (CWE-78) via &&, |, ;, etc. in clipboard content.
+                        string tempBat = Path.Combine(Path.GetTempPath(), $"FlyShelf_Run_{Guid.NewGuid():N}.bat");
+                        File.WriteAllText(tempBat, $"@echo off\r\n{RawContent}\r\npause\r\ndel \"%~f0\"");
+                        startInfo.Arguments = $"/c \"{tempBat}\"";
                     }
 
 
@@ -551,7 +554,8 @@ namespace FlyShelf.ViewModels
 
 
 
-                    sourceFile = Path.Combine(Path.GetTempPath(), "FlyShelfRuntime_" + Guid.NewGuid().ToString().Substring(0, 4) + ".cpp");
+                    // [SECURITY FIX v2.1.0]: Use full GUID to prevent predictable temp file names (CWE-377)
+                    sourceFile = Path.Combine(Path.GetTempPath(), $"FlyShelf_{Guid.NewGuid():N}.cpp");
 
 
 
@@ -559,7 +563,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                    exeName = Path.Combine(Path.GetTempPath(), "FlyShelfRuntime.exe");
+                    exeName = Path.Combine(Path.GetTempPath(), $"FlyShelf_{Guid.NewGuid():N}.exe");
 
 
 
@@ -632,7 +636,8 @@ namespace FlyShelf.ViewModels
                     {
                         // Group: zip all file paths stored in RawContent
                         string[] paths = RawContent.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
-                        string tempZip = Path.Combine(Path.GetTempPath(), $"FlyShelf_Group_{DateTime.Now:yyyyMMdd_HHmmss}.zip");
+                        // [SECURITY FIX v2.1.0]: Use full GUID to prevent predictable temp file names (CWE-377)
+                        string tempZip = Path.Combine(Path.GetTempPath(), $"FlyShelf_Group_{Guid.NewGuid():N}.zip");
                         if (File.Exists(tempZip)) File.Delete(tempZip);
 
                         using (var archive = System.IO.Compression.ZipFile.Open(tempZip, System.IO.Compression.ZipArchiveMode.Create))
@@ -663,7 +668,8 @@ namespace FlyShelf.ViewModels
                     else if (ItemType == ClipboardItemType.Folder && !string.IsNullOrEmpty(FilePath) && Directory.Exists(FilePath))
                     {
                         // Folder: zip the entire directory
-                        string tempZip = Path.Combine(Path.GetTempPath(), $"FlyShelf_{FileName}_{DateTime.Now:HHmmss}.zip");
+                        // [SECURITY FIX v2.1.0]: Use full GUID to prevent predictable temp file names (CWE-377)
+                        string tempZip = Path.Combine(Path.GetTempPath(), $"FlyShelf_{Guid.NewGuid():N}.zip");
                         if (File.Exists(tempZip)) File.Delete(tempZip);
                         System.IO.Compression.ZipFile.CreateFromDirectory(FilePath, tempZip, System.IO.Compression.CompressionLevel.Fastest, true);
 

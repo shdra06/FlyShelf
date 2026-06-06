@@ -263,6 +263,8 @@ namespace FlyShelf
                     try
                     {
                         // Use Word COM to open PDF and save as DOCX (Word 2013+ supports this natively)
+                        // [SECURITY FIX]: Use -EncodedCommand (Base64) instead of inline -Command
+                        // to prevent PowerShell injection via crafted filenames (CWE-78).
                         string script = $@"
 $word = New-Object -ComObject Word.Application
 $word.Visible = $false
@@ -272,10 +274,11 @@ $doc.Close()
 $word.Quit()
 [System.Runtime.InteropServices.Marshal]::ReleaseComObject($word) | Out-Null
 ";
+                        string encodedScript = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script));
                         var psi = new System.Diagnostics.ProcessStartInfo
                         {
                             FileName = "powershell.exe",
-                            Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -Command \"{script}\"",
+                            Arguments = $"-NoProfile -WindowStyle Hidden -ExecutionPolicy RemoteSigned -EncodedCommand {encodedScript}",
                             CreateNoWindow = true,
                             UseShellExecute = false
                         };

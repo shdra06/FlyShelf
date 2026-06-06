@@ -36,11 +36,8 @@ namespace FlyShelf
                 }
                 
                 // Smooth slide-down + fade-in animation
-                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(-8, 0, new Duration(TimeSpan.FromMilliseconds(150)))
-                {
-                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-                };
-                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(150)));
+                var slideAnim = Classes.AnimationHelper.SlideIn();
+                var fadeAnim = Classes.AnimationHelper.FadeIn();
                 SearchBarContainer.RenderTransform.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, slideAnim);
                 SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
                 
@@ -195,6 +192,8 @@ namespace FlyShelf
                         if (_activeCategoryFilter == null)
                         {
                             view.Filter = null;
+                            if (ShelfListView != null && ShelfListView.Items.CanFilter) ShelfListView.Items.Filter = null;
+                            if (AltShelfListView != null && AltShelfListView.Items.CanFilter) AltShelfListView.Items.Filter = null;
                         }
                         else
                         {
@@ -234,6 +233,8 @@ namespace FlyShelf
                 else
                 {
                     view.Filter = null;
+                    if (ShelfListView != null && ShelfListView.Items.CanFilter) ShelfListView.Items.Filter = null;
+                    if (AltShelfListView != null && AltShelfListView.Items.CanFilter) AltShelfListView.Items.Filter = null;
                 }
                 view.CustomSort = null;
                 _viewModel.IsSearchActive = _activeCategoryFilter != null;
@@ -323,11 +324,8 @@ namespace FlyShelf
                 SortFilterInlineBar.Visibility = Visibility.Visible;
 
                 // Smooth slide-down + fade-in animation
-                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(-8, 0, new Duration(TimeSpan.FromMilliseconds(150)))
-                {
-                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-                };
-                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(150)));
+                var slideAnim = Classes.AnimationHelper.SlideIn();
+                var fadeAnim = Classes.AnimationHelper.FadeIn();
 
                 if (SortFilterInlineBar.RenderTransform is System.Windows.Media.TranslateTransform translate)
                 {
@@ -338,11 +336,8 @@ namespace FlyShelf
             else
             {
                 // Smooth slide-up + fade-out animation
-                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(0, -8, new Duration(TimeSpan.FromMilliseconds(120)))
-                {
-                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn }
-                };
-                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(1, 0, new Duration(TimeSpan.FromMilliseconds(120)));
+                var slideAnim = Classes.AnimationHelper.SlideOut();
+                var fadeAnim = Classes.AnimationHelper.FadeOut(120);
 
                 fadeAnim.Completed += (s, args) =>
                 {
@@ -453,6 +448,10 @@ namespace FlyShelf
             {
                 ShelfListView.Items.Filter = null;
             }
+            if (AltShelfListView != null && AltShelfListView.Items.CanFilter)
+            {
+                AltShelfListView.Items.Filter = null;
+            }
             _viewModel.IsSearchActive = false;
 
             // Reset button color
@@ -474,6 +473,7 @@ namespace FlyShelf
             {
                 var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
                 var listView = ShelfListView?.Items;
+                var altListView = AltShelfListView?.Items;
 
                 Predicate<object>? filterPredicate = null;
 
@@ -521,6 +521,11 @@ namespace FlyShelf
                 {
                     listView.Filter = filterPredicate;
                 }
+
+                if (altListView != null && altListView.CanFilter)
+                {
+                    altListView.Filter = filterPredicate;
+                }
             }
             catch { }
         }
@@ -541,11 +546,11 @@ namespace FlyShelf
                     return;
                 }
 
-                // If the popup was closed very recently (within 200ms), it means
+                // If the popup was closed very recently (within 350ms), it means
                 // the user clicked the MoreBtn to close it, and the StaysOpen="False"
                 // behavior triggered a close before this click handler fired.
-                // In that case, we want it to stay closed.
-                if ((DateTime.Now - _overflowPopupLastClosed).TotalMilliseconds < 200)
+                // In that case, we want it to stay closed (toggle OFF).
+                if ((DateTime.Now - _overflowPopupLastClosed).TotalMilliseconds < 350)
                 {
                     return;
                 }

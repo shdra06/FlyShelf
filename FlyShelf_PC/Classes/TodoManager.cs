@@ -78,7 +78,10 @@ namespace FlyShelf.Classes
         private static readonly object _lock = new();
         private static volatile bool _isDirty;
 
-        public static ObservableCollection<TodoDay> Days => _days;
+        public static ObservableCollection<TodoDay> Days
+        {
+            get { lock (_lock) { return _days; } }
+        }
 
         public static void Load()
         {
@@ -111,6 +114,30 @@ namespace FlyShelf.Classes
                 catch (Exception ex)
                 {
                     Logger.LogAction("TODOS", $"Failed to load todos: {ex.Message}");
+                    // Fallback: try loading from .bak file
+                    try
+                    {
+                        string bakPath = _todosPath + ".bak";
+                        if (File.Exists(bakPath))
+                        {
+                            Logger.LogAction("TODOS", "Attempting recovery from .bak file");
+                            string bakJson = File.ReadAllText(bakPath);
+                            var bakLoaded = JsonSerializer.Deserialize<List<TodoDay>>(bakJson, new JsonSerializerOptions
+                            {
+                                PropertyNameCaseInsensitive = true
+                            });
+                            if (bakLoaded != null)
+                            {
+                                var sorted = bakLoaded.OrderByDescending(d => d.Date).ToList();
+                                _days = new ObservableCollection<TodoDay>(sorted);
+                                return;
+                            }
+                        }
+                    }
+                    catch (Exception bakEx)
+                    {
+                        Logger.LogAction("TODOS", $"Backup recovery also failed: {bakEx.Message}");
+                    }
                     _days = new ObservableCollection<TodoDay>();
                 }
             }
@@ -118,19 +145,28 @@ namespace FlyShelf.Classes
 
         public static TodoDay EnsureToday()
         {
-            var today = DateTime.Today;
-            var existing = _days.FirstOrDefault(d => d.Date.Date == today);
-            if (existing != null) return existing;
+            lock (_lock)
+            {
+                var today = DateTime.Today;
+                var existing = _days.FirstOrDefault(d => d.Date.Date == today);
+                if (existing != null) return existing;
 
-            var newDay = new TodoDay { Date = today };
-            _days.Insert(0, newDay);
-            ScheduleSave();
-            return newDay;
+                var newDay = new TodoDay { Date = today };
+                _days.Insert(0, newDay);
+                ScheduleSave();
+                return newDay;
+            }
         }
 
-        public static bool HasDay(DateTime date) => _days.Any(d => d.Date.Date == date.Date);
+        public static bool HasDay(DateTime date)
+        {
+            lock (_lock) { return _days.Any(d => d.Date.Date == date.Date); }
+        }
 
-        public static TodoDay? GetDay(DateTime date) => _days.FirstOrDefault(d => d.Date.Date == date.Date);
+        public static TodoDay? GetDay(DateTime date)
+        {
+            lock (_lock) { return _days.FirstOrDefault(d => d.Date.Date == date.Date); }
+        }
 
         public static TodoItem? AddItem(TodoDay day, string text = "")
         {
@@ -180,11 +216,11 @@ namespace FlyShelf.Classes
                     if (!Directory.Exists(_appDataDir))
                         Directory.CreateDirectory(_appDataDir);
 
-                    List<TodoDay> snapshot;
-                    lock (_days)
-                    {
-                        snapshot = _days.ToList();
-                    }
+                    // Snapshot under the same _lock — no nested locking needed
+                    List<TodoDay> snapshot = _days.ToList();
+
+                    // Create backup before saving
+                    try { if (File.Exists(_todosPath)) File.Copy(_todosPath, _todosPath + ".bak", overwrite: true); } catch { }
 
                     string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
                     {

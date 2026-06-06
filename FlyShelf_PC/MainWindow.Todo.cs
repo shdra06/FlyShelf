@@ -71,11 +71,8 @@ namespace FlyShelf
             UpdateToolbarButtonsVisibility();
 
             // Animate in
-            var slideAnim = new DoubleAnimation(-12, 0, new Duration(TimeSpan.FromMilliseconds(200)))
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-            };
-            var fadeAnim = new DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(200)));
+            var slideAnim = Classes.AnimationHelper.SlideIn(fromY: -12, durationMs: 200);
+            var fadeAnim = Classes.AnimationHelper.FadeIn(durationMs: 200);
             if (TodoPanel.RenderTransform is TranslateTransform tt)
                 tt.BeginAnimation(TranslateTransform.YProperty, slideAnim);
             TodoPanel.BeginAnimation(OpacityProperty, fadeAnim);
@@ -122,11 +119,8 @@ namespace FlyShelf
             }
 
             // Animate out
-            var slideAnim = new DoubleAnimation(0, -12, new Duration(TimeSpan.FromMilliseconds(180)))
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseIn }
-            };
-            var fadeAnim = new DoubleAnimation(1, 0, new Duration(TimeSpan.FromMilliseconds(180)));
+            var slideAnim = Classes.AnimationHelper.SlideOut(toY: -12, durationMs: 180);
+            var fadeAnim = Classes.AnimationHelper.FadeOut(durationMs: 180);
 
             if (TodoPanel.RenderTransform is TranslateTransform tt)
                 tt.BeginAnimation(TranslateTransform.YProperty, slideAnim);

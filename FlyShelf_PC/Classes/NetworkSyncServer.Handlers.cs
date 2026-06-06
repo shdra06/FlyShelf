@@ -125,7 +125,7 @@ namespace FlyShelf.Classes
             if (!SettingsManager.Current.EnableIncomingSync)
             {
                 res.StatusCode = 200;
-                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"sync_paused\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                try { await WriteJsonResponse(res, true, "sync_paused"); } catch { }
                 res.Close();
                 return;
             }
@@ -135,9 +135,48 @@ namespace FlyShelf.Classes
             string sourceDevice;
             string itemType = null;
             string sourceDeviceId = req.Headers["X-Source-DeviceId"] ?? "";
+            // [SECURITY FIX v2.1.0]: Reject oversized text uploads (DoS prevention)
+            long contentLength = req.ContentLength64;
+            const long MAX_TEXT_BYTES = 10_485_760; // 10MB max
+            if (contentLength > MAX_TEXT_BYTES)
+            {
+                res.StatusCode = 413;
+                byte[] errBytes = Encoding.UTF8.GetBytes("{\"error\":\"Request body too large (10MB max)\"}");
+                res.ContentType = "application/json";
+                res.OutputStream.Write(errBytes, 0, errBytes.Length);
+                res.Close();
+                return;
+            }
             using (var reader = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8))
             {
-                text = await reader.ReadToEndAsync();
+                // Guard against chunked encoding (ContentLength64 == -1) by reading with a limit
+                if (contentLength < 0)
+                {
+                    // Unknown length (chunked) — read with a byte count limit
+                    var sb = new StringBuilder();
+                    char[] charBuf = new char[8192];
+                    int totalChars = 0;
+                    int charsRead;
+                    while ((charsRead = await reader.ReadAsync(charBuf, 0, charBuf.Length)) > 0)
+                    {
+                        totalChars += charsRead;
+                        if (totalChars > MAX_TEXT_BYTES) // ~10M chars ≈ 10-40MB UTF-8
+                        {
+                            res.StatusCode = 413;
+                            byte[] errBytes = Encoding.UTF8.GetBytes("{\"error\":\"Request body too large (10MB max)\"}");
+                            res.ContentType = "application/json";
+                            res.OutputStream.Write(errBytes, 0, errBytes.Length);
+                            res.Close();
+                            return;
+                        }
+                        sb.Append(charBuf, 0, charsRead);
+                    }
+                    text = sb.ToString();
+                }
+                else
+                {
+                    text = await reader.ReadToEndAsync();
+                }
                 sourceDevice = req.Headers["X-Source-Device"] ?? "Mobile";
             }
 
@@ -177,7 +216,7 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("SYNC_GATE", "Ignored loopback sync_text from self");
                 res.StatusCode = 200;
-                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"loopback_ignored\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { }
                 res.Close();
                 return;
             }
@@ -266,6 +305,9 @@ namespace FlyShelf.Classes
                 bool wasEmpty = _viewModel.DroppedItems.Count == 0;
                 _viewModel.InsertWithDedup(clip);
                 if (wasEmpty) _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
+
+                // Persist history so the synced text survives app restarts
+                _viewModel.PersistHistoryPublic();
                 
                 // ECHO PREVENTION: Mark this text as cloud-sourced so the clipboard monitor
                 // doesn't re-push it to Firebase when we set the Windows clipboard below.
@@ -290,7 +332,7 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("SYNC_GATE", "Ignored loopback sync_file from self");
                 res.StatusCode = 200;
-                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"loopback_ignored\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { }
                 res.Close();
                 return;
             }
@@ -299,7 +341,7 @@ namespace FlyShelf.Classes
             if (!SettingsManager.Current.EnableIncomingSync)
             {
                 res.StatusCode = 200;
-                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"sync_paused\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                try { await WriteJsonResponse(res, true, "sync_paused"); } catch { }
                 res.Close();
                 return;
             }
@@ -315,9 +357,9 @@ namespace FlyShelf.Classes
                 if (string.IsNullOrEmpty(sourceDevice)) sourceDevice = req.QueryString["sourceDevice"];
                 if (!string.IsNullOrEmpty(sourceDevice))
                 {
-                    try { sourceDevice = Uri.UnescapeDataString(sourceDevice); } catch { }
+                    try { sourceDevice = Path.GetFileName(Uri.UnescapeDataString(sourceDevice)); } catch { }
                 }
-                else
+                if (string.IsNullOrWhiteSpace(sourceDevice))
                 {
                     sourceDevice = "Mobile";
                 }
@@ -331,14 +373,15 @@ namespace FlyShelf.Classes
                 string rawName = "uploaded_file.dat";
                 if (!string.IsNullOrEmpty(encodedName))
                 {
-                    try { rawName = Uri.UnescapeDataString(encodedName); } catch { }
+                    try { rawName = Path.GetFileName(Uri.UnescapeDataString(encodedName)); } catch { }
                 }
+                if (string.IsNullOrWhiteSpace(rawName)) rawName = "uploaded_file.dat";
 
                 long totalBytes = req.ContentLength64;
                 if (totalBytes > 50L * 1024 * 1024 && !LicenseManager.IsPro)
                 {
                     res.StatusCode = 413; // Payload Too Large
-                    try { var b = Encoding.UTF8.GetBytes("{\"ok\":false,\"message\":\"File size exceeds 50 MB limit for Free tier.\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                    try { await WriteJsonResponse(res, false, "File size exceeds 50 MB limit for Free tier."); } catch { }
                     res.Close();
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                         FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming transfer rejected: file exceeds 50 MB Free tier limit.");
@@ -513,7 +556,7 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("SYNC_GATE", "Ignored loopback archive_upload from self");
                 res.StatusCode = 200;
-                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"loopback_ignored\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { }
                 res.Close();
                 return;
             }
@@ -522,7 +565,7 @@ namespace FlyShelf.Classes
             if (!SettingsManager.Current.EnableIncomingSync)
             {
                 res.StatusCode = 200;
-                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"sync_paused\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                try { await WriteJsonResponse(res, true, "sync_paused"); } catch { }
                 res.Close();
                 return;
             }
@@ -531,7 +574,7 @@ namespace FlyShelf.Classes
             if (totalBytes > 50L * 1024 * 1024 && !LicenseManager.IsPro)
             {
                 res.StatusCode = 413;
-                try { var b = Encoding.UTF8.GetBytes("{\"ok\":false,\"message\":\"File size exceeds 50 MB limit for Free tier.\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                try { await WriteJsonResponse(res, false, "File size exceeds 50 MB limit for Free tier."); } catch { }
                 res.Close();
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                     FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming archive rejected: exceeds 50 MB Free tier limit.");
@@ -544,12 +587,17 @@ namespace FlyShelf.Classes
                 string batchName = req.Headers["X-Batch-Name"];
                 if (!string.IsNullOrEmpty(batchName))
                 {
-                    try { batchName = Uri.UnescapeDataString(batchName); } catch { }
+                    try { batchName = Path.GetFileName(Uri.UnescapeDataString(batchName)); } catch { }
                 }
-                
                 if (string.IsNullOrWhiteSpace(batchName)) batchName = "FlyShelf_Mobile_Transfer";
+                
                 string archiveSource = req.Headers["X-Source-Device"] ?? req.QueryString["sourceDevice"] ?? "Mobile";
-                try { archiveSource = Uri.UnescapeDataString(archiveSource); } catch { }
+                if (!string.IsNullOrEmpty(archiveSource))
+                {
+                    try { archiveSource = Path.GetFileName(Uri.UnescapeDataString(archiveSource)); } catch { }
+                }
+                if (string.IsNullOrWhiteSpace(archiveSource)) archiveSource = "Mobile";
+
                 var archiveTransport = DetectTransport(req);
 
                 string archiveDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", "Synced", batchName);
@@ -566,8 +614,9 @@ namespace FlyShelf.Classes
                 string rawName = "uploaded_media.dat";
                 if (!string.IsNullOrEmpty(encodedName))
                 {
-                    try { rawName = Uri.UnescapeDataString(encodedName); } catch { }
+                    try { rawName = Path.GetFileName(Uri.UnescapeDataString(encodedName)); } catch { }
                 }
+                if (string.IsNullOrWhiteSpace(rawName)) rawName = "uploaded_media.dat";
 
                 if ((DateTime.Now - _lastArchiveToastTime).TotalSeconds > 2)
                 {
@@ -632,6 +681,9 @@ namespace FlyShelf.Classes
                             bool wasEmpty = _viewModel.DroppedItems.Count == 0;
                             _viewModel.InsertWithDedup(clip);
                             if (wasEmpty) _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
+
+                            // Persist history so the synced archive item survives app restarts
+                            _viewModel.PersistHistoryPublic();
                         }
                         catch (Exception ex) { Logger.LogAction("ARCHIVE", $"Clipboard set failed: {ex.Message}"); }
                     });
@@ -660,7 +712,7 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("SYNC_GATE", "Ignored loopback relay_upload from self");
                 res.StatusCode = 200;
-                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"loopback_ignored\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { }
                 res.Close();
                 return;
             }
@@ -669,7 +721,7 @@ namespace FlyShelf.Classes
             if (!SettingsManager.Current.EnableIncomingSync)
             {
                 res.StatusCode = 200;
-                try { var b = Encoding.UTF8.GetBytes("{\"ok\":true,\"message\":\"sync_paused\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                try { await WriteJsonResponse(res, true, "sync_paused"); } catch { }
                 res.Close();
                 return;
             }
@@ -678,7 +730,7 @@ namespace FlyShelf.Classes
             if (totalBytes > 50L * 1024 * 1024 && !LicenseManager.IsPro)
             {
                 res.StatusCode = 413;
-                try { var b = Encoding.UTF8.GetBytes("{\"ok\":false,\"message\":\"File size exceeds 50 MB limit for Free tier.\"}"); res.ContentType = "application/json"; await res.OutputStream.WriteAsync(b, 0, b.Length); } catch { }
+                try { await WriteJsonResponse(res, false, "File size exceeds 50 MB limit for Free tier."); } catch { }
                 res.Close();
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                     FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming relay rejected: exceeds 50 MB Free tier limit.");
@@ -690,11 +742,20 @@ namespace FlyShelf.Classes
             {
                 string encodedName = req.Headers["X-File-Name"] ?? "";
                 string senderDevice = req.Headers["X-Source-Device"] ?? "Android";
+                if (!string.IsNullOrEmpty(senderDevice))
+                {
+                    try { senderDevice = Path.GetFileName(Uri.UnescapeDataString(senderDevice)); } catch { }
+                }
+                if (string.IsNullOrWhiteSpace(senderDevice)) senderDevice = "Android";
+                
                 string originalDateStr = req.Headers["X-Original-Date"];
 
                 string rawName = "relayed_file.dat";
                 if (!string.IsNullOrEmpty(encodedName))
-                    try { rawName = Uri.UnescapeDataString(encodedName); } catch { }
+                {
+                    try { rawName = Path.GetFileName(Uri.UnescapeDataString(encodedName)); } catch { }
+                }
+                if (string.IsNullOrWhiteSpace(rawName)) rawName = "relayed_file.dat";
 
                 // Save to AppData/FlyShelf/SyncedFiles/Relay_{sender}/
                 string relayDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), 

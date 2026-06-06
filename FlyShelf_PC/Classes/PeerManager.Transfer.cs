@@ -33,12 +33,12 @@ namespace FlyShelf.Classes
                 if (!sent)
                 {
                     // First attempt failed — peer's tunnel may have died. Reconnect + retry once.
+                    // FIX R7: Targeted retry — only reconnect this specific peer instead of
+                    // full DiscoverAndHandshake() which reads ALL devices from Firebase
                     Logger.LogAction("PEER", $"⚡ Text delivery failed — reconnecting {peer.DeviceName}...");
                     peer.IsAlive = false;
                     peer.ConsecutiveFailures = 0;
-                    _urlCleanedFromFirebase = false;
-                    _urlRequestSent = false;
-                    await DiscoverAndHandshake();
+                    await Handshake(peer);
                     if (peer.IsAlive)
                     {
                         sent = await TrySendText(peer, text, title, itemType);
@@ -70,10 +70,12 @@ namespace FlyShelf.Classes
 
                     byte[] envelopeBytes = Encoding.UTF8.GetBytes(envelope);
                     
-                    await peer.SendSemaphore.WaitAsync();
+                    // FIX R2: 30s timeout prevents permanent SendSemaphore hold if peer stalls
+                    using var wsSendCts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                    await peer.SendSemaphore.WaitAsync(wsSendCts.Token);
                     try
                     {
-                        await peer.LiveSocket.SendAsync(new ArraySegment<byte>(envelopeBytes), WebSocketMessageType.Text, true, CancellationToken.None);
+                        await peer.LiveSocket.SendAsync(new ArraySegment<byte>(envelopeBytes), WebSocketMessageType.Text, true, wsSendCts.Token);
                     }
                     finally
                     {
@@ -151,12 +153,11 @@ namespace FlyShelf.Classes
                 if (!sent)
                 {
                     // First attempt failed — peer's tunnel may have died. Reconnect + retry once.
+                    // FIX R7: Targeted retry — only reconnect this specific peer
                     Logger.LogAction("PEER", $"⚡ File delivery failed — reconnecting {peer.DeviceName}...");
                     peer.IsAlive = false;
                     peer.ConsecutiveFailures = 0;
-                    _urlCleanedFromFirebase = false;
-                    _urlRequestSent = false;
-                    await DiscoverAndHandshake();
+                    await Handshake(peer);
                     if (peer.IsAlive)
                     {
                         sent = await TrySendFile(peer, filePath, title, itemType);
@@ -193,23 +194,20 @@ namespace FlyShelf.Classes
             }
             if (!peer.IsAlive)
             {
+                // FIX R7: Targeted retry — only reconnect this specific peer
                 Logger.LogAction("PEER", $"PushFileToSinglePeer: {peer.DeviceName} is not alive — attempting reconnect");
                 peer.ConsecutiveFailures = 0;
-                _urlCleanedFromFirebase = false;
-                _urlRequestSent = false;
-                await DiscoverAndHandshake();
+                await Handshake(peer);
                 if (!peer.IsAlive) return false;
             }
 
             bool sent = await TrySendFile(peer, filePath, title, itemType);
             if (!sent)
             {
-                // Retry once with reconnect
+                // FIX R7: Targeted retry — only reconnect this specific peer
                 peer.IsAlive = false;
                 peer.ConsecutiveFailures = 0;
-                _urlCleanedFromFirebase = false;
-                _urlRequestSent = false;
-                await DiscoverAndHandshake();
+                await Handshake(peer);
                 if (peer.IsAlive)
                 {
                     sent = await TrySendFile(peer, filePath, title, itemType);
@@ -221,6 +219,12 @@ namespace FlyShelf.Classes
 
         private async Task<bool> TrySendFile(PeerConnection peer, string filePath, string title, string itemType)
         {
+            if (!File.Exists(filePath))
+            {
+                Logger.LogAction("PEER", $"TrySendFile aborted: local file does not exist: {filePath}");
+                return false;
+            }
+
             try
             {
                 Interlocked.Increment(ref peer.ActiveTransfers);
@@ -248,11 +252,13 @@ namespace FlyShelf.Classes
 
                         byte[] startBytes = Encoding.UTF8.GetBytes(startEnvelope);
 
-                        await peer.SendSemaphore.WaitAsync();
+                        // FIX R1: 5-minute timeout prevents permanent SendSemaphore hold if peer stalls mid-transfer
+                        using var wsFileCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                        await peer.SendSemaphore.WaitAsync(wsFileCts.Token);
                         try
                         {
                             // Send start frame
-                            await peer.LiveSocket.SendAsync(new ArraySegment<byte>(startBytes), WebSocketMessageType.Text, true, CancellationToken.None);
+                            await peer.LiveSocket.SendAsync(new ArraySegment<byte>(startBytes), WebSocketMessageType.Text, true, wsFileCts.Token);
 
                             // 2. Stream the file in binary chunks (zero-allocation renting)
                             using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
@@ -262,11 +268,11 @@ namespace FlyShelf.Classes
                                 {
                                     int readBytes;
                                     long totalSent = 0;
-                                    while ((readBytes = await fs.ReadAsync(rentBuffer, 0, rentBuffer.Length)) > 0)
+                                    while ((readBytes = await fs.ReadAsync(rentBuffer, 0, rentBuffer.Length, wsFileCts.Token)) > 0)
                                     {
                                         totalSent += readBytes;
                                         bool isEnd = totalSent >= wsFileSize;
-                                        await peer.LiveSocket.SendAsync(new ArraySegment<byte>(rentBuffer, 0, readBytes), WebSocketMessageType.Binary, isEnd, CancellationToken.None);
+                                        await peer.LiveSocket.SendAsync(new ArraySegment<byte>(rentBuffer, 0, readBytes), WebSocketMessageType.Binary, isEnd, wsFileCts.Token);
                                     }
                                 }
                                 finally
@@ -442,7 +448,8 @@ namespace FlyShelf.Classes
 
             Logger.LogAction("PEER", $"⚡ CF chunked (streamed): {fileName} ({fileSize / 1024}KB) → {totalChunks} chunks × {CHUNK_SIZE / 1024}KB, {MAX_PARALLEL_CHUNKS} parallel");
 
-            // Upload chunks in parallel batches
+            // Upload chunks in parallel batches with unified cancellation source
+            using var batchCts = new CancellationTokenSource();
             var semaphore = new SemaphoreSlim(MAX_PARALLEL_CHUNKS);
             var tasks = new List<Task<bool>>();
 
@@ -454,38 +461,64 @@ namespace FlyShelf.Classes
 
                 tasks.Add(Task.Run(async () =>
                 {
+                    if (batchCts.IsCancellationRequested) return false;
                     await semaphore.WaitAsync();
                     try
                     {
-                        using var req = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/upload_chunk");
-                        if (!string.IsNullOrEmpty(pk)) req.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
-                        req.Headers.TryAddWithoutValidation("X-Upload-Session", sessionId);
-                        req.Headers.TryAddWithoutValidation("X-Chunk-Index", chunkIndex.ToString());
+                        if (batchCts.IsCancellationRequested) return false;
 
-                        // Read exactly 'length' bytes from the file stream on demand to protect LOH memory
-                        var chunkData = new byte[length];
-                        using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, FileOptions.Asynchronous))
+                        // FIX R9: 1 retry per chunk — prevents re-uploading entire file for a single blip
+                        for (int attempt = 0; attempt < 2; attempt++)
                         {
-                            fs.Seek(offset, SeekOrigin.Begin);
-                            int readBytes = 0;
-                            while (readBytes < length)
+                            try
                             {
-                                int r = await fs.ReadAsync(chunkData, readBytes, length - readBytes);
-                                if (r == 0) break;
-                                readBytes += r;
+                                using var req = new HttpRequestMessage(HttpMethod.Post, $"{baseUrl}/api/upload_chunk");
+                                if (!string.IsNullOrEmpty(pk)) req.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
+                                req.Headers.TryAddWithoutValidation("X-Upload-Session", sessionId);
+                                req.Headers.TryAddWithoutValidation("X-Chunk-Index", chunkIndex.ToString());
+
+                                // Read exactly 'length' bytes from the file stream on demand to protect LOH memory
+                                var chunkData = new byte[length];
+                                using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, FileOptions.Asynchronous))
+                                {
+                                    fs.Seek(offset, SeekOrigin.Begin);
+                                    int readBytes = 0;
+                                    while (readBytes < length)
+                                    {
+                                        int r = await fs.ReadAsync(chunkData, readBytes, length - readBytes, batchCts.Token);
+                                        if (r == 0) break;
+                                        readBytes += r;
+                                    }
+                                }
+
+                                req.Content = new ByteArrayContent(chunkData);
+                                req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+
+                                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(batchCts.Token);
+                                linkedCts.CancelAfter(TimeSpan.FromSeconds(60));
+
+                                var resp = await _sharedClient.SendAsync(req, linkedCts.Token);
+                                if (resp.IsSuccessStatusCode) return true;
+
+                                Logger.LogAction("PEER_CHUNK", $"Chunk {chunkIndex} attempt {attempt + 1} HTTP {(int)resp.StatusCode}");
+                            }
+                            catch (Exception ex) when (attempt == 0 && !batchCts.IsCancellationRequested)
+                            {
+                                Logger.LogAction("PEER_CHUNK", $"Chunk {chunkIndex} attempt 1 failed: {ex.Message} — retrying...");
+                                await Task.Delay(500, batchCts.Token);
+                                continue;
                             }
                         }
 
-                        req.Content = new ByteArrayContent(chunkData);
-                        req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
-
-                        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
-                        var resp = await _sharedClient.SendAsync(req, cts.Token);
-                        return resp.IsSuccessStatusCode;
+                        // Both attempts failed
+                        Logger.LogAction("PEER_CHUNK_ERROR", $"Chunk {chunkIndex} failed after 2 attempts — aborting batch");
+                        try { batchCts.Cancel(); } catch { }
+                        return false;
                     }
                     catch (Exception ex)
                     {
                         Logger.LogAction("PEER_CHUNK_ERROR", $"Chunk {chunkIndex} upload failed: {ex.Message}");
+                        try { batchCts.Cancel(); } catch { }
                         return false;
                     }
                     finally { semaphore.Release(); }

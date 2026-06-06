@@ -168,11 +168,8 @@ namespace FlyShelf
                 SyncDirectionBar.Visibility = Visibility.Visible;
 
                 // Smooth slide-down + fade-in animation (same pattern as SortFilterInlineBar)
-                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(-8, 0, new Duration(TimeSpan.FromMilliseconds(150)))
-                {
-                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-                };
-                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(150)));
+                var slideAnim = Classes.AnimationHelper.SlideIn();
+                var fadeAnim = Classes.AnimationHelper.FadeIn();
 
                 if (SyncDirectionBar.RenderTransform is System.Windows.Media.TranslateTransform translate)
                 {
@@ -183,11 +180,8 @@ namespace FlyShelf
             else
             {
                 // Smooth slide-up + fade-out animation
-                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(0, -8, new Duration(TimeSpan.FromMilliseconds(120)))
-                {
-                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn }
-                };
-                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(1, 0, new Duration(TimeSpan.FromMilliseconds(120)));
+                var slideAnim = Classes.AnimationHelper.SlideOut();
+                var fadeAnim = Classes.AnimationHelper.FadeOut(120);
 
                 fadeAnim.Completed += (s, args) =>
                 {
@@ -389,11 +383,8 @@ namespace FlyShelf
                 ClearConfirmPanel.Visibility = Visibility.Visible;
 
                 // Slide-down + fade-in (same animation as ToggleFilterBar)
-                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(-8, 0, new Duration(TimeSpan.FromMilliseconds(150)))
-                {
-                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-                };
-                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, new Duration(TimeSpan.FromMilliseconds(150)));
+                var slideAnim = Classes.AnimationHelper.SlideIn();
+                var fadeAnim = Classes.AnimationHelper.FadeIn();
 
                 if (ClearConfirmPanel.RenderTransform is System.Windows.Media.TranslateTransform translate)
                 {
@@ -404,11 +395,8 @@ namespace FlyShelf
             else
             {
                 // Slide-up + fade-out
-                var slideAnim = new System.Windows.Media.Animation.DoubleAnimation(0, -8, new Duration(TimeSpan.FromMilliseconds(120)))
-                {
-                    EasingFunction = new System.Windows.Media.Animation.QuadraticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn }
-                };
-                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(1, 0, new Duration(TimeSpan.FromMilliseconds(120)));
+                var slideAnim = Classes.AnimationHelper.SlideOut();
+                var fadeAnim = Classes.AnimationHelper.FadeOut(120);
 
                 fadeAnim.Completed += (s, args) =>
                 {

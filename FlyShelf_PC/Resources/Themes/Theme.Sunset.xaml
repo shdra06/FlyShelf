@@ -108,4 +108,7 @@
 
     <!-- Theme marker -->
     <SolidColorBrush x:Key="FlyShelf.ColorThemeMarker" Color="#EA580C"/>
+
+    <!-- Theme-specific logo icon -->
+    <BitmapImage x:Key="ThemeLogoIcon" UriSource="pack://application:,,,/Resources/FlyShelfIcon_SunsetFire.png" />
 </ResourceDictionary>

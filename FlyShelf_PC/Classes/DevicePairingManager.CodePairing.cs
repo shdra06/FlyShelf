@@ -22,6 +22,9 @@ namespace FlyShelf.Classes
 {
     public static partial class DevicePairingManager
     {
+        // FIX: Track when a pairing code was last generated — only check handshakes within 10 min of that
+        public static DateTime LastPairingCodeGeneratedAt { get; set; } = DateTime.MinValue;
+
         public static async Task<(bool Success, string DeviceName)> ConnectByCode(string code)
         {
             var info = await LookupPairingCode(code);

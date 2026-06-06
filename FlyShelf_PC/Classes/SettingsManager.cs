@@ -1,7 +1,10 @@
+using System;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 
 namespace FlyShelf.Classes
@@ -121,6 +124,10 @@ namespace FlyShelf.Classes
         private bool _enableTaskbarWidget = true;
         public bool EnableTaskbarWidget { get => _enableTaskbarWidget; set => SetProperty(ref _enableTaskbarWidget, value); }
 
+        // Desktop Mascot
+        private bool _enableDesktopMascot = false;
+        public bool EnableDesktopMascot { get => _enableDesktopMascot; set => SetProperty(ref _enableDesktopMascot, value); }
+
         // Manual horizontal offset (physical pixels) — lets users nudge the widget left/right on problematic taskbars
         private int _widgetHorizontalOffset = 0;
         public int WidgetHorizontalOffset { get => _widgetHorizontalOffset; set => SetProperty(ref _widgetHorizontalOffset, value); }
@@ -155,6 +162,10 @@ namespace FlyShelf.Classes
         // Auto-Start on Windows Boot
         private bool _autoStartEnabled = true;
         public bool AutoStartEnabled { get => _autoStartEnabled; set => SetProperty(ref _autoStartEnabled, value); }
+
+        // Aero Clipboard UI — alternate visual shell
+        private bool _useAlternateClipboardUI = false;
+        public bool UseAlternateClipboardUI { get => _useAlternateClipboardUI; set => SetProperty(ref _useAlternateClipboardUI, value); }
 
         /// <summary>
         /// Reflection-based property copying to keep the static Current reference stable.
@@ -209,7 +220,7 @@ namespace FlyShelf.Classes
             {
                 if (File.Exists(path))
                 {
-                    var json = File.ReadAllText(path);
+                    var json = RunWithRetry(() => File.ReadAllText(path));
                     
                     // Legacy migration: Rename old settings keys in raw json if needed
                     if (json.Contains("\"EnableGlobalFirebaseSync\""))
@@ -237,7 +248,7 @@ namespace FlyShelf.Classes
                         try 
                         { 
                             string corruptBackup = path + ".corrupt_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
-                            File.Copy(path, corruptBackup, true);
+                            RunWithRetry(() => File.Copy(path, corruptBackup, true));
                             Logger.LogAction("SETTINGS_LOAD_WARN", $"Backed up corrupt settings to {corruptBackup}");
                         } 
                         catch { }
@@ -268,8 +279,8 @@ namespace FlyShelf.Classes
                             {
                                 var migJson = JsonSerializer.Serialize(Current, new JsonSerializerOptions { WriteIndented = true });
                                 string tmpPath = path + ".tmp";
-                                File.WriteAllText(tmpPath, migJson);
-                                File.Move(tmpPath, path, true);
+                                RunWithRetry(() => File.WriteAllText(tmpPath, migJson));
+                                RunWithRetry(() => File.Move(tmpPath, path, true));
                             }
                             catch { }
                         }
@@ -279,7 +290,11 @@ namespace FlyShelf.Classes
                 // Generate a random PIN for first-time users (replaces insecure static '55555' default)
                 if (string.IsNullOrEmpty(Current.WebClientPinToken))
                 {
-                    Current.WebClientPinToken = Random.Shared.Next(10000, 99999).ToString();
+                    // [SECURITY FIX v2.1.0]: Use cryptographic RNG with alphanumeric charset (M-03)
+                    const string pinChars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // No ambiguous chars (0/O, 1/I/L)
+                    var pinBytes = new byte[8];
+                    System.Security.Cryptography.RandomNumberGenerator.Fill(pinBytes);
+                    Current.WebClientPinToken = new string(pinBytes.Select(b => pinChars[b % pinChars.Length]).ToArray());
                     Logger.LogAction("SETTINGS", "Generated random WebClient PIN for new install.");
                 }
             }
@@ -325,8 +340,8 @@ namespace FlyShelf.Classes
                         try
                         {
                             string tempPath = path + ".tmp";
-                            File.WriteAllText(tempPath, json);
-                            File.Move(tempPath, path, true);
+                            RunWithRetry(() => File.WriteAllText(tempPath, json));
+                            RunWithRetry(() => File.Move(tempPath, path, true));
                         }
                         catch (Exception ex)
                         {
@@ -408,6 +423,47 @@ namespace FlyShelf.Classes
             {
                 Environment.Exit(0);
             }
+        }
+
+        private static T RunWithRetry<T>(Func<T> action, int retries = 3, int delayMs = 100)
+        {
+            for (int i = 0; i < retries; i++)
+            {
+                try
+                {
+                    return action();
+                }
+                catch (IOException) when (i < retries - 1)
+                {
+                    Thread.Sleep(delayMs);
+                }
+                catch (UnauthorizedAccessException) when (i < retries - 1)
+                {
+                    Thread.Sleep(delayMs);
+                }
+            }
+            return action();
+        }
+
+        private static void RunWithRetry(Action action, int retries = 3, int delayMs = 100)
+        {
+            for (int i = 0; i < retries; i++)
+            {
+                try
+                {
+                    action();
+                    return;
+                }
+                catch (IOException) when (i < retries - 1)
+                {
+                    Thread.Sleep(delayMs);
+                }
+                catch (UnauthorizedAccessException) when (i < retries - 1)
+                {
+                    Thread.Sleep(delayMs);
+                }
+            }
+            action();
         }
     }
 }

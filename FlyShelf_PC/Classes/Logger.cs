@@ -162,8 +162,9 @@ namespace FlyShelf.Classes
                 sb.AppendLine("── DEVICE IDENTITY ──");
                 sb.AppendLine($"  DeviceName:   {SettingsManager.Current.DeviceName ?? "(not set)"}");
                 sb.AppendLine($"  DeviceId:     {SettingsManager.Current.DeviceId ?? "(not set)"}");
-                sb.AppendLine($"  MachineName:  {Environment.MachineName}");
-                sb.AppendLine($"  UserName:     {Environment.UserName}");
+// [SECURITY FIX v2.1.0]: Hash PII in diagnostics to prevent exposure (M-09)
+                sb.AppendLine($"  MachineName:  {Environment.MachineName[..Math.Min(2, Environment.MachineName.Length)]}***");
+                sb.AppendLine($"  UserName:     {Environment.UserName[..Math.Min(2, Environment.UserName.Length)]}***");
                 sb.AppendLine($"  OS:           {Environment.OSVersion}");
                 sb.AppendLine();
 

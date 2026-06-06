@@ -20,6 +20,7 @@ namespace FlyShelf.Classes
 
         private static byte[]? _cachedKey;
         private static string? _cachedPairingKey;
+        private static readonly object _keyLock = new();
 
         /// <summary>
         /// Derives a 256-bit AES key from the pairing key using PBKDF2-SHA256.
@@ -31,18 +32,21 @@ namespace FlyShelf.Classes
             if (string.IsNullOrEmpty(pairingKey))
                 throw new InvalidOperationException("Cannot encrypt — no pairing key set");
 
-            // Return cached key if pairing key hasn't changed
-            if (_cachedKey != null && _cachedPairingKey == pairingKey)
-                return _cachedKey;
+            lock (_keyLock)
+            {
+                // Return cached key if pairing key hasn't changed
+                if (_cachedKey != null && _cachedPairingKey == pairingKey)
+                    return _cachedKey;
 
-            _cachedKey = Rfc2898DeriveBytes.Pbkdf2(
-                pairingKey,
-                SALT,
-                PBKDF2_ITERATIONS,
-                HashAlgorithmName.SHA256,
-                KEY_SIZE_BYTES);
-            _cachedPairingKey = pairingKey;
-            return _cachedKey;
+                _cachedKey = Rfc2898DeriveBytes.Pbkdf2(
+                    pairingKey,
+                    SALT,
+                    PBKDF2_ITERATIONS,
+                    HashAlgorithmName.SHA256,
+                    KEY_SIZE_BYTES);
+                _cachedPairingKey = pairingKey;
+                return _cachedKey;
+            }
         }
 
         /// <summary>
@@ -200,12 +204,15 @@ namespace FlyShelf.Classes
         /// </summary>
         public static void ClearKeyCache()
         {
-            if (_cachedKey != null)
+            lock (_keyLock)
             {
-                Array.Clear(_cachedKey, 0, _cachedKey.Length);
-                _cachedKey = null;
+                if (_cachedKey != null)
+                {
+                    Array.Clear(_cachedKey, 0, _cachedKey.Length);
+                    _cachedKey = null;
+                }
+                _cachedPairingKey = null;
             }
-            _cachedPairingKey = null;
         }
     }
 }

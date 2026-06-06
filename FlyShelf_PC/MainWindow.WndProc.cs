@@ -10,6 +10,9 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
 
 namespace FlyShelf
 {
@@ -35,6 +38,67 @@ namespace FlyShelf
 
         private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
+            const int WM_MOUSEACTIVATE = 0x0021;
+            const int MA_NOACTIVATE = 3;
+
+            if (msg == WM_MOUSEACTIVATE)
+            {
+                // If Notes or Todo mode is active, allow normal activation so text boxes receive focus and keyboard input
+                if (_isNotesActive || _isTodoActive)
+                {
+                    return IntPtr.Zero;
+                }
+
+                // In standard clipboard mode, we want to prevent activation when clicking on the list items, buttons, or scrollbars
+                // to avoid stealing focus from the target text editor.
+                // However, if the user explicitly clicks on the SearchTextBox or SearchBarContainer, we must allow activation
+                // so they can type search queries.
+                try
+                {
+                    // Convert screen cursor position to client/WPF coordinates
+                    Classes.NativeMethods.POINT mousePos;
+                    if (Classes.NativeMethods.GetCursorPos(out mousePos))
+                    {
+                        // Convert screen point to logical WPF point relative to this window
+                        Point wpfPoint = this.PointFromScreen(new Point(mousePos.X, mousePos.Y));
+
+                        // Hit test the WPF visual tree
+                        var hitResult = VisualTreeHelper.HitTest(this, wpfPoint);
+                        if (hitResult != null && hitResult.VisualHit != null)
+                        {
+                            DependencyObject? current = hitResult.VisualHit;
+                            bool isInputControl = false;
+                            while (current != null)
+                            {
+                                if (current is TextBox || current is System.Windows.Controls.Primitives.TextBoxBase)
+                                {
+                                    isInputControl = true;
+                                    break;
+                                }
+                                if (current is FrameworkElement fe && (fe.Name == "SearchTextBox" || fe.Name == "AltSearchTextBox" || fe.Name == "SearchBarContainer"))
+                                {
+                                    isInputControl = true;
+                                    break;
+                                }
+                                current = VisualTreeHelper.GetParent(current);
+                            }
+
+                            if (isInputControl)
+                            {
+                                // User clicked a search input, let it activate normally
+                                this.Activate();
+                                return IntPtr.Zero;
+                            }
+                        }
+                    }
+                }
+                catch { }
+
+                // Otherwise, do not activate this window, but still process the mouse click
+                handled = true;
+                return new IntPtr(MA_NOACTIVATE);
+            }
+
             if (msg == WM_HOTKEY)
             {
                 int hotkeyId = wParam.ToInt32();

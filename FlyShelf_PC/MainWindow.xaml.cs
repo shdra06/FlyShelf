@@ -40,6 +40,7 @@ namespace FlyShelf
         private double _lockedBottomEdge = 0;
         private bool _isEdgeLocked = false;
         private Windows.TaskbarWindow? _taskbarWidget;
+        private Windows.MascotCompanionWindow? _mascotCompanion;
         private System.Windows.Threading.DispatcherTimer? _clipboardDebounceTimer;
         private System.Windows.Threading.DispatcherTimer? _scrollDecayTimer;
         private System.Windows.Threading.DispatcherTimer? _scrollHighQualityTimer;
@@ -278,6 +279,14 @@ namespace FlyShelf
                 {
                     Dispatcher.InvokeAsync(() => _themeChangedHandler?.Invoke(Classes.ThemeManager.Instance.ActiveTheme));
                 }
+                else if (e.PropertyName == nameof(Classes.AdvanceSettings.UseAlternateClipboardUI))
+                {
+                    Dispatcher.InvokeAsync(() => ApplyAlternateUIMode());
+                }
+                else if (e.PropertyName == nameof(Classes.AdvanceSettings.EnableDesktopMascot))
+                {
+                    Dispatcher.InvokeAsync(() => UpdateMascotCompanionState());
+                }
             };
             Classes.SettingsManager.Current.PropertyChanged += _settingsChangedHandler;
 
@@ -330,6 +339,9 @@ namespace FlyShelf
 
             // Calculate initial toolbar buttons visibility based on current mode
             UpdateToolbarButtonsVisibility();
+
+            // Apply Aero UI mode if enabled in settings
+            ApplyAlternateUIMode();
 
             // ═══ Update Available Badge ═══
             // Subscribe to the static cross-window event from UpdateManager
@@ -524,6 +536,9 @@ namespace FlyShelf
             {
                 Classes.Logger.LogAction("WIDGET_FAIL", $"Failed to create taskbar widget: {ex.Message}");
             }
+
+            // Launch desktop mascot companion if enabled
+            UpdateMascotCompanionState();
 
             // Attach window-level smooth scrolling with specialized snappy ClipboardProfile
             Classes.SmoothScroll.AttachToWindow(this, Classes.SmoothScroll.ClipboardProfile);
@@ -998,6 +1013,15 @@ namespace FlyShelf
             _isClosed = true;
             try
             {
+                if (_mascotCompanion != null)
+                {
+                    _mascotCompanion.Close();
+                    _mascotCompanion = null;
+                }
+            }
+            catch { }
+            try
+            {
                 if (_foregroundHook != IntPtr.Zero)
                 {
                     UnhookWinEvent(_foregroundHook);
@@ -1073,6 +1097,35 @@ namespace FlyShelf
                 CloseNotesPanel(immediate: true);
             if (_isTodoActive)
                 CloseTodoPanel(immediate: true);
+        }
+
+        private void UpdateMascotCompanionState()
+        {
+            try
+            {
+                bool enabled = Classes.SettingsManager.Current.EnableDesktopMascot;
+                if (enabled)
+                {
+                    if (_mascotCompanion == null)
+                    {
+                        _mascotCompanion = new Windows.MascotCompanionWindow();
+                        _mascotCompanion.Closed += (s, ev) => _mascotCompanion = null;
+                        _mascotCompanion.Show();
+                    }
+                }
+                else
+                {
+                    if (_mascotCompanion != null)
+                    {
+                        _mascotCompanion.Close();
+                        _mascotCompanion = null;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("COMPANION_STATE_ERR", ex.ToString());
+            }
         }
     }
 }

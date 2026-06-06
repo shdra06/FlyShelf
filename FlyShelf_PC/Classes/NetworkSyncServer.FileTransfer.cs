@@ -175,7 +175,7 @@ namespace FlyShelf.Classes
             catch (Exception ex)
             {
                 Logger.LogAction("PAIR ERROR", ex.Message);
-                byte[] err = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
+                byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Internal server error\"}");
                 res.StatusCode = 500;
                 res.ContentType = "application/json";
                 try { res.OutputStream.Write(err, 0, err.Length); } catch { }
@@ -245,7 +245,7 @@ namespace FlyShelf.Classes
             catch (Exception ex)
             {
                 Logger.LogAction("PEER_ANNOUNCE ERROR", ex.Message);
-                byte[] err = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
+                byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Internal server error\"}");
                 res.StatusCode = 500;
                 res.ContentType = "application/json";
                 try { res.OutputStream.Write(err, 0, err.Length); } catch { }
@@ -274,24 +274,7 @@ namespace FlyShelf.Classes
                     
                     // skipCloudSync=true - file came FROM a peer device, don't echo it back
                     // forceClipboardSync=false - we write to clipboard ourselves with echo prevention
-                    _viewModel.HandleDrop(dataObj, false, skipCloudSync: true);
-                    
-                    // Tag the newly created item with transport + source device info
-                    if (_viewModel.DroppedItems.Count > 0)
-                    {
-                        var newest = _viewModel.DroppedItems[0];
-                        newest.SourceDeviceName = sourceDevice;
-                        newest.SourceDeviceType = sourceDeviceType;
-                        newest.TransferMethod = transferMethod;
-                        
-                        // Persist network metadata via debounced JSON save
-                        _viewModel.PersistHistoryPublic();
-
-                        // ECHO PREVENTION: Mark file as cloud-sourced so clipboard monitor
-                        // doesn't re-push it to peers/Firebase when we write to clipboard
-                        string fileFp = $"IMG::{newest.FormattedSize}";
-                        _viewModel.MarkAsCloudSourced(fileFp);
-                    }
+                    _viewModel.HandleDrop(dataObj, false, skipCloudSync: true, sourceDevice, sourceDeviceType, transferMethod);
                     
                     // Write received file to OS clipboard so user can paste it
                     ClipboardHelper.SafeSetFileDropList(new System.Collections.Specialized.StringCollection { filePath }, suppressEcho: true, echoDelayMs: 100);
@@ -440,6 +423,9 @@ namespace FlyShelf.Classes
                     bool wasEmpty = _viewModel.DroppedItems.Count == 0;
                     _viewModel.InsertWithDedup(clip);
                     if (wasEmpty) _viewModel.OnPropertyChanged(nameof(_viewModel.ShelfVisibility));
+                    
+                    // Persist history so the synced text survives app restarts
+                    _viewModel.PersistHistoryPublic();
                     
                     // ECHO PREVENTION: Mark this text as cloud-sourced so the clipboard monitor
                     // doesn't re-push it to Firebase when we set the Windows clipboard below.

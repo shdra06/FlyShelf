@@ -20,23 +20,68 @@ using FlyShelf.ViewModels;
 namespace FlyShelf.Classes
 {
     public partial class PeerManager
-    {
-        private async Task Handshake(PeerConnection peer)
+    {        private async Task Handshake(PeerConnection peer)
         {
             bool lanEnabled = SettingsManager.Current.EnableLocalLAN;
             Logger.LogAction("PEER", $"🔌 Handshake {peer.DeviceName}: LAN={peer.LanUrl ?? "(empty)"} CF={peer.CloudflareUrl ?? "(empty)"} lanEnabled={lanEnabled}");
-            
-            // Priority 1: LAN (only if enabled)
-            if (lanEnabled && await TryConnect(peer, peer.LanUrl, "LAN")) return;
-            // Priority 2: Cloudflare
-            if (await TryConnect(peer, peer.CloudflareUrl, "Cloudflare")) return;
 
-            peer.IsAlive = false;
-            peer.Transport = "offline";
-            Logger.LogAction("PEER", $"⚠️ {peer.DeviceName} unreachable (LAN:{(lanEnabled ? "on" : "off")}) tried LAN={peer.LanUrl ?? "null"} CF={peer.CloudflareUrl ?? "null"}");
+            using var cts = new CancellationTokenSource();
+            var tasks = new List<Task<(bool success, string transport, string url)>>();
+
+            if (lanEnabled && !string.IsNullOrEmpty(peer.LanUrl))
+            {
+                tasks.Add(Task.Run(async () =>
+                {
+                    bool ok = await TryConnect(peer, peer.LanUrl, "LAN", cts.Token);
+                    return (ok, "LAN", peer.LanUrl);
+                }));
+            }
+
+            if (!string.IsNullOrEmpty(peer.CloudflareUrl))
+            {
+                tasks.Add(Task.Run(async () =>
+                {
+                    bool ok = await TryConnect(peer, peer.CloudflareUrl, "Cloudflare", cts.Token);
+                    return (ok, "Cloudflare", peer.CloudflareUrl);
+                }));
+            }
+
+            if (tasks.Count == 0)
+            {
+                peer.IsAlive = false;
+                peer.Transport = "offline";
+                return;
+            }
+
+            var remainingTasks = new List<Task<(bool success, string transport, string url)>>(tasks);
+            bool handshakeSucceeded = false;
+
+            while (remainingTasks.Count > 0)
+            {
+                var completedTask = await Task.WhenAny(remainingTasks);
+                remainingTasks.Remove(completedTask);
+                try
+                {
+                    var result = await completedTask;
+                    if (result.success)
+                    {
+                        handshakeSucceeded = true;
+                        try { cts.Cancel(); } catch { } // Cancel the other transport probe immediately
+                        break;
+                    }
+                }
+                catch { }
+            }
+
+            if (!handshakeSucceeded)
+            {
+                peer.IsAlive = false;
+                peer.Transport = "offline";
+                Logger.LogAction("PEER", $"⚠️  {peer.DeviceName} unreachable (LAN:{(lanEnabled ? "on" : "off")}) tried LAN={peer.LanUrl ?? "null"} CF={peer.CloudflareUrl ?? "null"}");
+            }
         }
 
-        private async Task<bool> TryConnect(PeerConnection peer, string testUrl, string transport)
+        private async Task<bool> TryConnect(PeerConnection peer, string testUrl, string transport, CancellationToken ct)
         {
             if (string.IsNullOrEmpty(testUrl)) return false;
             
@@ -46,7 +91,7 @@ namespace FlyShelf.Classes
                 foreach (var url in urls)
                 {
                     var trimmed = url.Trim();
-                    if (await TryConnectSingle(peer, trimmed, transport))
+                    if (await TryConnectSingle(peer, trimmed, transport, ct))
                     {
                         return true;
                     }
@@ -54,10 +99,10 @@ namespace FlyShelf.Classes
                 return false;
             }
 
-            return await TryConnectSingle(peer, testUrl.Trim(), transport);
+            return await TryConnectSingle(peer, testUrl.Trim(), transport, ct);
         }
 
-        private async Task<bool> TryConnectSingle(PeerConnection peer, string testUrl, string transport)
+        private async Task<bool> TryConnectSingle(PeerConnection peer, string testUrl, string transport, CancellationToken ct)
         {
             if (string.IsNullOrEmpty(testUrl)) return false;
             // Reject non-URL values like "offline", corrupted decryptions, etc.
@@ -65,12 +110,15 @@ namespace FlyShelf.Classes
             try
             {
                 int timeout = (transport == "LAN") ? HANDSHAKE_TIMEOUT_LAN_MS : HANDSHAKE_TIMEOUT_CF_MS;
-                using var c = new HttpClient { Timeout = TimeSpan.FromMilliseconds(timeout) };
                 string pk = DevicePairingManager.GetPairingKeyForDevice(peer.DeviceId);
                 if (string.IsNullOrEmpty(pk)) pk = DevicePairingManager.EnsurePairingKey();
-                if (!string.IsNullOrEmpty(pk)) c.DefaultRequestHeaders.Add("X-Pairing-Key", pk);
 
-                var r = await c.GetAsync($"{testUrl.TrimEnd('/')}/api/health");
+                using var req = new HttpRequestMessage(HttpMethod.Get, $"{testUrl.TrimEnd('/')}/api/health");
+                if (!string.IsNullOrEmpty(pk)) req.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
+
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                linkedCts.CancelAfter(timeout);
+                var r = await _sharedClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, linkedCts.Token);
                 if (r.IsSuccessStatusCode)
                 {
                     peer.ActiveUrl = testUrl;
@@ -159,6 +207,10 @@ namespace FlyShelf.Classes
             }
             catch (Exception ex)
             {
+                if (ct.IsCancellationRequested || ex is OperationCanceledException)
+                {
+                    return false; // Silently exit on cancellation
+                }
                 Logger.LogAction("PEER", $"{transport} handshake {peer.DeviceName} for URL '{testUrl}': {ex.Message}");
                 if (transport == "Cloudflare")
                 {
@@ -232,7 +284,7 @@ namespace FlyShelf.Classes
             var cts = peer.WsCts;
             if (ws == null || cts == null) return;
 
-            var buf = new byte[64];
+            var buf = new byte[4096]; // Larger buffer to handle JSON messages (UrlUpdate)
             try
             {
                 while (ws.State == WebSocketState.Open && !cts.Token.IsCancellationRequested)
@@ -249,15 +301,47 @@ namespace FlyShelf.Classes
                         peer.SendSemaphore.Release();
                     }
 
-                    // Wait for pong (with 15s timeout)
-                    var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
+                    // Wait for response (pong or JSON message) with 15s timeout
+                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cts.Token);
                     timeoutCts.CancelAfter(15_000);
                     try
                     {
-                        var result = await ws.ReceiveAsync(new ArraySegment<byte>(buf), timeoutCts.Token);
-                        if (result.MessageType == WebSocketMessageType.Close) break;
+                        // Read full message (may span multiple frames)
+                        using var ms = new System.IO.MemoryStream();
+                        WebSocketReceiveResult result;
+                        bool wsClosed = false;
+                        do
+                        {
+                            result = await ws.ReceiveAsync(new ArraySegment<byte>(buf), timeoutCts.Token);
+                            if (result.MessageType == WebSocketMessageType.Close) { wsClosed = true; break; }
+                            ms.Write(buf, 0, result.Count);
+                        } while (!result.EndOfMessage);
+                        if (wsClosed) break;
+
                         peer.LastSeen = DateTime.UtcNow;
                         peer.ConsecutiveFailures = 0;
+
+                        // Parse the message — could be "pong" or a JSON envelope
+                        string text = Encoding.UTF8.GetString(ms.ToArray());
+                        if (text != "pong" && text.TrimStart().StartsWith("{"))
+                        {
+                            // JSON message — handle UrlUpdate
+                            try
+                            {
+                                using var doc = JsonDocument.Parse(text);
+                                var root = doc.RootElement;
+                                string msgType = root.TryGetProperty("type", out var tp) ? tp.GetString() ?? "" : "";
+                                if (msgType == "UrlUpdate")
+                                {
+                                    string srcId = root.TryGetProperty("sourceDeviceId", out var si) ? si.GetString() ?? "" : "";
+                                    string srcName = root.TryGetProperty("sourceDeviceName", out var sn) ? sn.GetString() ?? "" : "";
+                                    string newLan = root.TryGetProperty("lanUrl", out var nl) ? nl.GetString() ?? "" : "";
+                                    string newCf = root.TryGetProperty("cfUrl", out var nc) ? nc.GetString() ?? "" : "";
+                                    _ = Task.Run(() => HandlePeerUrlUpdateFromWebSocket(srcId, srcName, newLan, newCf));
+                                }
+                            }
+                            catch { /* Best-effort JSON parsing */ }
+                        }
                     }
                     catch (OperationCanceledException) when (!cts.Token.IsCancellationRequested)
                     {
@@ -301,10 +385,12 @@ namespace FlyShelf.Classes
 
                 if (stillAlive)
                 {
-                    Logger.LogAction("WS", $"ℹ️  {peer.DeviceName} is still reachable via HTTP. Keeping connection alive.");
+                    Logger.LogAction("WS", $"ℹ️  {peer.DeviceName} still reachable — reconnecting WebSocket...");
                     try { peer.WsCts?.Cancel(); } catch { }
                     try { peer.LiveSocket?.Dispose(); } catch { }
                     peer.LiveSocket = null;
+                    // Re-establish WebSocket for instant death detection + direct sends
+                    _ = Task.Run(() => ConnectWebSocket(peer));
                 }
                 else
                 {
@@ -400,7 +486,8 @@ namespace FlyShelf.Classes
 
             try
             {
-                using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+                // FIX R6: Reuse shared HttpClient instead of creating new one per cleanup
+                using var cleanupCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
 
                 // Write confirmation tick: "I have connected to all my peers"
                 string tickUrl = await CloudDiscoveryManager.AuthUrlPublic(
@@ -411,7 +498,7 @@ namespace FlyShelf.Classes
                     confirmedAt = NetworkClock.UtcNowMs,
                     peers = peerIds
                 });
-                await client.PutAsync(tickUrl, new StringContent(tickJson, Encoding.UTF8, "application/json"));
+                await _sharedClient.PutAsync(tickUrl, new StringContent(tickJson, Encoding.UTF8, "application/json"), cleanupCts.Token);
                 Logger.LogAction("PEER", $"✅ Confirmation tick written — {peerIds.Count} peer(s) confirmed");
 
                 // ═ ═ ═ FIX 6: DON'T delete URLs from Firebase ═ ═ ═ 
@@ -423,7 +510,7 @@ namespace FlyShelf.Classes
                 {
                     string rUrl = await CloudDiscoveryManager.AuthUrlPublic(
                         $"active_devices/{_myPairingKey}/{_myDeviceId}/urlRequest.json");
-                    await client.DeleteAsync(rUrl);
+                    await _sharedClient.DeleteAsync(rUrl);
                 }
                 catch { }
 
@@ -437,6 +524,117 @@ namespace FlyShelf.Classes
             }
         }
 
-        // ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ 
+        // ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═ ═
+
+        // ═══════════════════════════════════════════════════════════════
+        // P2P URL Exchange via WebSocket — eliminates Firebase SSE
+        // When our tunnel URL changes, we broadcast directly to all
+        // connected peers. No Firebase connection needed.
+        // ═══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Broadcasts our updated URLs to all connected peers via their WebSocket.
+        /// Called when the Cloudflare tunnel restarts with a new URL or LAN IP changes.
+        /// This replaces Firebase SSE for already-connected peers (&lt;100ms vs ~2s).
+        /// </summary>
+        public async Task BroadcastUrlUpdate(string lanUrl, string cfUrl)
+        {
+            var msg = JsonSerializer.Serialize(new
+            {
+                type = "UrlUpdate",
+                sourceDeviceId = _myDeviceId,
+                sourceDeviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
+                lanUrl = lanUrl ?? "",
+                cfUrl = cfUrl ?? "",
+                timestamp = NetworkClock.UtcNowMs
+            });
+            byte[] data = Encoding.UTF8.GetBytes(msg);
+            int sent = 0;
+
+            foreach (var peer in _peers.Values)
+            {
+                if (!peer.IsAlive || peer.LiveSocket == null || peer.LiveSocket.State != WebSocketState.Open)
+                    continue;
+
+                try
+                {
+                    await peer.SendSemaphore.WaitAsync(TimeSpan.FromSeconds(3));
+                    try
+                    {
+                        using var sendCts = new CancellationTokenSource(5000);
+                        await peer.LiveSocket.SendAsync(
+                            new ArraySegment<byte>(data), WebSocketMessageType.Text, true,
+                            sendCts.Token);
+                        sent++;
+                    }
+                    finally { peer.SendSemaphore.Release(); }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("WS", $"Failed to send UrlUpdate to {peer.DeviceName}: {ex.Message}");
+                }
+            }
+
+            if (sent > 0)
+                Logger.LogAction("WS", $"📡 Broadcasted URL update to {sent} peer(s) via WebSocket (LAN={lanUrl} CF={cfUrl})");
+        }
+
+        /// <summary>
+        /// Called when a connected peer sends us a UrlUpdate message over WebSocket.
+        /// Updates the peer's URLs and reconnects if they changed — all without Firebase.
+        /// </summary>
+        public async Task HandlePeerUrlUpdateFromWebSocket(string sourceDeviceId, string sourceDeviceName, string newLanUrl, string newCfUrl)
+        {
+            if (sourceDeviceId == _myDeviceId) return;
+
+            Logger.LogAction("WS", $"📡 Received URL update from {sourceDeviceName} via WebSocket: LAN={newLanUrl} CF={newCfUrl}");
+
+            if (_peers.TryGetValue(sourceDeviceId, out var peer))
+            {
+                bool changed = false;
+
+                if (!string.IsNullOrEmpty(newLanUrl) && newLanUrl.StartsWith("http") && newLanUrl != peer.LanUrl)
+                {
+                    peer.LanUrl = newLanUrl;
+                    changed = true;
+                }
+                if (!string.IsNullOrEmpty(newCfUrl) && newCfUrl.StartsWith("http") && newCfUrl != peer.CloudflareUrl)
+                {
+                    peer.CloudflareUrl = newCfUrl;
+                    changed = true;
+                }
+
+                if (changed)
+                {
+                    SaveUrlCache();
+
+                    // If we're currently connected via Cloudflare and the CF URL changed,
+                    // we need to reconnect with the new URL
+                    if (peer.Transport == "Cloudflare" && !string.IsNullOrEmpty(newCfUrl) && newCfUrl != peer.ActiveUrl)
+                    {
+                        Logger.LogAction("WS", $"📡 {sourceDeviceName} CF URL changed — scheduling reconnect...");
+                        // Fire-and-forget reconnect to avoid blocking the WebSocket monitor
+                        // that dispatched this handler — prevents deadlock with HandlePeerDeath
+                        _ = Task.Run(async () =>
+                        {
+                            peer.IsAlive = false;
+                            peer.ConsecutiveFailures = 0;
+                            try { peer.WsCts?.Cancel(); } catch { }
+                            try { peer.LiveSocket?.Dispose(); } catch { }
+                            peer.LiveSocket = null;
+                            await Handshake(peer);
+                        });
+                    }
+                    else
+                    {
+                        Logger.LogAction("WS", $"📡 {sourceDeviceName} URLs updated (no reconnect needed — transport={peer.Transport})");
+                    }
+                }
+            }
+            else
+            {
+                Logger.LogAction("WS", $"📡 URL update from unknown peer {sourceDeviceName} ({sourceDeviceId}) — ignoring");
+            }
+        }
     }
 }

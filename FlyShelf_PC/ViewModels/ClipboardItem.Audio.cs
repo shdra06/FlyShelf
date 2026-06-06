@@ -237,7 +237,7 @@ namespace FlyShelf.ViewModels
         {
             if (_playingItem != null)
             {
-                Application.Current.Dispatcher.Invoke(() =>
+                Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     double durSeconds = _sharedPlayer.NaturalDuration.HasTimeSpan ? _sharedPlayer.NaturalDuration.TimeSpan.TotalSeconds : 0;
                     _playingItem.AudioDuration = durSeconds;
@@ -250,7 +250,7 @@ namespace FlyShelf.ViewModels
         {
             if (_playingItem != null)
             {
-                Application.Current.Dispatcher.Invoke(() =>
+                Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     _playbackTimer?.Stop();
                     _sharedPlayer.Stop();
@@ -264,7 +264,7 @@ namespace FlyShelf.ViewModels
         {
             if (_playingItem != null)
             {
-                Application.Current.Dispatcher.Invoke(() =>
+                Application.Current.Dispatcher.InvokeAsync(() =>
                 {
                     _playbackTimer?.Stop();
                     FlyShelf.Windows.ToastWindow.ShowToast("Failed to play audio preview ⚠️");

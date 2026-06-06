@@ -266,13 +266,17 @@ namespace FlyShelf.ViewModels
                 {
                     try
                     {
+                        // Create backup before saving
+                        try { if (File.Exists(path)) File.Copy(path, path + ".bak", overwrite: true); } catch { }
                         var json = System.Text.Json.JsonSerializer.Serialize(pinned);
-                        File.WriteAllText(path, json);
+                        string tmpPath = path + ".tmp";
+                        File.WriteAllText(tmpPath, json);
+                        File.Move(tmpPath, path, overwrite: true);
                     }
-                    catch { }
+                    catch (Exception ex) { Classes.Logger.LogAction("PINNED_SAVE", $"Failed to serialize/write pinned items: {ex.Message}"); }
                 });
             }
-            catch { }
+            catch (Exception ex) { Classes.Logger.LogAction("PINNED_SAVE", $"Failed to gather pinned items: {ex.Message}"); }
         }
 
         public async Task LoadPinnedItemsAsync()
@@ -290,7 +294,22 @@ namespace FlyShelf.ViewModels
                             return System.Text.Json.JsonSerializer.Deserialize<List<ClipboardItem>>(json);
                         }
                     }
-                    catch { }
+                    catch (Exception ex)
+                    {
+                        Classes.Logger.LogAction("PINNED_LOAD", $"Failed to deserialize pinned items JSON: {ex.Message}");
+                        // Fallback: try loading from .bak file
+                        try
+                        {
+                            string bakPath = path + ".bak";
+                            if (File.Exists(bakPath))
+                            {
+                                Classes.Logger.LogAction("PINNED_LOAD", "Attempting recovery from .bak file");
+                                var bakJson = File.ReadAllText(bakPath);
+                                return System.Text.Json.JsonSerializer.Deserialize<List<ClipboardItem>>(bakJson);
+                            }
+                        }
+                        catch (Exception bakEx) { Classes.Logger.LogAction("PINNED_LOAD", $"Backup recovery also failed: {bakEx.Message}"); }
+                    }
                     return null;
                 });
 
@@ -364,7 +383,7 @@ namespace FlyShelf.ViewModels
                             }
                             pinnedToAdd.Add(d);
                         }
-                        catch { }
+                        catch (Exception ex) { Classes.Logger.LogAction("PINNED_LOAD", $"Failed to process pinned item: {ex.Message}"); }
                     }
 
                     if (pinnedToAdd.Count > 0)
@@ -373,7 +392,7 @@ namespace FlyShelf.ViewModels
                     }
                 }
             }
-            catch { }
+            catch (Exception ex) { Classes.Logger.LogAction("PINNED_LOAD", $"Failed to load pinned items: {ex.Message}"); }
         }
 
 
