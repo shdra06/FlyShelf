@@ -2405,4 +2405,309 @@ body:not(.dark-mode) .theme-toggle-btn:hover {
 }
 
 
+/* ==============================================
+   MOBILE NAVIGATION AND ANDROID OVERHAUL
+   ============================================== */
+
+/* Hamburger menu button */
+.mobile-menu-toggle {
+  display: none;
+  background: transparent;
+  border: 1px solid var(--border-light);
+  color: var(--text-primary);
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  outline: none;
+}
+
+/* Sliding mobile menu drawer */
+.mobile-menu-drawer {
+  position: fixed;
+  top: 100px;
+  left: 50%;
+  transform: translate(-50%, -20px);
+  width: calc(100% - 40px);
+  max-width: 500px;
+  background: var(--bg-glass);
+  border: 1px solid var(--border-light);
+  border-radius: 24px;
+  padding: 30px;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.3s ease;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5), 0 0 30px rgba(0,210,255,0.1);
+}
+.mobile-menu-drawer.open {
+  transform: translate(-50%, 0);
+  opacity: 1;
+  pointer-events: all;
+}
+
+/* Close button inside drawer */
+.mobile-menu-close {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 1.6rem;
+  cursor: pointer;
+  transition: var(--transition-fast);
+}
+
+/* Drawer links list */
+.mobile-nav-links {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.mobile-nav-links a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 1.1rem;
+  font-weight: 600;
+  display: block;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+  transition: var(--transition-fast);
+}
+
+/* Responsive Overrides (max-width: 768px) */
+@media (max-width: 768px) {
+  /* Hide desktop links and show mobile toggle */
+  .nav-links {
+    display: none;
+  }
+  .nav-download-btn {
+    display: none !important; /* Hide header download button on small screens */
+  }
+  .mobile-menu-toggle {
+    display: flex;
+  }
+  .navbar {
+    padding: 0 20px;
+    height: 64px;
+    top: 12px;
+  }
+
+  /* Hero adjustments */
+  .hero {
+    padding: 110px 15px 40px 15px;
+  }
+  .hero h1 {
+    font-size: 2.3rem !important;
+    letter-spacing: -1px;
+    line-height: 1.15;
+  }
+  .hero p.lead {
+    font-size: 0.95rem;
+    margin-bottom: 25px;
+    padding: 0 10px;
+  }
+  .hero-ctas {
+    flex-direction: column;
+    gap: 12px;
+    align-items: stretch;
+    max-width: 320px;
+    margin: 0 auto 30px auto;
+  }
+  .hero-ctas .btn-premium {
+    width: 100%;
+    justify-content: center;
+    padding: 14px 20px;
+    font-size: 0.9rem;
+  }
+
+  /* Swatch thematic adjustments */
+  .theme-switcher-box {
+    flex-direction: column;
+    padding: 15px 20px;
+    border-radius: 20px;
+    width: 100%;
+    max-width: 340px;
+  }
+  .theme-swatches {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  .theme-swatch {
+    padding: 6px 10px;
+  }
+
+  /* Showcase collapse fix */
+  .showcase-section > div {
+    grid-template-columns: 1fr !important;
+    gap: 30px !important;
+    padding: 0 10px;
+  }
+  .showcase-section {
+    padding: 30px 10px !important;
+  }
+  .showcase-section h2 {
+    font-size: 1.6rem !important;
+  }
+
+  /* Sync Demo */
+  .sync-space-section {
+    padding: 30px 10px !important;
+  }
+  .sync-container {
+    padding: 20px 15px !important;
+    grid-template-columns: 1fr !important;
+  }
+  .pathway-selectors {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  .selector-pill {
+    flex: 1;
+    min-width: 110px;
+    padding: 8px 12px;
+    font-size: 0.75rem;
+  }
+
+  /* Comparison Matrix */
+  .comparison-section {
+    padding: 40px 10px !important;
+  }
+  .comparison-table-wrapper {
+    margin: 0 -10px;
+    padding: 0 10px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .comparison-table th, .comparison-table td {
+    padding: 12px 8px;
+    font-size: 0.78rem;
+  }
+
+  /* Widgets and grid overrides */
+  .smart-actions-section {
+    padding: 40px 10px !important;
+  }
+  .smart-widgets-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .compact-utilities-grid {
+    grid-template-columns: 1fr;
+    gap: 15px;
+  }
+  .widget-card {
+    padding: 20px !important;
+  }
+
+  /* Footer */
+  footer {
+    padding: 40px 20px 20px 20px !important;
+  }
+  .footer-container {
+    grid-template-columns: 1fr !important;
+    gap: 30px;
+    text-align: center;
+  }
+  .footer-brand-col {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+  }
+  .footer-bottom {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+  
+  /* Pricing / Checkout styles */
+  .pricing-hero {
+    padding: 100px 15px 30px 15px !important;
+  }
+  .checkout-container {
+    margin-bottom: 50px !important;
+  }
+  .checkout-grid {
+    grid-template-columns: 1fr !important;
+    gap: 20px !important;
+  }
+  .payment-tab {
+    padding: 8px !important;
+    font-size: 0.75rem !important;
+  }
+}
+
+/* Small Screens / Compact Android (max-width: 480px) */
+@media (max-width: 480px) {
+  .hero h1 {
+    font-size: 1.95rem !important;
+  }
+  .hero-tag {
+    font-size: 0.75rem;
+    padding: 4px 12px;
+  }
+  .navbar span {
+    font-size: 1.15rem;
+  }
+  .mobile-menu-drawer {
+    width: calc(100% - 24px);
+    padding: 20px;
+    top: 80px;
+  }
+  .section-header h2 {
+    font-size: 1.5rem !important;
+  }
+  .section-header p {
+    font-size: 0.85rem !important;
+  }
+  
+  /* Touch target expansions */
+  .color-pill-btn, .filter-pill, .selector-pill {
+    padding: 10px 14px !important;
+    font-size: 0.8rem !important;
+  }
+  .btn-premium {
+    padding: 14px 20px !important;
+  }
+  
+  /* Prevent touch zoom inside input elements on iOS/Android */
+  input[type="text"], input[type="email"], textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Touch Sandbox Styling */
+@media (hover: none) {
+  /* Prevent sticky hover styles on mobile */
+  .btn-premium:hover, .btn-cyan:hover, .btn-outline:hover, .selector-pill:hover, .sync-card:hover {
+    transform: none !important;
+    box-shadow: none !important;
+  }
+  .btn-cyan:active, .btn-outline:active {
+    opacity: 0.85;
+    transform: translateY(1px);
+  }
+}
+
+/* Touch Action Configuration for gestures */
+.summon-box {
+  touch-action: none; /* Prevents default page scroll/pull-to-refresh on Android during swipe shake */
+}
+
+
+
 

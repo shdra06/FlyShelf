@@ -153,7 +153,7 @@
   .strip-item { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap; }
   .strip-item ion-icon { font-size: 1.2rem; color: var(--color-cyan); }
   @media (max-width: 768px) {
-    .showcase-section > div > div { grid-template-columns: 1fr !important; }
+    .showcase-section > div { grid-template-columns: 1fr !important; }
     .strip-items { gap: 16px; }
     [style*='grid-template-columns: repeat(4'] { grid-template-columns: repeat(2, 1fr) !important; }
   }
@@ -182,9 +182,29 @@
       <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Mode">
         <ion-icon name="moon-outline" id="theme-toggle-icon"></ion-icon>
       </button>
-      <a href="#download" class="btn-premium btn-cyan" style="padding: 10px 20px; font-size: 0.85rem;">Download</a>
+      <a href="#download" class="btn-premium btn-cyan nav-download-btn" style="padding: 10px 20px; font-size: 0.85rem;">Download</a>
+      <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Toggle Navigation Menu">
+        <ion-icon name="menu-outline"></ion-icon>
+      </button>
     </div>
   </nav>
+
+  <!-- Mobile Navigation Drawer -->
+  <div class="mobile-menu-drawer glass" id="mobile-menu-drawer">
+    <button class="mobile-menu-close" id="mobile-menu-close" aria-label="Close Navigation Menu">
+      <ion-icon name="close-outline"></ion-icon>
+    </button>
+    <ul class="mobile-nav-links">
+      <li><a href="#simulator">Sync Space</a></li>
+      <li><a href="#smart-actions">Smart Tools</a></li>
+      <li><a href="#summon">Shake Summon</a></li>
+      <li><a href="#features">Features</a></li>
+      <li><a href="pricing.html" style="color: var(--color-cyan); font-weight: 700;">Buy Pro</a></li>
+    </ul>
+    <div class="mobile-menu-cta">
+      <a href="#download" class="btn-premium btn-cyan" style="width: 100%; justify-content: center;">Download App</a>
+    </div>
+  </div>
   <main>
 
   <!-- Hero Section (COMPACT) -->

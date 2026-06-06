@@ -6,6 +6,60 @@
 document.addEventListener('DOMContentLoaded', () => {
 
   /* ==========================================
+     0.0.1 ANDROID DETECTION & APK CTA SWAP
+     ========================================== */
+  const isAndroid = /Android/i.test(navigator.userAgent);
+  if (isAndroid) {
+    document.body.classList.add('is-android');
+    // Prioritize APK download
+    const btnHeroDownloadExe = document.getElementById('btn-hero-download-exe');
+    const btnHeroDownloadApk = document.getElementById('btn-hero-download-apk');
+    if (btnHeroDownloadExe && btnHeroDownloadApk) {
+      btnHeroDownloadApk.classList.add('btn-cyan');
+      btnHeroDownloadApk.classList.remove('btn-outline');
+      btnHeroDownloadExe.classList.add('btn-outline');
+      btnHeroDownloadExe.classList.remove('btn-cyan');
+      btnHeroDownloadApk.parentNode.insertBefore(btnHeroDownloadApk, btnHeroDownloadExe);
+    }
+    const btnFooterDownloadExe = document.getElementById('btn-footer-download-exe');
+    const btnFooterDownloadApk = document.getElementById('btn-footer-download-apk');
+    if (btnFooterDownloadExe && btnFooterDownloadApk) {
+      btnFooterDownloadApk.classList.add('btn-cyan');
+      btnFooterDownloadApk.classList.remove('btn-outline');
+      btnFooterDownloadExe.classList.add('btn-outline');
+      btnFooterDownloadExe.classList.remove('btn-cyan');
+      btnFooterDownloadApk.parentNode.insertBefore(btnFooterDownloadApk, btnFooterDownloadExe);
+    }
+  }
+
+  /* ==========================================
+     0.0.2 MOBILE NAVIGATION MENU DRAWER
+     ========================================== */
+  const mobileToggleBtn = document.getElementById('mobile-menu-toggle');
+  const mobileMenuDrawer = document.getElementById('mobile-menu-drawer');
+  const mobileCloseBtn = document.getElementById('mobile-menu-close');
+  
+  if (mobileToggleBtn && mobileMenuDrawer) {
+    mobileToggleBtn.addEventListener('click', () => {
+      mobileMenuDrawer.classList.toggle('open');
+    });
+  }
+  if (mobileCloseBtn && mobileMenuDrawer) {
+    mobileCloseBtn.addEventListener('click', () => {
+      mobileMenuDrawer.classList.remove('open');
+    });
+  }
+  // Close drawer when clicking nav links
+  const mobileDrawerLinks = document.querySelectorAll('.mobile-nav-links a, .mobile-menu-cta a');
+  mobileDrawerLinks.forEach(link => {
+    link.addEventListener('click', () => {
+      if (mobileMenuDrawer) {
+        mobileMenuDrawer.classList.remove('open');
+      }
+    });
+  });
+
+  /* ==========================================
      0. LIGHT/DARK THEME TOGGLER & PERSISTENCE
      ========================================== */
   const modeToggleBtn = document.getElementById('theme-toggle-btn');
@@ -341,6 +395,95 @@ document.addEventListener('DOMContentLoaded', () => {
       directionsSwitched = 0;
       updateGauge(0);
     }
+  });
+
+  // --- MOBILE TOUCH SWIPE SHAKE & TAP FALLBACK ---
+  gestureSandbox.addEventListener('touchstart', (e) => {
+    if (winSumoOverlay.classList.contains('unlocked') && e.target.closest('#win-sumo-overlay')) {
+      return;
+    }
+    
+    // Prevent default scroll/zoom behaviors during touch gestures
+    e.preventDefault();
+    
+    isTrackingShake = true;
+    shakeAccumulator = 0;
+    directionsSwitched = 0;
+    lastMouseX = e.touches[0].clientX;
+    lastDirection = 0;
+    gestureSandbox.classList.add('shaking');
+    
+    // Decay gauge over time
+    if (decayTimer) clearInterval(decayTimer);
+    decayTimer = setInterval(() => {
+      if (directionsSwitched > 0) {
+        directionsSwitched = Math.max(0, directionsSwitched - 0.7);
+        updateGauge(directionsSwitched);
+      }
+    }, 100);
+  }, { passive: false });
+
+  gestureSandbox.addEventListener('touchmove', (e) => {
+    if (!isTrackingShake) return;
+    
+    const currentX = e.touches[0].clientX;
+    const deltaX = currentX - lastMouseX;
+    
+    if (Math.abs(deltaX) > 3) {
+      const currentDirection = deltaX > 0 ? 1 : -1;
+      
+      if (lastDirection !== 0 && currentDirection !== lastDirection) {
+        directionsSwitched++;
+        updateGauge(directionsSwitched);
+        
+        if (directionsSwitched >= 3) {
+          triggerSummoSummon();
+        }
+      }
+      
+      lastDirection = currentDirection;
+      lastMouseX = currentX;
+    }
+  }, { passive: true });
+
+  gestureSandbox.addEventListener('touchend', () => {
+    if (!isTrackingShake) return;
+    isTrackingShake = false;
+    gestureSandbox.classList.remove('shaking');
+    if (decayTimer) clearInterval(decayTimer);
+    
+    if (!winSumoOverlay.classList.contains('unlocked')) {
+      directionsSwitched = 0;
+      updateGauge(0);
+    }
+  });
+
+  // Mobile Tap Fallback: rapid clicking/tapping inside the sandbox sums up the gauge
+  let lastTapTime = 0;
+  let tapCount = 0;
+  gestureSandbox.addEventListener('click', (e) => {
+    if (winSumoOverlay.classList.contains('unlocked')) return;
+    
+    // Check if touch is supported or mobile width
+    const isMobileViewport = window.innerWidth <= 768;
+    if (!isMobileViewport && !('ontouchstart' in window)) return;
+    
+    const now = Date.now();
+    if (now - lastTapTime < 400) {
+      tapCount++;
+      directionsSwitched = Math.min(3, tapCount);
+      updateGauge(directionsSwitched);
+      
+      if (directionsSwitched >= 3) {
+        triggerSummoSummon();
+        tapCount = 0;
+      }
+    } else {
+      tapCount = 1;
+      directionsSwitched = 1;
+      updateGauge(directionsSwitched);
+    }
+    lastTapTime = now;
   });
 
   let isGaugeUpdatePending = false;

@@ -341,9 +341,29 @@
       <button id="theme-toggle-btn" class="theme-toggle-btn" title="Toggle Light/Dark Mode">
         <ion-icon name="moon-outline" id="theme-toggle-icon"></ion-icon>
       </button>
-      <a href="pricing.html" class="btn-premium btn-cyan" style="padding: 10px 20px; font-size: 0.85rem; box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);">Buy Pro</a>
+      <a href="pricing.html" class="btn-premium btn-cyan nav-download-btn" style="padding: 10px 20px; font-size: 0.85rem; box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);">Buy Pro</a>
+      <button id="mobile-menu-toggle" class="mobile-menu-toggle" aria-label="Toggle Navigation Menu">
+        <ion-icon name="menu-outline"></ion-icon>
+      </button>
     </div>
   </nav>
+
+  <!-- Mobile Navigation Drawer -->
+  <div class="mobile-menu-drawer glass" id="mobile-menu-drawer">
+    <button class="mobile-menu-close" id="mobile-menu-close" aria-label="Close Navigation Menu">
+      <ion-icon name="close-outline"></ion-icon>
+    </button>
+    <ul class="mobile-nav-links">
+      <li><a href="index.html#simulator">Sync Space</a></li>
+      <li><a href="index.html#smart-actions">Smart Tools</a></li>
+      <li><a href="index.html#dilemma">The Dilemma</a></li>
+      <li><a href="index.html#features">Features</a></li>
+      <li><a href="index.html#download" style="color: var(--color-cyan); font-weight: 700;">Download Free</a></li>
+    </ul>
+    <div class="mobile-menu-cta">
+      <a href="pricing.html" class="btn-premium btn-cyan" style="width: 100%; justify-content: center; box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);">Buy Pro</a>
+    </div>
+  </div>
 
   <!-- Hero Header -->
   <header class="pricing-hero scroll-reveal">
@@ -834,6 +854,44 @@
         }, 1800);
       }
 
+      // ═══════════════════════════════════════════
+      // DEEP LINK ACTIVATE — copy key + launch app
+      // ═══════════════════════════════════════════
+      function tryActivate(key, feedbackEl) {
+        // 1. Always copy key to clipboard first (FlyShelf auto-detects Pro keys)
+        navigator.clipboard.writeText(key).catch(() => {});
+
+        // 2. Attempt deep link via hidden iframe (more reliable than <a> click)
+        const deepUrl = `flyshelf://activate?key=${encodeURIComponent(key)}`;
+        try {
+          const iframe = document.createElement('iframe');
+          iframe.style.display = 'none';
+          iframe.src = deepUrl;
+          document.body.appendChild(iframe);
+          setTimeout(() => iframe.remove(), 3000);
+        } catch(e) {
+          // Fallback: navigate directly
+          window.location.href = deepUrl;
+        }
+
+        // 3. Visual feedback on button
+        if (feedbackEl) {
+          const orig = feedbackEl.innerHTML;
+          feedbackEl.innerHTML = '<ion-icon name="checkmark-done-outline" style="font-size: 1rem;"></ion-icon> Key Copied & Opening App...';
+          feedbackEl.style.pointerEvents = 'none';
+          setTimeout(() => {
+            feedbackEl.innerHTML = orig;
+            feedbackEl.style.pointerEvents = '';
+          }, 3000);
+        }
+      }
+
+      // Success modal activate button
+      btnActivateDeeplink.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (generatedKey) tryActivate(generatedKey, btnActivateDeeplink);
+      });
+
       // Close modal
       btnCloseModal.addEventListener('click', () => {
         checkoutModal.style.display = 'none';
@@ -956,7 +1014,34 @@
         });
       }
 
-
+      // Activate button for recent order
+      if (recentOrderDeeplink) {
+        recentOrderDeeplink.addEventListener('click', (e) => {
+          e.preventDefault();
+          const key = recentOrderKey.textContent;
+          if (key) tryActivate(key, recentOrderDeeplink);
+        });
+      }
+      // Mobile Navigation Drawer Toggle
+      const mobileToggle = document.getElementById('mobile-menu-toggle');
+      const mobileDrawer = document.getElementById('mobile-menu-drawer');
+      const mobileClose = document.getElementById('mobile-menu-close');
+      if (mobileToggle && mobileDrawer) {
+        mobileToggle.addEventListener('click', () => {
+          mobileDrawer.classList.toggle('open');
+        });
+      }
+      if (mobileClose && mobileDrawer) {
+        mobileClose.addEventListener('click', () => {
+          mobileDrawer.classList.remove('open');
+        });
+      }
+      const mobileLinks = document.querySelectorAll('.mobile-nav-links a');
+      mobileLinks.forEach(link => {
+        link.addEventListener('click', () => {
+          mobileDrawer.classList.remove('open');
+        });
+      });
 
     });
   </script>
