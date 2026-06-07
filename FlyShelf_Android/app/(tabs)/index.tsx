@@ -361,6 +361,7 @@ export default function SyncScreen() {
   // ─── PC URL (auto-discovered from Firebase, no manual config needed) ───
   const cachedPcUrlRef = useRef<string | null>(null);
   const cachedPcUrlTimestampRef = useRef<number>(0);
+  const activeUrlResolutionPromiseRef = useRef<Promise<string> | null>(null);
 
   const getCachedPcUrl = async (): Promise<string> => {
     // Return cached URL if fresh (15s TTL)
@@ -369,98 +370,111 @@ export default function SyncScreen() {
       return cachedPcUrlRef.current;
     }
 
-    // Priority 2: Stored pairing URLs from QR scan / code entry
-    try {
-      const storedLocal = await getSecureItem('pairedLocalUrl');
-      const storedGlobal = await getSecureItem('pairedGlobalUrl');
-      const candidates: string[] = [];
-      if (storedLocal) {
-        candidates.push(...storedLocal.split(',').map(s => s.trim()).filter(Boolean));
-      }
-      if (storedGlobal) {
-        candidates.push(storedGlobal.trim());
-      }
-      for (const url of candidates) {
-        try {
-          const res = await fetchWithTimeout(`${url}/api/health`,
-            { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }, 2000);
-          if (res.ok) {
-            cachedPcUrlRef.current = url;
-            cachedPcUrlTimestampRef.current = now;
-            return url;
-          }
-        } catch {}
-      }
-    } catch {}
-
-    // Priority 3: Last-known Cloudflare URL (Phase 4 — cached from previous session)
-    // This eliminates the Firebase query on most app restarts.
-    try {
-      const lastCfUrl = await getSecureItem('lastCloudflareUrl');
-      if (lastCfUrl && lastCfUrl.includes('trycloudflare.com')) {
-        try {
-          const res = await fetchWithTimeout(`${lastCfUrl}/api/health`,
-            { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }, 3000);
-          if (res.ok) {
-            cachedPcUrlRef.current = lastCfUrl;
-            cachedPcUrlTimestampRef.current = now;
-            return lastCfUrl;
-          }
-        } catch {}
-      }
-    } catch {}
-
-    // Priority 4: Firebase auto-discovered devices (use REF to avoid stale closure)
-    const pc = activeDevicesRef.current.find((d: any) => d.DeviceType === 'PC');
-    if (pc) {
-      const urls = getDeviceUrls(pc);
-      const resolved = urls.length === 1 ? urls[0] : await resolveOptimalUrl(pc, fetchWithTimeout, pairingKeyRef.current);
-      if (resolved) {
-        cachedPcUrlRef.current = resolved;
-        cachedPcUrlTimestampRef.current = now;
-        return resolved;
-      }
+    if (activeUrlResolutionPromiseRef.current) {
+      return activeUrlResolutionPromiseRef.current;
     }
 
-    // Priority 5: Direct Firebase query for PC nodes (handles cold start / stale state)
-    const pk = pairingKeyRef.current;
-    if (pk && isValidPairingKey(pk)) {
+    const runResolution = async (): Promise<string> => {
+      const startNow = NetworkClock.now();
+      // Priority 2: Stored pairing URLs from QR scan / code entry
       try {
-        const nodesSnap = await get(ref(database, `nodes/${pk}`));
-        if (nodesSnap.exists()) {
-          const nodes = nodesSnap.val();
-          for (const key of Object.keys(nodes)) {
-            const node = nodes[key];
-            if (node.DeviceType === 'PC') {
-              const urls = getDeviceUrls(node);
-              for (const url of urls) {
-                try {
-                  const res = await fetchWithTimeout(`${url}/api/health`, { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk } }, 2500);
-                  if (res.ok) {
-                    cachedPcUrlRef.current = url;
-                    cachedPcUrlTimestampRef.current = now;
-                    return url;
-                  }
-                } catch {}
+        const storedLocal = await getSecureItem('pairedLocalUrl');
+        const storedGlobal = await getSecureItem('pairedGlobalUrl');
+        const candidates: string[] = [];
+        if (storedLocal) {
+          candidates.push(...storedLocal.split(',').map(s => s.trim()).filter(Boolean));
+        }
+        if (storedGlobal) {
+          candidates.push(storedGlobal.trim());
+        }
+        for (const url of candidates) {
+          try {
+            const res = await fetchWithTimeout(`${url}/api/health`,
+              { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }, 2000);
+            if (res.ok) {
+              cachedPcUrlRef.current = url;
+              cachedPcUrlTimestampRef.current = startNow;
+              return url;
+            }
+          } catch {}
+        }
+      } catch {}
+
+      // Priority 3: Last-known Cloudflare URL (Phase 4 — cached from previous session)
+      try {
+        const lastCfUrl = await getSecureItem('lastCloudflareUrl');
+        if (lastCfUrl && lastCfUrl.includes('trycloudflare.com')) {
+          try {
+            const res = await fetchWithTimeout(`${lastCfUrl}/api/health`,
+              { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }, 3000);
+            if (res.ok) {
+              cachedPcUrlRef.current = lastCfUrl;
+              cachedPcUrlTimestampRef.current = startNow;
+              return lastCfUrl;
+            }
+          } catch {}
+        }
+      } catch {}
+
+      // Priority 4: Firebase auto-discovered devices
+      const pc = activeDevicesRef.current.find((d: any) => d.DeviceType === 'PC');
+      if (pc) {
+        const urls = getDeviceUrls(pc);
+        const resolved = urls.length === 1 ? urls[0] : await resolveOptimalUrl(pc, fetchWithTimeout, pairingKeyRef.current);
+        if (resolved) {
+          cachedPcUrlRef.current = resolved;
+          cachedPcUrlTimestampRef.current = startNow;
+          return resolved;
+        }
+      }
+
+      // Priority 5: Direct Firebase query for PC nodes
+      const pk = pairingKeyRef.current;
+      if (pk && isValidPairingKey(pk)) {
+        try {
+          const nodesSnap = await get(ref(database, `nodes/${pk}`));
+          if (nodesSnap.exists()) {
+            const nodes = nodesSnap.val();
+            for (const key of Object.keys(nodes)) {
+              const node = nodes[key];
+              if (node.DeviceType === 'PC') {
+                const urls = getDeviceUrls(node);
+                for (const url of urls) {
+                  try {
+                    const res = await fetchWithTimeout(`${url}/api/health`, { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk } }, 2500);
+                    if (res.ok) {
+                      cachedPcUrlRef.current = url;
+                      cachedPcUrlTimestampRef.current = startNow;
+                      return url;
+                    }
+                  } catch {}
+                }
               }
             }
           }
-        }
-      } catch {}
-    }
-
-    // Priority 5: manual IP from Settings (legacy fallback)
-    const raw = pcLocalIp?.trim();
-    if (raw) {
-      const parts = raw.split(',');
-      for (const part of parts) {
-        const trimmed = part.trim();
-        if (!trimmed) continue;
-        const fallback = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
-        return fallback;
+        } catch {}
       }
+
+      // Priority 6: manual IP from Settings (legacy fallback)
+      const raw = pcLocalIp?.trim();
+      if (raw) {
+        const parts = raw.split(',');
+        for (const part of parts) {
+          const trimmed = part.trim();
+          if (!trimmed) continue;
+          const fallback = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
+          return fallback;
+        }
+      }
+      return '';
+    };
+
+    activeUrlResolutionPromiseRef.current = runResolution();
+    try {
+      return await activeUrlResolutionPromiseRef.current;
+    } finally {
+      activeUrlResolutionPromiseRef.current = null;
     }
-    return '';
   };
 
   // ─── Overlay Sync ───
@@ -1489,7 +1503,7 @@ export default function SyncScreen() {
       if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; }
       longPollActive = false; // Stop long-poll loop
     };
-  }, [isGlobalSyncEnabled, activeDevices, pcLocalIp]);
+  }, [isGlobalSyncEnabled, pcLocalIp, deviceName]);
 
   // ─── Device Self-Registration ───
   useEffect(() => {

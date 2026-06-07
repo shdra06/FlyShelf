@@ -13,6 +13,30 @@ const DB_URL = process.env.FIREBASE_RTDB_URL;
 const MAX_DEVICES = 3;
 const TOKEN_EXPIRY_DAYS = 7;
 
+// [SECURITY FIX v2.2.0]: In-memory rate limiter to prevent brute-force key guessing
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const RATE_LIMIT_MAX = 10; // max attempts per IP per window
+const _rateLimitMap = new Map();
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const entry = _rateLimitMap.get(ip);
+  if (!entry || (now - entry.windowStart) > RATE_LIMIT_WINDOW_MS) {
+    _rateLimitMap.set(ip, { windowStart: now, count: 1 });
+    return true;
+  }
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX) return false;
+  return true;
+}
+// Cleanup stale entries every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of _rateLimitMap) {
+    if ((now - entry.windowStart) > RATE_LIMIT_WINDOW_MS) _rateLimitMap.delete(ip);
+  }
+}, 30 * 60 * 1000);
+
 // ═══ CORS — Allow browser + desktop requests ═══
 const ALLOWED_ORIGINS = [
   'https://fly-shelf.vercel.app',
@@ -64,6 +88,13 @@ module.exports = async (req, res) => {
   }
 
   try {
+    // [SECURITY FIX v2.2.0]: Rate limit activation attempts
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+    if (!checkRateLimit(clientIp)) {
+      console.log(`[activate] Rate limit exceeded for IP: ${clientIp.substring(0, 12)}...`);
+      return res.status(429).json({ success: false, error: 'Too many activation attempts. Please try again in 15 minutes.' });
+    }
+
     // ═══ Validate environment ═══
     if (!HMAC_SECRET || !JWT_SECRET) {
       console.error('[activate] Missing HMAC_SECRET or JWT_SECRET env vars');

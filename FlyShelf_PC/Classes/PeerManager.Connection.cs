@@ -107,6 +107,19 @@ namespace FlyShelf.Classes
             if (string.IsNullOrEmpty(testUrl)) return false;
             // Reject non-URL values like "offline", corrupted decryptions, etc.
             if (!testUrl.StartsWith("http://") && !testUrl.StartsWith("https://")) return false;
+
+            // Reject loopback URLs to ourselves
+            string myLocalUrl = CloudDiscoveryManager.CachedLocalUrl;
+            string myGlobalUrl = CloudDiscoveryManager.CachedGlobalUrl;
+            string myDisplayUrl = NetworkSyncServer.Instance?.DisplayUrl;
+            string myServerGlobalUrl = NetworkSyncServer.Instance?.GlobalUrl;
+
+            string normalizedTest = testUrl.TrimEnd('/');
+            if (!string.IsNullOrEmpty(myLocalUrl) && normalizedTest.Equals(myLocalUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)) return false;
+            if (!string.IsNullOrEmpty(myGlobalUrl) && normalizedTest.Equals(myGlobalUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)) return false;
+            if (!string.IsNullOrEmpty(myDisplayUrl) && normalizedTest.Equals(myDisplayUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)) return false;
+            if (!string.IsNullOrEmpty(myServerGlobalUrl) && normalizedTest.Equals(myServerGlobalUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)) return false;
+
             try
             {
                 int timeout = (transport == "LAN") ? HANDSHAKE_TIMEOUT_LAN_MS : HANDSHAKE_TIMEOUT_CF_MS;

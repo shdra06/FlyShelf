@@ -156,7 +156,11 @@ namespace FlyShelf.Classes
                     res.OutputStream.Write(pong, 0, pong.Length);
                     res.Close();
                 }
-                else if (path == "/api/health" && req.HttpMethod == "GET")
+                else if (path == "/api/health" && req.HttpMethod == "GET" &&
+                         string.IsNullOrEmpty(req.Headers["X-Pairing-Key"]) &&
+                         string.IsNullOrEmpty(req.QueryString["key"]) &&
+                         string.IsNullOrEmpty(req.Headers["Authorization"]) &&
+                         string.IsNullOrEmpty(req.QueryString["pin"]))
                 {
                     // SECURITY: Unauthenticated health endpoint — expose ONLY liveness status.
                     // Full device info (name, ID, URLs, peers) is served behind auth below.

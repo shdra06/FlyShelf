@@ -159,18 +159,21 @@ namespace FlyShelf
                 var myHwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (myHwnd != IntPtr.Zero)
                 {
-                    var vdm = (Classes.NativeMethods.IVirtualDesktopManager)new Classes.NativeMethods.VirtualDesktopManager();
-                    int hr = vdm.IsWindowOnCurrentVirtualDesktop(myHwnd, out bool onCurrent);
-                    if (hr >= 0 && !onCurrent)
+                    var vdm = GetVirtualDesktopManager();
+                    if (vdm != null)
                     {
-                        // User switched to a different virtual desktop — dismiss the clipboard
-                        Application.Current.Dispatcher.InvokeAsync(() =>
+                        int hr = vdm.IsWindowOnCurrentVirtualDesktop(myHwnd, out bool onCurrent);
+                        if (hr >= 0 && !onCurrent)
                         {
-                            if (_isCurrentlySummoned && !_isAnimatingHide)
+                            // User switched to a different virtual desktop — dismiss the clipboard
+                            Application.Current.Dispatcher.InvokeAsync(() =>
                             {
-                                AnimateAndHide();
-                            }
-                        });
+                                if (_isCurrentlySummoned && !_isAnimatingHide)
+                                {
+                                    AnimateAndHide();
+                                }
+                            });
+                        }
                     }
                 }
             }

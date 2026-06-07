@@ -94,7 +94,9 @@ module.exports = async (req, res) => {
     // Firebase RTDB doesn't support native queries without indexing,
     // so we use orderBy + equalTo on the email field.
     // This requires a Firebase rule: ".indexOn": ["email"] under /payments
-    const searchUrl = `${dbUrl}/payments.json?orderBy="email"&equalTo="${normalizedEmail}"&limitToLast=5`;
+    // [SECURITY FIX v2.2.0]: URL-encode email to prevent Firebase query injection
+    const encodedEmail = encodeURIComponent(normalizedEmail);
+    const searchUrl = `${dbUrl}/payments.json?orderBy="email"&equalTo="${encodedEmail}"&limitToLast=5`;
 
     const searchRes = await fetch(searchUrl);
 
@@ -125,6 +127,8 @@ module.exports = async (req, res) => {
     }
 
     if (!latestPayment) {
+      // [SECURITY FIX v2.2.0]: Delay on 404 too, to prevent timing-based email enumeration
+      await new Promise(resolve => setTimeout(resolve, 500));
       return res.status(404).json({
         error: 'No completed payment found for this email. If you just paid, please wait 2 minutes and try again.'
       });

@@ -58,6 +58,9 @@ module.exports = async (req, res) => {
     }
 
     // ═══ Step 1: Verify JWT signature and extract payload ═══
+    // [SECURITY FIX v2.2.0]: Always verify signature, even for expired tokens.
+    // Previously used jwt.decode() for expired tokens which skipped signature
+    // verification — allowing anyone to forge a valid token with any payload.
     let payload;
     try {
       payload = jwt.verify(token, JWT_SECRET, {
@@ -66,10 +69,15 @@ module.exports = async (req, res) => {
       });
     } catch (jwtErr) {
       if (jwtErr.name === 'TokenExpiredError') {
-        // Token expired but signature valid — still allow revalidation
-        // (we re-issue a fresh token if the key is still valid)
-        payload = jwt.decode(token);
-        if (!payload) {
+        // Token expired — verify signature but ignore expiry
+        try {
+          payload = jwt.verify(token, JWT_SECRET, {
+            algorithms: ['HS256'],
+            issuer: 'flyshelf-license-server',
+            ignoreExpiration: true
+          });
+        } catch (innerErr) {
+          console.log(`[revalidate] Expired token with invalid signature: ${innerErr.message}`);
           return res.status(401).json({ valid: false, error: 'invalid_token' });
         }
         console.log(`[revalidate] Expired token for ${payload.key?.substring(0, 11)}... — checking key validity`);
@@ -82,6 +90,13 @@ module.exports = async (req, res) => {
     const key = payload.key;
     if (!key) {
       return res.status(400).json({ valid: false, error: 'invalid_token' });
+    }
+
+    // [SECURITY FIX v2.2.0]: Validate deviceId matches the token's embedded deviceId.
+    // Previously accepted any deviceId from the request body, allowing device-limit bypass.
+    if (payload.deviceId && payload.deviceId !== deviceId) {
+      console.log(`[revalidate] DeviceId mismatch: token=${payload.deviceId}, request=${deviceId}`);
+      return res.status(403).json({ valid: false, error: 'device_mismatch' });
     }
 
     const safeKey = key.replace(/-/g, '_');
@@ -118,10 +133,12 @@ module.exports = async (req, res) => {
     }
 
     // ═══ Step 4: Issue fresh JWT with new expiry ═══
+    // [SECURITY FIX v2.2.0]: Use token's deviceId, not request body, to prevent injection
+    const tokenDeviceId = payload.deviceId || deviceId;
     const freshToken = jwt.sign(
       {
         key,
-        deviceId,
+        deviceId: tokenDeviceId,
         tier: payload.tier || 'pro',
         v: 1
       },

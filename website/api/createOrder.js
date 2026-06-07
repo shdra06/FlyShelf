@@ -1,5 +1,28 @@
 const Razorpay = require('razorpay');
 
+// [SECURITY FIX v2.2.0]: In-memory rate limiter to prevent order spam
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const RATE_LIMIT_MAX = 10; // max orders per IP per window
+const _rateLimitMap = new Map();
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const entry = _rateLimitMap.get(ip);
+  if (!entry || (now - entry.windowStart) > RATE_LIMIT_WINDOW_MS) {
+    _rateLimitMap.set(ip, { windowStart: now, count: 1 });
+    return true;
+  }
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX) return false;
+  return true;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of _rateLimitMap) {
+    if ((now - entry.windowStart) > RATE_LIMIT_WINDOW_MS) _rateLimitMap.delete(ip);
+  }
+}, 30 * 60 * 1000);
+
 // ═══════════════════════════════════════════════════════════════════
 // CORS — Restricted to trusted origins only (security audit v2.0.0)
 // ═══════════════════════════════════════════════════════════════════
@@ -23,10 +46,20 @@ function setCorsHeaders(req, res) {
 module.exports = async (req, res) => {
   setCorsHeaders(req, res);
 
+  // [SECURITY FIX v2.2.0]: Handle CORS preflight (was missing)
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
 
   try {
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Method Not Allowed' });
+    }
+
+    // [SECURITY FIX v2.2.0]: Rate limit order creation
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+    if (!checkRateLimit(clientIp)) {
+      return res.status(429).json({ error: 'Too many requests. Please try again in 15 minutes.' });
     }
 
     const { email, deviceId, region } = req.body;
@@ -87,6 +120,7 @@ module.exports = async (req, res) => {
 
   } catch (err) {
     console.error('Vercel createOrder Error:', err);
-    return res.status(500).json({ error: err.message || 'Failed to initiate order.' });
+    // [SECURITY FIX v2.2.0]: Generic error message to prevent info leaks
+    return res.status(500).json({ error: 'Failed to initiate order.' });
   }
 };

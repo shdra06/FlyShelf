@@ -229,6 +229,12 @@ namespace FlyShelf.Classes
                 return false;
             }
 
+            if (deviceId == (SettingsManager.Current.DeviceId ?? ""))
+            {
+                Logger.LogAction("PAIR", $"❌ Rejected pairing attempt from self (DeviceId='{deviceId}')");
+                return false;
+            }
+
             string expectedKey = EnsurePairingKey();
             if (pairingKey != expectedKey)
             {

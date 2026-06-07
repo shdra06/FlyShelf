@@ -22,7 +22,8 @@ namespace FlyShelf
         {
             try
             {
-                var vdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                var vdm = GetVirtualDesktopManager();
+                if (vdm == null) return false;
                 
                 // Check if already on the current desktop — skip when force=true
                 // because IsWindowOnCurrentVirtualDesktop can return stale/wrong results
@@ -128,11 +129,14 @@ namespace FlyShelf
                 var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
-                    var vdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
-                    int hr = vdm.IsWindowOnCurrentVirtualDesktop(hwnd, out bool onCurrent);
-                    if (hr == 0 && !onCurrent)
+                    var vdm = GetVirtualDesktopManager();
+                    if (vdm != null)
                     {
-                        isOnOtherDesktop = true;
+                        int hr = vdm.IsWindowOnCurrentVirtualDesktop(hwnd, out bool onCurrent);
+                        if (hr == 0 && !onCurrent)
+                        {
+                            isOnOtherDesktop = true;
+                        }
                     }
                 }
             }

@@ -143,7 +143,8 @@ module.exports = async (req, res) => {
     }
 
     // Also store under license keys index
-    const safeKey = licenseKey.replace(/\./g, '_').replace(/\//g, '_');
+    // [SECURITY FIX v2.2.0]: Match activate.js sanitization (replace dashes, not dots/slashes)
+    const safeKey = licenseKey.replace(/-/g, '_');
     fetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },

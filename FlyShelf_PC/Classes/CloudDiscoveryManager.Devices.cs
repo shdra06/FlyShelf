@@ -239,11 +239,18 @@ namespace FlyShelf.Classes
         public static async Task<List<DeviceGroupInfo>> GetDeviceGroups()
         {
             var result = new List<DeviceGroupInfo>();
+            string pairingKey = DevicePairingManager.EnsurePairingKey();
+            if (string.IsNullOrEmpty(pairingKey))
+            {
+                Logger.LogAction("FIREBASE", "Skipped GetDeviceGroups — no pairing key");
+                return result;
+            }
+
             for (int attempt = 0; attempt < 2; attempt++)
             {
                 try
                 {
-                    string url = (await AuthUrl("device_groups.json"));
+                    string url = (await AuthUrl($"device_groups/{pairingKey}.json"));
                     var httpResponse = await _client.GetAsync(url);
 
                     // Auto-retry on 401: invalidate token and try once more
@@ -295,7 +302,14 @@ namespace FlyShelf.Classes
         {
             try
             {
-                string url = (await AuthUrl($"device_groups/{groupId}.json"));
+                string pairingKey = DevicePairingManager.EnsurePairingKey();
+                if (string.IsNullOrEmpty(pairingKey))
+                {
+                    Logger.LogAction("FIREBASE", "Skipped SaveDeviceGroup — no pairing key");
+                    return;
+                }
+
+                string url = (await AuthUrl($"device_groups/{pairingKey}/{groupId}.json"));
                 // SECURITY: Include ownerUid for Firebase rule ownership validation (M-01 hardening)
                 string ownerUid = "";
                 try { ownerUid = await FirebaseAuthManager.GetUidAsync() ?? ""; } catch { }
@@ -315,7 +329,14 @@ namespace FlyShelf.Classes
         {
             try
             {
-                string url = (await AuthUrl($"device_groups/{groupId}.json"));
+                string pairingKey = DevicePairingManager.EnsurePairingKey();
+                if (string.IsNullOrEmpty(pairingKey))
+                {
+                    Logger.LogAction("FIREBASE", "Skipped DeleteDeviceGroup — no pairing key");
+                    return;
+                }
+
+                string url = (await AuthUrl($"device_groups/{pairingKey}/{groupId}.json"));
                 await _client.DeleteAsync(url);
                 Logger.LogAction("FIREBASE", $"Deleted group {groupId}");
             }

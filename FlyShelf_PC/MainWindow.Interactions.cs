@@ -405,10 +405,13 @@ namespace FlyShelf
                 var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
-                    var vdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
-                    int hr = vdm.IsWindowOnCurrentVirtualDesktop(hwnd, out bool onCurrent);
-                    if (hr == 0 && !onCurrent)
-                        isOnOtherDesktop = true;
+                    var vdm = GetVirtualDesktopManager();
+                    if (vdm != null)
+                    {
+                        int hr = vdm.IsWindowOnCurrentVirtualDesktop(hwnd, out bool onCurrent);
+                        if (hr == 0 && !onCurrent)
+                            isOnOtherDesktop = true;
+                    }
                 }
             }
             catch { }
@@ -553,10 +556,13 @@ namespace FlyShelf
                         var hwnd = new System.Windows.Interop.WindowInteropHelper(_hubWindowInstance).Handle;
                         if (hwnd != IntPtr.Zero)
                         {
-                            var vdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
-                            int hr = vdm.IsWindowOnCurrentVirtualDesktop(hwnd, out bool onCurrent);
-                            if (hr == 0 && !onCurrent)
-                                needsRecreate = true;
+                            var vdm = GetVirtualDesktopManager();
+                            if (vdm != null)
+                            {
+                                int hr = vdm.IsWindowOnCurrentVirtualDesktop(hwnd, out bool onCurrent);
+                                if (hr == 0 && !onCurrent)
+                                    needsRecreate = true;
+                            }
                         }
                     }
                     catch { /* COM not available on older Windows — skip desktop check */ }

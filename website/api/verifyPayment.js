@@ -85,7 +85,10 @@ module.exports = async (req, res) => {
       .update(`${razorpay_order_id}|${razorpay_payment_id}`)
       .digest("hex");
 
-    if (expectedSignature !== razorpay_signature) {
+    // [SECURITY FIX v2.2.0]: Use timing-safe comparison to prevent timing attacks
+    const expectedBuf = Buffer.from(expectedSignature, 'hex');
+    const signatureBuf = Buffer.from(razorpay_signature, 'hex');
+    if (expectedBuf.length !== signatureBuf.length || !crypto.timingSafeEqual(expectedBuf, signatureBuf)) {
       return res.status(400).json({ error: 'Payment signature mismatch.' });
     }
 
@@ -142,7 +145,8 @@ module.exports = async (req, res) => {
         body: JSON.stringify(record)
       }).catch(err => console.warn('[verifyPayment] Payment record write failed:', err.message));
       
-      const safeKey = licenseKey.replace(/\./g, '_').replace(/\//g, '_');
+      // [SECURITY FIX v2.2.0]: Match activate.js sanitization (replace dashes, not dots/slashes)
+      const safeKey = licenseKey.replace(/-/g, '_');
       fetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },

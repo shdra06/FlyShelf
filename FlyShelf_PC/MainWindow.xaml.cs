@@ -60,6 +60,20 @@ namespace FlyShelf
         private System.ComponentModel.PropertyChangedEventHandler? _settingsChangedHandler;
         private bool _isSuppressingSizeSync = false;
 
+        private FlyShelf.Classes.NativeMethods.IVirtualDesktopManager? _vdm = null;
+        private FlyShelf.Classes.NativeMethods.IVirtualDesktopManager? GetVirtualDesktopManager()
+        {
+            if (_vdm == null)
+            {
+                try
+                {
+                    _vdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                }
+                catch { }
+            }
+            return _vdm;
+        }
+
         private ScrollViewer? GetShelfScrollViewer()
         {
             if (_shelfScrollViewer == null)
