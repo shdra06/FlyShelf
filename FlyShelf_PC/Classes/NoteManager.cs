@@ -449,42 +449,46 @@ namespace FlyShelf.Classes
                 try { snapshot = _days.ToList(); } catch { return; }
             }
 
-            lock (_lock)
+            // Run serialization and file IO on a background thread so it doesn't block the UI thread
+            System.Threading.Tasks.Task.Run(() =>
             {
-                try
+                lock (_lock)
                 {
-                    if (!Directory.Exists(_appDataDir))
-                        Directory.CreateDirectory(_appDataDir);
-
-                    string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+                    try
                     {
-                        WriteIndented = false,
-                        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-                    });
+                        if (!Directory.Exists(_appDataDir))
+                            Directory.CreateDirectory(_appDataDir);
 
-                    // Create backup copy first
-                    if (File.Exists(_notesPath))
-                    {
-                        try
+                        string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
                         {
-                            File.Copy(_notesPath, _notesPath + ".bak", overwrite: true);
-                        }
-                        catch (Exception ex)
+                            WriteIndented = false,
+                            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                        });
+
+                        // Create backup copy first
+                        if (File.Exists(_notesPath))
                         {
-                            Logger.LogAction("NOTES", $"Failed to create notes backup: {ex.Message}");
+                            try
+                            {
+                                File.Copy(_notesPath, _notesPath + ".bak", overwrite: true);
+                            }
+                            catch (Exception ex)
+                            {
+                                Logger.LogAction("NOTES", $"Failed to create notes backup: {ex.Message}");
+                            }
                         }
+
+                        // Atomic write: tmp → rename
+                        string tmpPath = _notesPath + ".tmp";
+                        File.WriteAllText(tmpPath, json);
+                        File.Move(tmpPath, _notesPath, overwrite: true);
                     }
-
-                    // Atomic write: tmp → rename
-                    string tmpPath = _notesPath + ".tmp";
-                    File.WriteAllText(tmpPath, json);
-                    File.Move(tmpPath, _notesPath, overwrite: true);
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("NOTES", $"Failed to save notes: {ex.Message}");
+                    }
                 }
-                catch (Exception ex)
-                {
-                    Logger.LogAction("NOTES", $"Failed to save notes: {ex.Message}");
-                }
-            }
+            });
         }
 
         /// <summary>

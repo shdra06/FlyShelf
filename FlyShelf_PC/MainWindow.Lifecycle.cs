@@ -159,22 +159,61 @@ namespace FlyShelf
                 var myHwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (myHwnd != IntPtr.Zero)
                 {
-                    var vdm = GetVirtualDesktopManager();
-                    if (vdm != null)
+                    // Run the check asynchronously on a background thread so we NEVER block the UI thread on focus changes
+                    System.Threading.Tasks.Task.Run(() =>
                     {
-                        int hr = vdm.IsWindowOnCurrentVirtualDesktop(myHwnd, out bool onCurrent);
-                        if (hr >= 0 && !onCurrent)
+                        try
                         {
-                            // User switched to a different virtual desktop — dismiss the clipboard
-                            Application.Current.Dispatcher.InvokeAsync(() =>
+                            var localVdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                            
+                            bool desktopSwitched = false;
+
+                            // Get thread/process ID of the new foreground window
+                            uint focusedProcId = 0;
+                            if (hwnd != IntPtr.Zero)
                             {
-                                if (_isCurrentlySummoned && !_isAnimatingHide)
+                                GetWindowThreadProcessId(hwnd, out focusedProcId);
+                            }
+                            uint currProcId = (uint)System.Environment.ProcessId;
+
+                            // 1. Get desktop ID of the newly focused window
+                            if (hwnd != IntPtr.Zero && hwnd != myHwnd && focusedProcId != currProcId)
+                            {
+                                int hr = localVdm.GetWindowDesktopId(hwnd, out Guid currentDesktopId);
+                                if (hr == 0 && currentDesktopId != Guid.Empty)
                                 {
-                                    AnimateAndHide();
+                                    if (_summonedDesktopId != Guid.Empty && currentDesktopId != _summonedDesktopId)
+                                    {
+                                        desktopSwitched = true;
+                                    }
                                 }
-                            });
+                            }
+
+                            // 2. Fallback using _lastActiveExternalWindow (only run if verified to be on current desktop at summon)
+                            if (!desktopSwitched && _lastActiveExternalWindowWasOnCurrentAtSummon && 
+                                _lastActiveExternalWindow != IntPtr.Zero && IsWindow(_lastActiveExternalWindow))
+                            {
+                                int hr = localVdm.IsWindowOnCurrentVirtualDesktop(_lastActiveExternalWindow, out int onCurrent);
+                                if (hr == 0 && onCurrent == 0)
+                                {
+                                    desktopSwitched = true;
+                                }
+                            }
+
+                            if (desktopSwitched)
+                            {
+                                // User switched to a different virtual desktop — dismiss on UI thread
+                                Application.Current.Dispatcher.InvokeAsync(() =>
+                                {
+                                    if (_isCurrentlySummoned && !_isAnimatingHide)
+                                    {
+                                        AnimateAndHide();
+                                    }
+                                });
+                            }
                         }
-                    }
+                        catch { }
+                    });
                 }
             }
             catch { /* COM may fail on older Windows builds — silently ignore */ }

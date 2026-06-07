@@ -59,6 +59,8 @@ namespace FlyShelf
         private Action<Classes.ThemePackage?>? _themeChangedHandler;
         private System.ComponentModel.PropertyChangedEventHandler? _settingsChangedHandler;
         private bool _isSuppressingSizeSync = false;
+        private Guid _summonedDesktopId = Guid.Empty;
+        private bool _lastActiveExternalWindowWasOnCurrentAtSummon = false;
 
         private FlyShelf.Classes.NativeMethods.IVirtualDesktopManager? _vdm = null;
         private FlyShelf.Classes.NativeMethods.IVirtualDesktopManager? GetVirtualDesktopManager()
@@ -144,6 +146,41 @@ namespace FlyShelf
                 // Force rounded corners on all devices (VMs, Win10-style DWM, etc.)
                 int cornerPref = 2; // DWMWCP_ROUND
                 DwmSetWindowAttribute(helper.Handle, 33, ref cornerPref, sizeof(int)); // DWMWA_WINDOW_CORNER_PREFERENCE
+
+                // Pin the entire application to all virtual desktops natively!
+                try
+                {
+                    string appId = "FlyShelf.Clipboard";
+                    Classes.NativeMethods.SetCurrentProcessExplicitAppUserModelID(appId);
+                    
+                    var pinnedAppsType = Type.GetTypeFromCLSID(new Guid("B5A399E7-1C87-46B8-88E9-FC5747B171BD"));
+                    if (pinnedAppsType != null)
+                    {
+                        var pinnedApps = Activator.CreateInstance(pinnedAppsType) as Classes.NativeMethods.IVirtualDesktopPinnedApps;
+                        if (pinnedApps != null)
+                        {
+                            int hr = pinnedApps.IsAppIdPinned(appId, out int isPinned);
+                            if (hr == 0 && isPinned == 0)
+                            {
+                                pinnedApps.PinAppID(appId);
+                                Classes.Logger.LogAction("DESKTOP", "Natively pinned FlyShelf AppID to all virtual desktops!");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Classes.Logger.LogAction("DESKTOP_ERR", $"Failed to pin AppID: {ex.Message}");
+                }
+
+                // Initialize _summonedDesktopId
+                try
+                {
+                    var localVdm = (Classes.NativeMethods.IVirtualDesktopManager)new Classes.NativeMethods.VirtualDesktopManager();
+                    localVdm.GetWindowDesktopId(helper.Handle, out _summonedDesktopId);
+                    Classes.Logger.LogAction("DESKTOP", $"Initial virtual desktop GUID: {_summonedDesktopId}");
+                }
+                catch { }
             }
         }
 
@@ -1111,6 +1148,45 @@ namespace FlyShelf
                 CloseNotesPanel(immediate: true);
             if (_isTodoActive)
                 CloseTodoPanel(immediate: true);
+        }
+
+        /// <summary>
+        /// Query IsWindowOnCurrentVirtualDesktop on a background ThreadPool thread (MTA)
+        /// with a strict timeout (default 30ms). Prevents Explorer.exe COM congestion
+        /// from freezing or lagging the UI thread during virtual desktop switches.
+        /// </summary>
+        public bool IsWindowOnCurrentVirtualDesktop(IntPtr hwnd, int timeoutMs = 30)
+        {
+            try
+            {
+                var task = System.Threading.Tasks.Task.Run(() =>
+                {
+                    try
+                    {
+                        var localVdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                        int hr = localVdm.IsWindowOnCurrentVirtualDesktop(hwnd, out int onCurrent);
+                        return hr == 0 && onCurrent != 0;
+                    }
+                    catch
+                    {
+                        return false;
+                    }
+                });
+
+                if (task.Wait(timeoutMs))
+                {
+                    return task.Result;
+                }
+                else
+                {
+                    Classes.Logger.LogAction("VD_TIMEOUT", $"IsWindowOnCurrentVirtualDesktop timed out (>{timeoutMs}ms) for HWND 0x{hwnd:X}");
+                    return false; // Treat as on another desktop if it times out
+                }
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private void UpdateMascotCompanionState()

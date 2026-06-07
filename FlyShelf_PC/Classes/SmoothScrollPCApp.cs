@@ -95,6 +95,9 @@ namespace FlyShelf.Classes
 
             public double PendingDelta;      // Coalesced target displacement
             public long LastInputTime;       // Environment.TickCount64 of last input event
+
+            public double LastOffset;        // Position at the previous rendering frame
+            public long LastFrameTick;       // Timestamp of the previous rendering frame
         }
 
         // ═══ GPU Caching — Disabled ═══
@@ -228,6 +231,8 @@ namespace FlyShelf.Classes
                 state.FromOffset = sv.VerticalOffset;
                 state.ToOffset = sv.VerticalOffset;
                 state.ViewportHeight = sv.ViewportHeight;
+                state.LastOffset = sv.VerticalOffset;
+                state.LastFrameTick = System.Diagnostics.Stopwatch.GetTimestamp();
             }
 
             if (!_renderingAttached)
@@ -290,28 +295,49 @@ namespace FlyShelf.Classes
                     continue;
                 }
 
+                long currentTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+                double elapsedMs = (double)(currentTimestamp - state.LastFrameTick) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                if (elapsedMs <= 0) elapsedMs = 1.0;
+                state.LastFrameTick = currentTimestamp;
+
                 // ═══ Calculate Animation Position ═══
                 long elapsedAnim = now - state.StartTimeMs;
                 double animCompletion = state.DurationMs > 0 ? (double)elapsedAnim / state.DurationMs : 1.0;
 
+                double nextOffset;
                 if (animCompletion >= 1.0)
                 {
                     // Snap exactly to final target
                     double finalTarget = Math.Clamp(state.ToOffset, 0.0, sv.ScrollableHeight);
-                    sv.ScrollToVerticalOffset(Math.Round(finalTarget));
+                    nextOffset = Math.Round(finalTarget);
+                    sv.ScrollToVerticalOffset(nextOffset);
                     
                     state.IsAnimating = false;
                     completed.Add(sv);
                 }
                 else
                 {
-                    double nextOffset = GetPositionAtCompletion(state.FromOffset, state.ToOffset, state.ViewportHeight, animCompletion);
-                    nextOffset = Math.Clamp(nextOffset, 0.0, sv.ScrollableHeight);
+                    double nextPos = GetPositionAtCompletion(state.FromOffset, state.ToOffset, state.ViewportHeight, animCompletion);
+                    nextOffset = Math.Clamp(nextPos, 0.0, sv.ScrollableHeight);
+                    nextOffset = Math.Round(nextOffset);
                     
                     // Snap to integer pixels to match VS Code (eliminates sub-pixel text shimmering)
-                    sv.ScrollToVerticalOffset(Math.Round(nextOffset));
+                    sv.ScrollToVerticalOffset(nextOffset);
                     anyAnimating = true;
                 }
+
+                // ═══ Dispatch Real-Time Telemetry ═══
+                try
+                {
+                    double diff = nextOffset - state.LastOffset;
+                    double velocityInPixelsSec = Math.Abs(diff / (elapsedMs / 1000.0));
+                    state.LastOffset = nextOffset;
+
+                    double fps = 1000.0 / elapsedMs;
+                    string cardsData = ScrollTelemetryClient.GetVisibleItemsTelemetry(sv);
+                    ScrollTelemetryClient.SendTelemetry(nextOffset, state.ToOffset, velocityInPixelsSec, fps, elapsedMs, sv.ViewportHeight, sv.ScrollableHeight, cardsData);
+                }
+                catch { }
             }
 
             foreach (var sv in completed)

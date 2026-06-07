@@ -209,34 +209,42 @@ namespace FlyShelf.Classes
 
         public static void SaveNow()
         {
+            List<TodoDay> snapshot;
             lock (_lock)
             {
-                try
-                {
-                    if (!Directory.Exists(_appDataDir))
-                        Directory.CreateDirectory(_appDataDir);
-
-                    // Snapshot under the same _lock — no nested locking needed
-                    List<TodoDay> snapshot = _days.ToList();
-
-                    // Create backup before saving
-                    try { if (File.Exists(_todosPath)) File.Copy(_todosPath, _todosPath + ".bak", overwrite: true); } catch { }
-
-                    string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
-                    {
-                        WriteIndented = false,
-                        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-                    });
-
-                    string tmpPath = _todosPath + ".tmp";
-                    File.WriteAllText(tmpPath, json);
-                    File.Move(tmpPath, _todosPath, overwrite: true);
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogAction("TODOS", $"Failed to save todos: {ex.Message}");
-                }
+                // Snapshot under the same _lock — no nested locking needed
+                snapshot = _days.ToList();
             }
+
+            // Run serialization and file IO on a background thread so it doesn't block the UI thread
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                lock (_lock)
+                {
+                    try
+                    {
+                        if (!Directory.Exists(_appDataDir))
+                            Directory.CreateDirectory(_appDataDir);
+
+                        // Create backup before saving
+                        try { if (File.Exists(_todosPath)) File.Copy(_todosPath, _todosPath + ".bak", overwrite: true); } catch { }
+
+                        string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+                        {
+                            WriteIndented = false,
+                            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                        });
+
+                        string tmpPath = _todosPath + ".tmp";
+                        File.WriteAllText(tmpPath, json);
+                        File.Move(tmpPath, _todosPath, overwrite: true);
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("TODOS", $"Failed to save todos: {ex.Message}");
+                    }
+                }
+            });
         }
     }
 }

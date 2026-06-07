@@ -399,7 +399,7 @@ public static partial class NativeMethods
     internal interface IVirtualDesktopManager
     {
         [PreserveSig]
-        int IsWindowOnCurrentVirtualDesktop(IntPtr topLevelWindow, out bool onCurrentDesktop);
+        int IsWindowOnCurrentVirtualDesktop(IntPtr topLevelWindow, out int onCurrentDesktop);
 
         [PreserveSig]
         int GetWindowDesktopId(IntPtr topLevelWindow, out Guid desktopId);
@@ -412,6 +412,32 @@ public static partial class NativeMethods
     [Guid("aa509086-5ca9-4c25-8f95-589d3c07b48a")]
     internal class VirtualDesktopManager { }
 
+    [DllImport("shell32.dll", SetLastError = true)]
+    internal static extern int SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string appId);
+
+    [ComImport]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    [Guid("4CE81583-1E4C-4632-A621-07A53543148F")]
+    internal interface IVirtualDesktopPinnedApps
+    {
+        [PreserveSig]
+        int IsAppIdPinned([MarshalAs(UnmanagedType.LPWStr)] string appId, out int isPinned);
+
+        [PreserveSig]
+        int PinAppID([MarshalAs(UnmanagedType.LPWStr)] string appId);
+
+        [PreserveSig]
+        int UnpinAppID([MarshalAs(UnmanagedType.LPWStr)] string appId);
+
+        [PreserveSig]
+        int IsViewPinned(IntPtr applicationView, out int isPinned);
+
+        [PreserveSig]
+        int PinView(IntPtr applicationView);
+
+        [PreserveSig]
+        int UnpinView(IntPtr applicationView);
+    }
     #endregion
 
     #region Backdrop and Blur Utilities

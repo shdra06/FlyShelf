@@ -398,20 +398,14 @@ namespace FlyShelf
         public void ToggleMainClipboard()
         {
             // ═══ VIRTUAL DESKTOP CHECK ═══
-            // Detect if the window is stuck on another virtual desktop (rare — VDM API is unreliable for overlay windows)
+            // Detect if the window is stuck on another virtual desktop
             bool isOnOtherDesktop = false;
             try
             {
                 var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
-                    var vdm = GetVirtualDesktopManager();
-                    if (vdm != null)
-                    {
-                        int hr = vdm.IsWindowOnCurrentVirtualDesktop(hwnd, out bool onCurrent);
-                        if (hr == 0 && !onCurrent)
-                            isOnOtherDesktop = true;
-                    }
+                    isOnOtherDesktop = !IsWindowOnCurrentVirtualDesktop(hwnd);
                 }
             }
             catch { }
@@ -556,13 +550,8 @@ namespace FlyShelf
                         var hwnd = new System.Windows.Interop.WindowInteropHelper(_hubWindowInstance).Handle;
                         if (hwnd != IntPtr.Zero)
                         {
-                            var vdm = GetVirtualDesktopManager();
-                            if (vdm != null)
-                            {
-                                int hr = vdm.IsWindowOnCurrentVirtualDesktop(hwnd, out bool onCurrent);
-                                if (hr == 0 && !onCurrent)
-                                    needsRecreate = true;
-                            }
+                            if (!IsWindowOnCurrentVirtualDesktop(hwnd))
+                                needsRecreate = true;
                         }
                     }
                     catch { /* COM not available on older Windows — skip desktop check */ }

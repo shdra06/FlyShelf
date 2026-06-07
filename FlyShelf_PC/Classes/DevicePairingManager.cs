@@ -491,9 +491,9 @@ namespace FlyShelf.Classes
                 if (info != null && info.timestamp > 0)
                 {
                     double ageMs = NetworkClock.UtcNowMs - info.timestamp;
-                    if (ageMs > 5 * 60_000)
+                    if (Math.Abs(ageMs) > 15 * 60_000)
                     {
-                        Logger.LogAction("PAIR CODE", $"Code {upperCode} expired ({ageMs / 1000}s old)");
+                        Logger.LogAction("PAIR CODE", $"Code {upperCode} expired/drifted ({ageMs / 1000}s offset)");
                         return null;
                     }
                 }

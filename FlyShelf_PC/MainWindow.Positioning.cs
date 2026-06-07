@@ -26,11 +26,9 @@ namespace FlyShelf
                 if (vdm == null) return false;
                 
                 // Check if already on the current desktop — skip when force=true
-                // because IsWindowOnCurrentVirtualDesktop can return stale/wrong results
-                // when the window has been parked offscreen with Opacity=0.
                 if (!force)
                 {
-                    if (vdm.IsWindowOnCurrentVirtualDesktop(hwnd, out bool onCurrent) == 0 && onCurrent)
+                    if (IsWindowOnCurrentVirtualDesktop(hwnd))
                     {
                         Classes.Logger.LogAction("DESKTOP", "Window already on current virtual desktop.");
                         return true;
@@ -42,8 +40,6 @@ namespace FlyShelf
                 }
 
                 // Get current foreground window desktop ID — but EXCLUDE our own window!
-                // If GetForegroundWindow returns our HWND, GetWindowDesktopId gives us the
-                // OLD desktop's GUID, causing MoveWindowToDesktop to be a no-op.
                 IntPtr fg = GetForegroundWindow();
                 Guid desktopId = Guid.Empty;
                 if (fg != IntPtr.Zero && fg != hwnd)
@@ -56,28 +52,6 @@ namespace FlyShelf
                     Classes.Logger.LogAction("DESKTOP", $"Foreground window is self or null (fg=0x{fg:X}), skipping.");
                 }
 
-                // Fallback: search other visible windows on current desktop
-                if (desktopId == Guid.Empty)
-                {
-                    Classes.Logger.LogAction("DESKTOP", "Enumerating windows to find current desktop GUID...");
-                    EnumWindows((wnd, param) =>
-                    {
-                        if (wnd != hwnd && IsWindowVisible(wnd))
-                        {
-                            if (vdm.IsWindowOnCurrentVirtualDesktop(wnd, out bool isCurrent) == 0 && isCurrent)
-                            {
-                                if (vdm.GetWindowDesktopId(wnd, out Guid id) == 0 && id != Guid.Empty)
-                                {
-                                    desktopId = id;
-                                    return false; // Stop enumeration
-                                }
-                            }
-                        }
-                        return true;
-                    }, IntPtr.Zero);
-                    Classes.Logger.LogAction("DESKTOP", $"EnumWindows result GUID: {desktopId}");
-                }
-
                 if (desktopId != Guid.Empty)
                 {
                     int hr = vdm.MoveWindowToDesktop(hwnd, ref desktopId);
@@ -88,10 +62,6 @@ namespace FlyShelf
                         return true;
                     }
                 }
-                else
-                {
-                    Classes.Logger.LogAction("DESKTOP", "Could not determine current desktop GUID. COM move skipped.");
-                }
             }
             catch (Exception ex)
             {
@@ -99,12 +69,10 @@ namespace FlyShelf
             }
 
             // ═══ ULTIMATE FALLBACK ═══
-            // If COM move failed (empty desktop, no reference windows, etc.),
-            // use Hide+Show — Windows re-associates the window with the calling
-            // thread's active desktop when Show() is called.
+            // If COM move failed or GUID was empty, use Hide+Show fallback.
             try
             {
-                Classes.Logger.LogAction("DESKTOP", "COM move failed. Using Hide+Show fallback.");
+                Classes.Logger.LogAction("DESKTOP", "COM move failed or empty GUID. Using Hide+Show fallback.");
                 this.Hide();
                 this.Left = -20000;
                 this.Top = -20000;
@@ -129,15 +97,7 @@ namespace FlyShelf
                 var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
-                    var vdm = GetVirtualDesktopManager();
-                    if (vdm != null)
-                    {
-                        int hr = vdm.IsWindowOnCurrentVirtualDesktop(hwnd, out bool onCurrent);
-                        if (hr == 0 && !onCurrent)
-                        {
-                            isOnOtherDesktop = true;
-                        }
-                    }
+                    isOnOtherDesktop = !IsWindowOnCurrentVirtualDesktop(hwnd);
                 }
             }
             catch { }
@@ -150,12 +110,12 @@ namespace FlyShelf
                 CloseNotesPanel(immediate: true);
                 CloseTodoPanel(immediate: true);
 
-                // 2. Hide + Show to re-create on the current desktop
-                this.Hide();
-                this.Left = -20000;
-                this.Top = -20000;
-                this.Show();
-                Classes.Logger.LogAction("DESKTOP", "Hide+Show completed in ShowNearPosition.");
+                // 2. Move to current virtual desktop via COM (falls back to Hide+Show if COM fails)
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    MoveToCurrentVirtualDesktop(hwnd, force: true);
+                }
 
                 // 3. Reset state
                 this.WindowState = WindowState.Normal;
@@ -290,6 +250,41 @@ namespace FlyShelf
 
         private void ShowNearPositionInternal(double targetX, double targetY, int mode, bool isPersistent, bool stealFocus)
         {
+            // Capture the current virtual desktop ID at the moment of summoning
+            try
+            {
+                var localVdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                
+                // 1. Try foreground window (which is the active user window on the current desktop)
+                IntPtr fg = GetForegroundWindow();
+                _summonedDesktopId = Guid.Empty;
+                if (fg != IntPtr.Zero)
+                {
+                    localVdm.GetWindowDesktopId(fg, out _summonedDesktopId);
+                }
+                
+                // 2. Try last active external window if foreground failed or returned empty
+                _lastActiveExternalWindowWasOnCurrentAtSummon = false;
+                if (_lastActiveExternalWindow != IntPtr.Zero && IsWindow(_lastActiveExternalWindow))
+                {
+                    int hrCheck = localVdm.IsWindowOnCurrentVirtualDesktop(_lastActiveExternalWindow, out int onCurrent);
+                    if (hrCheck == 0 && onCurrent != 0)
+                    {
+                        _lastActiveExternalWindowWasOnCurrentAtSummon = true;
+                        if (_summonedDesktopId == Guid.Empty)
+                        {
+                            localVdm.GetWindowDesktopId(_lastActiveExternalWindow, out _summonedDesktopId);
+                        }
+                    }
+                }
+                
+                Classes.Logger.LogAction("DESKTOP", $"Summoned on virtual desktop: {_summonedDesktopId}, prevWindowWasOnCurrent: {_lastActiveExternalWindowWasOnCurrentAtSummon}");
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("DESKTOP_ERR", $"Failed to capture summoned desktop ID: {ex.Message}");
+            }
+
             if (this.WindowState == WindowState.Minimized)
             {
                 this.WindowState = WindowState.Normal;
