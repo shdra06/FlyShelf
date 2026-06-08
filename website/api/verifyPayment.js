@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { firebaseFetch } = require('./_firebaseAdmin');
 
 // Safe import — if nodemailer isn't available, email is skipped (not fatal)
 let sendPurchaseEmail;
@@ -104,7 +105,7 @@ module.exports = async (req, res) => {
     }
     
     try {
-      const existingRes = await fetch(`${dbUrl}/payments/${razorpay_payment_id}.json`);
+      const existingRes = await firebaseFetch(`${dbUrl}/payments/${razorpay_payment_id}.json`);
       if (existingRes.ok) {
         const existingData = await existingRes.json();
         if (existingData && existingData.licenseKey && existingData.status === 'completed') {
@@ -139,7 +140,7 @@ module.exports = async (req, res) => {
       };
       
       // Store payment record (best-effort — don't block key delivery)
-      await fetch(`${dbUrl}/payments/${razorpay_payment_id}.json`, {
+      await firebaseFetch(`${dbUrl}/payments/${razorpay_payment_id}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(record)
@@ -147,7 +148,7 @@ module.exports = async (req, res) => {
       
       // [SECURITY FIX v2.2.0]: Match activate.js sanitization (replace dashes, not dots/slashes)
       const safeKey = licenseKey.replace(/-/g, '_');
-      fetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
+      firebaseFetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, paymentId: razorpay_payment_id, generatedAt: new Date().toISOString() })

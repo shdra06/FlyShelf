@@ -404,8 +404,9 @@ namespace FlyShelf.Classes
         /// Key format: FS-PRO-XXXX-XXXX-XXXX-XXXX (alphanumeric, 16 chars payload)
         /// The last 4 chars are an HMAC checksum of the first 12 chars.
         /// v2.1.0: Calls server-side /api/activate for JWT token. Falls back to offline activation.
+        /// v2.2.1: Made async to prevent UI thread deadlock (GetAwaiter().GetResult() crash fix).
         /// </summary>
-        public static bool ActivateLicense(string key)
+        public static async Task<bool> ActivateLicenseAsync(string key)
         {
             if (string.IsNullOrWhiteSpace(key)) return false;
 
@@ -426,17 +427,17 @@ namespace FlyShelf.Classes
                 return false;
 
             // Valid format — attempt server-side activation
-            string deviceId = SettingsManager.Current.DeviceId;
+            string deviceId = SettingsManager.Current?.DeviceId ?? "";
             string activationTime = NetworkClock.IsSynced
                 ? NetworkClock.UtcNow.ToString("o")
                 : DateTime.UtcNow.ToString("o");
 
-            // Try server-side activation (blocking — user is waiting for result)
+            // Try server-side activation (async — no UI thread deadlock)
             string serverToken = null;
             string serverError = null;
             try
             {
-                var result = ActivateOnServerAsync(key, deviceId).GetAwaiter().GetResult();
+                var result = await ActivateOnServerAsync(key, deviceId).ConfigureAwait(false);
                 serverToken = result.token;
                 serverError = result.error;
             }
@@ -487,6 +488,15 @@ namespace FlyShelf.Classes
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// Synchronous wrapper for backward compatibility (e.g. UpgradePrompt dialog).
+        /// Uses Task.Run to avoid SynchronizationContext deadlock on UI thread.
+        /// </summary>
+        public static bool ActivateLicense(string key)
+        {
+            return Task.Run(() => ActivateLicenseAsync(key)).GetAwaiter().GetResult();
         }
 
         /// <summary>
@@ -754,10 +764,14 @@ namespace FlyShelf.Classes
                     : DateTime.UtcNow.ToString("o");
 
                 string activationUrl = AuthUrl($"{dbUrl}/licenses/activations/{safeKey}/{deviceId}.json");
+                // Get Firebase UID for rule compliance: .validate requires uid === auth.uid
+                string firebaseUid = "";
+                try { firebaseUid = await FirebaseAuthManager.GetUidAsync() ?? ""; } catch { }
                 var activationPayload = JsonSerializer.Serialize(new
                 {
                     deviceId,
                     activatedAt = activationTime,
+                    uid = firebaseUid,
                     appVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown"
                 });
 

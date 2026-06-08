@@ -681,8 +681,8 @@ namespace FlyShelf.Windows
                     LicenseStatusTitle.Text = "Free Tier";
                     LicenseStatusDesc.Text = "Upgrade to Pro to unlock unlimited features";
                     LicenseStatusBadgeText.Text = "FREE";
-                    LicenseStatusBadge.Background = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.SubtleFillColorTertiary");
-                    LicenseStatusBadgeText.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorTertiary");
+                    LicenseStatusBadge.Background = (TryFindResource("MicaWPF.Brushes.SubtleFillColorTertiary") as System.Windows.Media.Brush) ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(40, 128, 128, 128));
+                    LicenseStatusBadgeText.Foreground = (TryFindResource("MicaWPF.Brushes.TextFillColorTertiary") as System.Windows.Media.Brush) ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(128, 128, 128));
                     LicenseStatusPanel.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(26, 16, 185, 129));
                     LicenseActivationPanel.Visibility = Visibility.Visible;
                     LicenseDeactivatePanel.Visibility = Visibility.Collapsed;
@@ -697,31 +697,57 @@ namespace FlyShelf.Windows
             PopulateThemeCombo();
         }
 
-        private void ActivateLicense_Click(object sender, RoutedEventArgs e)
+        private async void ActivateLicense_Click(object sender, RoutedEventArgs e)
         {
-            string key = LicenseKeyInput?.Text?.Trim() ?? "";
-
-            if (string.IsNullOrWhiteSpace(key))
+            try
             {
-                LicenseErrorText.Text = "Please enter a license key.";
-                LicenseErrorText.Visibility = Visibility.Visible;
-                return;
+                string key = LicenseKeyInput?.Text?.Trim() ?? "";
+
+                if (string.IsNullOrWhiteSpace(key))
+                {
+                    if (LicenseErrorText != null)
+                    {
+                        LicenseErrorText.Text = "Please enter a license key.";
+                        LicenseErrorText.Visibility = Visibility.Visible;
+                    }
+                    return;
+                }
+
+                // Disable button and show progress
+                if (sender is System.Windows.Controls.Button btn) btn.IsEnabled = false;
+                if (LicenseErrorText != null) { LicenseErrorText.Text = "Activating..."; LicenseErrorText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11)); LicenseErrorText.Visibility = Visibility.Visible; }
+
+                bool success = await FlyShelf.Classes.LicenseManager.ActivateLicenseAsync(key);
+
+                if (success)
+                {
+                    if (LicenseErrorText != null) LicenseErrorText.Visibility = Visibility.Collapsed;
+                    if (LicenseKeyInput != null) LicenseKeyInput.Text = "";
+                    RefreshLicenseUI();
+                    FlyShelf.Windows.ToastWindow.ShowToast("Pro license activated successfully!");
+                }
+                else
+                {
+                    if (LicenseErrorText != null)
+                    {
+                        LicenseErrorText.Text = "Invalid license key. Please check and try again.";
+                        LicenseErrorText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
+                        LicenseErrorText.Visibility = Visibility.Visible;
+                    }
+                }
+
+                if (sender is System.Windows.Controls.Button btn2) btn2.IsEnabled = true;
             }
-
-            bool success = FlyShelf.Classes.LicenseManager.ActivateLicense(key);
-
-            if (success)
+            catch (Exception ex)
             {
-                LicenseErrorText.Visibility = Visibility.Collapsed;
-                LicenseKeyInput.Text = "";
-                RefreshLicenseUI();
-                FlyShelf.Windows.ToastWindow.ShowToast("Pro license activated successfully!");
-            }
-            else
-            {
-                LicenseErrorText.Text = "Invalid license key. Please check and try again.";
-                LicenseErrorText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
-                LicenseErrorText.Visibility = Visibility.Visible;
+                FlyShelf.Classes.Logger.LogAction("UI", $"Activation click failed: {ex.Message}");
+                if (LicenseErrorText != null)
+                {
+                    LicenseErrorText.Text = $"Activation failed: {ex.Message}";
+                    LicenseErrorText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
+                    LicenseErrorText.Visibility = Visibility.Visible;
+                }
+                if (sender is System.Windows.Controls.Button btn3) btn3.IsEnabled = true;
             }
         }
 

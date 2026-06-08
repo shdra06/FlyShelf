@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { firebaseFetch } = require('./_firebaseAdmin');
 
 // ═══════════════════════════════════════════════════════════════════
 // Razorpay Webhook Handler — Server-to-Server (v2.0.0)
@@ -101,7 +102,7 @@ module.exports = async (req, res) => {
     }
 
     try {
-      const existingRes = await fetch(`${dbUrl}/payments/${paymentId}.json`);
+      const existingRes = await firebaseFetch(`${dbUrl}/payments/${paymentId}.json`);
       if (existingRes.ok) {
         const existingData = await existingRes.json();
         if (existingData && existingData.licenseKey && existingData.status === 'completed') {
@@ -132,7 +133,7 @@ module.exports = async (req, res) => {
       timestamp: new Date().toISOString()
     };
 
-    const writeRes = await fetch(`${dbUrl}/payments/${paymentId}.json`, {
+    const writeRes = await firebaseFetch(`${dbUrl}/payments/${paymentId}.json`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(record)
@@ -145,7 +146,7 @@ module.exports = async (req, res) => {
     // Also store under license keys index
     // [SECURITY FIX v2.2.0]: Match activate.js sanitization (replace dashes, not dots/slashes)
     const safeKey = licenseKey.replace(/-/g, '_');
-    fetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
+    firebaseFetch(`${dbUrl}/licenses/keys/${safeKey}.json`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, paymentId, generatedAt: new Date().toISOString() })

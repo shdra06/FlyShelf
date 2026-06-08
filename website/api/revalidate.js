@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { firebaseFetch } = require('./_firebaseAdmin');
 
 // ═══════════════════════════════════════════════════════════════════
 // Server-side license revalidation (security audit v2.1.0)
@@ -103,7 +104,7 @@ module.exports = async (req, res) => {
 
     // ═══ Step 2: Check if key is revoked ═══
     try {
-      const revokeRes = await fetch(`${DB_URL}/licenses/revoked/${safeKey}.json`);
+      const revokeRes = await firebaseFetch(`${DB_URL}/licenses/revoked/${safeKey}.json`);
       if (revokeRes.ok) {
         const revokeData = await revokeRes.json();
         if (revokeData === true || (typeof revokeData === 'object' && revokeData !== null)) {
@@ -117,7 +118,7 @@ module.exports = async (req, res) => {
 
     // ═══ Step 3: Verify device is still within limit ═══
     try {
-      const activationsRes = await fetch(`${DB_URL}/licenses/activations/${safeKey}.json?shallow=true`);
+      const activationsRes = await firebaseFetch(`${DB_URL}/licenses/activations/${safeKey}.json?shallow=true`);
       if (activationsRes.ok) {
         const activationsData = await activationsRes.json();
         if (activationsData && typeof activationsData === 'object') {
@@ -152,7 +153,7 @@ module.exports = async (req, res) => {
 
     // Update activation timestamp in Firebase
     try {
-      await fetch(`${DB_URL}/licenses/activations/${safeKey}/${deviceId}.json`, {
+      await firebaseFetch(`${DB_URL}/licenses/activations/${safeKey}/${deviceId}.json`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

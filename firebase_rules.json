@@ -55,10 +55,14 @@
       ".write": false
     },
     "device_groups": {
-      ".read": "auth != null",
-      "$groupId": {
-        ".write": "auth != null && (!data.exists() || data.child('ownerUid').val() === auth.uid)"
-      }
+      "$pairingKey": {
+        ".read": "auth != null && root.child('members/' + $pairingKey + '/' + auth.uid).exists()",
+        "$groupId": {
+          ".write": "auth != null && (!data.exists() || data.child('ownerUid').val() === auth.uid)"
+        }
+      },
+      ".read": false,
+      ".write": false
     },
     "global_clipboard": {
       ".read": false,
@@ -83,11 +87,23 @@
         "$keyId": {
           ".read": "auth != null",
           "$deviceId": {
-            ".write": "auth != null",
-            ".validate": "newData.hasChildren(['deviceId', 'activatedAt'])"
+            ".write": "auth != null && !data.exists()",
+            ".validate": "newData.hasChildren(['deviceId', 'activatedAt', 'uid']) && newData.child('uid').val() === auth.uid"
           }
         }
       },
+      "keys": {
+        ".read": false,
+        ".write": false
+      },
+      ".read": false,
+      ".write": false
+    },
+    "payments": {
+      ".read": false,
+      ".write": false
+    },
+    "rate_limits": {
       ".read": false,
       ".write": false
     },

@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const { firebaseFetch } = require('./_firebaseAdmin');
 const { sendRecoveryEmail } = require('./_email');
 
 // ═══════════════════════════════════════════════════════════════════
@@ -65,7 +66,7 @@ module.exports = async (req, res) => {
 
     // Check rate limit: max 5 recoveries per email per 24 hours
     try {
-      const rateLimitRes = await fetch(`${dbUrl}/rate_limits/recovery/${emailHash}.json`);
+      const rateLimitRes = await firebaseFetch(`${dbUrl}/rate_limits/recovery/${emailHash}.json`);
       if (rateLimitRes.ok) {
         const rateLimitData = await rateLimitRes.json();
         if (rateLimitData) {
@@ -83,7 +84,7 @@ module.exports = async (req, res) => {
 
     // Record this attempt
     try {
-      await fetch(`${dbUrl}/rate_limits/recovery/${emailHash}/${Date.now()}.json`, {
+      await firebaseFetch(`${dbUrl}/rate_limits/recovery/${emailHash}/${Date.now()}.json`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(new Date().toISOString())
@@ -98,7 +99,7 @@ module.exports = async (req, res) => {
     const encodedEmail = encodeURIComponent(normalizedEmail);
     const searchUrl = `${dbUrl}/payments.json?orderBy="email"&equalTo="${encodedEmail}"&limitToLast=5`;
 
-    const searchRes = await fetch(searchUrl);
+    const searchRes = await firebaseFetch(searchUrl);
 
     if (!searchRes.ok) {
       // If indexing isn't set up, fall back to shallow scan
@@ -160,7 +161,7 @@ module.exports = async (req, res) => {
 async function fallbackSearch(dbUrl, normalizedEmail, res) {
   try {
     // Get all payment IDs (shallow)
-    const shallowRes = await fetch(`${dbUrl}/payments.json?shallow=true`);
+    const shallowRes = await firebaseFetch(`${dbUrl}/payments.json?shallow=true`);
     if (!shallowRes.ok) {
       return res.status(500).json({ error: 'Database unavailable.' });
     }
@@ -178,7 +179,7 @@ async function fallbackSearch(dbUrl, normalizedEmail, res) {
 
     for (const pid of recentIds) {
       try {
-        const pRes = await fetch(`${dbUrl}/payments/${pid}.json`);
+        const pRes = await firebaseFetch(`${dbUrl}/payments/${pid}.json`);
         if (pRes.ok) {
           const pData = await pRes.json();
           if (pData &&
