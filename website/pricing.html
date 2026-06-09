@@ -60,8 +60,8 @@
   <link rel="stylesheet" href="style.css?v=8.5.2">
   
   <!-- Ionicons -->
-  <script type="module" src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
-  <script nomodule src="https://unpkg.com/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
+  <script nomodule src="https://cdn.jsdelivr.net/npm/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
   
   <!-- Razorpay Checkout SDK -->
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
@@ -205,9 +205,9 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(4, 5, 10, 0.85);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
+      background: rgba(4, 5, 10, 0.88);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
       display: none;
       align-items: center;
       justify-content: center;
@@ -217,77 +217,156 @@
     
     .modal-content {
       width: 100%;
-      max-width: 460px;
-      padding: 30px;
+      max-width: 480px;
+      padding: 36px 32px;
       text-align: center;
       display: flex;
       flex-direction: column;
       gap: 20px;
-      animation: zoom-in-modal 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      animation: zoom-in-modal 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      /* Force solid opaque dark background for maximum contrast */
+      background: #0d1117 !important;
+      border: 1px solid rgba(0, 210, 255, 0.15) !important;
+      border-radius: 24px !important;
+      box-shadow: 0 24px 80px -12px rgba(0, 0, 0, 0.7), 0 0 60px -10px rgba(0, 210, 255, 0.12) !important;
+      position: relative;
+      overflow: hidden;
+    }
+    
+    /* Subtle gradient shimmer on modal top edge */
+    .modal-content::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, transparent, #00d2ff, #3ddc84, #00d2ff, transparent);
+      background-size: 200% 100%;
+      animation: shimmer-bar 3s ease-in-out infinite;
+    }
+    
+    @keyframes shimmer-bar {
+      0%, 100% { background-position: -200% 0; }
+      50% { background-position: 200% 0; }
     }
     
     @keyframes zoom-in-modal {
-      from { transform: scale(0.9); opacity: 0; }
-      to { transform: scale(1); opacity: 1; }
+      from { transform: scale(0.85) translateY(20px); opacity: 0; }
+      to { transform: scale(1) translateY(0); opacity: 1; }
     }
     
     .payment-loader {
       width: 50px;
       height: 50px;
       border: 3px solid rgba(0, 210, 255, 0.1);
-      border-top-color: var(--color-cyan);
+      border-top-color: #00d2ff;
       border-radius: 50%;
       animation: spin 1s linear infinite;
       margin: 10px auto;
     }
     
+    /* ── SUCCESS ICON ── */
     .success-icon-badge {
-      width: 70px;
-      height: 70px;
+      width: 80px;
+      height: 80px;
       border-radius: 50%;
-      background: rgba(61, 220, 132, 0.12);
-      border: 1px solid rgba(61, 220, 132, 0.25);
+      background: linear-gradient(145deg, rgba(61, 220, 132, 0.2), rgba(0, 210, 255, 0.1));
+      border: 2px solid rgba(61, 220, 132, 0.4);
       display: grid;
       place-content: center;
       font-size: 2.5rem;
-      color: var(--color-emerald);
-      box-shadow: 0 0 25px rgba(61, 220, 132, 0.2);
+      color: #3ddc84;
+      box-shadow: 0 0 35px rgba(61, 220, 132, 0.25), inset 0 0 20px rgba(61, 220, 132, 0.1);
+      margin: 0 auto;
+      animation: success-pulse 2s ease-in-out infinite, success-enter 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    
+    @keyframes success-pulse {
+      0%, 100% { box-shadow: 0 0 35px rgba(61, 220, 132, 0.25), inset 0 0 20px rgba(61, 220, 132, 0.1); }
+      50% { box-shadow: 0 0 50px rgba(61, 220, 132, 0.4), inset 0 0 25px rgba(61, 220, 132, 0.15); }
+    }
+    
+    @keyframes success-enter {
+      from { transform: scale(0.3) rotate(-15deg); opacity: 0; }
+      to { transform: scale(1) rotate(0deg); opacity: 1; }
+    }
+    
+    /* ── SUCCESS HEADING ── */
+    .success-heading {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #f3f5f9, #ffffff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .success-subtext {
+      font-size: 0.85rem;
+      color: #9aa2b5;
+      line-height: 1.6;
+      max-width: 360px;
       margin: 0 auto;
     }
     
-    .license-glow-box {
-      background: var(--bg-card);
-      border: 1px dashed rgba(0, 210, 255, 0.4);
-      padding: 16px;
-      border-radius: 12px;
-      font-family: 'Fira Code', monospace;
-      font-size: 1.15rem;
+    .success-subtext strong {
+      color: #e0e7ff;
+    }
+    
+    /* ── EMAIL BADGE ── */
+    .email-confirm-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(61, 220, 132, 0.12);
+      border: 1px solid rgba(61, 220, 132, 0.3);
+      border-radius: 24px;
+      padding: 8px 18px;
+      font-size: 0.78rem;
+      color: #3ddc84;
       font-weight: 700;
-      letter-spacing: 1px;
-      color: var(--color-cyan);
-      text-shadow: 0 0 10px rgba(0, 210, 255, 0.3);
-      margin: 15px 0;
+      margin: 0 auto;
+      letter-spacing: 0.3px;
+    }
+    
+    /* ── LICENSE KEY BOX ── */
+    .license-glow-box {
+      background: linear-gradient(135deg, rgba(0, 210, 255, 0.08), rgba(61, 220, 132, 0.06));
+      border: 2px solid rgba(0, 210, 255, 0.3);
+      padding: 18px 20px;
+      border-radius: 14px;
+      font-family: 'Fira Code', monospace;
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 2px;
+      color: #00d2ff;
+      text-shadow: 0 0 12px rgba(0, 210, 255, 0.4);
+      margin: 8px 0;
       position: relative;
       cursor: pointer;
-      transition: all 0.2s ease;
+      transition: all 0.3s ease;
+      box-shadow: inset 0 0 20px rgba(0, 210, 255, 0.06);
     }
     
     .license-glow-box:hover {
-      border-color: rgba(0, 210, 255, 0.7);
-      box-shadow: 0 0 20px rgba(0, 210, 255, 0.15);
+      border-color: rgba(0, 210, 255, 0.6);
+      box-shadow: 0 0 30px rgba(0, 210, 255, 0.2), inset 0 0 25px rgba(0, 210, 255, 0.08);
+      transform: scale(1.02);
     }
     
     .license-glow-box::after {
-      content: 'Click to copy';
+      content: '🔑 Click to copy';
       position: absolute;
-      bottom: -18px;
+      bottom: -22px;
       left: 50%;
       transform: translateX(-50%);
-      font-size: 0.6rem;
-      color: var(--text-muted);
-      font-family: inherit;
+      font-size: 0.68rem;
+      color: #626a7e;
+      font-family: 'Plus Jakarta Sans', sans-serif;
       letter-spacing: 0;
-      font-weight: 400;
+      font-weight: 600;
       opacity: 0;
       transition: opacity 0.2s ease;
     }
@@ -296,25 +375,119 @@
       opacity: 1;
     }
     
+    /* ── COPY BUTTON ── */
+    .btn-copy-key {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #e0e7ff;
+      padding: 11px 28px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      border-radius: 22px;
+      cursor: pointer;
+      transition: all 0.25s ease;
+    }
+    
+    .btn-copy-key:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: rgba(255, 255, 255, 0.25);
+      transform: translateY(-2px);
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    }
+    
+    /* ── ACTIVATE BUTTON ── */
     .btn-deeplink {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      background: linear-gradient(135deg, var(--color-cyan), var(--color-blue));
-      color: #000;
+      background: linear-gradient(135deg, #00d2ff, #0078d6);
+      color: #fff;
       text-decoration: none;
-      padding: 12px 24px;
+      padding: 13px 28px;
       font-weight: 700;
       border-radius: 25px;
-      font-size: 0.85rem;
-      box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);
-      transition: var(--transition-smooth);
+      font-size: 0.88rem;
+      box-shadow: 0 4px 20px rgba(0, 210, 255, 0.35);
+      transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      letter-spacing: 0.3px;
     }
     
     .btn-deeplink:hover {
-      transform: scale(1.03);
-      box-shadow: 0 8px 25px rgba(0, 210, 255, 0.5);
+      transform: translateY(-3px) scale(1.02);
+      box-shadow: 0 8px 30px rgba(0, 210, 255, 0.5), 0 0 15px rgba(0, 210, 255, 0.2);
+    }
+    
+    /* ── CLIPBOARD MAGIC TIP ── */
+    .clipboard-magic-tip {
+      font-size: 0.75rem;
+      color: #626a7e;
+      margin-top: 12px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+      padding-top: 14px;
+      line-height: 1.6;
+    }
+    
+    .clipboard-magic-tip strong {
+      color: #9aa2b5;
+    }
+    
+    /* ── CLOSE BUTTON ── */
+    .btn-close-success {
+      background: transparent;
+      border: none;
+      color: #626a7e;
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      font-weight: 600;
+      margin-top: 4px;
+      padding: 6px 16px;
+      border-radius: 12px;
+      transition: all 0.2s ease;
+    }
+    
+    .btn-close-success:hover {
+      color: #9aa2b5;
+      background: rgba(255, 255, 255, 0.05);
+    }
+    
+    /* ── CONFETTI PARTICLES ── */
+    .confetti-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      overflow: hidden;
+      z-index: 1;
+    }
+    
+    .confetti-particle {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      border-radius: 2px;
+      top: -10px;
+      animation: confetti-fall linear forwards;
+    }
+    
+    @keyframes confetti-fall {
+      0% { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
+      70% { opacity: 1; }
+      100% { transform: translateY(500px) rotate(720deg) scale(0.3); opacity: 0; }
+    }
+    
+    /* Ensure content sits above confetti */
+    #modal-stage-success > *:not(.confetti-container) {
+      position: relative;
+      z-index: 2;
     }
   </style>
 </head>
@@ -466,18 +639,18 @@
       <!-- Stage 1: Loading verification -->
       <div id="modal-stage-loading" style="display: flex; flex-direction: column; gap: 15px; padding: 20px 0;">
         <div class="payment-loader"></div>
-        <h4 style="font-size: 1.15rem; font-weight: 800; color: var(--text-primary);" id="loader-headline">Connecting with Razorpay...</h4>
-        <p style="font-size: 0.82rem; color: var(--text-secondary);" id="loader-desc">Awaiting secure handshake buffer approval...</p>
+        <h4 style="font-size: 1.15rem; font-weight: 800; color: #f3f5f9;" id="loader-headline">Connecting with Razorpay...</h4>
+        <p style="font-size: 0.82rem; color: #9aa2b5;" id="loader-desc">Awaiting secure handshake buffer approval...</p>
       </div>
       
       <!-- Stage 2: Sandbox test verification approval -->
       <div id="modal-stage-approval" style="display: none; flex-direction: column; gap: 15px; padding: 10px 0;">
-        <div style="font-size: 3rem; color: var(--color-cyan);"><ion-icon name="flask-outline"></ion-icon></div>
-        <h4 style="font-size: 1.25rem; font-weight: 800; color: var(--text-primary);">Sandbox Payment Portal</h4>
-        <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5;">This is the local FlyShelf checkout sandbox. To test the license generation and C# app auto-activation, click the confirm payment button below.</p>
-        <div style="background: var(--bg-card); border: 1px solid var(--border-light); padding: 12px; border-radius: 8px; font-size: 0.78rem; text-align: left; color: var(--text-secondary);">
-          <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Email:</span><strong id="confirm-email" style="color: var(--text-primary);">test@flyshelf.app</strong></div>
-          <div style="display:flex; justify-content:space-between;"><span>Amount:</span><strong id="confirm-amount" style="color:var(--color-cyan);">₹299</strong></div>
+        <div style="font-size: 3rem; color: #00d2ff;"><ion-icon name="flask-outline"></ion-icon></div>
+        <h4 style="font-size: 1.25rem; font-weight: 800; color: #f3f5f9;">Sandbox Payment Portal</h4>
+        <p style="font-size: 0.85rem; color: #9aa2b5; line-height: 1.5;">This is the local FlyShelf checkout sandbox. To test the license generation and C# app auto-activation, click the confirm payment button below.</p>
+        <div style="background: rgba(20, 24, 38, 0.55); border: 1px solid rgba(255, 255, 255, 0.07); padding: 12px; border-radius: 8px; font-size: 0.78rem; text-align: left; color: #9aa2b5;">
+          <div style="display:flex; justify-content:space-between; margin-bottom:4px;"><span>Email:</span><strong id="confirm-email" style="color: #f3f5f9;">test@flyshelf.app</strong></div>
+          <div style="display:flex; justify-content:space-between;"><span>Amount:</span><strong id="confirm-amount" style="color:#00d2ff;">₹299</strong></div>
         </div>
         <button class="btn-checkout-pay btn-razorpay" id="btn-confirm-test-pay" style="margin-top: 10px;">
           Confirm Test Payment
@@ -485,35 +658,42 @@
       </div>
 
       <!-- Stage 3: Success & C# key display -->
-      <div id="modal-stage-success" style="display: none; flex-direction: column; gap: 15px; text-align: center;">
-        <div class="success-icon-badge"><ion-icon name="checkmark-outline"></ion-icon></div>
-        <h4 style="font-size: 1.35rem; font-weight: 800; color: var(--text-primary);">Purchase Successful!</h4>
-        <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; max-width: 360px; margin: 0 auto;">Your Pro license key has been <strong>emailed to you</strong> and is shown below. Copy it to activate Pro instantly.</p>
+      <div id="modal-stage-success" style="display: none; flex-direction: column; gap: 16px; text-align: center;">
+        <!-- Confetti particles (injected by JS) -->
+        <div class="confetti-container" id="confetti-container"></div>
+        
+        <div class="success-icon-badge">
+          <ion-icon name="checkmark-outline"></ion-icon>
+        </div>
+        
+        <h4 class="success-heading">Purchase Successful! 🎉</h4>
+        <p class="success-subtext">Your Pro license key has been <strong>emailed to you</strong> and is shown below. Copy it to activate Pro instantly.</p>
         
         <!-- Email confirmation badge -->
-        <div style="display: inline-flex; align-items: center; gap: 6px; background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 20px; padding: 6px 14px; font-size: 0.72rem; color: var(--color-emerald); font-weight: 600; margin: 0 auto;">
-          <ion-icon name="mail-outline" style="font-size: 0.9rem;"></ion-icon> Confirmation email sent
+        <div class="email-confirm-badge">
+          <ion-icon name="mail-outline" style="font-size: 1rem;"></ion-icon> Confirmation email sent
         </div>
         
         <!-- Valid generated C# License Key -->
         <div class="license-glow-box" id="license-key-output">FS-PRO-XXXX-XXXX-XXXX-XXXX</div>
         
         <!-- Action Row -->
-        <div style="display: flex; flex-direction: column; gap: 12px; align-items: center; margin-top: 5px;">
-          <button class="btn-reset-desktop" id="btn-copy-license" style="font-size: 0.82rem; padding: 10px 24px; border-radius: 20px;">
-            <ion-icon name="copy-outline" style="vertical-align: middle; margin-right: 4px;"></ion-icon> Copy License Key
+        <div style="display: flex; flex-direction: column; gap: 12px; align-items: center; margin-top: 8px;">
+          <button class="btn-copy-key" id="btn-copy-license">
+            <ion-icon name="copy-outline" style="font-size: 1.05rem;"></ion-icon> Copy License Key
           </button>
           
           <a href="#" class="btn-deeplink" id="btn-activate-deeplink">
-            <ion-icon name="flash-outline"></ion-icon> One-Click Activate PC App
+            <ion-icon name="flash-outline" style="font-size: 1.1rem;"></ion-icon> One-Click Activate PC App
           </a>
         </div>
         
-        <div style="font-size: 0.72rem; color: var(--text-muted); margin-top: 15px; border-top: 1px solid var(--border-light); padding-top: 12px;">
-          <ion-icon name="bulb-outline" style="color: var(--color-amber); font-size: 0.95rem; vertical-align: middle; margin-right: 2px;"></ion-icon> <strong>Clipboard Magic:</strong> Copying this key (Ctrl+C) while your FlyShelf PC app is running in the background will automatically activate it!
+        <div class="clipboard-magic-tip">
+          <ion-icon name="bulb-outline" style="color: #ff9d00; font-size: 0.95rem; vertical-align: middle; margin-right: 3px;"></ion-icon>
+          <strong>Clipboard Magic:</strong> Copying this key (Ctrl+C) while your FlyShelf PC app is running in the background will automatically activate it!
         </div>
         
-        <button class="color-pill-btn-clear" id="btn-close-modal" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:0.75rem; margin-top: 10px;">Close Window</button>
+        <button class="btn-close-success" id="btn-close-modal">Close Window</button>
       </div>
 
     </div>
@@ -783,6 +963,7 @@
                   btnActivateDeeplink.href = `flyshelf://activate?key=${generatedKey}`;
                   confirmEmail.textContent = email;
                   confirmAmount.textContent = region === 'USD' ? '$9.99' : '₹299';
+                  spawnConfetti();
                 } else {
                   alert('Verification could not be completed. Your payment is safe — please contact support@flyshelf.app');
                   modalStageLoading.style.display = 'none';
@@ -845,13 +1026,38 @@
         const origBg = el.style.background;
         const origColor = el.style.color;
         el.innerHTML = '<ion-icon name="checkmark-done-outline" style="vertical-align: middle;"></ion-icon> Copied!';
-        el.style.background = 'var(--color-emerald)';
+        el.style.background = '#3ddc84';
         el.style.color = '#000';
         setTimeout(() => {
           el.innerHTML = original;
           el.style.background = origBg;
           el.style.color = origColor;
         }, 1800);
+      }
+
+      // ═══════════════════════════════════════════
+      // CONFETTI CELEBRATION EFFECT
+      // ═══════════════════════════════════════════
+      function spawnConfetti() {
+        const container = document.getElementById('confetti-container');
+        if (!container) return;
+        container.innerHTML = ''; // Clear any previous confetti
+        const colors = ['#00d2ff', '#3ddc84', '#ff9d00', '#a78bfa', '#f472b6', '#fbbf24', '#34d399'];
+        const count = 40;
+        for (let i = 0; i < count; i++) {
+          const particle = document.createElement('div');
+          particle.className = 'confetti-particle';
+          particle.style.left = Math.random() * 100 + '%';
+          particle.style.background = colors[Math.floor(Math.random() * colors.length)];
+          particle.style.width = (Math.random() * 6 + 4) + 'px';
+          particle.style.height = (Math.random() * 6 + 4) + 'px';
+          particle.style.animationDuration = (Math.random() * 2 + 1.5) + 's';
+          particle.style.animationDelay = (Math.random() * 0.8) + 's';
+          particle.style.borderRadius = Math.random() > 0.5 ? '50%' : '2px';
+          container.appendChild(particle);
+        }
+        // Auto-clean after animation completes
+        setTimeout(() => { container.innerHTML = ''; }, 4000);
       }
 
       // ═══════════════════════════════════════════
