@@ -40,7 +40,6 @@ const firebaseConfig = {
   storageBucket: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET || "advance-sync.firebasestorage.app",
   messagingSenderId: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "49241495533",
   appId: process.env.EXPO_PUBLIC_FIREBASE_APP_ID || "1:49241495533:web:a774fec697271c1b81f9e4",
-  measurementId: process.env.EXPO_PUBLIC_FIREBASE_MEASUREMENT_ID || "G-FHVL9ESM85",
   databaseURL: deobfuscate(DB_URL_BYTES, XOR_KEY)
 };
 
