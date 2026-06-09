@@ -119,6 +119,15 @@ namespace FlyShelf.ViewModels
                             item.FileName = item.RawContent.Length > 800 ? item.RawContent.Substring(0, 800) + "..." : item.RawContent;
 
                         item.EvaluateSmartActions();
+
+                        // Regenerate non-serialized icons (Icon is [JsonIgnore])
+                        if (item.IsPassword)
+                            item.GeneratePasswordIcon();
+                        else if (item.ItemType == ClipboardItemType.Folder)
+                            item.GenerateFolderIcon();
+                        else if (item.ItemType == ClipboardItemType.Document && item.Extension == ".MD")
+                            item.GenerateMarkdownIcon();
+
                         allItems.Add(item);
                     }
                     catch { }

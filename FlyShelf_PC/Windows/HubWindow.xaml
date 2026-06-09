@@ -1596,7 +1596,33 @@
                                 </Grid>
                             </Border>
 
-                            <!-- Widget Positioning & Customization Settings -->
+                            <!-- Desktop Mascot Kill Switch -->
+                            <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                            <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                        <GradientStop Color="#A855F7" Offset="0"/>
+                                                        <GradientStop Color="#C084FC" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <ui:SymbolIcon Symbol="Emoji24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock Text="Desktop Mascot" FontWeight="Bold" FontSize="14" Foreground="#C084FC" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <TextBlock Text="Show your pet mascot companion on the desktop. The mascot reacts to clipboard events, idles when inactive, and can be dragged around freely." 
+                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                    </StackPanel>
+                                    <ui:ToggleSwitch x:Name="DesktopMascotToggle" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableDesktopMascot, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                </Grid>
+                            </Border>
+
                             <Border x:Name="WidgetPositioningSection" Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12"
                                     Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableTaskbarWidget, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <StackPanel VerticalAlignment="Center">
