@@ -81,6 +81,12 @@
     <SolidColorBrush x:Key="ThemeOverflowBorder"      Color="#30000000" />
     <Color           x:Key="ThemeOverflowShadowColor">#40000000</Color>
 
+    <!-- ── Button Accent Overrides (light-friendly) ─────────────────── -->
+    <SolidColorBrush x:Key="EmojiButtonBg"     Color="#18D97706" />
+    <SolidColorBrush x:Key="EmojiButtonBorder" Color="#30D97706" />
+    <SolidColorBrush x:Key="DangerBgHover"     Color="#18EF4444" />
+    <SolidColorBrush x:Key="DangerBorder"      Color="#30EF4444" />
+
     <!-- ── Toast ─────────────────────────────────────────────────────── -->
     <SolidColorBrush x:Key="ThemeToastBg"        Color="#F0F8FAFC" />
     <SolidColorBrush x:Key="ThemeToastBorder"    Color="#18000000" />
