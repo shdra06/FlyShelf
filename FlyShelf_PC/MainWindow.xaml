@@ -212,20 +212,21 @@
 
         <!-- Layer 3: Frosted glass header — subtle blur with smooth fade-out -->
         <Border x:Name="WallpaperFrostHeader" Grid.RowSpan="2" Visibility="Collapsed" IsHitTestVisible="False"
-                ClipToBounds="True" CornerRadius="12,12,0,0" Height="54" VerticalAlignment="Top">
+                ClipToBounds="True" CornerRadius="12,12,0,0" Height="90" VerticalAlignment="Top">
             <Border.OpacityMask>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop Color="#FF000000" Offset="0"/>
-                    <GradientStop Color="#AA000000" Offset="0.5"/>
+                    <GradientStop Color="#CC000000" Offset="0"/>
+                    <GradientStop Color="#66000000" Offset="0.35"/>
+                    <GradientStop Color="#22000000" Offset="0.65"/>
                     <GradientStop Color="#00000000" Offset="1"/>
                 </LinearGradientBrush>
             </Border.OpacityMask>
             <Grid>
-                <Image x:Name="WallpaperFrostImg" Stretch="UniformToFill" Opacity="0.2"
+                <Image x:Name="WallpaperFrostImg" Stretch="UniformToFill" Opacity="0.15"
                        RenderOptions.BitmapScalingMode="LowQuality"
                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 <!-- Subtle tinted glass overlay -->
-                <Border x:Name="WallpaperFrostTint" Background="#25000000"/>
+                <Border x:Name="WallpaperFrostTint" Background="#18000000"/>
             </Grid>
         </Border>
 
