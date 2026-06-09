@@ -6,6 +6,21 @@
 document.addEventListener('DOMContentLoaded', () => {
 
   /* ==========================================
+     GPU-LITE PERFORMANCE MODE AUTO-DETECTION
+     Strips backdrop-filter, shadows & animations
+     on low-end hardware for smooth scrolling.
+     ========================================== */
+  (function detectPerfMode() {
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const lowCores = navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4;
+    const lowMemory = navigator.deviceMemory && navigator.deviceMemory <= 4;
+    if (prefersReduced || (lowCores && lowMemory)) {
+      document.body.classList.add('perf-lite');
+    }
+  })();
+
+
+  /* ==========================================
      0.0.1 ANDROID DETECTION & APK CTA SWAP
      ========================================== */
   const isAndroid = /Android/i.test(navigator.userAgent);
@@ -118,12 +133,14 @@ document.addEventListener('DOMContentLoaded', () => {
   });
   
   function applyTheme(themeName) {
-    // Remove other theme-* classes from body while preserving dark-mode class
+    // Remove theme-* classes while preserving functional classes
     const isDarkMode = document.body.classList.contains('dark-mode');
+    const isPerfLite = document.body.classList.contains('perf-lite');
+    const isAndroidClass = document.body.classList.contains('is-android');
     document.body.className = '';
-    if (isDarkMode) {
-      document.body.classList.add('dark-mode');
-    }
+    if (isDarkMode) document.body.classList.add('dark-mode');
+    if (isPerfLite) document.body.classList.add('perf-lite');
+    if (isAndroidClass) document.body.classList.add('is-android');
     if (themeName !== 'midnight') {
       document.body.classList.add(`theme-${themeName}`);
     }

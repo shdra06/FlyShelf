@@ -236,7 +236,8 @@ body {
 }
 
 .glass:hover {
-  border-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(0, 0, 0, 0.06);
+  box-shadow: 0 14px 45px -10px rgba(0, 0, 0, 0.12);
 }
 
 .glow-text-cyan {
@@ -505,8 +506,9 @@ body {
 }
 
 .theme-swatch:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(0, 0, 0, 0.04);
   color: var(--text-primary);
+  transform: scale(1.05);
 }
 
 .theme-swatch.active {
@@ -2220,6 +2222,15 @@ body:not(.dark-mode) .theme-toggle-btn:hover {
     opacity: 1 !important;
     transform: none !important;
   }
+
+  /* Strip GPU-heavy effects for accessibility */
+  .glass, .navbar, .modal-overlay {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .bg-mesh, .grid-bg {
+    display: none !important;
+  }
 }
 
 /* Premium Icon Badges & Wrappers (replacing emojis) */
@@ -2709,5 +2720,204 @@ body:not(.dark-mode) .theme-toggle-btn:hover {
 }
 
 
+/* ============================================
+   LIGHT MODE - ADAPTIVE HOVER EFFECTS
+   All hover states tuned for white backgrounds
+   ============================================ */
+body:not(.dark-mode) .glass:hover {
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 14px 45px -10px rgba(0, 0, 0, 0.1);
+}
+
+body:not(.dark-mode) .theme-swatch:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+body:not(.dark-mode) .theme-swatch.active {
+  background: rgba(0, 0, 0, 0.06);
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.06);
+}
+
+body:not(.dark-mode) .btn-cyan:hover {
+  box-shadow: 0 8px 25px rgba(0, 150, 200, 0.3);
+}
+
+body:not(.dark-mode) .btn-outline:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+body:not(.dark-mode) .platform-card:hover {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+}
+
+body:not(.dark-mode) .sync-card:hover {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+body:not(.dark-mode) .feature-card-grid-item:hover {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.9) !important;
+}
+
+body:not(.dark-mode) .widget-card:hover {
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+}
+
+body:not(.dark-mode) .selector-pill:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+body:not(.dark-mode) .problem-card:hover {
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+}
+
+body:not(.dark-mode) .filter-pill:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+body:not(.dark-mode) .desktop-pdf-item:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+body:not(.dark-mode) .color-pill-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
+body:not(.dark-mode) .top-bar-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+body:not(.dark-mode) .nav-links a:hover {
+  color: var(--text-primary);
+  text-shadow: none;
+}
+
+body:not(.dark-mode) .footer-links a:hover {
+  color: var(--text-primary);
+}
+
+body:not(.dark-mode) .icon-badge:hover {
+  border-color: rgba(0, 0, 0, 0.12);
+}
+
+body:not(.dark-mode) .summon-box:hover {
+  border-color: rgba(0, 0, 0, 0.1);
+}
+
+body:not(.dark-mode) .btn-merge-desktop:hover {
+  box-shadow: 0 6px 20px rgba(0, 150, 200, 0.25);
+}
+
+body:not(.dark-mode) .btn-utm-scrub:hover {
+  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.25);
+}
+
+body:not(.dark-mode) .pricing-section .widget-card:first-child:hover {
+  border-color: rgba(234, 88, 12, 0.3) !important;
+  box-shadow: 0 16px 36px -10px rgba(234, 88, 12, 0.12), 0 0 15px rgba(234, 88, 12, 0.06) !important;
+}
+
+body:not(.dark-mode) .pricing-section .widget-card:last-child:hover {
+  border-color: rgba(2, 132, 199, 0.4) !important;
+  box-shadow: 0 16px 36px -10px rgba(2, 132, 199, 0.15), 0 0 15px rgba(2, 132, 199, 0.08) !important;
+}
 
 
+/* ============================================
+   DARK MODE - RE-ASSERT HOVER EFFECTS
+   Ensure dark mode keeps original glow hovers
+   ============================================ */
+body.dark-mode .glass:hover {
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 14px 45px -10px rgba(0, 0, 0, 0.4);
+}
+
+body.dark-mode .theme-swatch:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+
+/* ============================================
+   PERFORMANCE: GPU-LITE MODE
+   Strips heavy rendering for low-end hardware.
+   Auto-applied via JS when hardwareConcurrency<=4
+   and deviceMemory<=4, or prefers-reduced-motion.
+   ============================================ */
+.perf-lite .glass,
+.perf-lite .navbar,
+.perf-lite .modal-overlay {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+.perf-lite .glass {
+  background: var(--bg-card) !important;
+  border: 1px solid var(--border-light) !important;
+}
+
+.perf-lite .navbar {
+  background: var(--bg-main) !important;
+  border-bottom: 1px solid var(--border-light) !important;
+}
+
+.perf-lite .bg-mesh,
+.perf-lite .grid-bg {
+  display: none !important;
+}
+
+.perf-lite * {
+  box-shadow: none !important;
+  text-shadow: none !important;
+}
+
+/* Keep basic borders without shadow for visual separation */
+.perf-lite .glass,
+.perf-lite .widget-card,
+.perf-lite .platform-card,
+.perf-lite .feature-card-grid-item,
+.perf-lite .problem-card,
+.perf-lite .sync-card {
+  border: 1px solid var(--border-light) !important;
+}
+
+/* Simplify transitions to bare minimum */
+.perf-lite .glass,
+.perf-lite .btn-premium,
+.perf-lite .btn-cyan,
+.perf-lite .btn-outline,
+.perf-lite .platform-card,
+.perf-lite .feature-card-grid-item,
+.perf-lite .widget-card,
+.perf-lite .sync-card,
+.perf-lite .selector-pill,
+.perf-lite .problem-card,
+.perf-lite .theme-swatch {
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease !important;
+}
+
+.perf-lite .floating-ball {
+  animation: none !important;
+}
+
+.perf-lite .scroll-reveal {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+/* Disable filter effects */
+.perf-lite .matrix-icon,
+.perf-lite .feature-icon-box,
+.perf-lite .icon-badge {
+  filter: none !important;
+}

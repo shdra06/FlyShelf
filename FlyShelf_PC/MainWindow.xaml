@@ -1754,7 +1754,7 @@
                     <DataTemplate.Triggers>
                         <!-- Dynamic sizing for Large Images vs Standard Files -->
                         <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
-                             <Setter TargetName="InnerHighlightBorder" Property="Padding" Value="0" />
+                             <Setter TargetName="InnerHighlightBorder" Property="Padding" Value="6" />
                              <Setter TargetName="InnerHighlightBorder" Property="BorderThickness" Value="0" />
                              <Setter TargetName="CardBorder" Property="Margin" Value="0,2,0,2" />
                              <Setter TargetName="ItemIcon" Property="Stretch" Value="UniformToFill" />
@@ -1776,7 +1776,7 @@
                              <Setter TargetName="IconBorder" Property="HorizontalAlignment" Value="Stretch" />
                              <Setter TargetName="IconBorder" Property="Background" Value="Transparent" />
                              <Setter TargetName="IconBorder" Property="Padding" Value="0" />
-                             <Setter TargetName="IconBorder" Property="CornerRadius" Value="14" />
+                             <Setter TargetName="IconBorder" Property="CornerRadius" Value="12" />
                              <Setter TargetName="IconBorder" Property="Width" Value="Auto" />
                              <Setter TargetName="IconBorder" Property="Height" Value="165" />
                              <Setter TargetName="ImagePlaceholderBorder" Property="Margin" Value="0" />
