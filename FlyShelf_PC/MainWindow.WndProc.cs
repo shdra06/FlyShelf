@@ -400,6 +400,15 @@ namespace FlyShelf
                         
                         // Clear the trigger from clipboard so it doesn't re-fire
                         _lastClipboardCaptureTime = DateTime.UtcNow;
+
+                        // If already Pro, just copy the plain key — no need to re-activate
+                        if (Classes.LicenseManager.IsPro)
+                        {
+                            try { Clipboard.SetText(keyCandidate); } catch { }
+                            Classes.Logger.LogAction("LICENSE", "Already Pro — copied plain key to clipboard");
+                            return;
+                        }
+
                         try { Clipboard.SetText(""); } catch { }
 
                         // Validate format before attempting activation
