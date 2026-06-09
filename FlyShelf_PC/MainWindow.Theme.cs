@@ -72,6 +72,19 @@ namespace FlyShelf
                 this.Background = Brushes.Transparent;
                 if (RootContent != null)
                     RootContent.Background = new SolidColorBrush(Color.FromArgb(0x01, 0, 0, 0)); // Near-transparent for hit-testing
+
+                // Deferred second cleanup: the Win32 Acrylic accent policy (SetWindowCompositionAttribute)
+                // can linger even after DisableCustomAcrylic because DWM needs a compositor frame to process
+                // the change. This deferred call ensures the Acrylic look is fully purged after DWM catches up.
+                if (hwnd != IntPtr.Zero)
+                {
+                    var capturedHwnd = hwnd;
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        try { Classes.NativeMethods.DisableCustomAcrylic(capturedHwnd); }
+                        catch { }
+                    }, System.Windows.Threading.DispatcherPriority.Background);
+                }
             }
             else
             {

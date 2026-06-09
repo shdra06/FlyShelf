@@ -740,6 +740,7 @@ namespace FlyShelf.Windows
 
                 SettingsManager.Save();
                 HighlightActiveDisplayMode();
+                ApplyTheme(); // Force HubWindow to re-apply its own backdrop to match the new display mode
 
                 // Refresh wallpaper preview after a short delay
                 Dispatcher.InvokeAsync(async () =>

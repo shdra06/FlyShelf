@@ -613,6 +613,12 @@ namespace FlyShelf.Classes
         {
             try
             {
+                // Mica and Glass modes are explicitly wallpaper-free — don't inject a color theme
+                // wallpaper that would conflict with the display mode handler's "no wallpaper" intent.
+                string mode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                if (mode == "mica" || mode == "glass")
+                    return;
+
                 if (!ThemeWallpaperMap.TryGetValue(themeName, out string resourcePath))
                 {
                     // Light or Default — clear wallpaper (use desktop or no wallpaper)
