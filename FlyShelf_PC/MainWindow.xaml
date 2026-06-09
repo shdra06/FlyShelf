@@ -1757,19 +1757,21 @@
                              <Setter TargetName="InnerHighlightBorder" Property="Padding" Value="6" />
                              <Setter TargetName="InnerHighlightBorder" Property="BorderThickness" Value="0" />
                              <Setter TargetName="CardBorder" Property="Margin" Value="0,2,0,2" />
-                             <Setter TargetName="ItemIcon" Property="Stretch" Value="UniformToFill" />
+                             <Setter TargetName="ItemIcon" Property="Stretch" Value="Uniform" />
                              <Setter TargetName="ItemIcon" Property="Height" Value="165" />
                              <Setter TargetName="ItemIcon" Property="MaxHeight" Value="165" />
                              <Setter TargetName="ItemIcon" Property="Width" Value="Auto" />
                              <Setter TargetName="ItemIcon" Property="Grid.ColumnSpan" Value="2" />
-                             <Setter TargetName="ItemIcon" Property="HorizontalAlignment" Value="Stretch" />
+                             <Setter TargetName="ItemIcon" Property="HorizontalAlignment" Value="Center" />
+                             <Setter TargetName="ItemIcon" Property="VerticalAlignment" Value="Center" />
                              <Setter TargetName="ItemIcon" Property="Margin" Value="0" />
-                             <Setter TargetName="GifItemIcon" Property="Stretch" Value="UniformToFill" />
+                             <Setter TargetName="GifItemIcon" Property="Stretch" Value="Uniform" />
                              <Setter TargetName="GifItemIcon" Property="Height" Value="165" />
                              <Setter TargetName="GifItemIcon" Property="MaxHeight" Value="165" />
                              <Setter TargetName="GifItemIcon" Property="Width" Value="Auto" />
                              <Setter TargetName="GifItemIcon" Property="Grid.ColumnSpan" Value="2" />
-                             <Setter TargetName="GifItemIcon" Property="HorizontalAlignment" Value="Stretch" />
+                             <Setter TargetName="GifItemIcon" Property="HorizontalAlignment" Value="Center" />
+                             <Setter TargetName="GifItemIcon" Property="VerticalAlignment" Value="Center" />
                              <Setter TargetName="GifItemIcon" Property="Margin" Value="0" />
                              <Setter TargetName="IconBorder" Property="Margin" Value="0" />
                              <Setter TargetName="IconBorder" Property="Grid.ColumnSpan" Value="2" />

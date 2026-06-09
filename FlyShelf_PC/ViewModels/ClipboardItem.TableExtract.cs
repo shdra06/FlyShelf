@@ -286,11 +286,19 @@ namespace FlyShelf.ViewModels
                 string finalJsonPayload = System.Text.Json.JsonSerializer.Serialize(jsonDict);
 
                 // 5. Open Table Editor Window on Main thread
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    FlyShelf.Classes.LicenseManager.RecordTableExtraction();
-                    var editor = new FlyShelf.Windows.TableEditorWindow(finalJsonPayload, imgPath, "ONNX_Pipeline");
-                    editor.Show();
+                    try
+                    {
+                        FlyShelf.Classes.LicenseManager.RecordTableExtraction();
+                        var editor = new FlyShelf.Windows.TableEditorWindow(finalJsonPayload, imgPath, "ONNX_Pipeline");
+                        editor.Show();
+                    }
+                    catch (Exception uiEx)
+                    {
+                        Classes.Logger.LogAction("TABLE_UI_FAIL", $"Failed to open Table Editor: {uiEx.Message}");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Failed to open Table Editor: {uiEx.Message}");
+                    }
                 });
 
                 Classes.Logger.LogAction("ONNX_TABLE", $"ONNX Table Extract Succeeded: {numRows}x{numCols} grid");
@@ -514,6 +522,9 @@ namespace FlyShelf.ViewModels
                     if (ocrResult == null || ocrResult.Lines.Count == 0)
                     {
                         Classes.Logger.LogAction("TABLE_OCR", "No OCR text detected in image.");
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            FlyShelf.Windows.ToastWindow.ShowToast("No text detected in this image. Try a clearer screenshot.")
+                        );
                         return;
                     }
 
@@ -605,6 +616,9 @@ namespace FlyShelf.ViewModels
                     if (allWords.Count < 3)
                     {
                         Classes.Logger.LogAction("TABLE_OCR", "Too few words inside table boundaries.");
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            FlyShelf.Windows.ToastWindow.ShowToast("Too few words detected inside the table area.")
+                        );
                         return;
                     }
 
@@ -710,6 +724,9 @@ namespace FlyShelf.ViewModels
                     if (layoutRows.Count < 2)
                     {
                         Classes.Logger.LogAction("TABLE_OCR", "Only 1 row detected in layout after title filtering - not a table.");
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            FlyShelf.Windows.ToastWindow.ShowToast("Only 1 row detected — image doesn't appear to contain a table.")
+                        );
                         return;
                     }
 
@@ -1261,9 +1278,17 @@ namespace FlyShelf.ViewModels
                 string method = extractionMethod;
                 await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                 {
-                    FlyShelf.Classes.LicenseManager.RecordTableExtraction();
-                    var editor = new FlyShelf.Windows.TableEditorWindow(finalJsonPayload, imgPath, method);
-                    editor.Show();
+                    try
+                    {
+                        FlyShelf.Classes.LicenseManager.RecordTableExtraction();
+                        var editor = new FlyShelf.Windows.TableEditorWindow(finalJsonPayload, imgPath, method);
+                        editor.Show();
+                    }
+                    catch (Exception uiEx)
+                    {
+                        Classes.Logger.LogAction("TABLE_UI_FAIL", $"Failed to open Table Editor: {uiEx.Message}");
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Failed to open Table Editor: {uiEx.Message}");
+                    }
                 });
             }
             else
