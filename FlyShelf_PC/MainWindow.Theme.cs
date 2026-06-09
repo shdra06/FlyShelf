@@ -142,17 +142,28 @@ namespace FlyShelf
         }
 
         /// <summary>
-        /// Applies a neutral dark grey background for the popup clipboard
+        /// Applies a solid background for the popup clipboard
         /// (solid fallback when system blur is disabled or unsupported).
+        /// Uses the active theme's ThemeWindowFallback color for theme-awareness.
         /// </summary>
         private void ApplyPopupBackground()
         {
-            // Clean neutral dark grey — no blue/indigo tint
-            var grey = new SolidColorBrush(
-                Color.FromRgb(36, 36, 36)); // #242424 — Windows 11 dark surface
-            grey.Freeze();
+            // Read the theme-aware fallback color; defaults to neutral dark grey (#242424)
+            SolidColorBrush fallback;
+            try
+            {
+                fallback = Application.Current?.Resources["ThemeWindowFallback"] as SolidColorBrush
+                           ?? new SolidColorBrush(Color.FromRgb(36, 36, 36));
+            }
+            catch
+            {
+                fallback = new SolidColorBrush(Color.FromRgb(36, 36, 36));
+            }
+
+            var bg = new SolidColorBrush(fallback.Color);
+            bg.Freeze();
             this.Background = Brushes.Transparent; // Maintain window chrome transparency for flawless fade compositing
-            if (RootContent != null) RootContent.Background = grey;
+            if (RootContent != null) RootContent.Background = bg;
         }
 
         /// <summary>
@@ -526,33 +537,85 @@ namespace FlyShelf
         }
 
         /// <summary>
-        /// Pre-renders a blurred version of a BitmapImage on a background thread.
+        /// Pre-renders a blurred version of a BitmapImage using a pure pixel-level box blur.
+        /// Safe to call from any thread (no WPF DispatcherObjects created).
         /// Returns a frozen BitmapSource safe for cross-thread assignment to Image.Source.
-        /// This replaces runtime WPF BlurEffect which re-rasterizes every render pass.
+        /// Uses 3-pass box blur to approximate Gaussian blur.
         /// </summary>
         public static System.Windows.Media.Imaging.BitmapSource PreBlurBitmap(
             System.Windows.Media.Imaging.BitmapImage source, int radius)
         {
-            var image = new System.Windows.Controls.Image
-            {
-                Source = source,
-                Effect = new System.Windows.Media.Effects.BlurEffect
-                {
-                    Radius = radius,
-                    KernelType = System.Windows.Media.Effects.KernelType.Gaussian
-                },
-                Width = source.PixelWidth,
-                Height = source.PixelHeight
-            };
-            image.Measure(new Size(source.PixelWidth, source.PixelHeight));
-            image.Arrange(new Rect(0, 0, source.PixelWidth, source.PixelHeight));
+            int w = source.PixelWidth;
+            int h = source.PixelHeight;
+            int stride = w * 4;
+            byte[] pixels = new byte[stride * h];
 
-            var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(
-                source.PixelWidth, source.PixelHeight, 96, 96,
-                System.Windows.Media.PixelFormats.Pbgra32);
-            rtb.Render(image);
-            rtb.Freeze();
-            return rtb;
+            // CopyPixels is safe on frozen BitmapImage from any thread
+            var formatted = new System.Windows.Media.Imaging.FormatConvertedBitmap(source, PixelFormats.Pbgra32, null, 0);
+            formatted.Freeze();
+            formatted.CopyPixels(pixels, stride, 0);
+
+            // 3-pass horizontal+vertical box blur approximates Gaussian
+            byte[] temp = new byte[pixels.Length];
+            for (int pass = 0; pass < 3; pass++)
+            {
+                // Horizontal pass
+                for (int y = 0; y < h; y++)
+                {
+                    int rowBase = y * stride;
+                    for (int x = 0; x < w; x++)
+                    {
+                        int rSum = 0, gSum = 0, bSum = 0, aSum = 0, count = 0;
+                        int x0 = Math.Max(0, x - radius);
+                        int x1 = Math.Min(w - 1, x + radius);
+                        for (int kx = x0; kx <= x1; kx++)
+                        {
+                            int idx = rowBase + kx * 4;
+                            bSum += pixels[idx];
+                            gSum += pixels[idx + 1];
+                            rSum += pixels[idx + 2];
+                            aSum += pixels[idx + 3];
+                            count++;
+                        }
+                        int outIdx = rowBase + x * 4;
+                        temp[outIdx]     = (byte)(bSum / count);
+                        temp[outIdx + 1] = (byte)(gSum / count);
+                        temp[outIdx + 2] = (byte)(rSum / count);
+                        temp[outIdx + 3] = (byte)(aSum / count);
+                    }
+                }
+
+                // Vertical pass
+                for (int x = 0; x < w; x++)
+                {
+                    for (int y = 0; y < h; y++)
+                    {
+                        int rSum = 0, gSum = 0, bSum = 0, aSum = 0, count = 0;
+                        int y0 = Math.Max(0, y - radius);
+                        int y1 = Math.Min(h - 1, y + radius);
+                        for (int ky = y0; ky <= y1; ky++)
+                        {
+                            int idx = ky * stride + x * 4;
+                            bSum += temp[idx];
+                            gSum += temp[idx + 1];
+                            rSum += temp[idx + 2];
+                            aSum += temp[idx + 3];
+                            count++;
+                        }
+                        int outIdx = y * stride + x * 4;
+                        pixels[outIdx]     = (byte)(bSum / count);
+                        pixels[outIdx + 1] = (byte)(gSum / count);
+                        pixels[outIdx + 2] = (byte)(rSum / count);
+                        pixels[outIdx + 3] = (byte)(aSum / count);
+                    }
+                }
+            }
+
+            // Create frozen WriteableBitmap from blurred pixel data
+            var result = System.Windows.Media.Imaging.BitmapSource.Create(
+                w, h, 96, 96, PixelFormats.Pbgra32, null, pixels, stride);
+            result.Freeze();
+            return result;
         }
     }
 }

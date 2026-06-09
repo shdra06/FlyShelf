@@ -378,8 +378,8 @@ namespace FlyShelf.Windows
             {
                 if (!item.SetPageRange(rangeText))
                 {
-                    textBox.Foreground = new System.Windows.Media.SolidColorBrush(
-                        System.Windows.Media.Color.FromRgb(239, 68, 68));
+                    textBox.Foreground = TryFindResource("DangerColor") as System.Windows.Media.Brush
+                        ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
                     textBox.ToolTip = "Invalid range! Use: 1-5, 8, 10-12";
                     return;
                 }

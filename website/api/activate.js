@@ -128,6 +128,46 @@ module.exports = async (req, res) => {
 
     const safeKey = normalizedKey.replace(/-/g, '_');
 
+    // ═══ Step 1.5: Verify key was legitimately purchased ═══
+    // [SECURITY FIX v2.3.0]: Blocks forged keys — even with a valid HMAC checksum,
+    // the key must exist in licenses/keys/ (written by verifyPayment.js on purchase)
+    // or have pre-existing activations (backwards compatibility for pre-v2.3 keys)
+    try {
+      const keyRes = await firebaseFetch(`${DB_URL}/licenses/keys/${safeKey}.json`);
+      if (keyRes.ok) {
+        const keyData = await keyRes.json();
+        if (!keyData || !keyData.paymentId) {
+          // Key not in purchase DB — check if it has pre-existing activations (legacy key)
+          const legacyCheck = await firebaseFetch(`${DB_URL}/licenses/activations/${safeKey}.json`);
+          if (legacyCheck.ok) {
+            const legacyData = await legacyCheck.json();
+            if (legacyData && typeof legacyData === 'object' && Object.keys(legacyData).length > 0) {
+              // Pre-existing key with activations — auto-register it for future lookups
+              console.log(`[activate] Legacy key with activations found — auto-registering: ${safeKey.substring(0, 15)}...`);
+              await firebaseFetch(`${DB_URL}/licenses/keys/${safeKey}.json`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paymentId: 'pre_v2.3_legacy', generatedAt: new Date().toISOString(), note: 'Auto-registered from existing activations' })
+              }).catch(e => console.warn('[activate] Auto-register write failed:', e.message));
+            } else {
+              console.log(`[activate] Key not found in purchase DB and no activations: ${safeKey.substring(0, 15)}...`);
+              return res.status(403).json({ success: false, error: 'key_not_found' });
+            }
+          } else {
+            console.log(`[activate] Key not found and activation check failed: ${safeKey.substring(0, 15)}...`);
+            return res.status(403).json({ success: false, error: 'key_not_found' });
+          }
+        }
+      } else {
+        console.log(`[activate] Purchase DB lookup failed (${keyRes.status}) — rejecting`);
+        return res.status(403).json({ success: false, error: 'key_not_found' });
+      }
+    } catch (err) {
+      // If we can't verify the key exists, fail closed — don't activate unverified keys
+      console.error('[activate] Purchase DB check failed:', err.message);
+      return res.status(500).json({ success: false, error: 'verification_unavailable' });
+    }
+
     // ═══ Step 2: Check if key is revoked ═══
     try {
       const revokeRes = await firebaseFetch(`${DB_URL}/licenses/revoked/${safeKey}.json`);

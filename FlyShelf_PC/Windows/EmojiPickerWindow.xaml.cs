@@ -78,7 +78,8 @@ namespace FlyShelf.Windows
             {
                 PinIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Pin24;
                 PinBtn.ToolTip = "Pinned (always on top) — click to unpin";
-                PinBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x63, 0x66, 0xF1)); // indigo
+                PinBtn.Foreground = FindResource("ThemeAccent") as System.Windows.Media.Brush
+                    ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x63, 0x66, 0xF1));
             }
             else
             {
@@ -188,7 +189,12 @@ namespace FlyShelf.Windows
                 };
                 btn.Click += CategoryTab_Click;
                 if (cat == _currentCategory)
-                    btn.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x20, 0x63, 0x66, 0xF1));
+                {
+                    // Use theme accent color for active category tab
+                    var accentBrush = FindResource("ThemeAccent") as System.Windows.Media.SolidColorBrush;
+                    var accentColor = accentBrush?.Color ?? System.Windows.Media.Color.FromRgb(0x63, 0x66, 0xF1);
+                    btn.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x20, accentColor.R, accentColor.G, accentColor.B));
+                }
                 CategoryTabs.Children.Add(btn);
             }
         }

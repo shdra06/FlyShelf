@@ -430,28 +430,28 @@
                 </Border.Effect>
                 <UniformGrid Rows="1" HorizontalAlignment="Center" MaxWidth="420" Width="{Binding ActualWidth, ElementName=TopHeaderGrid}">
                     <Border x:Name="FilterBtn_Images" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="Images"
-                            Background="{DynamicResource FilterImageBg}" BorderBrush="{DynamicResource FilterImageBorder}" BorderThickness="1" Padding="0,5">
+                            Background="Transparent" BorderThickness="0" Padding="0,5">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                             <ui:SymbolIcon Symbol="Image24" Foreground="{DynamicResource TypeImageColor}" FontSize="13" Margin="0,0,4,0"/>
                             <TextBlock Text="Img" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <Border x:Name="FilterBtn_Pinned" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="Pinned"
-                            Background="{DynamicResource FilterPinnedBg}" BorderBrush="{DynamicResource FilterPinnedBorder}" BorderThickness="1" Padding="0,5">
+                            Background="Transparent" BorderThickness="0" Padding="0,5">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                             <ui:SymbolIcon Symbol="Pin24" Foreground="{DynamicResource PinActiveColor}" Filled="True" FontSize="13" Margin="0,0,4,0"/>
                             <TextBlock Text="Pin" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <Border x:Name="FilterBtn_Pdf" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="PDF"
-                            Background="{DynamicResource FilterPdfBg}" BorderBrush="{DynamicResource FilterPdfBorder}" BorderThickness="1" Padding="0,5">
+                            Background="Transparent" BorderThickness="0" Padding="0,5">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                             <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="{DynamicResource DangerColor}" FontSize="13" Margin="0,0,4,0"/>
                             <TextBlock Text="PDF" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                     <Border x:Name="FilterBtn_Docs" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="Docs"
-                            Background="{DynamicResource FilterDocsBg}" BorderBrush="{DynamicResource FilterDocsBorder}" BorderThickness="1" Padding="0,5">
+                            Background="Transparent" BorderThickness="0" Padding="0,5">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
                             <ui:SymbolIcon Symbol="Document24" Foreground="{DynamicResource DeviceLaptopColor}" FontSize="13" Margin="0,0,4,0"/>
                             <TextBlock Text="Doc" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
@@ -542,24 +542,11 @@
                    VerticalOffset="8" HorizontalOffset="-72" PopupAnimation="Fade"
                    Closed="OverflowPopup_Closed">
                 <!-- Floating Glassmorphism Container with Soft Accent Glow -->
-                <Border CornerRadius="12" Padding="6,5" BorderThickness="1.5">
-                    <Border.Background>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                            <GradientStop Color="#EC1E1A33" Offset="0.0"/>
-                            <GradientStop Color="#E5121020" Offset="0.6"/>
-                            <GradientStop Color="#DC08070F" Offset="1.0"/>
-                        </LinearGradientBrush>
-                    </Border.Background>
-                    <Border.BorderBrush>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                            <GradientStop Color="#858184FF" Offset="0.0"/> <!-- Accent light leak top-left -->
-                            <GradientStop Color="#2CFFFFFF" Offset="0.4"/>
-                            <GradientStop Color="#12FFFFFF" Offset="0.7"/>
-                            <GradientStop Color="#408184FF" Offset="1.0"/> <!-- Accent light leak bottom-right -->
-                        </LinearGradientBrush>
-                    </Border.BorderBrush>
+                <Border CornerRadius="12" Padding="6,5" BorderThickness="1.5"
+                        Background="{DynamicResource ThemeOverflowBg}"
+                        BorderBrush="{DynamicResource ThemeOverflowBorder}">
                     <Border.Effect>
-                        <DropShadowEffect BlurRadius="25" ShadowDepth="3" Opacity="0.45" Color="{DynamicResource SystemAccentColor}"/>
+                        <DropShadowEffect BlurRadius="25" ShadowDepth="3" Opacity="0.45" Color="{DynamicResource ThemeOverflowShadowColor}"/>
                     </Border.Effect>
                     <StackPanel Orientation="Horizontal">
                         <!-- Emoji Picker -->
@@ -2533,9 +2520,9 @@
                             <!-- Delete/Clear -->
                             <Border Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" ToolTip="Clear Shelf">
                                 <Border.Style><Style TargetType="Border"><Style.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#30EF4444"/></Trigger>
+                                    <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource DangerBgHover}"/></Trigger>
                                 </Style.Triggers></Style></Border.Style>
-                                <ui:SymbolIcon Symbol="Delete24" FontSize="13" Foreground="#EF4444" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <ui:SymbolIcon Symbol="Delete24" FontSize="13" Foreground="{DynamicResource DangerColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                             </Border>
                         </StackPanel>
                     </Grid>
@@ -3019,7 +3006,7 @@
 
                     <!-- Title and Current day label -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0">
-                        <ui:SymbolIcon Symbol="CheckboxChecked24" Foreground="#8B5CF6" FontSize="14" Margin="0,0,5,0"/>
+                        <ui:SymbolIcon Symbol="CheckboxChecked24" Foreground="{DynamicResource ThemeAccent}" FontSize="14" Margin="0,0,5,0"/>
                         <TextBlock Text="To-Do" FontSize="12.5" FontWeight="Bold" 
                                    Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" Margin="0,0,6,0"/>
                         <TextBlock Text="•" FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center" Margin="0,0,6,0"/>
@@ -3028,16 +3015,16 @@
                     </StackPanel>
 
                     <!-- Progress pill -->
-                    <Border Grid.Column="3" CornerRadius="8" Background="#188B5CF6" Padding="6,2" Margin="0,0,6,0" VerticalAlignment="Center">
-                        <TextBlock x:Name="TodoProgressText" Text="0 done" FontSize="9.5" FontWeight="SemiBold" Foreground="#C4B5FD" FontFamily="Segoe UI Emoji"/>
+                    <Border Grid.Column="3" CornerRadius="8" Background="{DynamicResource ThemeAccentBg}" Padding="6,2" Margin="0,0,6,0" VerticalAlignment="Center">
+                        <TextBlock x:Name="TodoProgressText" Text="0 done" FontSize="9.5" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccentLight}" FontFamily="Segoe UI Emoji"/>
                     </Border>
 
                     <!-- Add new to-do item -->
                     <Border Grid.Column="4" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="TodoAddBtn_Click" Padding="7,3"
-                            Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1" ToolTip="Add To-Do Item">
+                            Background="{DynamicResource ThemeAccentBg}" BorderBrush="{DynamicResource ThemeAccentBorder}" BorderThickness="1" ToolTip="Add To-Do Item">
                         <StackPanel Orientation="Horizontal">
-                            <ui:SymbolIcon Symbol="Add12" Foreground="#C4B5FD" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center"/>
-                            <TextBlock Text="Add" FontSize="10.5" FontWeight="SemiBold" Foreground="#C4B5FD" VerticalAlignment="Center"/>
+                            <ui:SymbolIcon Symbol="Add12" Foreground="{DynamicResource ThemeAccentLight}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center"/>
+                            <TextBlock Text="Add" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccentLight}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
                 </Grid>
@@ -3093,7 +3080,7 @@
                                                 <MenuItem Header="Delete" Click="TodoItemDeleteMenu_Click" Icon="{ui:SymbolIcon Symbol=Delete16}">
                                                     <MenuItem.Style>
                                                         <Style TargetType="MenuItem">
-                                                            <Setter Property="Foreground" Value="#EF4444"/>
+                                                            <Setter Property="Foreground" Value="{DynamicResource DangerColor}"/>
                                                         </Style>
                                                     </MenuItem.Style>
                                                 </MenuItem>
@@ -3116,8 +3103,8 @@
                                                         <Setter Property="BorderThickness" Value="1.5"/>
                                                         <Style.Triggers>
                                                             <DataTrigger Binding="{Binding IsDone}" Value="True">
-                                                                <Setter Property="Background" Value="#10B981"/>
-                                                                <Setter Property="BorderBrush" Value="#10B981"/>
+                                                                <Setter Property="Background" Value="{DynamicResource SuccessColor}"/>
+                                                                <Setter Property="BorderBrush" Value="{DynamicResource SuccessColor}"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
@@ -3197,18 +3184,18 @@
                                                         MouseLeftButtonDown="TodoItemDelete_Click" ToolTip="Delete Task">
                                                     <Border.Style>
                                                         <Style TargetType="Border">
-                                                            <Setter Property="Background" Value="#1AEF4444"/>
-                                                            <Setter Property="BorderBrush" Value="#30EF4444"/>
+                                                            <Setter Property="Background" Value="{DynamicResource DangerBgSubtle}"/>
+                                                            <Setter Property="BorderBrush" Value="{DynamicResource DangerBgHover}"/>
                                                             <Setter Property="BorderThickness" Value="1"/>
                                                             <Style.Triggers>
                                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                                    <Setter Property="Background" Value="#30EF4444"/>
-                                                                    <Setter Property="BorderBrush" Value="#60EF4444"/>
+                                                                    <Setter Property="Background" Value="{DynamicResource DangerBgHover}"/>
+                                                                    <Setter Property="BorderBrush" Value="{DynamicResource DangerBorder}"/>
                                                                 </Trigger>
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Border.Style>
-                                                    <ui:SymbolIcon Symbol="Delete16" Foreground="#EF4444" FontSize="11" HorizontalAlignment="Center"/>
+                                                    <ui:SymbolIcon Symbol="Delete16" Foreground="{DynamicResource DangerColor}" FontSize="11" HorizontalAlignment="Center"/>
                                                 </Border>
                                             </StackPanel>
                                         </Grid>
@@ -3233,7 +3220,7 @@
                                 </Style.Triggers>
                             </Style>
                         </StackPanel.Style>
-                        <ui:SymbolIcon Symbol="CheckboxChecked24" FontSize="28" Foreground="#308B5CF6" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <ui:SymbolIcon Symbol="CheckboxChecked24" FontSize="28" Foreground="{DynamicResource ThemeAccentBg}" HorizontalAlignment="Center" Margin="0,0,0,8"/>
                         <TextBlock Text="No tasks yet" Opacity="0.35" FontSize="12" FontWeight="Medium" TextAlignment="Center"/>
                         <TextBlock Text="Click Add to list your tasks" Opacity="0.2" FontSize="10.5" TextAlignment="Center" Margin="0,4,0,0"/>
                     </StackPanel>

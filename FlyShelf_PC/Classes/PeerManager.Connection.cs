@@ -382,13 +382,17 @@ namespace FlyShelf.Classes
                 bool stillAlive = false;
                 try
                 {
-                    using var checkClient = new HttpClient { Timeout = TimeSpan.FromMilliseconds(3000) };
+                    // H3b: Reuse shared HttpClient instead of creating a new one per health check
+                    // Prevents socket exhaustion under rapid WS reconnection cycles
                     string testUrl = $"{peer.ActiveUrl.TrimEnd('/')}/api/health";
                     string pk = DevicePairingManager.GetPairingKeyForDevice(peer.DeviceId);
                     if (string.IsNullOrEmpty(pk)) pk = DevicePairingManager.EnsurePairingKey();
-                    if (!string.IsNullOrEmpty(pk)) checkClient.DefaultRequestHeaders.Add("X-Pairing-Key", pk);
 
-                    var r = await checkClient.GetAsync(testUrl);
+                    using var req = new HttpRequestMessage(HttpMethod.Get, testUrl);
+                    if (!string.IsNullOrEmpty(pk)) req.Headers.TryAddWithoutValidation("X-Pairing-Key", pk);
+
+                    using var healthCts = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+                    var r = await _sharedClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, healthCts.Token);
                     if (r.IsSuccessStatusCode)
                     {
                         stillAlive = true;

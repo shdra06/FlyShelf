@@ -137,45 +137,74 @@ namespace FlyShelf.Classes
 
         /// <summary>
         /// Signs in anonymously via Firebase REST API.
+        /// Retries up to 3 times with exponential backoff (2s, 4s, 8s).
         /// POST https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={API_KEY}
         /// </summary>
         private static async Task SignInAnonymouslyAsync()
         {
+            const int MAX_ATTEMPTS = 3;
+            Exception lastException = null;
+
+            for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++)
+            {
+                try
+                {
+                    string url = $"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={FIREBASE_API_KEY}";
+                    var payload = new { returnSecureToken = true };
+                    string json = JsonSerializer.Serialize(payload);
+                    var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
+
+                    var response = await _authClient.PostAsync(url, content);
+                    string body = await response.Content.ReadAsStringAsync();
+
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        Logger.LogAction("FIREBASE AUTH", $"Anonymous sign-in attempt {attempt}/{MAX_ATTEMPTS} failed: HTTP {(int)response.StatusCode} — {body}");
+                        lastException = new Exception($"HTTP {(int)response.StatusCode}: {body}");
+                        if (attempt < MAX_ATTEMPTS)
+                        {
+                            int delayMs = (int)Math.Pow(2, attempt) * 1000; // 2s, 4s, 8s
+                            await Task.Delay(delayMs);
+                        }
+                        continue;
+                    }
+
+                    using var doc = JsonDocument.Parse(body);
+                    _idToken = doc.RootElement.GetProperty("idToken").GetString() ?? "";
+                    _refreshToken = doc.RootElement.GetProperty("refreshToken").GetString() ?? "";
+                    if (doc.RootElement.TryGetProperty("localId", out var uidProp))
+                    {
+                        _uid = uidProp.GetString() ?? "";
+                    }
+
+                    // expiresIn is in seconds (usually 3600 = 1 hour)
+                    string expiresIn = doc.RootElement.GetProperty("expiresIn").GetString() ?? "3600";
+                    int seconds = int.TryParse(expiresIn, out var s) ? s : 3600;
+                    _tokenExpiry = DateTime.UtcNow.AddSeconds(seconds);
+
+                    Logger.LogAction("FIREBASE AUTH", $"Anonymous sign-in successful (new identity) — UID: {_uid.Substring(0, Math.Min(8, _uid.Length))}... token valid for {seconds}s");
+                    return; // Success — exit retry loop
+                }
+                catch (Exception ex)
+                {
+                    lastException = ex;
+                    Logger.LogAction("FIREBASE AUTH", $"Anonymous sign-in attempt {attempt}/{MAX_ATTEMPTS} error: {ex.Message}");
+                    if (attempt < MAX_ATTEMPTS)
+                    {
+                        int delayMs = (int)Math.Pow(2, attempt) * 1000;
+                        await Task.Delay(delayMs);
+                    }
+                }
+            }
+
+            // All attempts exhausted — notify user
+            Logger.LogAction("FIREBASE AUTH", $"⚠️ Anonymous sign-in failed after {MAX_ATTEMPTS} attempts — cloud sync unavailable");
             try
             {
-                string url = $"https://identitytoolkit.googleapis.com/v1/accounts:signUp?key={FIREBASE_API_KEY}";
-                var payload = new { returnSecureToken = true };
-                string json = JsonSerializer.Serialize(payload);
-                var content = new StringContent(json, System.Text.Encoding.UTF8, "application/json");
-
-                var response = await _authClient.PostAsync(url, content);
-                string body = await response.Content.ReadAsStringAsync();
-
-                if (!response.IsSuccessStatusCode)
-                {
-                    Logger.LogAction("FIREBASE AUTH", $"Anonymous sign-in failed: HTTP {(int)response.StatusCode} — {body}");
-                    return;
-                }
-
-                using var doc = JsonDocument.Parse(body);
-                _idToken = doc.RootElement.GetProperty("idToken").GetString() ?? "";
-                _refreshToken = doc.RootElement.GetProperty("refreshToken").GetString() ?? "";
-                if (doc.RootElement.TryGetProperty("localId", out var uidProp))
-                {
-                    _uid = uidProp.GetString() ?? "";
-                }
-                
-                // expiresIn is in seconds (usually 3600 = 1 hour)
-                string expiresIn = doc.RootElement.GetProperty("expiresIn").GetString() ?? "3600";
-                int seconds = int.TryParse(expiresIn, out var s) ? s : 3600;
-                _tokenExpiry = DateTime.UtcNow.AddSeconds(seconds);
-
-                Logger.LogAction("FIREBASE AUTH", $"Anonymous sign-in successful (new identity) — UID: {_uid.Substring(0, Math.Min(8, _uid.Length))}... token valid for {seconds}s");
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    Windows.ToastWindow.ShowToast("☁️ Cloud sync unavailable — check your internet connection"));
             }
-            catch (Exception ex)
-            {
-                Logger.LogAction("FIREBASE AUTH", $"Anonymous sign-in error: {ex.Message}");
-            }
+            catch { }
         }
 
         /// <summary>

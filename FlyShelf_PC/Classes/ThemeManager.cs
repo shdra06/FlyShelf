@@ -511,11 +511,11 @@ namespace FlyShelf.Classes
 
         // ═══════════════════════════════════════════════════════════════
         // COLOR THEME SYSTEM — Dynamic ResourceDictionary swap for
-        // accent/surface/text colors (Midnight/Ocean/Sunset/Emerald/Lavender/Light)
+        // accent/surface/text colors (Midnight/Ocean/Sunset/Emerald/Lavender/ArcticSnow)
         // ═══════════════════════════════════════════════════════════════
 
         private const string ColorThemePrefix = "pack://application:,,,/Resources/Themes/Theme.";
-        private static readonly string[] ValidColorThemes = { "Midnight", "Ocean", "Sunset", "Emerald", "Lavender", "Light" };
+        private static readonly string[] ValidColorThemes = { "Midnight", "Ocean", "Sunset", "Emerald", "Lavender", "ArcticSnow" };
         private System.Windows.ResourceDictionary? _activeColorThemeDict;
 
         /// <summary>
@@ -578,7 +578,7 @@ namespace FlyShelf.Classes
                 SettingsManager.Current.ColorThemeName = themeName;
 
                 // Auto-apply matching wallpaper for dark themes
-                // Light and Default use desktop wallpaper (handled by clearing path)
+                // ArcticSnow and Default use desktop wallpaper (handled by clearing path)
                 ApplyColorThemeWallpaper(themeName);
 
                 Logger.LogAction("COLOR_THEME", $"Applied color theme: '{themeName}'");
@@ -593,7 +593,7 @@ namespace FlyShelf.Classes
 
         /// <summary>
         /// Map of color theme names to their embedded wallpaper resource names.
-        /// Light and Default have no wallpaper (use desktop).
+        /// ArcticSnow and Default have no wallpaper (use desktop).
         /// </summary>
         private static readonly Dictionary<string, string> ThemeWallpaperMap = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -607,7 +607,7 @@ namespace FlyShelf.Classes
         /// <summary>
         /// Applies the matching wallpaper for a color theme. For themes with embedded wallpapers
         /// (Midnight, Ocean, Sunset, Emerald, Lavender), extracts to AppData and sets the path.
-        /// For Light/Default, clears the wallpaper.
+        /// For ArcticSnow/Default, clears the wallpaper.
         /// </summary>
         private void ApplyColorThemeWallpaper(string themeName)
         {
@@ -738,11 +738,10 @@ namespace FlyShelf.Classes
                 RemoveColorThemeDict(app);
                 SettingsManager.Current.ColorThemeName = "Default";
 
-                // Switch to desktop wallpaper mode — the original FlyShelf look
-                SettingsManager.Current.ThemeDisplayMode = "desktop";
-                SetActiveTheme(null); // Clear mascot
+                // Only remove the color overlay — preserve the user's current display mode
+                // (mica, desktop, glass, or theme). Don't force a mode switch.
 
-                Logger.LogAction("COLOR_THEME", "Color theme removed — using palette defaults with desktop wallpaper");
+                Logger.LogAction("COLOR_THEME", "Color theme removed — using Windows native palette defaults");
             }
             catch (Exception ex)
             {

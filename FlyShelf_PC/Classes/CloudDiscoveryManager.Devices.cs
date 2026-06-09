@@ -19,6 +19,10 @@ namespace FlyShelf.Classes
         // FIX: Only register room membership once per session — it never changes after pairing
         private static bool _roomMembershipRegistered = false;
 
+        // H4: Firebase quota/rate-limit backoff — prevents hammering when 429/402 is returned
+        private static DateTime _firebaseBackoffUntil = DateTime.MinValue;
+        private static bool _firebaseQuotaWarningShown = false;
+
         /// <summary>
         /// Push device registration to Firebase. Optimized: only writes when URL actually changes
         /// or when going offline. Reduces Firebase writes from ~1440/day to ~2-5/day per user.
@@ -94,12 +98,45 @@ namespace FlyShelf.Classes
                     _roomMembershipRegistered = true;
                 }
                 string tunnelNodeUrl = (await AuthUrl($"active_devices/{pairingKey}/{SettingsManager.Current.DeviceId}.json"));
+                // H4: Skip Firebase writes during backoff period
+                if (DateTime.UtcNow < _firebaseBackoffUntil)
+                {
+                    Logger.LogAction("FIREBASE SYNC", $"Skipping write — in backoff until {_firebaseBackoffUntil:HH:mm:ss}Z");
+                    return;
+                }
+
                 var response = await _client.PutAsync(tunnelNodeUrl, content);
                 
                 if (response.IsSuccessStatusCode)
                 {
                     _lastPushedTunnelUrl = urlFingerprint;
+                    _firebaseQuotaWarningShown = false; // Reset on success
                     Logger.LogAction("FIREBASE SYNC", $"Tunnel DNS updated: {url} [{isOnline}]");
+                }
+                else
+                {
+                    int statusCode = (int)response.StatusCode;
+                    // H4: Detect Firebase quota exceeded (402) and rate limiting (429)
+                    if (statusCode == 429 || statusCode == 402)
+                    {
+                        _firebaseBackoffUntil = DateTime.UtcNow.AddMinutes(5);
+                        Logger.LogAction("FIREBASE QUOTA", $"⚠️ Firebase returned {statusCode} — backing off for 5 minutes");
+                        if (!_firebaseQuotaWarningShown)
+                        {
+                            _firebaseQuotaWarningShown = true;
+                            try
+                            {
+                                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                    Windows.ToastWindow.ShowToast("☁️ Cloud sync temporarily limited — retrying in 5 minutes"));
+                            }
+                            catch { }
+                        }
+                    }
+                    else
+                    {
+                        string body = await response.Content.ReadAsStringAsync();
+                        Logger.LogAction("FIREBASE ERROR", $"Tunnel push failed: HTTP {statusCode} — {body}");
+                    }
                 }
             }
             catch (Exception ex)

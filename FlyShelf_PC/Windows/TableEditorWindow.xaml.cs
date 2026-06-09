@@ -148,8 +148,10 @@ namespace FlyShelf.Windows
 
             MethodBadge.Visibility = Visibility.Visible;
             MethodBadgeText.Text = "⚡ Powered by FlyShelf";
-            MethodBadge.Background = new SolidColorBrush(Color.FromArgb(26, 0, 210, 255));
-            MethodBadgeText.Foreground = new SolidColorBrush(Color.FromRgb(0, 210, 255));
+            var badgeAccent = TryFindResource("ThemeAccent") as SolidColorBrush;
+            var badgeColor = badgeAccent?.Color ?? Color.FromRgb(0, 210, 255);
+            MethodBadge.Background = new SolidColorBrush(Color.FromArgb(26, badgeColor.R, badgeColor.G, badgeColor.B));
+            MethodBadgeText.Foreground = badgeAccent ?? new SolidColorBrush(Color.FromRgb(0, 210, 255));
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -355,6 +357,31 @@ namespace FlyShelf.Windows
 
             if (_rows == 0 || _cols == 0) return;
 
+            // ── Resolve theme resources once for performance ──
+            var borderBrush = TryFindResource("ThemeOverlayBorder") as Brush ?? new SolidColorBrush(Color.FromArgb(20, 255, 255, 255));
+            var textPrimary = TryFindResource("ThemeTextPrimary") as Brush ?? Brushes.White;
+            var textMuted = TryFindResource("ThemeTextMuted") as Brush ?? new SolidColorBrush(Color.FromArgb(120, 255, 255, 255));
+            var overlayBg = TryFindResource("ThemeOverlayBg") as Brush ?? new SolidColorBrush(Color.FromArgb(15, 255, 255, 255));
+            var dangerBrush = TryFindResource("DangerColor") as Brush ?? new SolidColorBrush(Color.FromRgb(239, 68, 68));
+
+            // Accent color for column headers and focus highlight
+            var accentSCB = TryFindResource("ThemeAccent") as SolidColorBrush;
+            Color accentColor = accentSCB?.Color ?? Color.FromRgb(96, 165, 250);
+            var colHeaderBg = new SolidColorBrush(Color.FromArgb(20, accentColor.R, accentColor.G, accentColor.B));
+            var colHeaderFg = new SolidColorBrush(Color.FromArgb(200, accentColor.R, accentColor.G, accentColor.B));
+            var focusBorder = new SolidColorBrush(Color.FromArgb(100, accentColor.R, accentColor.G, accentColor.B));
+
+            // Success color for row headers
+            var successSCB = TryFindResource("SuccessColor") as SolidColorBrush;
+            Color successColor = successSCB?.Color ?? Color.FromRgb(34, 197, 94);
+            var rowHeaderBg = new SolidColorBrush(Color.FromArgb(12, successColor.R, successColor.G, successColor.B));
+            var rowHeaderFg = new SolidColorBrush(Color.FromArgb(160, successColor.R, successColor.G, successColor.B));
+
+            // Empty cell placeholder color
+            var emptyFg = TryFindResource("ThemeTextMuted") as SolidColorBrush;
+            var emptyFgColor = emptyFg?.Color ?? Color.FromArgb(60, 255, 255, 255);
+            var emptyCellBrush = new SolidColorBrush(Color.FromArgb(60, emptyFgColor.R, emptyFgColor.G, emptyFgColor.B));
+
             // Row number column
             TableGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(42) });
             for (int j = 0; j < _cols; j++)
@@ -366,8 +393,8 @@ namespace FlyShelf.Windows
             // Corner cell
             var cornerCell = new Border
             {
-                Background = new SolidColorBrush(Color.FromArgb(15, 255, 255, 255)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
+                Background = overlayBg,
+                BorderBrush = borderBrush,
                 BorderThickness = new Thickness(0, 0, 1, 1),
                 Padding = new Thickness(4)
             };
@@ -376,7 +403,7 @@ namespace FlyShelf.Windows
                 Text = "#",
                 FontSize = 11,
                 FontWeight = FontWeights.Bold,
-                Foreground = new SolidColorBrush(Color.FromArgb(120, 255, 255, 255)),
+                Foreground = textMuted,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center
             };
@@ -389,8 +416,8 @@ namespace FlyShelf.Windows
             {
                 var header = new Border
                 {
-                    Background = new SolidColorBrush(Color.FromArgb(20, 59, 130, 246)),
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
+                    Background = colHeaderBg,
+                    BorderBrush = borderBrush,
                     BorderThickness = new Thickness(0, 0, 1, 1),
                     Padding = new Thickness(8, 7, 8, 7),
                     Cursor = Cursors.Hand
@@ -401,7 +428,7 @@ namespace FlyShelf.Windows
                     Text = colName,
                     FontSize = 12,
                     FontWeight = FontWeights.Bold,
-                    Foreground = new SolidColorBrush(Color.FromArgb(200, 96, 165, 250)),
+                    Foreground = colHeaderFg,
                     HorizontalAlignment = HorizontalAlignment.Center
                 };
 
@@ -412,7 +439,7 @@ namespace FlyShelf.Windows
                 insertLeftItem.Click += (s, e) => InsertColumnAt(colIndex);
                 var insertRightItem = new MenuItem { Header = $"Insert Column Right of {colName}" };
                 insertRightItem.Click += (s, e) => InsertColumnAt(colIndex + 1);
-                var deleteColItem = new MenuItem { Header = $"Delete Column {colName}", Foreground = new SolidColorBrush(Color.FromRgb(239, 68, 68)) };
+                var deleteColItem = new MenuItem { Header = $"Delete Column {colName}", Foreground = dangerBrush };
                 deleteColItem.Click += (s, e) => DeleteColumnAt(colIndex);
                 colMenu.Items.Add(insertLeftItem);
                 colMenu.Items.Add(insertRightItem);
@@ -435,8 +462,8 @@ namespace FlyShelf.Windows
                 // Row number cell with context menu
                 var rowNumBorder = new Border
                 {
-                    Background = new SolidColorBrush(Color.FromArgb(12, 34, 197, 94)),
-                    BorderBrush = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
+                    Background = rowHeaderBg,
+                    BorderBrush = borderBrush,
                     BorderThickness = new Thickness(0, 0, 1, 1),
                     Padding = new Thickness(4),
                     Cursor = Cursors.Hand
@@ -446,7 +473,7 @@ namespace FlyShelf.Windows
                     Text = (i + 1).ToString(),
                     FontSize = 11,
                     FontWeight = FontWeights.SemiBold,
-                    Foreground = new SolidColorBrush(Color.FromArgb(160, 34, 197, 94)),
+                    Foreground = rowHeaderFg,
                     HorizontalAlignment = HorizontalAlignment.Center,
                     VerticalAlignment = VerticalAlignment.Center
                 };
@@ -458,7 +485,7 @@ namespace FlyShelf.Windows
                 insertAboveItem.Click += (s, e) => InsertRowAt(rowIndex);
                 var insertBelowItem = new MenuItem { Header = $"Insert Row Below Row {i + 1}" };
                 insertBelowItem.Click += (s, e) => InsertRowAt(rowIndex + 1);
-                var deleteRowItem = new MenuItem { Header = $"Delete Row {i + 1}", Foreground = new SolidColorBrush(Color.FromRgb(239, 68, 68)) };
+                var deleteRowItem = new MenuItem { Header = $"Delete Row {i + 1}", Foreground = dangerBrush };
                 deleteRowItem.Click += (s, e) => DeleteRowAt(rowIndex);
                 rowMenu.Items.Add(insertAboveItem);
                 rowMenu.Items.Add(insertBelowItem);
@@ -483,7 +510,7 @@ namespace FlyShelf.Windows
                     var border = new Border
                     {
                         Background = new SolidColorBrush(bg),
-                        BorderBrush = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255)),
+                        BorderBrush = borderBrush,
                         BorderThickness = new Thickness(0, 0, 1, 1),
                         Padding = new Thickness(1)
                     };
@@ -496,9 +523,7 @@ namespace FlyShelf.Windows
                         TextWrapping = TextWrapping.Wrap,
                         AcceptsReturn = false,
                         Background = Brushes.Transparent,
-                        Foreground = string.IsNullOrEmpty(cellText)
-                            ? new SolidColorBrush(Color.FromArgb(60, 255, 255, 255))
-                            : Brushes.White,
+                        Foreground = string.IsNullOrEmpty(cellText) ? emptyCellBrush : textPrimary,
                         BorderThickness = new Thickness(0),
                         MinHeight = 32,
                         FontSize = 13,
@@ -514,21 +539,19 @@ namespace FlyShelf.Windows
                     {
                         _selectedRow = ri;
                         _selectedCol = ci;
-                        border.BorderBrush = new SolidColorBrush(Color.FromArgb(100, 96, 165, 250));
+                        border.BorderBrush = focusBorder;
                         border.BorderThickness = new Thickness(1.5);
                         UpdateSelectionInfo();
                     };
                     tb.LostFocus += (s, e) =>
                     {
-                        border.BorderBrush = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255));
+                        border.BorderBrush = borderBrush;
                         border.BorderThickness = new Thickness(0, 0, 1, 1);
                     };
                     tb.TextChanged += (s, e) =>
                     {
                         // Update foreground color based on content
-                        tb.Foreground = string.IsNullOrEmpty(tb.Text)
-                            ? new SolidColorBrush(Color.FromArgb(60, 255, 255, 255))
-                            : Brushes.White;
+                        tb.Foreground = string.IsNullOrEmpty(tb.Text) ? emptyCellBrush : textPrimary;
                     };
 
                     // Tab/Enter navigation
@@ -552,9 +575,9 @@ namespace FlyShelf.Windows
                     insertColLeft.Click += (s, e) => InsertColumnAt(ci);
                     var insertColRight = new MenuItem { Header = "Insert Column Right" };
                     insertColRight.Click += (s, e) => InsertColumnAt(ci + 1);
-                    var delRow = new MenuItem { Header = $"Delete Row {ri + 1}", Foreground = new SolidColorBrush(Color.FromRgb(239, 68, 68)) };
+                    var delRow = new MenuItem { Header = $"Delete Row {ri + 1}", Foreground = dangerBrush };
                     delRow.Click += (s, e) => DeleteRowAt(ri);
-                    var delCol = new MenuItem { Header = $"Delete Column {(ci < 26 ? ((char)('A' + ci)).ToString() : $"C{ci + 1}")}", Foreground = new SolidColorBrush(Color.FromRgb(239, 68, 68)) };
+                    var delCol = new MenuItem { Header = $"Delete Column {(ci < 26 ? ((char)('A' + ci)).ToString() : $"C{ci + 1}")}", Foreground = dangerBrush };
                     delCol.Click += (s, e) => DeleteColumnAt(ci);
 
                     cellMenu.Items.Add(copyItem);

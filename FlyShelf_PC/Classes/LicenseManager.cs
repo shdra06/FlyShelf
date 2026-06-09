@@ -403,8 +403,10 @@ namespace FlyShelf.Classes
         /// Validate and activate a license key. Returns true if activation succeeds.
         /// Key format: FS-PRO-XXXX-XXXX-XXXX-XXXX (alphanumeric, 16 chars payload)
         /// The last 4 chars are an HMAC checksum of the first 12 chars.
-        /// v2.1.0: Calls server-side /api/activate for JWT token. Falls back to offline activation.
-        /// v2.2.1: Made async to prevent UI thread deadlock (GetAwaiter().GetResult() crash fix).
+        /// v2.1.0: Calls server-side /api/activate for JWT token.
+        /// v2.2.1: Made async to prevent UI thread deadlock.
+        /// v2.3.0: Server activation is MANDATORY — no offline fallback.
+        ///         This ensures only legitimately purchased keys can activate.
         /// </summary>
         public static async Task<bool> ActivateLicenseAsync(string key)
         {
@@ -432,7 +434,8 @@ namespace FlyShelf.Classes
                 ? NetworkClock.UtcNow.ToString("o")
                 : DateTime.UtcNow.ToString("o");
 
-            // Try server-side activation (async — no UI thread deadlock)
+            // [SECURITY FIX v2.3.0]: Server activation is MANDATORY.
+            // No offline fallback — prevents forged-key activation without purchase verification.
             string serverToken = null;
             string serverError = null;
             try
@@ -443,31 +446,46 @@ namespace FlyShelf.Classes
             }
             catch (Exception ex)
             {
-                Logger.LogAction("LICENSE", $"Server activation failed (will activate offline): {ex.Message}");
+                Logger.LogAction("LICENSE", $"Server activation failed: {ex.Message}");
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    Windows.ToastWindow.ShowToast("⚠️ Could not reach activation server. Please check your internet connection and try again."));
+                return false; // v2.3.0: FAIL — do NOT activate offline
             }
 
             // If server explicitly rejected the key, fail activation
             if (!string.IsNullOrEmpty(serverError))
             {
                 Logger.LogAction("LICENSE", $"Server rejected activation: {serverError}");
+                string userMsg = serverError switch
+                {
+                    "key_not_found" => "⚠️ This license key was not found. Please check your key and try again.",
+                    "revoked" => "⚠️ This license key has been revoked. Contact support.",
+                    "device_limit" => "⚠️ This key has reached the maximum device limit (3 devices).",
+                    "invalid_key" => "⚠️ Invalid license key format.",
+                    _ => $"⚠️ Activation failed: {serverError}"
+                };
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    Windows.ToastWindow.ShowToast(userMsg));
                 return false;
             }
 
-            // Activate locally (with or without JWT)
+            // v2.3.0: Server must return a JWT — no tokenless activation
+            if (string.IsNullOrEmpty(serverToken))
+            {
+                Logger.LogAction("LICENSE", "Server returned no token and no error — activation failed");
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    Windows.ToastWindow.ShowToast("⚠️ Activation server returned an unexpected response. Please try again."));
+                return false;
+            }
+
+            // Activate locally with verified JWT
             _data.LicenseKey = key;
             _data.Tier = "pro";
             _data.ActivatedAt = activationTime;
             _data.DeviceId = deviceId;
-            if (!string.IsNullOrEmpty(serverToken))
-            {
-                _data.ActivationToken = serverToken;
-                _data.LastValidated = activationTime;
-                Logger.LogAction("LICENSE", $"Pro license activated with server JWT: {MaskedKey}");
-            }
-            else
-            {
-                Logger.LogAction("LICENSE", $"Pro license activated offline (JWT pending): {MaskedKey}");
-            }
+            _data.ActivationToken = serverToken;
+            _data.LastValidated = activationTime;
+            Logger.LogAction("LICENSE", $"Pro license activated with server JWT: {MaskedKey}");
             Save();
 
             // Push updated licensing properties to active_devices
@@ -479,12 +497,6 @@ namespace FlyShelf.Classes
                     NetworkSyncServer.Instance.ServerUrl ?? "",
                     forceWrite: true
                 );
-            }
-
-            // If we didn't get a JWT, fire-and-forget legacy Firebase validation
-            if (string.IsNullOrEmpty(serverToken))
-            {
-                _ = ValidateKeyOnServerAsync(key, deviceId);
             }
 
             return true;
@@ -812,7 +824,7 @@ namespace FlyShelf.Classes
                         if (!string.IsNullOrEmpty(token))
                         {
                             _data.ActivationToken = token;
-                            _data.LastValidated = DateTime.UtcNow.ToString("o");
+                            _data.LastValidated = (NetworkClock.IsSynced ? NetworkClock.UtcNow : DateTimeOffset.UtcNow).ToString("o");
                             Save();
                             Logger.LogAction("LICENSE_SERVER", "✅ Silent JWT migration successful");
                         }
@@ -853,10 +865,12 @@ namespace FlyShelf.Classes
                 // Check if revalidation is needed (every 7 days)
                 if (DateTimeOffset.TryParse(_data.LastValidated, out var lastValidated))
                 {
-                    double daysSinceValidation = (DateTimeOffset.UtcNow - lastValidated).TotalDays;
+                    // [SECURITY FIX v2.3.0]: Use NTP time to prevent clock-rollback bypass
+                    DateTimeOffset now = NetworkClock.IsSynced ? NetworkClock.UtcNow : DateTimeOffset.UtcNow;
+                    double daysSinceValidation = (now - lastValidated).TotalDays;
                     if (daysSinceValidation < REVALIDATION_INTERVAL_DAYS)
                     {
-                        Logger.LogAction("LICENSE_SERVER", $"JWT still fresh ({daysSinceValidation:F1}d since last validation) — skipping revalidation");
+                        Logger.LogAction("LICENSE_SERVER", $"JWT still fresh ({daysSinceValidation:F1}d since last validation, source: {(NetworkClock.IsSynced ? "NTP" : "OS")}) — skipping revalidation");
                         return;
                     }
                 }
@@ -877,7 +891,7 @@ namespace FlyShelf.Classes
                         // Success — update token and timestamp
                         string newToken = root.GetProperty("token").GetString() ?? _data.ActivationToken;
                         _data.ActivationToken = newToken;
-                        _data.LastValidated = DateTime.UtcNow.ToString("o");
+                        _data.LastValidated = (NetworkClock.IsSynced ? NetworkClock.UtcNow : DateTimeOffset.UtcNow).ToString("o");
                         Save();
                         Logger.LogAction("LICENSE_SERVER", "✅ JWT revalidation successful — token refreshed");
                         return;
@@ -906,7 +920,7 @@ namespace FlyShelf.Classes
                             if (!string.IsNullOrEmpty(newToken))
                             {
                                 _data.ActivationToken = newToken;
-                                _data.LastValidated = DateTime.UtcNow.ToString("o");
+                                _data.LastValidated = (NetworkClock.IsSynced ? NetworkClock.UtcNow : DateTimeOffset.UtcNow).ToString("o");
                                 Save();
                                 Logger.LogAction("LICENSE_SERVER", "✅ Re-activation successful after invalid JWT");
                             }
@@ -921,16 +935,19 @@ namespace FlyShelf.Classes
                 }
                 catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException)
                 {
-                    // Network failure — apply grace period
+                    // Network failure — apply grace period with NTP time
                     if (DateTimeOffset.TryParse(_data.LastValidated, out var lastCheck))
                     {
-                        double daysOffline = (DateTimeOffset.UtcNow - lastCheck).TotalDays;
+                        // [SECURITY FIX v2.3.0]: Use NTP time to prevent clock-rollback bypass
+                        DateTimeOffset now = NetworkClock.IsSynced ? NetworkClock.UtcNow : DateTimeOffset.UtcNow;
+                        double daysOffline = (now - lastCheck).TotalDays;
                         if (daysOffline >= OFFLINE_GRACE_PERIOD_DAYS)
                         {
-                            Logger.LogAction("LICENSE_SERVER", $"Offline for {daysOffline:F0}d (grace: {OFFLINE_GRACE_PERIOD_DAYS}d) — showing warning");
+                            // [SECURITY FIX v2.3.0]: DEACTIVATE after grace period — not just warn
+                            Logger.LogAction("LICENSE_SERVER", $"Offline for {daysOffline:F0}d (grace: {OFFLINE_GRACE_PERIOD_DAYS}d, source: {(NetworkClock.IsSynced ? "NTP" : "OS")}) — DEACTIVATING");
+                            DeactivateLicense();
                             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                                Windows.ToastWindow.ShowToast("⚠️ Please connect to internet to verify your license."));
-                            // NOTE: We do NOT deactivate — just warn. User can still use the app.
+                                Windows.ToastWindow.ShowToast("⚠️ License expired — please connect to internet and re-activate your license key."));
                         }
                         else
                         {

@@ -344,8 +344,9 @@ namespace FlyShelf
                 }
                 else
                 {
-                    dot.Fill = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x33, 0x88, 0x88, 0x88));
-                    dot.Stroke = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x22, 0xFF, 0xFF, 0xFF));
+                    var mutedColor = ((System.Windows.Media.SolidColorBrush)FindResource("ThemeTextMuted")).Color;
+                    dot.Fill = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x50, mutedColor.R, mutedColor.G, mutedColor.B));
+                    dot.Stroke = (System.Windows.Media.Brush)FindResource("ThemeOverlayBorder");
                 }
             }
         }

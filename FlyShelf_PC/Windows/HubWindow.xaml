@@ -1810,6 +1810,63 @@
                                         </StackPanel>
                                     </StackPanel>
 
+                                    <!-- ── Background Style ── -->
+                                    <TextBlock Text="Background Style" FontWeight="SemiBold" FontSize="11" 
+                                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,8"/>
+                                    <UniformGrid Rows="1" Columns="3" Margin="0,0,0,16">
+                                        <!-- Mica Blur -->
+                                        <Border x:Name="DisplayBtn_Mica" Margin="0,0,6,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                                Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                                                BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                                                MouseLeftButtonDown="DisplayMode_Click" Tag="__mica__">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                                                    <Ellipse Width="14" Height="14" Fill="#9CA3AF" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#6B7280" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#374151"/>
+                                                </StackPanel>
+                                                <TextBlock Text="Mica Blur" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center"
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- Acrylic Blur (Pro) -->
+                                        <Border x:Name="DisplayBtn_Glass" Margin="0,0,6,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                                Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                                                BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                                                MouseLeftButtonDown="DisplayMode_Click" Tag="__glass__">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                                                    <Ellipse Width="14" Height="14" Fill="#60A5FA" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#3B82F6" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#1E3A5F"/>
+                                                </StackPanel>
+                                                <TextBlock x:Name="DisplayBtn_Glass_Label" Text="🔒 Acrylic Blur" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center"
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                            </StackPanel>
+                                        </Border>
+
+                                        <!-- FlyShelf (Desktop Wallpaper) -->
+                                        <Border x:Name="DisplayBtn_Desktop" Margin="0,0,0,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                                Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                                                BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                                                MouseLeftButtonDown="DisplayMode_Click" Tag="__desktop__">
+                                            <StackPanel HorizontalAlignment="Center">
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
+                                                    <Ellipse Width="14" Height="14" Fill="#8B5CF6" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#A78BFA" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#2E1065"/>
+                                                </StackPanel>
+                                                <TextBlock Text="FlyShelf" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center"
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </UniformGrid>
+
+                                    <!-- ── Color Palette ── -->
+                                    <TextBlock Text="Color Palette" FontWeight="SemiBold" FontSize="11" 
+                                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,8"/>
+
                                     <!-- Theme Grid: 3 columns × 3 rows -->
                                     <UniformGrid Rows="3" Columns="3" x:Name="ColorThemeGrid">
                                         <!-- Midnight -->
@@ -1892,18 +1949,18 @@
                                             </StackPanel>
                                         </Border>
 
-                                        <!-- Light -->
-                                        <Border x:Name="ThemeBtn_Light" Margin="0,0,0,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
+                                        <!-- Arctic Snow -->
+                                        <Border x:Name="ThemeBtn_ArcticSnow" Margin="0,0,0,0" CornerRadius="10" Padding="10,8" Cursor="Hand"
                                                 Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
                                                 BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
-                                                MouseLeftButtonDown="ColorTheme_Click" Tag="Light">
+                                                MouseLeftButtonDown="ColorTheme_Click" Tag="ArcticSnow">
                                             <StackPanel HorizontalAlignment="Center">
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
                                                     <Ellipse Width="14" Height="14" Fill="#4F46E5" Margin="0,0,4,0"/>
-                                                    <Ellipse Width="14" Height="14" Fill="#E0E7FF" Margin="0,0,4,0"/>
-                                                    <Ellipse Width="14" Height="14" Fill="#F8FAFC"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#CBD5E1" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#F3F3F3"/>
                                                 </StackPanel>
-                                                <TextBlock Text="Light" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center"
+                                                <TextBlock Text="Arctic Snow" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center"
                                                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
                                             </StackPanel>
                                         </Border>

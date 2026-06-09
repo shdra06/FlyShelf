@@ -32,7 +32,7 @@ namespace FlyShelf
                 SearchBarContainer.Visibility = Visibility.Visible;
                 if (SearchToggleBtn != null)
                 {
-                    SearchToggleBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x14, 0xB8, 0xA6));
+                    SearchToggleBtn.Foreground = (System.Windows.Media.Brush)FindResource("SystemAccentColorLight1Brush");
                 }
                 
                 // Smooth slide-down + fade-in animation
@@ -316,10 +316,10 @@ namespace FlyShelf
                 if (_isSearchActive) CloseSearch();
 
                 // Highlight buttons based on category
-                UpdateFilterButtonHighlight(FilterBtn_Images, "Images", "#F472B6");
-                UpdateFilterButtonHighlight(FilterBtn_Pinned, "Pinned", "#FBBF24");
-                UpdateFilterButtonHighlight(FilterBtn_Pdf, "PDF", "#EF4444");
-                UpdateFilterButtonHighlight(FilterBtn_Docs, "Docs", "#60A5FA");
+                UpdateFilterButtonHighlight(FilterBtn_Images, "Images");
+                UpdateFilterButtonHighlight(FilterBtn_Pinned, "Pinned");
+                UpdateFilterButtonHighlight(FilterBtn_Pdf, "PDF");
+                UpdateFilterButtonHighlight(FilterBtn_Docs, "Docs");
 
                 SortFilterInlineBar.Visibility = Visibility.Visible;
 
@@ -355,20 +355,18 @@ namespace FlyShelf
             }
         }
 
-        private void UpdateFilterButtonHighlight(System.Windows.Controls.Border btn, string category, string accentHex)
+        private void UpdateFilterButtonHighlight(System.Windows.Controls.Border btn, string category)
         {
             if (btn == null) return;
             bool isActive = _activeCategoryFilter == category;
-            var accent = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(accentHex);
+            var accent = (System.Windows.Media.Color)FindResource("SystemAccentColor");
             if (isActive)
             {
-                btn.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x40, accent.R, accent.G, accent.B));
-                btn.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x70, accent.R, accent.G, accent.B));
+                btn.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x38, accent.R, accent.G, accent.B));
             }
             else
             {
-                btn.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x18, accent.R, accent.G, accent.B));
-                btn.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x30, accent.R, accent.G, accent.B));
+                btn.Background = System.Windows.Media.Brushes.Transparent;
             }
         }
 
@@ -410,22 +408,14 @@ namespace FlyShelf
 
                 _viewModel.IsSearchActive = true;
 
-                // Highlight the filter button to indicate active filter
-                SortFilterBtn.Foreground = new System.Windows.Media.SolidColorBrush(
-                    category switch
-                    {
-                        "Images" => System.Windows.Media.Color.FromRgb(0xF4, 0x72, 0xB6),
-                        "Pinned" => System.Windows.Media.Color.FromRgb(0xFB, 0xBF, 0x24),
-                        "PDF" => System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44),
-                        "Docs" => System.Windows.Media.Color.FromRgb(0x60, 0xA5, 0xFA),
-                        _ => System.Windows.Media.Color.FromRgb(0x14, 0xB8, 0xA6)
-                    });
+                // Highlight the filter button to indicate active filter (use theme accent)
+                SortFilterBtn.Foreground = (System.Windows.Media.Brush)FindResource("SystemAccentColorLight1Brush");
 
                 // Update active state highlight on each button
-                UpdateFilterButtonHighlight(FilterBtn_Images, "Images", "#F472B6");
-                UpdateFilterButtonHighlight(FilterBtn_Pinned, "Pinned", "#FBBF24");
-                UpdateFilterButtonHighlight(FilterBtn_Pdf, "PDF", "#EF4444");
-                UpdateFilterButtonHighlight(FilterBtn_Docs, "Docs", "#60A5FA");
+                UpdateFilterButtonHighlight(FilterBtn_Images, "Images");
+                UpdateFilterButtonHighlight(FilterBtn_Pinned, "Pinned");
+                UpdateFilterButtonHighlight(FilterBtn_Pdf, "PDF");
+                UpdateFilterButtonHighlight(FilterBtn_Docs, "Docs");
 
                 // Render newly visible thumbnails immediately
                 RenderVisibleThumbnails();
@@ -458,10 +448,10 @@ namespace FlyShelf
             SortFilterBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
 
             // Update active state highlight on each button (clearing active colors)
-            UpdateFilterButtonHighlight(FilterBtn_Images, "Images", "#F472B6");
-            UpdateFilterButtonHighlight(FilterBtn_Pinned, "Pinned", "#FBBF24");
-            UpdateFilterButtonHighlight(FilterBtn_Pdf, "PDF", "#EF4444");
-            UpdateFilterButtonHighlight(FilterBtn_Docs, "Docs", "#60A5FA");
+            UpdateFilterButtonHighlight(FilterBtn_Images, "Images");
+            UpdateFilterButtonHighlight(FilterBtn_Pinned, "Pinned");
+            UpdateFilterButtonHighlight(FilterBtn_Pdf, "PDF");
+            UpdateFilterButtonHighlight(FilterBtn_Docs, "Docs");
 
             // Render newly visible thumbnails immediately
             RenderVisibleThumbnails();

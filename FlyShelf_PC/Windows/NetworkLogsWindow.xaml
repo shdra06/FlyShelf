@@ -25,7 +25,7 @@
         <!-- ═══ Title Bar ═══ -->
         <Border Grid.Row="0" Background="{DynamicResource ThemeOverlayBg}">
             <DockPanel Margin="14,0">
-                <TextBlock Text="📡 Network Logs" Foreground="#9cf" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
+                <TextBlock Text="📡 Network Logs" Foreground="{DynamicResource ThemeAccentLight}" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center" />
                 <TextBlock x:Name="TitleDeviceInfo" Text="" Foreground="{DynamicResource ThemeTextMuted}" FontSize="11" VerticalAlignment="Center" Margin="12,0,0,0" />
             </DockPanel>
         </Border>
@@ -72,15 +72,15 @@
                     <Rectangle Width="1" Fill="{DynamicResource ThemeSeparator}" Margin="8,2" />
 
                     <Button x:Name="ClearBtn" Content="🗑 Clear" Click="ClearLogs_Click" 
-                            Background="#20ff6666" Foreground="#f88" BorderThickness="0" Padding="10,3" Cursor="Hand" />
+                            Background="{DynamicResource DangerBgSubtle}" Foreground="{DynamicResource DangerColor}" BorderThickness="0" Padding="10,3" Cursor="Hand" />
                     <Button x:Name="CopyBtn" Content="📋 Copy All" Click="CopyLogs_Click" Margin="4,0,0,0"
-                            Background="#2066aaff" Foreground="#8cf" BorderThickness="0" Padding="10,3" Cursor="Hand" />
+                            Background="{DynamicResource ThemeAccentBg}" Foreground="{DynamicResource ThemeAccentLight}" BorderThickness="0" Padding="10,3" Cursor="Hand" />
                 </StackPanel>
             </DockPanel>
         </Border>
 
         <!-- ═══ Log Content ═══ -->
-        <Border Grid.Row="2" Background="#0a0e14" Margin="4,2,4,0" CornerRadius="6">
+        <Border Grid.Row="2" Background="{DynamicResource ThemeCodePreviewBg}" Margin="4,2,4,0" CornerRadius="6">
             <ScrollViewer x:Name="LogScroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                           Padding="6,4" ScrollChanged="LogScroller_ScrollChanged">
                 <ItemsControl x:Name="LogItems">
@@ -122,19 +122,19 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="bd" Background="#15ffffff" CornerRadius="4" Padding="10,4" Cursor="Hand"
-                                BorderBrush="#20ffffff" BorderThickness="1">
+                        <Border x:Name="bd" Background="{DynamicResource ThemeOverlayBg}" CornerRadius="4" Padding="10,4" Cursor="Hand"
+                                BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1">
                             <TextBlock x:Name="txt" Text="{TemplateBinding Content}" FontSize="11" Foreground="{DynamicResource ThemeTextMuted}" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#301f6feb" />
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#501f6feb" />
-                                <Setter TargetName="txt" Property="Foreground" Value="#58a6ff" />
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource ThemeAccentBg}" />
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ThemeAccentBorder}" />
+                                <Setter TargetName="txt" Property="Foreground" Value="{DynamicResource ThemeAccentLight}" />
                                 <Setter TargetName="txt" Property="FontWeight" Value="SemiBold" />
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="BorderBrush" Value="#4058a6ff" />
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource ThemeAccentBgHover}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

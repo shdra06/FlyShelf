@@ -446,29 +446,17 @@ namespace FlyShelf.Windows
             try
             {
                 if (ThemeCombo == null) return;
+
+                // Suppress SelectionChanged during programmatic population
+                ThemeCombo.SelectionChanged -= ThemeCombo_SelectionChanged;
+
                 ThemeCombo.Items.Clear();
 
-                // Mode 1: Mica Blur — pure system blur, no wallpaper, no mascot
-                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "Mica Blur", Tag = "__mica__" });
-
-                // Mode 2: Acrylic Blur — glassmorphism UI + system Acrylic blur
-                string acrylicLabel = LicenseManager.CanUseGlassTheme() ? "Acrylic Blur" : "🔒 Acrylic Blur";
-                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = acrylicLabel, Tag = "__glass__" });
-
-                // Mode 3: FlyShelf — desktop wallpaper on clipboard, Mica blur on hub
-                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "FlyShelf", Tag = "__desktop__" });
-
-                // Mode 4+: Custom mascot themes (skip skeleton templates with no sprite files)
+                // Only mascot theme packs — display modes (Mica/Acrylic/FlyShelf) are now in Background Style cards
                 var themes = ThemeManager.Instance.GetInstalledThemes();
-                int selectedIdx = 0;
+                int selectedIdx = -1;
                 string savedMode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
                 string activeTheme = SettingsManager.Current.ActiveThemeName ?? "";
-
-                // Determine which item should be pre-selected
-                if (savedMode == "glass")
-                    selectedIdx = 1;
-                else if (savedMode == "desktop")
-                    selectedIdx = 2;
 
                 // Blocklisted themes — removed from the product
                 var blockedThemes = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "Gravity Cat" };
@@ -491,11 +479,27 @@ namespace FlyShelf.Windows
                         selectedIdx = idx;
                 }
 
-                ThemeCombo.SelectedIndex = selectedIdx;
+                if (ThemeCombo.Items.Count == 0)
+                {
+                    ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "No themes installed", Tag = "__none__", IsEnabled = false });
+                }
+
+                ThemeCombo.SelectedIndex = Math.Max(0, selectedIdx);
+
+                // Re-hook the event handler now that population is done
+                ThemeCombo.SelectionChanged += ThemeCombo_SelectionChanged;
+
+                // Update Acrylic Blur label based on license state
+                if (DisplayBtn_Glass_Label != null)
+                {
+                    DisplayBtn_Glass_Label.Text = LicenseManager.CanUseGlassTheme() ? "Acrylic Blur" : "🔒 Acrylic Blur";
+                }
             }
             catch (Exception ex)
             {
                 Logger.LogAction("THEME UI", $"PopulateThemeCombo failed: {ex.Message}");
+                // Ensure event handler is re-attached even on error
+                try { ThemeCombo.SelectionChanged += ThemeCombo_SelectionChanged; } catch { }
             }
         }
 
@@ -504,24 +508,16 @@ namespace FlyShelf.Windows
             ThemeCombo.SelectionChanged -= ThemeCombo_SelectionChanged;
             try
             {
-                string savedMode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
                 string activeTheme = SettingsManager.Current.ActiveThemeName ?? "";
-
                 int selectedIdx = 0;
-                if (savedMode == "glass")
-                    selectedIdx = 1;
-                else if (savedMode == "desktop")
-                    selectedIdx = 2;
-                else if (savedMode == "theme")
+
+                for (int i = 0; i < ThemeCombo.Items.Count; i++)
                 {
-                    for (int i = 3; i < ThemeCombo.Items.Count; i++)
+                    if (ThemeCombo.Items[i] is System.Windows.Controls.ComboBoxItem cbi && 
+                        cbi.Tag?.ToString()?.Equals(activeTheme, StringComparison.OrdinalIgnoreCase) == true)
                     {
-                        if (ThemeCombo.Items[i] is System.Windows.Controls.ComboBoxItem cbi && 
-                            cbi.Tag?.ToString()?.Equals(activeTheme, StringComparison.OrdinalIgnoreCase) == true)
-                        {
-                            selectedIdx = i;
-                            break;
-                        }
+                        selectedIdx = i;
+                        break;
                     }
                 }
                 ThemeCombo.SelectedIndex = selectedIdx;
@@ -536,20 +532,13 @@ namespace FlyShelf.Windows
         {
             if (ThemeCombo.SelectedItem is System.Windows.Controls.ComboBoxItem selected)
             {
-                string tag = selected.Tag?.ToString() ?? "__mica__";
+                string tag = selected.Tag?.ToString() ?? "";
 
-                // Check Pro permissions for Glass UI
-                if (tag == "__glass__" && !Classes.LicenseManager.CanUseGlassTheme())
-                {
-                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                        Windows.ToastWindow.ShowToast("🔒 Unlock Premium to use this option!"));
-                    UpgradePrompt.ShowThemeLimit(this);
-                    RevertThemeComboSelection();
-                    return;
-                }
+                // Skip placeholder "No themes installed"
+                if (tag == "__none__") return;
 
                 // Check Pro permissions for Mascot Themes
-                if (tag != "__mica__" && tag != "__glass__" && tag != "__desktop__" && !Classes.LicenseManager.CanUseTheme(tag))
+                if (!Classes.LicenseManager.CanUseTheme(tag))
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                         Windows.ToastWindow.ShowToast("🔒 Unlock Premium to use this option!"));
@@ -558,37 +547,16 @@ namespace FlyShelf.Windows
                     return;
                 }
 
-                // Always clean up Glass theme first when switching away
-                if (tag != "__glass__")
+                // Clean up Glass theme if currently active
+                if (SettingsManager.Current.ThemeDisplayMode == "glass")
                     ThemeManager.Instance.RemoveGlassTheme();
 
-                if (tag == "__mica__")
-                {
-                    // Mica Blur mode — pure system blur, no wallpaper, no mascot
-                    SettingsManager.Current.ThemeDisplayMode = "mica";
-                    ThemeManager.Instance.SetActiveTheme(null);
-                }
-                else if (tag == "__glass__")
-                {
-                    // Glass mode — glassmorphism UI (frosted buttons, translucent cards)
-                    SettingsManager.Current.ThemeDisplayMode = "glass";
-                    ThemeManager.Instance.SetActiveTheme(null);
-                    ThemeManager.Instance.ApplyGlassTheme();
-                }
-                else if (tag == "__desktop__")
-                {
-                    // FlyShelf mode — desktop wallpaper on clipboard, no mascot
-                    SettingsManager.Current.ThemeDisplayMode = "desktop";
-                    ThemeManager.Instance.SetActiveTheme(null);
-                }
-                else
-                {
-                    // Custom theme — theme wallpaper + mascot
-                    SettingsManager.Current.ThemeDisplayMode = "theme";
-                    ThemeManager.Instance.SetActiveTheme(tag);
-                }
+                // Custom mascot theme — theme wallpaper + mascot
+                SettingsManager.Current.ThemeDisplayMode = "theme";
+                ThemeManager.Instance.SetActiveTheme(tag);
 
                 SettingsManager.Save();
+                HighlightActiveDisplayMode();
 
                 // Refresh wallpaper preview after a short delay so the 
                 // _themeChangedHandler's Dispatcher.InvokeAsync has time to update ClipboardWallpaperPath
@@ -728,6 +696,107 @@ namespace FlyShelf.Windows
             }
         }
 
+        // ═══ Display Mode Handlers ═══
+
+        private void DisplayMode_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is System.Windows.Controls.Border border && border.Tag is string tag)
+            {
+                // Check Pro permissions for Glass UI
+                if (tag == "__glass__" && !Classes.LicenseManager.CanUseGlassTheme())
+                {
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        Windows.ToastWindow.ShowToast("🔒 Unlock Premium to use this option!"));
+                    UpgradePrompt.ShowThemeLimit(this);
+                    return;
+                }
+
+                // Always clean up Glass theme first when switching away
+                if (tag != "__glass__" && SettingsManager.Current.ThemeDisplayMode == "glass")
+                    ThemeManager.Instance.RemoveGlassTheme();
+
+                if (tag == "__mica__")
+                {
+                    // Mica Blur mode — pure system blur, no wallpaper, no mascot
+                    SettingsManager.Current.ThemeDisplayMode = "mica";
+                    ThemeManager.Instance.SetActiveTheme(null);
+                    ToastWindow.ShowToast("✨ Mica Blur");
+                }
+                else if (tag == "__glass__")
+                {
+                    // Glass mode — glassmorphism UI (frosted buttons, translucent cards)
+                    SettingsManager.Current.ThemeDisplayMode = "glass";
+                    ThemeManager.Instance.SetActiveTheme(null);
+                    ThemeManager.Instance.ApplyGlassTheme();
+                    ToastWindow.ShowToast("✨ Acrylic Blur");
+                }
+                else if (tag == "__desktop__")
+                {
+                    // FlyShelf mode — desktop wallpaper on clipboard, no mascot
+                    SettingsManager.Current.ThemeDisplayMode = "desktop";
+                    ThemeManager.Instance.SetActiveTheme(null);
+                    ToastWindow.ShowToast("✨ FlyShelf");
+                }
+
+                SettingsManager.Save();
+                HighlightActiveDisplayMode();
+
+                // Refresh wallpaper preview after a short delay
+                Dispatcher.InvokeAsync(async () =>
+                {
+                    await System.Threading.Tasks.Task.Delay(200);
+                    RefreshWallpaperPreview();
+                });
+            }
+        }
+
+        internal void HighlightActiveDisplayMode()
+        {
+            try
+            {
+                string mode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                var defaultBrush = Application.Current.FindResource("MicaWPF.Brushes.ControlStrokeColorDefault") as Brush
+                                   ?? new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF));
+
+                // Map mode tag → accent color for active border
+                var modeAccents = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase)
+                {
+                    { "mica",    Color.FromRgb(156, 163, 175) },
+                    { "glass",   Color.FromRgb(59, 130, 246)  },
+                    { "desktop", Color.FromRgb(139, 92, 246)  },
+                };
+
+                var buttons = new (System.Windows.Controls.Border btn, string modeKey)[]
+                {
+                    (DisplayBtn_Mica, "mica"),
+                    (DisplayBtn_Glass, "glass"),
+                    (DisplayBtn_Desktop, "desktop"),
+                };
+
+                foreach (var (btn, modeKey) in buttons)
+                {
+                    if (btn == null) continue;
+                    // "theme" mode means a mascot theme is active, so no display mode card should be highlighted
+                    bool isActive = mode == modeKey;
+
+                    if (isActive && modeAccents.TryGetValue(modeKey, out var accentColor))
+                    {
+                        btn.BorderBrush = new SolidColorBrush(accentColor);
+                        btn.BorderThickness = new Thickness(2);
+                    }
+                    else
+                    {
+                        btn.BorderBrush = defaultBrush;
+                        btn.BorderThickness = new Thickness(1);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("DISPLAY_MODE_UI", $"HighlightActiveDisplayMode failed: {ex.Message}");
+            }
+        }
+
         // ═══ Color Theme Handlers ═══
 
         private void ColorTheme_Click(object sender, MouseButtonEventArgs e)
@@ -769,12 +838,12 @@ namespace FlyShelf.Windows
                     { "Sunset",   Color.FromRgb(234, 88, 12)  },
                     { "Emerald",  Color.FromRgb(5, 150, 105)  },
                     { "Lavender", Color.FromRgb(124, 58, 237) },
-                    { "Light",    Color.FromRgb(79, 70, 229)  },
+                    { "ArcticSnow",    Color.FromRgb(79, 70, 229)  },
                     { "Default",  Color.FromRgb(156, 163, 175) },
                 };
 
                 // Find all theme buttons (including Default)
-                var buttons = new[] { ThemeBtn_Midnight, ThemeBtn_Ocean, ThemeBtn_Sunset, ThemeBtn_Emerald, ThemeBtn_Lavender, ThemeBtn_Light, ThemeBtn_Default };
+                var buttons = new[] { ThemeBtn_Midnight, ThemeBtn_Ocean, ThemeBtn_Sunset, ThemeBtn_Emerald, ThemeBtn_Lavender, ThemeBtn_ArcticSnow, ThemeBtn_Default };
 
                 foreach (var btn in buttons)
                 {
@@ -793,6 +862,9 @@ namespace FlyShelf.Windows
                         btn.BorderThickness = new Thickness(1);
                     }
                 }
+
+                // Also refresh display mode highlights
+                HighlightActiveDisplayMode();
             }
             catch (Exception ex)
             {

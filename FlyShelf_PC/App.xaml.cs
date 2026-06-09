@@ -479,6 +479,22 @@ public partial class App : Application
                                     return;
                                 }
 
+                                // Ignore strictly horizontal movements (between 0 and 7 degrees) to block horizontal shakes
+                                if (Math.Abs(deltaY) <= Math.Abs(deltaX) * 0.123)
+                                {
+                                    if (_shakeCount > 0)
+                                    {
+                                        FlyShelf.Classes.Logger.LogAction("SHAKE", $"Reset: strictly horizontal movement (0°-7°) detected (Delta: {deltaX}, {deltaY}). Resetting count from {_shakeCount} to 0.");
+                                    }
+                                    _shakeCount = 0;
+                                    _lastSigDirX = 0;
+                                    _lastSigDirY = 0;
+                                    _lastShakeX = currentX;
+                                    _lastShakeY = currentY;
+                                    _lastShakeTime = currentTime;
+                                    return;
+                                }
+
                                 bool reversed = false;
 
                                 // Dot product of current direction vector and last direction vector.
@@ -590,7 +606,7 @@ public partial class App : Application
         }
         if (safeWidth <= 0) safeWidth = 260;
 
-        logicalX = logicalX + (safeWidth / 2) + 50; // Entirely to the right of the cursor
+        logicalX = logicalX + (safeWidth / 2) + 120; // Entirely to the right of the cursor (increased offset from 50 to 120)
         logicalY += 100; // Lowered by 100 logical pixels
 
         _mainWinInstance.ShowNearPosition(logicalX, logicalY, mode, isPersistent, stealFocus);

@@ -341,9 +341,17 @@ namespace FlyShelf.Windows
 
         /// <summary>
         /// Pure WPF input dialog — no System.Windows.Forms dependency.
+        /// Uses theme-aware colors from Application resources.
         /// </summary>
         private static string ShowInputDialog(string message, string title, string defaultValue)
         {
+            // Resolve theme brushes with fallbacks
+            var app = Application.Current;
+            var bgBrush = app?.TryFindResource("ThemeWindowFallback") as Brush ?? new SolidColorBrush(Color.FromRgb(26, 31, 46));
+            var fgBrush = app?.TryFindResource("ThemeTextPrimary") as Brush ?? Brushes.White;
+            var inputBgBrush = app?.TryFindResource("ThemeOverlayBg") as Brush ?? new SolidColorBrush(Color.FromRgb(15, 17, 24));
+            var borderBrush = app?.TryFindResource("ThemeOverlayBorder") as Brush ?? new SolidColorBrush(Color.FromRgb(42, 47, 58));
+
             var dlg = new Window
             {
                 Title = title,
@@ -351,13 +359,13 @@ namespace FlyShelf.Windows
                 WindowStartupLocation = WindowStartupLocation.CenterScreen,
                 WindowStyle = WindowStyle.ToolWindow,
                 ResizeMode = ResizeMode.NoResize,
-                Background = new SolidColorBrush(Color.FromRgb(26, 31, 46))
+                Background = bgBrush
             };
             var sp = new StackPanel { Margin = new Thickness(16) };
             var tb = new System.Windows.Controls.TextBlock
             {
                 Text = message,
-                Foreground = Brushes.White,
+                Foreground = fgBrush,
                 FontSize = 12,
                 TextWrapping = TextWrapping.Wrap,
                 Margin = new Thickness(0, 0, 0, 10)
@@ -367,9 +375,9 @@ namespace FlyShelf.Windows
                 Text = defaultValue,
                 FontSize = 13,
                 Padding = new Thickness(8, 6, 8, 6),
-                Background = new SolidColorBrush(Color.FromRgb(15, 17, 24)),
-                Foreground = Brushes.White,
-                BorderBrush = new SolidColorBrush(Color.FromRgb(42, 47, 58)),
+                Background = inputBgBrush,
+                Foreground = fgBrush,
+                BorderBrush = borderBrush,
                 Margin = new Thickness(0, 0, 0, 12)
             };
             var btnPanel = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
@@ -389,6 +397,7 @@ namespace FlyShelf.Windows
             dlg.ShowDialog();
             return result;
         }
+
 
         private async void UpdateBtn_Click(object sender, RoutedEventArgs e)
         {

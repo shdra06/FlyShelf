@@ -344,31 +344,29 @@ namespace FlyShelf.ViewModels
                         bool isGhostImage = false;
                         try
                         {
-                            isGhostImage = Application.Current.Dispatcher.Invoke(() =>
+                            // Safe on background thread: source bitmap is Frozen, FormatConvertedBitmap on frozen source is thread-safe
+                            var converted = new FormatConvertedBitmap(capturedBmpToCheck, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+                            converted.Freeze();
+                            int w = converted.PixelWidth;
+                            int h = converted.PixelHeight;
+                            byte[] pixel = new byte[4];
+                            int transparentCount = 0;
+                            const int gridSize = 4;
+                            for (int gy = 0; gy < gridSize; gy++)
                             {
-                                var converted = new FormatConvertedBitmap(capturedBmpToCheck, System.Windows.Media.PixelFormats.Bgra32, null, 0);
-                                int w = converted.PixelWidth;
-                                int h = converted.PixelHeight;
-                                byte[] pixel = new byte[4];
-                                int transparentCount = 0;
-                                const int gridSize = 4;
-                                for (int gy = 0; gy < gridSize; gy++)
+                                int y = (gy * 2 + 1) * h / (gridSize * 2);
+                                for (int gx = 0; gx < gridSize; gx++)
                                 {
-                                    int y = (gy * 2 + 1) * h / (gridSize * 2);
-                                    for (int gx = 0; gx < gridSize; gx++)
-                                    {
-                                        int x = (gx * 2 + 1) * w / (gridSize * 2);
-                                        converted.CopyPixels(new System.Windows.Int32Rect(x, y, 1, 1), pixel, 4, 0);
-                                        if (pixel[3] < 10) transparentCount++;
-                                    }
+                                    int x = (gx * 2 + 1) * w / (gridSize * 2);
+                                    converted.CopyPixels(new System.Windows.Int32Rect(x, y, 1, 1), pixel, 4, 0);
+                                    if (pixel[3] < 10) transparentCount++;
                                 }
-                                if (transparentCount >= 15)
-                                {
-                                    Classes.Logger.LogAction("CLIPBOARD", $"⛔ Detected ghost image ({w}x{h}) — {transparentCount}/16 samples transparent. Removing...");
-                                    return true;
-                                }
-                                return false;
-                            });
+                            }
+                            if (transparentCount >= 15)
+                            {
+                                Classes.Logger.LogAction("CLIPBOARD", $"⛔ Detected ghost image ({w}x{h}) — {transparentCount}/16 samples transparent. Removing...");
+                                isGhostImage = true;
+                            }
                         }
                         catch (Exception ex)
                         {
@@ -389,11 +387,9 @@ namespace FlyShelf.ViewModels
                     FormatConvertedBitmap? convertedBmp = null;
                     try
                     {
-                        Application.Current.Dispatcher.Invoke(() =>
-                        {
-                            convertedBmp = new FormatConvertedBitmap(bitmap, System.Windows.Media.PixelFormats.Bgra32, null, 0);
-                            convertedBmp.Freeze();
-                        });
+                        // Safe on background thread: source bitmap is Frozen, FormatConvertedBitmap on frozen source is thread-safe
+                        convertedBmp = new FormatConvertedBitmap(bitmap, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+                        convertedBmp.Freeze();
                     }
                     catch (Exception convEx)
                     {

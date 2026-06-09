@@ -74,7 +74,34 @@ namespace FlyShelf.Classes
         public bool EnableOutgoingSync { get => _enableOutgoingSync; set => SetProperty(ref _enableOutgoingSync, value); }
         
         private string _webClientPinToken = "";
+        /// <summary>Stored encrypted via DPAPI. Getter returns plaintext, setter accepts plaintext.</summary>
+        [JsonIgnore]
         public string WebClientPinToken { get => _webClientPinToken; set => SetProperty(ref _webClientPinToken, value); }
+
+        /// <summary>Serialized to JSON — holds the DPAPI-encrypted blob of WebClientPinToken.</summary>
+        public string WebClientPinTokenEncrypted
+        {
+            get => string.IsNullOrEmpty(_webClientPinToken) ? "" : SecureStorage.Encrypt(_webClientPinToken);
+            set => _webClientPinToken = string.IsNullOrEmpty(value) ? "" : SecureStorage.Decrypt(value);
+        }
+
+        /// <summary>
+        /// Backwards compatibility: Accepts old plaintext WebClientPinToken from config.json
+        /// and migrates it to DPAPI-encrypted storage on next save.
+        /// </summary>
+        [JsonPropertyName("WebClientPinToken")]
+        public string WebClientPinTokenLegacy
+        {
+            get => null; // Never serialize this — only WebClientPinTokenEncrypted is written
+            set
+            {
+                // Only accept legacy plaintext if encrypted field wasn't already loaded
+                if (!string.IsNullOrEmpty(value) && string.IsNullOrEmpty(_webClientPinToken))
+                {
+                    _webClientPinToken = value;
+                }
+            }
+        }
         
         private int _savedLocalPort = 0;
         public int SavedLocalPort { get => _savedLocalPort; set => SetProperty(ref _savedLocalPort, value); }
@@ -88,8 +115,59 @@ namespace FlyShelf.Classes
         private string _deviceName = System.Environment.MachineName;
         public string DeviceName { get => _deviceName; set => SetProperty(ref _deviceName, value); }
         
-        private string _deviceId = $"PC_{Guid.NewGuid().ToString("N").Substring(0, 12)}";
-        public string DeviceId { get => _deviceId; set => SetProperty(ref _deviceId, value); }
+        private string _deviceId = "";
+        /// <summary>
+        /// [SECURITY FIX v2.3.0]: Hardware-bound device ID derived from Windows SID + machine name.
+        /// Prevents device-limit bypass by deleting config.json (same machine → same ID).
+        /// Existing devices keep their persisted DeviceId from config.json.
+        /// </summary>
+        public string DeviceId
+        {
+            get
+            {
+                if (string.IsNullOrEmpty(_deviceId))
+                    _deviceId = GenerateHardwareDeviceId();
+                return _deviceId;
+            }
+            set => SetProperty(ref _deviceId, value);
+        }
+
+        /// <summary>
+        /// Derives a deterministic device ID from hardware/OS identifiers.
+        /// Uses: Windows user SID + machine name + Windows product ID.
+        /// Returns a stable "PC_" + 12-char hex hash that survives config deletion.
+        /// </summary>
+        private static string GenerateHardwareDeviceId()
+        {
+            try
+            {
+                var sb = new System.Text.StringBuilder();
+                // Windows user SID (unique per user account, survives reinstalls)
+                sb.Append(System.Security.Principal.WindowsIdentity.GetCurrent()?.User?.Value ?? "");
+                sb.Append('|');
+                // Machine name (changes if hostname changes, but that's acceptable)
+                sb.Append(Environment.MachineName);
+                sb.Append('|');
+                // Windows Product ID (unique per Windows install)
+                try
+                {
+                    using var key = Microsoft.Win32.Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows NT\CurrentVersion");
+                    sb.Append(key?.GetValue("ProductId")?.ToString() ?? "");
+                }
+                catch { /* Registry access may fail in sandboxed environments */ }
+
+                using var sha = System.Security.Cryptography.SHA256.Create();
+                var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(sb.ToString()));
+                // Take first 12 hex chars for a compact but unique ID
+                string hexHash = BitConverter.ToString(hash).Replace("-", "").Substring(0, 12);
+                return $"PC_{hexHash}";
+            }
+            catch
+            {
+                // Ultimate fallback — random GUID (should never reach here)
+                return $"PC_{Guid.NewGuid().ToString("N").Substring(0, 12)}";
+            }
+        }
 
         private bool _enableQuickPasteHotkeys = true;
         public bool EnableQuickPasteHotkeys { get => _enableQuickPasteHotkeys; set => SetProperty(ref _enableQuickPasteHotkeys, value); }
@@ -140,13 +218,13 @@ namespace FlyShelf.Classes
         public int ClipboardRetentionDays { get => _clipboardRetentionDays; set => SetProperty(ref _clipboardRetentionDays, value); }
 
         // ═══ Mascot Theme System ═══
-        private string _activeThemeName = "FlyShelf Default";
+        private string _activeThemeName = "";
         public string ActiveThemeName { get => _activeThemeName; set => SetProperty(ref _activeThemeName, value); }
 
         /// <summary>
         /// Controls clipboard background mode: "mica" (system blur), "desktop" (Windows wallpaper), or "theme" (custom theme).
         /// </summary>
-        private string _themeDisplayMode = "desktop";
+        private string _themeDisplayMode = "mica";
         public string ThemeDisplayMode { get => _themeDisplayMode; set => SetProperty(ref _themeDisplayMode, value); }
 
         // ═══ Color Theme System (Midnight/Ocean/Sunset/Emerald/Lavender/Light) ═══
@@ -264,15 +342,14 @@ namespace FlyShelf.Classes
                             Current.Version = 1;
                             Save(); // Persist the migrated settings with version 1
                         }
-                        // ═══ v1→v2 Migration: Default to FlyShelf theme on startup ═══
-                        // Existing installs may have ThemeDisplayMode="mica" and empty ActiveThemeName
-                        // from earlier free-tier downgrades. Set them to the "FlyShelf Default" theme
-                        // which is allowed for all users (free + pro).
+                        // ═══ v1→v2 Migration: Ensure clean Mica Blur default ═══
+                        // Existing installs from v1 get the classic Mica Blur (grey) look.
+                        // Users can switch to "FlyShelf" (desktop wallpaper) mode from the theme combo.
                         if (version < 2)
                         {
-                            Logger.LogAction("SETTINGS_MIGRATION", $"Upgrading config version from {version} to 2 — enabling FlyShelf Default theme.");
-                            Current.ActiveThemeName = "FlyShelf Default";
-                            Current.ThemeDisplayMode = "desktop";
+                            Logger.LogAction("SETTINGS_MIGRATION", $"Upgrading config version from {version} to 2 — Mica Blur default.");
+                            Current.ActiveThemeName = "";
+                            Current.ThemeDisplayMode = "mica";
                             Current.Version = 2;
                             // Write synchronously to guarantee persistence before DebouncedSave can race
                             try

@@ -52,37 +52,8 @@ namespace FlyShelf.Windows
 
         private void ApplyTheme()
         {
-            try
-            {
-                bool isLight = FlyShelf.Classes.SettingsManager.Current.ColorScheme == 1;
-
-                // Handled cleanly by centralized ApplyWindowBackdropAndBackground logic in constructor
-
-                if (isLight)
-                {
-                    OuterBorder.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xE5, 0xF5, 0xF6, 0xF8));
-                    OuterBorder.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x30, 0x00, 0x00, 0x00));
-                    HeaderGrid.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xE5, 0xE5, 0xE6, 0xE8));
-                    HeaderTitle.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x33, 0x33, 0x33));
-                    TextPreviewScroll.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xF5, 0xF6, 0xF8));
-                    TextPreview.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x11, 0x11, 0x11));
-                    DocTitle.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x11, 0x11, 0x11));
-                    DocSize.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x66, 0x66, 0x66));
-                    RotateBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x37, 0x7C, 0xF6)); // Blue
-                    OcrBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x10, 0x96, 0x6C)); // Green
-                    CopyAllOcrBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x7C, 0x3A, 0xED)); // Purple
-                    CloseBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0xDC, 0x26, 0x26)); // Red
-                    PinBtn.Foreground = this.Topmost 
-                        ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(217, 119, 6))  // Amber
-                        : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x6B, 0x72, 0x80)); // Gray
-                    HelperText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x80, 0x11, 0x11, 0x11));
-                    if (QrContentBar != null) QrContentBar.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0xE5, 0xE5, 0xE6, 0xE8));
-                    if (QrContentBar != null) QrContentBar.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x20, 0x00, 0x00, 0x00));
-                    if (QrContentText != null) QrContentText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x11, 0x11, 0x11));
-                    if (CopyQrBtn != null) CopyQrBtn.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x37, 0x7C, 0xF6));
-                }
-            }
-            catch { }
+            // All visual properties now use DynamicResource bindings in XAML
+            // that auto-adapt to any theme — no manual overrides needed.
         }
 
         private async System.Threading.Tasks.Task LoadContentAsync()
@@ -404,8 +375,8 @@ namespace FlyShelf.Windows
                 ? Wpf.Ui.Controls.SymbolRegular.Pin24
                 : Wpf.Ui.Controls.SymbolRegular.PinOff24;
             PinBtn.Foreground = this.Topmost
-                ? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11))  // #F59E0B
-                : new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(136, 136, 136)); // #888
+                ? (TryFindResource("WarningColor") as System.Windows.Media.Brush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11)))
+                : (TryFindResource("ThemeTextMuted") as System.Windows.Media.Brush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(136, 136, 136)));
             PinBtn.ToolTip = this.Topmost ? "Pinned on top" : "Unpinned";
         }
 

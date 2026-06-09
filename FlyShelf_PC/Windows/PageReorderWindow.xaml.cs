@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -280,7 +280,7 @@ namespace FlyShelf.Windows
 
             var orderBadge = new Border
             {
-                Background = new SolidColorBrush(Color.FromRgb(139, 92, 246)),
+                Background = TryFindResource("ThemeAccent") as Brush ?? new SolidColorBrush(Color.FromRgb(139, 92, 246)),
                 CornerRadius = new CornerRadius(10),
                 Padding = new Thickness(6, 1, 6, 1),
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -333,7 +333,7 @@ namespace FlyShelf.Windows
             tile.MouseEnter += (s, e) =>
             {
                 if (!_selectedIndices.Contains(orderIndex))
-                    tile.Background = new SolidColorBrush(Color.FromArgb(30, 139, 92, 246));
+                    tile.Background = TryFindResource("ThemeAccentBg") as Brush ?? new SolidColorBrush(Color.FromArgb(30, 139, 92, 246));
             };
             tile.MouseLeave += (s, e) =>
             {
@@ -373,10 +373,10 @@ namespace FlyShelf.Windows
                 {
                     bool sel = _selectedIndices.Contains(i);
                     tile.Background = sel
-                        ? new SolidColorBrush(Color.FromArgb(50, 139, 92, 246))
+                        ? (TryFindResource("ThemeAccentBgHover") as Brush ?? new SolidColorBrush(Color.FromArgb(50, 139, 92, 246)))
                         : new SolidColorBrush(Color.FromArgb(15, 255, 255, 255));
                     tile.BorderBrush = sel
-                        ? new SolidColorBrush(Color.FromRgb(139, 92, 246))
+                        ? (TryFindResource("ThemeAccent") as Brush ?? new SolidColorBrush(Color.FromRgb(139, 92, 246)))
                         : new SolidColorBrush(Color.FromArgb(25, 255, 255, 255));
                     tile.BorderThickness = sel ? new Thickness(2) : new Thickness(1);
                 }

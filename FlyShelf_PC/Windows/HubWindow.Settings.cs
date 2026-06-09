@@ -293,7 +293,7 @@ namespace FlyShelf.Windows
                 if (vm?.LocalServer == null) { ToastWindow.ShowToast("âŒ Server instance not found"); return; }
 
                 ServerDiagnosticsLog.Text = "â³ Stopping server...\n";
-                ServerDiagnosticsLog.Foreground = new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B));
+                ServerDiagnosticsLog.Foreground = TryFindResource("WarningColor") as Brush ?? new SolidColorBrush(Color.FromRgb(0xF5, 0x9E, 0x0B));
 
                 vm.LocalServer.Stop();
                 ServerDiagnosticsLog.Text += "âœ… Server stopped.\nâ³ Starting server...\n";
@@ -307,7 +307,7 @@ namespace FlyShelf.Windows
                         vm.RefreshLocalServerData();
                         string diagnostics = GetServerDiagnostics();
                         ServerDiagnosticsLog.Text = diagnostics;
-                        ServerDiagnosticsLog.Foreground = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81));
+                        ServerDiagnosticsLog.Foreground = TryFindResource("SuccessColor") as Brush ?? new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81));
                         ToastWindow.ShowToast("ðŸ”„ Server restarted â€” check diagnostics below");
                     });
                 });
@@ -315,7 +315,7 @@ namespace FlyShelf.Windows
             catch (Exception ex)
             {
                 ServerDiagnosticsLog.Text = $"âŒ Restart failed: {ex.Message}";
-                ServerDiagnosticsLog.Foreground = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
+                ServerDiagnosticsLog.Foreground = TryFindResource("DangerColor") as Brush ?? new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
             }
         }
 
@@ -669,9 +669,11 @@ namespace FlyShelf.Windows
                     LicenseStatusTitle.Text = "FlyShelf Pro";
                     LicenseStatusDesc.Text = $"Activated on {FlyShelf.Classes.LicenseManager.ActivatedAt}";
                     LicenseStatusBadgeText.Text = "PRO";
-                    LicenseStatusBadge.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(40, 245, 158, 11));
-                    LicenseStatusBadgeText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11));
-                    LicenseStatusPanel.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(26, 245, 158, 11));
+                    var warnBrush = TryFindResource("WarningColor") as System.Windows.Media.SolidColorBrush;
+                    var warnColor = warnBrush?.Color ?? System.Windows.Media.Color.FromRgb(245, 158, 11);
+                    LicenseStatusBadge.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(40, warnColor.R, warnColor.G, warnColor.B));
+                    LicenseStatusBadgeText.Foreground = warnBrush ?? new System.Windows.Media.SolidColorBrush(warnColor);
+                    LicenseStatusPanel.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(26, warnColor.R, warnColor.G, warnColor.B));
                     LicenseActivationPanel.Visibility = Visibility.Collapsed;
                     LicenseDeactivatePanel.Visibility = Visibility.Visible;
                     ActiveKeyDisplay.Text = FlyShelf.Classes.LicenseManager.MaskedKey;
@@ -683,7 +685,9 @@ namespace FlyShelf.Windows
                     LicenseStatusBadgeText.Text = "FREE";
                     LicenseStatusBadge.Background = (TryFindResource("MicaWPF.Brushes.SubtleFillColorTertiary") as System.Windows.Media.Brush) ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(40, 128, 128, 128));
                     LicenseStatusBadgeText.Foreground = (TryFindResource("MicaWPF.Brushes.TextFillColorTertiary") as System.Windows.Media.Brush) ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(128, 128, 128));
-                    LicenseStatusPanel.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(26, 16, 185, 129));
+                    var successBrush = TryFindResource("SuccessColor") as System.Windows.Media.SolidColorBrush;
+                    var successColor = successBrush?.Color ?? System.Windows.Media.Color.FromRgb(16, 185, 129);
+                    LicenseStatusPanel.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(26, successColor.R, successColor.G, successColor.B));
                     LicenseActivationPanel.Visibility = Visibility.Visible;
                     LicenseDeactivatePanel.Visibility = Visibility.Collapsed;
                 }
@@ -715,7 +719,7 @@ namespace FlyShelf.Windows
 
                 // Disable button and show progress
                 if (sender is System.Windows.Controls.Button btn) btn.IsEnabled = false;
-                if (LicenseErrorText != null) { LicenseErrorText.Text = "Activating..."; LicenseErrorText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11)); LicenseErrorText.Visibility = Visibility.Visible; }
+                if (LicenseErrorText != null) { LicenseErrorText.Text = "Activating..."; LicenseErrorText.Foreground = TryFindResource("WarningColor") as System.Windows.Media.Brush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11)); LicenseErrorText.Visibility = Visibility.Visible; }
 
                 bool success = await FlyShelf.Classes.LicenseManager.ActivateLicenseAsync(key);
 
@@ -731,7 +735,7 @@ namespace FlyShelf.Windows
                     if (LicenseErrorText != null)
                     {
                         LicenseErrorText.Text = "Invalid license key. Please check and try again.";
-                        LicenseErrorText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
+                        LicenseErrorText.Foreground = TryFindResource("DangerColor") as System.Windows.Media.Brush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
                         LicenseErrorText.Visibility = Visibility.Visible;
                     }
                 }
@@ -744,7 +748,7 @@ namespace FlyShelf.Windows
                 if (LicenseErrorText != null)
                 {
                     LicenseErrorText.Text = $"Activation failed: {ex.Message}";
-                    LicenseErrorText.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
+                    LicenseErrorText.Foreground = TryFindResource("DangerColor") as System.Windows.Media.Brush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
                     LicenseErrorText.Visibility = Visibility.Visible;
                 }
                 if (sender is System.Windows.Controls.Button btn3) btn3.IsEnabled = true;
@@ -794,7 +798,7 @@ namespace FlyShelf.Windows
                 else
                 {
                     SettingsLicenseError.Text = "Invalid license key. Please check and try again.";
-                    SettingsLicenseError.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
+                    SettingsLicenseError.Foreground = TryFindResource("DangerColor") as System.Windows.Media.Brush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
                     SettingsLicenseError.Visibility = Visibility.Visible;
                 }
             }

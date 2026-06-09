@@ -2357,8 +2357,8 @@ export default function SyncScreen() {
       const data = await res.json();
       if (!data) { setIsPairing(false); Alert.alert('Code Not Found', 'No device found with this code.\nMake sure the code is correct and the other device is online.'); return; }
 
-      // Check TTL (5 min)
-      if (data.timestamp && (NetworkClock.now() - data.timestamp) > 5 * 60 * 1000) {
+      // Check TTL (15 min) with absolute difference check to handle clock drift
+      if (data.timestamp && Math.abs(NetworkClock.now() - data.timestamp) > 15 * 60 * 1000) {
         setIsPairing(false); Alert.alert('Code Expired', 'This code has expired. Generate a new one on the other device.'); return;
       }
 
@@ -2394,7 +2394,7 @@ export default function SyncScreen() {
         localUrl: '',
         globalUrl: '',
         pin: '',
-        timestamp: NetworkClock.now(),
+        timestamp: { '.sv': 'timestamp' }, // Write server-side timestamp to prevent client clock drift
       };
       const _pubToken = await getFirebaseIdToken();
       await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_pubToken ? `?auth=${_pubToken}` : ''}`, {
@@ -2422,7 +2422,7 @@ export default function SyncScreen() {
           for (const key of Object.keys(devices)) {
             const dev = devices[key];
             // Look for a recently-active PC that's online
-            if (dev.DeviceType === 'PC' && dev.IsOnline && dev.Timestamp && (NetworkClock.now() - dev.Timestamp) < 120000) {
+            if (dev.DeviceType === 'PC' && dev.IsOnline && (!dev.Timestamp || Math.abs(NetworkClock.now() - dev.Timestamp) < 15 * 60 * 1000)) {
               // Check if this PC is NOT already in our paired list
               const alreadyPaired = (await AsyncStorage.getItem('@pairedDevices') || '[]');
               const pairedList = JSON.parse(alreadyPaired);

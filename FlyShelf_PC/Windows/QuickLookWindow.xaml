@@ -15,7 +15,7 @@
     </WindowChrome.WindowChrome>
     <Grid>
         <!-- Dynamic Frame -->
-        <Border x:Name="OuterBorder" CornerRadius="12" Background="{DynamicResource ThemeWindowFallback}" BorderBrush="#30FFFFFF" BorderThickness="1" ClipToBounds="True">
+        <Border x:Name="OuterBorder" CornerRadius="12" Background="{DynamicResource ThemeWindowFallback}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="1" ClipToBounds="True">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="40" />
@@ -23,20 +23,20 @@
                 </Grid.RowDefinitions>
                 
                 <!-- Header Bar -->
-                <Grid x:Name="HeaderGrid" Grid.Row="0" Background="#90111111" MouseLeftButtonDown="Window_MouseLeftButtonDown">
+                <Grid x:Name="HeaderGrid" Grid.Row="0" Background="{DynamicResource ThemeOverlayBg}" MouseLeftButtonDown="Window_MouseLeftButtonDown">
                     <TextBlock x:Name="HeaderTitle" Text="Quick Look" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center" Margin="14,0,0,0" FontWeight="Medium" FontSize="11.5" IsHitTestVisible="False"/>
                     
                     <!-- Action Buttons (right side) -->
                     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
                         <!-- Rotate Button (image only) -->
                         <ui:Button x:Name="RotateBtn" Click="RotateButton_Click" Appearance="Secondary" 
-                                   Foreground="#60A5FA" Padding="5,3" Margin="0,0,4,0" ToolTip="Rotate 90° clockwise"
+                                   Foreground="{DynamicResource InfoColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Rotate 90° clockwise"
                                    Visibility="Collapsed">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowRotateClockwise24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                         <!-- OCR Button (image only) -->
                         <ui:Button x:Name="OcrBtn" Click="OcrButton_Click" Appearance="Secondary" 
-                                   Foreground="#34D399" Padding="5,3" Margin="0,0,4,0" ToolTip="Extract &amp; Select Text (OCR)"
+                                   Foreground="{DynamicResource SuccessColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Extract &amp; Select Text (OCR)"
                                    Visibility="Collapsed">
                             <TextBlock Text="T" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI" Margin="3,0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                         </ui:Button>
@@ -58,8 +58,8 @@
                     </StackPanel>
                 </Grid>
 
-                <Grid Grid.Row="1" Background="#20000000">
-                    <ProgressBar IsIndeterminate="True" x:Name="LoadingProgress" VerticalAlignment="Top" Height="3" Background="Transparent" Foreground="#60A5FA" BorderThickness="0" Visibility="Collapsed" Panel.ZIndex="10" />
+                <Grid Grid.Row="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}">
+                    <ProgressBar IsIndeterminate="True" x:Name="LoadingProgress" VerticalAlignment="Top" Height="3" Background="Transparent" Foreground="{DynamicResource ThemeAccentLight}" BorderThickness="0" Visibility="Collapsed" Panel.ZIndex="10" />
                     <!-- Image Mode Grid -->
                     <Grid x:Name="ImageModeGrid" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                         <Viewbox Stretch="Uniform" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
@@ -74,13 +74,13 @@
                     <WebBrowser x:Name="WebPreview" Visibility="Collapsed" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
                     
                     <!-- Raw Text/Code/DOCX Extracted Frame -->
-                    <ScrollViewer x:Name="TextPreviewScroll" Visibility="Collapsed" Background="#FF1E1E1E">
-                        <TextBlock x:Name="TextPreview" Foreground="#FFD4D4D4" Margin="15" TextWrapping="Wrap" FontFamily="Consolas" FontSize="13" />
+                    <ScrollViewer x:Name="TextPreviewScroll" Visibility="Collapsed" Background="{DynamicResource ThemeCodePreviewBg}">
+                        <TextBlock x:Name="TextPreview" Foreground="{DynamicResource ThemeTextPrimary}" Margin="15" TextWrapping="Wrap" FontFamily="Consolas" FontSize="13" />
                     </ScrollViewer>
                     
                     <!-- Document Mode (Fallback when all else fails) -->
                     <StackPanel x:Name="DocumentPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
-                        <ui:SymbolIcon x:Name="DocIcon" Symbol="Document24" FontSize="120" Foreground="#60A5FA" HorizontalAlignment="Center"/>
+                        <ui:SymbolIcon x:Name="DocIcon" Symbol="Document24" FontSize="120" Foreground="{DynamicResource InfoColor}" HorizontalAlignment="Center"/>
                         <TextBlock x:Name="DocTitle" Text="Document Name" FontSize="18" FontWeight="SemiBold" Foreground="{DynamicResource ThemeTextPrimary}" Margin="0,15,0,5" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="300"/>
                         <TextBlock x:Name="DocSize" Text="PDF Document - 2.4 MB" FontSize="13" Foreground="{DynamicResource ThemeTextMuted}" TextAlignment="Center"/>
                         <ui:Button Content="Open Native Tool" Appearance="Primary" Margin="0,20,0,0" HorizontalAlignment="Center" Click="OpenFile_Click">
@@ -91,21 +91,21 @@
                     </StackPanel>
                     
                     <!-- QR Code Decoded Content Bar -->
-                    <Border x:Name="QrContentBar" VerticalAlignment="Bottom" Height="40" Background="#A01A1A1A" BorderBrush="#20FFFFFF" BorderThickness="0,1,0,0" Visibility="Collapsed">
+                    <Border x:Name="QrContentBar" VerticalAlignment="Bottom" Height="40" Background="{DynamicResource ThemeOverlayBg}" BorderBrush="{DynamicResource ThemeOverlayBorder}" BorderThickness="0,1,0,0" Visibility="Collapsed">
                         <Grid Margin="12,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
-                            <ui:SymbolIcon Symbol="QRCode24" Foreground="#60A5FA" FontSize="18" VerticalAlignment="Center" Margin="0,0,8,0" Grid.Column="0"/>
+                            <ui:SymbolIcon Symbol="QRCode24" Foreground="{DynamicResource InfoColor}" FontSize="18" VerticalAlignment="Center" Margin="0,0,8,0" Grid.Column="0"/>
                             <TextBlock x:Name="QrContentText" Text="QR Code Text..." Foreground="{DynamicResource ThemeTextPrimary}" VerticalAlignment="Center" FontSize="12" TextTrimming="CharacterEllipsis" Grid.Column="1"/>
                             <ui:Button x:Name="CopyQrBtn" Click="CopyQrButton_Click" Content="Copy Text" Appearance="Secondary" Padding="8,3" FontSize="10.5" VerticalAlignment="Center" Grid.Column="2"/>
                         </Grid>
                     </Border>
                     
                     <!-- Instruction Overlay (fades out) -->
-                    <TextBlock x:Name="HelperText" Text="Drag image to drop natively" Foreground="#80FFFFFF" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,10" FontSize="12" IsHitTestVisible="False">
+                    <TextBlock x:Name="HelperText" Text="Drag image to drop natively" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Bottom" HorizontalAlignment="Center" Margin="0,0,0,10" FontSize="12" IsHitTestVisible="False">
                     <TextBlock.Triggers>
                         <EventTrigger RoutedEvent="Loaded">
                             <BeginStoryboard>

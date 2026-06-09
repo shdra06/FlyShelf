@@ -2,7 +2,8 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ═══════════════════════════════════════════════════════════════
-         FlyShelf  –  LIGHT  Theme  (Indigo Accent #4F46E5)
+         FlyShelf  –  ARCTIC SNOW  Theme  (Indigo Accent #4F46E5)
+         Light grey background inspired by Windows native clipboard.
          ═══════════════════════════════════════════════════════════════ -->
 
     <!-- ── Theme Marker ─────────────────────────────────────────────── -->
@@ -58,8 +59,8 @@
     <!-- ── Chrome / Surface ──────────────────────────────────────────── -->
     <SolidColorBrush x:Key="ThemeSeparator"      Color="#20000000" />
     <SolidColorBrush x:Key="ThemeShadow"         Color="#20000000" />
-    <SolidColorBrush x:Key="ThemeWindowFallback" Color="#F8FAFC" />
-    <SolidColorBrush x:Key="ThemeCodePreviewBg"  Color="#F1F5F9" />
+    <SolidColorBrush x:Key="ThemeWindowFallback" Color="#F3F3F3" />
+    <SolidColorBrush x:Key="ThemeCodePreviewBg"  Color="#EBEDF0" />
 
     <!-- ── Chevron ───────────────────────────────────────────────────── -->
     <SolidColorBrush x:Key="ThemeChevronBg"          Color="#F1F5F9" />
@@ -74,6 +75,11 @@
     <!-- ── Floating Bar ──────────────────────────────────────────────── -->
     <SolidColorBrush x:Key="ThemeFloatingBarBg"     Color="#E8F1F5F9" />
     <SolidColorBrush x:Key="ThemeFloatingBarBorder" Color="#22000000" />
+
+    <!-- ── Overflow Popup (three-dot menu) ───────────────────────────── -->
+    <SolidColorBrush x:Key="ThemeOverflowBg"          Color="#F0F8FAFC" />
+    <SolidColorBrush x:Key="ThemeOverflowBorder"      Color="#30000000" />
+    <Color           x:Key="ThemeOverflowShadowColor">#40000000</Color>
 
     <!-- ── Toast ─────────────────────────────────────────────────────── -->
     <SolidColorBrush x:Key="ThemeToastBg"        Color="#F0F8FAFC" />

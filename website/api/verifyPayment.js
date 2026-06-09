@@ -10,6 +10,29 @@ try {
   sendPurchaseEmail = async () => ({ skipped: true, reason: 'module_unavailable' });
 }
 
+// [SECURITY FIX v2.3.0]: In-memory rate limiter (consistent with activate.js)
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const RATE_LIMIT_MAX = 10; // max attempts per IP per window
+const _rateLimitMap = new Map();
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const entry = _rateLimitMap.get(ip);
+  if (!entry || (now - entry.windowStart) > RATE_LIMIT_WINDOW_MS) {
+    _rateLimitMap.set(ip, { windowStart: now, count: 1 });
+    return true;
+  }
+  entry.count++;
+  if (entry.count > RATE_LIMIT_MAX) return false;
+  return true;
+}
+// Cleanup stale entries every 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of _rateLimitMap) {
+    if ((now - entry.windowStart) > RATE_LIMIT_WINDOW_MS) _rateLimitMap.delete(ip);
+  }
+}, 30 * 60 * 1000);
 // ═══════════════════════════════════════════════════════════════════
 // HMAC secret for license-key checksum — MUST be set as env var.
 // NEVER hardcode the fallback in source code (security audit v2.0.0)
@@ -63,6 +86,13 @@ module.exports = async (req, res) => {
       return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
+    // [SECURITY FIX v2.3.0]: Rate limit payment verification attempts
+    const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
+    if (!checkRateLimit(clientIp)) {
+      console.log(`[verifyPayment] Rate limit exceeded for IP: ${clientIp.substring(0, 12)}...`);
+      return res.status(429).json({ error: 'Too many attempts. Please try again in 15 minutes.' });
+    }
+
     const {
       razorpay_payment_id,
       razorpay_order_id,
@@ -91,6 +121,37 @@ module.exports = async (req, res) => {
     const signatureBuf = Buffer.from(razorpay_signature, 'hex');
     if (expectedBuf.length !== signatureBuf.length || !crypto.timingSafeEqual(expectedBuf, signatureBuf)) {
       return res.status(400).json({ error: 'Payment signature mismatch.' });
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // [SECURITY FIX v2.3.0]: Re-verify payment amount via Razorpay API
+    // Signature confirms the payment exists, but we also verify the captured
+    // amount matches our expected prices — defense-in-depth against amount tampering.
+    // ═══════════════════════════════════════════════════════════════
+    const VALID_AMOUNTS = [29900, 999]; // ₹299 (paise) or $9.99 (cents)
+    const key_id = process.env.RAZORPAY_KEY_ID;
+    try {
+      const paymentFetchRes = await fetch(`https://api.razorpay.com/v1/payments/${razorpay_payment_id}`, {
+        headers: {
+          'Authorization': 'Basic ' + Buffer.from(`${key_id}:${key_secret}`).toString('base64')
+        }
+      });
+      if (paymentFetchRes.ok) {
+        const paymentData = await paymentFetchRes.json();
+        if (paymentData.status !== 'captured') {
+          console.warn(`[verifyPayment] Payment ${razorpay_payment_id} status is '${paymentData.status}', expected 'captured'`);
+          return res.status(400).json({ error: 'Payment not captured.' });
+        }
+        if (!VALID_AMOUNTS.includes(paymentData.amount)) {
+          console.warn(`[verifyPayment] Payment ${razorpay_payment_id} amount ${paymentData.amount} not in valid amounts`);
+          return res.status(400).json({ error: 'Invalid payment amount.' });
+        }
+      } else {
+        console.warn(`[verifyPayment] Razorpay API fetch failed: ${paymentFetchRes.status} — proceeding with signature-only verification`);
+        // Don't block if Razorpay API is temporarily down — signature is already verified
+      }
+    } catch (amountCheckErr) {
+      console.warn('[verifyPayment] Amount re-verification failed (proceeding):', amountCheckErr.message);
     }
 
     // ═══════════════════════════════════════════════════════════════

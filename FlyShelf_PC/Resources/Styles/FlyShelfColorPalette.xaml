@@ -8,7 +8,7 @@
          FlyShelfColorPalette.xaml — Central Color Token System
          
          ALL semantic colors for the entire app live here.
-         Theme variant files (Theme.Ocean.xaml, Theme.Light.xaml, etc.)
+         Theme variant files (Theme.Ocean.xaml, Theme.ArcticSnow.xaml, etc.)
          override the "Theme*" tokens to change the app's accent/chrome.
          Content-type colors are FIXED across all themes.
          
@@ -80,6 +80,11 @@
     <!-- Floating action bar -->
     <SolidColorBrush x:Key="ThemeFloatingBarBg"       Color="#D0181818"/>
     <SolidColorBrush x:Key="ThemeFloatingBarBorder"   Color="#30FFFFFF"/>
+
+    <!-- Overflow popup (three-dot menu) -->
+    <SolidColorBrush x:Key="ThemeOverflowBg"           Color="#EC1E1A33"/>
+    <SolidColorBrush x:Key="ThemeOverflowBorder"       Color="#408184FF"/>
+    <Color           x:Key="ThemeOverflowShadowColor">#6366F1</Color>
 
     <!-- Toast notification -->
     <SolidColorBrush x:Key="ThemeToastBg"          Color="#E8101018"/>
