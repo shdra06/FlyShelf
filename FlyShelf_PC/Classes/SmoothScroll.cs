@@ -108,15 +108,26 @@ namespace FlyShelf.Classes
 
         private static void EnableStaticCanvas(ScrollViewer sv)
         {
-            // Set text rendering to Grayscale during active scrolling to eliminate ClearType sub-pixel color fringing/rainbow shimmer,
-            // giving the text a clean, premium, and solid macOS-like texture during motion.
+            // ═══ MOTION TEXT PROFILE ═══
+            // Switch to a rendering profile optimized for smooth text during scroll:
+            // - Grayscale: eliminates ClearType sub-pixel color fringing/rainbow shimmer
+            // - Ideal: unlocks sub-pixel glyph positioning so text glides fluidly instead of pixel-stepping
+            // - Animated: optimizes hinting for moving text (relaxed grid-fitting)
             TextOptions.SetTextRenderingMode(sv, TextRenderingMode.Grayscale);
+            TextOptions.SetTextFormattingMode(sv, TextFormattingMode.Ideal);
+            TextOptions.SetTextHintingMode(sv, TextHintingMode.Animated);
         }
 
         private static void DisableStaticCanvas(ScrollViewer sv)
         {
-            // Restore text rendering to ClearType when scrolling stops, providing maximum static sharpness.
+            // ═══ STATIC TEXT PROFILE ═══
+            // Restore sharp pixel-perfect text for reading at rest:
+            // - ClearType: sub-pixel rendered for maximum sharpness
+            // - Display: snaps glyphs to pixel grid for razor-sharp letterforms
+            // - Fixed: consistent glyph shapes at rest
             TextOptions.SetTextRenderingMode(sv, TextRenderingMode.ClearType);
+            TextOptions.SetTextFormattingMode(sv, TextFormattingMode.Display);
+            TextOptions.SetTextHintingMode(sv, TextHintingMode.Fixed);
         }
 
         /// <summary>
@@ -189,12 +200,14 @@ namespace FlyShelf.Classes
 
             if (sv == null) return;
 
-            // Bubbling Boundary check: let events bubble if limits are already reached
+            // Boundary check: consume event at scroll limits to prevent native WPF ScrollViewer
+            // from firing a jarring non-smooth scroll when smooth scroll owns this viewport.
             bool atTopBoundary = sv.VerticalOffset <= 0 && e.Delta > 0;
             bool atBottomBoundary = sv.VerticalOffset >= sv.ScrollableHeight && e.Delta < 0;
 
             if (atTopBoundary || atBottomBoundary)
             {
+                e.Handled = true;
                 return;
             }
 

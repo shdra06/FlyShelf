@@ -1755,6 +1755,7 @@
                         <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
                              <Setter TargetName="InnerHighlightBorder" Property="Padding" Value="0" />
                              <Setter TargetName="InnerHighlightBorder" Property="BorderThickness" Value="0" />
+                             <Setter TargetName="CardBorder" Property="Margin" Value="0,2,0,2" />
                              <Setter TargetName="ItemIcon" Property="Stretch" Value="UniformToFill" />
                              <Setter TargetName="ItemIcon" Property="Height" Value="165" />
                              <Setter TargetName="ItemIcon" Property="MaxHeight" Value="165" />

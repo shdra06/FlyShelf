@@ -855,35 +855,35 @@
       }
 
       // ═══════════════════════════════════════════
-      // DEEP LINK ACTIVATE — copy key + launch app
+      // DEEP LINK ACTIVATE — copy activation trigger to clipboard
+      // The FlyShelf PC app monitors clipboard for the FLYSHELF_ACTIVATE:: prefix
+      // and auto-triggers activation when detected.
       // ═══════════════════════════════════════════
       function tryActivate(key, feedbackEl) {
-        // 1. Always copy key to clipboard first (FlyShelf auto-detects Pro keys)
-        navigator.clipboard.writeText(key).catch(() => {});
-
-        // 2. Attempt deep link via hidden iframe (more reliable than <a> click)
-        const deepUrl = `flyshelf://activate?key=${encodeURIComponent(key)}`;
-        try {
-          const iframe = document.createElement('iframe');
-          iframe.style.display = 'none';
-          iframe.src = deepUrl;
-          document.body.appendChild(iframe);
-          setTimeout(() => iframe.remove(), 3000);
-        } catch(e) {
-          // Fallback: navigate directly
-          window.location.href = deepUrl;
-        }
-
-        // 3. Visual feedback on button
-        if (feedbackEl) {
-          const orig = feedbackEl.innerHTML;
-          feedbackEl.innerHTML = '<ion-icon name="checkmark-done-outline" style="font-size: 1rem;"></ion-icon> Key Copied & Opening App...';
-          feedbackEl.style.pointerEvents = 'none';
-          setTimeout(() => {
-            feedbackEl.innerHTML = orig;
-            feedbackEl.style.pointerEvents = '';
-          }, 3000);
-        }
+        // Copy key with activation trigger prefix — FlyShelf PC app auto-detects this
+        const activationString = `FLYSHELF_ACTIVATE::${key}`;
+        navigator.clipboard.writeText(activationString).then(() => {
+          // Visual feedback on button
+          if (feedbackEl) {
+            const orig = feedbackEl.innerHTML;
+            feedbackEl.innerHTML = '<ion-icon name="checkmark-done-outline" style="font-size: 1rem;"></ion-icon> Activating... Check your PC app!';
+            feedbackEl.style.pointerEvents = 'none';
+            feedbackEl.style.background = 'linear-gradient(135deg, var(--color-emerald), #0ea5e9)';
+            setTimeout(() => {
+              feedbackEl.innerHTML = orig;
+              feedbackEl.style.pointerEvents = '';
+              feedbackEl.style.background = '';
+            }, 4000);
+          }
+        }).catch(() => {
+          // Fallback: copy plain key
+          navigator.clipboard.writeText(key).catch(() => {});
+          if (feedbackEl) {
+            const orig = feedbackEl.innerHTML;
+            feedbackEl.innerHTML = '<ion-icon name="copy-outline" style="font-size: 1rem;"></ion-icon> Key Copied! Paste in app settings.';
+            setTimeout(() => { feedbackEl.innerHTML = orig; }, 3000);
+          }
+        });
       }
 
       // Success modal activate button

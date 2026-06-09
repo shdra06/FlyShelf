@@ -408,6 +408,11 @@ namespace FlyShelf
 
                 _viewModel.IsSearchActive = true;
 
+                // Reduce bottom padding for filtered views — prevents excessive empty overscroll area
+                // that makes the list feel "stuck" when only a few items remain.
+                if (ShelfListView != null)
+                    ShelfListView.Padding = new Thickness(0, 0, 0, 80);
+
                 // Highlight the filter button to indicate active filter (use theme accent)
                 SortFilterBtn.Foreground = (System.Windows.Media.Brush)FindResource("SystemAccentColorLight1Brush");
 
@@ -443,6 +448,10 @@ namespace FlyShelf
                 AltShelfListView.Items.Filter = null;
             }
             _viewModel.IsSearchActive = false;
+
+            // Restore full bottom padding for unfiltered clipboard view
+            if (ShelfListView != null)
+                ShelfListView.Padding = new Thickness(0, 0, 0, 250);
 
             // Reset button color
             SortFilterBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");

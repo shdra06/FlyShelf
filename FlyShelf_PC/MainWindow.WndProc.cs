@@ -389,6 +389,57 @@ namespace FlyShelf
                 }
                 else if (!string.IsNullOrWhiteSpace(text))
                 {
+                    // ═══ ONE-CLICK ACTIVATE: Detect activation trigger from website ═══
+                    // The FlyShelf website copies "FLYSHELF_ACTIVATE::FS-PRO-XXXX-XXXX-XXXX-XXXX"
+                    // to clipboard when the user clicks "One-Click Activate PC App".
+                    const string ACTIVATION_PREFIX = "FLYSHELF_ACTIVATE::";
+                    if (text.Trim().StartsWith(ACTIVATION_PREFIX, StringComparison.OrdinalIgnoreCase))
+                    {
+                        string keyCandidate = text.Trim().Substring(ACTIVATION_PREFIX.Length).Trim();
+                        Classes.Logger.LogAction("LICENSE", $"Clipboard activation trigger detected: {keyCandidate.Substring(0, Math.Min(12, keyCandidate.Length))}...");
+                        
+                        // Clear the trigger from clipboard so it doesn't re-fire
+                        _lastClipboardCaptureTime = DateTime.UtcNow;
+                        try { Clipboard.SetText(""); } catch { }
+
+                        // Validate format before attempting activation
+                        if (keyCandidate.StartsWith("FS-PRO-", StringComparison.OrdinalIgnoreCase) && keyCandidate.Length >= 23)
+                        {
+                            // Auto-activate on background thread
+                            _ = Task.Run(async () =>
+                            {
+                                try
+                                {
+                                    Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                        Windows.ToastWindow.ShowToast("⚡ Activating your Pro license..."));
+
+                                    bool success = await Classes.LicenseManager.ActivateLicenseAsync(keyCandidate);
+                                    
+                                    Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                    {
+                                        if (success)
+                                        {
+                                            Windows.ToastWindow.ShowToast("✅ FlyShelf Pro Activated! Restart to apply.");
+                                            Classes.Logger.LogAction("LICENSE", "One-click activation SUCCESS");
+                                        }
+                                        else
+                                        {
+                                            Windows.ToastWindow.ShowToast("❌ Activation failed — check your key or internet.");
+                                            Classes.Logger.LogAction("LICENSE", "One-click activation FAILED");
+                                        }
+                                    });
+                                }
+                                catch (Exception ex)
+                                {
+                                    Classes.Logger.LogAction("LICENSE", $"One-click activation error: {ex.Message}");
+                                    Application.Current?.Dispatcher?.InvokeAsync(() =>
+                                        Windows.ToastWindow.ShowToast("❌ Activation error — please try again."));
+                                }
+                            });
+                        }
+                        return; // Don't create a clipboard card for the activation trigger
+                    }
+
                     _lastClipboardCaptureTime = DateTime.UtcNow;
                     Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as TEXT ({text.Length} chars)");
                     var capturedText = text;
