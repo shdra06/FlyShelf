@@ -185,27 +185,61 @@ module.exports = async (req, res) => {
     // Generate NEW license key (first-time payment only)
     const licenseKey = generateProKey();
 
-    // Log payment to Firebase RTDB
+    // ═══════════════════════════════════════════════════════════════
+    // [SECURITY FIX v2.3.1]: Atomic write — use conditional PUT to prevent
+    // race condition where 2 concurrent requests both pass the replay check.
+    // The first write claims the payment ID; any subsequent write gets 412.
+    // ═══════════════════════════════════════════════════════════════
+    const record = {
+      gateway: 'razorpay',
+      paymentId: razorpay_payment_id,
+      orderId: razorpay_order_id,
+      amount: 'verified',
+      currency: 'verified',
+      email,
+      deviceId,
+      licenseKey,
+      status: 'completed',
+      timestamp: new Date().toISOString()
+    };
+
+    // Log payment to Firebase RTDB — atomic conditional write
     try {
-      const record = {
-        gateway: 'razorpay',
-        paymentId: razorpay_payment_id,
-        orderId: razorpay_order_id,
-        amount: 'verified',
-        currency: 'verified',
-        email,
-        deviceId,
-        licenseKey,
-        status: 'completed',
-        timestamp: new Date().toISOString()
-      };
-      
-      // Store payment record (best-effort — don't block key delivery)
-      await firebaseFetch(`${dbUrl}/payments/${razorpay_payment_id}.json`, {
+      // First, get the current ETag for the payment path
+      const etagRes = await firebaseFetch(`${dbUrl}/payments/${razorpay_payment_id}.json`, {
+        headers: { 'X-Firebase-ETag': 'true' }
+      });
+      const currentETag = etagRes.headers.get('etag');
+      const currentData = await etagRes.json();
+
+      // If data already exists (race lost), return the existing key
+      if (currentData && currentData.licenseKey && currentData.status === 'completed') {
+        console.log(`[verifyPayment] Race condition caught — payment already processed: ${razorpay_payment_id.substring(0, 8)}...`);
+        return res.status(200).json({
+          success: true,
+          licenseKey: currentData.licenseKey
+        });
+      }
+
+      // Conditional write — only succeeds if ETag matches (no one else wrote in between)
+      const writeRes = await firebaseFetch(`${dbUrl}/payments/${razorpay_payment_id}.json`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'if-match': currentETag || 'null_etag'
+        },
         body: JSON.stringify(record)
-      }).catch(err => console.warn('[verifyPayment] Payment record write failed:', err.message));
+      });
+
+      if (writeRes.status === 412) {
+        // 412 Precondition Failed — another request won the race
+        console.log(`[verifyPayment] Atomic write failed (race lost) — fetching winner's key`);
+        const winnerRes = await firebaseFetch(`${dbUrl}/payments/${razorpay_payment_id}.json`);
+        const winnerData = await winnerRes.json();
+        if (winnerData && winnerData.licenseKey) {
+          return res.status(200).json({ success: true, licenseKey: winnerData.licenseKey });
+        }
+      }
       
       // [SECURITY FIX v2.2.0]: Match activate.js sanitization (replace dashes, not dots/slashes)
       const safeKey = licenseKey.replace(/-/g, '_');

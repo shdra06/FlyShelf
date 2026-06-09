@@ -9,62 +9,95 @@ namespace FlyShelf.Windows
 {
     public partial class ToastWindow : Window
     {
+        // ═══ Single-Instance Toast Pool ═══
+        // Reuses a single window to avoid expensive Window construction on every toast.
+        private static ToastWindow? _pooledInstance;
+        private static readonly object _poolLock = new();
+        private static readonly Queue<string> _pendingMessages = new();
+        private static bool _isShowing;
+
         // ═══ Toast Stacking System ═══
         private static readonly List<ToastWindow> _activeToasts = new();
         private static readonly object _toastLock = new();
         private const int TOAST_GAP = 6;
 
-        public ToastWindow(string message)
+        // Anti-spam: track the last message to prevent identical back-to-back toasts
+        private static string? _lastMessage;
+        private static long _lastMessageTime;
+
+        // Dismiss timer
+        private System.Windows.Threading.DispatcherTimer? _dismissTimer;
+
+        public ToastWindow()
         {
             InitializeComponent();
+        }
+
+        /// <summary>
+        /// Configures the toast content and icon based on message semantics.
+        /// Called each time a message is shown (no Window re-creation needed).
+        /// </summary>
+        private void ConfigureForMessage(string message)
+        {
             MessageText.Text = message;
-            
+
             string msgLower = message.ToLowerInvariant();
-            Color accentColor;
-            Color accentEnd;
             Wpf.Ui.Controls.SymbolRegular symbol;
+            string accentKey; // Theme token key for accent color lookup
 
             if (msgLower.Contains("failed") || msgLower.Contains("error") || msgLower.Contains("❌") || msgLower.Contains("busy") || msgLower.Contains("timeout") || msgLower.Contains("offline") || msgLower.Contains("unreachable"))
             {
                 symbol = Wpf.Ui.Controls.SymbolRegular.ErrorCircle24;
-                accentColor = Color.FromRgb(244, 63, 94);  // Rose
-                accentEnd = Color.FromRgb(190, 18, 60);
+                accentKey = "DangerColor"; // Rose/Red from palette
             }
-            else if (msgLower.Contains("warning") || msgLower.Contains("⚠️") || msgLower.Contains("limit") || msgLower.Contains("retry"))
+            else if (msgLower.Contains("warning") || msgLower.Contains("⚠️") || msgLower.Contains("⚠") || msgLower.Contains("limit") || msgLower.Contains("retry"))
             {
                 symbol = Wpf.Ui.Controls.SymbolRegular.Warning24;
-                accentColor = Color.FromRgb(245, 158, 11); // Amber
-                accentEnd = Color.FromRgb(217, 119, 6);
+                accentKey = "WarningColor"; // Amber from palette
             }
             else if (msgLower.Contains("copy") || msgLower.Contains("copied") || msgLower.Contains("clipboard") || msgLower.Contains("📋"))
             {
                 symbol = Wpf.Ui.Controls.SymbolRegular.Clipboard24;
-                accentColor = Color.FromRgb(167, 139, 250); // Violet
-                accentEnd = Color.FromRgb(139, 92, 246);
+                accentKey = "ThemeAccentLight"; // Theme accent light
             }
             else if (msgLower.Contains("sync") || msgLower.Contains("pairing") || msgLower.Contains("paired") || msgLower.Contains("device") || msgLower.Contains("lan") || msgLower.Contains("cloudflare"))
             {
                 symbol = Wpf.Ui.Controls.SymbolRegular.Router24;
-                accentColor = Color.FromRgb(56, 189, 248);  // Sky
-                accentEnd = Color.FromRgb(29, 78, 216);
+                accentKey = "InfoColor"; // Sky/info from palette
             }
             else
             {
                 symbol = Wpf.Ui.Controls.SymbolRegular.CheckmarkCircle24;
-                accentColor = Color.FromRgb(129, 140, 248); // Indigo
-                accentEnd = Color.FromRgb(99, 102, 241);
+                accentKey = "ThemeAccentLight"; // Default theme accent
             }
 
-            // Apply
+            // Apply icon
             ToastIcon.Symbol = symbol;
+
+            // Resolve accent color from theme-aware resources
+            Color accentColor;
+            try
+            {
+                var brush = Application.Current?.Resources[accentKey] as SolidColorBrush;
+                accentColor = brush?.Color ?? Color.FromRgb(129, 140, 248); // Fallback indigo
+            }
+            catch
+            {
+                accentColor = Color.FromRgb(129, 140, 248); // Fallback indigo
+            }
+
             ToastIcon.Foreground = new SolidColorBrush(accentColor);
 
             // Subtle accent-colored outer glow
             ToastShadow.Color = accentColor;
             ToastShadow.Opacity = 0.18;
             ToastShadow.BlurRadius = 14;
+
+            // Reset transform for fresh animation
+            ToastTranslate.Y = 12;
+            this.Opacity = 0;
         }
-        
+
         private void PositionAndShow()
         {
             var workArea = SystemParameters.WorkArea;
@@ -75,7 +108,8 @@ namespace FlyShelf.Windows
                 double stackOffset = 0;
                 foreach (var existing in _activeToasts)
                 {
-                    stackOffset += existing.ActualHeight + TOAST_GAP;
+                    if (existing != this)
+                        stackOffset += existing.ActualHeight + TOAST_GAP;
                 }
 
                 this.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
@@ -84,98 +118,190 @@ namespace FlyShelf.Windows
 
                 this.Left = workArea.Left + (workArea.Width - targetWidth) / 2;
                 this.Top = baseBottom - targetHeight - stackOffset;
-                _activeToasts.Add(this);
+
+                if (!_activeToasts.Contains(this))
+                    _activeToasts.Add(this);
             }
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            PositionAndShow();
+            // Only runs on first show; subsequent shows use ShowAndAnimate
+            ShowAndAnimate();
+        }
 
+        private void ShowAndAnimate()
+        {
+            PositionAndShow();
+            RunEntranceAnimation();
+            RestartDismissTimer();
+        }
+
+        private void RunEntranceAnimation()
+        {
             var sb = new Storyboard();
-            
-            var fadeAnim = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(200))
+
+            var fadeAnim = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(180))
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             };
             Storyboard.SetTarget(fadeAnim, this);
             Storyboard.SetTargetProperty(fadeAnim, new PropertyPath(Window.OpacityProperty));
-            
-            var slideAnim = new DoubleAnimation(12.0, 0.0, TimeSpan.FromMilliseconds(240))
+
+            var slideAnim = new DoubleAnimation(12.0, 0.0, TimeSpan.FromMilliseconds(200))
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             };
             Storyboard.SetTarget(slideAnim, ToastBorder);
             Storyboard.SetTargetProperty(slideAnim, new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.Y)"));
-            
+
             sb.Children.Add(fadeAnim);
             sb.Children.Add(slideAnim);
             sb.Begin();
         }
 
-        private async void StartDismissTimer()
+        private void RestartDismissTimer()
         {
-            await Task.Delay(2400);
-            await DismissAsync();
+            _dismissTimer?.Stop();
+            _dismissTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(2400)
+            };
+            _dismissTimer.Tick += async (s, e) =>
+            {
+                _dismissTimer?.Stop();
+                await DismissAsync();
+            };
+            _dismissTimer.Start();
         }
 
         private async Task DismissAsync()
         {
-            var sb = new Storyboard();
-            
-            var fadeAnim = new DoubleAnimation(this.Opacity, 0.0, TimeSpan.FromMilliseconds(160))
+            try
             {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
-            };
-            Storyboard.SetTarget(fadeAnim, this);
-            Storyboard.SetTargetProperty(fadeAnim, new PropertyPath(Window.OpacityProperty));
-            
-            var slideAnim = new DoubleAnimation(ToastTranslate.Y, 8.0, TimeSpan.FromMilliseconds(160))
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
-            };
-            Storyboard.SetTarget(slideAnim, ToastBorder);
-            Storyboard.SetTargetProperty(slideAnim, new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.Y)"));
-            
-            sb.Children.Add(fadeAnim);
-            sb.Children.Add(slideAnim);
-            
-            var tcs = new TaskCompletionSource<bool>();
-            sb.Completed += (s, e) => tcs.SetResult(true);
-            sb.Begin();
-            
-            await tcs.Task;
+                var sb = new Storyboard();
 
-            lock (_toastLock)
-            {
-                _activeToasts.Remove(this);
+                var fadeAnim = new DoubleAnimation(this.Opacity, 0.0, TimeSpan.FromMilliseconds(140))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+                };
+                Storyboard.SetTarget(fadeAnim, this);
+                Storyboard.SetTargetProperty(fadeAnim, new PropertyPath(Window.OpacityProperty));
+
+                var slideAnim = new DoubleAnimation(ToastTranslate.Y, 8.0, TimeSpan.FromMilliseconds(140))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
+                };
+                Storyboard.SetTarget(slideAnim, ToastBorder);
+                Storyboard.SetTargetProperty(slideAnim, new PropertyPath("(UIElement.RenderTransform).(TranslateTransform.Y)"));
+
+                sb.Children.Add(fadeAnim);
+                sb.Children.Add(slideAnim);
+
+                var tcs = new TaskCompletionSource<bool>();
+                sb.Completed += (s, e) => tcs.TrySetResult(true);
+                sb.Begin();
+
+                await tcs.Task;
+
+                lock (_toastLock)
+                {
+                    _activeToasts.Remove(this);
+                }
+
+                // Hide instead of Close — keeps the window alive for reuse
+                this.Hide();
+
+                lock (_poolLock)
+                {
+                    _isShowing = false;
+
+                    // If there are queued messages, show the next one immediately
+                    if (_pendingMessages.Count > 0)
+                    {
+                        string nextMsg = _pendingMessages.Dequeue();
+                        ShowNextFromPool(nextMsg);
+                    }
+                }
             }
-            try { this.Close(); } catch { }
+            catch
+            {
+                // Failsafe: ensure we don't block the queue
+                lock (_poolLock) { _isShowing = false; }
+                lock (_toastLock) { _activeToasts.Remove(this); }
+                try { this.Hide(); } catch { }
+            }
         }
-        
+
+        /// <summary>
+        /// Shows a toast by reusing the pooled instance. If the pool is busy,
+        /// the message is queued and will display after the current toast dismisses.
+        /// </summary>
         public static void ShowToast(string message)
         {
             string smartMessage = MakeMessageSmart(message);
-            Application.Current.Dispatcher.InvokeAsync(() => 
+
+            // Anti-spam: skip exact duplicate within 500ms
+            long now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+            if (_lastMessage == smartMessage && (now - _lastMessageTime) < 500)
+                return;
+            _lastMessage = smartMessage;
+            _lastMessageTime = now;
+
+            Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
-                lock (_toastLock)
+                lock (_poolLock)
                 {
-                    if (_activeToasts.Count >= 4)
+                    if (_isShowing)
                     {
-                        try 
-                        {
-                            var oldest = _activeToasts[0];
-                            oldest.Close();
-                            _activeToasts.RemoveAt(0);
-                        } 
-                        catch { }
+                        // Queue it — max 3 pending to prevent unbounded growth
+                        if (_pendingMessages.Count < 3)
+                            _pendingMessages.Enqueue(smartMessage);
+                        return;
                     }
+
+                    ShowNextFromPool(smartMessage);
+                }
+            });
+        }
+
+        /// <summary>
+        /// Internal: configures and shows the pooled window with a new message.
+        /// Must be called on the UI thread while holding _poolLock.
+        /// </summary>
+        private static void ShowNextFromPool(string message)
+        {
+            _isShowing = true;
+
+            try
+            {
+                if (_pooledInstance == null)
+                {
+                    _pooledInstance = new ToastWindow();
                 }
 
-                var toast = new ToastWindow(smartMessage);
-                toast.Show();
-                toast.StartDismissTimer();
-            });
+                _pooledInstance.ConfigureForMessage(message);
+
+                if (!_pooledInstance.IsLoaded)
+                {
+                    _pooledInstance.Show();
+                    // Window_Loaded will call ShowAndAnimate
+                }
+                else
+                {
+                    _pooledInstance.Show();
+                    _pooledInstance.ShowAndAnimate();
+                }
+            }
+            catch (Exception ex)
+            {
+                _isShowing = false;
+                Classes.Logger.LogAction("TOAST", $"Show failed: {ex.Message}");
+
+                // If the pooled instance is corrupt, discard it
+                try { _pooledInstance?.Close(); } catch { }
+                _pooledInstance = null;
+            }
         }
 
         public static string FormatSize(long bytes) => FlyShelf.Classes.FormatHelper.FormatSize(bytes);

@@ -470,6 +470,17 @@ namespace FlyShelf
             }
             else
             {
+                // ═══ RESET FILTERS ON RESUMMON ═══
+                // Clear any active category/search filter before showing.
+                // Stale filters cause expensive CollectionView refresh during the
+                // show animation, making the summon feel laggy.
+                if (_activeCategoryFilter != null)
+                    ClearCategoryFilter();
+                if (_isFilterBarActive)
+                    ToggleFilterBar(false);
+                if (_isSearchActive)
+                    CloseSearch();
+
                 double targetX = -1;
                 double targetY = -1;
                 bool positionFound = false;

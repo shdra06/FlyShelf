@@ -31,7 +31,7 @@
     },
     "pairing_codes": {
       "$code": {
-        ".read": "auth != null",
+        ".read": "auth != null && data.child('uid').val() === auth.uid",
         ".write": "auth != null && (!data.exists() || data.child('uid').val() === auth.uid)",
         ".validate": "newData.hasChildren(['deviceId', 'pairingKey', 'uid'])"
       },
@@ -48,7 +48,7 @@
     },
     "forced_sync": {
       "$deviceId": {
-        ".read": "auth != null",
+        ".read": "auth != null && data.child('uid').val() === auth.uid",
         ".write": "auth != null && newData.child('uid').val() === auth.uid"
       },
       ".read": false,
@@ -79,7 +79,7 @@
     "licenses": {
       "revoked": {
         "$keyId": {
-          ".read": true,
+          ".read": "auth != null",
           ".write": false
         }
       },
@@ -87,7 +87,7 @@
         "$keyId": {
           ".read": "auth != null",
           "$deviceId": {
-            ".write": "auth != null && !data.exists()",
+            ".write": false,
             ".validate": "newData.hasChildren(['deviceId', 'activatedAt', 'uid']) && newData.child('uid').val() === auth.uid"
           }
         }
