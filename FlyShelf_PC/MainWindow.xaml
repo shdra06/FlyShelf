@@ -691,7 +691,7 @@
         </Canvas>
 
         <!-- Premium frosted veil — subtly dims the Mica/wallpaper backdrop for crisp content readability -->
-        <Border Grid.Row="1" IsHitTestVisible="False">
+        <Border Grid.RowSpan="2" IsHitTestVisible="False">
             <Border.Background>
                 <SolidColorBrush Color="#000000" Opacity="0.12" />
             </Border.Background>
