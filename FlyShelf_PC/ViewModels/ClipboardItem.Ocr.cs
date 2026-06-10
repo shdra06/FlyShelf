@@ -60,7 +60,7 @@ namespace FlyShelf.ViewModels
                         uint imgW = (uint)softwareBitmap.PixelWidth;
                         uint imgH = (uint)softwareBitmap.PixelHeight;
 
-                        if (Math.Max(imgW, imgH) < 2200)
+                        if (Math.Max(imgW, imgH) < 2800)
                         {
                             try
                             {
@@ -122,6 +122,19 @@ namespace FlyShelf.ViewModels
                             {
                                 FlyShelf.Classes.Logger.LogAction("OCR_DOWNSCALE", $"Downscale failed (using original): {downscaleEx.Message}");
                             }
+                        }
+
+                        // ── Contrast enhancement ──
+                        // Neutralize colored highlights (blue/yellow row backgrounds) and
+                        // stretch contrast for dramatically improved character recognition.
+                        try
+                        {
+                            var enhanced = FlyShelf.Classes.OcrPreprocessor.EnhanceForOcr(softwareBitmap);
+                            softwareBitmap = enhanced;
+                        }
+                        catch (Exception enhanceEx)
+                        {
+                            FlyShelf.Classes.Logger.LogAction("OCR_ENHANCE", $"Enhancement failed (using original): {enhanceEx.Message}");
                         }
 
                         // ── Run OCR ──
@@ -205,7 +218,7 @@ namespace FlyShelf.ViewModels
                         uint imgW = (uint)softwareBitmap.PixelWidth;
                         uint imgH = (uint)softwareBitmap.PixelHeight;
 
-                        if (Math.Max(imgW, imgH) < 2200)
+                        if (Math.Max(imgW, imgH) < 2800)
                         {
                             try
                             {
@@ -261,6 +274,17 @@ namespace FlyShelf.ViewModels
                             {
                                 FlyShelf.Classes.Logger.LogAction("AUTO_OCR_DOWNSCALE", $"Downscale failed (using original): {downscaleEx.Message}");
                             }
+                        }
+
+                        // ── Contrast enhancement ──
+                        try
+                        {
+                            var enhanced = FlyShelf.Classes.OcrPreprocessor.EnhanceForOcr(softwareBitmap);
+                            softwareBitmap = enhanced;
+                        }
+                        catch (Exception enhanceEx)
+                        {
+                            FlyShelf.Classes.Logger.LogAction("OCR_ENHANCE", $"Auto-OCR enhancement failed (using original): {enhanceEx.Message}");
                         }
 
                         // ── Run OCR ──

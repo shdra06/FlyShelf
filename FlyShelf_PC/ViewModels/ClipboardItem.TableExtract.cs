@@ -515,7 +515,20 @@ namespace FlyShelf.ViewModels
                         return;
                     }
 
-                    // ── STEP 1d: Run Windows OCR on the scaled & padded raw crop ──
+                    // ── STEP 1d: Enhance contrast for OCR ──
+                    // Neutralize any remaining colored highlights and maximize text contrast
+                    try
+                    {
+                        var enhancedOcr = Classes.OcrPreprocessor.EnhanceForOcr(ocrBitmap);
+                        ocrBitmap.Dispose();
+                        ocrBitmap = enhancedOcr;
+                    }
+                    catch (Exception enhanceEx)
+                    {
+                        Classes.Logger.LogAction("TABLE_OCR_ENHANCE", $"Enhancement failed (using original): {enhanceEx.Message}");
+                    }
+
+                    // ── STEP 1e: Run Windows OCR on the enhanced, scaled & padded raw crop ──
                     var ocrResult = await ocrEngine.RecognizeAsync(ocrBitmap);
                     ocrBitmap.Dispose();
 

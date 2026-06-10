@@ -573,7 +573,7 @@ namespace FlyShelf.Windows
 
                             // For small/medium images, upscale 2x for better OCR text detection.
                             // The OCR engine struggles with text smaller than ~12px.
-                            if (Math.Max(ocrW, ocrH) < 2200)
+                            if (Math.Max(ocrW, ocrH) < 2800)
                             {
                                 try
                                 {
@@ -609,6 +609,15 @@ namespace FlyShelf.Windows
                                     // Continue with original bitmap — upscale is best-effort
                                 }
                             }
+
+                            // ── Contrast enhancement ──
+                            // Neutralize colored highlights and stretch contrast
+                            try
+                            {
+                                var enhanced = FlyShelf.Classes.OcrPreprocessor.EnhanceForOcr(softwareBitmap);
+                                softwareBitmap = enhanced;
+                            }
+                            catch { }
 
                             // Try user profile languages first (more likely to match), then en-US fallback
                             var ocrEngine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
