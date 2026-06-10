@@ -409,8 +409,154 @@ namespace FlyShelf
 
         private void TodoStopwatch_Click(object sender, RoutedEventArgs e)
         {
-            var tw = new FlyShelf.Windows.TimerWindow("5m");
-            tw.Show();
+            var menu = new System.Windows.Controls.ContextMenu
+            {
+                PlacementTarget = TodoStopwatchBtn,
+                Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+                StaysOpen = true,
+                HorizontalOffset = -40
+            };
+
+            // Common time presets
+            var presets = new[]
+            {
+                ("1 min",    "1m"),
+                ("2 min",    "2m"),
+                ("5 min",    "5m"),
+                ("10 min",   "10m"),
+                ("15 min",   "15m"),
+                ("25 min  🍅", "25m"),   // Pomodoro
+                ("30 min",   "30m"),
+                ("45 min",   "45m"),
+                ("1 hour",   "1h"),
+                ("2 hours",  "2h"),
+            };
+
+            foreach (var (label, code) in presets)
+            {
+                var item = new System.Windows.Controls.MenuItem
+                {
+                    Header = label,
+                    Tag = code,
+                    FontSize = 12.5,
+                    Padding = new Thickness(10, 6, 10, 6)
+                };
+                item.Click += (s, ev) =>
+                {
+                    var tw = new FlyShelf.Windows.TimerWindow((string)((System.Windows.Controls.MenuItem)s).Tag);
+                    tw.Show();
+                };
+                menu.Items.Add(item);
+            }
+
+            menu.Items.Add(new System.Windows.Controls.Separator());
+
+            // Custom time input
+            var customPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Margin = new Thickness(10, 4, 10, 6)
+            };
+
+            var customInput = new TextBox
+            {
+                Width = 70,
+                FontSize = 12,
+                VerticalContentAlignment = VerticalAlignment.Center,
+                Padding = new Thickness(6, 4, 6, 4),
+                ToolTip = "e.g. 12, 90, 3:30",
+                Foreground = (Brush)(TryFindResource("MicaWPF.Brushes.TextFillColorPrimary") ?? Brushes.White),
+                Background = (Brush)(TryFindResource("MicaWPF.Brushes.SubtleFillColorSecondary") ?? new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF))),
+                BorderBrush = (Brush)(TryFindResource("MicaWPF.Brushes.ControlStrokeColorDefault") ?? new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF))),
+                BorderThickness = new Thickness(1),
+                Text = ""
+            };
+
+            var unitLabel = new TextBlock
+            {
+                Text = "min",
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (Brush)(TryFindResource("MicaWPF.Brushes.TextFillColorTertiary") ?? Brushes.Gray),
+                Margin = new Thickness(4, 0, 6, 0)
+            };
+
+            var goBtn = new System.Windows.Controls.Button
+            {
+                Content = "▶",
+                FontSize = 12,
+                Padding = new Thickness(8, 4, 8, 4),
+                VerticalAlignment = VerticalAlignment.Center,
+                Cursor = Cursors.Hand,
+                ToolTip = "Start Timer"
+            };
+
+            goBtn.Click += (s, ev) =>
+            {
+                LaunchCustomTimer(customInput.Text);
+                menu.IsOpen = false;
+            };
+
+            customInput.PreviewKeyDown += (s, ev) =>
+            {
+                if (ev.Key == Key.Enter)
+                {
+                    LaunchCustomTimer(customInput.Text);
+                    menu.IsOpen = false;
+                    ev.Handled = true;
+                }
+            };
+
+            customPanel.Children.Add(customInput);
+            customPanel.Children.Add(unitLabel);
+            customPanel.Children.Add(goBtn);
+
+            var customMenuItem = new System.Windows.Controls.MenuItem
+            {
+                Header = customPanel,
+                StaysOpenOnClick = true
+            };
+            menu.Items.Add(customMenuItem);
+
+            menu.IsOpen = true;
+
+            // Focus the custom input after the menu opens
+            menu.Opened += (s, ev) =>
+            {
+                customInput.Dispatcher.InvokeAsync(() =>
+                {
+                    customInput.Focus();
+                    Keyboard.Focus(customInput);
+                }, System.Windows.Threading.DispatcherPriority.Input);
+            };
+        }
+
+        private void LaunchCustomTimer(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return;
+
+            string trimmed = input.Trim();
+
+            // Support mm:ss format (e.g. "3:30")
+            if (trimmed.Contains(":"))
+            {
+                var tw = new FlyShelf.Windows.TimerWindow(trimmed);
+                tw.Show();
+                return;
+            }
+
+            // Try parse as number → treat as minutes
+            if (int.TryParse(trimmed, out int mins) && mins > 0)
+            {
+                var tw = new FlyShelf.Windows.TimerWindow($"{mins}m");
+                tw.Show();
+            }
+            else
+            {
+                // Fallback: pass as-is and let TimerWindow.ParseContext handle it
+                var tw = new FlyShelf.Windows.TimerWindow(trimmed);
+                tw.Show();
+            }
         }
     }
 }

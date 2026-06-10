@@ -95,7 +95,7 @@ namespace FlyShelf
                 }
 
                 this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
-                ApplyPopupBackground(); // solid dark
+                ApplyPopupBackground(); // solid dark + software blur fallback
             }
             ResetSelectionAccent();
         }
@@ -131,7 +131,7 @@ namespace FlyShelf
                 }
 
                 this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
-                ApplyPopupBackground(); // solid dark
+                ApplyPopupBackground(); // solid dark + software blur fallback
             }
             ResetSelectionAccent();
         }
@@ -150,16 +150,17 @@ namespace FlyShelf
             }
 
             this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
-            ApplyPopupBackground();
+            ApplyPopupBackground(skipSoftwareBlur: true); // Own wallpaper is applied right after
             ResetSelectionAccent();
         }
 
         /// <summary>
-        /// Applies a solid background for the popup clipboard
-        /// (solid fallback when system blur is disabled or unsupported).
-        /// Uses the active theme's ThemeWindowFallback color for theme-awareness.
+        /// Applies a fallback background for the popup clipboard when system blur is disabled.
+        /// Instead of a flat solid color, loads the Windows desktop wallpaper and applies a
+        /// heavy software blur to simulate the frosted glass look without DWM compositor.
+        /// Falls back to solid dark if no desktop wallpaper is available.
         /// </summary>
-        private void ApplyPopupBackground()
+        private void ApplyPopupBackground(bool skipSoftwareBlur = false)
         {
             // Read the theme-aware fallback color; defaults to neutral dark grey (#242424)
             SolidColorBrush fallback;
@@ -177,6 +178,58 @@ namespace FlyShelf
             bg.Freeze();
             this.Background = Brushes.Transparent; // Maintain window chrome transparency for flawless fade compositing
             if (RootContent != null) RootContent.Background = bg;
+
+            // ═══ SOFTWARE BLUR FALLBACK ═══
+            // When DWM blur is off, simulate frosted glass by showing a heavily blurred
+            // version of the desktop wallpaper as the clipboard background.
+            if (skipSoftwareBlur) return; // Caller will apply its own wallpaper
+            string desktopWp = GetDesktopWallpaperPath();
+            if (string.IsNullOrEmpty(desktopWp) || !System.IO.File.Exists(desktopWp))
+                return; // No wallpaper available — solid dark is fine
+
+            try
+            {
+                // Load the desktop wallpaper at reduced resolution for fast blurring
+                var bmp = new System.Windows.Media.Imaging.BitmapImage();
+                bmp.BeginInit();
+                bmp.UriSource = new Uri(desktopWp, UriKind.Absolute);
+                bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+                bmp.DecodePixelWidth = 600; // Low-res for performance
+                bmp.EndInit();
+                bmp.Freeze();
+
+                // Show immediately (unblurred) while the blur processes in background
+                WallpaperBg.Source = bmp;
+                WallpaperBg.Opacity = 0.35;
+                WallpaperBg.Visibility = Visibility.Visible;
+
+                // Heavy software blur on background thread (radius 25 for strong frosted effect)
+                var capturedBmp = bmp;
+                _ = System.Threading.Tasks.Task.Run(() =>
+                {
+                    try
+                    {
+                        var blurred = PreBlurBitmap(capturedBmp, 25);
+                        Dispatcher.InvokeAsync(() =>
+                        {
+                            WallpaperBg.Source = blurred;
+                            WallpaperBg.Opacity = 0.38;
+
+                            // Apply a dark tint overlay so text remains readable
+                            WallpaperThemeOverlay.Visibility = Visibility.Visible;
+                            WallpaperRadialBrush.GradientStops[0].Color = Color.FromArgb(80, 20, 20, 30);
+                            WallpaperRadialBrush.GradientStops[1].Color = Color.FromArgb(160, 10, 10, 20);
+                        });
+                    }
+                    catch { }
+                });
+
+                Classes.Logger.LogAction("THEME", $"Software blur fallback — using desktop wallpaper: {desktopWp}");
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("THEME", $"Software blur fallback failed: {ex.Message}");
+            }
         }
 
         /// <summary>
