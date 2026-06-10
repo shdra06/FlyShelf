@@ -27,6 +27,9 @@ namespace FlyShelf.Windows
         private Action<string>? _peerDisconnectedHandler;
         private Action<string, string>? _transportSwitchedHandler;
 
+        // ═══ Hub Thumbnail Rendering ═══
+        private System.Windows.Threading.DispatcherTimer? _hubScrollHighQualityTimer;
+
         public HubWindow(FlyShelfViewModel viewModel)
         {
             _viewModel = viewModel;
@@ -172,6 +175,14 @@ namespace FlyShelf.Windows
                     {
                         _pairingHandshakeTimer?.Start();
                     }
+
+                    // Render visible image thumbnails when the HubWindow becomes visible
+                    // (they may have been evicted by OptimizeMemoryUsage while the window was hidden)
+                    if (HistoryGrid != null && HistoryGrid.Visibility == Visibility.Visible)
+                    {
+                        Dispatcher.InvokeAsync(() => RenderHubVisibleThumbnails(),
+                            System.Windows.Threading.DispatcherPriority.Background);
+                    }
                 }
                 else
                 {
@@ -189,6 +200,9 @@ namespace FlyShelf.Windows
                     RefreshDevices_Click(null, null);
                     // Hook window-level smooth scrolling with elegant dedicated SmoothScrollPCApp
                     Classes.SmoothScrollPCApp.AttachToWindow(this);
+
+                    // Hook scroll-based thumbnail rendering on HubListView
+                    HubListView.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(HubListView_ScrollChanged));
 
                     // Initialize retention ComboBox from saved setting
                     if (RetentionCombo != null)
@@ -453,6 +467,12 @@ namespace FlyShelf.Windows
                 else
                 {
                     _pairingHandshakeTimer?.Stop();
+                }
+                if (tag == "History")
+                {
+                    // Render visible thumbnails when switching to the Clipboard/History tab
+                    Dispatcher.InvokeAsync(() => RenderHubVisibleThumbnails(),
+                        System.Windows.Threading.DispatcherPriority.Background);
                 }
             }
         }
@@ -840,5 +860,135 @@ namespace FlyShelf.Windows
         }
 
         // ═══ Logs, Diagnostics & Drag-Drop moved to HubWindow.Logs.cs ═══
+
+        // ═══════════════════════════════════════════════════════════════════
+        // Hub Thumbnail Rendering — Scroll-based lazy load for History tab
+        // ═══════════════════════════════════════════════════════════════════
+
+        private void HubListView_ScrollChanged(object sender, ScrollChangedEventArgs e)
+        {
+            if (e.VerticalChange == 0) return;
+
+            // Debounce: start or reset the 30ms timer to render visible thumbnails when scroll stops
+            if (_hubScrollHighQualityTimer == null)
+            {
+                _hubScrollHighQualityTimer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(30)
+                };
+                _hubScrollHighQualityTimer.Tick += (s, ev) =>
+                {
+                    _hubScrollHighQualityTimer.Stop();
+                    RenderHubVisibleThumbnails();
+                };
+            }
+            else
+            {
+                _hubScrollHighQualityTimer.Stop();
+            }
+            _hubScrollHighQualityTimer.Start();
+        }
+
+        private ScrollViewer? GetHubScrollViewer()
+        {
+            if (HubListView == null) return null;
+            var border = VisualTreeHelper.GetChild(HubListView, 0) as System.Windows.Controls.Decorator;
+            return border?.Child as ScrollViewer;
+        }
+
+        /// <summary>
+        /// Walks all visible HubListView containers and loads 300px image thumbnails
+        /// for any Image/QRCode items whose Icon has been evicted (null).
+        /// Does NOT evict — eviction is handled by OptimizeMemoryUsage on window close.
+        /// </summary>
+        private void RenderHubVisibleThumbnails()
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    if (!this.IsVisible) return;
+                    if (HistoryGrid == null || HistoryGrid.Visibility != Visibility.Visible) return;
+
+                    // Force layout pass to ensure containers are generated
+                    HubListView.UpdateLayout();
+
+                    if (HubListView.ItemContainerGenerator.Status != System.Windows.Controls.Primitives.GeneratorStatus.ContainersGenerated)
+                        return;
+
+                    var sv = GetHubScrollViewer();
+                    if (sv == null) return;
+
+                    double viewportWidth = sv.ViewportWidth;
+                    double viewportHeight = sv.ViewportHeight;
+                    if (viewportHeight <= 0 || viewportWidth <= 0) return;
+
+                    // Prefetch overdraw: expand viewport by 300px top and bottom
+                    Rect viewportRect = new Rect(0, -300, viewportWidth, viewportHeight + 600);
+                    int count = HubListView.Items.Count;
+
+                    for (int i = 0; i < count; i++)
+                    {
+                        var item = HubListView.Items[i] as ClipboardItem;
+                        if (item == null) continue;
+
+                        // Only process image and QR code items
+                        if (item.ItemType != ClipboardItemType.Image && item.ItemType != ClipboardItemType.QRCode)
+                            continue;
+
+                        // Skip if already loaded or currently loading
+                        if (item.Icon != null || item.IsLoadingHighQuality)
+                            continue;
+
+                        var container = HubListView.ItemContainerGenerator.ContainerFromIndex(i) as FrameworkElement;
+                        if (container == null || !container.IsLoaded) continue;
+
+                        bool isVisible = false;
+                        try
+                        {
+                            GeneralTransform transform = container.TransformToAncestor(sv);
+                            Rect bounds = transform.TransformBounds(new Rect(0, 0, container.ActualWidth, container.ActualHeight));
+                            isVisible = viewportRect.IntersectsWith(bounds);
+                        }
+                        catch { /* container not fully in visual tree */ }
+
+                        if (!isVisible) continue;
+
+                        // Load 300px thumbnail on background thread
+                        item.IsLoadingHighQuality = true;
+                        string filePath = item.FilePath;
+
+                        _ = System.Threading.Tasks.Task.Run(() =>
+                        {
+                            try
+                            {
+                                var bmp = FlyShelfViewModel.LoadImageThumbnail(filePath, 300);
+                                if (bmp != null)
+                                {
+                                    Dispatcher.InvokeAsync(() =>
+                                    {
+                                        item.Icon = bmp;
+                                        item.IsLoadedHighQuality = true;
+                                        item.IsLoadingHighQuality = false;
+                                    }, System.Windows.Threading.DispatcherPriority.Normal);
+                                }
+                                else
+                                {
+                                    Dispatcher.InvokeAsync(() => { item.IsLoadingHighQuality = false; });
+                                }
+                            }
+                            catch
+                            {
+                                Dispatcher.InvokeAsync(() => { item.IsLoadingHighQuality = false; });
+                            }
+                        });
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("HUB_THUMB_ERR", $"Error in RenderHubVisibleThumbnails: {ex.Message}");
+                }
+            }, System.Windows.Threading.DispatcherPriority.Normal);
+        }
     }
 }

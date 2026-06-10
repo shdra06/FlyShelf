@@ -86,21 +86,29 @@ namespace FlyShelf
             return false;
         }
 
-        public void ShowNearPosition(double targetX, double targetY, int mode = 0, bool isPersistent = false, bool stealFocus = true)
+        public void ShowNearPosition(double targetX, double targetY, int mode = 0, bool isPersistent = false, bool stealFocus = true, bool? knownOnOtherDesktop = null)
         {
             Classes.Logger.LogAction("TELEMETRY", $"ShowNearPosition entered, mode={mode}, isPersistent={isPersistent}, stealFocus={stealFocus}");
             
-            // Check if the window is on another virtual desktop!
+            // PERF: Reuse the VD check from ToggleMainClipboard if already known,
+            // avoiding a redundant COM call with 30ms timeout.
             bool isOnOtherDesktop = false;
-            try
+            if (knownOnOtherDesktop.HasValue)
             {
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                if (hwnd != IntPtr.Zero)
-                {
-                    isOnOtherDesktop = !IsWindowOnCurrentVirtualDesktop(hwnd);
-                }
+                isOnOtherDesktop = knownOnOtherDesktop.Value;
             }
-            catch { }
+            else
+            {
+                try
+                {
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        isOnOtherDesktop = !IsWindowOnCurrentVirtualDesktop(hwnd);
+                    }
+                }
+                catch { }
+            }
 
             if (isOnOtherDesktop)
             {
@@ -202,39 +210,13 @@ namespace FlyShelf
                 Dispatcher.InvokeAsync(() => HideWindowInternal(), System.Windows.Threading.DispatcherPriority.Background);
             }
 
-            // CRITICAL: Always pre-apply the target mode's width and layout mode offscreen.
-            // This ensures WPF processes the size change while the window is still offscreen,
-            // preventing the "half-rendered" flash where the window appears at the old mode's width.
-            _isSuppressingSizeSync = true;
-            try
-            {
-                _viewModel.CurrentMode = mode;
-                this.Width = _viewModel.CurrentFlyShelfWidth;
-                this.MaxHeight = _viewModel.CurrentFlyShelfMaxHeight;
-                if (mode == 0)
-                {
-                    if (this.SizeToContent != SizeToContent.Height)
-                        this.SizeToContent = SizeToContent.Height;
-                    if (!double.IsNaN(this.Height))
-                        this.Height = double.NaN;
-                }
-                else
-                {
-                    if (this.SizeToContent != SizeToContent.Manual)
-                        this.SizeToContent = SizeToContent.Manual;
-                    this.Height = _viewModel.CurrentFlyShelfMaxHeight;
-                }
-                this.UpdateLayout();
-            }
-            finally
-            {
-                _isSuppressingSizeSync = false;
-            }
+            // PERF: Set the mode eagerly so toolbar visibility updates correctly,
+            // but DON'T run UpdateLayout() here — it will run once inside ShowNearPositionInternal.
+            _viewModel.CurrentMode = mode;
 
-            // ALWAYS defer the positioning, activation, and summon animation to Background priority.
-            // This guarantees that WPF renders the 0% opacity frame offscreen, fully committing 
-            // the 0% transparent state to DWM, BEFORE the window is positioned back onscreen.
-            // This completely eliminates any repositioning or rapid re-summon flashes/double-spawns!
+            // Defer the positioning, activation, and summon animation to Loaded priority.
+            // Loaded runs after layout + rendering but BEFORE Background/ContextIdle,
+            // giving the fastest spawn while still allowing WPF to commit the 0% opacity frame.
             Dispatcher.InvokeAsync(() =>
             {
                 // Verify this summon hasn't been superseded by a newer summon in the meantime
@@ -245,45 +227,51 @@ namespace FlyShelf
                 }
 
                 ShowNearPositionInternal(targetX, targetY, mode, isPersistent, stealFocus);
-            }, System.Windows.Threading.DispatcherPriority.Background);
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         private void ShowNearPositionInternal(double targetX, double targetY, int mode, bool isPersistent, bool stealFocus)
         {
-            // Capture the current virtual desktop ID at the moment of summoning
-            try
+            // PERF: Capture the virtual desktop ID asynchronously — these COM calls can take
+            // 10-100ms+ when Explorer is busy during desktop switches. The desktop ID is only
+            // used for dismiss logic, not for the actual spawn, so deferring is safe.
+            _summonedDesktopId = Guid.Empty;
+            _lastActiveExternalWindowWasOnCurrentAtSummon = false;
+            IntPtr capturedFg = GetForegroundWindow();
+            IntPtr capturedLastExternal = _lastActiveExternalWindow;
+            System.Threading.Tasks.Task.Run(() =>
             {
-                var localVdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
-                
-                // 1. Try foreground window (which is the active user window on the current desktop)
-                IntPtr fg = GetForegroundWindow();
-                _summonedDesktopId = Guid.Empty;
-                if (fg != IntPtr.Zero)
+                try
                 {
-                    localVdm.GetWindowDesktopId(fg, out _summonedDesktopId);
-                }
-                
-                // 2. Try last active external window if foreground failed or returned empty
-                _lastActiveExternalWindowWasOnCurrentAtSummon = false;
-                if (_lastActiveExternalWindow != IntPtr.Zero && IsWindow(_lastActiveExternalWindow))
-                {
-                    int hrCheck = localVdm.IsWindowOnCurrentVirtualDesktop(_lastActiveExternalWindow, out int onCurrent);
-                    if (hrCheck == 0 && onCurrent != 0)
+                    var bgVdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                    
+                    if (capturedFg != IntPtr.Zero)
                     {
-                        _lastActiveExternalWindowWasOnCurrentAtSummon = true;
-                        if (_summonedDesktopId == Guid.Empty)
+                        bgVdm.GetWindowDesktopId(capturedFg, out Guid desktopId);
+                        _summonedDesktopId = desktopId;
+                    }
+                    
+                    if (capturedLastExternal != IntPtr.Zero && IsWindow(capturedLastExternal))
+                    {
+                        int hrCheck = bgVdm.IsWindowOnCurrentVirtualDesktop(capturedLastExternal, out int onCurrent);
+                        if (hrCheck == 0 && onCurrent != 0)
                         {
-                            localVdm.GetWindowDesktopId(_lastActiveExternalWindow, out _summonedDesktopId);
+                            _lastActiveExternalWindowWasOnCurrentAtSummon = true;
+                            if (_summonedDesktopId == Guid.Empty)
+                            {
+                                bgVdm.GetWindowDesktopId(capturedLastExternal, out Guid dId);
+                                _summonedDesktopId = dId;
+                            }
                         }
                     }
+                    
+                    Classes.Logger.LogAction("DESKTOP", $"Summoned on virtual desktop: {_summonedDesktopId}, prevWindowWasOnCurrent: {_lastActiveExternalWindowWasOnCurrentAtSummon}");
                 }
-                
-                Classes.Logger.LogAction("DESKTOP", $"Summoned on virtual desktop: {_summonedDesktopId}, prevWindowWasOnCurrent: {_lastActiveExternalWindowWasOnCurrentAtSummon}");
-            }
-            catch (Exception ex)
-            {
-                Classes.Logger.LogAction("DESKTOP_ERR", $"Failed to capture summoned desktop ID: {ex.Message}");
-            }
+                catch (Exception ex)
+                {
+                    Classes.Logger.LogAction("DESKTOP_ERR", $"Failed to capture summoned desktop ID: {ex.Message}");
+                }
+            });
 
             if (this.WindowState == WindowState.Minimized)
             {

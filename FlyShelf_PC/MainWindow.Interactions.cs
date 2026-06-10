@@ -526,7 +526,7 @@ namespace FlyShelf
                     targetY = workArea.Top + workArea.Height;
                 }
 
-                ShowNearPosition(targetX, targetY, 1, false, false); // mode = 1, isPersistent = false, stealFocus = false (native clipboard behavior: don't steal focus from active app)
+                ShowNearPosition(targetX, targetY, 1, false, false, knownOnOtherDesktop: isOnOtherDesktop); // mode = 1, isPersistent = false, stealFocus = false (native clipboard behavior: don't steal focus from active app)
             }
         }
 

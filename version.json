@@ -2,7 +2,7 @@
     "pc_version":  "2.5.0",
     "pc_changelog":  "v2.5.0 â€” Advanced Table Extraction \u0026 UI Refinements\n\nâ€¢ NEW: Bradley-Roth adaptive thresholding for perfect low-contrast OCR\nâ€¢ NEW: Projection-Profile column separation for accurate table extraction\nâ€¢ NEW: Advanced FlyShelf table extraction engine (replaces Gemini OCR)\nâ€¢ MOVED: Live Network Monitor relocated to System Logs tab\nâ€¢ PERF: Lighthouse performance 66â†’90+ and accessibility 76â†’95+\nâ€¢ FIX: Footer readability, Unicode restoration, missing navbar logo\nâ€¢ UI: Default pricing to International USD tab",
     "pc_download":  "https://github.com/shdra06/FlyShelf/releases/download/v2.5.0/FlyShelf.exe",
-    "pc_sha256":  "0205858a047c70c95634dc7c9f38bc30ea19d13bf0d813795e11cd6b7565fef3",
+    "pc_sha256":  "72b98326abbf848a5cf17f199f39ef35411e7b3a41edb7bf1d803cd3c8e50cd0",
     "android_version":  "7.1.0",
     "android_changelog":  "v7.1.0 â€” Version Sync\n\nâ€¢ Bumped version to sync with Desktop client release.",
     "android_download":  "https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk"

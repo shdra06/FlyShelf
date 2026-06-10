@@ -234,8 +234,6 @@ namespace FlyShelf
             // Clear last focused bullet textbox reference
             _lastFocusedBulletTextBox = null;
 
-            // Save before closing
-            NoteManager.SaveNow();
 
             // Restore notes button icon and tooltip
             NotesToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.List24 };
@@ -257,8 +255,15 @@ namespace FlyShelf
                 ShelfListView.Visibility = Visibility.Visible;
                 // Let the XAML DataTrigger on DroppedItems.Count control visibility
                 EmptyStatePanel.ClearValue(VisibilityProperty);
+
+                // PERF: Defer save to Background priority so it doesn't block the summon pipeline.
+                Dispatcher.InvokeAsync(() => NoteManager.SaveNow(),
+                    System.Windows.Threading.DispatcherPriority.Background);
                 return;
             }
+
+            // Normal close path: save synchronously (no spawn pipeline follows)
+            NoteManager.SaveNow();
 
             // Animate out
             var fadeAnim = Classes.AnimationHelper.FadeOut();

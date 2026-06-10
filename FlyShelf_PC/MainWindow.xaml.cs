@@ -1152,10 +1152,14 @@ namespace FlyShelf
 
         /// <summary>
         /// Query IsWindowOnCurrentVirtualDesktop on a background ThreadPool thread (MTA)
-        /// with a strict timeout (default 30ms). Prevents Explorer.exe COM congestion
+        /// with a strict timeout. Prevents Explorer.exe COM congestion
         /// from freezing or lagging the UI thread during virtual desktop switches.
+        /// PERF: Uses a cached COM singleton — avoids leaking abandoned COM objects that
+        /// congest Explorer's COM apartment and cause progressive desktop-switch lag.
         /// </summary>
-        public bool IsWindowOnCurrentVirtualDesktop(IntPtr hwnd, int timeoutMs = 30)
+        [ThreadStatic] private static FlyShelf.Classes.NativeMethods.IVirtualDesktopManager? _threadLocalVdm;
+
+        public bool IsWindowOnCurrentVirtualDesktop(IntPtr hwnd, int timeoutMs = 60)
         {
             try
             {
@@ -1163,12 +1167,21 @@ namespace FlyShelf
                 {
                     try
                     {
-                        var localVdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
-                        int hr = localVdm.IsWindowOnCurrentVirtualDesktop(hwnd, out int onCurrent);
-                        return hr == 0 && onCurrent != 0;
+                        // PERF: Reuse a thread-local COM instance instead of creating new ones.
+                        // This prevents COM object leaks when tasks timeout and get abandoned.
+                        _threadLocalVdm ??= (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                        int hr = _threadLocalVdm.IsWindowOnCurrentVirtualDesktop(hwnd, out int onCurrent);
+                        if (hr != 0)
+                        {
+                            // COM call failed — recreate instance on next call
+                            _threadLocalVdm = null;
+                            return false;
+                        }
+                        return onCurrent != 0;
                     }
                     catch
                     {
+                        _threadLocalVdm = null; // Reset on error so next call creates fresh instance
                         return false;
                     }
                 });
