@@ -1133,18 +1133,6 @@ namespace FlyShelf
             {
                 this.Left = -20000;
                 this.Top = -20000;
-
-                // Cloak the window when hidden to free up DWM resources and prevent visual artifacts
-                try
-                {
-                    var hwnd = new WindowInteropHelper(this).Handle;
-                    if (hwnd != IntPtr.Zero)
-                    {
-                        int cloak = 1;
-                        DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, ref cloak, sizeof(int));
-                    }
-                }
-                catch { }
             }
 
             // Actively optimize and release memory whenever the window is hidden/unsummoned
