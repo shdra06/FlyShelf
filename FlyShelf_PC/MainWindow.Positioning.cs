@@ -210,9 +210,34 @@ namespace FlyShelf
                 Dispatcher.InvokeAsync(() => HideWindowInternal(), System.Windows.Threading.DispatcherPriority.Background);
             }
 
-            // PERF: Set the mode eagerly so toolbar visibility updates correctly,
-            // but DON'T run UpdateLayout() here — it will run once inside ShowNearPositionInternal.
-            _viewModel.CurrentMode = mode;
+            // Restore the offscreen layout pass — this commits the window's visual tree
+            // at 0% opacity BEFORE the spawn callback. Without it, DWM renders 1-3 black
+            // frames because the content hasn't been realized when the window moves onscreen.
+            _isSuppressingSizeSync = true;
+            try
+            {
+                _viewModel.CurrentMode = mode;
+                this.Width = _viewModel.CurrentFlyShelfWidth;
+                this.MaxHeight = _viewModel.CurrentFlyShelfMaxHeight;
+                if (mode == 0)
+                {
+                    if (this.SizeToContent != SizeToContent.Height)
+                        this.SizeToContent = SizeToContent.Height;
+                    if (!double.IsNaN(this.Height))
+                        this.Height = double.NaN;
+                }
+                else
+                {
+                    if (this.SizeToContent != SizeToContent.Manual)
+                        this.SizeToContent = SizeToContent.Manual;
+                    this.Height = _viewModel.CurrentFlyShelfMaxHeight;
+                }
+                this.UpdateLayout();
+            }
+            finally
+            {
+                _isSuppressingSizeSync = false;
+            }
 
             // Defer the positioning, activation, and summon animation to Loaded priority.
             // Loaded runs after layout + rendering but BEFORE Background/ContextIdle,
@@ -232,6 +257,18 @@ namespace FlyShelf
 
         private void ShowNearPositionInternal(double targetX, double targetY, int mode, bool isPersistent, bool stealFocus)
         {
+            // Cloak the window immediately to hide any rendering/positioning artifacts
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    int cloak = 1;
+                    DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, ref cloak, sizeof(int));
+                }
+            }
+            catch { }
+
             // PERF: Capture the virtual desktop ID asynchronously — these COM calls can take
             // 10-100ms+ when Explorer is busy during desktop switches. The desktop ID is only
             // used for dismiss logic, not for the actual spawn, so deferring is safe.
@@ -306,7 +343,8 @@ namespace FlyShelf
                 }
 
                 UpdateToolbarButtonsVisibility();
-                this.UpdateLayout();
+                // PERF: Skip UpdateLayout() here — already done offscreen in ShowNearPosition()
+                // before the deferred callback. This eliminates the duplicate layout pass.
             }
             finally
             {
@@ -516,6 +554,18 @@ namespace FlyShelf
                     _scrollHighQualityTimer.Stop();
                 }
                 _scrollHighQualityTimer.Start();
+
+                // Uncloak the window now that layout and first rendering pass at new position is complete
+                try
+                {
+                    var wndHwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (wndHwnd != IntPtr.Zero)
+                    {
+                        int cloak = 0;
+                        DwmSetWindowAttribute(wndHwnd, DWMWA_CLOAK, ref cloak, sizeof(int));
+                    }
+                }
+                catch { }
             }, System.Windows.Threading.DispatcherPriority.Loaded);
 
             int currentToken = ++_spawnToken;

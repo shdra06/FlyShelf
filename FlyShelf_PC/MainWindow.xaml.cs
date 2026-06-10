@@ -97,6 +97,7 @@ namespace FlyShelf
         public const int DWMWA_BORDER_COLOR = 34;
         public const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
         public const int DWMWA_COLOR_DARK_GRAY = 0x002D2D2D;
+        public const int DWMWA_CLOAK = 13;
 
         private const int GWL_EXSTYLE = -20;
         private const int WS_EX_NOACTIVATE = 0x08000000;
@@ -1132,6 +1133,18 @@ namespace FlyShelf
             {
                 this.Left = -20000;
                 this.Top = -20000;
+
+                // Cloak the window when hidden to free up DWM resources and prevent visual artifacts
+                try
+                {
+                    var hwnd = new WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        int cloak = 1;
+                        DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, ref cloak, sizeof(int));
+                    }
+                }
+                catch { }
             }
 
             // Actively optimize and release memory whenever the window is hidden/unsummoned
