@@ -571,14 +571,14 @@ namespace FlyShelf.Windows
                             uint ocrW = (uint)softwareBitmap.PixelWidth;
                             uint ocrH = (uint)softwareBitmap.PixelHeight;
 
-                            // For small/medium images, upscale 2x for better OCR text detection.
+                            // For small/medium images, upscale 3x for better OCR text detection.
                             // The OCR engine struggles with text smaller than ~12px.
                             if (Math.Max(ocrW, ocrH) < 2800)
                             {
                                 try
                                 {
-                                    uint newW = ocrW * 2;
-                                    uint newH = ocrH * 2;
+                                    uint newW = ocrW * 3;
+                                    uint newH = ocrH * 3;
                                     // Cap at 4000px (OCR engine max)
                                     if (newW > 4000) { newW = 4000; newH = (uint)(ocrH * (4000.0 / ocrW)); }
                                     if (newH > 4000) { newH = 4000; newW = (uint)(ocrW * (4000.0 / ocrH)); }
@@ -610,16 +610,9 @@ namespace FlyShelf.Windows
                                 }
                             }
 
-                            // ── Contrast enhancement ──
-                            // Neutralize colored highlights and stretch contrast
-                            try
-                            {
-                                var enhanced = FlyShelf.Classes.OcrPreprocessor.EnhanceForOcr(softwareBitmap);
-                                softwareBitmap = enhanced;
-                            }
-                            catch { }
-
-                            // Try user profile languages first (more likely to match), then en-US fallback
+                            // ── Multi-pass OCR for maximum accuracy ──
+                            // Run OCR on 3 preprocessing variants (Enhanced, Inverted+Enhanced, OtsuBinarized)
+                            // and pick the result with the most detected text. This handles all image types.
                             var ocrEngine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
                             if (ocrEngine == null)
                             {
@@ -628,8 +621,40 @@ namespace FlyShelf.Windows
 
                             if (ocrEngine != null)
                             {
-                                var result = await ocrEngine.RecognizeAsync(softwareBitmap);
-                                return (result, (double)ocrW, (double)ocrH);
+                                var variants = FlyShelf.Classes.OcrPreprocessor.CreateOcrVariants(softwareBitmap);
+                                global::Windows.Media.Ocr.OcrResult bestResult = null;
+                                int bestScore = 0;
+
+                                for (int v = 0; v < variants.Length; v++)
+                                {
+                                    try
+                                    {
+                                        var varResult = await ocrEngine.RecognizeAsync(variants[v].bitmap);
+                                        if (varResult != null)
+                                        {
+                                            int score = 0;
+                                            foreach (var line in varResult.Lines)
+                                                foreach (var word in line.Words)
+                                                    score += word.Text.Length;
+
+                                            FlyShelf.Classes.Logger.LogAction("OCR_MULTIPASS",
+                                                $"QuickLook {variants[v].name}: {varResult.Lines.Count} lines, {score} chars");
+
+                                            if (score > bestScore)
+                                            {
+                                                bestScore = score;
+                                                bestResult = varResult;
+                                            }
+                                        }
+                                    }
+                                    catch { }
+                                    finally
+                                    {
+                                        variants[v].bitmap.Dispose();
+                                    }
+                                }
+
+                                return (bestResult, (double)ocrW, (double)ocrH);
                             }
                         }
                     }
@@ -640,7 +665,7 @@ namespace FlyShelf.Windows
                     return (null, 0.0, 0.0);
                 });
 
-                var ocrResult = ocrResultTuple.result;
+                var ocrResult = ocrResultTuple.bestResult;
                 if (ocrResult != null && !string.IsNullOrWhiteSpace(ocrResult.Text))
                 {
                     _ocrResult = ocrResult;

@@ -982,10 +982,7 @@ namespace FlyShelf
                     // Update the item's icon with the rotated image
                     item.Icon = freshBitmap;
 
-                    // Move to top without triggering clipboard copy or sync
-                    _viewModel.MoveItemToTop(item);
-
-                    FlyShelf.Classes.Logger.LogAction("ROTATE", "Rotated 90u00B0 in-place: " + System.IO.Path.GetFileName(filePath));
+                    FlyShelf.Classes.Logger.LogAction("ROTATE", "Rotated 90\u00B0 in-place: " + System.IO.Path.GetFileName(filePath));
                 }
                 catch (Exception ex)
                 {

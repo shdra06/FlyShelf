@@ -64,8 +64,8 @@ namespace FlyShelf.ViewModels
                         {
                             try
                             {
-                                uint newW = imgW * 2;
-                                uint newH = imgH * 2;
+                                uint newW = imgW * 3;
+                                uint newH = imgH * 3;
                                 // Cap at 3800px to stay within OCR engine's ~4000px limit
                                 if (newW > 3800) { newW = 3800; newH = (uint)(imgH * (3800.0 / imgW)); }
                                 if (newH > 3800) { newH = 3800; newW = (uint)(imgW * (3800.0 / imgH)); }
@@ -124,20 +124,10 @@ namespace FlyShelf.ViewModels
                             }
                         }
 
-                        // ── Contrast enhancement ──
-                        // Neutralize colored highlights (blue/yellow row backgrounds) and
-                        // stretch contrast for dramatically improved character recognition.
-                        try
-                        {
-                            var enhanced = FlyShelf.Classes.OcrPreprocessor.EnhanceForOcr(softwareBitmap);
-                            softwareBitmap = enhanced;
-                        }
-                        catch (Exception enhanceEx)
-                        {
-                            FlyShelf.Classes.Logger.LogAction("OCR_ENHANCE", $"Enhancement failed (using original): {enhanceEx.Message}");
-                        }
-
-                        // ── Run OCR ──
+                        // ── Multi-pass OCR for maximum accuracy ──
+                        // Creates 3 preprocessing variants (Enhanced, Inverted+Enhanced, Otsu Binarized)
+                        // and runs OCR on each. Picks the result with the most detected text.
+                        // This handles all image types: light backgrounds, dark themes, low contrast.
                         var ocrEngine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new global::Windows.Globalization.Language("en-US"));
                         if (ocrEngine == null)
                         {
@@ -146,20 +136,56 @@ namespace FlyShelf.ViewModels
 
                         if (ocrEngine != null)
                         {
-                            var result = await ocrEngine.RecognizeAsync(softwareBitmap);
+                            var variants = FlyShelf.Classes.OcrPreprocessor.CreateOcrVariants(softwareBitmap);
+                            global::Windows.Media.Ocr.OcrResult bestResult = null;
+                            int bestScore = 0;
+                            string bestVariantName = "";
 
-                            if (result != null && !string.IsNullOrWhiteSpace(result.Text))
+                            for (int v = 0; v < variants.Length; v++)
                             {
+                                try
+                                {
+                                    var varResult = await ocrEngine.RecognizeAsync(variants[v].bitmap);
+                                    if (varResult != null)
+                                    {
+                                        int score = 0;
+                                        foreach (var line in varResult.Lines)
+                                            foreach (var word in line.Words)
+                                                score += word.Text.Length;
+
+                                        FlyShelf.Classes.Logger.LogAction("OCR_MULTIPASS",
+                                            $"{variants[v].name}: {varResult.Lines.Count} lines, {score} chars");
+
+                                        if (score > bestScore)
+                                        {
+                                            bestScore = score;
+                                            bestResult = varResult;
+                                            bestVariantName = variants[v].name;
+                                        }
+                                    }
+                                }
+                                catch { }
+                                finally
+                                {
+                                    variants[v].bitmap.Dispose();
+                                }
+                            }
+
+                            if (bestResult != null && !string.IsNullOrWhiteSpace(bestResult.Text))
+                            {
+                                FlyShelf.Classes.Logger.LogAction("OCR_MULTIPASS",
+                                    $"Winner: {bestVariantName} (score={bestScore})");
+
                                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
                                 {
-                                    FlyShelf.Classes.ClipboardHelper.SafeSetText(result.Text, suppressEcho: true, echoDelayMs: 500);
+                                    FlyShelf.Classes.ClipboardHelper.SafeSetText(bestResult.Text, suppressEcho: true, echoDelayMs: 500);
                                     FlyShelf.Windows.ToastWindow.ShowToast("OCR Text Copied to Clipboard! 📋");
                                     FlyShelf.Classes.LicenseManager.RecordOcrExtraction();
 
                                     var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
                                     if (mainWin != null)
                                     {
-                                        mainWin.ShowQuickLookForItem(this, result);
+                                        mainWin.ShowQuickLookForItem(this, bestResult);
                                     }
                                 });
                             }
@@ -222,8 +248,8 @@ namespace FlyShelf.ViewModels
                         {
                             try
                             {
-                                uint newW = imgW * 2;
-                                uint newH = imgH * 2;
+                                uint newW = imgW * 3;
+                                uint newH = imgH * 3;
                                 if (newW > 3800) { newW = 3800; newH = (uint)(imgH * (3800.0 / imgW)); }
                                 if (newH > 3800) { newH = 3800; newW = (uint)(imgW * (3800.0 / imgH)); }
 
@@ -276,10 +302,10 @@ namespace FlyShelf.ViewModels
                             }
                         }
 
-                        // ── Contrast enhancement ──
+                        // ── Smart contrast enhancement (auto dark/light detection) ──
                         try
                         {
-                            var enhanced = FlyShelf.Classes.OcrPreprocessor.EnhanceForOcr(softwareBitmap);
+                            var enhanced = FlyShelf.Classes.OcrPreprocessor.SmartEnhance(softwareBitmap);
                             softwareBitmap = enhanced;
                         }
                         catch (Exception enhanceEx)

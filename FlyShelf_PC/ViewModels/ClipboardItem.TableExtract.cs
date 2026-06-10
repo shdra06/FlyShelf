@@ -516,10 +516,10 @@ namespace FlyShelf.ViewModels
                     }
 
                     // ── STEP 1d: Enhance contrast for OCR ──
-                    // Neutralize any remaining colored highlights and maximize text contrast
+                    // Smart dark/light detection + enhancement for maximum text recognition
                     try
                     {
-                        var enhancedOcr = Classes.OcrPreprocessor.EnhanceForOcr(ocrBitmap);
+                        var enhancedOcr = Classes.OcrPreprocessor.SmartEnhance(ocrBitmap);
                         ocrBitmap.Dispose();
                         ocrBitmap = enhancedOcr;
                     }
