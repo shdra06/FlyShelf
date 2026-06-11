@@ -85,46 +85,8 @@ namespace FlyShelf
         {
             Classes.Logger.LogAction("TELEMETRY", $"ShowNearPosition entered, mode={mode}, isPersistent={isPersistent}, stealFocus={stealFocus}");
             
-            // PERF: Reuse the VD check from ToggleMainClipboard if already known,
-            // avoiding a redundant COM call with 30ms timeout.
-            bool isOnOtherDesktop = false;
-            if (knownOnOtherDesktop.HasValue)
-            {
-                isOnOtherDesktop = knownOnOtherDesktop.Value;
-            }
-            else
-            {
-                try
-                {
-                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                    if (hwnd != IntPtr.Zero)
-                    {
-                        isOnOtherDesktop = !IsWindowOnCurrentVirtualDesktop(hwnd);
-                    }
-                }
-                catch { }
-            }
-
-            if (isOnOtherDesktop)
-            {
-                Classes.Logger.LogAction("TELEMETRY", "ShowNearPosition: Window on another desktop. Resetting to current.");
-                
-                // 1. Close notes and todo panels — restores window style (removes WS_EX_APPWINDOW)
-                CloseNotesPanel(immediate: true);
-                CloseTodoPanel(immediate: true);
-
-                // 2. Move to current virtual desktop via COM (falls back to Hide+Show if COM fails)
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                if (hwnd != IntPtr.Zero)
-                {
-                    MoveToCurrentVirtualDesktop(hwnd, force: true);
-                }
-
-                // 3. Reset state
-                this.WindowState = WindowState.Normal;
-                _isCurrentlySummoned = false;
-                _isAnimatingHide = false;
-            }
+            // NOTE: VD handling removed — window is always pinned to all virtual desktops
+            // (WS_EX_APPWINDOW is never set), so IsWindowOnCurrentVirtualDesktop always returns true.
 
 
             if (mode == 0)
