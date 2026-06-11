@@ -113,8 +113,6 @@ namespace FlyShelf.Classes
             }
 
             // Variant 6: Original (no preprocessing)
-            // Windows.Media.Ocr may handle the raw image better for some styled UI text
-            // (e.g. header values like "61%" in Task Manager that preprocessing distorts)
             try
             {
                 var original = SoftwareBitmap.Convert(input,
@@ -124,6 +122,29 @@ namespace FlyShelf.Classes
             catch (Exception ex)
             {
                 Logger.LogAction("OCR_VARIANT", $"Original variant failed: {ex.Message}");
+            }
+
+            // Variant 7: Inverted + Bold (morphological text thickening)
+            // Thin text strokes (especially '%' character with tiny circles and diagonal)
+            // are too few pixels for OCR to recognize. Bolding doubles the stroke width.
+            try
+            {
+                variants.Add((InvertAndBolden(input), "InvertedBold"));
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("OCR_VARIANT", $"InvertedBold variant failed: {ex.Message}");
+            }
+
+            // Variant 8: Grayscale with aggressive contrast stretch
+            // Maximum dynamic range — 0th/100th percentile stretch
+            try
+            {
+                variants.Add((GrayscaleMaxContrast(input), "GrayscaleStretch"));
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("OCR_VARIANT", $"GrayscaleStretch variant failed: {ex.Message}");
             }
 
             // Fallback: if all preprocessing failed, use a format-converted copy
@@ -383,9 +404,175 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
+        /// Inverts colors then morphologically BOLDENS (thickens) text strokes.
+        /// 
+        /// After inversion, dark background becomes light and white text becomes dark.
+        /// Then a 3x3 minimum filter (applied twice) expands dark pixels outward,
+        /// effectively doubling the stroke width of all text. This makes thin characters
+        /// like '%' (with tiny circles and diagonal) much more detectable by OCR.
+        ///
+        /// The minimum filter works because text is dark (0) on light (255) background:
+        /// taking the minimum of a 3x3 neighborhood spreads dark pixels by 1px in all directions.
+        /// </summary>
+        public static unsafe SoftwareBitmap InvertAndBolden(SoftwareBitmap input)
+        {
+            SoftwareBitmap working;
+            if (input.BitmapPixelFormat != BitmapPixelFormat.Bgra8 ||
+                input.BitmapAlphaMode == BitmapAlphaMode.Premultiplied)
+            {
+                working = SoftwareBitmap.Convert(input, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight);
+            }
+            else
+            {
+                working = SoftwareBitmap.Copy(input);
+            }
+
+            int width = working.PixelWidth;
+            int height = working.PixelHeight;
+
+            using (var buffer = working.LockBuffer(BitmapBufferAccessMode.ReadWrite))
+            using (var reference = buffer.CreateReference())
+            {
+                var byteAccess = WinRT.CastExtensions.As<IMemoryBufferByteAccess>(reference);
+                byteAccess.GetBuffer(out byte* data, out uint capacity);
+                var layout = buffer.GetPlaneDescription(0);
+
+                // Step 1: Convert to inverted grayscale in-place
+                // White text on dark bg → dark text on light bg
+                for (int y = 0; y < height; y++)
+                {
+                    int rowOffset = layout.StartIndex + layout.Stride * y;
+                    for (int x = 0; x < width; x++)
+                    {
+                        int idx = rowOffset + 4 * x;
+                        int gray = (int)(0.299 * data[idx + 2] + 0.587 * data[idx + 1] + 0.114 * data[idx + 0]);
+                        byte invGray = (byte)(255 - Math.Clamp(gray, 0, 255));
+                        data[idx + 0] = invGray;
+                        data[idx + 1] = invGray;
+                        data[idx + 2] = invGray;
+                        data[idx + 3] = 255;
+                    }
+                }
+
+                // Step 2: Morphological dilation of dark text (3x3 min filter)
+                // Applied TWICE for 2px expansion in each direction
+                for (int pass = 0; pass < 2; pass++)
+                {
+                    // Read current grayscale values into array
+                    byte[] current = new byte[width * height];
+                    for (int y = 0; y < height; y++)
+                    {
+                        int rowOffset = layout.StartIndex + layout.Stride * y;
+                        for (int x = 0; x < width; x++)
+                            current[y * width + x] = data[rowOffset + 4 * x]; // B channel = gray
+                    }
+
+                    // Apply 3x3 minimum filter
+                    for (int y = 0; y < height; y++)
+                    {
+                        int rowOffset = layout.StartIndex + layout.Stride * y;
+                        for (int x = 0; x < width; x++)
+                        {
+                            byte minVal = 255;
+                            for (int dy = -1; dy <= 1; dy++)
+                            {
+                                int ny = y + dy;
+                                if (ny < 0 || ny >= height) continue;
+                                for (int dx = -1; dx <= 1; dx++)
+                                {
+                                    int nx = x + dx;
+                                    if (nx < 0 || nx >= width) continue;
+                                    byte v = current[ny * width + nx];
+                                    if (v < minVal) minVal = v;
+                                }
+                            }
+                            int idx = rowOffset + 4 * x;
+                            data[idx + 0] = minVal;
+                            data[idx + 1] = minVal;
+                            data[idx + 2] = minVal;
+                        }
+                    }
+                }
+            }
+
+            var result = SoftwareBitmap.Convert(working, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+            working.Dispose();
+            return result;
+        }
+
+        /// <summary>
+        /// Converts to grayscale with aggressive full-range contrast stretch.
+        /// Uses 0th/100th percentile (actual min/max) instead of 2nd/98th,
+        /// giving maximum dynamic range. Also inverts if dark-themed.
+        /// </summary>
+        public static unsafe SoftwareBitmap GrayscaleMaxContrast(SoftwareBitmap input)
+        {
+            SoftwareBitmap working;
+            if (input.BitmapPixelFormat != BitmapPixelFormat.Bgra8 ||
+                input.BitmapAlphaMode == BitmapAlphaMode.Premultiplied)
+            {
+                working = SoftwareBitmap.Convert(input, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight);
+            }
+            else
+            {
+                working = SoftwareBitmap.Copy(input);
+            }
+
+            int width = working.PixelWidth;
+            int height = working.PixelHeight;
+
+            using (var buffer = working.LockBuffer(BitmapBufferAccessMode.ReadWrite))
+            using (var reference = buffer.CreateReference())
+            {
+                var byteAccess = WinRT.CastExtensions.As<IMemoryBufferByteAccess>(reference);
+                byteAccess.GetBuffer(out byte* data, out uint capacity);
+                var layout = buffer.GetPlaneDescription(0);
+
+                // Pass 1: Find actual min/max luminance
+                int minLum = 255, maxLum = 0;
+                long totalLum = 0;
+                for (int y = 0; y < height; y++)
+                {
+                    int rowOffset = layout.StartIndex + layout.Stride * y;
+                    for (int x = 0; x < width; x++)
+                    {
+                        int idx = rowOffset + 4 * x;
+                        int lum = (int)(0.299 * data[idx + 2] + 0.587 * data[idx + 1] + 0.114 * data[idx + 0]);
+                        if (lum < minLum) minLum = lum;
+                        if (lum > maxLum) maxLum = lum;
+                        totalLum += lum;
+                    }
+                }
+
+                int range = Math.Max(maxLum - minLum, 1);
+                bool isDark = (totalLum / (width * height)) < 110;
+
+                // Pass 2: Stretch to full 0-255 range, convert to grayscale, auto-invert if dark
+                for (int y = 0; y < height; y++)
+                {
+                    int rowOffset = layout.StartIndex + layout.Stride * y;
+                    for (int x = 0; x < width; x++)
+                    {
+                        int idx = rowOffset + 4 * x;
+                        int lum = (int)(0.299 * data[idx + 2] + 0.587 * data[idx + 1] + 0.114 * data[idx + 0]);
+                        int stretched = (int)((lum - minLum) * 255.0 / range);
+                        byte val = (byte)Math.Clamp(stretched, 0, 255);
+                        if (isDark) val = (byte)(255 - val); // Invert for dark themes
+                        data[idx + 0] = val;
+                        data[idx + 1] = val;
+                        data[idx + 2] = val;
+                        data[idx + 3] = 255;
+                    }
+                }
+            }
+
+            var result = SoftwareBitmap.Convert(working, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+            working.Dispose();
+            return result;
+        }
+
+        /// <summary>
         /// Inverts all pixel colors (R,G,B → 255-R, 255-G, 255-B).
-        /// Critical for dark-themed screenshots: converts dark background + light text
-        /// into light background + dark text, which is what OCR engines expect.
         /// </summary>
         public static unsafe SoftwareBitmap InvertColors(SoftwareBitmap input)
         {
