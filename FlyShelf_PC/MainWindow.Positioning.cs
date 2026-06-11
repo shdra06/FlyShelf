@@ -84,6 +84,7 @@ namespace FlyShelf
         public void ShowNearPosition(double targetX, double targetY, int mode = 0, bool isPersistent = false, bool stealFocus = true, bool? knownOnOtherDesktop = null)
         {
             Classes.Logger.LogAction("TELEMETRY", $"ShowNearPosition entered, mode={mode}, isPersistent={isPersistent}, stealFocus={stealFocus}");
+            Classes.SpawnProfiler.Instance.BeginSpawn();
             
             // NOTE: VD handling removed — window is always pinned to all virtual desktops
             // (WS_EX_APPWINDOW is never set), so IsWindowOnCurrentVirtualDesktop always returns true.
@@ -93,8 +94,10 @@ namespace FlyShelf
             {
                 EnsureClipboardMode();
             }
+            Classes.SpawnProfiler.Instance.Mark("ENSURE_CLIPBOARD_MODE");
             CloseSearch();
             CloseEmojiPicker();
+            Classes.SpawnProfiler.Instance.Mark("CLOSE_SEARCH_EMOJI");
 
             // Increment spawn token at the very beginning of the summon sequence.
             // This immediately invalidates any active or pending dismiss/hide animation callbacks.
@@ -107,6 +110,7 @@ namespace FlyShelf
 
             _spawnTime = DateTime.Now;
             _isPersistentMode = isPersistent;
+            Classes.SpawnProfiler.Instance.Mark("PRE_ABORT_HIDE");
 
             // Abort hide animation if one is actively running
             if (_isAnimatingHide)
@@ -142,8 +146,10 @@ namespace FlyShelf
                 Dispatcher.InvokeAsync(() => HideWindowInternal(), System.Windows.Threading.DispatcherPriority.Background);
             }
 
+            Classes.SpawnProfiler.Instance.Mark("PRE_SET_MODE");
             // PERF: Set mode before internal call — needed for layout calculations
             _viewModel.CurrentMode = mode;
+            Classes.SpawnProfiler.Instance.Mark("SET_MODE");
 
             // PERF: Call synchronously — no deferred callback.
             // Window is at Left=-20000, Opacity=0, so there's nothing to "commit" first.
@@ -241,6 +247,7 @@ namespace FlyShelf
                 }
 
                 UpdateToolbarButtonsVisibility();
+                Classes.SpawnProfiler.Instance.Mark("LAYOUT_SETUP");
                 // PERF: Skip UpdateLayout() here — already done offscreen in ShowNearPosition()
                 // before the deferred callback. This eliminates the duplicate layout pass.
             }
@@ -289,41 +296,45 @@ namespace FlyShelf
             _lockedBottomEdge = rawY;
             _isEdgeLocked = false; // Lock the edge AFTER all positioning has been completed at the end of the method!
 
-            this.ShowActivated = stealFocus;
+            // ═══ CRITICAL: JITTER-FREE SPAWN SEQUENCE ═══
+            // Order: Position → Activate → Animate
+            // Profiler analysis: Starting animation BEFORE positioning causes a 29ms DWM stall
+            // when the window moves from -20000 to visible area (DWM must composite the new window).
+            // By positioning FIRST at opacity=0 (invisible), DWM settles before animation starts.
 
-            // ═══ CRITICAL: ANTI-BLACK-BOX SPAWN SEQUENCE ═══
-            // DWM renders the raw HWND surface (black rectangle) independently of WPF content.
-            // If we move the window onscreen BEFORE the opacity animation starts, DWM shows
-            // 1-3 frames of black before WPF's opacity transitions from 0→1.
-            //
-            // Solution: Keep the window OFFSCREEN during all prep work, start the opacity
-            // animation while still offscreen, then move onscreen as the very last step.
-            // This way the first DWM-visible frame already has the animation clock running
-            // at ~0% opacity (invisible), and the content gracefully fades in.
-
-            // 1. Reset opacity and animation clocks while still offscreen
-            this.Opacity = 0;
+            // 1. Clear old animation clocks THEN set opacity=0.
+            //    Clearing first prevents an intermediate frame at the old animated value.
             this.BeginAnimation(OpacityProperty, null);
+            this.Opacity = 0;
+            Classes.SpawnProfiler.Instance.Mark("CLEAR_ANIM_CLOCKS");
+            
+            // Reset the cached slide transform instead of setting RenderTransform=null.
+            // Setting null invalidates the entire render tree; resetting Y is a no-op.
+            if (RootContent.RenderTransform is TranslateTransform existingTT)
+            {
+                existingTT.BeginAnimation(TranslateTransform.YProperty, null);
+                existingTT.Y = 0;
+            }
             RootContent.Opacity = 1;
-            RootContent.RenderTransform = null;
 
-            _spawnGeneration++; // Invalidate any stale ForegroundChangedCallback dispatches
+            _spawnGeneration++;
             _isCurrentlySummoned = true;
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
-                _isShowAnimating = true; // Guard BEFORE move — prevents OnActivated from flashing opacity to 1.0
+                _isShowAnimating = true;
 
-            // NOTE: Scroll reset is now done in AnimateAndHide() during dismiss,
-            // so the scroll is already at position 0 when the spawn starts (no jitter).
+            // 2. Move onscreen FIRST — window is at opacity=0, completely invisible.
+            //    This lets DWM composite the window in the correct position BEFORE animation.
+            this.Left = rawX;
+            double computedTop = _lockedBottomEdge - realHeight - 20;
+            if (computedTop < workArea.Top + 16)
+                computedTop = workArea.Top + 16;
+            if (computedTop + realHeight > workArea.Top + workArea.Height - 16)
+                computedTop = workArea.Top + workArea.Height - realHeight - 16;
+            this.Top = computedTop;
+            Classes.SpawnProfiler.Instance.Mark("MOVE_ONSCREEN");
 
-            // 3. Activation strategy:
-            //    stealFocus=true  → Activate() to take keyboard focus (used by Notes/Todo panels)
-            //    stealFocus=false → SetWindowPos with SWP_NOACTIVATE to bring to front without
-            //                       stealing focus from the active app (native Win+V clipboard behavior)
-            if (stealFocus)
-            {
-                this.Activate();
-            }
-            else
+            // 3. Bring to front — window is positioned but still invisible (opacity=0).
+            if (!stealFocus)
             {
                 try
                 {
@@ -338,29 +349,23 @@ namespace FlyShelf
                 }
                 catch { }
             }
+            else
+            {
+                this.Activate();
+            }
+            Classes.SpawnProfiler.Instance.Mark("ACTIVATION_DONE");
 
-            // 4. Start the opacity animation BEFORE moving onscreen.
-            //    The animation clock starts ticking from opacity=0. When we move the window
-            //    onscreen in step 5, the first DWM-composited frame will already be at ~0% opacity.
+            // 4. Start animation LAST — DWM has fully composited the window at opacity=0.
+            //    The composition thread clock starts from a clean, settled state.
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
             {
                 PlayShowAnimation();
+                Classes.SpawnProfiler.Instance.Mark("PLAY_SHOW_ANIMATION");
             }
             else
             {
                 this.Opacity = 1.0;
             }
-
-            // 5. LAST STEP: Move onscreen. By now the animation is running at near-0% opacity,
-            //    so DWM will composite a fully transparent frame — no black box flash.
-            this.Left = rawX;
-            double computedTop = _lockedBottomEdge - realHeight - 20;
-            // Full bounds clamp: keep entire window within the visible work area
-            if (computedTop < workArea.Top + 16)
-                computedTop = workArea.Top + 16;
-            if (computedTop + realHeight > workArea.Top + workArea.Height - 16)
-                computedTop = workArea.Top + workArea.Height - realHeight - 16;
-            this.Top = computedTop;
 
             _isEdgeLocked = true; // Lock the edge AFTER all positioning has been completed!
 

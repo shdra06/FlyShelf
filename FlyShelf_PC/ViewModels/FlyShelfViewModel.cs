@@ -354,6 +354,7 @@ namespace FlyShelf.ViewModels
             get => _currentMode;
             set
             {
+                if (_currentMode == value) return; // PERF: skip cascading layout notifications when unchanged
                 _currentMode = value;
                 OnPropertyChanged(nameof(CurrentMode));
                 OnPropertyChanged(nameof(IsMiniMode));

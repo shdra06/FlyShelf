@@ -146,6 +146,7 @@ namespace FlyShelf
         private void CloseSearch(bool switchingPanel = false)
         {
             if (_isClosingSearch) return;   // prevent re-entrant calls
+            if (!_isSearchActive) return;   // PERF: fast-path — nothing to close
             _isClosingSearch = true;
             try
             {

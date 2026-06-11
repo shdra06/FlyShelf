@@ -302,7 +302,7 @@ namespace FlyShelf.Classes
                 ScheduleSave();
         }
 
-        private static void ScheduleSave()
+        public static void ScheduleSave()
         {
             _isDirty = true;
             lock (_lock)

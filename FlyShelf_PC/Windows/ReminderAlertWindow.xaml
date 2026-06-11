@@ -7,151 +7,305 @@
         ResizeMode="NoResize" SizeToContent="WidthAndHeight" MaxWidth="400"
         Loaded="Window_Loaded" MouseDown="Window_MouseDown">
 
-    <Grid Margin="20,12,20,12">
-        <Border x:Name="AlertBorder" CornerRadius="16" Padding="0"
-                Background="{DynamicResource ThemeOverflowBg}"
-                BorderBrush="{DynamicResource ThemeOverflowBorder}"
-                BorderThickness="1" MinWidth="320">
+    <Grid Margin="20,12,20,4">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- ═══ MAIN CARD ═══ -->
+        <Border x:Name="AlertBorder" Grid.Row="0" CornerRadius="18" Padding="0"
+                MinWidth="350">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#1E1E2E" Offset="0"/>
+                    <GradientStop Color="#181825" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <Border.BorderBrush>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#25FFFFFF" Offset="0"/>
+                    <GradientStop Color="#08FFFFFF" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.BorderBrush>
+            <Border.BorderThickness>1</Border.BorderThickness>
             <Border.Effect>
-                <DropShadowEffect BlurRadius="30" ShadowDepth="6" Opacity="0.5"
-                                  Color="{DynamicResource ThemeOverflowShadowColor}"/>
+                <DropShadowEffect BlurRadius="40" ShadowDepth="8" Opacity="0.6" Color="#000000"/>
             </Border.Effect>
             <Border.RenderTransform>
                 <TranslateTransform x:Name="AlertTranslate" Y="15"/>
             </Border.RenderTransform>
 
-            <!-- Inner glow border -->
-            <Border CornerRadius="15" Padding="16" BorderThickness="1" BorderBrush="#0AFFFFFF">
+            <!-- Inner glow layer -->
+            <Border CornerRadius="17" Padding="18,16,18,16" BorderThickness="1"
+                    BorderBrush="#08FFFFFF">
                 <StackPanel>
-                    <!-- ═══ Header Row ═══ -->
+
+                    <!-- ═══ HEADER ═══ -->
                     <Grid Margin="0,0,0,12">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <ui:SymbolIcon Grid.Column="0" Symbol="Alert24" FontSize="20" Foreground="#F59E0B"
-                                       VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="1" Text="Reminder" FontSize="13" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource ThemeTextSecondary}" Margin="8,0,0,0"
-                                   VerticalAlignment="Center"/>
-                        <TextBlock Grid.Column="3" x:Name="TimeText" FontSize="12"
-                                   Foreground="{DynamicResource ThemeTextMuted}"
-                                   VerticalAlignment="Center"/>
+
+                        <!-- Animated bell badge -->
+                        <Border Grid.Column="0" CornerRadius="10" Width="36" Height="36" Margin="0,0,12,0">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#F59E0B" Offset="0"/>
+                                    <GradientStop Color="#D97706" Offset="0.5"/>
+                                    <GradientStop Color="#B45309" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="12" ShadowDepth="0" Opacity="0.4" Color="#F59E0B"/>
+                            </Border.Effect>
+                            <ui:SymbolIcon Symbol="Alert24" FontSize="16" Foreground="White"
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <TextBlock Text="Upcoming Reminder" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="#E0E0E0"/>
+                            <TextBlock x:Name="TimeText" FontSize="11" Foreground="#F59E0B" Margin="0,1,0,0"/>
+                        </StackPanel>
+
+                        <!-- Dismiss X -->
+                        <Border Grid.Column="2" CornerRadius="8" Width="28" Height="28" Cursor="Hand"
+                                VerticalAlignment="Top" MouseLeftButtonDown="Close_Click">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#0AFFFFFF"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#18FFFFFF"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <ui:SymbolIcon Symbol="Dismiss24" FontSize="12" Foreground="#666" 
+                                          HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
                     </Grid>
 
-                    <!-- ═══ Title ═══ -->
-                    <TextBlock x:Name="TitleText" FontSize="16" FontWeight="SemiBold"
-                               Foreground="{DynamicResource ThemeTextPrimary}"
-                               TextWrapping="Wrap" Margin="0,0,0,4"/>
+                    <!-- Subtle divider -->
+                    <Border Height="1" Margin="0,0,0,12">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+                                <GradientStop Color="#00FFFFFF" Offset="0"/>
+                                <GradientStop Color="#15FFFFFF" Offset="0.5"/>
+                                <GradientStop Color="#00FFFFFF" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                    </Border>
 
-                    <!-- ═══ Notes ═══ -->
-                    <TextBlock x:Name="NotesText" FontSize="13"
-                               Foreground="{DynamicResource ThemeTextSecondary}"
-                               TextWrapping="Wrap" Margin="0,0,0,8"
-                               Visibility="Collapsed" MaxHeight="60"
+                    <!-- ═══ TITLE ═══ -->
+                    <TextBlock x:Name="TitleText" FontSize="17" FontWeight="Bold"
+                               Foreground="White" TextWrapping="Wrap" Margin="0,0,0,4"/>
+
+                    <!-- ═══ NOTES ═══ -->
+                    <TextBlock x:Name="NotesText" FontSize="12.5" LineHeight="18"
+                               Foreground="#999" TextWrapping="Wrap" Margin="0,0,0,8"
+                               Visibility="Collapsed" MaxHeight="48"
                                TextTrimming="CharacterEllipsis"/>
 
-                    <!-- ═══ Date Line ═══ -->
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                        <TextBlock Text="📅" FontSize="12" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="DateText" FontSize="12"
-                                   Foreground="{DynamicResource ThemeTextMuted}"
-                                   Margin="4,0,0,0" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="RepeatText" FontSize="11"
-                                   Foreground="#F59E0B" Margin="8,0,0,0"
-                                   VerticalAlignment="Center" Visibility="Collapsed"/>
-                    </StackPanel>
-
-                    <!-- ═══ Separator ═══ -->
-                    <Border Height="1" Background="{DynamicResource ThemeSeparator}" Margin="0,0,0,12"/>
-
-                    <!-- ═══ Button Row ═══ -->
-                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                        <!-- Snooze Button -->
-                        <ui:Button x:Name="SnoozeBtn" Click="Snooze_Click"
-                                   Appearance="Secondary" Cursor="Hand"
-                                   Padding="10,6" MinWidth="110"
-                                   ToolTip="Click to snooze 15 minutes, or expand for more options">
+                    <!-- ═══ META BADGES ═══ -->
+                    <WrapPanel Margin="0,0,0,16">
+                        <!-- Date badge -->
+                        <Border CornerRadius="6" Padding="8,4" Margin="0,0,6,0">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#10FFFFFF" Offset="0"/>
+                                    <GradientStop Color="#08FFFFFF" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="AlertSnooze24" FontSize="14" Margin="0,0,6,0"/>
-                                <TextBlock Text="Snooze (15m)" FontSize="12" VerticalAlignment="Center"/>
-                                <TextBlock Text="▾" FontSize="10" Margin="6,0,0,0" Opacity="0.6"
-                                           VerticalAlignment="Center" Cursor="Hand"
-                                           MouseLeftButtonDown="SnoozeDropdown_Click"/>
+                                <TextBlock Text="📅" FontSize="11" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="DateText" FontSize="11" Foreground="#AAA"
+                                           Margin="5,0,0,0" VerticalAlignment="Center"/>
                             </StackPanel>
-                        </ui:Button>
+                        </Border>
+                        <!-- Repeat badge -->
+                        <Border x:Name="RepeatBadge" CornerRadius="6" Padding="8,4" Visibility="Collapsed">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#18F59E0B" Offset="0"/>
+                                    <GradientStop Color="#08F59E0B" Offset="1"/>
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <TextBlock x:Name="RepeatText" FontSize="11" Foreground="#FCD34D"/>
+                        </Border>
+                    </WrapPanel>
 
-                        <!-- Snooze Presets Popup -->
-                        <Popup x:Name="SnoozePopup" PlacementTarget="{Binding ElementName=SnoozeBtn}"
-                               Placement="Top" StaysOpen="False" AllowsTransparency="True"
-                               PopupAnimation="Fade" VerticalOffset="-4">
-                            <Border CornerRadius="12" Padding="4"
-                                    Background="{DynamicResource ThemeOverflowBg}"
-                                    BorderBrush="{DynamicResource ThemeOverflowBorder}"
-                                    BorderThickness="1" MinWidth="160">
-                                <Border.Effect>
-                                    <DropShadowEffect BlurRadius="20" ShadowDepth="4" Opacity="0.4"
-                                                      Color="{DynamicResource ThemeOverflowShadowColor}"/>
-                                </Border.Effect>
-                                <Border CornerRadius="11" BorderThickness="1" BorderBrush="#08FFFFFF" Padding="2">
-                                    <StackPanel>
-                                        <Border CornerRadius="8" Padding="10,7" Cursor="Hand"
-                                                Background="Transparent" MouseLeftButtonDown="Snooze5_Click"
-                                                MouseEnter="SnoozeOption_MouseEnter" MouseLeave="SnoozeOption_MouseLeave">
-                                            <TextBlock Text="⏰  5 minutes" FontSize="12"
-                                                       Foreground="{DynamicResource ThemeTextPrimary}"/>
-                                        </Border>
-                                        <Border CornerRadius="8" Padding="10,7" Cursor="Hand"
-                                                Background="Transparent" MouseLeftButtonDown="Snooze15_Click"
-                                                MouseEnter="SnoozeOption_MouseEnter" MouseLeave="SnoozeOption_MouseLeave">
-                                            <TextBlock Text="⏰  15 minutes" FontSize="12"
-                                                       Foreground="{DynamicResource ThemeTextPrimary}"/>
-                                        </Border>
-                                        <Border CornerRadius="8" Padding="10,7" Cursor="Hand"
-                                                Background="Transparent" MouseLeftButtonDown="Snooze30_Click"
-                                                MouseEnter="SnoozeOption_MouseEnter" MouseLeave="SnoozeOption_MouseLeave">
-                                            <TextBlock Text="⏰  30 minutes" FontSize="12"
-                                                       Foreground="{DynamicResource ThemeTextPrimary}"/>
-                                        </Border>
-                                        <Border CornerRadius="8" Padding="10,7" Cursor="Hand"
-                                                Background="Transparent" MouseLeftButtonDown="Snooze60_Click"
-                                                MouseEnter="SnoozeOption_MouseEnter" MouseLeave="SnoozeOption_MouseLeave">
-                                            <TextBlock Text="⏰  1 hour" FontSize="12"
-                                                       Foreground="{DynamicResource ThemeTextPrimary}"/>
-                                        </Border>
-                                        <Border CornerRadius="8" Padding="10,7" Cursor="Hand"
-                                                Background="Transparent" MouseLeftButtonDown="Snooze180_Click"
-                                                MouseEnter="SnoozeOption_MouseEnter" MouseLeave="SnoozeOption_MouseLeave">
-                                            <TextBlock Text="⏰  3 hours" FontSize="12"
-                                                       Foreground="{DynamicResource ThemeTextPrimary}"/>
-                                        </Border>
-                                        <Border Height="1" Background="{DynamicResource ThemeSeparator}" Margin="6,2"/>
-                                        <Border CornerRadius="8" Padding="10,7" Cursor="Hand"
-                                                Background="Transparent" MouseLeftButtonDown="SnoozeTomorrow_Click"
-                                                MouseEnter="SnoozeOption_MouseEnter" MouseLeave="SnoozeOption_MouseLeave">
-                                            <TextBlock Text="🌅  Tomorrow 9 AM" FontSize="12"
-                                                       Foreground="{DynamicResource ThemeTextPrimary}"/>
-                                        </Border>
-                                    </StackPanel>
-                                </Border>
-                            </Border>
-                        </Popup>
+                    <!-- ═══ SNOOZE SECTION ═══ -->
+                    <TextBlock Text="SNOOZE FOR" FontSize="10" FontWeight="Bold"
+                               Foreground="#555" Margin="0,0,0,8"/>
 
-                        <!-- Done Button -->
-                        <ui:Button x:Name="DoneBtn" Click="Done_Click"
-                                   Appearance="Secondary" Cursor="Hand"
-                                   Padding="10,6" Margin="8,0,0,0" MinWidth="80">
+                    <!-- Snooze pills row 1 -->
+                    <WrapPanel Margin="0,0,0,6">
+                        <Border CornerRadius="8" Padding="12,7" Margin="0,0,6,6" Cursor="Hand"
+                                MouseLeftButtonDown="Snooze5_Click" Tag="5m">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#0CFFFFFF"/>
+                                    <Setter Property="BorderBrush" Value="#12FFFFFF"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#18F59E0B"/>
+                                            <Setter Property="BorderBrush" Value="#30F59E0B"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="5 min" FontSize="12" Foreground="#CCC" FontWeight="Medium"/>
+                        </Border>
+
+                        <Border CornerRadius="8" Padding="12,7" Margin="0,0,6,6" Cursor="Hand"
+                                MouseLeftButtonDown="Snooze15_Click" Tag="15m">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#15F59E0B"/>
+                                    <Setter Property="BorderBrush" Value="#30F59E0B"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#25F59E0B"/>
+                                            <Setter Property="BorderBrush" Value="#50F59E0B"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="15 min" FontSize="12" Foreground="#FDE68A" FontWeight="SemiBold"/>
+                        </Border>
+
+                        <Border CornerRadius="8" Padding="12,7" Margin="0,0,6,6" Cursor="Hand"
+                                MouseLeftButtonDown="Snooze30_Click" Tag="30m">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#0CFFFFFF"/>
+                                    <Setter Property="BorderBrush" Value="#12FFFFFF"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#18F59E0B"/>
+                                            <Setter Property="BorderBrush" Value="#30F59E0B"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="30 min" FontSize="12" Foreground="#CCC" FontWeight="Medium"/>
+                        </Border>
+
+                        <Border CornerRadius="8" Padding="12,7" Margin="0,0,6,6" Cursor="Hand"
+                                MouseLeftButtonDown="Snooze60_Click" Tag="1h">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#0CFFFFFF"/>
+                                    <Setter Property="BorderBrush" Value="#12FFFFFF"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#18F59E0B"/>
+                                            <Setter Property="BorderBrush" Value="#30F59E0B"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="1 hour" FontSize="12" Foreground="#CCC" FontWeight="Medium"/>
+                        </Border>
+
+                        <Border CornerRadius="8" Padding="12,7" Margin="0,0,6,6" Cursor="Hand"
+                                MouseLeftButtonDown="Snooze180_Click" Tag="3h">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#0CFFFFFF"/>
+                                    <Setter Property="BorderBrush" Value="#12FFFFFF"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#18F59E0B"/>
+                                            <Setter Property="BorderBrush" Value="#30F59E0B"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBlock Text="3 hours" FontSize="12" Foreground="#CCC" FontWeight="Medium"/>
+                        </Border>
+
+                        <Border CornerRadius="8" Padding="12,7" Margin="0,0,0,6" Cursor="Hand"
+                                MouseLeftButtonDown="SnoozeTomorrow_Click" Tag="tmrw">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="Background" Value="#0CFFFFFF"/>
+                                    <Setter Property="BorderBrush" Value="#12FFFFFF"/>
+                                    <Setter Property="BorderThickness" Value="1"/>
+                                    <Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="#18F59E0B"/>
+                                            <Setter Property="BorderBrush" Value="#30F59E0B"/>
+                                        </Trigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="CheckmarkCircle24" FontSize="14"
-                                               Foreground="#22C55E" Margin="0,0,6,0"/>
-                                <TextBlock Text="Done" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBlock Text="🌅" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <TextBlock Text="Tomorrow" FontSize="12" Foreground="#CCC" FontWeight="Medium"/>
                             </StackPanel>
-                        </ui:Button>
-                    </StackPanel>
+                        </Border>
+                    </WrapPanel>
+
+                    <!-- ═══ DONE BUTTON (full width, prominent) ═══ -->
+                    <Border CornerRadius="10" Padding="0,11" Margin="0,6,0,0" Cursor="Hand"
+                            MouseLeftButtonDown="Done_Click">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background">
+                                    <Setter.Value>
+                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                            <GradientStop Color="#16A34A" Offset="0"/>
+                                            <GradientStop Color="#22C55E" Offset="1"/>
+                                        </LinearGradientBrush>
+                                    </Setter.Value>
+                                </Setter>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background">
+                                            <Setter.Value>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                    <GradientStop Color="#15803D" Offset="0"/>
+                                                    <GradientStop Color="#16A34A" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Setter.Value>
+                                        </Setter>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <ui:SymbolIcon Symbol="CheckmarkCircle24" FontSize="15"
+                                           Foreground="White" Margin="0,0,8,0"/>
+                            <TextBlock Text="Mark as Done" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="White" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
                 </StackPanel>
             </Border>
         </Border>
+
+        <!-- ═══ ARROW TAIL ═══ -->
+        <Path x:Name="ArrowTail" Grid.Row="1" HorizontalAlignment="Center" Margin="0,-1,0,0"
+              Fill="#1E1E2E" Stroke="#20FFFFFF" StrokeThickness="1">
+            <Path.Data>
+                <PathGeometry>
+                    <PathFigure StartPoint="0,0" IsClosed="True">
+                        <LineSegment Point="14,14"/>
+                        <LineSegment Point="28,0"/>
+                    </PathFigure>
+                </PathGeometry>
+            </Path.Data>
+        </Path>
     </Grid>
 </Window>

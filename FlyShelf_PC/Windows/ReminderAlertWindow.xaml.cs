@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Windows;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
@@ -29,7 +28,7 @@ namespace FlyShelf.Windows
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             PopulateFields();
-            PositionWindow();
+            PositionAboveWidget();
             RunEntranceAnimation();
             StartAutoDismissTimer();
         }
@@ -56,15 +55,33 @@ namespace FlyShelf.Windows
                     RepeatMode.Monthly => "🔁 Monthly",
                     _ => ""
                 };
-                RepeatText.Visibility = Visibility.Visible;
+                RepeatBadge.Visibility = Visibility.Visible;
             }
         }
 
-        // ═══ Positioning & Stacking ═══
-        private void PositionWindow()
+        // ═══ Position above the clipboard widget (MainWindow) ═══
+        private void PositionAboveWidget()
         {
             var workArea = SystemParameters.WorkArea;
-            double baseBottom = workArea.Bottom - 80;
+            this.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            double targetWidth = this.DesiredSize.Width > 0 ? this.DesiredSize.Width : 400;
+            double targetHeight = this.DesiredSize.Height > 0 ? this.DesiredSize.Height : 320;
+
+            double centerX;
+            double bottomY;
+
+            // Position relative to MainWindow (clipboard widget) if visible
+            var mainWin = Application.Current.MainWindow as MainWindow;
+            if (mainWin != null && mainWin.IsVisible)
+            {
+                centerX = mainWin.Left + mainWin.ActualWidth / 2;
+                bottomY = mainWin.Top - 12;
+            }
+            else
+            {
+                centerX = workArea.Left + workArea.Width / 2;
+                bottomY = workArea.Bottom - 80;
+            }
 
             lock (_alertLock)
             {
@@ -75,12 +92,13 @@ namespace FlyShelf.Windows
                         stackOffset += existing.ActualHeight + ALERT_GAP;
                 }
 
-                this.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-                double targetWidth = this.DesiredSize.Width > 0 ? this.DesiredSize.Width : 400;
-                double targetHeight = this.DesiredSize.Height > 0 ? this.DesiredSize.Height : 200;
+                this.Left = centerX - targetWidth / 2;
+                this.Top = bottomY - targetHeight - stackOffset;
 
-                this.Left = workArea.Left + (workArea.Width - targetWidth) / 2;
-                this.Top = baseBottom - targetHeight - stackOffset;
+                // Clamp to screen
+                if (this.Left < workArea.Left + 8) this.Left = workArea.Left + 8;
+                if (this.Left + targetWidth > workArea.Right - 8) this.Left = workArea.Right - targetWidth - 8;
+                if (this.Top < workArea.Top + 8) this.Top = workArea.Top + 8;
 
                 if (!_activeAlerts.Contains(this))
                     _activeAlerts.Add(this);
@@ -95,14 +113,14 @@ namespace FlyShelf.Windows
 
             var sb = new Storyboard();
 
-            var fadeAnim = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(200))
+            var fadeAnim = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(220))
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             };
             Storyboard.SetTarget(fadeAnim, this);
             Storyboard.SetTargetProperty(fadeAnim, new PropertyPath(Window.OpacityProperty));
 
-            var slideAnim = new DoubleAnimation(15.0, 0.0, TimeSpan.FromMilliseconds(250))
+            var slideAnim = new DoubleAnimation(15.0, 0.0, TimeSpan.FromMilliseconds(280))
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
             };
@@ -140,10 +158,7 @@ namespace FlyShelf.Windows
 
             sb.Completed += (s, e) =>
             {
-                lock (_alertLock)
-                {
-                    _activeAlerts.Remove(this);
-                }
+                lock (_alertLock) { _activeAlerts.Remove(this); }
                 onComplete?.Invoke();
                 this.Close();
             };
@@ -151,7 +166,7 @@ namespace FlyShelf.Windows
             sb.Begin();
         }
 
-        // ═══ Auto-Dismiss Timer ═══
+        // ═══ Auto-Dismiss Timer (60s → auto-snooze 5m) ═══
         private void StartAutoDismissTimer()
         {
             _autoDismissTimer = new System.Windows.Threading.DispatcherTimer
@@ -173,13 +188,55 @@ namespace FlyShelf.Windows
             _autoDismissTimer?.Start();
         }
 
-        // ═══ Button Actions ═══
-        private void Snooze_Click(object sender, RoutedEventArgs e)
+        // ═══ SNOOZE PILL CLICKS (all inline, one-tap) ═══
+
+        private void Snooze5_Click(object sender, MouseButtonEventArgs e)
+        {
+            SnoozeAndDismiss(TimeSpan.FromMinutes(5), "Snoozed 5m ⏰");
+        }
+
+        private void Snooze15_Click(object sender, MouseButtonEventArgs e)
         {
             SnoozeAndDismiss(TimeSpan.FromMinutes(15), "Snoozed 15m ⏰");
         }
 
-        private void Done_Click(object sender, RoutedEventArgs e)
+        private void Snooze30_Click(object sender, MouseButtonEventArgs e)
+        {
+            SnoozeAndDismiss(TimeSpan.FromMinutes(30), "Snoozed 30m ⏰");
+        }
+
+        private void Snooze60_Click(object sender, MouseButtonEventArgs e)
+        {
+            SnoozeAndDismiss(TimeSpan.FromHours(1), "Snoozed 1h ⏰");
+        }
+
+        private void Snooze180_Click(object sender, MouseButtonEventArgs e)
+        {
+            SnoozeAndDismiss(TimeSpan.FromHours(3), "Snoozed 3h ⏰");
+        }
+
+        private void SnoozeTomorrow_Click(object sender, MouseButtonEventArgs e)
+        {
+            var tomorrow9am = DateTime.Today.AddDays(1).AddHours(9);
+            var duration = tomorrow9am.ToUniversalTime() - DateTime.UtcNow;
+            if (duration <= TimeSpan.Zero) duration = TimeSpan.FromHours(12);
+
+            try
+            {
+                ReminderManager.SnoozeReminder(_reminder.Id, duration);
+                ReminderScheduler.ClearShownId(_reminder.Id);
+                Logger.LogAction("REMINDER", $"Snoozed to tomorrow 9 AM: {_reminder.Title}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("REMINDER", $"Snooze error: {ex.Message}");
+            }
+
+            RunDismissAnimation(() => ToastWindow.ShowToast("Snoozed to tomorrow 9 AM 🌅"));
+        }
+
+        // ═══ DONE ═══
+        private void Done_Click(object sender, MouseButtonEventArgs e)
         {
             try
             {
@@ -192,13 +249,17 @@ namespace FlyShelf.Windows
                 Logger.LogAction("REMINDER", $"Done error: {ex.Message}");
             }
 
-            RunDismissAnimation(() =>
-            {
-                ToastWindow.ShowToast("Reminder done! ✅");
-            });
+            RunDismissAnimation(() => ToastWindow.ShowToast("Reminder done! ✅"));
         }
 
-        // ═══ Snooze Helpers ═══
+        // ═══ CLOSE (X) → auto-snooze 5m ═══
+        private void Close_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            SnoozeAndDismiss(TimeSpan.FromMinutes(5), "Dismissed — snoozed 5m ⏰");
+        }
+
+        // ═══ Shared snooze helper ═══
         private void SnoozeAndDismiss(TimeSpan duration, string toastMessage)
         {
             try
@@ -212,95 +273,10 @@ namespace FlyShelf.Windows
                 Logger.LogAction("REMINDER", $"Snooze error: {ex.Message}");
             }
 
-            RunDismissAnimation(() =>
-            {
-                ToastWindow.ShowToast(toastMessage);
-            });
+            RunDismissAnimation(() => ToastWindow.ShowToast(toastMessage));
         }
 
-        private void SnoozeToDuration(TimeSpan duration, string label)
-        {
-            SnoozePopup.IsOpen = false;
-            SnoozeAndDismiss(duration, $"Snoozed {label} ⏰");
-        }
-
-        // ═══ Snooze Dropdown ═══
-        private void SnoozeDropdown_Click(object sender, MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-            SnoozePopup.IsOpen = !SnoozePopup.IsOpen;
-            ResetAutoDismissTimer();
-        }
-
-        // ═══ Snooze Preset Clicks ═══
-        private void Snooze5_Click(object sender, MouseButtonEventArgs e)
-        {
-            SnoozeToDuration(TimeSpan.FromMinutes(5), "5m");
-        }
-
-        private void Snooze15_Click(object sender, MouseButtonEventArgs e)
-        {
-            SnoozeToDuration(TimeSpan.FromMinutes(15), "15m");
-        }
-
-        private void Snooze30_Click(object sender, MouseButtonEventArgs e)
-        {
-            SnoozeToDuration(TimeSpan.FromMinutes(30), "30m");
-        }
-
-        private void Snooze60_Click(object sender, MouseButtonEventArgs e)
-        {
-            SnoozeToDuration(TimeSpan.FromHours(1), "1h");
-        }
-
-        private void Snooze180_Click(object sender, MouseButtonEventArgs e)
-        {
-            SnoozeToDuration(TimeSpan.FromHours(3), "3h");
-        }
-
-        private void SnoozeTomorrow_Click(object sender, MouseButtonEventArgs e)
-        {
-            SnoozePopup.IsOpen = false;
-
-            // Calculate tomorrow 9 AM local → duration from now
-            var tomorrow9am = DateTime.Today.AddDays(1).AddHours(9);
-            var duration = tomorrow9am.ToUniversalTime() - DateTime.UtcNow;
-
-            // Guard against negative duration (shouldn't happen, but be safe)
-            if (duration <= TimeSpan.Zero)
-                duration = TimeSpan.FromHours(12);
-
-            try
-            {
-                ReminderManager.SnoozeReminder(_reminder.Id, duration);
-                ReminderScheduler.ClearShownId(_reminder.Id);
-                Logger.LogAction("REMINDER", $"Snoozed to tomorrow 9 AM: {_reminder.Title}");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("REMINDER", $"Snooze error: {ex.Message}");
-            }
-
-            RunDismissAnimation(() =>
-            {
-                ToastWindow.ShowToast("Snoozed to tomorrow 9 AM 🌅");
-            });
-        }
-
-        // ═══ Snooze Popup Hover Effects ═══
-        private void SnoozeOption_MouseEnter(object sender, MouseEventArgs e)
-        {
-            if (sender is System.Windows.Controls.Border border)
-                border.Background = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255));
-        }
-
-        private void SnoozeOption_MouseLeave(object sender, MouseEventArgs e)
-        {
-            if (sender is System.Windows.Controls.Border border)
-                border.Background = Brushes.Transparent;
-        }
-
-        // ═══ Drag Move ═══
+        // ═══ Drag ═══
         private void Window_MouseDown(object sender, MouseButtonEventArgs e)
         {
             if (e.ChangedButton == MouseButton.Left)
@@ -310,17 +286,12 @@ namespace FlyShelf.Windows
             }
         }
 
-        // ═══ Cleanup on Close ═══
+        // ═══ Cleanup ═══
         protected override void OnClosed(EventArgs e)
         {
             _autoDismissTimer?.Stop();
             _autoDismissTimer = null;
-
-            lock (_alertLock)
-            {
-                _activeAlerts.Remove(this);
-            }
-
+            lock (_alertLock) { _activeAlerts.Remove(this); }
             base.OnClosed(e);
         }
     }

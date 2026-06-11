@@ -1,0 +1,330 @@
+<controls:MicaWindow x:Class="FlyShelf.Windows.ReminderHistoryWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:classes="clr-namespace:FlyShelf.Classes"
+        Title="Reminders" Height="620" Width="500"
+        WindowStartupLocation="CenterScreen"
+        SystemBackdropType="Mica" Background="Transparent">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="32" ResizeBorderThickness="6" CornerRadius="12" GlassFrameThickness="-1"/>
+    </WindowChrome.WindowChrome>
+
+    <Grid Margin="24,8,24,20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- ═══ HEADER: Icon + Title + Count Pill ═══ -->
+        <Grid Grid.Row="0" Margin="0,0,0,14" WindowChrome.IsHitTestVisibleInChrome="False">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <Border CornerRadius="12" Width="40" Height="40" Margin="0,0,14,0">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#D97706" Offset="0"/>
+                            <GradientStop Color="#F59E0B" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <ui:SymbolIcon Symbol="Alert24" Foreground="White" FontSize="18"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </Border>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Reminders" FontSize="18" FontWeight="SemiBold"
+                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                    <TextBlock Text="Manage your scheduled reminders" FontSize="11"
+                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
+                               Margin="0,2,0,0" Opacity="0.7"/>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Count pill -->
+            <Border Grid.Column="2" CornerRadius="20" Padding="14,6" VerticalAlignment="Center">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#0AF59E0B" Offset="0"/>
+                        <GradientStop Color="#08FFFFFF" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <TextBlock x:Name="ReminderCountLabel" Text="0 active" FontSize="11.5" FontWeight="Medium"
+                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+            </Border>
+        </Grid>
+
+        <!-- ═══ FILTER TABS: Upcoming / Done / All ═══ -->
+        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
+            <Border x:Name="FilterUpcoming" CornerRadius="8" Padding="14,6" Margin="0,0,6,0"
+                    Cursor="Hand" MouseLeftButtonDown="Filter_Click" Tag="Upcoming">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="#20F59E0B"/>
+                        <Setter Property="BorderBrush" Value="#40F59E0B"/>
+                        <Setter Property="BorderThickness" Value="1"/>
+                    </Style>
+                </Border.Style>
+                <StackPanel Orientation="Horizontal">
+                    <ui:SymbolIcon Symbol="Clock24" FontSize="13" Foreground="#F59E0B" Margin="0,0,6,0"/>
+                    <TextBlock Text="Upcoming" FontSize="12" FontWeight="Medium"
+                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                </StackPanel>
+            </Border>
+
+            <Border x:Name="FilterDone" CornerRadius="8" Padding="14,6" Margin="0,0,6,0"
+                    Cursor="Hand" MouseLeftButtonDown="Filter_Click" Tag="Done">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderBrush" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="1"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#0AFFFFFF"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel Orientation="Horizontal">
+                    <ui:SymbolIcon Symbol="CheckmarkCircle24" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,0,6,0"/>
+                    <TextBlock Text="Done" FontSize="12"
+                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                </StackPanel>
+            </Border>
+
+            <Border x:Name="FilterAll" CornerRadius="8" Padding="14,6"
+                    Cursor="Hand" MouseLeftButtonDown="Filter_Click" Tag="All">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Background" Value="Transparent"/>
+                        <Setter Property="BorderBrush" Value="Transparent"/>
+                        <Setter Property="BorderThickness" Value="1"/>
+                        <Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter Property="Background" Value="#0AFFFFFF"/>
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <StackPanel Orientation="Horizontal">
+                    <ui:SymbolIcon Symbol="List24" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,0,6,0"/>
+                    <TextBlock Text="All" FontSize="12"
+                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                </StackPanel>
+            </Border>
+        </StackPanel>
+
+        <!-- ═══ NEW REMINDER BUTTON (inline bar) ═══ -->
+        <Border Grid.Row="2" CornerRadius="10" Padding="10,8" Margin="0,0,0,12" Cursor="Hand"
+                MouseLeftButtonDown="NewReminder_Click">
+            <Border.Style>
+                <Style TargetType="Border">
+                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
+                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
+                    <Setter Property="BorderThickness" Value="1"/>
+                    <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter Property="Background" Value="#12FFFFFF"/>
+                            <Setter Property="BorderBrush" Value="#25FFFFFF"/>
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </Border.Style>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <ui:SymbolIcon Symbol="Add24" FontSize="15" Foreground="#F59E0B" Margin="0,0,8,0"/>
+                <TextBlock Text="New Reminder" FontSize="13" FontWeight="Medium"
+                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+            </StackPanel>
+        </Border>
+
+        <!-- ═══ REMINDERS LIST ═══ -->
+        <Border Grid.Row="3" CornerRadius="12" Padding="6"
+                Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
+                BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
+            <Grid>
+                <!-- Empty state -->
+                <StackPanel x:Name="EmptyState" VerticalAlignment="Center" HorizontalAlignment="Center"
+                            Opacity="0.4" Visibility="Collapsed">
+                    <ui:SymbolIcon Symbol="Alert24" FontSize="36" HorizontalAlignment="Center"
+                                  Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                    <TextBlock Text="No reminders yet — add one above" FontSize="13"
+                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
+                               Margin="0,8,0,0" HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="0">
+                    <ItemsControl x:Name="RemindersList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="{x:Type classes:ReminderItem}">
+                                <Border Margin="2,2" CornerRadius="10" Padding="10,10"
+                                        Background="Transparent" BorderBrush="Transparent" BorderThickness="1">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Background" Value="#0AFFFFFF"/>
+                                                    <Setter Property="BorderBrush" Value="#15FFFFFF"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Status Badge -->
+                                        <Grid Grid.Column="0" Width="38" Height="38" Margin="0,0,12,0">
+                                            <Border CornerRadius="9">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Background">
+                                                            <Setter.Value>
+                                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                                    <GradientStop Color="#18F59E0B" Offset="0"/>
+                                                                    <GradientStop Color="#08F59E0B" Offset="1"/>
+                                                                </LinearGradientBrush>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                <Setter Property="Background">
+                                                                    <Setter.Value>
+                                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                                            <GradientStop Color="#1810B981" Offset="0"/>
+                                                                            <GradientStop Color="#0810B981" Offset="1"/>
+                                                                        </LinearGradientBrush>
+                                                                    </Setter.Value>
+                                                                </Setter>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <ui:SymbolIcon FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                    <ui:SymbolIcon.Style>
+                                                        <Style TargetType="ui:SymbolIcon">
+                                                            <Setter Property="Symbol" Value="Alert24"/>
+                                                            <Setter Property="Foreground" Value="#F59E0B"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                    <Setter Property="Symbol" Value="CheckmarkCircle24"/>
+                                                                    <Setter Property="Foreground" Value="#10B981"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsSnoozed}" Value="True">
+                                                                    <Setter Property="Symbol" Value="AlertSnooze24"/>
+                                                                    <Setter Property="Foreground" Value="#6366F1"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </ui:SymbolIcon.Style>
+                                                </ui:SymbolIcon>
+                                            </Border>
+                                        </Grid>
+
+                                        <!-- Title + Details -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
+                                            <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="Medium"
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
+                                                       TextTrimming="CharacterEllipsis">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                <Setter Property="Opacity" Value="0.5"/>
+                                                                <Setter Property="TextDecorations" Value="Strikethrough"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                <TextBlock Text="{Binding DueAtDisplay}" FontSize="10.5"
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                <TextBlock FontSize="10.5" Margin="6,0,0,0"
+                                                           Foreground="#F59E0B">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Text" Value=""/>
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding Repeat}" Value="Daily">
+                                                                    <Setter Property="Text" Value="🔁 Daily"/>
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Repeat}" Value="Weekly">
+                                                                    <Setter Property="Text" Value="🔁 Weekly"/>
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding Repeat}" Value="Monthly">
+                                                                    <Setter Property="Text" Value="🔁 Monthly"/>
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <!-- Notes preview -->
+                                            <TextBlock Text="{Binding Notes}" FontSize="10" Margin="0,2,0,0"
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
+                                                       TextTrimming="CharacterEllipsis" MaxWidth="280" Opacity="0.6">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Notes}" Value="">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+
+                                        <!-- Actions -->
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <!-- Toggle Done -->
+                                            <ui:Button Appearance="Transparent" Tag="{Binding}" Click="ToggleDone_Click"
+                                                       ToolTip="Mark Done / Undo" Padding="5,4" Margin="0,0,2,0"
+                                                       Foreground="#10B981">
+                                                <ui:Button.Icon>
+                                                    <ui:SymbolIcon FontSize="14">
+                                                        <ui:SymbolIcon.Style>
+                                                            <Style TargetType="ui:SymbolIcon">
+                                                                <Setter Property="Symbol" Value="CheckmarkCircle24"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                        <Setter Property="Symbol" Value="ArrowUndo24"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </ui:SymbolIcon.Style>
+                                                    </ui:SymbolIcon>
+                                                </ui:Button.Icon>
+                                            </ui:Button>
+                                            <!-- Delete -->
+                                            <ui:Button Appearance="Transparent" Tag="{Binding}" Click="DeleteReminder_Click"
+                                                       ToolTip="Delete" Foreground="{DynamicResource DangerColor}" Padding="5,4">
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" FontSize="14"/></ui:Button.Icon>
+                                            </ui:Button>
+                                        </StackPanel>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+    </Grid>
+</controls:MicaWindow>

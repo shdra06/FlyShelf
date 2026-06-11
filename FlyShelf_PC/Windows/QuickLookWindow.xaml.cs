@@ -1072,12 +1072,31 @@ namespace FlyShelf.Windows
             try
             {
                 string combined = string.Join(" ", _selectedWordTexts);
+                FlyShelf.Classes.Logger.LogAction("OCR_COPY", $"Copying {_selectedWordTexts.Count} words: [{combined}]");
+                
                 if (ClipboardHelper.SafeSetText(combined))
                 {
+                    // Verify clipboard was actually set
+                    try
+                    {
+                        string verify = System.Windows.Clipboard.GetText();
+                        FlyShelf.Classes.Logger.LogAction("OCR_COPY", $"Clipboard verified: [{verify}]");
+                    }
+                    catch { }
+                    
                     FlyShelf.Windows.ToastWindow.ShowToast($"Copied {_selectedWordTexts.Count} word{(_selectedWordTexts.Count > 1 ? "s" : "")}");
                 }
+                else
+                {
+                    FlyShelf.Classes.Logger.LogAction("OCR_COPY", "SafeSetText returned FALSE — clipboard busy");
+                    FlyShelf.Windows.ToastWindow.ShowToast("Clipboard busy — try again");
+                }
             }
-            catch { }
+            catch (Exception ex)
+            {
+                FlyShelf.Classes.Logger.LogAction("OCR_COPY", $"Exception: {ex.Message}");
+                FlyShelf.Windows.ToastWindow.ShowToast("Copy failed — try again");
+            }
         }
 
         /// <summary>

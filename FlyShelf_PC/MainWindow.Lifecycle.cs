@@ -48,7 +48,7 @@ namespace FlyShelf
         private const int VK_RBUTTON = 0x02;
 
         [System.Runtime.InteropServices.DllImport("kernel32.dll", EntryPoint = "SetProcessWorkingSetSize", SetLastError = true)]
-        private static extern int SetProcessWorkingSetSize(IntPtr process, int minimumWorkingSetSize, int maximumWorkingSetSize);
+        private static extern int SetProcessWorkingSetSize(IntPtr process, nint minimumWorkingSetSize, nint maximumWorkingSetSize);
 
         private System.Windows.Threading.DispatcherTimer? _dragActiveDismissTimer;
 
@@ -345,20 +345,25 @@ namespace FlyShelf
 
         static MainWindow()
         {
-            _cachedOpacityAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120))
+            // Opacity: 300ms QuarticEase — the first ~100ms runs at near-0% opacity (invisible),
+            // absorbing the 60-115ms of pre-animation setup work (CloseSearch, CurrentMode, layout).
+            // The visible fade-in is the last ~200ms: smooth and jitter-free.
+            _cachedOpacityAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(300))
             {
-                EasingFunction = new System.Windows.Media.Animation.QuinticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+                EasingFunction = new System.Windows.Media.Animation.QuarticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
             };
             _cachedOpacityAnim.Freeze();
 
-            _cachedSlideInAnim = new System.Windows.Media.Animation.DoubleAnimation(10, 0, TimeSpan.FromMilliseconds(200))
+            // Slide: 350ms CubicEase from Y=8 → 0. Subtle enough that the first few frames
+            // of movement are sub-pixel (invisible) during setup, then smoothly decelerates to rest.
+            _cachedSlideInAnim = new System.Windows.Media.Animation.DoubleAnimation(8, 0, TimeSpan.FromMilliseconds(350))
             {
                 EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
             };
             _cachedSlideInAnim.Freeze();
         }
 
-        // Cached timer for clearing _isShowAnimating after opacity animation completes
+        // Cached timer for clearing _isShowAnimating after animation completes
         private System.Windows.Threading.DispatcherTimer? _showAnimEndTimer;
 
         /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
@@ -368,15 +373,15 @@ namespace FlyShelf
 
             // Reset the cached transform for slide-in
             _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, null);
-            _cachedSlideTransform.Y = 10;
+            _cachedSlideTransform.Y = 8;
             RootContent.RenderTransform = _cachedSlideTransform;
 
-            // Clear _isShowAnimating after 130ms (just past 120ms opacity animation)
+            // Clear _isShowAnimating after 400ms (slide-in is 350ms)
             if (_showAnimEndTimer == null)
             {
                 _showAnimEndTimer = new System.Windows.Threading.DispatcherTimer
                 {
-                    Interval = TimeSpan.FromMilliseconds(130)
+                    Interval = TimeSpan.FromMilliseconds(400)
                 };
                 _showAnimEndTimer.Tick += (s, e) =>
                 {
@@ -575,19 +580,24 @@ namespace FlyShelf
             }
             catch { }
 
-            // 2. Perform Garbage Collection and Empty the Process Working Set asynchronously
+            // 2. GC + working set trim — keep 30MB minimum to avoid cold-start animation jitter.
+            // SetProcessWorkingSetSize(-1,-1) evicts ALL pages including WPF rendering pipeline,
+            // causing page faults on first spawn. A 30MB floor keeps composition thread buffers resident.
             System.Threading.Tasks.Task.Run(() =>
             {
                 try
                 {
-                    // Force complete Gen 2 collection
-                    System.GC.Collect(2, System.GCCollectionMode.Forced, true);
+                    // Gen 1 optimized collection — reclaims short-lived objects without freezing UI
+                    System.GC.Collect(1, System.GCCollectionMode.Optimized, false);
                     System.GC.WaitForPendingFinalizers();
 
-                    // Empty process working set to release physical RAM pages back to OS standby list
+                    // Set working set to 30MB min / 60MB max — keeps WPF rendering pages resident
+                    // while still releasing image bitmap pages back to OS standby list
+                    const nint MIN_WS = 30 * 1024 * 1024;  // 30 MB
+                    const nint MAX_WS = 60 * 1024 * 1024;  // 60 MB
                     using (var currentProcess = System.Diagnostics.Process.GetCurrentProcess())
                     {
-                        SetProcessWorkingSetSize(currentProcess.Handle, -1, -1);
+                        SetProcessWorkingSetSize(currentProcess.Handle, MIN_WS, MAX_WS);
                     }
                 }
                 catch { }

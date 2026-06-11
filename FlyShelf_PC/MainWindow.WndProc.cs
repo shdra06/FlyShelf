@@ -116,7 +116,12 @@ namespace FlyShelf
                     _lastHotkeyTime = now;
 
                     Classes.Logger.LogAction("TELEMETRY", "Hotkey Alt+C received inside WndProc");
-                    ToggleMainClipboard();
+                    // PERF: Defer spawn out of WndProc — when Alt+C is pressed quickly,
+                    // WM_SYSKEYDOWN/WM_SYSKEYUP messages are still queued behind WM_HOTKEY.
+                    // Running spawn synchronously inside HwndHook causes those keyboard messages
+                    // to be processed between animation frames (25-40ms stalls).
+                    // Input priority lets the keyboard queue drain first → jitter-free animation.
+                    Dispatcher.InvokeAsync(() => ToggleMainClipboard(), System.Windows.Threading.DispatcherPriority.Input);
                     handled = true;
                 }
                 else if (hotkeyId >= HOTKEY_QUICKPASTE_BASE + 1 && hotkeyId <= HOTKEY_QUICKPASTE_BASE + 10)
