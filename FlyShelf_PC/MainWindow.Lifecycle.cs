@@ -173,6 +173,8 @@ namespace FlyShelf
                             
                             bool desktopSwitched = false;
 
+                            Classes.Logger.LogAction("VD_CB", $"BG_CHECK | summoned={_isCurrentlySummoned} notes={_isNotesActive} todo={_isTodoActive} summonedId={_summonedDesktopId:N}");
+
                             // Get thread/process ID of the new foreground window
                             uint focusedProcId = 0;
                             if (hwnd != IntPtr.Zero)
@@ -191,13 +193,16 @@ namespace FlyShelf
                                 int hr = localVdm.GetWindowDesktopId(hwnd, out Guid currentDesktopId);
                                 if (hr == 0 && currentDesktopId != Guid.Empty)
                                 {
+                                    // Always track the current desktop (used by ToggleMainClipboard)
+                                    _currentDesktopId = currentDesktopId;
+
+                                    Classes.Logger.LogAction("VD_CB", $"CHECK1: fgDesktop={currentDesktopId:N} summonedId={_summonedDesktopId:N} match={currentDesktopId == _summonedDesktopId}");
+
                                     if (_summonedDesktopId != Guid.Empty && currentDesktopId != _summonedDesktopId)
                                     {
                                         desktopSwitched = true;
+                                        Classes.Logger.LogAction("VD_CB", "CHECK1: DESKTOP SWITCH DETECTED via GUID comparison");
                                     }
-                                    // Track the foreground desktop GUID as a rolling reference.
-                                    // This ensures _summonedDesktopId is always valid even if it
-                                    // was Guid.Empty at summon time (pinned window).
                                     if (_summonedDesktopId == Guid.Empty)
                                     {
                                         _summonedDesktopId = currentDesktopId;
@@ -213,45 +218,52 @@ namespace FlyShelf
                                 if (hr == 0 && onCurrent == 0)
                                 {
                                     desktopSwitched = true;
+                                    // Invalidate _currentDesktopId since we couldn't get the new desktop's GUID
+                                    _currentDesktopId = Guid.Empty;
+                                    Classes.Logger.LogAction("VD_CB", "CHECK2: _lastActiveExternalWindow NOT on current VD → desktop switch detected");
                                 }
                             }
 
                             // Ultimate fallback for Notes/Todo: when WS_EX_APPWINDOW is set,
                             // the window is tied to a specific desktop despite being "pinned".
-                            // Check our own window — but ONLY when a panel is active.
                             if (!desktopSwitched && (_isNotesActive || _isTodoActive))
                             {
                                 int hr = localVdm.IsWindowOnCurrentVirtualDesktop(myHwnd, out int onCurrent);
                                 if (hr == 0 && onCurrent == 0)
                                 {
                                     desktopSwitched = true;
+                                    _currentDesktopId = Guid.Empty;
+                                    Classes.Logger.LogAction("VD_CB", "CHECK3: Our own window NOT on current VD (Notes/Todo WS_EX_APPWINDOW) → desktop switch detected");
                                 }
                             }
 
+                            Classes.Logger.LogAction("VD_CB", $"RESULT: desktopSwitched={desktopSwitched}");
+
                             if (desktopSwitched)
                             {
-                                // Capture the spawn generation BEFORE dispatching to UI thread.
-                                // If a new spawn happens between now and when the lambda runs,
-                                // the generation will differ → skip the stale dismiss.
                                 int capturedGeneration = _spawnGeneration;
+                                Classes.Logger.LogAction("VD_CB", $"DISMISS: Dispatching AnimateAndHide to UI thread (gen={capturedGeneration})");
 
-                                // User switched to a different virtual desktop — dismiss on UI thread
+                                // User switched to a different virtual desktop — force clipboard mode
                                 Application.Current.Dispatcher.InvokeAsync(() =>
                                 {
-                                    // Skip if a new spawn happened since this callback was queued.
-                                    // This prevents the stale callback from hiding a clipboard
-                                    // that was just spawned on the new desktop via Alt+C.
                                     if (_spawnGeneration != capturedGeneration) return;
+
+                                    // ═══ NUCLEAR RESET: Force clipboard mode on desktop switch ═══
+                                    // Close any active panels and clear ALL panel state.
+                                    // This guarantees Alt+C on the new desktop shows a fresh clipboard.
+                                    EnsureClipboardMode();
+                                    _lastPanelBeforeDismiss = null;
+                                    _desktopSwitchedSinceLastDismiss = true;
 
                                     if (_isCurrentlySummoned && !_isAnimatingHide)
                                     {
-                                        if (_isNotesActive)
-                                            CloseNotesPanel(immediate: true);
-                                        if (_isTodoActive)
-                                            CloseTodoPanel(immediate: true);
-
-                                        _desktopSwitchedSinceLastDismiss = true;
+                                        Classes.Logger.LogAction("VD_CB", $"DISMISS: Executing on UI thread. notes={_isNotesActive} todo={_isTodoActive}");
                                         AnimateAndHide();
+                                    }
+                                    else
+                                    {
+                                        Classes.Logger.LogAction("VD_CB", $"DISMISS: Not summoned but reset to clipboard mode (notes={_isNotesActive} todo={_isTodoActive})");
                                     }
                                 });
                             }
@@ -368,60 +380,43 @@ namespace FlyShelf
             // ═══ CRITICAL: Set unsummoned IMMEDIATELY ═══
             _isCurrentlySummoned = false;
 
-            // ═══ CLOSE NOTES/TODO BEFORE HIDING ═══
-            // Must close panels HERE, not in HideWindowInternal.
-            // If panels are still active when HideWindowInternal runs,
-            // it minimizes (opacity=1) instead of moving offscreen (Left=-20000).
-            // Minimized windows break the zombie detector (Left < -10000 && Opacity < 0.01).
+            Classes.Logger.LogAction("VD_HIDE", $"AnimateAndHide | notes={_isNotesActive} todo={_isTodoActive} deskSwitchFlag={_desktopSwitchedSinceLastDismiss}");
+
+            // ═══ CLOSE NOTES/TODO ═══
             if (_isNotesActive || _isTodoActive)
             {
-                // Remember which panel was active for same-desktop re-summon
+                // Always save which panel was active — ToggleMainClipboard decides whether to restore
                 _lastPanelBeforeDismiss = _isNotesActive ? "notes" : "todo";
-
-                // Notes/Todo uses WS_EX_APPWINDOW which corrupts desktop association.
-                // ALWAYS mark as desktop-switched when Notes was active —
-                // this guarantees the fast desktop reset runs on the next summon.
-                _desktopSwitchedSinceLastDismiss = true;
+                Classes.Logger.LogAction("VD_HIDE", $"Panel close: saved={_lastPanelBeforeDismiss}");
 
                 if (_isNotesActive) CloseNotesPanel(immediate: true);
                 if (_isTodoActive) CloseTodoPanel(immediate: true);
             }
 
-            // Cancel the auto-revert safety timer (panel is being dismissed normally)
             StopPanelAutoRevertTimer();
-
-            // Cancel any pending mascot timers
             _mascotDelayTimer?.Stop();
-
             _isAnimatingHide = false;
             _lastActualHeight = this.ActualHeight;
 
-            // Clear merge state & close search instantly
             DismissMergeState();
             CloseSearch();
 
-            // Close the overflow popup so it doesn't linger on screen after dismiss
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
 
             try
             {
-                // Reset window opacity to 0 and clear any active animations immediately onscreen.
-                // This makes the window instantly invisible to the user on the screen.
+                // Make window invisible
                 this.Opacity = 0;
                 this.BeginAnimation(OpacityProperty, null);
                 RootContent.Opacity = 1;
-                
-                // Clear any active translation offsets
+
                 if (RootContent.RenderTransform is TranslateTransform tt)
                 {
                     tt.BeginAnimation(TranslateTransform.YProperty, null);
                 }
                 RootContent.RenderTransform = null;
 
-                // ═══ SCROLL RESET DURING DISMISS ═══
-                // Reset scroll position while the window is invisible (opacity=0).
-                // This eliminates the visible jitter on next spawn — the scroll is
-                // already at position 0 when the fade-in animation starts.
+                // Reset scroll
                 try
                 {
                     Classes.SmoothScroll.ResetScrollState(GetShelfScrollViewer());
@@ -437,8 +432,9 @@ namespace FlyShelf
                 catch { }
 
                 // Defer the offscreen move to Background priority.
-                // This ensures WPF has rendered and committed a 0% opacity frame to DWM first,
-                // clearing the composition cache before the window is translated offscreen.
+                // This ensures WPF has rendered and committed a 0% opacity frame to DWM first.
+                // HideWindowInternal has a guard: if _isCurrentlySummoned was set by a new show,
+                // it aborts to avoid clobbering the new show.
                 Dispatcher.InvokeAsync(() =>
                 {
                     HideWindowInternal();
@@ -446,7 +442,7 @@ namespace FlyShelf
             }
             catch { }
 
-            // Pause all GIF mascot and wallpaper decoding loops immediately
+            // Pause GIF mascot and wallpaper decoding
             try
             {
                 MascotIdle.PausePlayback();
@@ -454,6 +450,9 @@ namespace FlyShelf
                 animator?.Pause();
             }
             catch { }
+
+            // Optimize memory
+            OptimizeMemoryUsage();
         }
         private DateTime _spawnTime = DateTime.MinValue;
         private IntPtr _previousForegroundWindow = IntPtr.Zero;

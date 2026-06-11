@@ -397,28 +397,37 @@ namespace FlyShelf
         /// </summary>
         public void ToggleMainClipboard()
         {
+            // ═══ DESKTOP SWITCH DETECTION ═══
+            // Primary: cached GUID comparison (zero COM calls)
+            bool isOnOtherDesktop = _summonedDesktopId != Guid.Empty &&
+                                   _currentDesktopId != Guid.Empty &&
+                                   _currentDesktopId != _summonedDesktopId;
+
+            // Fallback 1: Use _desktopSwitchedSinceLastDismiss flag (set by callback)
+            if (!isOnOtherDesktop && _desktopSwitchedSinceLastDismiss)
+            {
+                isOnOtherDesktop = true;
+                Classes.Logger.LogAction("VD_TOGGLE", "FALLBACK1: deskSwitchFlag=true → isOnOtherDesktop=true");
+            }
+
+            Classes.Logger.LogAction("VD_TOGGLE", $"ENTER | summoned={_isCurrentlySummoned} animHide={_isAnimatingHide} " +
+                $"notes={_isNotesActive} todo={_isTodoActive} isOtherDesktop={isOnOtherDesktop} " +
+                $"summonedId={_summonedDesktopId:N} currentId={_currentDesktopId:N} " +
+                $"deskSwitchFlag={_desktopSwitchedSinceLastDismiss} lastPanel={_lastPanelBeforeDismiss ?? "null"} " +
+                $"Left={this.Left:F0} Opacity={this.Opacity:F2}");
+
             // ═══ NOTES/TODO DISMISS ═══
             if ((_isNotesActive || _isTodoActive) && _isCurrentlySummoned && !_isAnimatingHide)
             {
-                // Check if we're on a different desktop than the Notes/Todo window
-                bool panelOnOtherDesktop = false;
-                try
+                if (isOnOtherDesktop)
                 {
-                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                    if (hwnd != IntPtr.Zero)
-                        panelOnOtherDesktop = !IsWindowOnCurrentVirtualDesktop(hwnd);
-                }
-                catch { }
-
-                if (panelOnOtherDesktop)
-                {
-                    // Different desktop: close panel, mark as desktop switch, reset state,
-                    // and FALL THROUGH to normal clipboard spawn path below.
-                    if (_isNotesActive) CloseNotesPanel(immediate: true);
-                    if (_isTodoActive) CloseTodoPanel(immediate: true);
+                    Classes.Logger.LogAction("VD_TOGGLE", "PANEL_DISMISS: Other desktop → EnsureClipboardMode + fall through");
+                    EnsureClipboardMode();
+                    _lastPanelBeforeDismiss = null;
                     _desktopSwitchedSinceLastDismiss = true;
                     _isCurrentlySummoned = false;
                     _isAnimatingHide = false;
+                    StopPanelAutoRevertTimer();
                     this.Opacity = 0;
                     this.BeginAnimation(OpacityProperty, null);
                     this.Left = -20000;
@@ -427,66 +436,37 @@ namespace FlyShelf
                 }
                 else
                 {
-                    // Same desktop: just dismiss the panel normally
+                    Classes.Logger.LogAction("VD_TOGGLE", "PANEL_DISMISS: Same desktop → AnimateAndHide + return");
                     AnimateAndHide();
                     return;
                 }
             }
 
-            // ═══ VIRTUAL DESKTOP CHECK ═══
-            // Detect if the window is stuck on another virtual desktop
-            bool isOnOtherDesktop = false;
-            try
-            {
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                if (hwnd != IntPtr.Zero)
-                {
-                    isOnOtherDesktop = !IsWindowOnCurrentVirtualDesktop(hwnd);
-                }
-            }
-            catch { }
-
+            // ═══ VIRTUAL DESKTOP CLEANUP ═══
             if (isOnOtherDesktop)
             {
-                if (_isNotesActive) CloseNotesPanel(immediate: true);
-                if (_isTodoActive) CloseTodoPanel(immediate: true);
+                Classes.Logger.LogAction("VD_TOGGLE", "VD_CLEANUP: Window on other desktop, resetting state");
+                EnsureClipboardMode();
+                _lastPanelBeforeDismiss = null;
                 _isCurrentlySummoned = false;
                 _isAnimatingHide = false;
             }
 
             // Capture whether this is a desktop-switch resummon BEFORE zombie check clears the flag.
-            // Used to decide whether to restore the last panel or show clipboard.
             bool wasDesktopSwitch = _desktopSwitchedSinceLastDismiss || isOnOtherDesktop;
+            _desktopSwitchedSinceLastDismiss = false; // CONSUME immediately — prevents stale flag on rapid re-entry
+            Classes.Logger.LogAction("VD_TOGGLE", $"wasDesktopSwitch={wasDesktopSwitch} (deskSwitchFlag={_desktopSwitchedSinceLastDismiss} || isOther={isOnOtherDesktop})");
 
             // ═══ ZOMBIE STATE DETECTOR ═══
-            // ALWAYS run when window is offscreen and invisible. The physical state
-            // (Left < -10000, Opacity < 0.01) is the ground truth.
+            // Window is offscreen and not summoned — just reset state.
+            // No Hide+Show cycle needed since window is always pinned to all desktops.
             bool zombieRecovered = false;
-            if (!_isCurrentlySummoned && this.Left < -10000 && this.Opacity < 0.01)
+            if (!_isCurrentlySummoned && this.Left < -10000)
             {
-                // Close any lingering panels (skip if already closed)
-                if (_isNotesActive) CloseNotesPanel(immediate: true);
-                if (_isTodoActive) CloseTodoPanel(immediate: true);
+                this.Opacity = 0;
+                this.BeginAnimation(OpacityProperty, null);
 
-                if (_desktopSwitchedSinceLastDismiss)
-                {
-                    // ═══ FAST DESKTOP RESET (only after desktop switch) ═══
-                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                    if (hwnd != IntPtr.Zero)
-                    {
-                        Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
-                        int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-                        SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle | WS_EX_APPWINDOW) & ~WS_EX_NOACTIVATE);
-                        Classes.NativeMethods.ShowWindow(hwnd, 5 /*SW_SHOW*/);
-                        exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-                        SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle & ~WS_EX_APPWINDOW) | WS_EX_NOACTIVATE);
-                        Classes.NativeMethods.SetWindowPos(hwnd,
-                            -1 /*HWND_TOPMOST*/, 0, 0, 0, 0,
-                            Classes.NativeMethods.SWP_NOMOVE | Classes.NativeMethods.SWP_NOSIZE |
-                            Classes.NativeMethods.SWP_NOACTIVATE | 0x0020 /*SWP_FRAMECHANGED*/);
-                    }
-                }
-
+                EnsureClipboardMode();
                 _desktopSwitchedSinceLastDismiss = false;
                 _isAnimatingHide = false;
                 _isCurrentlySummoned = false;
@@ -495,15 +475,23 @@ namespace FlyShelf
 
             // On desktop switch, clear panel memory — new desktop always starts with clipboard
             if (wasDesktopSwitch)
-                _lastPanelBeforeDismiss = null;
-
-            // If the overlay is already visible and in Mode 1, hide it
-            if (!zombieRecovered && _isCurrentlySummoned && _viewModel.CurrentMode == 1 && !_isAnimatingHide)
             {
+                Classes.Logger.LogAction("VD_TOGGLE", "Clearing panel memory (desktop switch)");
+                _lastPanelBeforeDismiss = null;
+            }
+
+            // If the overlay is already visible and in Mode 1, hide it.
+            // Require Opacity > 0.5 to avoid cancelling a show animation that hasn't finished yet.
+            // Without this, rapid Alt+C during the fade-in would hide the window before it appears.
+            if (!zombieRecovered && _isCurrentlySummoned && _viewModel.CurrentMode == 1 && !_isAnimatingHide && this.Opacity > 0.5)
+            {
+                Classes.Logger.LogAction("VD_TOGGLE", $"TOGGLE_OFF: Already visible (Opacity={this.Opacity:F2}) → AnimateAndHide");
                 AnimateAndHide();
             }
             else
             {
+                Classes.Logger.LogAction("VD_TOGGLE", $"SHOW_PATH: zombieRecovered={zombieRecovered} summoned={_isCurrentlySummoned}");
+
                 // ═══ RESET FILTERS ON RESUMMON ═══
                 if (_activeCategoryFilter != null)
                     ClearCategoryFilter();
@@ -554,6 +542,7 @@ namespace FlyShelf
                     targetY = workArea.Top + workArea.Height;
                 }
 
+                Classes.Logger.LogAction("VD_TOGGLE", $"SHOW: Calling ShowNearPosition at ({targetX:F0}, {targetY:F0}), knownOnOther={isOnOtherDesktop}");
                 ShowNearPosition(targetX, targetY, 1, false, false, knownOnOtherDesktop: isOnOtherDesktop);
 
                 // ═══ SAME-DESKTOP PANEL RESTORE ═══
@@ -563,6 +552,7 @@ namespace FlyShelf
                 {
                     string panelToRestore = _lastPanelBeforeDismiss;
                     _lastPanelBeforeDismiss = null; // Consume — only restore once
+                    Classes.Logger.LogAction("VD_TOGGLE", $"PANEL_RESTORE: Restoring '{panelToRestore}' (same desktop)");
 
                     // Defer panel open to after the show animation completes
                     Dispatcher.InvokeAsync(() =>
@@ -574,6 +564,10 @@ namespace FlyShelf
                         else if (panelToRestore == "todo")
                             OpenTodoPanel();
                     }, System.Windows.Threading.DispatcherPriority.Loaded);
+                }
+                else
+                {
+                    Classes.Logger.LogAction("VD_TOGGLE", $"NO_RESTORE: wasDesktopSwitch={wasDesktopSwitch} lastPanel={_lastPanelBeforeDismiss ?? "null"}");
                 }
             }
         }

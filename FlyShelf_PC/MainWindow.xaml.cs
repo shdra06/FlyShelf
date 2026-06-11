@@ -60,6 +60,7 @@ namespace FlyShelf
         private System.ComponentModel.PropertyChangedEventHandler? _settingsChangedHandler;
         private bool _isSuppressingSizeSync = false;
         private Guid _summonedDesktopId = Guid.Empty;
+        private Guid _currentDesktopId = Guid.Empty; // Updated on every foreground change from the fg window's desktop GUID
         private bool _lastActiveExternalWindowWasOnCurrentAtSummon = false;
 
         private FlyShelf.Classes.NativeMethods.IVirtualDesktopManager? _vdm = null;
@@ -1062,13 +1063,17 @@ namespace FlyShelf
 
         public void HideWindowInternal()
         {
+            // Guard: If a new show happened between AnimateAndHide and this deferred call,
+            // abort — we'd clobber the new show by moving the window offscreen.
+            if (_isCurrentlySummoned)
+            {
+                Classes.Logger.LogAction("VD_HIDE", "HideWindowInternal ABORTED — window was re-summoned");
+                return;
+            }
+
             _isCurrentlySummoned = false;
             _isEdgeLocked = false;
 
-            // Always move offscreen. Notes/Todo panels are closed in AnimateAndHide
-            // BEFORE this method runs, so _isNotesActive/_isTodoActive are always false here.
-            // Moving offscreen (not minimizing) ensures the zombie detector works:
-            // it checks Left < -10000 && Opacity < 0.01 which fails for minimized windows.
             if (this.WindowState == WindowState.Minimized)
             {
                 _isProgrammaticMinimize = true;

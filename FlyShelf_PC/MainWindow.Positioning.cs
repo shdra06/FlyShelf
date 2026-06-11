@@ -23,64 +23,60 @@ namespace FlyShelf
             try
             {
                 var vdm = GetVirtualDesktopManager();
-                if (vdm == null) return false;
-                
-                // Check if already on the current desktop — skip when force=true
-                if (!force)
+                if (vdm != null)
                 {
+                    // ALWAYS check if window is on current desktop — pinned windows return true.
+                    // Skip all heavy lifting if it's already visible here.
                     if (IsWindowOnCurrentVirtualDesktop(hwnd))
                     {
                         Classes.Logger.LogAction("DESKTOP", "Window already on current virtual desktop.");
                         return true;
                     }
-                }
-                else
-                {
-                    Classes.Logger.LogAction("DESKTOP", "Force mode — skipping IsWindowOnCurrentVirtualDesktop check.");
-                }
 
-                // Get current foreground window desktop ID — but EXCLUDE our own window!
-                IntPtr fg = GetForegroundWindow();
-                Guid desktopId = Guid.Empty;
-                if (fg != IntPtr.Zero && fg != hwnd)
-                {
-                    vdm.GetWindowDesktopId(fg, out desktopId);
-                    Classes.Logger.LogAction("DESKTOP", $"Foreground window 0x{fg:X} GUID: {desktopId}");
-                }
-                else
-                {
-                    Classes.Logger.LogAction("DESKTOP", $"Foreground window is self or null (fg=0x{fg:X}), skipping.");
-                }
-
-                if (desktopId != Guid.Empty)
-                {
-                    int hr = vdm.MoveWindowToDesktop(hwnd, ref desktopId);
-                    Classes.Logger.LogAction("DESKTOP", $"MoveWindowToDesktop HR=0x{hr:X8}");
-                    if (hr == 0)
+                    // Try COM move
+                    Guid desktopId = _currentDesktopId;
+                    if (desktopId == Guid.Empty)
                     {
-                        Classes.Logger.LogAction("DESKTOP", "Successfully moved window to current virtual desktop.");
-                        return true;
+                        IntPtr fg = GetForegroundWindow();
+                        if (fg != IntPtr.Zero && fg != hwnd)
+                            vdm.GetWindowDesktopId(fg, out desktopId);
+                    }
+
+                    if (desktopId != Guid.Empty)
+                    {
+                        int hr = vdm.MoveWindowToDesktop(hwnd, ref desktopId);
+                        Classes.Logger.LogAction("DESKTOP", $"MoveWindowToDesktop HR=0x{hr:X8} target={desktopId}");
+                        _summonedDesktopId = desktopId;
+                        _currentDesktopId = desktopId;
                     }
                 }
             }
             catch (Exception ex)
             {
-                Classes.Logger.LogAction("DESKTOP_ERR", $"MoveToCurrentVirtualDesktop error: {ex.Message}");
+                Classes.Logger.LogAction("DESKTOP_ERR", $"COM move error: {ex.Message}");
             }
 
-            // ═══ ULTIMATE FALLBACK ═══
-            // If COM move failed, re-pin the window to all virtual desktops.
-            // Re-pinning is more reliable than Hide+Show (which doesn't actually
-            // move windows across virtual desktops — it's a visibility API only).
+            // Fallback: Hide+Show cycle to force DWM re-association
+            // Only runs if IsWindowOnCurrentVirtualDesktop returned false above.
             try
             {
-                Classes.Logger.LogAction("DESKTOP", "COM move failed or empty GUID. Re-pinning to all desktops.");
-                EnsureVirtualDesktopPinned();
+                Classes.Logger.LogAction("DESKTOP", "Forcing Hide+Show cycle for DWM re-association.");
+                Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
+                int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle | WS_EX_APPWINDOW) & ~WS_EX_NOACTIVATE);
+                Classes.NativeMethods.ShowWindow(hwnd, 5 /*SW_SHOW*/);
+                exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle & ~WS_EX_APPWINDOW) | WS_EX_NOACTIVATE);
+                Classes.NativeMethods.SetWindowPos(hwnd,
+                    -1 /*HWND_TOPMOST*/, 0, 0, 0, 0,
+                    Classes.NativeMethods.SWP_NOMOVE | Classes.NativeMethods.SWP_NOSIZE |
+                    Classes.NativeMethods.SWP_NOACTIVATE | 0x0020 /*SWP_FRAMECHANGED*/);
+                Classes.Logger.LogAction("DESKTOP", "Hide+Show cycle complete.");
                 return true;
             }
             catch (Exception ex)
             {
-                Classes.Logger.LogAction("DESKTOP_ERR", $"Re-pin fallback error: {ex.Message}");
+                Classes.Logger.LogAction("DESKTOP_ERR", $"Hide+Show cycle error: {ex.Message}");
             }
             return false;
         }
@@ -130,34 +126,6 @@ namespace FlyShelf
                 _isAnimatingHide = false;
             }
 
-            // ═══ ZOMBIE STATE DETECTOR ═══
-            // ALWAYS run when window is offscreen and invisible. The physical state is ground truth.
-            if (!_isCurrentlySummoned && this.Left < -10000 && this.Opacity < 0.01)
-            {
-                if (_isNotesActive) CloseNotesPanel(immediate: true);
-                if (_isTodoActive) CloseTodoPanel(immediate: true);
-
-                if (_desktopSwitchedSinceLastDismiss)
-                {
-                    // Fast desktop reset — only after desktop switch
-                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                    if (hwnd != IntPtr.Zero)
-                    {
-                        Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
-                        int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-                        SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle | WS_EX_APPWINDOW) & ~WS_EX_NOACTIVATE);
-                        Classes.NativeMethods.ShowWindow(hwnd, 5 /*SW_SHOW*/);
-                        exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-                        SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle & ~WS_EX_APPWINDOW) | WS_EX_NOACTIVATE);
-                        Classes.NativeMethods.SetWindowPos(hwnd,
-                            -1 /*HWND_TOPMOST*/, 0, 0, 0, 0,
-                            Classes.NativeMethods.SWP_NOMOVE | Classes.NativeMethods.SWP_NOSIZE |
-                            Classes.NativeMethods.SWP_NOACTIVATE | 0x0020 /*SWP_FRAMECHANGED*/);
-                    }
-                }
-                _desktopSwitchedSinceLastDismiss = false;
-                _isAnimatingHide = false;
-            }
 
             if (mode == 0)
             {
@@ -268,27 +236,34 @@ namespace FlyShelf
             // PERF: Capture the virtual desktop ID asynchronously — these COM calls can take
             // 10-100ms+ when Explorer is busy during desktop switches. The desktop ID is only
             // used for dismiss logic, not for the actual spawn, so deferring is safe.
-            _summonedDesktopId = Guid.Empty;
+            // Seed from _currentDesktopId (continuously updated by ForegroundChangedCallback).
+            // NEVER reset to Guid.Empty — that breaks all desktop switch detection.
+            // The async Task.Run below will refine this if possible.
+            _summonedDesktopId = _currentDesktopId;
             _lastActiveExternalWindowWasOnCurrentAtSummon = false;
             IntPtr capturedFg = GetForegroundWindow();
             IntPtr capturedLastExternal = _lastActiveExternalWindow;
             IntPtr hwndCopyForDesktop = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            Guid seededDesktopId = _summonedDesktopId; // Capture the seed — don't overwrite if already valid
             System.Threading.Tasks.Task.Run(() =>
             {
                 try
                 {
                     var bgVdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
                     
-                    // Prefer the last active EXTERNAL window for desktop GUID capture.
-                    // Our own pinned window returns Guid.Empty from GetWindowDesktopId.
+                    // Capture _lastActiveExternalWindowWasOnCurrentAtSummon for callback use
                     if (capturedLastExternal != IntPtr.Zero && IsWindow(capturedLastExternal))
                     {
                         int hrCheck = bgVdm.IsWindowOnCurrentVirtualDesktop(capturedLastExternal, out int onCurrent);
                         if (hrCheck == 0 && onCurrent != 0)
                         {
                             _lastActiveExternalWindowWasOnCurrentAtSummon = true;
-                            bgVdm.GetWindowDesktopId(capturedLastExternal, out Guid dId);
-                            if (dId != Guid.Empty) _summonedDesktopId = dId;
+                            // Only update _summonedDesktopId if it's still Empty (wasn't set by MoveWindowToDesktop)
+                            if (_summonedDesktopId == Guid.Empty)
+                            {
+                                bgVdm.GetWindowDesktopId(capturedLastExternal, out Guid dId);
+                                if (dId != Guid.Empty) _summonedDesktopId = dId;
+                            }
                         }
                     }
 

@@ -154,16 +154,16 @@ namespace FlyShelf
                 int exStyle = GetWindowLong(helper.Handle, GWL_EXSTYLE);
                 if (_isNotesActive || _isTodoActive)
                 {
-                    // Remove WS_EX_NOACTIVATE and WS_EX_TOOLWINDOW so the window can be activated
-                    // Add WS_EX_APPWINDOW so it appears in the taskbar and alt+tab with its proper app icon
-                    exStyle = exStyle & ~WS_EX_NOACTIVATE & ~WS_EX_TOOLWINDOW;
-                    exStyle = exStyle | WS_EX_APPWINDOW;
+                    // Remove WS_EX_NOACTIVATE so the window can receive keyboard focus
+                    // DO NOT add WS_EX_APPWINDOW — it unpins the window from all virtual
+                    // desktops and causes cross-desktop spawning failures.
+                    exStyle = exStyle & ~WS_EX_NOACTIVATE;
                     SetWindowLong(helper.Handle, GWL_EXSTYLE, exStyle);
                 }
                 else
                 {
-                    // Remove WS_EX_APPWINDOW and add WS_EX_NOACTIVATE back for clipboard overlay mode
-                    exStyle = exStyle & ~WS_EX_APPWINDOW;
+                    // Restore WS_EX_NOACTIVATE for clipboard overlay mode
+                    exStyle = exStyle & ~WS_EX_APPWINDOW; // Ensure APPWINDOW is never left on
                     exStyle = exStyle | WS_EX_NOACTIVATE;
                     SetWindowLong(helper.Handle, GWL_EXSTYLE, exStyle);
                 }
@@ -179,11 +179,7 @@ namespace FlyShelf
                     0x0020 // SWP_FRAMECHANGED
                 );
 
-                // CRITICAL: Re-pin to all virtual desktops SYNCHRONOUSLY after WS_EX_APPWINDOW
-                // style changes. Toggling WS_EX_APPWINDOW causes Windows Shell to IMMEDIATELY
-                // unpin the window. Re-pinning must be synchronous — deferring to Background
-                // creates a race condition where the window gets stuck on the old desktop.
-                EnsureVirtualDesktopPinned();
+                // No need to re-pin — we never unpin because WS_EX_APPWINDOW is never set
             }
         }
 

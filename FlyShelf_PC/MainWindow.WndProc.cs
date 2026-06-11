@@ -20,6 +20,7 @@ namespace FlyShelf
     {
         private int _clipboardUpdateToken;
         private DateTime _lastClipboardCaptureTime = DateTime.MinValue;
+        private DateTime _lastHotkeyTime = DateTime.MinValue;
 
         // ═══ SendInput for auto-paste after shortcut expansion ═══
         [DllImport("user32.dll", SetLastError = true)]
@@ -104,6 +105,16 @@ namespace FlyShelf
                 int hotkeyId = wParam.ToInt32();
                 if (hotkeyId == HOTKEY_ID)
                 {
+                    // Debounce: prevent double-fire from WM_HOTKEY auto-repeat/ghost messages
+                    var now = DateTime.UtcNow;
+                    if ((now - _lastHotkeyTime).TotalMilliseconds < 300)
+                    {
+                        Classes.Logger.LogAction("TELEMETRY", "Hotkey Alt+C DEBOUNCED (too fast)");
+                        handled = true;
+                        return IntPtr.Zero;
+                    }
+                    _lastHotkeyTime = now;
+
                     Classes.Logger.LogAction("TELEMETRY", "Hotkey Alt+C received inside WndProc");
                     ToggleMainClipboard();
                     handled = true;
