@@ -18,6 +18,7 @@
 // ---------------------------------------------------------------
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using Windows.Graphics.Imaging;
 
@@ -102,8 +103,6 @@ namespace FlyShelf.Classes
             }
 
             // Variant 5: Simple inversion without highlight neutralization
-            // Best for: dark screenshots where the Inverted+Enhanced variant's highlight
-            // neutralization is too aggressive (strips header cell content like "61%")
             try
             {
                 variants.Add((InvertColors(input), "InvertedOnly"));
@@ -111,6 +110,20 @@ namespace FlyShelf.Classes
             catch (Exception ex)
             {
                 Logger.LogAction("OCR_VARIANT", $"InvertedOnly variant failed: {ex.Message}");
+            }
+
+            // Variant 6: Original (no preprocessing)
+            // Windows.Media.Ocr may handle the raw image better for some styled UI text
+            // (e.g. header values like "61%" in Task Manager that preprocessing distorts)
+            try
+            {
+                var original = SoftwareBitmap.Convert(input,
+                    BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+                variants.Add((original, "Original"));
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("OCR_VARIANT", $"Original variant failed: {ex.Message}");
             }
 
             // Fallback: if all preprocessing failed, use a format-converted copy
@@ -126,6 +139,122 @@ namespace FlyShelf.Classes
             }
 
             return variants.ToArray();
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        //  OCR RESULT MERGING — union of words from ALL variants
+        // ═══════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// A merged OCR word with its bounding rectangle and text.
+        /// Used to build a union of words detected across multiple preprocessing variants.
+        /// </summary>
+        public struct MergedOcrWord
+        {
+            public global::Windows.Foundation.Rect BoundingRect;
+            public string Text;
+        }
+
+        /// <summary>
+        /// Merges OCR results from multiple preprocessing variants into a single word list.
+        /// 
+        /// Instead of picking the single "best" result (which may miss text that
+        /// only one variant can detect), this combines ALL words from ALL results.
+        /// Overlapping words (IoM > 0.3) are de-duplicated, keeping the longer text.
+        /// 
+        /// Returns a sorted word list and reconstructed text with lines grouped by Y-proximity.
+        /// </summary>
+        public static (List<MergedOcrWord> words, string mergedText) MergeOcrResults(
+            List<global::Windows.Media.Ocr.OcrResult> allResults)
+        {
+            if (allResults == null || allResults.Count == 0)
+                return (new List<MergedOcrWord>(), "");
+
+            var merged = new List<MergedOcrWord>();
+
+            foreach (var result in allResults)
+            {
+                if (result == null) continue;
+                foreach (var line in result.Lines)
+                {
+                    if (line.Words == null || line.Words.Count == 0) continue;
+
+                    foreach (var word in line.Words)
+                    {
+                        var newWord = new MergedOcrWord
+                        {
+                            BoundingRect = word.BoundingRect,
+                            Text = word.Text
+                        };
+
+                        // Check overlap with existing merged words
+                        bool isDuplicate = false;
+                        for (int i = 0; i < merged.Count; i++)
+                        {
+                            if (BoundingBoxOverlap(merged[i].BoundingRect, newWord.BoundingRect) > 0.3)
+                            {
+                                isDuplicate = true;
+                                // Keep the longer text (more chars = more info)
+                                if (newWord.Text.Length > merged[i].Text.Length)
+                                    merged[i] = newWord;
+                                break;
+                            }
+                        }
+
+                        if (!isDuplicate)
+                            merged.Add(newWord);
+                    }
+                }
+            }
+
+            // Sort by Y (top→bottom) then X (left→right)
+            merged.Sort((a, b) =>
+            {
+                int yCompare = a.BoundingRect.Y.CompareTo(b.BoundingRect.Y);
+                return yCompare != 0 ? yCompare : a.BoundingRect.X.CompareTo(b.BoundingRect.X);
+            });
+
+            // Reconstruct lines by grouping words with similar Y positions
+            var lines = new List<string>();
+            var currentLineWords = new List<string>();
+            double currentLineY = -1000;
+            double lineThreshold = merged.Count > 0 ? merged.Average(w => w.BoundingRect.Height) * 0.5 : 20;
+
+            foreach (var word in merged)
+            {
+                if (Math.Abs(word.BoundingRect.Y - currentLineY) > lineThreshold)
+                {
+                    if (currentLineWords.Count > 0)
+                        lines.Add(string.Join(" ", currentLineWords));
+                    currentLineWords.Clear();
+                    currentLineY = word.BoundingRect.Y;
+                }
+                currentLineWords.Add(word.Text);
+            }
+            if (currentLineWords.Count > 0)
+                lines.Add(string.Join(" ", currentLineWords));
+
+            string mergedText = string.Join("\n", lines);
+            Logger.LogAction("OCR_MERGE", $"Merged {merged.Count} words into {lines.Count} lines from {allResults.Count} variants");
+
+            return (merged, mergedText);
+        }
+
+        /// <summary>
+        /// Intersection-over-Minimum-Area overlap ratio (0.0 to 1.0).
+        /// </summary>
+        private static double BoundingBoxOverlap(global::Windows.Foundation.Rect a, global::Windows.Foundation.Rect b)
+        {
+            double x1 = Math.Max(a.X, b.X);
+            double y1 = Math.Max(a.Y, b.Y);
+            double x2 = Math.Min(a.X + a.Width, b.X + b.Width);
+            double y2 = Math.Min(a.Y + a.Height, b.Y + b.Height);
+
+            if (x2 <= x1 || y2 <= y1) return 0.0;
+
+            double intersectArea = (x2 - x1) * (y2 - y1);
+            double minArea = Math.Min(a.Width * a.Height, b.Width * b.Height);
+            return minArea > 0 ? intersectArea / minArea : 0.0;
         }
 
         /// <summary>

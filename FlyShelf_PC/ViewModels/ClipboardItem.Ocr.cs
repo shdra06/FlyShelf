@@ -124,10 +124,9 @@ namespace FlyShelf.ViewModels
                             }
                         }
 
-                        // ── Multi-pass OCR for maximum accuracy ──
-                        // Creates 3 preprocessing variants (Enhanced, Inverted+Enhanced, Otsu Binarized)
-                        // and runs OCR on each. Picks the result with the most detected text.
-                        // This handles all image types: light backgrounds, dark themes, low contrast.
+                        // ── Multi-pass OCR with RESULT MERGING ──
+                        // Runs OCR on all preprocessing variants and MERGES words from ALL results.
+                        // This ensures text detected by ANY variant is included (no words lost).
                         var ocrEngine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(new global::Windows.Globalization.Language("en-US"));
                         if (ocrEngine == null)
                         {
@@ -137,17 +136,18 @@ namespace FlyShelf.ViewModels
                         if (ocrEngine != null)
                         {
                             var variants = FlyShelf.Classes.OcrPreprocessor.CreateOcrVariants(softwareBitmap);
+                            var allResults = new System.Collections.Generic.List<global::Windows.Media.Ocr.OcrResult>();
                             global::Windows.Media.Ocr.OcrResult bestResult = null;
                             int bestScore = 0;
-                            string bestVariantName = "";
 
                             for (int v = 0; v < variants.Length; v++)
                             {
                                 try
                                 {
                                     var varResult = await ocrEngine.RecognizeAsync(variants[v].bitmap);
-                                    if (varResult != null)
+                                    if (varResult != null && varResult.Lines.Count > 0)
                                     {
+                                        allResults.Add(varResult);
                                         int score = 0;
                                         foreach (var line in varResult.Lines)
                                             foreach (var word in line.Words)
@@ -160,7 +160,6 @@ namespace FlyShelf.ViewModels
                                         {
                                             bestScore = score;
                                             bestResult = varResult;
-                                            bestVariantName = variants[v].name;
                                         }
                                     }
                                 }
@@ -171,19 +170,20 @@ namespace FlyShelf.ViewModels
                                 }
                             }
 
-                            if (bestResult != null && !string.IsNullOrWhiteSpace(bestResult.Text))
-                            {
-                                FlyShelf.Classes.Logger.LogAction("OCR_MULTIPASS",
-                                    $"Winner: {bestVariantName} (score={bestScore})");
+                            // Merge words from ALL results
+                            var mergeResult = FlyShelf.Classes.OcrPreprocessor.MergeOcrResults(allResults);
 
+                            if (!string.IsNullOrWhiteSpace(mergeResult.mergedText))
+                            {
                                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() => 
                                 {
-                                    FlyShelf.Classes.ClipboardHelper.SafeSetText(bestResult.Text, suppressEcho: true, echoDelayMs: 500);
+                                    FlyShelf.Classes.ClipboardHelper.SafeSetText(mergeResult.mergedText, suppressEcho: true, echoDelayMs: 500);
                                     FlyShelf.Windows.ToastWindow.ShowToast("OCR Text Copied to Clipboard! 📋");
                                     FlyShelf.Classes.LicenseManager.RecordOcrExtraction();
 
+                                    // Pass best result for QuickLook overlay (for bounding box positions)
                                     var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
-                                    if (mainWin != null)
+                                    if (mainWin != null && bestResult != null)
                                     {
                                         mainWin.ShowQuickLookForItem(this, bestResult);
                                     }

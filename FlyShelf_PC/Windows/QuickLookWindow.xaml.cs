@@ -13,6 +13,8 @@ namespace FlyShelf.Windows
         private Point _startPoint;
         private bool _isImageLoaded = false;
         private global::Windows.Media.Ocr.OcrResult _ocrResult = null;
+        private System.Collections.Generic.List<FlyShelf.Classes.OcrPreprocessor.MergedOcrWord> _mergedOcrWords = null;
+        private string _mergedOcrText = null;
         private double _originalWidth = 0;
         private double _originalHeight = 0;
         private double _imageDpiX = 1.0;
@@ -610,9 +612,10 @@ namespace FlyShelf.Windows
                                 }
                             }
 
-                            // ── Multi-pass OCR for maximum accuracy ──
-                            // Run OCR on 3 preprocessing variants (Enhanced, Inverted+Enhanced, OtsuBinarized)
-                            // and pick the result with the most detected text. This handles all image types.
+                            // ── Multi-pass OCR with RESULT MERGING ──
+                            // Runs OCR on all preprocessing variants and MERGES words from ALL results.
+                            // This ensures text detected by ANY variant is included (e.g. header "61%"
+                            // that only the Original or BradleyRoth variant can detect).
                             var ocrEngine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
                             if (ocrEngine == null)
                             {
@@ -622,29 +625,22 @@ namespace FlyShelf.Windows
                             if (ocrEngine != null)
                             {
                                 var variants = FlyShelf.Classes.OcrPreprocessor.CreateOcrVariants(softwareBitmap);
-                                global::Windows.Media.Ocr.OcrResult bestResult = null;
-                                int bestScore = 0;
+                                var allResults = new System.Collections.Generic.List<global::Windows.Media.Ocr.OcrResult>();
 
                                 for (int v = 0; v < variants.Length; v++)
                                 {
                                     try
                                     {
                                         var varResult = await ocrEngine.RecognizeAsync(variants[v].bitmap);
-                                        if (varResult != null)
+                                        if (varResult != null && varResult.Lines.Count > 0)
                                         {
-                                            int score = 0;
+                                            allResults.Add(varResult);
+                                            int charCount = 0;
                                             foreach (var line in varResult.Lines)
                                                 foreach (var word in line.Words)
-                                                    score += word.Text.Length;
-
+                                                    charCount += word.Text.Length;
                                             FlyShelf.Classes.Logger.LogAction("OCR_MULTIPASS",
-                                                $"QuickLook {variants[v].name}: {varResult.Lines.Count} lines, {score} chars");
-
-                                            if (score > bestScore)
-                                            {
-                                                bestScore = score;
-                                                bestResult = varResult;
-                                            }
+                                                $"QuickLook {variants[v].name}: {varResult.Lines.Count} lines, {charCount} chars");
                                         }
                                     }
                                     catch { }
@@ -654,7 +650,9 @@ namespace FlyShelf.Windows
                                     }
                                 }
 
-                                return (bestResult, (double)ocrW, (double)ocrH);
+                                // Merge words from ALL results
+                                var mergeResult = FlyShelf.Classes.OcrPreprocessor.MergeOcrResults(allResults);
+                                return (mergeResult.words, mergeResult.mergedText, (double)ocrW, (double)ocrH);
                             }
                         }
                     }
@@ -662,20 +660,23 @@ namespace FlyShelf.Windows
                     {
                         FlyShelf.Classes.Logger.LogAction("QUICKLOOK_OCR_FAIL", ex.Message);
                     }
-                    return (null, 0.0, 0.0);
+                    return (null, null, 0.0, 0.0);
                 });
 
-                var ocrResult = ocrResultTuple.bestResult;
-                if (ocrResult != null && !string.IsNullOrWhiteSpace(ocrResult.Text))
+                var mergedWords = ocrResultTuple.Item1;
+                var mergedText = ocrResultTuple.Item2;
+                if (mergedWords != null && mergedWords.Count > 0 && !string.IsNullOrWhiteSpace(mergedText))
                 {
-                    _ocrResult = ocrResult;
-                    _ocrBitmapWidth = ocrResultTuple.Item2;
-                    _ocrBitmapHeight = ocrResultTuple.Item3;
+                    _mergedOcrWords = mergedWords;
+                    _mergedOcrText = mergedText;
+                    _ocrResult = null; // Using merged results instead
+                    _ocrBitmapWidth = ocrResultTuple.Item3;
+                    _ocrBitmapHeight = ocrResultTuple.Item4;
                     OcrOverlayCanvas.Visibility = Visibility.Visible;
                     CopyAllOcrBtn.Visibility = Visibility.Visible;
                     RenderOcrOverlay();
                     
-                    FlyShelf.Windows.ToastWindow.ShowToast($"OCR Complete! {ocrResult.Lines.Count} lines detected. Select text to copy.");
+                    FlyShelf.Windows.ToastWindow.ShowToast($"OCR Complete! {mergedWords.Count} words detected. Select text to copy.");
                 }
                 else
                 {
@@ -695,11 +696,13 @@ namespace FlyShelf.Windows
 
         private void CopyAllOcrButton_Click(object sender, RoutedEventArgs e)
         {
-            if (_ocrResult == null || string.IsNullOrWhiteSpace(_ocrResult.Text)) return;
+            if ((_mergedOcrText == null || string.IsNullOrWhiteSpace(_mergedOcrText)) &&
+                (_ocrResult == null || string.IsNullOrWhiteSpace(_ocrResult.Text))) return;
 
+            string textToCopy = _mergedOcrText ?? _ocrResult?.Text ?? "";
             try
             {
-                if (ClipboardHelper.SafeSetText(_ocrResult.Text))
+                if (ClipboardHelper.SafeSetText(textToCopy))
                 {
                     FlyShelf.Windows.ToastWindow.ShowToast("All Image Text Copied to Clipboard! 📋");
                 }
@@ -754,7 +757,8 @@ namespace FlyShelf.Windows
 
         private void RenderOcrOverlay()
         {
-            if (_ocrResult == null || _originalWidth == 0 || _originalHeight == 0) return;
+            if (_mergedOcrWords == null && _ocrResult == null) return;
+            if (_originalWidth == 0 || _originalHeight == 0) return;
 
             OcrOverlayCanvas.Children.Clear();
             _selectedWordBorders.Clear();
@@ -789,21 +793,16 @@ namespace FlyShelf.Windows
             var selectedBorder = _ocrSelectedBorder;
             var transparentBrush = System.Windows.Media.Brushes.Transparent;
 
-            foreach (var line in _ocrResult.Lines)
+            // Render words from merged results (preferred) or legacy OcrResult
+            if (_mergedOcrWords != null && _mergedOcrWords.Count > 0)
             {
-                if (line.Words == null || line.Words.Count == 0) continue;
-
-                string fullLineText = line.Text;
-
-                foreach (var word in line.Words)
+                foreach (var word in _mergedOcrWords)
                 {
                     var rect = word.BoundingRect;
                     if (rect.Width <= 0 || rect.Height <= 0) continue;
 
                     string wordText = word.Text;
 
-                    // Map raw physical OCR pixel coordinates to the original image's DIP space.
-                    // This accounts for both OCR upscaling (scaleX/scaleY) and the image's embedded DPI metadata (_imageDpiX/_imageDpiY).
                     double scaledLeft = rect.X / (scaleX * _imageDpiX);
                     double scaledTop = rect.Y / (scaleY * _imageDpiY);
                     double scaledWidth = rect.Width / (scaleX * _imageDpiX);
@@ -898,7 +897,11 @@ namespace FlyShelf.Windows
                     {
                         try
                         {
-                            if (ClipboardHelper.SafeSetText(fullLineText))
+                            // In merged mode, copy all selected words as the "line"
+                            string lineToCopy = _selectedWordTexts.Count > 0 
+                                ? string.Join(" ", _selectedWordTexts) 
+                                : wordText;
+                            if (ClipboardHelper.SafeSetText(lineToCopy))
                             {
                                 FlyShelf.Windows.ToastWindow.ShowToast("Copied full line");
                             }
@@ -916,6 +919,85 @@ namespace FlyShelf.Windows
                     System.Windows.Controls.Canvas.SetLeft(wordBorder, scaledLeft - hPad);
                     System.Windows.Controls.Canvas.SetTop(wordBorder, scaledTop - vPad);
                     OcrOverlayCanvas.Children.Add(wordBorder);
+                }
+            }
+            else if (_ocrResult != null)
+            {
+                // Legacy fallback: render from OcrResult (used when pre-loaded from ExtractText)
+                foreach (var line in _ocrResult.Lines)
+                {
+                    if (line.Words == null || line.Words.Count == 0) continue;
+                    string fullLineText = line.Text;
+
+                    foreach (var word in line.Words)
+                    {
+                        var rect = word.BoundingRect;
+                        if (rect.Width <= 0 || rect.Height <= 0) continue;
+
+                        string wordText = word.Text;
+                        double scaledLeft = rect.X / (scaleX * _imageDpiX);
+                        double scaledTop = rect.Y / (scaleY * _imageDpiY);
+                        double scaledWidth = rect.Width / (scaleX * _imageDpiX);
+                        double scaledHeight = rect.Height / (scaleY * _imageDpiY);
+
+                        if (scaledWidth <= 0 || scaledHeight <= 0) continue;
+                        double hPad = Math.Max(3, scaledWidth * 0.12);
+                        double vPad = Math.Max(1, scaledHeight * 0.08);
+
+                        var wordBorder = new System.Windows.Controls.Border
+                        {
+                            Width = scaledWidth + hPad * 2,
+                            Height = scaledHeight + vPad * 2,
+                            Background = transparentBrush,
+                            BorderBrush = transparentBrush,
+                            BorderThickness = new Thickness(0),
+                            CornerRadius = new CornerRadius(2),
+                            Cursor = System.Windows.Input.Cursors.IBeam,
+                            ToolTip = wordText,
+                            Focusable = true,
+                            Tag = wordText
+                        };
+                        wordBorder.MouseLeftButtonDown += (s, ev) =>
+                        {
+                            var border = s as System.Windows.Controls.Border;
+                            if (border == null) return;
+                            bool ctrlHeld = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+                            if (!ctrlHeld) DeselectAllOcrWords();
+                            SelectWordBorder(border);
+                            border.Focus();
+                            _isDragSelecting = true;
+                            _dragStartPoint = ev.GetPosition(OcrOverlayCanvas);
+                            OcrOverlayCanvas.CaptureMouse();
+                            ev.Handled = true;
+                        };
+                        wordBorder.MouseEnter += (s, ev) =>
+                        {
+                            var border = s as System.Windows.Controls.Border;
+                            if (border != null && !_selectedWordBorders.Contains(border))
+                            { border.Background = hoverBg; border.BorderBrush = hoverBorder; }
+                        };
+                        wordBorder.MouseLeave += (s, ev) =>
+                        {
+                            var border = s as System.Windows.Controls.Border;
+                            if (border != null && !_selectedWordBorders.Contains(border))
+                            { border.Background = transparentBrush; border.BorderBrush = transparentBrush; }
+                        };
+                        var menu = new System.Windows.Controls.ContextMenu();
+                        var copyWordItem = new System.Windows.Controls.MenuItem { Header = "Copy Word" };
+                        copyWordItem.Click += (s, ev) => { try { ClipboardHelper.SafeSetText(wordText); } catch { } };
+                        var copySelectedItem = new System.Windows.Controls.MenuItem { Header = "Copy Selected Words" };
+                        copySelectedItem.Click += (s, ev) => { CopySelectedOcrWords(); };
+                        var copyLineItem = new System.Windows.Controls.MenuItem { Header = "Copy Full Line" };
+                        copyLineItem.Click += (s, ev) => { try { ClipboardHelper.SafeSetText(fullLineText); } catch { } };
+                        menu.Items.Add(copyWordItem);
+                        menu.Items.Add(copySelectedItem);
+                        menu.Items.Add(new System.Windows.Controls.Separator());
+                        menu.Items.Add(copyLineItem);
+                        wordBorder.ContextMenu = menu;
+                        System.Windows.Controls.Canvas.SetLeft(wordBorder, scaledLeft - hPad);
+                        System.Windows.Controls.Canvas.SetTop(wordBorder, scaledTop - vPad);
+                        OcrOverlayCanvas.Children.Add(wordBorder);
+                    }
                 }
             }
 
