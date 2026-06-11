@@ -131,9 +131,9 @@ namespace FlyShelf
             }
 
             // ═══ ZOMBIE STATE DETECTOR ═══
-            // Same as in ToggleMainClipboard — catch windows stuck offscreen/invisible
-            // after a desktop switch with Notes/Todo that the VDM API can't detect.
-            if (!isOnOtherDesktop && !_isCurrentlySummoned && this.Left < -10000 && this.Opacity < 0.01)
+            // ALWAYS run when window is offscreen and invisible. The VDM API can time out
+            // or return unreliable results — the physical state is ground truth.
+            if (!_isCurrentlySummoned && this.Left < -10000 && this.Opacity < 0.01)
             {
                 if (_isNotesActive) CloseNotesPanel(immediate: true);
                 if (_isTodoActive) CloseTodoPanel(immediate: true);
@@ -141,11 +141,13 @@ namespace FlyShelf
                 var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
-                    // ═══ PINNING-SAFE ZOMBIE RECOVERY ═══
-                    // Window is pinned to all virtual desktops — it's already on the current desktop.
-                    // Just verify pinning is intact and ensure topmost Z-order.
-                    // Do NOT toggle WS_EX_APPWINDOW as that unpins the window!
-                    EnsureVirtualDesktopPinned();
+                    // ═══ FAST DESKTOP RESET using native Win32 ═══
+                    Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
+                    int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                    SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle | WS_EX_APPWINDOW) & ~WS_EX_NOACTIVATE);
+                    Classes.NativeMethods.ShowWindow(hwnd, 5 /*SW_SHOW*/);
+                    exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                    SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle & ~WS_EX_APPWINDOW) | WS_EX_NOACTIVATE);
                     Classes.NativeMethods.SetWindowPos(hwnd,
                         -1 /*HWND_TOPMOST*/, 0, 0, 0, 0,
                         Classes.NativeMethods.SWP_NOMOVE | Classes.NativeMethods.SWP_NOSIZE |
@@ -400,25 +402,13 @@ namespace FlyShelf
             RootContent.Opacity = 1;
             RootContent.RenderTransform = null;
 
+            _spawnGeneration++; // Invalidate any stale ForegroundChangedCallback dispatches
             _isCurrentlySummoned = true;
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
                 _isShowAnimating = true; // Guard BEFORE move — prevents OnActivated from flashing opacity to 1.0
 
-            // 2. Scroll reset while still offscreen (no visual impact)
-            try
-            {
-                Classes.SmoothScroll.ResetScrollState(GetShelfScrollViewer());
-                if (ShelfListView.Items.Count > 0)
-                    ShelfListView.SelectedIndex = 0;
-                var sv = GetShelfScrollViewer();
-                if (sv != null && sv.VerticalOffset > 0)
-                {
-                    sv.ScrollToVerticalOffset(0);
-                    sv.ScrollToTop();
-                    sv.InvalidateArrange();
-                }
-            }
-            catch { }
+            // NOTE: Scroll reset is now done in AnimateAndHide() during dismiss,
+            // so the scroll is already at position 0 when the spawn starts (no jitter).
 
             // 3. Activation strategy:
             //    stealFocus=true  → Activate() to take keyboard focus (used by Notes/Todo panels)

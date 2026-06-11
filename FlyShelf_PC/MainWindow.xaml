@@ -542,13 +542,16 @@
                    Placement="Bottom" StaysOpen="False" AllowsTransparency="True" 
                    VerticalOffset="8" HorizontalOffset="-72" PopupAnimation="Fade"
                    Closed="OverflowPopup_Closed">
-                <!-- Floating Glassmorphism Container with Soft Accent Glow -->
-                <Border CornerRadius="12" Padding="6,5" BorderThickness="1.5"
+                <!-- Floating Glassmorphism Container with Premium Toolbar Look -->
+                <Border CornerRadius="16" Padding="0" BorderThickness="1"
                         Background="{DynamicResource ThemeOverflowBg}"
                         BorderBrush="{DynamicResource ThemeOverflowBorder}">
                     <Border.Effect>
-                        <DropShadowEffect BlurRadius="25" ShadowDepth="3" Opacity="0.45" Color="{DynamicResource ThemeOverflowShadowColor}"/>
+                        <DropShadowEffect BlurRadius="30" ShadowDepth="4" Opacity="0.5" Color="{DynamicResource ThemeOverflowShadowColor}"/>
                     </Border.Effect>
+                    <!-- Inner glow border for depth -->
+                    <Border CornerRadius="15" Padding="8,6" BorderThickness="1"
+                            BorderBrush="#0AFFFFFF" Background="Transparent">
                     <StackPanel Orientation="Horizontal">
                         <!-- Emoji Picker -->
                         <ui:Button x:Name="EmojiBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,4,0" Padding="0">
@@ -630,6 +633,7 @@
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Settings24" /></ui:Button.Icon>
                         </ui:Button>
                     </StackPanel>
+                    </Border>
                 </Border>
             </Popup>
 

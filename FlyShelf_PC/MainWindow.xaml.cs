@@ -536,50 +536,6 @@ namespace FlyShelf
                     }
                 }
                 catch { }
-
-                // Notes/Todo Mode: Handle USER-INITIATED minimize (taskbar click, alt+tab dismiss)
-                // Close the Notes/Todo panel and open the normal clipboard — same as Alt+C.
-                // Skip if the minimize was triggered programmatically by HideWindowInternal (unsummon flow).
-                if (this.WindowState == WindowState.Minimized && (_isNotesActive || _isTodoActive) && !_isProgrammaticMinimize)
-                {
-                    // Defer to avoid issues during the state change event
-                    Dispatcher.InvokeAsync(() =>
-                    {
-                        // Close whichever panel is active
-                        if (_isNotesActive)
-                            CloseNotesPanel(immediate: true);
-                        if (_isTodoActive)
-                            CloseTodoPanel(immediate: true);
-
-                        // Restore normal window state, reset, then open clipboard
-                        this.WindowState = WindowState.Normal;
-                        _isCurrentlySummoned = false;
-                        this.Opacity = 0;
-                        this.BeginAnimation(OpacityProperty, null);
-                        this.Left = -20000;
-                        this.Top = -20000;
-
-                        // Ensure pinning survived the WS_EX_APPWINDOW removal
-                        EnsureVirtualDesktopPinned();
-
-                        // Open the clipboard — same as pressing Alt+C
-                        ToggleMainClipboard();
-                    }, System.Windows.Threading.DispatcherPriority.Background);
-                }
-
-                // Notes/Todo Mode Alt+Tab/Restore un-minimize handling
-                if (this.WindowState == WindowState.Normal && (_isNotesActive || _isTodoActive))
-                {
-                    this.Opacity = 1;
-                    _isCurrentlySummoned = true;
-                    this.Activate();
-                    this.Topmost = true;
-                    
-                    if (_isNotesActive)
-                        FocusNotesActiveTextBox();
-                    else if (_isTodoActive)
-                        FocusTodoActiveTextBox();
-                }
             };
 
             // Launch the taskbar-embedded widget
@@ -1038,28 +994,11 @@ namespace FlyShelf
         {
             if (_isNotesActive || _isTodoActive)
             {
-                // Cancel the close — don't destroy the window
+                // Cancel the close — don't destroy the window, just dismiss
                 e.Cancel = true;
 
-                // Close whichever panel is active
-                if (_isNotesActive)
-                    CloseNotesPanel(immediate: true);
-                if (_isTodoActive)
-                    CloseTodoPanel(immediate: true);
-
-                // Reset to normal overlay state
-                _isCurrentlySummoned = false;
-                this.Opacity = 0;
-                this.BeginAnimation(OpacityProperty, null);
-                this.WindowState = WindowState.Normal;
-                this.Left = -20000;
-                this.Top = -20000;
-
-                // Ensure pinning survived the WS_EX_APPWINDOW removal
-                EnsureVirtualDesktopPinned();
-
-                // Open the clipboard — same as pressing Alt+C
-                ToggleMainClipboard();
+                // Dismiss via the same path as Alt+C (preserves panel state for resummon)
+                AnimateAndHide();
                 return;
             }
 
@@ -1126,20 +1065,18 @@ namespace FlyShelf
             _isCurrentlySummoned = false;
             _isEdgeLocked = false;
 
-            if (_isNotesActive || _isTodoActive)
+            // Always move offscreen. Notes/Todo panels are closed in AnimateAndHide
+            // BEFORE this method runs, so _isNotesActive/_isTodoActive are always false here.
+            // Moving offscreen (not minimizing) ensures the zombie detector works:
+            // it checks Left < -10000 && Opacity < 0.01 which fails for minimized windows.
+            if (this.WindowState == WindowState.Minimized)
             {
-                // Instead of moving offscreen, minimize the window so it remains in Alt+Tab list as requested.
-                // Set guard flag so StateChanged handler knows NOT to close the panel.
                 _isProgrammaticMinimize = true;
-                this.Opacity = 1;
-                this.WindowState = WindowState.Minimized;
+                this.WindowState = WindowState.Normal;
                 _isProgrammaticMinimize = false;
             }
-            else
-            {
-                this.Left = -20000;
-                this.Top = -20000;
-            }
+            this.Left = -20000;
+            this.Top = -20000;
 
             // Actively optimize and release memory whenever the window is hidden/unsummoned
             OptimizeMemoryUsage();

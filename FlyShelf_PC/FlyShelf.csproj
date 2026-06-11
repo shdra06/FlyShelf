@@ -13,6 +13,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <ApplicationIcon>Resources\FlyShelfLogo.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <NoWarn>CS4014;CS0168;CS0162;CS0414;CS8632;CS0169</NoWarn>
     <Version>2.5.0</Version>
     <AssemblyVersion>2.5.0</AssemblyVersion>

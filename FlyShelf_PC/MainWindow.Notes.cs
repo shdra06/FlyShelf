@@ -177,12 +177,11 @@ namespace FlyShelf
                     0x0020 // SWP_FRAMECHANGED
                 );
 
-                // CRITICAL: Re-pin to all virtual desktops after WS_EX_APPWINDOW style changes.
-                // Toggling WS_EX_APPWINDOW causes Windows Shell to unpin the window from all
-                // virtual desktops and lock it to the current desktop only.
-                // PERF: Defer to Background priority so the COM call doesn't block panel animations.
-                Dispatcher.InvokeAsync(() => EnsureVirtualDesktopPinned(),
-                    System.Windows.Threading.DispatcherPriority.Background);
+                // CRITICAL: Re-pin to all virtual desktops SYNCHRONOUSLY after WS_EX_APPWINDOW
+                // style changes. Toggling WS_EX_APPWINDOW causes Windows Shell to IMMEDIATELY
+                // unpin the window. Re-pinning must be synchronous — deferring to Background
+                // creates a race condition where the window gets stuck on the old desktop.
+                EnsureVirtualDesktopPinned();
             }
         }
 

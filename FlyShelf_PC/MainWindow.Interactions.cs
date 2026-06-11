@@ -397,32 +397,13 @@ namespace FlyShelf
         /// </summary>
         public void ToggleMainClipboard()
         {
-            // ═══ ALWAYS CLOSE NOTES/TODO FIRST ═══
-            // Alt+C means "show clipboard" — close any active panels and restore to clipboard mode.
-            // This prevents zombie states when Notes/Todo was active on another desktop:
-            // HideWindowInternal minimizes (instead of moving offscreen) when Notes/Todo is active,
-            // which bypasses all zombie detection (Left isn't < -10000, Opacity isn't < 0.01).
-            if (_isNotesActive || _isTodoActive)
+            // ═══ NOTES/TODO DISMISS ═══
+            // If a panel is visible, dismiss it. AnimateAndHide closes the panel
+            // and saves data automatically before moving the window offscreen.
+            if ((_isNotesActive || _isTodoActive) && _isCurrentlySummoned && !_isAnimatingHide)
             {
-                if (_isNotesActive) CloseNotesPanel(immediate: true);
-                if (_isTodoActive) CloseTodoPanel(immediate: true);
-
-                // If window was minimized (Notes/Todo dismiss path), restore to normal first
-                if (this.WindowState == WindowState.Minimized)
-                {
-                    _isProgrammaticMinimize = true; // Prevent StateChanged from re-opening
-                    this.WindowState = WindowState.Normal;
-                    _isProgrammaticMinimize = false;
-                }
-
-                // Reset to clean state for clipboard spawn
-                _isCurrentlySummoned = false;
-                _isAnimatingHide = false;
-                this.Opacity = 0;
-                this.BeginAnimation(OpacityProperty, null);
-                this.Left = -20000;
-                this.Top = -20000;
-                Classes.Logger.LogAction("VD_DIAG", "ToggleMainClipboard: Closed Notes/Todo panels, reset to clipboard mode.");
+                AnimateAndHide();
+                return;
             }
 
             // ═══ VIRTUAL DESKTOP CHECK ═══
@@ -440,18 +421,19 @@ namespace FlyShelf
 
             if (isOnOtherDesktop)
             {
+                if (_isNotesActive) CloseNotesPanel(immediate: true);
+                if (_isTodoActive) CloseTodoPanel(immediate: true);
                 _isCurrentlySummoned = false;
                 _isAnimatingHide = false;
             }
 
             // ═══ ZOMBIE STATE DETECTOR ═══
-            // The VDM API is unreliable for windows with ShowInTaskbar=False + Topmost=True
-            // (returns Guid.Empty and onCurrent=true even when the window is stuck on another desktop).
-            // Detect the zombie state directly: window is offscreen, invisible, and not summoned.
-            // This happens when Notes/Todo was open (WS_EX_APPWINDOW pinned window to a desktop),
-            // then closed, then user switched desktops. DWM still renders on the old desktop.
+            // ALWAYS run when the window is offscreen and invisible, regardless of what
+            // the VDM API says. IsWindowOnCurrentVirtualDesktop can time out (60ms) or
+            // return unreliable results for pinned/overlay windows. The physical state
+            // (Left < -10000, Opacity < 0.01) is the ground truth.
             bool zombieRecovered = false;
-            if (!isOnOtherDesktop && !_isCurrentlySummoned && this.Left < -10000 && this.Opacity < 0.01)
+            if (!_isCurrentlySummoned && this.Left < -10000 && this.Opacity < 0.01)
             {
                 // Close any lingering panels (skip if already closed)
                 if (_isNotesActive) CloseNotesPanel(immediate: true);
@@ -460,12 +442,22 @@ namespace FlyShelf
                 var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
-                    // ═══ PINNING-SAFE ZOMBIE RECOVERY ═══
-                    // Window is pinned to all virtual desktops via IVirtualDesktopPinnedApps —
-                    // it's already on the current desktop. Just ensure topmost Z-order and
-                    // verify pinning is intact. Do NOT toggle WS_EX_APPWINDOW as that causes
-                    // Windows Shell to unpin the window, breaking cross-desktop spawning!
-                    EnsureVirtualDesktopPinned();
+                    // ═══ FAST DESKTOP RESET using native Win32 ═══
+                    // 1. Hide via native call (no WPF layout pass)
+                    Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
+
+                    // 2. Add WS_EX_APPWINDOW to force desktop association with current VD
+                    int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                    SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle | WS_EX_APPWINDOW) & ~WS_EX_NOACTIVATE);
+
+                    // 3. Show via native call (creates desktop association because APPWINDOW is set)
+                    Classes.NativeMethods.ShowWindow(hwnd, 5 /*SW_SHOW*/);
+
+                    // 4. Immediately restore overlay style — desktop association is already locked in
+                    exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                    SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle & ~WS_EX_APPWINDOW) | WS_EX_NOACTIVATE);
+
+                    // 5. Single SetWindowPos: apply style change + force topmost in one call
                     Classes.NativeMethods.SetWindowPos(hwnd,
                         -1 /*HWND_TOPMOST*/, 0, 0, 0, 0,
                         Classes.NativeMethods.SWP_NOMOVE | Classes.NativeMethods.SWP_NOSIZE |
@@ -475,11 +467,10 @@ namespace FlyShelf
                 _isAnimatingHide = false;
                 _isCurrentlySummoned = false;
                 zombieRecovered = true;
-                Classes.Logger.LogAction("VD_DIAG", "ZOMBIE: Pinning-safe recovery done (no style toggle).");
+                Classes.Logger.LogAction("VD_DIAG", "ZOMBIE: Fast desktop reset done.");
             }
 
             // If the overlay is already visible and in Mode 1, hide it
-            // BUT: skip this if we just did a zombie recovery — we want to SHOW, not hide.
             if (!zombieRecovered && _isCurrentlySummoned && _viewModel.CurrentMode == 1 && !_isAnimatingHide)
             {
                 AnimateAndHide();
@@ -487,9 +478,6 @@ namespace FlyShelf
             else
             {
                 // ═══ RESET FILTERS ON RESUMMON ═══
-                // Clear any active category/search filter before showing.
-                // Stale filters cause expensive CollectionView refresh during the
-                // show animation, making the summon feel laggy.
                 if (_activeCategoryFilter != null)
                     ClearCategoryFilter();
                 if (_isFilterBarActive)
@@ -501,7 +489,6 @@ namespace FlyShelf
                 double targetY = -1;
                 bool positionFound = false;
 
-                // Try to get the taskbar widget position
                 if (_taskbarWidget != null && _taskbarWidget.IsVisible)
                 {
                     try
@@ -529,20 +516,18 @@ namespace FlyShelf
 
                     if (Classes.NativeMethods.IsTaskbarAutoHideEnabled())
                     {
-                        // Spawn fallback in bottom-right corner (mimicking Windows clipboard Win+V)
                         targetX = workArea.Left + workArea.Width - 16 - (safeWidth / 2);
                         Classes.Logger.LogAction("SUMMON", $"Spawn fallback (auto-hide enabled, bottom-right) at logical X={targetX}, Y={workArea.Top + workArea.Height}");
                     }
                     else
                     {
-                        // Spawn fallback in bottom-left corner (where widget rests by default)
                         targetX = workArea.Left + 16 + (safeWidth / 2);
                         Classes.Logger.LogAction("SUMMON", $"Spawn fallback (auto-hide disabled, bottom-left) at logical X={targetX}, Y={workArea.Top + workArea.Height}");
                     }
                     targetY = workArea.Top + workArea.Height;
                 }
 
-                ShowNearPosition(targetX, targetY, 1, false, false, knownOnOtherDesktop: isOnOtherDesktop); // mode = 1, isPersistent = false, stealFocus = false (native clipboard behavior: don't steal focus from active app)
+                ShowNearPosition(targetX, targetY, 1, false, false, knownOnOtherDesktop: isOnOtherDesktop);
             }
         }
 

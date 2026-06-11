@@ -82,8 +82,8 @@
     <SolidColorBrush x:Key="ThemeFloatingBarBorder"   Color="#30FFFFFF"/>
 
     <!-- Overflow popup (three-dot menu) -->
-    <SolidColorBrush x:Key="ThemeOverflowBg"           Color="#D0181818"/>
-    <SolidColorBrush x:Key="ThemeOverflowBorder"       Color="#30FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeOverflowBg"           Color="#CC1E1E26"/>
+    <SolidColorBrush x:Key="ThemeOverflowBorder"       Color="#40FFFFFF"/>
     <Color           x:Key="ThemeOverflowShadowColor">#000000</Color>
 
     <!-- Toast notification -->

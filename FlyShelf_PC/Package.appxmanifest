@@ -19,7 +19,7 @@
   <Properties>
     <DisplayName>FlyShelf</DisplayName>
     <PublisherDisplayName>Shivendra</PublisherDisplayName>
-    <Logo>Assets\StoreLogo.png</Logo>
+    <Logo>Assets\StoreLogo.scale-200.png</Logo>
   </Properties>
 
   <Dependencies>

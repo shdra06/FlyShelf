@@ -247,6 +247,10 @@ namespace FlyShelf
 
         private async void ConvertPdfToWord_Click(object sender, RoutedEventArgs e)
         {
+#if MSIX_STORE
+            await System.Threading.Tasks.Task.CompletedTask; // suppress async warning
+            FlyShelf.Windows.ToastWindow.ShowToast("⚠️ PDF to Word conversion is not available in the Store version.");
+#else
             try
             {
                 var clipItem = GetClipItemFromSender(sender);
@@ -310,6 +314,7 @@ $word.Quit()
             {
                 FlyShelf.Windows.ToastWindow.ShowToast($"❌ PDF to Word error: {ex.Message}");
             }
+#endif
         }
 
         private void MarkAsPassword_Click(object sender, RoutedEventArgs e)

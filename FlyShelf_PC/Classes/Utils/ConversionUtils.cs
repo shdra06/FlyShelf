@@ -40,6 +40,10 @@ namespace FlyShelf.Classes
         /// <summary>Converts a DOC/DOCX file to PDF using Word COM via PowerShell. Returns the output path or null.</summary>
         public static async Task<string> ConvertDocToPdfAsync(string docPath)
         {
+#if MSIX_STORE
+            await Task.CompletedTask; // suppress async warning
+            return null; // PowerShell-based conversion not available in Store version
+#else
             string outputDir = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
                 "Downloads", "FlyShelf", "Converted");
@@ -81,6 +85,7 @@ $word.Quit()
             });
 
             return (success && File.Exists(pdfPath)) ? pdfPath : null;
+#endif
         }
     }
 }

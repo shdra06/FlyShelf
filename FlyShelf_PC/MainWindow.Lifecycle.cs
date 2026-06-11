@@ -207,11 +207,26 @@ namespace FlyShelf
 
                             if (desktopSwitched)
                             {
+                                // Capture the spawn generation BEFORE dispatching to UI thread.
+                                // If a new spawn happens between now and when the lambda runs,
+                                // the generation will differ → skip the stale dismiss.
+                                int capturedGeneration = _spawnGeneration;
+
                                 // User switched to a different virtual desktop — dismiss on UI thread
                                 Application.Current.Dispatcher.InvokeAsync(() =>
                                 {
+                                    // Skip if a new spawn happened since this callback was queued.
+                                    // This prevents the stale callback from hiding a clipboard
+                                    // that was just spawned on the new desktop via Alt+C.
+                                    if (_spawnGeneration != capturedGeneration) return;
+
                                     if (_isCurrentlySummoned && !_isAnimatingHide)
                                     {
+                                        if (_isNotesActive)
+                                            CloseNotesPanel(immediate: true);
+                                        if (_isTodoActive)
+                                            CloseTodoPanel(immediate: true);
+
                                         AnimateAndHide();
                                     }
                                 });
@@ -227,6 +242,7 @@ namespace FlyShelf
         private bool _isAnimatingHide = false;
         private bool _isShowAnimating = false;
         private bool _isApplyingTheme = false;
+        private volatile int _spawnGeneration = 0; // Incremented on each spawn to invalidate stale callbacks
 
         /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
         private void PlayShowAnimation()
@@ -269,6 +285,17 @@ namespace FlyShelf
             StopDragActiveDismissTimer();
             if (!_isCurrentlySummoned) return;
 
+            // ═══ CRITICAL: Set unsummoned IMMEDIATELY ═══
+            _isCurrentlySummoned = false;
+
+            // ═══ CLOSE NOTES/TODO BEFORE HIDING ═══
+            // Must close panels HERE, not in HideWindowInternal.
+            // If panels are still active when HideWindowInternal runs,
+            // it minimizes (opacity=1) instead of moving offscreen (Left=-20000).
+            // Minimized windows break the zombie detector (Left < -10000 && Opacity < 0.01).
+            if (_isNotesActive) CloseNotesPanel(immediate: true);
+            if (_isTodoActive) CloseTodoPanel(immediate: true);
+
             // Cancel any pending mascot timers
             _mascotDelayTimer?.Stop();
 
@@ -278,6 +305,9 @@ namespace FlyShelf
             // Clear merge state & close search instantly
             DismissMergeState();
             CloseSearch();
+
+            // Close the overflow popup so it doesn't linger on screen after dismiss
+            if (OverflowPopup != null) OverflowPopup.IsOpen = false;
 
             try
             {
@@ -293,6 +323,24 @@ namespace FlyShelf
                     tt.BeginAnimation(TranslateTransform.YProperty, null);
                 }
                 RootContent.RenderTransform = null;
+
+                // ═══ SCROLL RESET DURING DISMISS ═══
+                // Reset scroll position while the window is invisible (opacity=0).
+                // This eliminates the visible jitter on next spawn — the scroll is
+                // already at position 0 when the fade-in animation starts.
+                try
+                {
+                    Classes.SmoothScroll.ResetScrollState(GetShelfScrollViewer());
+                    if (ShelfListView.Items.Count > 0)
+                        ShelfListView.SelectedIndex = 0;
+                    var sv = GetShelfScrollViewer();
+                    if (sv != null && sv.VerticalOffset > 0)
+                    {
+                        sv.ScrollToVerticalOffset(0);
+                        sv.ScrollToTop();
+                    }
+                }
+                catch { }
 
                 // Defer the offscreen move to Background priority.
                 // This ensures WPF has rendered and committed a 0% opacity frame to DWM first,

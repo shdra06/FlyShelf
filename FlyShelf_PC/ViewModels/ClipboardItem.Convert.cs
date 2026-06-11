@@ -20,6 +20,11 @@ namespace FlyShelf.ViewModels
 
 
         {
+#if MSIX_STORE
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Document conversion is not available in the Store version."));
+            return;
+#else
             if (!FlyShelf.Classes.LicenseManager.CanConvertDoc())
             {
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
@@ -257,9 +262,7 @@ namespace FlyShelf.ViewModels
 
 
             });
-
-
-
+#endif
         }
 
 
