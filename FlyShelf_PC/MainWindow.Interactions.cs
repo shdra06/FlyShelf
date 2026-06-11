@@ -529,17 +529,10 @@ namespace FlyShelf
                     double safeWidth = double.IsNaN(this.Width) ? 360 : this.Width;
                     if (safeWidth <= 0) safeWidth = 320;
 
-                    if (Classes.NativeMethods.IsTaskbarAutoHideEnabled())
-                    {
-                        targetX = workArea.Left + workArea.Width - 16 - (safeWidth / 2);
-                        Classes.Logger.LogAction("SUMMON", $"Spawn fallback (auto-hide enabled, bottom-right) at logical X={targetX}, Y={workArea.Top + workArea.Height}");
-                    }
-                    else
-                    {
-                        targetX = workArea.Left + 16 + (safeWidth / 2);
-                        Classes.Logger.LogAction("SUMMON", $"Spawn fallback (auto-hide disabled, bottom-left) at logical X={targetX}, Y={workArea.Top + workArea.Height}");
-                    }
+                    // Always spawn bottom-left — consistent with the widget's default position
+                    targetX = workArea.Left + 16 + (safeWidth / 2);
                     targetY = workArea.Top + workArea.Height;
+                    Classes.Logger.LogAction("SUMMON", $"Spawn fallback (bottom-left) at logical X={targetX}, Y={targetY}");
                 }
 
                 Classes.Logger.LogAction("VD_TOGGLE", $"SHOW: Calling ShowNearPosition at ({targetX:F0}, {targetY:F0}), knownOnOther={isOnOtherDesktop}");

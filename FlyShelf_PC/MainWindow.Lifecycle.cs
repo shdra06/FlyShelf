@@ -336,36 +336,59 @@ namespace FlyShelf
         }
 
 
+        // ═══ CACHED FROZEN ANIMATIONS (zero-alloc spawn) ═══
+        // Created once, frozen, reused every spawn. Frozen animations run entirely on
+        // WPF's composition thread (GPU), completely immune to UI thread GC pauses.
+        private static readonly System.Windows.Media.Animation.DoubleAnimation _cachedOpacityAnim;
+        private static readonly System.Windows.Media.Animation.DoubleAnimation _cachedSlideInAnim;
+        private readonly TranslateTransform _cachedSlideTransform = new TranslateTransform(0, 10);
+
+        static MainWindow()
+        {
+            _cachedOpacityAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120))
+            {
+                EasingFunction = new System.Windows.Media.Animation.QuinticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+            };
+            _cachedOpacityAnim.Freeze();
+
+            _cachedSlideInAnim = new System.Windows.Media.Animation.DoubleAnimation(10, 0, TimeSpan.FromMilliseconds(200))
+            {
+                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+            };
+            _cachedSlideInAnim.Freeze();
+        }
+
+        // Cached timer for clearing _isShowAnimating after opacity animation completes
+        private System.Windows.Threading.DispatcherTimer? _showAnimEndTimer;
+
         /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
         private void PlayShowAnimation()
         {
             _isShowAnimating = true;
 
-            // Set starting state for slide-in (TranslateY = 10)
-            RootContent.RenderTransform = new TranslateTransform(0, 10);
+            // Reset the cached transform for slide-in
+            _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, null);
+            _cachedSlideTransform.Y = 10;
+            RootContent.RenderTransform = _cachedSlideTransform;
 
-            // ═══ COMPOSITION-THREAD ACCELERATED SPAWN PROFILE (GPU-BOUND) ═══
-            // Opacity Animation: Front-loaded 0 -> 1 over 120ms with QuinticEaseOut.
-            // Runs entirely on the GPU render thread, completely immune to UI thread layout stalls!
-            var opacityAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(120))
+            // Clear _isShowAnimating after 130ms (just past 120ms opacity animation)
+            if (_showAnimEndTimer == null)
             {
-                EasingFunction = new System.Windows.Media.Animation.QuinticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-            };
+                _showAnimEndTimer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(130)
+                };
+                _showAnimEndTimer.Tick += (s, e) =>
+                {
+                    _showAnimEndTimer.Stop();
+                    _isShowAnimating = false;
+                };
+            }
+            _showAnimEndTimer.Stop();
+            _showAnimEndTimer.Start();
 
-            opacityAnim.Completed += (s, e) =>
-            {
-                _isShowAnimating = false;
-            };
-
-            // Slide In Animation: Back-loaded 10 -> 0 over 200ms with CubicEaseOut.
-            // Also runs entirely on the GPU render thread, providing a buttery-smooth soft settle!
-            var slideInAnim = new System.Windows.Media.Animation.DoubleAnimation(10, 0, TimeSpan.FromMilliseconds(200))
-            {
-                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-            };
-
-            this.BeginAnimation(OpacityProperty, opacityAnim);
-            RootContent.RenderTransform.BeginAnimation(TranslateTransform.YProperty, slideInAnim);
+            this.BeginAnimation(OpacityProperty, _cachedOpacityAnim);
+            _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, _cachedSlideInAnim);
         }
 
         // PERF: Deferred mascot/GIF resume timer — mascot starts 1s after spawn, not during spawn

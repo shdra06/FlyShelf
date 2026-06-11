@@ -608,6 +608,15 @@
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Rocket24" /></ui:Button.Icon>
                         </ui:Button>
 
+                        <!-- Reminder Button -->
+                        <ui:Button x:Name="ReminderToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ReminderBtn_Click" ToolTip="Set Reminder" Margin="0,0,4,0">
+                            <ui:Button.Resources>
+                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28F59E0B"/>
+                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#60F59E0B"/>
+                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FDE68A"/>
+                            </ui:Button.Resources>
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Alert24" /></ui:Button.Icon>
+                        </ui:Button>
 
                         <!-- Clear Shelf Button -->
                         <ui:Button x:Name="ClearAllToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ClearAllToolbar_Click" ToolTip="Clear Shelf (Delete Unpinned)" Margin="0,0,4,0"

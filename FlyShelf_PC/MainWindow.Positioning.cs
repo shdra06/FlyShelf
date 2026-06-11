@@ -98,7 +98,7 @@ namespace FlyShelf
 
             // Increment spawn token at the very beginning of the summon sequence.
             // This immediately invalidates any active or pending dismiss/hide animation callbacks.
-            int currentToken = ++_spawnToken;
+            ++_spawnToken;
 
             // PERF: Use cached foreground window — avoids expensive EnumWindows P/Invoke scan
             _previousForegroundWindow = _lastActiveExternalWindow != IntPtr.Zero && IsWindow(_lastActiveExternalWindow)
@@ -142,49 +142,13 @@ namespace FlyShelf
                 Dispatcher.InvokeAsync(() => HideWindowInternal(), System.Windows.Threading.DispatcherPriority.Background);
             }
 
-            // Restore the offscreen layout pass — this commits the window's visual tree
-            // at 0% opacity BEFORE the spawn callback. Without it, DWM renders 1-3 black
-            // frames because the content hasn't been realized when the window moves onscreen.
-            _isSuppressingSizeSync = true;
-            try
-            {
-                _viewModel.CurrentMode = mode;
-                this.Width = _viewModel.CurrentFlyShelfWidth;
-                this.MaxHeight = _viewModel.CurrentFlyShelfMaxHeight;
-                if (mode == 0)
-                {
-                    if (this.SizeToContent != SizeToContent.Height)
-                        this.SizeToContent = SizeToContent.Height;
-                    if (!double.IsNaN(this.Height))
-                        this.Height = double.NaN;
-                }
-                else
-                {
-                    if (this.SizeToContent != SizeToContent.Manual)
-                        this.SizeToContent = SizeToContent.Manual;
-                    this.Height = _viewModel.CurrentFlyShelfMaxHeight;
-                }
-                this.UpdateLayout();
-            }
-            finally
-            {
-                _isSuppressingSizeSync = false;
-            }
+            // PERF: Set mode before internal call — needed for layout calculations
+            _viewModel.CurrentMode = mode;
 
-            // Defer the positioning, activation, and summon animation to Loaded priority.
-            // Loaded runs after layout + rendering but BEFORE Background/ContextIdle,
-            // giving the fastest spawn while still allowing WPF to commit the 0% opacity frame.
-            Dispatcher.InvokeAsync(() =>
-            {
-                // Verify this summon hasn't been superseded by a newer summon in the meantime
-                if (_spawnToken != currentToken)
-                {
-                    Classes.Logger.LogAction("TELEMETRY", $"ShowNearPosition deferred callback bypassed: token changed ({currentToken} -> {_spawnToken})");
-                    return;
-                }
-
-                ShowNearPositionInternal(targetX, targetY, mode, isPersistent, stealFocus);
-            }, System.Windows.Threading.DispatcherPriority.Loaded);
+            // PERF: Call synchronously — no deferred callback.
+            // Window is at Left=-20000, Opacity=0, so there's nothing to "commit" first.
+            // This eliminates 1 full frame (~16ms) of latency vs the old Dispatcher.InvokeAsync(Loaded).
+            ShowNearPositionInternal(targetX, targetY, mode, isPersistent, stealFocus);
         }
 
         private void ShowNearPositionInternal(double targetX, double targetY, int mode, bool isPersistent, bool stealFocus)
@@ -416,22 +380,9 @@ namespace FlyShelf
                 catch { }
             }, System.Windows.Threading.DispatcherPriority.Background);
 
-            // Use Dispatcher callback to adjust position after the first layout pass completes.
+            // Defer mascot/HQ rendering to Background priority — avoids blocking spawn animation
             Dispatcher.InvokeAsync(() =>
             {
-                Classes.Logger.LogAction("TELEMETRY", "ShowNearPosition Loaded callback executed (Layout rendering complete)");
-                if (this.ActualHeight > 0 && Math.Abs(this.ActualHeight - realHeight) > 1)
-                {
-                    double newTop = _lockedBottomEdge - this.ActualHeight - 20;
-                    
-                    // Full bounds clamp: keep entire window within the visible work area
-                    if (newTop < workArea.Top + 16)
-                        newTop = workArea.Top + 16;
-                    if (newTop + this.ActualHeight > workArea.Top + workArea.Height - 16)
-                        newTop = workArea.Top + workArea.Height - this.ActualHeight - 16;
-                    
-                    this.Top = newTop;
-                }
 
                 // PERF: Do NOT resume mascot/GIF immediately — let the clipboard spawn lag-free first.
                 // Defer mascot + wallpaper GIF start to perfectly sync with the end of the 1000ms appear transition.
@@ -479,7 +430,7 @@ namespace FlyShelf
 
                 // NOTE: DWM uncloaking was previously here but has been removed.
                 // The anti-black-box spawn sequence handles visibility correctly without cloaking.
-            }, System.Windows.Threading.DispatcherPriority.Loaded);
+            }, System.Windows.Threading.DispatcherPriority.Background);
 
             int currentToken = ++_spawnToken;
 

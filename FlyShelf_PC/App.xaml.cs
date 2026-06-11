@@ -126,6 +126,7 @@ public partial class App : Application
 
         FlyShelf.Classes.SettingsManager.Load();
         FlyShelf.Classes.LicenseManager.Load();
+        FlyShelf.Classes.ReminderManager.Load();
         
         // ═══ SECURITY v2.0.0: Verify binary hasn't been patched ═══
         FlyShelf.Classes.LicenseManager.VerifyAssemblyIntegrity();
@@ -340,6 +341,9 @@ public partial class App : Application
 
 
                     
+                    // Start the reminder scheduler (polls every 15s for due reminders)
+                    FlyShelf.Classes.ReminderScheduler.Start();
+                    
                     // One-time cleanup: purge old GUID-based device entries from Firebase
                     _ = FlyShelf.Classes.CloudDiscoveryManager.CleanupStaleDevices();
                     
@@ -379,6 +383,10 @@ public partial class App : Application
         ViewModels.ClipboardItem.StopActivePlayback();
 
         _shakeTimer?.Dispose();
+        
+        // Stop reminder scheduler and flush pending saves
+        try { FlyShelf.Classes.ReminderScheduler.Stop(); } catch { }
+        try { FlyShelf.Classes.ReminderManager.SaveNow(); } catch { }
 
         try
         {

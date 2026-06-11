@@ -86,6 +86,11 @@
     <SolidColorBrush x:Key="ThemeOverflowBorder"       Color="#40FFFFFF"/>
     <Color           x:Key="ThemeOverflowShadowColor">#000000</Color>
 
+    <!-- Reminder feature -->
+    <SolidColorBrush x:Key="ReminderAccent"         Color="#F59E0B"/>
+    <SolidColorBrush x:Key="ReminderAccentBg"       Color="#18F59E0B"/>
+    <SolidColorBrush x:Key="ReminderAccentBorder"   Color="#30F59E0B"/>
+
     <!-- Toast notification -->
     <SolidColorBrush x:Key="ThemeToastBg"          Color="#E8101018"/>
     <SolidColorBrush x:Key="ThemeToastBorder"      Color="#18FFFFFF"/>

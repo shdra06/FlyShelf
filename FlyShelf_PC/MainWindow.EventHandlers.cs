@@ -415,6 +415,18 @@ namespace FlyShelf
             }
         }
 
+        private void ReminderBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (OverflowPopup != null) OverflowPopup.IsOpen = false;
+            var reminderWin = new FlyShelf.Windows.ReminderCreateWindow();
+            reminderWin.Left = this.Left + (this.Width - reminderWin.Width) / 2;
+            reminderWin.Top = this.Top - reminderWin.Height - 8;
+            if (reminderWin.Top < 0) reminderWin.Top = this.Top + this.Height + 8;
+            reminderWin.Topmost = true;
+            reminderWin.Show();
+            reminderWin.Activate();
+        }
+
         private FlyShelf.Windows.EmojiPickerWindow? _emojiPickerInstance;
 
         private void EmojiPicker_Click(object sender, RoutedEventArgs e)
