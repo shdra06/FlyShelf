@@ -454,6 +454,10 @@ namespace FlyShelf
                 _isAnimatingHide = false;
             }
 
+            // Capture whether this is a desktop-switch resummon BEFORE zombie check clears the flag.
+            // Used to decide whether to restore the last panel or show clipboard.
+            bool wasDesktopSwitch = _desktopSwitchedSinceLastDismiss || isOnOtherDesktop;
+
             // ═══ ZOMBIE STATE DETECTOR ═══
             // ALWAYS run when window is offscreen and invisible. The physical state
             // (Left < -10000, Opacity < 0.01) is the ground truth.
@@ -467,33 +471,20 @@ namespace FlyShelf
                 if (_desktopSwitchedSinceLastDismiss)
                 {
                     // ═══ FAST DESKTOP RESET (only after desktop switch) ═══
-                    // Forces Windows Shell to re-associate the window with the current VD.
-                    // Only needed when a desktop switch happened — on the same desktop,
-                    // the window is already correctly associated and this is wasteful.
                     var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                     if (hwnd != IntPtr.Zero)
                     {
-                        // 1. Hide via native call (no WPF layout pass)
                         Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
-
-                        // 2. Add WS_EX_APPWINDOW to force desktop association with current VD
                         int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
                         SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle | WS_EX_APPWINDOW) & ~WS_EX_NOACTIVATE);
-
-                        // 3. Show via native call (creates desktop association because APPWINDOW is set)
                         Classes.NativeMethods.ShowWindow(hwnd, 5 /*SW_SHOW*/);
-
-                        // 4. Immediately restore overlay style — desktop association is already locked in
                         exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
                         SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle & ~WS_EX_APPWINDOW) | WS_EX_NOACTIVATE);
-
-                        // 5. Single SetWindowPos: apply style change + force topmost in one call
                         Classes.NativeMethods.SetWindowPos(hwnd,
                             -1 /*HWND_TOPMOST*/, 0, 0, 0, 0,
                             Classes.NativeMethods.SWP_NOMOVE | Classes.NativeMethods.SWP_NOSIZE |
                             Classes.NativeMethods.SWP_NOACTIVATE | 0x0020 /*SWP_FRAMECHANGED*/);
                     }
-                    Classes.Logger.LogAction("VD_DIAG", "ZOMBIE: Fast desktop reset done (desktop switch detected).");
                 }
 
                 _desktopSwitchedSinceLastDismiss = false;
@@ -501,6 +492,10 @@ namespace FlyShelf
                 _isCurrentlySummoned = false;
                 zombieRecovered = true;
             }
+
+            // On desktop switch, clear panel memory — new desktop always starts with clipboard
+            if (wasDesktopSwitch)
+                _lastPanelBeforeDismiss = null;
 
             // If the overlay is already visible and in Mode 1, hide it
             if (!zombieRecovered && _isCurrentlySummoned && _viewModel.CurrentMode == 1 && !_isAnimatingHide)
@@ -560,6 +555,26 @@ namespace FlyShelf
                 }
 
                 ShowNearPosition(targetX, targetY, 1, false, false, knownOnOtherDesktop: isOnOtherDesktop);
+
+                // ═══ SAME-DESKTOP PANEL RESTORE ═══
+                // If the last panel was Notes/Todo and this is NOT a desktop switch,
+                // re-open the panel after the clipboard finishes appearing.
+                if (!wasDesktopSwitch && _lastPanelBeforeDismiss != null)
+                {
+                    string panelToRestore = _lastPanelBeforeDismiss;
+                    _lastPanelBeforeDismiss = null; // Consume — only restore once
+
+                    // Defer panel open to after the show animation completes
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        if (!_isCurrentlySummoned) return; // Cancelled before we got here
+
+                        if (panelToRestore == "notes")
+                            OpenNotesPanel();
+                        else if (panelToRestore == "todo")
+                            OpenTodoPanel();
+                    }, System.Windows.Threading.DispatcherPriority.Loaded);
+                }
             }
         }
 

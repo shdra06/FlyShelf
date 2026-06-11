@@ -272,30 +272,31 @@ namespace FlyShelf
             _lastActiveExternalWindowWasOnCurrentAtSummon = false;
             IntPtr capturedFg = GetForegroundWindow();
             IntPtr capturedLastExternal = _lastActiveExternalWindow;
+            IntPtr hwndCopyForDesktop = new System.Windows.Interop.WindowInteropHelper(this).Handle;
             System.Threading.Tasks.Task.Run(() =>
             {
                 try
                 {
                     var bgVdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
                     
-                    if (capturedFg != IntPtr.Zero)
-                    {
-                        bgVdm.GetWindowDesktopId(capturedFg, out Guid desktopId);
-                        _summonedDesktopId = desktopId;
-                    }
-                    
+                    // Prefer the last active EXTERNAL window for desktop GUID capture.
+                    // Our own pinned window returns Guid.Empty from GetWindowDesktopId.
                     if (capturedLastExternal != IntPtr.Zero && IsWindow(capturedLastExternal))
                     {
                         int hrCheck = bgVdm.IsWindowOnCurrentVirtualDesktop(capturedLastExternal, out int onCurrent);
                         if (hrCheck == 0 && onCurrent != 0)
                         {
                             _lastActiveExternalWindowWasOnCurrentAtSummon = true;
-                            if (_summonedDesktopId == Guid.Empty)
-                            {
-                                bgVdm.GetWindowDesktopId(capturedLastExternal, out Guid dId);
-                                _summonedDesktopId = dId;
-                            }
+                            bgVdm.GetWindowDesktopId(capturedLastExternal, out Guid dId);
+                            if (dId != Guid.Empty) _summonedDesktopId = dId;
                         }
+                    }
+
+                    // Fallback: try the foreground window (but skip if it's our own handle)
+                    if (_summonedDesktopId == Guid.Empty && capturedFg != IntPtr.Zero && capturedFg != hwndCopyForDesktop)
+                    {
+                        bgVdm.GetWindowDesktopId(capturedFg, out Guid desktopId);
+                        if (desktopId != Guid.Empty) _summonedDesktopId = desktopId;
                     }
                     
                     Classes.Logger.LogAction("DESKTOP", $"Summoned on virtual desktop: {_summonedDesktopId}, prevWindowWasOnCurrent: {_lastActiveExternalWindowWasOnCurrentAtSummon}");

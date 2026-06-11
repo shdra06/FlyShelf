@@ -181,7 +181,11 @@ namespace FlyShelf
                             }
                             uint currProcId = (uint)System.Environment.ProcessId;
 
-                            // 1. Get desktop ID of the newly focused window
+                            // ═══ DESKTOP SWITCH DETECTION ═══
+                            // Strategy: Get the FOREGROUND window's desktop GUID and compare
+                            // with _summonedDesktopId. This is the most reliable signal because
+                            // it doesn't depend on our own window's VDM state (which is broken
+                            // for pinned windows).
                             if (hwnd != IntPtr.Zero && hwnd != myHwnd && focusedProcId != currProcId)
                             {
                                 int hr = localVdm.GetWindowDesktopId(hwnd, out Guid currentDesktopId);
@@ -191,10 +195,17 @@ namespace FlyShelf
                                     {
                                         desktopSwitched = true;
                                     }
+                                    // Track the foreground desktop GUID as a rolling reference.
+                                    // This ensures _summonedDesktopId is always valid even if it
+                                    // was Guid.Empty at summon time (pinned window).
+                                    if (_summonedDesktopId == Guid.Empty)
+                                    {
+                                        _summonedDesktopId = currentDesktopId;
+                                    }
                                 }
                             }
 
-                            // 2. Fallback using _lastActiveExternalWindow (only run if verified to be on current desktop at summon)
+                            // Fallback: check _lastActiveExternalWindow
                             if (!desktopSwitched && _lastActiveExternalWindowWasOnCurrentAtSummon && 
                                 _lastActiveExternalWindow != IntPtr.Zero && IsWindow(_lastActiveExternalWindow))
                             {
@@ -205,10 +216,10 @@ namespace FlyShelf
                                 }
                             }
 
-                            // 3. Ultimate fallback: check if OUR OWN window is still on the current desktop.
-                            // This is the most reliable signal — especially when Notes/Todo mode adds
-                            // WS_EX_APPWINDOW, tying the window to a specific desktop.
-                            if (!desktopSwitched)
+                            // Ultimate fallback for Notes/Todo: when WS_EX_APPWINDOW is set,
+                            // the window is tied to a specific desktop despite being "pinned".
+                            // Check our own window — but ONLY when a panel is active.
+                            if (!desktopSwitched && (_isNotesActive || _isTodoActive))
                             {
                                 int hr = localVdm.IsWindowOnCurrentVirtualDesktop(myHwnd, out int onCurrent);
                                 if (hr == 0 && onCurrent == 0)
@@ -257,6 +268,61 @@ namespace FlyShelf
         private bool _isApplyingTheme = false;
         private volatile int _spawnGeneration = 0; // Incremented on each spawn to invalidate stale callbacks
         private bool _desktopSwitchedSinceLastDismiss = false; // True when dismiss was triggered by a desktop switch
+        private string? _lastPanelBeforeDismiss = null; // "notes" or "todo" — remembers panel for same-desktop resummon
+
+        /// <summary>
+        /// Starts or restarts the 1-minute auto-revert timer for Notes/Todo panels.
+        /// If the timer fires and a panel is still active, it auto-closes the panel
+        /// and ensures the next summon shows the clipboard (with fast desktop reset).
+        /// </summary>
+        private void StartPanelAutoRevertTimer()
+        {
+            StopPanelAutoRevertTimer();
+            _panelAutoRevertTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMinutes(1)
+            };
+            _panelAutoRevertTimer.Tick += PanelAutoRevertTimer_Tick;
+            _panelAutoRevertTimer.Start();
+        }
+
+        private void StopPanelAutoRevertTimer()
+        {
+            if (_panelAutoRevertTimer != null)
+            {
+                _panelAutoRevertTimer.Stop();
+                _panelAutoRevertTimer.Tick -= PanelAutoRevertTimer_Tick;
+                _panelAutoRevertTimer = null;
+            }
+        }
+
+        private void PanelAutoRevertTimer_Tick(object? sender, EventArgs e)
+        {
+            StopPanelAutoRevertTimer(); // One-shot
+
+            // If a panel is still active after 1 minute, auto-revert to clipboard mode
+            if (_isNotesActive || _isTodoActive)
+            {
+                Classes.Logger.LogAction("AUTO_REVERT", "Panel idle for 1 minute — auto-reverting to clipboard mode.");
+
+                if (_isNotesActive) CloseNotesPanel(immediate: true);
+                if (_isTodoActive) CloseTodoPanel(immediate: true);
+
+                // Ensure clean state for next summon — clear panel memory too
+                _lastPanelBeforeDismiss = null;
+                _desktopSwitchedSinceLastDismiss = true;
+                _isCurrentlySummoned = false;
+                _isAnimatingHide = false;
+                this.Opacity = 0;
+                this.BeginAnimation(OpacityProperty, null);
+                this.Left = -20000;
+                this.Top = -20000;
+
+                // Release memory
+                OptimizeMemoryUsage();
+            }
+        }
+
 
         /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
         private void PlayShowAnimation()
@@ -301,16 +367,28 @@ namespace FlyShelf
 
             // ═══ CRITICAL: Set unsummoned IMMEDIATELY ═══
             _isCurrentlySummoned = false;
-            // Note: _desktopSwitchedSinceLastDismiss is set by ForegroundChangedCallback
-            // BEFORE calling AnimateAndHide. For normal dismiss (Alt+C), it stays false.
 
             // ═══ CLOSE NOTES/TODO BEFORE HIDING ═══
             // Must close panels HERE, not in HideWindowInternal.
             // If panels are still active when HideWindowInternal runs,
             // it minimizes (opacity=1) instead of moving offscreen (Left=-20000).
             // Minimized windows break the zombie detector (Left < -10000 && Opacity < 0.01).
-            if (_isNotesActive) CloseNotesPanel(immediate: true);
-            if (_isTodoActive) CloseTodoPanel(immediate: true);
+            if (_isNotesActive || _isTodoActive)
+            {
+                // Remember which panel was active for same-desktop re-summon
+                _lastPanelBeforeDismiss = _isNotesActive ? "notes" : "todo";
+
+                // Notes/Todo uses WS_EX_APPWINDOW which corrupts desktop association.
+                // ALWAYS mark as desktop-switched when Notes was active —
+                // this guarantees the fast desktop reset runs on the next summon.
+                _desktopSwitchedSinceLastDismiss = true;
+
+                if (_isNotesActive) CloseNotesPanel(immediate: true);
+                if (_isTodoActive) CloseTodoPanel(immediate: true);
+            }
+
+            // Cancel the auto-revert safety timer (panel is being dismissed normally)
+            StopPanelAutoRevertTimer();
 
             // Cancel any pending mascot timers
             _mascotDelayTimer?.Stop();

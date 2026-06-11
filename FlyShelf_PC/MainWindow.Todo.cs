@@ -49,6 +49,7 @@ namespace FlyShelf
             TodoDaySidebar.ItemsSource = TodoManager.Days;
 
             _isTodoActive = true;
+            StartPanelAutoRevertTimer();
 
             // Update taskbar/alt-tab title
             Title = "To-Do";

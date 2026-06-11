@@ -10,7 +10,9 @@
 // Pipeline variants:
 //   1. Enhanced — highlight neutralization + contrast stretch (light images)
 //   2. Inverted + Enhanced — for dark theme screenshots
-//   3. Otsu Binarized — universal fallback, maximum text separation
+//   3. Otsu Binarized — global threshold, maximum text separation
+//   4. Bradley-Roth Adaptive — local threshold, handles varying backgrounds
+//   5. Inverted Only — simple inversion without highlight neutralization
 //
 // Used by: ClipboardItem.Ocr.cs, QuickLookWindow.xaml.cs
 // ---------------------------------------------------------------
@@ -75,16 +77,40 @@ namespace FlyShelf.Classes
                 Logger.LogAction("OCR_VARIANT", $"Inverted variant failed: {ex.Message}");
             }
 
-            // Variant 3: Otsu binarization (adaptive threshold)
-            // Best for: universal fallback — works on both dark and light images
-            // Automatically finds the optimal threshold to separate text from background
+            // Variant 3: Otsu binarization (global adaptive threshold)
+            // Best for: images with clear bimodal histogram (text vs uniform background)
             try
             {
                 variants.Add((BinarizeOtsu(input), "OtsuBinarized"));
             }
             catch (Exception ex)
             {
-                Logger.LogAction("OCR_VARIANT", $"Binarized variant failed: {ex.Message}");
+                Logger.LogAction("OCR_VARIANT", $"Otsu variant failed: {ex.Message}");
+            }
+
+            // Variant 4: Bradley-Roth local adaptive binarization
+            // Best for: images with VARYING backgrounds (e.g. Task Manager header cells
+            // have different shade than data rows). Computes a different threshold for
+            // each local neighborhood, so it handles multi-zone contrast perfectly.
+            try
+            {
+                variants.Add((BinarizeBradleyRoth(input), "BradleyRoth"));
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("OCR_VARIANT", $"BradleyRoth variant failed: {ex.Message}");
+            }
+
+            // Variant 5: Simple inversion without highlight neutralization
+            // Best for: dark screenshots where the Inverted+Enhanced variant's highlight
+            // neutralization is too aggressive (strips header cell content like "61%")
+            try
+            {
+                variants.Add((InvertColors(input), "InvertedOnly"));
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("OCR_VARIANT", $"InvertedOnly variant failed: {ex.Message}");
             }
 
             // Fallback: if all preprocessing failed, use a format-converted copy
@@ -378,6 +404,125 @@ namespace FlyShelf.Classes
                 if (blackCount > totalPixels / 2)
                 {
                     Logger.LogAction("OCR_BINARIZE", "Majority black — inverting for dark-on-light text");
+                    for (int y = 0; y < height; y++)
+                    {
+                        int rowOffset = layout.StartIndex + layout.Stride * y;
+                        for (int x = 0; x < width; x++)
+                        {
+                            int idx = rowOffset + 4 * x;
+                            data[idx + 0] = (byte)(255 - data[idx + 0]);
+                            data[idx + 1] = (byte)(255 - data[idx + 1]);
+                            data[idx + 2] = (byte)(255 - data[idx + 2]);
+                        }
+                    }
+                }
+            }
+
+            var result = SoftwareBitmap.Convert(working, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
+            working.Dispose();
+            return result;
+        }
+
+        /// <summary>
+        /// Bradley-Roth local adaptive binarization using integral images.
+        /// Unlike global Otsu, this computes a DIFFERENT threshold for each pixel
+        /// based on its local neighborhood. This is critical for images with
+        /// varying backgrounds — e.g. Task Manager where header cells (61%, 0%)
+        /// have a different background shade than the data rows below.
+        ///
+        /// Algorithm: For each pixel, compute the mean of an S×S window around it.
+        /// If the pixel is more than t% below the local mean, it's foreground (black).
+        /// Otherwise it's background (white).
+        ///
+        /// After binarization, auto-inverts if the image is majority-black (dark theme).
+        /// </summary>
+        public static unsafe SoftwareBitmap BinarizeBradleyRoth(SoftwareBitmap input)
+        {
+            SoftwareBitmap working;
+            if (input.BitmapPixelFormat != BitmapPixelFormat.Bgra8 ||
+                input.BitmapAlphaMode == BitmapAlphaMode.Premultiplied)
+            {
+                working = SoftwareBitmap.Convert(input, BitmapPixelFormat.Bgra8, BitmapAlphaMode.Straight);
+            }
+            else
+            {
+                working = SoftwareBitmap.Copy(input);
+            }
+
+            int width = working.PixelWidth;
+            int height = working.PixelHeight;
+
+            using (var buffer = working.LockBuffer(BitmapBufferAccessMode.ReadWrite))
+            using (var reference = buffer.CreateReference())
+            {
+                var byteAccess = WinRT.CastExtensions.As<IMemoryBufferByteAccess>(reference);
+                byteAccess.GetBuffer(out byte* data, out uint capacity);
+                var layout = buffer.GetPlaneDescription(0);
+
+                // Step 1: Compute grayscale values and integral image
+                int[,] gray = new int[width, height];
+                long[,] integral = new long[width, height];
+
+                for (int y = 0; y < height; y++)
+                {
+                    long rowSum = 0;
+                    int rowOffset = layout.StartIndex + layout.Stride * y;
+                    for (int x = 0; x < width; x++)
+                    {
+                        int idx = rowOffset + 4 * x;
+                        int val = (int)(0.299 * data[idx + 2] + 0.587 * data[idx + 1] + 0.114 * data[idx + 0]);
+                        gray[x, y] = val;
+                        rowSum += val;
+                        integral[x, y] = (y == 0) ? rowSum : (integral[x, y - 1] + rowSum);
+                    }
+                }
+
+                // Step 2: Bradley-Roth adaptive thresholding
+                int S = width / 8;  // Window size = 1/8th of image width
+                if (S < 4) S = 4;
+                double t = 0.15;    // 15% below local mean = foreground
+
+                int blackCount = 0;
+                for (int y = 0; y < height; y++)
+                {
+                    int rowOffset = layout.StartIndex + layout.Stride * y;
+                    for (int x = 0; x < width; x++)
+                    {
+                        int idx = rowOffset + 4 * x;
+
+                        // Local window bounds (clamped to image edges)
+                        int x1 = Math.Max(0, x - S / 2);
+                        int x2 = Math.Min(width - 1, x + S / 2);
+                        int y1 = Math.Max(0, y - S / 2);
+                        int y2 = Math.Min(height - 1, y + S / 2);
+
+                        int count = (x2 - x1 + 1) * (y2 - y1 + 1);
+
+                        // Sum from integral image
+                        long sum = integral[x2, y2];
+                        if (x1 > 0) sum -= integral[x1 - 1, y2];
+                        if (y1 > 0) sum -= integral[x2, y1 - 1];
+                        if (x1 > 0 && y1 > 0) sum += integral[x1 - 1, y1 - 1];
+
+                        double localAvg = (double)sum / count;
+
+                        // Binarize: if pixel is significantly below local average → foreground
+                        byte resultVal = (gray[x, y] < localAvg * (1.0 - t)) ? (byte)0 : (byte)255;
+
+                        data[idx + 0] = resultVal;
+                        data[idx + 1] = resultVal;
+                        data[idx + 2] = resultVal;
+                        data[idx + 3] = 255;
+
+                        if (resultVal == 0) blackCount++;
+                    }
+                }
+
+                // Step 3: Auto-invert for dark-themed images
+                int totalPixels = width * height;
+                if (blackCount > totalPixels / 2)
+                {
+                    Logger.LogAction("OCR_BRADLEY", "Majority black — inverting for dark-on-light text");
                     for (int y = 0; y < height; y++)
                     {
                         int rowOffset = layout.StartIndex + layout.Stride * y;

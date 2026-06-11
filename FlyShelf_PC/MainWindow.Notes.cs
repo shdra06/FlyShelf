@@ -22,6 +22,7 @@ namespace FlyShelf
     public partial class MainWindow
     {
         private bool _isNotesActive = false;
+        private System.Windows.Threading.DispatcherTimer? _panelAutoRevertTimer;
         private bool _isNotesLoaded = false;
         private NoteDay? _selectedNoteDay = null;
         private Brush? _originalHeaderBg = null;
@@ -63,6 +64,7 @@ namespace FlyShelf
             NotesDaySidebar.ItemsSource = NoteManager.Days;
 
             _isNotesActive = true;
+            StartPanelAutoRevertTimer();
 
             // Update taskbar/alt-tab title
             Title = "Notes";
