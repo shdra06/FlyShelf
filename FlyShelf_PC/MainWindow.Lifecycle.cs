@@ -164,6 +164,11 @@ namespace FlyShelf
                     {
                         try
                         {
+                            // Wait for VDM state to settle — EVENT_SYSTEM_FOREGROUND fires
+                            // before IVirtualDesktopManager is fully updated during desktop switches.
+                            // Without this delay, GetWindowDesktopId returns stale/empty GUIDs.
+                            System.Threading.Thread.Sleep(80);
+
                             var localVdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
                             
                             bool desktopSwitched = false;

@@ -22,63 +22,71 @@ namespace FlyShelf.Classes
     public partial class PeerManager
     {        private async Task Handshake(PeerConnection peer)
         {
-            bool lanEnabled = SettingsManager.Current.EnableLocalLAN;
-            Logger.LogAction("PEER", $"🔌 Handshake {peer.DeviceName}: LAN={peer.LanUrl ?? "(empty)"} CF={peer.CloudflareUrl ?? "(empty)"} lanEnabled={lanEnabled}");
-
-            using var cts = new CancellationTokenSource();
-            var tasks = new List<Task<(bool success, string transport, string url)>>();
-
-            if (lanEnabled && !string.IsNullOrEmpty(peer.LanUrl))
+            // Prevent concurrent handshakes on the same peer (HeartbeatLoop, DiscoveryLoop, UDP, PeerAnnounce, UrlUpdate)
+            if (!await peer.HandshakeLock.WaitAsync(0))
             {
-                tasks.Add(Task.Run(async () =>
-                {
-                    bool ok = await TryConnect(peer, peer.LanUrl, "LAN", cts.Token);
-                    return (ok, "LAN", peer.LanUrl);
-                }));
-            }
-
-            if (!string.IsNullOrEmpty(peer.CloudflareUrl))
-            {
-                tasks.Add(Task.Run(async () =>
-                {
-                    bool ok = await TryConnect(peer, peer.CloudflareUrl, "Cloudflare", cts.Token);
-                    return (ok, "Cloudflare", peer.CloudflareUrl);
-                }));
-            }
-
-            if (tasks.Count == 0)
-            {
-                peer.IsAlive = false;
-                peer.Transport = "offline";
+                Logger.LogAction("PEER", $"🔌 Handshake {peer.DeviceName} already in progress — skipping");
                 return;
             }
-
-            var remainingTasks = new List<Task<(bool success, string transport, string url)>>(tasks);
-            bool handshakeSucceeded = false;
-
-            while (remainingTasks.Count > 0)
+            try
             {
-                var completedTask = await Task.WhenAny(remainingTasks);
-                remainingTasks.Remove(completedTask);
-                try
+                bool lanEnabled = SettingsManager.Current.EnableLocalLAN;
+                Logger.LogAction("PEER", $"🔌 Handshake {peer.DeviceName}: LAN={peer.LanUrl ?? "(empty)"} CF={peer.CloudflareUrl ?? "(empty)"} lanEnabled={lanEnabled}");
+
+                using var cts = new CancellationTokenSource();
+                var tasks = new List<Task<(bool success, string transport, string url)>>();
+
+                if (lanEnabled && !string.IsNullOrEmpty(peer.LanUrl))
                 {
-                    var result = await completedTask;
-                    if (result.success)
+                    tasks.Add(Task.Run(async () =>
                     {
-                        handshakeSucceeded = true;
-                        try { cts.Cancel(); } catch { } // Cancel the other transport probe immediately
-                        break;
-                    }
+                        bool ok = await TryConnect(peer, peer.LanUrl, "LAN", cts.Token);
+                        return (ok, "LAN", peer.LanUrl);
+                    }));
                 }
-                catch { }
-            }
 
-            if (!handshakeSucceeded)
-            {
-                peer.IsAlive = false;
-                peer.Transport = "offline";
-                Logger.LogAction("PEER", $"⚠️  {peer.DeviceName} unreachable (LAN:{(lanEnabled ? "on" : "off")}) tried LAN={peer.LanUrl ?? "null"} CF={peer.CloudflareUrl ?? "null"}");
+                if (!string.IsNullOrEmpty(peer.CloudflareUrl))
+                {
+                    tasks.Add(Task.Run(async () =>
+                    {
+                        bool ok = await TryConnect(peer, peer.CloudflareUrl, "Cloudflare", cts.Token);
+                        return (ok, "Cloudflare", peer.CloudflareUrl);
+                    }));
+                }
+
+                if (tasks.Count == 0)
+                {
+                    lock (peer.StateLock) { peer.IsAlive = false; peer.Transport = "offline"; }
+                    return;
+                }
+
+                var remainingTasks = new List<Task<(bool success, string transport, string url)>>(tasks);
+                bool handshakeSucceeded = false;
+
+                while (remainingTasks.Count > 0)
+                {
+                    var completedTask = await Task.WhenAny(remainingTasks);
+                    remainingTasks.Remove(completedTask);
+                    try
+                    {
+                        var result = await completedTask;
+                        if (result.success)
+                        {
+                            handshakeSucceeded = true;
+                            try { cts.Cancel(); } catch { } // Cancel the other transport probe immediately
+                            break;
+                        }
+                    }
+                    catch { }
+                }
+
+                if (!handshakeSucceeded)
+                {
+                    lock (peer.StateLock) { peer.IsAlive = false; peer.Transport = "offline"; }
+                    Logger.LogAction("PEER", $"⚠️  {peer.DeviceName} unreachable (LAN:{(lanEnabled ? "on" : "off")}) tried LAN={peer.LanUrl ?? "null"} CF={peer.CloudflareUrl ?? "null"}");
+                }
             }
+            finally { peer.HandshakeLock.Release(); }
         }
 
         private async Task<bool> TryConnect(PeerConnection peer, string testUrl, string transport, CancellationToken ct)
@@ -234,7 +242,7 @@ namespace FlyShelf.Classes
                                        msg.Contains("connection refused") || 
                                        msg.Contains("canceled");
                     
-                    peer.ConsecutiveFailures++;
+                    peer.IncrementFailures();
                     if (peer.ConsecutiveFailures >= 5 || isHostError)
                     {
                         Logger.LogAction("PEER", $"⚠️ Invalidating stale Cloudflare URL for {peer.DeviceName} (failures: {peer.ConsecutiveFailures}, reason: {ex.Message})");

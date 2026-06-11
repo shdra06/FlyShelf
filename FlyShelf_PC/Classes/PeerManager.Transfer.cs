@@ -477,8 +477,10 @@ namespace FlyShelf.Classes
                                 req.Headers.TryAddWithoutValidation("X-Upload-Session", sessionId);
                                 req.Headers.TryAddWithoutValidation("X-Chunk-Index", chunkIndex.ToString());
 
-                                // Read exactly 'length' bytes from the file stream on demand to protect LOH memory
-                                var chunkData = new byte[length];
+                                // Read exactly 'length' bytes from the file using pooled buffer (avoids LOH pressure)
+                                var chunkData = System.Buffers.ArrayPool<byte>.Shared.Rent(length);
+                                try
+                                {
                                 using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, FileOptions.Asynchronous))
                                 {
                                     fs.Seek(offset, SeekOrigin.Begin);
@@ -491,7 +493,7 @@ namespace FlyShelf.Classes
                                     }
                                 }
 
-                                req.Content = new ByteArrayContent(chunkData);
+                                req.Content = new ByteArrayContent(chunkData, 0, length);
                                 req.Content.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
 
                                 using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(batchCts.Token);
@@ -501,6 +503,8 @@ namespace FlyShelf.Classes
                                 if (resp.IsSuccessStatusCode) return true;
 
                                 Logger.LogAction("PEER_CHUNK", $"Chunk {chunkIndex} attempt {attempt + 1} HTTP {(int)resp.StatusCode}");
+                                }
+                                finally { System.Buffers.ArrayPool<byte>.Shared.Return(chunkData); }
                             }
                             catch (Exception ex) when (attempt == 0 && !batchCts.IsCancellationRequested)
                             {

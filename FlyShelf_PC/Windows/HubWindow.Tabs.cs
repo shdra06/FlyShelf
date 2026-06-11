@@ -198,6 +198,7 @@ namespace FlyShelf.Windows
                 SettingsManager.Current.ClipboardWallpaperPath = dialog.FileName;
                 SettingsManager.Save();
                 ApplyTheme();
+                RespawnClipboardPreview();
             }
         }
 
@@ -207,12 +208,14 @@ namespace FlyShelf.Windows
             SettingsManager.Current.ClipboardWallpaperPath = "";
             SettingsManager.Save();
             ApplyTheme();
+            RespawnClipboardPreview();
         }
 
         private void BlurToggle_Changed(object sender, RoutedEventArgs e)
         {
             SettingsManager.Save();
             ApplyTheme();
+            RespawnClipboardPreview();
         }
 
         private void ColorScheme_Changed(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
@@ -565,6 +568,9 @@ namespace FlyShelf.Windows
                     await System.Threading.Tasks.Task.Delay(200);
                     RefreshWallpaperPreview();
                 });
+
+                // Respawn clipboard so the user sees the mascot theme applied immediately
+                RespawnClipboardPreview();
             }
         }
 
@@ -698,6 +704,32 @@ namespace FlyShelf.Windows
 
         // ═══ Display Mode Handlers ═══
 
+        /// <summary>
+        /// Respawns the MainWindow clipboard after a theme change so the user can
+        /// immediately see the effect. Uses a short delay to let the theme engine
+        /// finish processing before the clipboard appears.
+        /// </summary>
+        private void RespawnClipboardPreview()
+        {
+            Dispatcher.InvokeAsync(async () =>
+            {
+                await System.Threading.Tasks.Task.Delay(350);
+                try
+                {
+                    var mainWin = Application.Current.MainWindow as MainWindow;
+                    if (mainWin == null) return;
+
+                    // Position the clipboard at the right-center of the primary screen
+                    var workArea = SystemParameters.WorkArea;
+                    double targetX = workArea.Right - 200;
+                    double targetY = workArea.Top + (workArea.Height / 2);
+
+                    mainWin.ShowNearPosition(targetX, targetY, mode: 1, isPersistent: false, stealFocus: false);
+                }
+                catch { }
+            });
+        }
+
         private void DisplayMode_Click(object sender, MouseButtonEventArgs e)
         {
             if (sender is System.Windows.Controls.Border border && border.Tag is string tag)
@@ -742,6 +774,9 @@ namespace FlyShelf.Windows
                 HighlightActiveDisplayMode();
                 ApplyTheme(); // Force HubWindow to re-apply its own backdrop to match the new display mode
 
+                // Respawn the clipboard so the user can immediately see the theme change
+                RespawnClipboardPreview();
+
                 // Refresh wallpaper preview after a short delay
                 Dispatcher.InvokeAsync(async () =>
                 {
@@ -764,7 +799,7 @@ namespace FlyShelf.Windows
                 {
                     { "mica",    Color.FromRgb(156, 163, 175) },
                     { "glass",   Color.FromRgb(59, 130, 246)  },
-                    { "desktop", Color.FromRgb(139, 92, 246)  },
+                    { "desktop", Color.FromRgb(217, 119, 6)  },
                 };
 
                 var buttons = new (System.Windows.Controls.Border btn, string modeKey)[]
@@ -820,6 +855,9 @@ namespace FlyShelf.Windows
                     HighlightActiveColorTheme();
                     ToastWindow.ShowToast($"🎨 Color theme: {themeName}");
                 }
+
+                // Respawn clipboard so the user sees the color change immediately
+                RespawnClipboardPreview();
             }
         }
 

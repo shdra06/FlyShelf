@@ -61,11 +61,12 @@ namespace FlyShelf.Classes
                 System.Windows.Application.Current.Dispatcher.Invoke(() => { currentCount = _viewModel.DroppedItems.Count; });
 
                 // Use cached response if still fresh and item count unchanged
-                if (_cachedSyncJson != null && (now - _cachedSyncTimestamp) < SYNC_CACHE_TTL_MS && currentCount == _cachedItemCount)
+                var cached = _cachedSyncJson; // Capture reference to avoid TOCTOU race
+                if (cached != null && (now - _cachedSyncTimestamp) < SYNC_CACHE_TTL_MS && currentCount == _cachedItemCount)
                 {
                     res.ContentType = "application/json; charset=utf-8";
-                    res.ContentLength64 = _cachedSyncJson.Length;
-                    try { res.OutputStream.Write(_cachedSyncJson, 0, _cachedSyncJson.Length); } catch { }
+                    res.ContentLength64 = cached.Length;
+                    try { res.OutputStream.Write(cached, 0, cached.Length); } catch { }
                     res.Close();
                     return;
                 }
@@ -111,9 +112,10 @@ namespace FlyShelf.Classes
                     _cachedItemCount = currentCount;
                 });
 
+                var freshCache = _cachedSyncJson!; // Capture reference after Dispatcher.Invoke
                 res.ContentType = "application/json; charset=utf-8";
-                res.ContentLength64 = _cachedSyncJson!.Length;
-                try { res.OutputStream.Write(_cachedSyncJson, 0, _cachedSyncJson.Length); } catch { }
+                res.ContentLength64 = freshCache.Length;
+                try { res.OutputStream.Write(freshCache, 0, freshCache.Length); } catch { }
                 res.Close();
             }
             catch (Exception ex) { Logger.LogAction("SYNC_SERVE", $"ServeClipboardData failed: {ex.Message}"); try { res.StatusCode = 500; } catch { } try { res.Close(); } catch { } }

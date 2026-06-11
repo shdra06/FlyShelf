@@ -198,31 +198,43 @@ namespace FlyShelf
                 bmp.EndInit();
                 bmp.Freeze();
 
-                // Show immediately (unblurred) while the blur processes in background
+                // Show the desktop wallpaper as background
                 WallpaperBg.Source = bmp;
-                WallpaperBg.Opacity = 0.35;
                 WallpaperBg.Visibility = Visibility.Visible;
 
-                // Heavy software blur on background thread (radius 25 for strong frosted effect)
-                var capturedBmp = bmp;
-                _ = System.Threading.Tasks.Task.Run(() =>
+                // STRICT BLUR RULE: Only blur the desktop wallpaper fallback when blur is enabled.
+                // When blur is OFF, show the wallpaper crystal clear.
+                bool blurFallbackEnabled = Classes.SettingsManager.Current.EnableBlurBehind 
+                                           && Classes.NativeMethods.ShouldUseBlur();
+                if (blurFallbackEnabled)
                 {
-                    try
+                    WallpaperBg.Opacity = 0.35;
+                    // Heavy software blur on background thread (radius 25 for strong frosted effect)
+                    var capturedBmp = bmp;
+                    _ = System.Threading.Tasks.Task.Run(() =>
                     {
-                        var blurred = PreBlurBitmap(capturedBmp, 25);
-                        Dispatcher.InvokeAsync(() =>
+                        try
                         {
-                            WallpaperBg.Source = blurred;
-                            WallpaperBg.Opacity = 0.38;
+                            var blurred = PreBlurBitmap(capturedBmp, 25);
+                            Dispatcher.InvokeAsync(() =>
+                            {
+                                WallpaperBg.Source = blurred;
+                                WallpaperBg.Opacity = 0.38;
 
-                            // Apply a dark tint overlay so text remains readable
-                            WallpaperThemeOverlay.Visibility = Visibility.Visible;
-                            WallpaperRadialBrush.GradientStops[0].Color = Color.FromArgb(80, 20, 20, 30);
-                            WallpaperRadialBrush.GradientStops[1].Color = Color.FromArgb(160, 10, 10, 20);
-                        });
-                    }
-                    catch { }
-                });
+                                // Apply a dark tint overlay so text remains readable
+                                WallpaperThemeOverlay.Visibility = Visibility.Visible;
+                                WallpaperRadialBrush.GradientStops[0].Color = Color.FromArgb(80, 20, 20, 30);
+                                WallpaperRadialBrush.GradientStops[1].Color = Color.FromArgb(160, 10, 10, 20);
+                            });
+                        }
+                        catch { }
+                    });
+                }
+                else
+                {
+                    // Crystal clear — no blur, slightly higher opacity for vivid wallpaper
+                    WallpaperBg.Opacity = 0.42;
+                }
 
                 Classes.Logger.LogAction("THEME", $"Software blur fallback — using desktop wallpaper: {desktopWp}");
             }
@@ -417,30 +429,43 @@ namespace FlyShelf
                     // Show container layers immediately with unblurred preview to prevent flash
                     WallpaperBg.Source = bmp;
                     WallpaperBg.Visibility = Visibility.Visible;
-                    WallpaperFrostHeader.Visibility = Visibility.Visible;
 
-                    var capturedPathForBlur = path;
-                    var bmpForBlur = bmp;
-                    _ = System.Threading.Tasks.Task.Run(() =>
+                    // STRICT BLUR RULE: Only pre-blur the custom wallpaper when blur is enabled.
+                    // When blur is OFF, the wallpaper is shown crystal clear — no blur processing at all.
+                    bool wallpaperBlurEnabled = Classes.SettingsManager.Current.EnableBlurBehind 
+                                                && Classes.NativeMethods.ShouldUseBlur();
+                    if (wallpaperBlurEnabled)
                     {
-                        try
+                        WallpaperFrostHeader.Visibility = Visibility.Visible;
+
+                        var capturedPathForBlur = path;
+                        var bmpForBlur = bmp;
+                        _ = System.Threading.Tasks.Task.Run(() =>
                         {
-                            // Pre-blur background at a soft radius of 15 for a premium glassmorphic feel
-                            var blurredBg = PreBlurBitmap(bmpForBlur, 15);
-                            // Pre-blur at radius 12 for frosted header (replaces runtime BlurEffect)
-                            var blurredHeader = PreBlurBitmap(bmpForBlur, 12);
-                            // Pre-blur at radius 18 for selected card backdrop
-                            var blurredCards = PreBlurBitmap(bmpForBlur, 18);
-                            Dispatcher.InvokeAsync(() =>
+                            try
                             {
-                                if (_currentLoadedWallpaperPath != capturedPathForBlur) return; // Stale
-                                WallpaperBg.Source = blurredBg;
-                                WallpaperFrostImg.Source = blurredHeader;
-                                Resources["PreBlurredWallpaper"] = blurredCards;
-                            });
-                        }
-                        catch { }
-                    });
+                                // Pre-blur background at a soft radius of 15 for a premium glassmorphic feel
+                                var blurredBg = PreBlurBitmap(bmpForBlur, 15);
+                                // Pre-blur at radius 12 for frosted header (replaces runtime BlurEffect)
+                                var blurredHeader = PreBlurBitmap(bmpForBlur, 12);
+                                // Pre-blur at radius 18 for selected card backdrop
+                                var blurredCards = PreBlurBitmap(bmpForBlur, 18);
+                                Dispatcher.InvokeAsync(() =>
+                                {
+                                    if (_currentLoadedWallpaperPath != capturedPathForBlur) return; // Stale
+                                    WallpaperBg.Source = blurredBg;
+                                    WallpaperFrostImg.Source = blurredHeader;
+                                    Resources["PreBlurredWallpaper"] = blurredCards;
+                                });
+                            }
+                            catch { }
+                        });
+                    }
+                    else
+                    {
+                        // Crystal clear — no frost header, no pre-blur, just the sharp wallpaper
+                        WallpaperFrostHeader.Visibility = Visibility.Collapsed;
+                    }
 
                     // Extract dominant color for theme gradient asynchronously to prevent UI stutter
                     System.Threading.Tasks.Task.Run(() =>

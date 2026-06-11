@@ -69,19 +69,18 @@ namespace FlyShelf
             }
 
             // ═══ ULTIMATE FALLBACK ═══
-            // If COM move failed or GUID was empty, use Hide+Show fallback.
+            // If COM move failed, re-pin the window to all virtual desktops.
+            // Re-pinning is more reliable than Hide+Show (which doesn't actually
+            // move windows across virtual desktops — it's a visibility API only).
             try
             {
-                Classes.Logger.LogAction("DESKTOP", "COM move failed or empty GUID. Using Hide+Show fallback.");
-                this.Hide();
-                this.Left = -20000;
-                this.Top = -20000;
-                this.Show();
+                Classes.Logger.LogAction("DESKTOP", "COM move failed or empty GUID. Re-pinning to all desktops.");
+                EnsureVirtualDesktopPinned();
                 return true;
             }
             catch (Exception ex)
             {
-                Classes.Logger.LogAction("DESKTOP_ERR", $"Hide+Show fallback error: {ex.Message}");
+                Classes.Logger.LogAction("DESKTOP_ERR", $"Re-pin fallback error: {ex.Message}");
             }
             return false;
         }
@@ -142,13 +141,11 @@ namespace FlyShelf
                 var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
-                    // Fast native desktop reset (same as ToggleMainClipboard)
-                    Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
-                    int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-                    SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle | WS_EX_APPWINDOW) & ~WS_EX_NOACTIVATE);
-                    Classes.NativeMethods.ShowWindow(hwnd, 5 /*SW_SHOW*/);
-                    exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-                    SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle & ~WS_EX_APPWINDOW) | WS_EX_NOACTIVATE);
+                    // ═══ PINNING-SAFE ZOMBIE RECOVERY ═══
+                    // Window is pinned to all virtual desktops — it's already on the current desktop.
+                    // Just verify pinning is intact and ensure topmost Z-order.
+                    // Do NOT toggle WS_EX_APPWINDOW as that unpins the window!
+                    EnsureVirtualDesktopPinned();
                     Classes.NativeMethods.SetWindowPos(hwnd,
                         -1 /*HWND_TOPMOST*/, 0, 0, 0, 0,
                         Classes.NativeMethods.SWP_NOMOVE | Classes.NativeMethods.SWP_NOSIZE |
@@ -257,17 +254,11 @@ namespace FlyShelf
 
         private void ShowNearPositionInternal(double targetX, double targetY, int mode, bool isPersistent, bool stealFocus)
         {
-            // Cloak the window immediately to hide any rendering/positioning artifacts
-            try
-            {
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                if (hwnd != IntPtr.Zero)
-                {
-                    int cloak = 1;
-                    DwmSetWindowAttribute(hwnd, DWMWA_CLOAK, ref cloak, sizeof(int));
-                }
-            }
-            catch { }
+            // NOTE: DWM cloaking was previously used here to hide positioning artifacts,
+            // but it caused the fade-in animation to be invisible for the first ~20-30%,
+            // making the spawn feel laggy/jumpy. The anti-black-box sequence below
+            // (opacity=0 → start animation → move onscreen) handles this correctly
+            // without cloaking — the first visible frame is already at ~0% opacity.
 
             // PERF: Capture the virtual desktop ID asynchronously — these COM calls can take
             // 10-100ms+ when Explorer is busy during desktop switches. The desktop ID is only
@@ -555,17 +546,8 @@ namespace FlyShelf
                 }
                 _scrollHighQualityTimer.Start();
 
-                // Uncloak the window now that layout and first rendering pass at new position is complete
-                try
-                {
-                    var wndHwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                    if (wndHwnd != IntPtr.Zero)
-                    {
-                        int cloak = 0;
-                        DwmSetWindowAttribute(wndHwnd, DWMWA_CLOAK, ref cloak, sizeof(int));
-                    }
-                }
-                catch { }
+                // NOTE: DWM uncloaking was previously here but has been removed.
+                // The anti-black-box spawn sequence handles visibility correctly without cloaking.
             }, System.Windows.Threading.DispatcherPriority.Loaded);
 
             int currentToken = ++_spawnToken;

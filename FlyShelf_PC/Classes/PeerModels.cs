@@ -24,7 +24,14 @@ namespace FlyShelf.Classes
         private volatile bool _isAlive;
         public bool IsAlive { get => _isAlive; set => _isAlive = value; }
         public DateTime LastSeen { get; set; } = DateTime.MinValue;
-        public int ConsecutiveFailures { get; set; }
+        // Thread-safe: accessed from HeartbeatLoop, HandlePeerFailure, MonitorWebSocket, TryConnectSingle
+        private int _consecutiveFailures;
+        public int ConsecutiveFailures
+        {
+            get => Interlocked.CompareExchange(ref _consecutiveFailures, 0, 0);
+            set => Interlocked.Exchange(ref _consecutiveFailures, value);
+        }
+        public int IncrementFailures() => Interlocked.Increment(ref _consecutiveFailures);
         public string Version { get; set; } = "";
         public string DeviceType { get; set; } = "";
 
@@ -32,6 +39,8 @@ namespace FlyShelf.Classes
         public ClientWebSocket? LiveSocket { get; set; }
         public CancellationTokenSource? WsCts { get; set; }
         public SemaphoreSlim SendSemaphore { get; } = new(1, 1);
+        public SemaphoreSlim HandshakeLock { get; } = new(1, 1); // Prevents concurrent handshakes from HeartbeatLoop/DiscoveryLoop/UDP/PeerAnnounce/UrlUpdate
+        public readonly object StateLock = new(); // Protects atomic IsAlive + Transport updates
 
         // Active file transfer tracking (prevents marking peer dead mid-transfer)
         public int ActiveTransfers;

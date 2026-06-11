@@ -397,6 +397,34 @@ namespace FlyShelf
         /// </summary>
         public void ToggleMainClipboard()
         {
+            // ═══ ALWAYS CLOSE NOTES/TODO FIRST ═══
+            // Alt+C means "show clipboard" — close any active panels and restore to clipboard mode.
+            // This prevents zombie states when Notes/Todo was active on another desktop:
+            // HideWindowInternal minimizes (instead of moving offscreen) when Notes/Todo is active,
+            // which bypasses all zombie detection (Left isn't < -10000, Opacity isn't < 0.01).
+            if (_isNotesActive || _isTodoActive)
+            {
+                if (_isNotesActive) CloseNotesPanel(immediate: true);
+                if (_isTodoActive) CloseTodoPanel(immediate: true);
+
+                // If window was minimized (Notes/Todo dismiss path), restore to normal first
+                if (this.WindowState == WindowState.Minimized)
+                {
+                    _isProgrammaticMinimize = true; // Prevent StateChanged from re-opening
+                    this.WindowState = WindowState.Normal;
+                    _isProgrammaticMinimize = false;
+                }
+
+                // Reset to clean state for clipboard spawn
+                _isCurrentlySummoned = false;
+                _isAnimatingHide = false;
+                this.Opacity = 0;
+                this.BeginAnimation(OpacityProperty, null);
+                this.Left = -20000;
+                this.Top = -20000;
+                Classes.Logger.LogAction("VD_DIAG", "ToggleMainClipboard: Closed Notes/Todo panels, reset to clipboard mode.");
+            }
+
             // ═══ VIRTUAL DESKTOP CHECK ═══
             // Detect if the window is stuck on another virtual desktop
             bool isOnOtherDesktop = false;
@@ -412,8 +440,6 @@ namespace FlyShelf
 
             if (isOnOtherDesktop)
             {
-                if (_isNotesActive) CloseNotesPanel(immediate: true);
-                if (_isTodoActive) CloseTodoPanel(immediate: true);
                 _isCurrentlySummoned = false;
                 _isAnimatingHide = false;
             }
@@ -434,22 +460,12 @@ namespace FlyShelf
                 var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
-                    // ═══ FAST DESKTOP RESET using native Win32 ═══
-                    // 1. Hide via native call (no WPF layout pass)
-                    Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
-
-                    // 2. Add WS_EX_APPWINDOW to force desktop association with current VD
-                    int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-                    SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle | WS_EX_APPWINDOW) & ~WS_EX_NOACTIVATE);
-
-                    // 3. Show via native call (creates desktop association because APPWINDOW is set)
-                    Classes.NativeMethods.ShowWindow(hwnd, 5 /*SW_SHOW*/);
-
-                    // 4. Immediately restore overlay style — desktop association is already locked in
-                    exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-                    SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle & ~WS_EX_APPWINDOW) | WS_EX_NOACTIVATE);
-
-                    // 5. Single SetWindowPos: apply style change + force topmost in one call
+                    // ═══ PINNING-SAFE ZOMBIE RECOVERY ═══
+                    // Window is pinned to all virtual desktops via IVirtualDesktopPinnedApps —
+                    // it's already on the current desktop. Just ensure topmost Z-order and
+                    // verify pinning is intact. Do NOT toggle WS_EX_APPWINDOW as that causes
+                    // Windows Shell to unpin the window, breaking cross-desktop spawning!
+                    EnsureVirtualDesktopPinned();
                     Classes.NativeMethods.SetWindowPos(hwnd,
                         -1 /*HWND_TOPMOST*/, 0, 0, 0, 0,
                         Classes.NativeMethods.SWP_NOMOVE | Classes.NativeMethods.SWP_NOSIZE |
@@ -459,7 +475,7 @@ namespace FlyShelf
                 _isAnimatingHide = false;
                 _isCurrentlySummoned = false;
                 zombieRecovered = true;
-                Classes.Logger.LogAction("VD_DIAG", "ZOMBIE: Fast desktop reset done.");
+                Classes.Logger.LogAction("VD_DIAG", "ZOMBIE: Pinning-safe recovery done (no style toggle).");
             }
 
             // If the overlay is already visible and in Mode 1, hide it

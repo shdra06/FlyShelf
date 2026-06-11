@@ -498,15 +498,17 @@
                                         <!-- Filter Chips — Compact horizontal icon pills -->
                     <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,8">
                         <StackPanel.Resources>
-                            <!-- Dynamic accent brushes with opacity for a beautiful glassy highlight -->
-                            <SolidColorBrush x:Key="CheckedBackgroundBrush" Color="{DynamicResource MicaWPF.Colors.SystemAccentColor}" Opacity="0.15"/>
-                            <SolidColorBrush x:Key="CheckedHoverBackgroundBrush" Color="{DynamicResource MicaWPF.Colors.SystemAccentColor}" Opacity="0.22"/>
+                            <!-- Clean neutral brushes — white-based glass tints for dark theme harmony -->
+                            <SolidColorBrush x:Key="CheckedBackgroundBrush" Color="#24FFFFFF"/>
+                            <SolidColorBrush x:Key="CheckedHoverBackgroundBrush" Color="#30FFFFFF"/>
+                            <SolidColorBrush x:Key="CheckedBorderBrush" Color="#38FFFFFF"/>
+                            <SolidColorBrush x:Key="CheckedHoverBorderBrush" Color="#48FFFFFF"/>
 
-                            <!-- Inner TextBlock style: animates text color, opacity, and weight based on checked/hover state -->
+                            <!-- Inner TextBlock style: text brightens on selection for clear hierarchy -->
                             <Style TargetType="TextBlock">
                                 <Setter Property="FontSize" Value="11.5"/>
                                 <Setter Property="FontWeight" Value="Medium"/>
-                                <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=IsChecked}" Value="True">
                                         <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
@@ -518,17 +520,17 @@
                                 </Style.Triggers>
                             </Style>
 
-                            <!-- Inner SymbolIcon style: dampens opacity when unchecked for cleaner visual hierarchy -->
+                            <!-- Inner SymbolIcon style: muted when unchecked, vivid when active -->
                             <Style TargetType="ui:SymbolIcon">
                                 <Setter Property="FontSize" Value="13"/>
                                 <Setter Property="Margin" Value="0,0,5,0"/>
-                                <Setter Property="Opacity" Value="0.65"/>
+                                <Setter Property="Opacity" Value="0.5"/>
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=IsChecked}" Value="True">
                                         <Setter Property="Opacity" Value="1.0"/>
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding RelativeSource={RelativeSource AncestorType=RadioButton}, Path=IsMouseOver}" Value="True">
-                                        <Setter Property="Opacity" Value="0.85"/>
+                                        <Setter Property="Opacity" Value="0.8"/>
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -540,38 +542,39 @@
                                     <Setter.Value>
                                         <ControlTemplate TargetType="RadioButton">
                                             <Border x:Name="ChipBorder" CornerRadius="8" Padding="10,6" 
-                                                    Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
-                                                    BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
+                                                    Background="Transparent" 
+                                                    BorderBrush="Transparent" BorderThickness="1">
                                                 <ContentPresenter x:Name="ChipContent" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                             <ControlTemplate.Triggers>
-                                                <!-- Hover state for unchecked chip -->
+                                                <!-- Hover state for unchecked chip — gentle glass lift -->
                                                 <MultiTrigger>
                                                     <MultiTrigger.Conditions>
                                                         <Condition Property="IsMouseOver" Value="True"/>
                                                         <Condition Property="IsChecked" Value="False"/>
                                                     </MultiTrigger.Conditions>
-                                                    <Setter TargetName="ChipBorder" Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
+                                                    <Setter TargetName="ChipBorder" Property="Background" Value="#10FFFFFF"/>
+                                                    <Setter TargetName="ChipBorder" Property="BorderBrush" Value="#14FFFFFF"/>
                                                 </MultiTrigger>
                                                 
-                                                <!-- Checked state (non-hovered) -->
+                                                <!-- Checked state — frosted glass pill -->
                                                 <MultiTrigger>
                                                     <MultiTrigger.Conditions>
                                                         <Condition Property="IsChecked" Value="True"/>
                                                         <Condition Property="IsMouseOver" Value="False"/>
                                                     </MultiTrigger.Conditions>
                                                     <Setter TargetName="ChipBorder" Property="Background" Value="{StaticResource CheckedBackgroundBrush}"/>
-                                                    <Setter TargetName="ChipBorder" Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.SystemAccentColor}"/>
+                                                    <Setter TargetName="ChipBorder" Property="BorderBrush" Value="{StaticResource CheckedBorderBrush}"/>
                                                 </MultiTrigger>
 
-                                                <!-- Checked & Hovered state -->
+                                                <!-- Checked & Hovered — brighter glass -->
                                                 <MultiTrigger>
                                                     <MultiTrigger.Conditions>
                                                         <Condition Property="IsChecked" Value="True"/>
                                                         <Condition Property="IsMouseOver" Value="True"/>
                                                     </MultiTrigger.Conditions>
                                                     <Setter TargetName="ChipBorder" Property="Background" Value="{StaticResource CheckedHoverBackgroundBrush}"/>
-                                                    <Setter TargetName="ChipBorder" Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.SystemAccentColorLight1}"/>
+                                                    <Setter TargetName="ChipBorder" Property="BorderBrush" Value="{StaticResource CheckedHoverBorderBrush}"/>
                                                 </MultiTrigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
@@ -1879,9 +1882,9 @@
                                                 MouseLeftButtonDown="DisplayMode_Click" Tag="__desktop__">
                                             <StackPanel HorizontalAlignment="Center">
                                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,6">
-                                                    <Ellipse Width="14" Height="14" Fill="#8B5CF6" Margin="0,0,4,0"/>
-                                                    <Ellipse Width="14" Height="14" Fill="#A78BFA" Margin="0,0,4,0"/>
-                                                    <Ellipse Width="14" Height="14" Fill="#2E1065"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#D97706" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#F59E0B" Margin="0,0,4,0"/>
+                                                    <Ellipse Width="14" Height="14" Fill="#1C1917"/>
                                                 </StackPanel>
                                                 <TextBlock Text="FlyShelf" FontWeight="SemiBold" FontSize="11" HorizontalAlignment="Center"
                                                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>

@@ -502,7 +502,7 @@ export default function ConnectScreen() {
 
     const batchName = buildBatchName();
     const isCloudflare = useRelay || targetNode.connectionType === 'cloudflare' || targetNode.connectionType === 'cloudflare-unverified';
-    const CHUNK_SIZE = 50 * 1024 * 1024; // 50MB chunks (under Cloudflare 100MB limit)
+    const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks (base64 overhead ~13MB in memory, safe for low-RAM devices)
 
     const processUpload = async (asset: any): Promise<void> => {
       if (isCancelledRef.current) return;
@@ -629,20 +629,29 @@ export default function ConnectScreen() {
         setUploadProgress(prev => ({ ...prev, [asset.id]: `chunk ${i + 1}/${totalChunks}` }));
       }
 
-      // Finalize — tell PC to merge all chunks
-      const finRes = await fetch(`${baseUrl}/api/upload_finalize`, {
-        method: 'POST',
-        headers: {
-          'X-FlyShelf-Client': 'MobileCompanion',
-          'X-Pairing-Key': pairingKey,
-          'X-Upload-Session': sessionId,
-          'X-File-Name': encodeURIComponent(asset.filename || 'file.bin'),
-          'X-Batch-Name': encodeURIComponent(batch),
-          'X-Original-Date': (asset.creationTime || Date.now()).toString(),
-          'X-Total-Chunks': totalChunks.toString(),
+      // Finalize — tell PC to merge all chunks (with retry — chunks are useless without this)
+      let finalizeOk = false;
+      for (let finAttempt = 0; finAttempt < 3 && !finalizeOk; finAttempt++) {
+        try {
+          const finRes = await fetch(`${baseUrl}/api/upload_finalize`, {
+            method: 'POST',
+            headers: {
+              'X-FlyShelf-Client': 'MobileCompanion',
+              'X-Pairing-Key': pairingKey,
+              'X-Upload-Session': sessionId,
+              'X-File-Name': encodeURIComponent(asset.filename || 'file.bin'),
+              'X-Batch-Name': encodeURIComponent(batch),
+              'X-Original-Date': (asset.creationTime || Date.now()).toString(),
+              'X-Total-Chunks': totalChunks.toString(),
+            }
+          });
+          if (finRes.ok) { finalizeOk = true; }
+          else if (finAttempt === 2) throw new Error(`Finalize failed after 3 attempts: ${finRes.status}`);
+        } catch (finErr) {
+          if (finAttempt === 2) throw finErr;
+          await new Promise(r => setTimeout(r, 2000)); // Wait 2s before retry
         }
-      });
-      if (!finRes.ok) throw new Error(`Finalize failed: ${finRes.status}`);
+      }
     };
 
     // Concurrent workers

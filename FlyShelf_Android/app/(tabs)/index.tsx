@@ -209,9 +209,9 @@ export default function SyncScreen() {
 
   const enqueueDownload = useCallback((item: DownloadQueueItem) => {
     // Dedup: don't re-enqueue already-processed or already-queued items
-    const dedupKey = `${item.title}::${item.fileUrl}`;
+    const dedupKey = `${item.title}::${item.timestamp || item.fileUrl}`;
     if (processedDownloadsRef.current.has(dedupKey)) return;
-    if (downloadQueueRef.current.some(q => `${q.title}::${q.fileUrl}` === dedupKey)) return;
+    if (downloadQueueRef.current.some(q => `${q.title}::${q.timestamp || q.fileUrl}` === dedupKey)) return;
     downloadQueueRef.current.push(item);
     processDownloadQueue();
   }, []);
@@ -223,7 +223,7 @@ export default function SyncScreen() {
 
     while (downloadQueueRef.current.length > 0) {
       const item = downloadQueueRef.current.shift()!;
-      const dedupKey = `${item.title}::${item.fileUrl}`;
+      const dedupKey = `${item.title}::${item.timestamp || item.fileUrl}`;
       if (processedDownloadsRef.current.has(dedupKey)) continue;
       processedDownloadsRef.current.add(dedupKey);
 
@@ -251,7 +251,11 @@ export default function SyncScreen() {
         syncLog('DL-QUEUE', `Downloading: ${item.title} via ${item.source}`);
         const dlHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
         if (pairingKeyRef.current) dlHeaders['X-Pairing-Key'] = pairingKeyRef.current;
-        const dlResult = await FileSystem.downloadAsync(item.fileUrl, item.destPath, { headers: dlHeaders });
+        // 60s timeout prevents stalled downloads from blocking the entire queue forever
+        const dlResult = await Promise.race([
+          FileSystem.downloadAsync(item.fileUrl, item.destPath, { headers: dlHeaders }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Download timeout (60s)')), 60000)),
+        ]);
 
         // Remove progress card
         setClips(prev => prev.filter(c => c.id !== progressId));
@@ -970,7 +974,7 @@ export default function SyncScreen() {
       if (firebaseUnsubFeedRef.current) { firebaseUnsubFeedRef.current(); firebaseUnsubFeedRef.current = null; }
       if (firebaseFallbackTimerRef.current) { clearTimeout(firebaseFallbackTimerRef.current); firebaseFallbackTimerRef.current = null; }
     };
-  }, [isGlobalSyncEnabled, contextPairingKey, pairedDevices]);
+  }, [isGlobalSyncEnabled, contextPairingKey, JSON.stringify((pairedDevices || []).map((d: any) => d.deviceId || d.DeviceId).sort())]);
 
   // ─── Last proven-working PC URL (set by poll on successful /api/sync) ───
   const lastWorkingPcUrlRef = useRef<string>('');
@@ -1091,9 +1095,13 @@ export default function SyncScreen() {
   }, [clips]);
 
   // ─── Local PC Polling ───
+  const pollLockRef = useRef(false); // Prevents concurrent pollFn from timer + long-poll
   useEffect(() => {
     const pollFn = async () => {
-      const targetUrl = await getCachedPcUrl();
+      if (pollLockRef.current) return; // Already running — skip this invocation
+      pollLockRef.current = true;
+      try {
+      const targetUrl = await getCachedPcUrl().catch(() => '');
       if (Platform.OS === 'android' && AdvanceOverlay && targetUrl) {
         try { AdvanceOverlay.setPcUrl(targetUrl); } catch(e) {}
         try { if (deviceName) AdvanceOverlay.setDeviceName(deviceName); } catch(e) {}
@@ -1103,7 +1111,8 @@ export default function SyncScreen() {
         const syncHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
         if (pairingKeyRef.current) syncHeaders['X-Pairing-Key'] = pairingKeyRef.current;
         const response = await fetchWithTimeout(`${targetUrl}/api/sync`, { headers: syncHeaders }, timeout);
-        if (response.ok) {
+        if (!response.ok) { cachedPcUrlRef.current = null; markPcUnreachable(); return; }
+        {
           // Phase 1: PC is reachable — disconnect Firebase listener if active
           markPcReachable();
           // Mark this URL as proven-working for the image sweep to use
@@ -1119,7 +1128,7 @@ export default function SyncScreen() {
           if (data && data.length > 0) {
             const latest = data[0];
             // ═══ GUARD: Skip items from BEFORE this device paired ═══
-            if (pairingTimestampRef.current > 0 && latest.Timestamp && latest.Timestamp < pairingTimestampRef.current) {
+            if (pairingTimestampRef.current > 0 && latest.Timestamp && latest.Timestamp < (pairingTimestampRef.current - 5000)) {
               return; // Pre-pairing item — don't sync to Android
             }
             const contentKey = `${latest.Type}_${latest.Title}_${latest.Timestamp}`;
@@ -1132,7 +1141,7 @@ export default function SyncScreen() {
 
               const crossFp = `${latest.Type}::${(latest.Raw || '').substring(0, 150)}`;
               recentSyncFingerprintsRef.current.set(crossFp, NetworkClock.now());
-              const isOwnEcho = (latest.SourceDeviceName && deviceName && latest.SourceDeviceName === deviceName) || (latest.SourceDeviceType === 'Mobile');
+              const isOwnEcho = (latest.SourceDeviceName && deviceName && latest.SourceDeviceName === deviceName) || (latest.SourceDeviceType === 'Mobile' && (!latest.SourceDeviceName || latest.SourceDeviceName === deviceName));
 
               if (!isOwnEcho) {
                 lastActivityRef.current = NetworkClock.now(); // Keep adaptive polling at high frequency
@@ -1315,7 +1324,7 @@ export default function SyncScreen() {
           // Uses the download queue for sequential, non-blocking processing.
           for (const item of data) {
             if (!['Pdf', 'Document', 'File', 'Video', 'Audio', 'Archive', 'Presentation'].includes(item.Type)) continue;
-            const isOwnEcho = (item.SourceDeviceName && deviceName && item.SourceDeviceName === deviceName) || (item.SourceDeviceType === 'Mobile');
+            const isOwnEcho = (item.SourceDeviceName && deviceName && item.SourceDeviceName === deviceName) || (item.SourceDeviceType === 'Mobile' && (!item.SourceDeviceName || item.SourceDeviceName === deviceName));
             if (isOwnEcho) continue;
             const fileDedupKey = `filedl::${item.Title || ''}::${item.Timestamp || ''}`;
             if (recentSyncFingerprintsRef.current.has(fileDedupKey)) continue;
@@ -1427,6 +1436,7 @@ export default function SyncScreen() {
           });
         }
       } catch (e) { cachedPcUrlRef.current = null; markPcUnreachable(); }
+      } finally { pollLockRef.current = false; }
     };
     // Adaptive polling: 2s (LAN active) → 5s (Cloud) → 10s (idle/no PC) → re-evaluate every cycle
     lastActivityRef.current = NetworkClock.now();
@@ -1895,7 +1905,7 @@ export default function SyncScreen() {
           sourceDeviceId: `Mobile_${(deviceName || 'Phone').replace(/[^a-zA-Z0-9_]/g, '_')}`,
           timestamp: NetworkClock.now(),
         });
-        const response = await fetchWithTimeout(`${targetUrl}/api/sync_text`, { method: 'POST', headers: hdrs, body: jsonBody }, 1500);
+        const response = await fetchWithTimeout(`${targetUrl}/api/sync_text`, { method: 'POST', headers: hdrs, body: jsonBody }, 3000);
         localSuccess = response.ok;
       } catch(e) { cachedPcUrlRef.current = null; }
       // Always add sent text to local clips so it appears in the feed
@@ -2606,20 +2616,29 @@ export default function SyncScreen() {
             if (Platform.OS === 'android') ToastAndroid.show(`📤 Chunk ${i + 1}/${totalChunks} sent`, ToastAndroid.SHORT);
           }
 
-          // Finalize — tell PC to merge all chunks
-          const finRes = await fetch(`${resolved}/api/upload_finalize`, {
-            method: 'POST',
-            headers: {
-              'X-FlyShelf-Client': 'MobileCompanion',
-              'X-Upload-Session': sessionId,
-              'X-File-Name': encodeURIComponent(name),
-              'X-Original-Date': NetworkClock.now().toString(),
-              'X-Total-Chunks': totalChunks.toString(),
-              'X-Source-Device': encodeURIComponent(deviceName || 'Mobile'),
-              ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}),
+          // Finalize — tell PC to merge all chunks (with retry — chunks are useless without this)
+          let finalizeOk = false;
+          for (let finAttempt = 0; finAttempt < 3 && !finalizeOk; finAttempt++) {
+            try {
+              const finRes = await fetch(`${resolved}/api/upload_finalize`, {
+                method: 'POST',
+                headers: {
+                  'X-FlyShelf-Client': 'MobileCompanion',
+                  'X-Upload-Session': sessionId,
+                  'X-File-Name': encodeURIComponent(name),
+                  'X-Original-Date': NetworkClock.now().toString(),
+                  'X-Total-Chunks': totalChunks.toString(),
+                  'X-Source-Device': encodeURIComponent(deviceName || 'Mobile'),
+                  ...(pairingKeyRef.current ? { 'X-Pairing-Key': pairingKeyRef.current } : {}),
+                }
+              });
+              if (finRes.ok) { finalizeOk = true; }
+              else if (finAttempt === 2) throw new Error(`Finalize failed after 3 attempts: ${finRes.status}`);
+            } catch (finErr) {
+              if (finAttempt === 2) throw finErr;
+              await new Promise(r => setTimeout(r, 2000));
             }
-          });
-          if (!finRes.ok) throw new Error(`Finalize failed: ${finRes.status}`);
+          }
         } else {
           // ── Direct single POST (LAN or small Cloudflare files) ──
           const uploadUrl = `${resolved}/api/sync_file?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}&sourceDevice=${encodeURIComponent(deviceName || 'Mobile')}`;

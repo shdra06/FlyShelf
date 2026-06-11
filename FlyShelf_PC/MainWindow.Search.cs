@@ -556,8 +556,34 @@ namespace FlyShelf
 
                 OverflowPopup.PlacementTarget = MoreBtn;
                 OverflowPopup.IsOpen = true;
+
+                // Force popup HWND to be topmost — WPF popups in topmost windows
+                // sometimes render behind the parent window's content area.
+                Dispatcher.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        var source = (System.Windows.Interop.HwndSource)System.Windows.PresentationSource.FromVisual(OverflowPopup.Child);
+                        if (source != null)
+                        {
+                            var hwnd = source.Handle;
+                            SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
+                        }
+                    }
+                    catch { }
+                }, System.Windows.Threading.DispatcherPriority.Loaded);
             }
         }
+
+        // Win32 interop for popup z-order fix
+        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOACTIVATE = 0x0010;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
 
         private void ShortcutsBtn_Click(object sender, RoutedEventArgs e)
         {

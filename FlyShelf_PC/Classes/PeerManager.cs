@@ -256,11 +256,12 @@ namespace FlyShelf.Classes
                     // Guard: skip ghost entries with empty DeviceId or DeviceName
                     if (string.IsNullOrWhiteSpace(devId) || string.IsNullOrWhiteSpace(name)) continue;
 
-                    // Self-healing: If device is in the Firebase room but not in local paired list, trust it and auto-register
+                    // Security: Do NOT auto-register unknown devices — they must go through explicit pairing (QR/code).
+                    // Finding a device in the Firebase room is not sufficient proof of trust.
                     if (!pairedDeviceIds.Contains(devId) && !pairedDeviceNames.Contains(name))
                     {
-                        Logger.LogAction("PEER", $"⭐ Auto-registering trusted peer from Firebase room: {name} ({devId})");
-                        DevicePairingManager.TryPairDevice(_myPairingKey, devId, name, devId.Contains("PC") || devId.Contains("LAPTOP") || devId.Contains("DESKTOP") ? "PC" : "Mobile", "cloud");
+                        Logger.LogAction("PEER", $"⚠️ Unknown device in Firebase room (not paired): {name} ({devId}) — skipping. Use QR or code pairing to add.");
+                        continue;
                     }
 
                     totalPeers++;
@@ -436,11 +437,11 @@ namespace FlyShelf.Classes
             var pairedDeviceIds = new HashSet<string>(pairedDevices.Select(d => d.DeviceId), StringComparer.OrdinalIgnoreCase);
             var pairedDeviceNames = new HashSet<string>(pairedDevices.Select(d => d.DeviceName), StringComparer.OrdinalIgnoreCase);
 
-            // Self-healing: If device is in the Firebase room but not in local paired list, trust it and auto-register
+            // Security: Do NOT auto-register unknown devices during real-time updates
             if (!pairedDeviceIds.Contains(deviceId) && !pairedDeviceNames.Contains(deviceName))
             {
-                Logger.LogAction("PEER", $"⭐ Auto-registering trusted peer during real-time update: {deviceName} ({deviceId})");
-                DevicePairingManager.TryPairDevice(_myPairingKey, deviceId, deviceName, deviceId.Contains("PC") || deviceId.Contains("LAPTOP") || deviceId.Contains("DESKTOP") ? "PC" : "Mobile", "cloud");
+                Logger.LogAction("PEER", $"⚠️ Unknown device in real-time update (not paired): {deviceName} ({deviceId}) — ignoring.");
+                return;
             }
 
             Logger.LogAction("PEER", $"📡 Target URL update for {deviceName}: LAN={lan} CF={cf}");
@@ -470,8 +471,17 @@ namespace FlyShelf.Classes
                 _peers[deviceId] = peer;
             }
 
+            // Guard: don't tear down connection if a file transfer is in progress — update URLs and let transfer finish
+            if (peer.ActiveTransfers > 0)
+            {
+                Logger.LogAction("PEER", $"📡 {deviceName} URL update deferred — {peer.ActiveTransfers} active transfer(s) in progress");
+                if (!string.IsNullOrEmpty(lan)) peer.LanUrl = lan;
+                if (!string.IsNullOrEmpty(cf)) peer.CloudflareUrl = cf;
+                return;
+            }
+
             // Reset liveness and attempt targeted handshake
-            peer.IsAlive = false;
+            lock (peer.StateLock) { peer.IsAlive = false; peer.Transport = "offline"; }
             peer.ConsecutiveFailures = 0;
             try { peer.WsCts?.Cancel(); } catch { }
             try { peer.LiveSocket?.Dispose(); } catch { }

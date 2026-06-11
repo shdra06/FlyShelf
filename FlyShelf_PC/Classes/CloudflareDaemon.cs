@@ -19,6 +19,7 @@ namespace FlyShelf.Classes
         private const string TRUSTED_CF_HASH = "c2f4a3c3ea4c62eed562ede027d586a6044d35517e335e642f4e9783e651e4a3";
         private System.Timers.Timer _healthTimer;      // Periodic tunnel health monitor
         private int _quicErrorCount = 0;                 // Track consecutive QUIC/datagram failures for fast auto-restart
+        private readonly SemaphoreSlim _startLock = new SemaphoreSlim(1, 1); // Prevents concurrent StartTunnelCore from QUIC/exit/health triggers
 
         public string GlobalUrl { get; private set; } = "Offline";
         /// <summary>Previous tunnel URL — used to purge stale file entries from Firebase when URL changes.</summary>
@@ -58,9 +59,11 @@ namespace FlyShelf.Classes
         private async Task StartTunnelCore()
         {
             if (_stopped) return;
-
+            if (!await _startLock.WaitAsync(0)) { Logger.LogAction("CLOUDFLARE", "StartTunnelCore already in progress — skipping duplicate call"); return; }
             try
             {
+                try
+                {
                 string exePath = GetCloudflaredExePath();
                 bool isBundled = exePath.StartsWith(AppContext.BaseDirectory, StringComparison.OrdinalIgnoreCase);
 
@@ -167,8 +170,9 @@ namespace FlyShelf.Classes
                             _quicErrorCount++;
                             if (_quicErrorCount >= 5 && !_stopped)
                             {
+                                int quicCount = _quicErrorCount;
                                 _quicErrorCount = 0;
-                                Logger.LogAction("CLOUDFLARE", $"⚡ {_quicErrorCount + 5} QUIC failures detected — auto-restarting tunnel with protocol switch...");
+                                Logger.LogAction("CLOUDFLARE", $"⚡ {quicCount} QUIC failures detected — auto-restarting tunnel with protocol switch...");
                                 _consecutiveFailures++; // This triggers protocol toggle in StartTunnelCore
                                 StopHealthMonitor();
                                 GlobalUrl = "QUIC failing — restarting...";
@@ -377,13 +381,15 @@ namespace FlyShelf.Classes
                 KillExisting();
                 int retryDelay = GetRetryDelay();
                 ScheduleRetry(retryDelay);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("CLOUDFLARE_ERROR", $"Startup error: {ex.Message}");
+                    _consecutiveFailures++;
+                    ScheduleRetry(GetRetryDelay());
+                }
             }
-            catch (Exception ex)
-            {
-                Logger.LogAction("CLOUDFLARE_ERROR", $"Startup error: {ex.Message}");
-                _consecutiveFailures++;
-                ScheduleRetry(GetRetryDelay());
-            }
+            finally { _startLock.Release(); }
         }
 
         /// <summary>

@@ -559,6 +559,9 @@ namespace FlyShelf
                         this.Left = -20000;
                         this.Top = -20000;
 
+                        // Ensure pinning survived the WS_EX_APPWINDOW removal
+                        EnsureVirtualDesktopPinned();
+
                         // Open the clipboard — same as pressing Alt+C
                         ToggleMainClipboard();
                     }, System.Windows.Threading.DispatcherPriority.Background);
@@ -1052,6 +1055,9 @@ namespace FlyShelf
                 this.Left = -20000;
                 this.Top = -20000;
 
+                // Ensure pinning survived the WS_EX_APPWINDOW removal
+                EnsureVirtualDesktopPinned();
+
                 // Open the clipboard — same as pressing Alt+C
                 ToggleMainClipboard();
                 return;
@@ -1149,6 +1155,35 @@ namespace FlyShelf
                 CloseNotesPanel(immediate: true);
             if (_isTodoActive)
                 CloseTodoPanel(immediate: true);
+        }
+
+        /// <summary>
+        /// Verifies the app is still pinned to all virtual desktops and re-pins if not.
+        /// Call this before any spawn to guard against accidental unpinning from
+        /// style changes, OS updates, or other edge cases.
+        /// </summary>
+        private void EnsureVirtualDesktopPinned()
+        {
+            try
+            {
+                string appId = "FlyShelf.Clipboard";
+                var pinnedAppsType = Type.GetTypeFromCLSID(new Guid("B5A399E7-1C87-46B8-88E9-FC5747B171BD"));
+                if (pinnedAppsType == null) return;
+
+                var pinnedApps = Activator.CreateInstance(pinnedAppsType) as Classes.NativeMethods.IVirtualDesktopPinnedApps;
+                if (pinnedApps == null) return;
+
+                int hr = pinnedApps.IsAppIdPinned(appId, out int isPinned);
+                if (hr == 0 && isPinned == 0)
+                {
+                    pinnedApps.PinAppID(appId);
+                    Classes.Logger.LogAction("DESKTOP", "Re-pinned FlyShelf AppID to all virtual desktops (was unpinned!)");
+                }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("DESKTOP_ERR", $"EnsureVirtualDesktopPinned failed: {ex.Message}");
+            }
         }
 
         /// <summary>

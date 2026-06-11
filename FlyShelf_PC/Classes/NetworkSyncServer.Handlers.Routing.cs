@@ -537,13 +537,15 @@ namespace FlyShelf.Classes
                                     var lastProgressUpdate = DateTime.MinValue;
                                     try
                                     {
+                                        // 5-minute timeout prevents infinite hang if sender declares large fileSize but stops sending
+                                        using var wsFileCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
                                         using (var fileFs = new FileStream(finalPath, FileMode.Create, FileAccess.Write, FileShare.None, 65536, true))
                                         {
                                             while (bytesReceived < fileSize)
                                             {
                                                 long remain = fileSize - bytesReceived;
                                                 int toRead = (int)Math.Min(buffer.Length, remain);
-                                                var chunkResult = await ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, toRead), CancellationToken.None);
+                                                var chunkResult = await ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, toRead), wsFileCts.Token);
                                                 if (chunkResult.MessageType == WebSocketMessageType.Close)
                                                 {
                                                     throw new WebSocketException("WebSocket closed during binary file transmission.");

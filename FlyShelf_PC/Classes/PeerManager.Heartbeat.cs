@@ -49,7 +49,7 @@ namespace FlyShelf.Classes
                     }
                     else
                     {
-                        peer.ConsecutiveFailures++;
+                        peer.IncrementFailures();
                         if (peer.ConsecutiveFailures >= MAX_FAILURES)
                         {
                             Logger.LogAction("PEER", $"💀 {peer.DeviceName} failed {MAX_FAILURES} heartbeats — marking dead");
@@ -149,13 +149,16 @@ namespace FlyShelf.Classes
         /// </summary>
         private async Task HandlePeerDeath(PeerConnection peer)
         {
-            // FIX R8: Death guard — prevent duplicate HandlePeerDeath from concurrent threads
+            // Atomic check-and-set: prevent duplicate HandlePeerDeath from concurrent threads
             // (HeartbeatLoop, MonitorWebSocket, and HandlePeerFailure can all trigger this)
-            if (!peer.IsAlive) return;
-
-            string oldTransport = peer.Transport;
-            peer.IsAlive = false;
-            peer.Transport = "offline";
+            string oldTransport;
+            lock (peer.StateLock)
+            {
+                if (!peer.IsAlive) return; // Already dead — another thread got here first
+                oldTransport = peer.Transport;
+                peer.IsAlive = false;
+                peer.Transport = "offline";
+            }
             peer.ConsecutiveFailures = 0;
 
             // Close WebSocket
@@ -191,7 +194,7 @@ namespace FlyShelf.Classes
         /// </summary>
         private void HandlePeerFailure(PeerConnection peer, string reason)
         {
-            peer.ConsecutiveFailures++;
+            peer.IncrementFailures();
             if (peer.ConsecutiveFailures >= MAX_FAILURES)
             {
                 Logger.LogAction("PEER", $"💀 {peer.DeviceName} transfer failures hit {MAX_FAILURES} — marking dead ({reason})");
