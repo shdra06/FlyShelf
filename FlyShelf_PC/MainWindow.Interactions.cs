@@ -398,12 +398,39 @@ namespace FlyShelf
         public void ToggleMainClipboard()
         {
             // ═══ NOTES/TODO DISMISS ═══
-            // If a panel is visible, dismiss it. AnimateAndHide closes the panel
-            // and saves data automatically before moving the window offscreen.
             if ((_isNotesActive || _isTodoActive) && _isCurrentlySummoned && !_isAnimatingHide)
             {
-                AnimateAndHide();
-                return;
+                // Check if we're on a different desktop than the Notes/Todo window
+                bool panelOnOtherDesktop = false;
+                try
+                {
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                        panelOnOtherDesktop = !IsWindowOnCurrentVirtualDesktop(hwnd);
+                }
+                catch { }
+
+                if (panelOnOtherDesktop)
+                {
+                    // Different desktop: close panel, mark as desktop switch, reset state,
+                    // and FALL THROUGH to normal clipboard spawn path below.
+                    if (_isNotesActive) CloseNotesPanel(immediate: true);
+                    if (_isTodoActive) CloseTodoPanel(immediate: true);
+                    _desktopSwitchedSinceLastDismiss = true;
+                    _isCurrentlySummoned = false;
+                    _isAnimatingHide = false;
+                    this.Opacity = 0;
+                    this.BeginAnimation(OpacityProperty, null);
+                    this.Left = -20000;
+                    this.Top = -20000;
+                    // Don't return — fall through to clipboard show path
+                }
+                else
+                {
+                    // Same desktop: just dismiss the panel normally
+                    AnimateAndHide();
+                    return;
+                }
             }
 
             // ═══ VIRTUAL DESKTOP CHECK ═══
@@ -428,9 +455,7 @@ namespace FlyShelf
             }
 
             // ═══ ZOMBIE STATE DETECTOR ═══
-            // ALWAYS run when the window is offscreen and invisible, regardless of what
-            // the VDM API says. IsWindowOnCurrentVirtualDesktop can time out (60ms) or
-            // return unreliable results for pinned/overlay windows. The physical state
+            // ALWAYS run when window is offscreen and invisible. The physical state
             // (Left < -10000, Opacity < 0.01) is the ground truth.
             bool zombieRecovered = false;
             if (!_isCurrentlySummoned && this.Left < -10000 && this.Opacity < 0.01)
@@ -439,35 +464,42 @@ namespace FlyShelf
                 if (_isNotesActive) CloseNotesPanel(immediate: true);
                 if (_isTodoActive) CloseTodoPanel(immediate: true);
 
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                if (hwnd != IntPtr.Zero)
+                if (_desktopSwitchedSinceLastDismiss)
                 {
-                    // ═══ FAST DESKTOP RESET using native Win32 ═══
-                    // 1. Hide via native call (no WPF layout pass)
-                    Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
+                    // ═══ FAST DESKTOP RESET (only after desktop switch) ═══
+                    // Forces Windows Shell to re-associate the window with the current VD.
+                    // Only needed when a desktop switch happened — on the same desktop,
+                    // the window is already correctly associated and this is wasteful.
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        // 1. Hide via native call (no WPF layout pass)
+                        Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
 
-                    // 2. Add WS_EX_APPWINDOW to force desktop association with current VD
-                    int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-                    SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle | WS_EX_APPWINDOW) & ~WS_EX_NOACTIVATE);
+                        // 2. Add WS_EX_APPWINDOW to force desktop association with current VD
+                        int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                        SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle | WS_EX_APPWINDOW) & ~WS_EX_NOACTIVATE);
 
-                    // 3. Show via native call (creates desktop association because APPWINDOW is set)
-                    Classes.NativeMethods.ShowWindow(hwnd, 5 /*SW_SHOW*/);
+                        // 3. Show via native call (creates desktop association because APPWINDOW is set)
+                        Classes.NativeMethods.ShowWindow(hwnd, 5 /*SW_SHOW*/);
 
-                    // 4. Immediately restore overlay style — desktop association is already locked in
-                    exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
-                    SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle & ~WS_EX_APPWINDOW) | WS_EX_NOACTIVATE);
+                        // 4. Immediately restore overlay style — desktop association is already locked in
+                        exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                        SetWindowLong(hwnd, GWL_EXSTYLE, (exStyle & ~WS_EX_APPWINDOW) | WS_EX_NOACTIVATE);
 
-                    // 5. Single SetWindowPos: apply style change + force topmost in one call
-                    Classes.NativeMethods.SetWindowPos(hwnd,
-                        -1 /*HWND_TOPMOST*/, 0, 0, 0, 0,
-                        Classes.NativeMethods.SWP_NOMOVE | Classes.NativeMethods.SWP_NOSIZE |
-                        Classes.NativeMethods.SWP_NOACTIVATE | 0x0020 /*SWP_FRAMECHANGED*/);
+                        // 5. Single SetWindowPos: apply style change + force topmost in one call
+                        Classes.NativeMethods.SetWindowPos(hwnd,
+                            -1 /*HWND_TOPMOST*/, 0, 0, 0, 0,
+                            Classes.NativeMethods.SWP_NOMOVE | Classes.NativeMethods.SWP_NOSIZE |
+                            Classes.NativeMethods.SWP_NOACTIVATE | 0x0020 /*SWP_FRAMECHANGED*/);
+                    }
+                    Classes.Logger.LogAction("VD_DIAG", "ZOMBIE: Fast desktop reset done (desktop switch detected).");
                 }
 
+                _desktopSwitchedSinceLastDismiss = false;
                 _isAnimatingHide = false;
                 _isCurrentlySummoned = false;
                 zombieRecovered = true;
-                Classes.Logger.LogAction("VD_DIAG", "ZOMBIE: Fast desktop reset done.");
             }
 
             // If the overlay is already visible and in Mode 1, hide it

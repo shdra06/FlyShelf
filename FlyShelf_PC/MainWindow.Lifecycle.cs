@@ -205,6 +205,18 @@ namespace FlyShelf
                                 }
                             }
 
+                            // 3. Ultimate fallback: check if OUR OWN window is still on the current desktop.
+                            // This is the most reliable signal — especially when Notes/Todo mode adds
+                            // WS_EX_APPWINDOW, tying the window to a specific desktop.
+                            if (!desktopSwitched)
+                            {
+                                int hr = localVdm.IsWindowOnCurrentVirtualDesktop(myHwnd, out int onCurrent);
+                                if (hr == 0 && onCurrent == 0)
+                                {
+                                    desktopSwitched = true;
+                                }
+                            }
+
                             if (desktopSwitched)
                             {
                                 // Capture the spawn generation BEFORE dispatching to UI thread.
@@ -227,6 +239,7 @@ namespace FlyShelf
                                         if (_isTodoActive)
                                             CloseTodoPanel(immediate: true);
 
+                                        _desktopSwitchedSinceLastDismiss = true;
                                         AnimateAndHide();
                                     }
                                 });
@@ -243,6 +256,7 @@ namespace FlyShelf
         private bool _isShowAnimating = false;
         private bool _isApplyingTheme = false;
         private volatile int _spawnGeneration = 0; // Incremented on each spawn to invalidate stale callbacks
+        private bool _desktopSwitchedSinceLastDismiss = false; // True when dismiss was triggered by a desktop switch
 
         /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
         private void PlayShowAnimation()
@@ -287,6 +301,8 @@ namespace FlyShelf
 
             // ═══ CRITICAL: Set unsummoned IMMEDIATELY ═══
             _isCurrentlySummoned = false;
+            // Note: _desktopSwitchedSinceLastDismiss is set by ForegroundChangedCallback
+            // BEFORE calling AnimateAndHide. For normal dismiss (Alt+C), it stays false.
 
             // ═══ CLOSE NOTES/TODO BEFORE HIDING ═══
             // Must close panels HERE, not in HideWindowInternal.
