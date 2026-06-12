@@ -32,7 +32,7 @@ namespace FlyShelf.Classes
         private const double TouchpadMul         = 0.09;   // Touchpad micro-step scale multiplier (precise, slightly controlled)
         private const double MouseMul            = 0.06;   // Mouse wheel step scale multiplier (reduced from 0.45 to target ~120px scroll distance per notch)
         private const double MinImpulse          = 0.3;    // Minimum impulse threshold for micro-scrolls
-        private const double MinVelocity         = 0.05;   // Velocity below this → complete stop (prevents sub-pixel crawl and end-of-scroll micro jitter)
+        private const double MinVelocity         = 0.20;   // Velocity below this → complete stop (raised from 0.05 to cut the imperceptible braking tail faster)
         private const double DeltaCapTouchpad    = 120.0;  // Clamps raw trackpad delta packets to absorb speed spikes (raised from 80 to allow faster swipes)
         private const double DeltaCapMouse       = 280.0;  // Clamps raw mouse delta packets
         private const double DirectionBrakeMul   = 0.35;   // Retained velocity on reversal (raised from 0.2 — touchpad finger noise causes false reversals)
@@ -298,22 +298,31 @@ namespace FlyShelf.Classes
                 }
 
                 // ═══ SYNCHRONIZE WITH WPF LAYOUT SHIFTS ═══
-                // If WPF's layout engine shifted the viewport offset (e.g. due to virtualization 
-                // recycling or asynchronous image loading changes), absorb the delta to prevent 
-                // fighting the layout engine, which causes scroll friction and jitter.
+                // WPF's VirtualizingPanel causes micro layout shifts when realizing items,
+                // especially when scrolling UP (items above viewport need realization).
+                // Small shifts (< 5px): Don't absorb into TrueOffset — just resync tracking.
+                //   Absorbing them fights the scroll and causes upward choppiness.
+                // Large shifts (> 5px): Absorb into TrueOffset to prevent position jumps
+                //   from async image loads or major layout changes.
                 double actualOffset = sv.VerticalOffset;
                 double wpfDelta = actualOffset - state.LastSetOffset;
-                if (Math.Abs(wpfDelta) > 0.001)
+                if (Math.Abs(wpfDelta) > 5.0)
                 {
+                    // Large shift — absorb to prevent visible jump
                     state.TrueOffset += wpfDelta;
+                    state.LastSetOffset = actualOffset;
+                }
+                else if (Math.Abs(wpfDelta) > 0.001)
+                {
+                    // Small virtualization shift — just resync, don't fight the scroll
+                    state.LastSetOffset = actualOffset;
                 }
 
-                // ═══ SMOOTH VELOCITY BLENDING ═══
-                // Instead of applying impulse as an instant velocity jump, blend toward
-                // the target velocity using exponential smoothing (EMA). This creates:
-                // 1. Smooth speed transitions when the user accelerates/decelerates
-                // 2. Natural direction reversals that curve through zero velocity
-                //    instead of snapping to the opposite direction
+                // ═══ SMOOTH VELOCITY BLENDING (Two-Phase Reversal) ═══
+                // For direction changes, instead of blending through zero in 2 frames:
+                // Phase 1: Smoothly DECELERATE current direction toward zero
+                // Phase 2: Once near zero, smoothly ACCELERATE in new direction
+                // This creates a natural "slow → stop → go" arc.
                 if (state.PendingImpulse != 0)
                 {
                     double pending = state.PendingImpulse;
@@ -322,14 +331,28 @@ namespace FlyShelf.Classes
                     double targetVelocity = state.Velocity - pending;
                     targetVelocity = Math.Clamp(targetVelocity, -MaxVelocity, MaxVelocity);
 
-                    // Detect direction reversal
-                    bool isReversal = state.Velocity != 0 && Math.Sign(targetVelocity) != Math.Sign(state.Velocity);
+                    // Detect if user is scrolling AGAINST current motion.
+                    // Only trigger for significant opposing velocity — residual micro-velocity
+                    // (< 2.5) should NOT cause braking or upward scrolling feels sluggish.
+                    bool isReversal = Math.Abs(state.Velocity) > 2.5 &&
+                                     Math.Sign(targetVelocity) != Math.Sign(state.Velocity);
 
-                    // Blend rate: lower for reversals (smoother curve through zero),
-                    // higher for same-direction (responsive acceleration)
-                    double blendRate = isReversal ? 0.25 : 0.45;
+                    if (isReversal)
+                    {
+                        // PHASE 1: Fast brake toward zero.
+                        // 0.40x per frame = crosses zero in ~2 frames (33ms) — responsive
+                        state.Velocity *= 0.40;
 
-                    state.Velocity += (targetVelocity - state.Velocity) * blendRate;
+                        // Clean zero-crossing
+                        if (Math.Abs(state.Velocity) < 0.3)
+                            state.Velocity = 0;
+                    }
+                    else
+                    {
+                        // PHASE 2 (or same-direction): Responsive acceleration blend
+                        state.Velocity += (targetVelocity - state.Velocity) * 0.55;
+                    }
+
                     state.Velocity = Math.Clamp(state.Velocity, -MaxVelocity, MaxVelocity);
                 }
 
@@ -381,12 +404,10 @@ namespace FlyShelf.Classes
                     state.InCoastPhase = false;
 
                     // ═══ MICRO-SCROLL DIRECT TRACKING ═══
-                    // For very small touchpad gestures (|velocity| < 1.5 px/frame), bypass the
-                    // velocity/friction animation entirely and apply displacement directly.
-                    // At sub-1px velocities, WPF's device-pixel snapping causes visible "steps" —
-                    // the content sits at the same pixel for several frames then jumps.
-                    // Direct tracking gives smooth 1:1 finger-following for micro-adjustments.
-                    if (state.IsTouchpad && Math.Abs(state.Velocity) < 1.5 && state.PendingImpulse != 0)
+                    // Only for truly sub-pixel movement (< 0.3 px/frame) where WPF's
+                    // device-pixel snapping makes the velocity system produce visible steps.
+                    // Everything above 0.3 flows through the smooth velocity+friction system.
+                    if (state.IsTouchpad && Math.Abs(state.Velocity) < 0.3 && state.PendingImpulse != 0)
                     {
                         // Apply the impulse directly as displacement (1:1 tracking)
                         double directDisplacement = -state.PendingImpulse * (TargetFrameMs / 1.0);
@@ -394,8 +415,8 @@ namespace FlyShelf.Classes
                         state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
                         sv.ScrollToVerticalOffset(state.TrueOffset);
                         state.LastSetOffset = state.TrueOffset;
-                        // Keep velocity low — don't accumulate momentum from micro-scrolls
-                        state.Velocity = state.Velocity * 0.5;
+                        // Let velocity build naturally from micro-scrolls
+                        state.Velocity = 0;
                         anyAnimating = true;
                     }
                     else
@@ -413,8 +434,8 @@ namespace FlyShelf.Classes
                         if (state.IsTouchpad)
                         {
                             double absV = Math.Abs(state.Velocity);
-                            double slowFriction = 0.97;  // Tight control for precise slow scrolling
-                            double fastFriction = 0.93;  // Momentum glide for fast swipes
+                            double slowFriction = 0.96;  // Smooth control for slow/medium scrolling
+                            double fastFriction = 0.93;  // Fluid momentum for fast swipes
                             double t = Math.Clamp((absV - 3.0) / 9.0, 0.0, 1.0);
                             t = t * t * (3.0 - 2.0 * t); // Smoothstep
                             friction = slowFriction + (fastFriction - slowFriction) * t;
@@ -438,7 +459,7 @@ namespace FlyShelf.Classes
                         // smooth animation (< 0.8 px/frame → total coast ~2px), stop immediately.
                         // This prevents step-wise micro-animations — micro-scrolls just stop
                         // cleanly where the finger left off.
-                        if (state.IsTouchpad && Math.Abs(state.Velocity) < 0.8)
+                        if (state.IsTouchpad && Math.Abs(state.Velocity) < 0.50)
                         {
                             state.Velocity = 0.0;
                             state.TrueOffset = Math.Round(state.TrueOffset);
@@ -462,7 +483,7 @@ namespace FlyShelf.Classes
                         if (state.IsTouchpad)
                         {
                             double absV = Math.Abs(state.Velocity);
-                            double slowFriction = 0.97;
+                            double slowFriction = 0.96;
                             double fastFriction = 0.93;
                             double t = Math.Clamp((absV - 3.0) / 9.0, 0.0, 1.0);
                             t = t * t * (3.0 - 2.0 * t);
@@ -499,26 +520,20 @@ namespace FlyShelf.Classes
                     sv.ScrollToVerticalOffset(state.TrueOffset);
                     state.LastSetOffset = state.TrueOffset;
 
-                    // ═══ EARLY CLEARTYPE RESTORATION ═══
-                    // At low velocity (< 2 px/frame), text barely moves — ClearType shimmer
-                    // is imperceptible but Grayscale blur IS visible, making the braking phase
-                    // look "sluggish." Switch back to sharp ClearType early for crisp text
-                    // during the final deceleration, creating a premium "settling" feel.
-                    if (Math.Abs(state.Velocity) < 2.0)
-                    {
-                        DisableStaticCanvas(sv); // Restore ClearType
-                    }
-
-                    // Stop condition: velocity is imperceptible (< 0.05 px/frame)
-                    if (Math.Abs(state.Velocity) < MinVelocity)
+                    // Stop condition: velocity is imperceptible (< 0.5 px/frame = 30px/sec)
+                    // No Math.Round — rounding snaps position by up to 0.5px which causes
+                    // a visible jitter on the final frame. Just stop at the exact sub-pixel
+                    // position. ClearType is restored HERE (not mid-coast) to avoid a
+                    // mid-deceleration text re-render shift.
+                    if (Math.Abs(state.Velocity) < 0.50)
                     {
                         state.Velocity = 0.0;
-                        state.TrueOffset = Math.Round(state.TrueOffset);
                         state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
                         sv.ScrollToVerticalOffset(state.TrueOffset);
                         state.LastSetOffset = state.TrueOffset;
                         state.IsAnimating = false;
                         state.InCoastPhase = false;
+                        DisableStaticCanvas(sv); // Restore ClearType only at full stop
                         completed.Add(sv);
                     }
                     else

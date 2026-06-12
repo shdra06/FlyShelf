@@ -391,20 +391,6 @@ namespace FlyShelf
             this.BeginAnimation(OpacityProperty, _cachedOpacityAnim);
             _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, _cachedSlideInAnim);
 
-            // FIRST-SPAWN FIX: WPF's composition cache is cold on first render —
-            // the initial frame may show a "half render box" with incomplete visuals
-            // (missing wallpaper, partially-drawn cards). Scrolling/clicking fixes it
-            // because those trigger InvalidateVisual internally. Do the same explicitly:
-            // queue a full visual tree repaint after the first animated frame renders.
-            if (!_hasCompletedFirstSpawn)
-            {
-                Dispatcher.InvokeAsync(() =>
-                {
-                    RootContent.InvalidateVisual();
-                    ShelfListView.InvalidateVisual();
-                }, System.Windows.Threading.DispatcherPriority.Background);
-            }
-
             // Detect animation completion on the render thread without unfreezing anything.
             // Check when the slide Y reaches 0 (end of 280ms slide animation).
             int capturedGen = _spawnGeneration;
@@ -439,6 +425,44 @@ namespace FlyShelf
                 _cachedSlideTransform.Y = 0;
             };
             System.Windows.Media.CompositionTarget.Rendering += completionHandler;
+        }
+
+        /// <summary>
+        /// Fixes the "half render box" on first spawn by mimicking what user scroll
+        /// interaction does — nudge the ScrollViewer offset by 1px and back. This forces
+        /// WPF's composition thread to fully re-render the viewport from its cold cache.
+        /// </summary>
+        private void ForceFirstSpawnRepaint()
+        {
+            // Two deferred dispatches: first waits for layout, second for render.
+            // This ensures the ScrollViewer's visual tree is fully realized before nudging.
+            Dispatcher.InvokeAsync(() =>
+            {
+                Dispatcher.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        var sv = GetShelfScrollViewer();
+                        if (sv != null)
+                        {
+                            double offset = sv.VerticalOffset;
+                            sv.ScrollToVerticalOffset(offset + 1);
+                            // Dispatch the restore at lower priority so the +1 actually renders
+                            Dispatcher.InvokeAsync(() =>
+                            {
+                                sv.ScrollToVerticalOffset(offset);
+                            }, System.Windows.Threading.DispatcherPriority.Background);
+                        }
+                        else
+                        {
+                            // Fallback: invalidate the entire visual tree
+                            RootContent.InvalidateVisual();
+                            ShelfListView.InvalidateVisual();
+                        }
+                    }
+                    catch { }
+                }, System.Windows.Threading.DispatcherPriority.Loaded);
+            }, System.Windows.Threading.DispatcherPriority.Render);
         }
 
         // PERF: Deferred mascot/GIF resume timer — mascot starts 1s after spawn, not during spawn

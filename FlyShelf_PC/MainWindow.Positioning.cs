@@ -341,6 +341,22 @@ namespace FlyShelf
             this.BeginAnimation(OpacityProperty, null);
             this.Opacity = 0; // TRUE zero — completely invisible during positioning to prevent first-spawn flash
             Classes.SpawnProfiler.Instance.Mark("CLEAR_ANIM_CLOCKS");
+
+            // ═══ DWM CLOAK: BULLETPROOF JITTER MASK ═══
+            // Cloak the window at the DWM compositor level. While cloaked, the window is
+            // completely invisible regardless of what WPF does internally — layout shifts,
+            // position changes, size recalculations, RenderTransform resets — NOTHING is
+            // visible. We uncloak just before the animation starts.
+            try
+            {
+                var hwndCloak = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwndCloak != IntPtr.Zero)
+                {
+                    int cloakVal = 1;
+                    DwmSetWindowAttribute(hwndCloak, DWMWA_CLOAK, ref cloakVal, sizeof(int));
+                }
+            }
+            catch { }
             
             // Reset the cached slide transform instead of setting RenderTransform=null.
             // Setting null invalidates the entire render tree; resetting Y is a no-op.
@@ -405,8 +421,23 @@ namespace FlyShelf
                     if (totalFramesSeen > maxFrames)
                     {
                         System.Windows.Media.CompositionTarget.Rendering -= renderHandler;
+                        bool wasFirstSpawn = !_hasCompletedFirstSpawn;
                         _hasCompletedFirstSpawn = true;
+
+                        // Uncloak on timeout too
+                        try
+                        {
+                            var hwndTimeout = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                            if (hwndTimeout != IntPtr.Zero)
+                            {
+                                int uncloakVal = 0;
+                                DwmSetWindowAttribute(hwndTimeout, DWMWA_CLOAK, ref uncloakVal, sizeof(int));
+                            }
+                        }
+                        catch { }
+
                         PlayShowAnimation();
+                        if (wasFirstSpawn) ForceFirstSpawnRepaint();
                         Classes.SpawnProfiler.Instance.Mark("PLAY_SHOW_ANIMATION");
                         return;
                     }
@@ -425,8 +456,23 @@ namespace FlyShelf
                         if (framesAtCorrectPos >= requiredFrames)
                         {
                             System.Windows.Media.CompositionTarget.Rendering -= renderHandler;
+                            bool wasFirstSpawn = !_hasCompletedFirstSpawn;
                             _hasCompletedFirstSpawn = true;
+
+                            // ═══ DWM UNCLOAK: Window is positioned and settled ═══
+                            try
+                            {
+                                var hwndUncloak = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                                if (hwndUncloak != IntPtr.Zero)
+                                {
+                                    int uncloakVal = 0;
+                                    DwmSetWindowAttribute(hwndUncloak, DWMWA_CLOAK, ref uncloakVal, sizeof(int));
+                                }
+                            }
+                            catch { }
+
                             PlayShowAnimation();
+                            if (wasFirstSpawn) ForceFirstSpawnRepaint();
                             Classes.SpawnProfiler.Instance.Mark("PLAY_SHOW_ANIMATION");
                         }
                     }
@@ -435,6 +481,18 @@ namespace FlyShelf
             }
             else
             {
+                // Uncloak for no-animation path
+                try
+                {
+                    var hwndNoAnim = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwndNoAnim != IntPtr.Zero)
+                    {
+                        int uncloakVal = 0;
+                        DwmSetWindowAttribute(hwndNoAnim, DWMWA_CLOAK, ref uncloakVal, sizeof(int));
+                    }
+                }
+                catch { }
+
                 this.Opacity = 1.0;
                 _isEdgeLocked = true;
                 UpdatePositionToLockedBottomEdge();
