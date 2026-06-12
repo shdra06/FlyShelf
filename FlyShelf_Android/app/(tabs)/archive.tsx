@@ -501,7 +501,7 @@ export default function ConnectScreen() {
     setUploadProgress({});
 
     const batchName = buildBatchName();
-    const isCloudflare = useRelay || targetNode.connectionType === 'cloudflare' || targetNode.connectionType === 'cloudflare-unverified';
+    const isCloudflare = useRelay || targetNode.connectionType === 'cloudflare';
     const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks (base64 overhead ~13MB in memory, safe for low-RAM devices)
 
     const processUpload = async (asset: any): Promise<void> => {
@@ -603,6 +603,22 @@ export default function ConnectScreen() {
         let chunkDone = false;
         while (chunkAttempt < 3 && !chunkDone) {
           chunkAttempt++;
+          // Re-resolve URL on retry (tunnel URL may have changed)
+          if (chunkAttempt > 1 && baseUrl.includes('trycloudflare.com')) {
+            try {
+              const res = await fetch(`${baseUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKey }, signal: AbortSignal.timeout(3000) });
+              if (!res.ok) {
+                // Health check failed — try to re-discover from other available devices
+                const allDevs = [...localDevices, ...globalDevices];
+                const freshPc = allDevs.find(d => d.DeviceType === 'PC' && d.resolvedUrl && d.connectionType !== 'sync-only' && d.resolvedUrl !== baseUrl);
+                if (freshPc) baseUrl = freshPc.resolvedUrl;
+              }
+            } catch {
+              const allDevs = [...localDevices, ...globalDevices];
+              const freshPc = allDevs.find(d => d.DeviceType === 'PC' && d.resolvedUrl && d.connectionType !== 'sync-only' && d.resolvedUrl !== baseUrl);
+              if (freshPc) baseUrl = freshPc.resolvedUrl;
+            }
+          }
           try {
             const res = await FileSystem.uploadAsync(`${baseUrl}/api/upload_chunk`, chunkTempUri, {
               httpMethod: 'POST',
@@ -722,6 +738,7 @@ export default function ConnectScreen() {
   const DeviceCard = ({ device, type }: { device: any, type: 'local' | 'global' }) => {
     const isPC = device.DeviceType === 'PC';
     const hasCloudflare = device.connectionType === 'cloudflare';
+    const isUnverifiedCloudflare = device.connectionType === 'cloudflare-unverified';
     const isSyncOnly = device.connectionType === 'sync-only';
     
     const getDeviceUrls = () => {
@@ -824,7 +841,7 @@ export default function ConnectScreen() {
             <Text style={[s.title, { fontSize: 22 }]}>Send to {selectedTarget.DeviceName}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
               <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: selectedTarget.connectionType === 'local' ? '#10B981' : '#3B82F6' }} />
-              <Text style={{ color: '#8A8F98', fontSize: 11 }}>{selectedTarget.connectionType === 'local' ? 'Local Network' : selectedTarget.connectionType === 'cloudflare' ? 'Via Cloudflare' : 'Global Sync'}</Text>
+              <Text style={{ color: selectedTarget.connectionType === 'cloudflare-unverified' ? '#F59E0B' : '#8A8F98', fontSize: 11 }}>{selectedTarget.connectionType === 'local' ? 'Local Network' : selectedTarget.connectionType === 'cloudflare' ? 'Via Cloudflare' : selectedTarget.connectionType === 'cloudflare-unverified' ? '⚠️ Cloudflare (Unverified)' : 'Global Sync'}</Text>
             </View>
           </View>
         </View>

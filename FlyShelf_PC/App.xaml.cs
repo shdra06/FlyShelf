@@ -317,7 +317,22 @@ public partial class App : Application
                         }
                         
                         FlyShelf.Classes.Logger.DumpNetworkDiagnostics();
-                        FlyShelf.Classes.Logger.LogAction("POWER", "✅ Post-sleep recovery complete — Cloudflare will auto-restart via health monitor");
+                        FlyShelf.Classes.Logger.LogAction("POWER", "✅ Post-sleep recovery complete — forcing immediate tunnel health check");
+
+                        // Force immediate tunnel health check on wake — don't wait 4 minutes for health timer
+                        try
+                        {
+                            var srvCheck = FlyShelf.Classes.NetworkSyncServer.Instance;
+                            if (srvCheck != null)
+                            {
+                                _ = System.Threading.Tasks.Task.Run(async () =>
+                                {
+                                    await System.Threading.Tasks.Task.Delay(3000); // Let network stack fully stabilize
+                                    srvCheck.ForceCheckTunnelHealth();
+                                });
+                            }
+                        }
+                        catch { }
                     });
                 }
             };

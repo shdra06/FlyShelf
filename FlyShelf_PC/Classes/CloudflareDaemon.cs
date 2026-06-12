@@ -21,8 +21,11 @@ namespace FlyShelf.Classes
         private System.Timers.Timer _healthTimer;      // Periodic tunnel health monitor
         private int _quicErrorCount = 0;                 // Track consecutive QUIC/datagram failures for fast auto-restart
         private readonly SemaphoreSlim _startLock = new SemaphoreSlim(1, 1); // Prevents concurrent StartTunnelCore from QUIC/exit/health triggers
+        private int _healthCheckCount = 0;                // Counts health ticks for periodic public URL check
+        private long _lastRetryScheduledTicks;             // Debounce: prevents multiple queued retries
 
-        public string GlobalUrl { get; private set; } = "Offline";
+        private volatile string _globalUrl = "Offline";
+        public string GlobalUrl { get => _globalUrl; private set => _globalUrl = value; }
         /// <summary>Previous tunnel URL — used to purge stale file entries from Firebase when URL changes.</summary>
         public string PreviousGlobalUrl { get; private set; } = "";
         /// <summary>
@@ -30,7 +33,8 @@ namespace FlyShelf.Classes
         /// False if verification was inconclusive (HTTP 400/530/timeout).
         /// CloudDiscoveryManager checks this before using the URL for file downloads.
         /// </summary>
-        public bool IsTunnelVerified { get; private set; } = false;
+        private volatile bool _isTunnelVerified;
+        public bool IsTunnelVerified { get => _isTunnelVerified; private set => _isTunnelVerified = value; }
         public event Action<string> GlobalUrlUpdated;
 
         public async Task StartAsync(int localPort)
@@ -402,6 +406,7 @@ namespace FlyShelf.Classes
         {
             StopHealthMonitor();
             _healthFailCount = 0;
+            _healthCheckCount = 0;
             _healthTimer = new System.Timers.Timer(60_000); // Every 60s
             _healthTimer.Elapsed += async (s, e) =>
             {
@@ -437,6 +442,27 @@ namespace FlyShelf.Classes
                     Logger.LogAction("CLOUDFLARE HEALTH", $"Ping failed ({_healthFailCount}/3): {ex.Message}");
                 }
 
+                // Every 5th check, verify the public URL too to detect edge failures
+                _healthCheckCount++;
+                if (_healthCheckCount % 5 == 0 && !string.IsNullOrEmpty(GlobalUrl) && GlobalUrl.Contains("trycloudflare.com"))
+                {
+                    try
+                    {
+                        using var publicClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                        var publicResp = await publicClient.GetAsync(GlobalUrl + "/api/health");
+                        if (!publicResp.IsSuccessStatusCode)
+                        {
+                            Logger.LogAction("CLOUDFLARE", "Public URL health check failed — tunnel may be stale");
+                            _healthFailCount++;
+                        }
+                    }
+                    catch
+                    {
+                        Logger.LogAction("CLOUDFLARE", "Public URL unreachable — scheduling restart");
+                        _healthFailCount++;
+                    }
+                }
+
                 if (_healthFailCount >= 3)
                 {
                     Logger.LogAction("CLOUDFLARE HEALTH", "🔄 Tunnel appears dead — auto-restarting...");
@@ -461,6 +487,46 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
+        /// Forces an immediate tunnel health check — called on wake from sleep
+        /// to avoid waiting up to 60s for the periodic health timer.
+        /// If the tunnel is dead, triggers a restart immediately.
+        /// </summary>
+        public async void ForceCheckTunnelHealth()
+        {
+            if (_stopped || string.IsNullOrEmpty(GlobalUrl) || !GlobalUrl.Contains("trycloudflare.com"))
+            {
+                Logger.LogAction("CLOUDFLARE HEALTH", "Force check skipped — tunnel not active");
+                return;
+            }
+            Logger.LogAction("CLOUDFLARE HEALTH", "⚡ Force health check triggered (post-sleep)");
+            try
+            {
+                using var client = new HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
+                var resp = await client.GetAsync($"http://localhost:{_localPort}/api/health");
+                if (resp.IsSuccessStatusCode)
+                {
+                    Logger.LogAction("CLOUDFLARE HEALTH", "✅ Force check passed — tunnel is alive");
+                    _healthFailCount = 0;
+                    return;
+                }
+                Logger.LogAction("CLOUDFLARE HEALTH", $"Force check failed: HTTP {(int)resp.StatusCode}");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("CLOUDFLARE HEALTH", $"Force check failed: {ex.Message}");
+            }
+            // Tunnel is dead — restart immediately
+            Logger.LogAction("CLOUDFLARE HEALTH", "🔄 Post-sleep tunnel dead — force-restarting...");
+            StopHealthMonitor();
+            _consecutiveFailures++;
+            GlobalUrl = "Restarting tunnel...";
+            GlobalUrlUpdated?.Invoke(GlobalUrl);
+            KillExisting();
+            await Task.Delay(2000);
+            _ = Task.Run(() => StartTunnelCore());
+        }
+
+        /// <summary>
         /// Calculate retry delay with exponential backoff: 5s, 10s, 20s, 30s, 30s, 30s...
         /// Never gives up — tunnel is critical for cross-network file sync.
         /// </summary>
@@ -474,6 +540,10 @@ namespace FlyShelf.Classes
         private void ScheduleRetry(int delayMs)
         {
             if (_stopped) return;
+            // Debounce: ignore retry if one was scheduled within the last 2 seconds
+            long now = Environment.TickCount64;
+            if (now - _lastRetryScheduledTicks < 2000) return;
+            _lastRetryScheduledTicks = now;
             _ = Task.Run(async () =>
             {
                 try { await Task.Delay(delayMs); } catch { return; }

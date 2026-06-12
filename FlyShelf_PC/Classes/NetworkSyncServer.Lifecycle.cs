@@ -192,7 +192,11 @@ namespace FlyShelf.Classes
                     }
                 }
 #endif
-                _ = CloudDiscoveryManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl);
+                // Don't push "Offline" to Firebase — wait for the daemon to provide a real URL
+                if (GlobalUrl != null && GlobalUrl != "Offline")
+                {
+                    _ = CloudDiscoveryManager.PushTunnelUrl(GlobalUrl, true, ServerUrl);
+                }
 
                 // Heartbeat: reduced to 900s (15 min) — URL updates are now handled via
                 // P2P WebSocket directly to connected peers. Firebase writes only happen

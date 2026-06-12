@@ -217,9 +217,9 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
-        /// Purge old GUID-based device entries from Firebase that were created by the old NewGuid() logic.
-        /// Only removes entries that are genuinely stale (offline for 24+ hours).
-        /// Active old-version devices are preserved so they remain visible for sync.
+        /// Purge stale device entries from Firebase.
+        /// Removes old GUID-based entries (24h) and modern PC_/Mobile_ entries that are
+        /// offline for 48+ hours AND not in the paired devices list.
         /// </summary>
         public static async Task CleanupStaleDevices()
         {
@@ -236,30 +236,52 @@ namespace FlyShelf.Classes
                     {
                         using var doc = JsonDocument.Parse(json);
                         long nowMs = NetworkClock.UtcNowMs;
-                        const long STALE_THRESHOLD_MS = 24 * 60 * 60_000; // 24 hours
+                        const long STALE_THRESHOLD_MS = 24 * 60 * 60_000; // 24 hours for old-format
+                        const long MODERN_STALE_THRESHOLD_MS = 48 * 60 * 60_000; // 48 hours for modern-format
+                        string myDeviceId = SettingsManager.Current.DeviceId ?? "";
+                        var pairedIds = new HashSet<string>(
+                            DevicePairingManager.GetPairedDevices().Select(d => d.DeviceId),
+                            StringComparer.OrdinalIgnoreCase);
 
                         foreach (var prop in doc.RootElement.EnumerateObject())
                         {
-                            // Old format: a raw GUID like "a1b2c3d4-e5f6-7890-..."
-                            // New format: "PC_MACHINENAME_USERNAME"
-                            if (prop.Name.Contains('-') && !prop.Name.StartsWith("PC_") && !prop.Name.StartsWith("Mobile_"))
-                            {
-                                // Only delete if genuinely stale (no heartbeat in 24 hours)
-                                long deviceTs = 0;
-                                if (prop.Value.TryGetProperty("Timestamp", out var ts))
-                                    deviceTs = (long)ts.GetDouble();
+                            // Never delete self
+                            if (prop.Name == myDeviceId) continue;
 
+                            long deviceTs = 0;
+                            if (prop.Value.TryGetProperty("Timestamp", out var ts))
+                                deviceTs = (long)ts.GetDouble();
+
+                            bool isOldFormat = prop.Name.Contains('-') && !prop.Name.StartsWith("PC_") && !prop.Name.StartsWith("Mobile_");
+                            bool isModernFormat = prop.Name.StartsWith("PC_") || prop.Name.StartsWith("Mobile_");
+
+                            if (isOldFormat)
+                            {
+                                // Old GUID-format: delete if offline 24+ hours
                                 if (deviceTs > 0 && (nowMs - deviceTs) < STALE_THRESHOLD_MS)
                                 {
-                                    // Old-format device is still active — keep it
                                     Logger.LogAction("FIREBASE CLEANUP", $"Keeping active old-format device: {prop.Name}");
                                     continue;
                                 }
-
-                                // Stale GUID-based entry — safe to remove
                                 string deleteUrl = (await AuthUrl($"active_devices/{pairingKey}/{prop.Name}.json"));
                                 await _client.DeleteAsync(deleteUrl);
-                                Logger.LogAction("FIREBASE CLEANUP", $"Removed stale device: {prop.Name}");
+                                Logger.LogAction("FIREBASE CLEANUP", $"Removed stale old-format device: {prop.Name}");
+                            }
+                            else if (isModernFormat && !pairedIds.Contains(prop.Name))
+                            {
+                                // Modern-format NOT in paired list: delete if offline 48+ hours
+                                // This prevents ghost entries from unpaired or abandoned devices.
+                                bool isOnline = prop.Value.TryGetProperty("IsOnline", out var onProp) && onProp.GetBoolean();
+                                if (isOnline && deviceTs > 0 && (nowMs - deviceTs) < MODERN_STALE_THRESHOLD_MS)
+                                {
+                                    continue; // Still active recently — keep it
+                                }
+                                if (deviceTs > 0 && (nowMs - deviceTs) > MODERN_STALE_THRESHOLD_MS)
+                                {
+                                    string deleteUrl = (await AuthUrl($"active_devices/{pairingKey}/{prop.Name}.json"));
+                                    await _client.DeleteAsync(deleteUrl);
+                                    Logger.LogAction("FIREBASE CLEANUP", $"Removed stale unpaired device: {prop.Name} (offline {(nowMs - deviceTs) / 3_600_000}h)");
+                                }
                             }
                         }
                     }

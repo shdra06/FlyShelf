@@ -893,6 +893,13 @@ namespace FlyShelf
             _activeQuickLook = qLook;
             qLook.Show();
             try { qLook.Activate(); } catch { }
+
+            // Keep the clipboard window visible behind QuickLook
+            // (both are Topmost, so re-show ensures the shelf isn't hidden)
+            Dispatcher.InvokeAsync(() =>
+            {
+                try { this.Show(); } catch { }
+            }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
         private void QuickLookSpecific_Click(object sender, MouseButtonEventArgs e)

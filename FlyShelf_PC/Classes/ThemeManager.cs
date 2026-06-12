@@ -582,6 +582,9 @@ namespace FlyShelf.Classes
                 ApplyColorThemeWallpaper(themeName);
 
                 Logger.LogAction("COLOR_THEME", $"Applied color theme: '{themeName}'");
+
+                // Update Aero UI resources to match the active color theme
+                ApplyAeroThemeOverrides(themeName);
             }
             catch (Exception ex)
             {
@@ -747,6 +750,9 @@ namespace FlyShelf.Classes
                 // Only remove the color overlay — preserve the user's current display mode
                 // (mica, desktop, glass, or theme). Don't force a mode switch.
 
+                // Reset Aero UI resources to light defaults
+                ApplyAeroThemeOverrides("Default");
+
                 Logger.LogAction("COLOR_THEME", "Color theme removed — using Windows native palette defaults");
             }
             catch (Exception ex)
@@ -755,6 +761,224 @@ namespace FlyShelf.Classes
             }
         }
 
+
+        // ═══════════════════════════════════════════════════════════════
+        // AERO UI THEME OVERRIDES — per-color-theme brush injection
+        // Updates DynamicResource brushes consumed by AltClipboardStyles.xaml
+        // so the Aero card/sidebar/bottom-bar colors match the active palette.
+        // ═══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Applies Aero-specific DynamicResource overrides based on the active color theme.
+        /// Called automatically when the color theme changes.
+        /// </summary>
+        public void ApplyAeroThemeOverrides(string themeName)
+        {
+            var app = System.Windows.Application.Current;
+            if (app == null) return;
+
+            // Default / ArcticSnow — light mode defaults from AltClipboardStyles.xaml
+            if (string.IsNullOrEmpty(themeName) || themeName.Equals("Default", StringComparison.OrdinalIgnoreCase)
+                || themeName.Equals("ArcticSnow", StringComparison.OrdinalIgnoreCase))
+            {
+                SetAeroResource(app, "AltCardBg", "#B8FFFFFF");
+                SetAeroResource(app, "AltCardBgHover", "#E0FFFFFF");
+                SetAeroResource(app, "AltCardBorder", "#18000000");
+                SetAeroResource(app, "AltCardBorderHover", "#28000000");
+                SetAeroResource(app, "AltTextPrimary", "#1E293B");
+                SetAeroResource(app, "AltTextSecondary", "#475569");
+                SetAeroResource(app, "AltTextTertiary", "#94A3B8");
+                SetAeroResource(app, "AltSearchBg", "#90FFFFFF");
+                SetAeroResource(app, "AltSearchBorder", "#20000000");
+                SetAeroResource(app, "AltSearchFg", "#64748B");
+                SetAeroResource(app, "AltBottomBarBg", "#D8F0F4F8");
+                SetAeroResource(app, "AltBottomBarBorder", "#20000000");
+                SetAeroResource(app, "AltSidebarHover", "#18000000");
+                SetAeroResource(app, "AltTimestampFg", "#64748B");
+                SetAeroResource(app, "AltSubtitleFg", "#64748B");
+            }
+
+            // Themed modes — bright, luminous Aero colors for each theme
+            switch (themeName)
+            {
+                case "Midnight":
+                    SetAeroResource(app, "AltCardBg", "#C8303060");
+                    SetAeroResource(app, "AltCardBgHover", "#E0404078");
+                    SetAeroResource(app, "AltCardBorder", "#4070709A");
+                    SetAeroResource(app, "AltCardBorderHover", "#608080B0");
+                    SetAeroResource(app, "AltTextPrimary", "#F5F5FF");
+                    SetAeroResource(app, "AltTextSecondary", "#C8C8E0");
+                    SetAeroResource(app, "AltTextTertiary", "#A0A0C0");
+                    SetAeroResource(app, "AltSearchBg", "#58404068");
+                    SetAeroResource(app, "AltSearchBorder", "#4060608A");
+                    SetAeroResource(app, "AltSearchFg", "#C8C8E0");
+                    SetAeroResource(app, "AltBottomBarBg", "#D8282850");
+                    SetAeroResource(app, "AltBottomBarBorder", "#4060608A");
+                    SetAeroResource(app, "AltSidebarHover", "#38505078");
+                    SetAeroResource(app, "AltTimestampFg", "#B0B0D0");
+                    SetAeroResource(app, "AltSubtitleFg", "#B0B0D0");
+                    break;
+                case "Ocean":
+                    SetAeroResource(app, "AltCardBg", "#C8103848");
+                    SetAeroResource(app, "AltCardBgHover", "#E0184858");
+                    SetAeroResource(app, "AltCardBorder", "#3818B8E0");
+                    SetAeroResource(app, "AltCardBorderHover", "#5820C8F0");
+                    SetAeroResource(app, "AltTextPrimary", "#F0FAFF");
+                    SetAeroResource(app, "AltTextSecondary", "#90E0FF");
+                    SetAeroResource(app, "AltTextTertiary", "#58C8F0");
+                    SetAeroResource(app, "AltSearchBg", "#48106070");
+                    SetAeroResource(app, "AltSearchBorder", "#3818B8E0");
+                    SetAeroResource(app, "AltSearchFg", "#90E0FF");
+                    SetAeroResource(app, "AltBottomBarBg", "#D80C2838");
+                    SetAeroResource(app, "AltBottomBarBorder", "#3818B8E0");
+                    SetAeroResource(app, "AltSidebarHover", "#38187088");
+                    SetAeroResource(app, "AltTimestampFg", "#90E0FF");
+                    SetAeroResource(app, "AltSubtitleFg", "#90E0FF");
+                    break;
+                case "Sunset":
+                    // Warm, glowing orange/amber — light and vibrant
+                    SetAeroResource(app, "AltCardBg", "#C8985030");
+                    SetAeroResource(app, "AltCardBgHover", "#E0B06038");
+                    SetAeroResource(app, "AltCardBorder", "#50F0A040");
+                    SetAeroResource(app, "AltCardBorderHover", "#70FFB050");
+                    SetAeroResource(app, "AltTextPrimary", "#FFFAE8D0");
+                    SetAeroResource(app, "AltTextSecondary", "#FFF0C880");
+                    SetAeroResource(app, "AltTextTertiary", "#F0D8A050");
+                    SetAeroResource(app, "AltSearchBg", "#48905030");
+                    SetAeroResource(app, "AltSearchBorder", "#50E89838");
+                    SetAeroResource(app, "AltSearchFg", "#FFF0C880");
+                    SetAeroResource(app, "AltBottomBarBg", "#D8884020");
+                    SetAeroResource(app, "AltBottomBarBorder", "#50F0A040");
+                    SetAeroResource(app, "AltSidebarHover", "#48A05830");
+                    SetAeroResource(app, "AltTimestampFg", "#F0D8A060");
+                    SetAeroResource(app, "AltSubtitleFg", "#F0D8A060");
+                    break;
+                case "Emerald":
+                    SetAeroResource(app, "AltCardBg", "#C8184828");
+                    SetAeroResource(app, "AltCardBgHover", "#E0205830");
+                    SetAeroResource(app, "AltCardBorder", "#3820D880");
+                    SetAeroResource(app, "AltCardBorderHover", "#5828E890");
+                    SetAeroResource(app, "AltTextPrimary", "#F0FFF5");
+                    SetAeroResource(app, "AltTextSecondary", "#88F0C0");
+                    SetAeroResource(app, "AltTextTertiary", "#58D8A0");
+                    SetAeroResource(app, "AltSearchBg", "#48185830");
+                    SetAeroResource(app, "AltSearchBorder", "#3820D880");
+                    SetAeroResource(app, "AltSearchFg", "#88F0C0");
+                    SetAeroResource(app, "AltBottomBarBg", "#D8103820");
+                    SetAeroResource(app, "AltBottomBarBorder", "#3820D880");
+                    SetAeroResource(app, "AltSidebarHover", "#38206838");
+                    SetAeroResource(app, "AltTimestampFg", "#88F0C0");
+                    SetAeroResource(app, "AltSubtitleFg", "#88F0C0");
+                    break;
+                case "Lavender":
+                    SetAeroResource(app, "AltCardBg", "#C8382058");
+                    SetAeroResource(app, "AltCardBgHover", "#E0482870");
+                    SetAeroResource(app, "AltCardBorder", "#38C0A0FF");
+                    SetAeroResource(app, "AltCardBorderHover", "#58D0B0FF");
+                    SetAeroResource(app, "AltTextPrimary", "#FAF0FF");
+                    SetAeroResource(app, "AltTextSecondary", "#DCC8FF");
+                    SetAeroResource(app, "AltTextTertiary", "#C0A8F0");
+                    SetAeroResource(app, "AltSearchBg", "#48382060");
+                    SetAeroResource(app, "AltSearchBorder", "#38C0A0FF");
+                    SetAeroResource(app, "AltSearchFg", "#DCC8FF");
+                    SetAeroResource(app, "AltBottomBarBg", "#D8281848");
+                    SetAeroResource(app, "AltBottomBarBorder", "#38C0A0FF");
+                    SetAeroResource(app, "AltSidebarHover", "#38402868");
+                    SetAeroResource(app, "AltTimestampFg", "#DCC8FF");
+                    SetAeroResource(app, "AltSubtitleFg", "#DCC8FF");
+                    break;
+                default:
+                    // Unrecognized theme — treat as light
+                    break;
+            }
+
+            // Update background gradients and overlay programmatically
+            try
+            {
+                var mainWin = System.Windows.Application.Current.Windows.OfType<MainWindow>().FirstOrDefault();
+                if (mainWin == null) return;
+
+                // Find the AltArcticOverlay and toggle its visibility based on theme
+                var arcticOverlay = mainWin.FindName("AltArcticOverlay") as System.Windows.Controls.Border;
+                bool isLight = string.IsNullOrEmpty(themeName) || themeName == "Default" || themeName == "ArcticSnow";
+
+                if (arcticOverlay != null)
+                {
+                    arcticOverlay.Visibility = isLight ? System.Windows.Visibility.Visible : System.Windows.Visibility.Collapsed;
+                }
+
+                // Find the main AltClipboardPanel to set background gradient on the first Border child
+                var altPanel = mainWin.FindName("AltClipboardPanel") as System.Windows.Controls.Grid;
+                if (altPanel != null && altPanel.Children.Count > 0)
+                {
+                    var bgBorder = altPanel.Children[0] as System.Windows.Controls.Border;
+                    if (bgBorder != null)
+                    {
+                        var grad = new System.Windows.Media.LinearGradientBrush();
+                        grad.StartPoint = new System.Windows.Point(0, 0);
+                        grad.EndPoint = new System.Windows.Point(0.3, 1);
+
+                        switch (themeName)
+                        {
+                            case "Midnight":
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF2E2E58"), 0.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF222245"), 0.5));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF181838"), 1.0));
+                                break;
+                            case "Ocean":
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF123548"), 0.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF0E2838"), 0.5));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF0A1E2E"), 1.0));
+                                break;
+                            case "Sunset":
+                                // Bright warm orange gradient
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFD06828"), 0.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFA85020"), 0.5));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF803C18"), 1.0));
+                                break;
+                            case "Emerald":
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF124028"), 0.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF0E3020"), 0.5));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF0A2418"), 1.0));
+                                break;
+                            case "Lavender":
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF382058"), 0.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF2A1845"), 0.5));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF201038"), 1.0));
+                                break;
+                            default: // ArcticSnow / Default — light gradient handled by overlay
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFF0F7FF"), 0.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFF5F5F5"), 0.5));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFFAFAFA"), 1.0));
+                                break;
+                        }
+                        bgBorder.Background = grad;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("AERO_THEME", $"Failed to update gradients: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Sets a single Aero DynamicResource brush from a hex color string.
+        /// </summary>
+        private static void SetAeroResource(System.Windows.Application app, string key, string hexColor)
+        {
+            try
+            {
+                var color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hexColor);
+                app.Resources[key] = new System.Windows.Media.SolidColorBrush(color);
+            }
+            catch { }
+        }
+
+        private static System.Windows.Media.Color ColorFromHex(string hex)
+        {
+            return (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hex);
+        }
 
         // ═══════════════════════════════════════════════════════════════
         // INTERNAL: FileSystemWatcher for hot-reload

@@ -373,5 +373,39 @@ $word.Quit()
             win.Topmost = true;
             win.ShowDialog();
         }
+
+        /// <summary>
+        /// Temporarily reveals the password for 5 seconds in the card's FileName field,
+        /// then restores the masked "Protected Password" label.
+        /// </summary>
+        private void PeekPasswordSpecific_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            var item = GetClipItemFromSender(sender);
+            if (item == null || !item.IsPassword || string.IsNullOrEmpty(item.RawContent)) return;
+
+            // Prevent double-peek — if already peeking, ignore
+            string masked = item.FileName;
+            string raw = item.RawContent;
+            if (masked == raw) return; // Already showing
+
+            // Reveal password
+            item.FileName = raw;
+
+            // Auto-hide after 5 seconds
+            var savedLabel = masked;
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                await System.Threading.Tasks.Task.Delay(5000);
+                Dispatcher.Invoke(() =>
+                {
+                    // Only revert if still showing the raw password (user didn't change it)
+                    if (item.FileName == raw && item.IsPassword)
+                    {
+                        item.FileName = savedLabel;
+                    }
+                });
+            });
+        }
     }
 }

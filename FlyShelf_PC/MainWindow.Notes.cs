@@ -93,6 +93,13 @@ namespace FlyShelf
             NotesToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Clipboard24 };
             NotesToggleBtn.ToolTip = "Back to Clipboard";
 
+            // Swap filter button → reminder button in Notes mode
+            if (SortFilterBtn != null)
+            {
+                SortFilterBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Alert24 };
+                SortFilterBtn.ToolTip = "Reminders";
+            }
+
             // Animate in
             var slideAnim = Classes.AnimationHelper.SlideIn(fromY: -12, durationMs: 200);
             var fadeAnim = Classes.AnimationHelper.FadeIn(durationMs: 200);
@@ -243,6 +250,13 @@ namespace FlyShelf
             NotesToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.List24 };
             NotesToggleBtn.ToolTip = "Quick Notes";
             NotesToggleBtn.ClearValue(ForegroundProperty);
+
+            // Restore filter button from reminder mode
+            if (SortFilterBtn != null)
+            {
+                SortFilterBtn.Icon = new Wpf.Ui.Controls.FontIcon { Glyph = "\uE71C", FontFamily = new System.Windows.Media.FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") };
+                SortFilterBtn.ToolTip = "Filter by Category";
+            }
 
             // ─── HEADER: Restore original transparent/Mica background ───
             HeaderAndFiltersStack.Background = _originalHeaderBg ?? Brushes.Transparent;

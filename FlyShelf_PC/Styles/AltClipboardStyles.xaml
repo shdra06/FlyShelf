@@ -58,7 +58,7 @@
         <Setter Property="Cursor" Value="Hand"/>
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
-                <Setter Property="Background" Value="{StaticResource AltCloseHoverBg}"/>
+                <Setter Property="Background" Value="{DynamicResource AltCloseHoverBg}"/>
             </Trigger>
         </Style.Triggers>
     </Style>

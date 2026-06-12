@@ -1100,6 +1100,22 @@
                                     </ui:Button>
                                 </Border>
 
+                                <!-- ═══ Peek Password (Password only — replaces Search) ═══ -->
+                                <Border Margin="0,0,2,0" Padding="0">
+                                    <Border.Style>
+                                        <Style TargetType="Border" BasedOn="{StaticResource ActionPillStyle}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsPassword}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource WarningColor}" ToolTip="Peek password (5s)"
+                                               PreviewMouseLeftButtonDown="PeekPasswordSpecific_Click">
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="Eye24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                    </ui:Button>
+                                </Border>
+
                                 <!-- ═══ Sanitize URL (Url only) ═══ -->
                                 <Border Margin="0,0,2,0" Padding="0">
                                     <Border.Style>
@@ -1969,7 +1985,7 @@
         <Grid x:Name="AltClipboardPanel" Grid.RowSpan="2" Visibility="Collapsed" Panel.ZIndex="40"
               Background="#01000000">
 
-            <!-- Themed gradient background — auto-generated from system accent -->
+            <!-- Themed gradient background -->
             <Border CornerRadius="14" ClipToBounds="True">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="0.3,1">
@@ -1980,7 +1996,7 @@
                 </Border.Background>
             </Border>
 
-            <!-- Arctic frost overlay — default Aero theme -->
+            <!-- Arctic frost overlay -->
             <Border x:Name="AltArcticOverlay" CornerRadius="14" ClipToBounds="True" Visibility="Visible" IsHitTestVisible="False">
                 <Border.Background>
                     <LinearGradientBrush StartPoint="0,0" EndPoint="0.2,1">
@@ -1992,7 +2008,7 @@
                 </Border.Background>
             </Border>
 
-            <!-- Subtle inner glow for depth -->
+            <!-- Subtle inner glow -->
             <Border CornerRadius="14" IsHitTestVisible="False">
                 <Border.Background>
                     <RadialGradientBrush Center="0.3,0" RadiusX="0.7" RadiusY="0.5" GradientOrigin="0.3,0">
@@ -2008,7 +2024,7 @@
                     <RowDefinition Height="*"/>
                 </Grid.RowDefinitions>
 
-                <!-- ═══ AERO TOP BAR ═══ -->
+                <!-- TOP BAR -->
                 <Grid Grid.Row="0" Margin="16,14,16,6" Background="Transparent" MouseLeftButtonDown="Header_MouseLeftButtonDown">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
@@ -2017,481 +2033,223 @@
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- Logo + Brand -->
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                         <Image Source="{DynamicResource ThemeLogoIcon}" Width="22" Height="22" Margin="0,0,8,0"
                                RenderOptions.BitmapScalingMode="HighQuality"/>
                         <TextBlock Text="FlyShelf" FontWeight="Bold" FontSize="15"
-                                   Foreground="{StaticResource AltTextPrimary}"
-                                   VerticalAlignment="Center"/>
+                                   Foreground="{DynamicResource AltTextPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
 
                     <!-- Search Pill -->
-                    <Border Grid.Column="1" Margin="14,0,8,0" CornerRadius="16" Padding="10,5"
-                            Background="{StaticResource AltSearchBg}" BorderBrush="{StaticResource AltSearchBorder}" BorderThickness="1"
+                    <Border Grid.Column="1" Margin="12,0,6,0" Height="26" CornerRadius="13" Padding="8,0"
+                            Background="{DynamicResource AltSearchBg}" BorderBrush="{DynamicResource AltSearchBorder}" BorderThickness="1"
                             VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonDown="AltSearchToggle_Click">
-                        <Grid>
-                            <StackPanel x:Name="AltSearchPlaceholder" Orientation="Horizontal" HorizontalAlignment="Center">
-                                <ui:SymbolIcon Symbol="Search24" FontSize="13" Foreground="{StaticResource AltSearchFg}" Margin="0,0,6,0"/>
-                                <TextBlock Text="Search" FontSize="12" Foreground="{StaticResource AltSearchFg}" VerticalAlignment="Center"/>
+                        <Grid VerticalAlignment="Center">
+                            <StackPanel x:Name="AltSearchPlaceholder" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <ui:SymbolIcon Symbol="Search24" FontSize="11" Foreground="{DynamicResource AltSearchFg}" Margin="0,0,5,0"/>
+                                <TextBlock Text="Search" FontSize="11" Foreground="{DynamicResource AltSearchFg}" VerticalAlignment="Center"/>
                             </StackPanel>
-                            <Grid x:Name="AltSearchContainer" Visibility="Collapsed">
+                            <Grid x:Name="AltSearchContainer" Visibility="Collapsed" VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <ui:SymbolIcon Grid.Column="0" Symbol="Search24" FontSize="13" Foreground="{StaticResource AltSearchFg}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                <TextBox x:Name="AltSearchTextBox" Grid.Column="1" 
-                                         Background="Transparent" BorderThickness="0" Padding="0,2"
-                                         FontSize="12" Foreground="{StaticResource AltTextPrimary}"
-                                         CaretBrush="{StaticResource AltTextPrimary}"
-                                         TextChanged="AltSearch_TextChanged"
-                                         VerticalAlignment="Center"/>
-                                <Border Grid.Column="2" Width="18" Height="18" CornerRadius="9" Background="#15000000" 
-                                        Cursor="Hand" MouseLeftButtonDown="AltSearchToggle_Click" VerticalAlignment="Center" Margin="4,0,0,0">
-                                    <ui:SymbolIcon Symbol="Dismiss16" FontSize="9" Foreground="{StaticResource AltTextSecondary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                <ui:SymbolIcon Grid.Column="0" Symbol="Search24" FontSize="11" Foreground="{DynamicResource AltSearchFg}" Margin="0,0,5,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="AltSearchTextBox" Grid.Column="1" Background="Transparent" BorderThickness="0" Padding="0,1"
+                                         FontSize="11" Foreground="{DynamicResource AltTextPrimary}" CaretBrush="{DynamicResource AltTextPrimary}"
+                                         TextChanged="AltSearch_TextChanged" VerticalAlignment="Center"/>
+                                <Border Grid.Column="2" Width="16" Height="16" CornerRadius="8" Background="#15000000"
+                                        Cursor="Hand" MouseLeftButtonDown="AltSearchToggle_Click" VerticalAlignment="Center" Margin="3,0,0,0">
+                                    <ui:SymbolIcon Symbol="Dismiss16" FontSize="8" Foreground="{DynamicResource AltTextSecondary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
                             </Grid>
                         </Grid>
                     </Border>
 
-                    <!-- Settings Gear -->
-                    <Border Grid.Column="2" Width="30" Height="30" CornerRadius="15" Background="Transparent" 
+                    <!-- Settings -->
+                    <Border Grid.Column="2" Width="30" Height="30" CornerRadius="15" Background="Transparent"
                             Cursor="Hand" MouseLeftButtonDown="AltSettings_Click" VerticalAlignment="Center" Margin="0,0,4,0">
-                        <Border.Style>
-                            <Style TargetType="Border">
-                                <Style.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter Property="Background" Value="{StaticResource AltSidebarHover}"/>
-                                    </Trigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Border.Style>
-                        <ui:SymbolIcon Symbol="Settings24" FontSize="14" 
-                                       Foreground="{StaticResource AltTextSecondary}"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Border.Style><Style TargetType="Border"><Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger>
+                        </Style.Triggers></Style></Border.Style>
+                        <ui:SymbolIcon Symbol="Settings24" FontSize="14" Foreground="{DynamicResource AltTextSecondary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
 
-                    <!-- Close Button -->
-                    <Border Grid.Column="3" Style="{StaticResource AltCloseButtonStyle}" MouseLeftButtonDown="AltClose_Click"
-                            VerticalAlignment="Center">
-                        <ui:SymbolIcon Symbol="Dismiss24" FontSize="14" 
-                                       Foreground="{StaticResource AltTextSecondary}"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <!-- Close -->
+                    <Border Grid.Column="3" Width="30" Height="30" CornerRadius="15" Background="Transparent"
+                            Cursor="Hand" MouseLeftButtonDown="AltClose_Click" VerticalAlignment="Center">
+                        <Border.Style><Style TargetType="Border"><Style.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltCloseHoverBg}"/></Trigger>
+                        </Style.Triggers></Style></Border.Style>
+                        <ui:SymbolIcon Symbol="Dismiss24" FontSize="14" Foreground="{DynamicResource AltTextSecondary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                 </Grid>
 
-                <!-- ═══ ROW 1: SIDEBAR + CONTENT ═══ -->
+                <!-- SIDEBAR + CONTENT -->
                 <Grid Grid.Row="1">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
 
-                    <!-- LEFT SIDEBAR —  icon buttons -->
+                    <!-- LEFT SIDEBAR -->
                     <StackPanel Grid.Column="0" Width="36" Margin="6,4,0,0" VerticalAlignment="Top">
-                        <!-- Clipboard (All items) -->
-                        <Border Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand"
-                                Background="{DynamicResource ThemeAccentBg}" ToolTip="All Items">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="{DynamicResource ThemeAccentBgHover}"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <ui:SymbolIcon Symbol="ClipboardPaste24" FontSize="14" 
-                                           Foreground="{DynamicResource ThemeAccentLight}" 
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Border x:Name="AltSidebarAll" Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand" Background="{DynamicResource ThemeAccentBg}" ToolTip="All Items" Tag="All" MouseLeftButtonDown="AltCategoryFilter_Click">
+                            <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource ThemeAccentBgHover}"/></Trigger></Style.Triggers></Style></Border.Style>
+                            <ui:SymbolIcon Symbol="ClipboardPaste24" FontSize="14" Foreground="{DynamicResource ThemeAccentLight}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
-                        <!-- Grid/Apps -->
-                        <Border Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand"
-                                Background="Transparent" ToolTip="Categories">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Style.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="{StaticResource AltSidebarHover}"/>
-                                        </Trigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <ui:SymbolIcon Symbol="Grid24" FontSize="14" 
-                                           Foreground="{StaticResource AltTextTertiary}" 
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <Border x:Name="AltSidebarText" Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="Text" Tag="Text" MouseLeftButtonDown="AltCategoryFilter_Click">
+                            <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style>
+                            <ui:SymbolIcon Symbol="TextT24" FontSize="14" Foreground="{DynamicResource AltAccent_Text}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Border x:Name="AltSidebarImage" Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="Images" Tag="Image" MouseLeftButtonDown="AltCategoryFilter_Click">
+                            <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style>
+                            <ui:SymbolIcon Symbol="Image24" FontSize="14" Foreground="{DynamicResource AltAccent_Image}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Border x:Name="AltSidebarPinned" Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="Pinned" Tag="Pinned" MouseLeftButtonDown="AltCategoryFilter_Click">
+                            <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style>
+                            <ui:SymbolIcon Symbol="Pin24" FontSize="14" Foreground="{DynamicResource AltPinDot}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Border x:Name="AltSidebarPdf" Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="PDFs" Tag="PDF" MouseLeftButtonDown="AltCategoryFilter_Click">
+                            <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style>
+                            <ui:SymbolIcon Symbol="DocumentPdf24" FontSize="14" Foreground="{DynamicResource AltAccent_Pdf}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Border x:Name="AltSidebarDocument" Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="Documents" Tag="Document" MouseLeftButtonDown="AltCategoryFilter_Click">
+                            <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style>
+                            <ui:SymbolIcon Symbol="Document24" FontSize="14" Foreground="{DynamicResource AltAccent_Document}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <Border Width="20" Height="1" Margin="5,4,5,8" Background="{DynamicResource AltCardBorder}"/>
+                        <Border Width="30" Height="30" CornerRadius="8" Margin="0,0,0,4" Cursor="Hand" Background="Transparent" ToolTip="Convert to PDF" MouseLeftButtonDown="AltConvertPdf_Click">
+                            <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style>
+                            <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="14" Foreground="{DynamicResource AltAccent_Pdf}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                     </StackPanel>
 
-                <!-- ═══ AERO CARD LIST ═══ -->
-                <ListView x:Name="AltShelfListView" Grid.Column="1" 
-                          ItemsSource="{Binding DroppedItems}" 
-                          Background="Transparent" BorderThickness="0" 
-                          Margin="4,4,4,12" Padding="0,0,0,50"
-                          Focusable="True" FocusVisualStyle="{x:Null}"
-                          UseLayoutRounding="True" SnapsToDevicePixels="True"
-                          TextOptions.TextFormattingMode="Display"
-                          TextOptions.TextRenderingMode="ClearType"
-                          ScrollViewer.HorizontalScrollBarVisibility="Disabled" 
-                          ScrollViewer.VerticalScrollBarVisibility="Auto"
-                          ScrollViewer.CanContentScroll="True"
-                          VirtualizingStackPanel.IsVirtualizing="True"
-                          VirtualizingStackPanel.VirtualizationMode="Recycling"
-                          VirtualizingPanel.ScrollUnit="Pixel"
-                          VirtualizingPanel.CacheLength="1,1"
-                          VirtualizingPanel.CacheLengthUnit="Page"
-                          SelectionMode="Extended"
-                          MouseMove="AltShelfListView_MouseMove"
-                          PreviewMouseLeftButtonDown="AltShelfListView_PreviewMouseLeftButtonDown"
-                          PreviewMouseLeftButtonUp="AltShelfListView_PreviewMouseLeftButtonUp"
-                          MouseDoubleClick="AltShelfListView_MouseDoubleClick"
-                          SelectionChanged="AltShelfListView_SelectionChanged"
-                          PreviewKeyDown="AltShelfListView_KeyDown"
-                          HorizontalContentAlignment="Stretch">
-                    <ListView.ItemContainerStyle>
-                        <Style TargetType="ListViewItem">
-                            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-                            <Setter Property="Focusable" Value="True"/>
-                            <Setter Property="Background" Value="Transparent"/>
-                            <Setter Property="BorderBrush" Value="Transparent"/>
-                            <Setter Property="BorderThickness" Value="0"/>
-                            <Setter Property="Margin" Value="0"/>
-                            <Setter Property="Padding" Value="0"/>
-                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="{x:Type ListViewItem}">
-                                        <Border Background="{TemplateBinding Background}" BorderThickness="0" CornerRadius="10" Margin="2,1.5,10,1.5" ClipToBounds="True">
-                                            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsSelected" Value="True">
-                                                <Setter Property="Background" Value="{DynamicResource ShelfCardSelectionBg}"/>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                        </Style>
-                    </ListView.ItemContainerStyle>
-                    <ListView.ItemTemplate>
-                        <DataTemplate>
-                            <Border Name="AltCardBorder" CornerRadius="10" Padding="0" ClipToBounds="True"
-                                    Background="{StaticResource AltCardBg}" 
-                                    BorderBrush="{StaticResource AltCardBorder}" BorderThickness="1">
-                                <Border.Style>
-                                    <Style TargetType="Border">
-                                        <Style.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter Property="Background" Value="{StaticResource AltCardBgHover}"/>
-                                                <Setter Property="BorderBrush" Value="{StaticResource AltCardBorderHover}"/>
-                                            </Trigger>
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
-                                <Grid Tag="{Binding DataContext, ElementName=AltShelfListView}" ContextMenu="{StaticResource CardContextMenu}">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="4"/>  <!-- Accent bar -->
-                                        <ColumnDefinition Width="Auto"/> <!-- Icon -->
-                                        <ColumnDefinition Width="*"/>  <!-- Text -->
-                                        <ColumnDefinition Width="Auto"/> <!-- Time -->
-                                    </Grid.ColumnDefinitions>
-
-                                    <!-- LEFT ACCENT BAR — color-coded by ItemType -->
-                                    <Border Grid.Column="0" Width="3" CornerRadius="2" Margin="1,6,0,6" HorizontalAlignment="Left">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Setter Property="Background" Value="{StaticResource AltAccent_Default}"/>
-                                                <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Background" Value="{StaticResource AltAccent_Text}"/></DataTrigger>
-                                                    <DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Background" Value="{StaticResource AltAccent_Code}"/></DataTrigger>
-                                                    <DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Background" Value="{StaticResource AltAccent_Image}"/></DataTrigger>
-                                                    <DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Background" Value="{StaticResource AltAccent_Pdf}"/></DataTrigger>
-                                                    <DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Background" Value="{StaticResource AltAccent_Url}"/></DataTrigger>
-                                                    <DataTrigger Binding="{Binding ItemType}" Value="Document"><Setter Property="Background" Value="{StaticResource AltAccent_Document}"/></DataTrigger>
-                                                    <DataTrigger Binding="{Binding ItemType}" Value="Archive"><Setter Property="Background" Value="{StaticResource AltAccent_Archive}"/></DataTrigger>
-                                                    <DataTrigger Binding="{Binding ItemType}" Value="Folder"><Setter Property="Background" Value="{StaticResource AltAccent_Folder}"/></DataTrigger>
-                                                    <DataTrigger Binding="{Binding ItemType}" Value="Video"><Setter Property="Background" Value="{StaticResource AltAccent_Video}"/></DataTrigger>
-                                                    <DataTrigger Binding="{Binding ItemType}" Value="Audio"><Setter Property="Background" Value="{StaticResource AltAccent_Audio}"/></DataTrigger>
-                                                    <DataTrigger Binding="{Binding ItemType}" Value="Password"><Setter Property="Background" Value="{StaticResource AltAccent_Password}"/></DataTrigger>
-                                                    <DataTrigger Binding="{Binding ItemType}" Value="Presentation"><Setter Property="Background" Value="{StaticResource AltAccent_Presentation}"/></DataTrigger>
-                                                    <DataTrigger Binding="{Binding ItemType}" Value="QRCode"><Setter Property="Background" Value="{StaticResource AltAccent_QRCode}"/></DataTrigger>
-                                                    <DataTrigger Binding="{Binding ItemType}" Value="Group"><Setter Property="Background" Value="{StaticResource AltAccent_Group}"/></DataTrigger>
-                                                    <DataTrigger Binding="{Binding ItemType}" Value="File"><Setter Property="Background" Value="{StaticResource AltAccent_File}"/></DataTrigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-                                    </Border>
-
-                                    <!-- TYPE ICON (32x32 rounded) -->
-                                    <Grid Grid.Column="1" Width="32" Height="32" Margin="8,8,6,8">
-                                        <!-- Thumbnail image when available (non-Image types like PDF/Doc/etc) -->
-                                        <Border CornerRadius="7" ClipToBounds="True">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Visibility" Value="Visible"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Icon}" Value="{x:Null}">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding ItemType}" Value="Text">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding ItemType}" Value="Url">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding ItemType}" Value="Code">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
-                                                            <Setter Property="Visibility" Value="Collapsed"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                            <Image Source="{Binding Icon}" Width="32" Height="32" Stretch="UniformToFill"
-                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
-                                        </Border>
-
-                                        <!-- Semantic icon fallback -->
-                                        <Border CornerRadius="7" Width="32" Height="32">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Icon}" Value="{x:Null}">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding ItemType}" Value="Text">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding ItemType}" Value="Url">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding ItemType}" Value="Code">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                            <Border.Background>
-                                                <SolidColorBrush Color="#000000" Opacity="0.05"/>
-                                            </Border.Background>
-                                            <ui:SymbolIcon FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                <ui:SymbolIcon.Style>
-                                                    <Style TargetType="ui:SymbolIcon">
-                                                        <Setter Property="Symbol" Value="Document24"/>
-                                                        <Setter Property="Foreground" Value="{StaticResource AltAccent_File}"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding ItemType}" Value="Text">
-                                                                <Setter Property="Symbol" Value="TextT24"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AltAccent_Text}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ItemType}" Value="Code">
-                                                                <Setter Property="Symbol" Value="Code24"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AltAccent_Code}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ItemType}" Value="Image">
-                                                                <Setter Property="Symbol" Value="Image24"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AltAccent_Image}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ItemType}" Value="Pdf">
-                                                                <Setter Property="Symbol" Value="DocumentPdf24"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AltAccent_Pdf}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ItemType}" Value="Url">
-                                                                <Setter Property="Symbol" Value="Globe24"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AltAccent_Url}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ItemType}" Value="Document">
-                                                                <Setter Property="Symbol" Value="Document24"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AltAccent_Document}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ItemType}" Value="Archive">
-                                                                <Setter Property="Symbol" Value="FolderZip24"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AltAccent_Archive}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ItemType}" Value="Folder">
-                                                                <Setter Property="Symbol" Value="Folder24"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AltAccent_Folder}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ItemType}" Value="Video">
-                                                                <Setter Property="Symbol" Value="VideoClip24"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AltAccent_Video}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ItemType}" Value="Audio">
-                                                                <Setter Property="Symbol" Value="MusicNote124"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AltAccent_Audio}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ItemType}" Value="Password">
-                                                                <Setter Property="Symbol" Value="ShieldKeyhole24"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AltAccent_Password}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ItemType}" Value="Presentation">
-                                                                <Setter Property="Symbol" Value="SlideText24"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AltAccent_Presentation}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ItemType}" Value="QRCode">
-                                                                <Setter Property="Symbol" Value="QrCode24"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AltAccent_QRCode}"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding ItemType}" Value="Group">
-                                                                <Setter Property="Symbol" Value="FolderMultiple24"/>
-                                                                <Setter Property="Foreground" Value="{StaticResource AltAccent_Group}"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </ui:SymbolIcon.Style>
-                                            </ui:SymbolIcon>
-                                        </Border>
+                    <!-- CARD LIST -->
+                    <ListView x:Name="AltShelfListView" Grid.Column="1" ItemsSource="{Binding DroppedItems}"
+                              Background="Transparent" BorderThickness="0" Margin="4,4,4,12" Padding="0,0,0,50"
+                              Focusable="True" FocusVisualStyle="{x:Null}" UseLayoutRounding="True" SnapsToDevicePixels="True"
+                              TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
+                              ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
+                              ScrollViewer.CanContentScroll="True" VirtualizingStackPanel.IsVirtualizing="True"
+                              VirtualizingStackPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel"
+                              VirtualizingPanel.CacheLength="1,1" VirtualizingPanel.CacheLengthUnit="Page" SelectionMode="Extended"
+                              MouseMove="AltShelfListView_MouseMove"
+                              PreviewMouseLeftButtonDown="AltShelfListView_PreviewMouseLeftButtonDown"
+                              PreviewMouseLeftButtonUp="AltShelfListView_PreviewMouseLeftButtonUp"
+                              MouseDoubleClick="AltShelfListView_MouseDoubleClick"
+                              SelectionChanged="AltShelfListView_SelectionChanged"
+                              PreviewKeyDown="AltShelfListView_KeyDown"
+                              ScrollViewer.ScrollChanged="AltShelfListView_ScrollChanged"
+                              HorizontalContentAlignment="Stretch">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                <Setter Property="Focusable" Value="True"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="BorderBrush" Value="Transparent"/>
+                                <Setter Property="BorderThickness" Value="0"/>
+                                <Setter Property="Margin" Value="0"/>
+                                <Setter Property="Padding" Value="0"/>
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="{x:Type ListViewItem}">
+                                            <Border x:Name="AltItemBorder" Background="{TemplateBinding Background}" BorderThickness="2" BorderBrush="Transparent" CornerRadius="10" Margin="2,1.5,10,1.5" ClipToBounds="True">
+                                                <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsSelected" Value="True">
+                                                    <Setter TargetName="AltItemBorder" Property="Background" Value="{DynamicResource ShelfCardSelectionBg}"/>
+                                                    <Setter TargetName="AltItemBorder" Property="BorderBrush" Value="{DynamicResource ShelfCardSelectionBorder}"/>
+                                                </Trigger>
+                                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                                    <Setter TargetName="AltItemBorder" Property="BorderBrush" Value="{DynamicResource ShelfCardFocusBorder}"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Border Name="AltCardBorder" CornerRadius="10" Padding="0" ClipToBounds="True" Background="{DynamicResource AltCardBg}" BorderBrush="{DynamicResource AltCardBorder}" BorderThickness="1">
+                                    <Border.Style><Style TargetType="Border"><Style.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter Property="Background" Value="{DynamicResource AltCardBgHover}"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource AltCardBorderHover}"/>
+                                        </Trigger>
+                                    </Style.Triggers></Style></Border.Style>
+                                    <Grid Tag="{Binding DataContext, ElementName=AltShelfListView}" ContextMenu="{StaticResource CardContextMenu}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="4"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <!-- HOVER ACTION BUTTONS -->
+                                        <StackPanel Grid.Column="0" Grid.ColumnSpan="4" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,4,0" Panel.ZIndex="5" Orientation="Horizontal">
+                                            <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Opacity" Value="0"/><Setter Property="IsHitTestVisible" Value="False"/>
+                                                <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True"/>
+                                                    <Condition Binding="{Binding DataContext.AllowHover, ElementName=AltShelfListView}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="IsHitTestVisible" Value="True"/><Setter Property="Opacity" Value="1"/>
+                                                <MultiDataTrigger.EnterActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.15" FillBehavior="Stop"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction></DoubleAnimation></Storyboard></BeginStoryboard></MultiDataTrigger.EnterActions>
+                                                <MultiDataTrigger.ExitActions><BeginStoryboard><Storyboard><DoubleAnimation Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.1" FillBehavior="Stop"><DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseIn"/></DoubleAnimation.EasingFunction></DoubleAnimation></Storyboard></BeginStoryboard></MultiDataTrigger.ExitActions>
+                                                </MultiDataTrigger></Style.Triggers>
+                                            </Style></StackPanel.Style>
+                                            <StackPanel.Resources><Style x:Key="AeroPill" TargetType="Border"><Setter Property="CornerRadius" Value="5"/><Setter Property="Background" Value="{DynamicResource AltBottomBarBg}"/><Setter Property="BorderBrush" Value="{DynamicResource AltCardBorder}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Width" Value="24"/><Setter Property="Height" Value="24"/><Setter Property="Margin" Value="0,0,1,0"/><Setter Property="Cursor" Value="Hand"/></Style></StackPanel.Resources>
+                                            <Border Margin="0,0,1,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="QRCode"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="12" Foreground="{DynamicResource AltAccent_Image}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" PreviewMouseLeftButtonDown="QuickLookSpecific_Click"/></Border>
+                                            <Border Margin="0,0,1,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Document"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="File"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Open24" FontSize="12" Foreground="{DynamicResource AltAccent_Document}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" PreviewMouseLeftButtonDown="OpenSpecific_Click"/></Border>
+                                            <Border Margin="0,0,1,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Search24" FontSize="12" Foreground="{DynamicResource AltAccent_Url}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" PreviewMouseLeftButtonDown="GoogleSearchSpecific_Click"/></Border>
+                                            <Border Margin="0,0,1,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsPassword}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Eye24" Filled="True" FontSize="12" Foreground="{DynamicResource AltAccent_Password}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" PreviewMouseLeftButtonDown="PeekPasswordSpecific_Click" ToolTip="Peek password (5s)"/></Border>
+                                            <Border Style="{StaticResource AeroPill}"><ui:SymbolIcon FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" PreviewMouseLeftButtonDown="PinSpecific_Click"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="Pin24"/><Setter Property="Filled" Value="True"/><Setter Property="Foreground" Value="{DynamicResource AltPinDot}"/><Style.Triggers><DataTrigger Binding="{Binding IsPinned}" Value="True"><Setter Property="Symbol" Value="PinOff24"/><Setter Property="Foreground" Value="{DynamicResource AltTextTertiary}"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
+                                            <Border Style="{StaticResource AeroPill}"><ui:SymbolIcon Symbol="Delete24" Filled="True" FontSize="12" Foreground="{DynamicResource DangerColor}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" PreviewMouseLeftButtonDown="DeleteSpecific_Click"/></Border>
+                                        </StackPanel>
+                                        <!-- ACCENT BAR -->
+                                        <Border Grid.Column="0" Width="3" CornerRadius="2" Margin="1,6,0,6" HorizontalAlignment="Left"><Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{DynamicResource AltAccent_Default}"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Background" Value="{DynamicResource AltAccent_Text}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Background" Value="{DynamicResource AltAccent_Code}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Background" Value="{DynamicResource AltAccent_Image}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Background" Value="{DynamicResource AltAccent_Pdf}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Background" Value="{DynamicResource AltAccent_Url}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Document"><Setter Property="Background" Value="{DynamicResource AltAccent_Document}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Archive"><Setter Property="Background" Value="{DynamicResource AltAccent_Archive}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Folder"><Setter Property="Background" Value="{DynamicResource AltAccent_Folder}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Video"><Setter Property="Background" Value="{DynamicResource AltAccent_Video}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Audio"><Setter Property="Background" Value="{DynamicResource AltAccent_Audio}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Password"><Setter Property="Background" Value="{DynamicResource AltAccent_Password}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Presentation"><Setter Property="Background" Value="{DynamicResource AltAccent_Presentation}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="QRCode"><Setter Property="Background" Value="{DynamicResource AltAccent_QRCode}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Group"><Setter Property="Background" Value="{DynamicResource AltAccent_Group}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="File"><Setter Property="Background" Value="{DynamicResource AltAccent_File}"/></DataTrigger></Style.Triggers></Style></Border.Style></Border>
+                                        <!-- ICON -->
+                                        <Grid Grid.Column="1" Width="32" Height="32" Margin="8,8,6,8">
+                                            <Border CornerRadius="7" ClipToBounds="True"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding Icon}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style><Image Source="{Binding Icon}" Width="32" Height="32" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/></Border>
+                                            <Border CornerRadius="7" Width="32" Height="32"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Icon}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Border.Background><SolidColorBrush Color="#000000" Opacity="0.05"/></Border.Background><ui:SymbolIcon FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="Document24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_File}"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Symbol" Value="TextT24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Text}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Symbol" Value="Code24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Code}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Symbol" Value="Image24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Image}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Symbol" Value="DocumentPdf24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Pdf}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Symbol" Value="Globe24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Url}"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
+                                        </Grid>
+                                        <!-- TEXT BODY -->
+                                        <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="2,5,4,5">
+                                            <Border CornerRadius="6" ClipToBounds="True" Margin="0,0,8,4" HorizontalAlignment="Stretch"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Image Source="{Binding Icon}" MaxHeight="90" Stretch="Uniform" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="HighQuality"/></Border>
+                                            <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AltTextPrimary}" TextTrimming="CharacterEllipsis" MaxHeight="18" LineHeight="18"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                                            <TextBlock Text="{Binding FormatIdentifier}" FontSize="11" Margin="0,2,0,0" Foreground="{DynamicResource AltSubtitleFg}" TextTrimming="CharacterEllipsis" MaxHeight="15" LineHeight="15" Opacity="0.7"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                                        </StackPanel>
+                                        <!-- TIMESTAMP + PIN -->
+                                        <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="4,0,10,0" HorizontalAlignment="Right">
+                                            <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:h:mm tt}'}" FontSize="10.5" Foreground="{DynamicResource AltTimestampFg}" HorizontalAlignment="Right"/>
+                                            <Ellipse Width="6" Height="6" HorizontalAlignment="Right" Margin="0,4,2,0"><Ellipse.Style><Style TargetType="Ellipse"><Setter Property="Visibility" Value="Collapsed"/><Setter Property="Fill" Value="{DynamicResource AltPinDot}"/><Style.Triggers><DataTrigger Binding="{Binding IsPinned}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Ellipse.Style></Ellipse>
+                                        </StackPanel>
                                     </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
 
-                                    <!-- TEXT BODY: Image Preview (first) + Title + Subtitle -->
-                                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="2,5,4,5">
-                                        <!-- Image Thumbnail Preview — shown FIRST, fills card width -->
-                                        <Border CornerRadius="6" ClipToBounds="True" Margin="0,0,8,4" HorizontalAlignment="Stretch">
-                                            <Border.Style>
-                                                <Style TargetType="Border">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Border.Style>
-                                            <Image Source="{Binding Icon}" MaxHeight="90" Stretch="Uniform"
-                                                   HorizontalAlignment="Left"
-                                                   RenderOptions.BitmapScalingMode="HighQuality"/>
-                                        </Border>
-                                        <!-- Title -->
-                                        <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{StaticResource AltTextPrimary}"
-                                                   TextTrimming="CharacterEllipsis" MaxHeight="18" LineHeight="18"/>
-                                        <!-- Subtitle: FormatIdentifier -->
-                                        <TextBlock Text="{Binding FormatIdentifier}" FontSize="11" Margin="0,2,0,0"
-                                                   Foreground="{StaticResource AltSubtitleFg}"
-                                                   TextTrimming="CharacterEllipsis" MaxHeight="15" LineHeight="15"
-                                                   Opacity="0.7"/>
-                                    </StackPanel>
-
-                                    <!-- TIMESTAMP + PIN DOT -->
-                                    <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="4,0,10,0" HorizontalAlignment="Right">
-                                        <TextBlock Text="{Binding CreatedAt, StringFormat='{}{0:h:mm tt}'}" 
-                                                   FontSize="10.5" Foreground="{StaticResource AltTimestampFg}"
-                                                   HorizontalAlignment="Right"/>
-                                        <!-- Golden pin dot -->
-                                        <Ellipse Width="6" Height="6" HorizontalAlignment="Right" Margin="0,4,2,0">
-                                            <Ellipse.Style>
-                                                <Style TargetType="Ellipse">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                    <Setter Property="Fill" Value="{StaticResource AltPinDot}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding IsPinned}" Value="True">
-                                                            <Setter Property="Visibility" Value="Visible"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </Ellipse.Style>
-                                        </Ellipse>
-                                    </StackPanel>
-                                </Grid>
-                            </Border>
-                        </DataTemplate>
-                    </ListView.ItemTemplate>
-                </ListView>
-
-                <!-- Aero Empty State -->
-                <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Setter Property="Visibility" Value="Collapsed"/>
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding DroppedItems.Count}" Value="0">
-                                    <Setter Property="Visibility" Value="Visible"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </StackPanel.Style>
-                    <Border Width="56" Height="56" CornerRadius="14" HorizontalAlignment="Center" Margin="0,0,0,14">
-                        <Border.Background>
-                            <SolidColorBrush Color="#000000" Opacity="0.06"/>
-                        </Border.Background>
-                        <Border.RenderTransform><TranslateTransform Y="0"/></Border.RenderTransform>
-                        <Border.Triggers>
-                            <EventTrigger RoutedEvent="Loaded">
-                                <BeginStoryboard>
-                                    <Storyboard RepeatBehavior="Forever" Storyboard.DesiredFrameRate="15">
-                                        <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)" From="0" To="-5" Duration="0:0:1.5" AutoReverse="True">
-                                            <DoubleAnimation.EasingFunction><SineEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
-                                    </Storyboard>
-                                </BeginStoryboard>
-                            </EventTrigger>
-                        </Border.Triggers>
-                        <ui:SymbolIcon Symbol="ClipboardPaste24" FontSize="24" Foreground="{StaticResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <TextBlock Text="Your shelf is empty" Opacity="0.5" FontWeight="SemiBold" FontSize="14" TextAlignment="Center"
-                               Foreground="{StaticResource AltTextPrimary}"/>
-                    <TextBlock Opacity="0.35" FontSize="11" Margin="0,8,0,0" TextAlignment="Center" LineHeight="20"
-                               Foreground="{StaticResource AltTextSecondary}">
-                        <Run Text="Copy anything to see it here"/>
-                    </TextBlock>
-                </StackPanel>
+                    <!-- Empty State -->
+                    <StackPanel Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding DroppedItems.Count}" Value="0"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></StackPanel.Style>
+                        <Border Width="56" Height="56" CornerRadius="14" HorizontalAlignment="Center" Margin="0,0,0,14"><Border.Background><SolidColorBrush Color="#000000" Opacity="0.06"/></Border.Background><ui:SymbolIcon Symbol="ClipboardPaste24" FontSize="24" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                        <TextBlock Text="Your shelf is empty" Opacity="0.5" FontWeight="SemiBold" FontSize="14" TextAlignment="Center" Foreground="{DynamicResource AltTextPrimary}"/>
+                        <TextBlock Opacity="0.35" FontSize="11" Margin="0,8,0,0" TextAlignment="Center" LineHeight="20" Foreground="{DynamicResource AltTextSecondary}"><Run Text="Copy anything to see it here"/></TextBlock>
+                    </StackPanel>
                 </Grid>
 
-                <!-- ═══ BOTTOM ACTION BAR ═══ -->
-                <Border Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" 
-                        Margin="8,0,8,8" Padding="10,6" CornerRadius="12"
-                        Background="{StaticResource AltBottomBarBg}" BorderBrush="{StaticResource AltBottomBarBorder}" BorderThickness="1">
+                <!-- BOTTOM BAR -->
+                <Border Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Margin="8,0,8,8" Padding="10,6" CornerRadius="12" Background="{DynamicResource AltBottomBarBg}" BorderBrush="{DynamicResource AltBottomBarBorder}" BorderThickness="1">
                     <Border.CacheMode><BitmapCache EnableClearType="True" RenderAtScale="1"/></Border.CacheMode>
                     <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-
-                        <!-- More options (left) -->
-                        <Border Grid.Column="0" Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" ToolTip="More Options">
-                            <Border.Style><Style TargetType="Border"><Style.Triggers>
-                                <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource AltSidebarHover}"/></Trigger>
-                            </Style.Triggers></Style></Border.Style>
-                            <ui:SymbolIcon Symbol="MoreHorizontal24" FontSize="14" Foreground="{StaticResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-
-                        <!-- Action buttons (right) -->
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Border Grid.Column="0" Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" ToolTip="More Options" MouseLeftButtonDown="AltMoreOptions_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="MoreHorizontal24" FontSize="14" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
-                            <!-- Add/Plus -->
-                            <Border Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Add Item">
-                                <Border.Style><Style TargetType="Border"><Style.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource AltSidebarHover}"/></Trigger>
-                                </Style.Triggers></Style></Border.Style>
-                                <ui:SymbolIcon Symbol="Add24" FontSize="14" Foreground="{StaticResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <!-- Sync -->
-                            <Border Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Sync">
-                                <Border.Style><Style TargetType="Border"><Style.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource AltSidebarHover}"/></Trigger>
-                                </Style.Triggers></Style></Border.Style>
-                                <ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" Foreground="{StaticResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <!-- Pin -->
-                            <Border Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Pinned Items">
-                                <Border.Style><Style TargetType="Border"><Style.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{StaticResource AltSidebarHover}"/></Trigger>
-                                </Style.Triggers></Style></Border.Style>
-                                <ui:SymbolIcon Symbol="Pin24" FontSize="13" Foreground="{StaticResource AltPinDot}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <!-- Delete/Clear -->
-                            <Border Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" ToolTip="Clear Shelf">
-                                <Border.Style><Style TargetType="Border"><Style.Triggers>
-                                    <Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource DangerBgHover}"/></Trigger>
-                                </Style.Triggers></Style></Border.Style>
-                                <ui:SymbolIcon Symbol="Delete24" FontSize="13" Foreground="{DynamicResource DangerColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
+                            <Border Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Keyboard Shortcuts" MouseLeftButtonDown="AltShortcuts_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Keyboard24" FontSize="14" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                            <Border Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Sync" MouseLeftButtonDown="AltSync_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                            <Border Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Clear Shelf" MouseLeftButtonDown="AltClear_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource DangerBgHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Delete24" FontSize="13" Foreground="{DynamicResource DangerColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                            <Border Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" ToolTip="Reminders" MouseLeftButtonDown="ReminderBtn_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Alert24" FontSize="13" Foreground="{DynamicResource AltPinDot}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                         </StackPanel>
                     </Grid>
                 </Border>

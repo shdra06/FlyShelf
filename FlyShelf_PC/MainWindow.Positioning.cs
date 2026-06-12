@@ -143,7 +143,6 @@ namespace FlyShelf
                 try
                 {
                     // Set base opacity to 0 and clear animation clocks immediately.
-                    // This forces WPF to evaluate the opacity as 0.
                     this.Opacity = 0;
                     this.BeginAnimation(OpacityProperty, null);
                     if (RootContent.RenderTransform is TranslateTransform tt)
@@ -152,12 +151,9 @@ namespace FlyShelf
                         tt.Y = 0;
                     }
                     RootContent.Opacity = 1;
-                    // JITTER FIX: Don't null RenderTransform — it invalidates WPF's
-                    // cached render tree and causes DWM recomposition flash/tremor.
-                    // Just ensure our cached transform is assigned with Y=0.
-
-                    // Defer offscreen move to let WPF commit the 0% opacity frame onscreen first
-                    Dispatcher.InvokeAsync(() => HideWindowInternal(), System.Windows.Threading.DispatcherPriority.Background);
+                    // NO deferred HideWindowInternal — ShowNearPositionInternal will
+                    // position the window correctly. The deferred hide was racing with
+                    // the new show, moving the window offscreen mid-animation.
                 }
                 catch { }
             }
@@ -167,14 +163,12 @@ namespace FlyShelf
                 this.Opacity = 0;
                 this.BeginAnimation(OpacityProperty, null);
                 RootContent.Opacity = 1;
-                // JITTER FIX: Don't null RenderTransform — reset the cached transform instead.
                 _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, null);
                 _cachedSlideTransform.Y = 0;
                 if (!ReferenceEquals(RootContent.RenderTransform, _cachedSlideTransform))
                     RootContent.RenderTransform = _cachedSlideTransform;
-                
-                // Defer offscreen move to let WPF commit the 0% opacity frame onscreen first
-                Dispatcher.InvokeAsync(() => HideWindowInternal(), System.Windows.Threading.DispatcherPriority.Background);
+                // NO deferred HideWindowInternal — same reason as above.
+                // The window will be repositioned by ShowNearPositionInternal below.
             }
 
             Classes.SpawnProfiler.Instance.Mark("PRE_SET_MODE");
@@ -340,23 +334,54 @@ namespace FlyShelf
             //    Clearing first prevents an intermediate frame at the old animated value.
             this.BeginAnimation(OpacityProperty, null);
             this.Opacity = 0; // TRUE zero — completely invisible during positioning to prevent first-spawn flash
+
+            // ═══ PRE-EMPTIVE GC: Drain Gen0 pressure before animation ═══
+            // Diagnostic logs show intermittent 26ms GC pauses between BeginAnimation()
+            // and the first render frame. Clean spawns get 2 frames at opacity=0 (GC happened
+            // before), jittery spawns lose a frame to GC (first visible frame jumps to 0.30).
+            // Running Gen0 GC now (while still invisible) prevents GC during the animation.
+            GC.Collect(0, GCCollectionMode.Optimized, false, false);
+
             Classes.SpawnProfiler.Instance.Mark("CLEAR_ANIM_CLOCKS");
 
-            // ═══ DWM CLOAK: BULLETPROOF JITTER MASK ═══
-            // Cloak the window at the DWM compositor level. While cloaked, the window is
-            // completely invisible regardless of what WPF does internally — layout shifts,
-            // position changes, size recalculations, RenderTransform resets — NOTHING is
-            // visible. We uncloak just before the animation starts.
-            try
+            // ═══ SPAWN DIAGNOSTIC: Wire up & start recording ═══
+            var diag = Classes.SpawnDiagnostic.Instance;
+            diag.GetIsShowAnimating = () => _isShowAnimating;
+            diag.GetIsCurrentlySummoned = () => _isCurrentlySummoned;
+            diag.GetIsEdgeLocked = () => _isEdgeLocked;
+            diag.GetIsAnimatingHide = () => _isAnimatingHide;
+            diag.GetSpawnGeneration = () => _spawnGeneration;
+            diag.GetIsNotesActive = () => _isNotesActive;
+            diag.GetIsTodoActive = () => _isTodoActive;
+            diag.GetLockedBottomEdge = () => _lockedBottomEdge;
+            diag.GetLastActualHeight = () => _lastActualHeight;
+            diag.GetRootContent = () => RootContent;
+            diag.GetNotesPanel = () => NotesPanel;
+            diag.GetTodoPanel = () => TodoPanel;
+            diag.GetShelfListView = () => ShelfListView;
+            diag.MarkPhase("CLEAR_ANIM");
+            diag.BeginRecording(this);
+
+            // ═══ ELEMENT POSITION TRACKER: Per-element jitter detection ═══
+            var ept = Classes.ElementPositionTracker.Instance;
+            ept.GetSlideTransformY = () => _cachedSlideTransform.Y;
+            // Register all major elements — first time only
+            if (!_elementsRegistered)
             {
-                var hwndCloak = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                if (hwndCloak != IntPtr.Zero)
-                {
-                    int cloakVal = 1;
-                    DwmSetWindowAttribute(hwndCloak, DWMWA_CLOAK, ref cloakVal, sizeof(int));
-                }
+                _elementsRegistered = true;
+                ept.RegisterElement("RootContent", () => RootContent);
+                ept.RegisterElement("HeaderStack", () => HeaderAndFiltersStack);
+                ept.RegisterElement("TopHeaderGrid", () => TopHeaderGrid);
+                ept.RegisterElement("SearchToggle", () => SearchToggleBtn);
+                ept.RegisterElement("NotesToggle", () => NotesToggleBtn);
+                ept.RegisterElement("ShelfListView", () => ShelfListView);
+                ept.RegisterElement("NotesPanel", () => NotesPanel);
+                ept.RegisterElement("TodoPanel", () => TodoPanel);
+                ept.RegisterElement("AltPanel", () => AltClipboardPanel);
+                ept.RegisterElement("AltListView", () => AltShelfListView);
             }
-            catch { }
+            ept.MarkPhase("SETUP");
+            ept.BeginRecording(this);
             
             // Reset the cached slide transform instead of setting RenderTransform=null.
             // Setting null invalidates the entire render tree; resetting Y is a no-op.
@@ -376,13 +401,16 @@ namespace FlyShelf
 
             // 2. Move onscreen FIRST — window is at opacity=0, completely invisible.
             //    This lets DWM composite the window in the correct position BEFORE animation.
-            this.Left = rawX;
+            diag.MarkEvent("SET_LEFT");
+            this.Left = Math.Round(rawX);
             double computedTop = _lockedBottomEdge - realHeight - 20;
             if (computedTop < workArea.Top + 16)
                 computedTop = workArea.Top + 16;
             if (computedTop + realHeight > workArea.Top + workArea.Height - 16)
                 computedTop = workArea.Top + workArea.Height - realHeight - 16;
-            this.Top = computedTop;
+            this.Top = Math.Round(computedTop);
+            diag.MarkPhase("MOVED_ONSCREEN");
+            diag.MarkEvent("SET_TOP");
             Classes.SpawnProfiler.Instance.Mark("MOVE_ONSCREEN");
 
             // 3. Bring to front — window is positioned but still invisible (opacity=0).
@@ -396,7 +424,7 @@ namespace FlyShelf
                         Classes.NativeMethods.SetWindowPos(hwnd,
                             -1 /*HWND_TOPMOST*/, 0, 0, 0, 0,
                             Classes.NativeMethods.SWP_NOMOVE | Classes.NativeMethods.SWP_NOSIZE |
-                            Classes.NativeMethods.SWP_NOACTIVATE | Classes.NativeMethods.SWP_SHOWWINDOW);
+                            Classes.NativeMethods.SWP_NOACTIVATE);
                     }
                 }
                 catch { }
@@ -405,93 +433,57 @@ namespace FlyShelf
             {
                 this.Activate();
             }
+            diag.MarkPhase("ACTIVATED");
+            diag.MarkEvent("ACTIVATION_DONE");
             Classes.SpawnProfiler.Instance.Mark("ACTIVATION_DONE");
 
-            // 4. Start animation after ONE rendered frame at opacity=0.
+            // 4. Start animation.
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
             {
-                double expectedTop = computedTop;
-                int framesAtCorrectPos = 0;
-                int totalFramesSeen = 0;
-                int maxFrames = 30;
-                EventHandler renderHandler = null!;
-                renderHandler = (s, e) =>
+                if (_hasCompletedFirstSpawn)
                 {
-                    totalFramesSeen++;
-                    if (totalFramesSeen > maxFrames)
+                    // ═══ FAST PATH (subsequent spawns) ═══
+                    // Wait exactly ONE render frame at opacity=0 before starting animation.
+                    // This invisible frame serves two critical purposes:
+                    // 1. DWM CACHE WARM-UP: After virtual desktop switches, DWM's texture
+                    //    cache for this window is invalidated. Without this frame, DWM must
+                    //    recomposite the entire window surface on the first VISIBLE frame,
+                    //    causing a 30ms stall (the jitter after desktop switching).
+                    // 2. GC BUFFER: Even with pre-emptive Gen0 GC, a render frame at opacity=0
+                    //    absorbs any residual GC pressure without visible impact.
+                    int capturedGen = _spawnGeneration;
+                    EventHandler warmupHandler = null!;
+                    warmupHandler = (s, e) =>
+                    {
+                        System.Windows.Media.CompositionTarget.Rendering -= warmupHandler;
+                        if (_spawnGeneration != capturedGen) return; // stale spawn
+                        PlayShowAnimation();
+                        Classes.SpawnProfiler.Instance.Mark("PLAY_SHOW_ANIMATION");
+                    };
+                    System.Windows.Media.CompositionTarget.Rendering += warmupHandler;
+                }
+                else
+                {
+                    // ═══ FIRST SPAWN PATH ═══
+                    // Wait exactly ONE render frame for WPF to realize the visual tree.
+                    // On first spawn, the visual tree is cold (no items templated yet).
+                    int capturedSpawnGen = _spawnGeneration;
+                    EventHandler renderHandler = null!;
+                    renderHandler = (s, e) =>
                     {
                         System.Windows.Media.CompositionTarget.Rendering -= renderHandler;
-                        bool wasFirstSpawn = !_hasCompletedFirstSpawn;
+                        if (_spawnGeneration != capturedSpawnGen) return; // stale
+
                         _hasCompletedFirstSpawn = true;
-
-                        // Uncloak on timeout too
-                        try
-                        {
-                            var hwndTimeout = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                            if (hwndTimeout != IntPtr.Zero)
-                            {
-                                int uncloakVal = 0;
-                                DwmSetWindowAttribute(hwndTimeout, DWMWA_CLOAK, ref uncloakVal, sizeof(int));
-                            }
-                        }
-                        catch { }
-
                         PlayShowAnimation();
-                        if (wasFirstSpawn) ForceFirstSpawnRepaint();
+                        ForceFirstSpawnRepaint();
                         Classes.SpawnProfiler.Instance.Mark("PLAY_SHOW_ANIMATION");
-                        return;
-                    }
-
-                    if (Math.Abs(this.Top - expectedTop) < 2.0)
-                    {
-                        if (!_hasCompletedFirstSpawn && framesAtCorrectPos == 0)
-                        {
-                            this.UpdateLayout();
-                            GC.Collect(0, GCCollectionMode.Forced, false);
-                            GC.WaitForPendingFinalizers();
-                        }
-
-                        framesAtCorrectPos++;
-                        int requiredFrames = _hasCompletedFirstSpawn ? 1 : 2;
-                        if (framesAtCorrectPos >= requiredFrames)
-                        {
-                            System.Windows.Media.CompositionTarget.Rendering -= renderHandler;
-                            bool wasFirstSpawn = !_hasCompletedFirstSpawn;
-                            _hasCompletedFirstSpawn = true;
-
-                            // ═══ DWM UNCLOAK: Window is positioned and settled ═══
-                            try
-                            {
-                                var hwndUncloak = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                                if (hwndUncloak != IntPtr.Zero)
-                                {
-                                    int uncloakVal = 0;
-                                    DwmSetWindowAttribute(hwndUncloak, DWMWA_CLOAK, ref uncloakVal, sizeof(int));
-                                }
-                            }
-                            catch { }
-
-                            PlayShowAnimation();
-                            if (wasFirstSpawn) ForceFirstSpawnRepaint();
-                            Classes.SpawnProfiler.Instance.Mark("PLAY_SHOW_ANIMATION");
-                        }
-                    }
-                };
-                System.Windows.Media.CompositionTarget.Rendering += renderHandler;
+                    };
+                    System.Windows.Media.CompositionTarget.Rendering += renderHandler;
+                }
             }
             else
             {
-                // Uncloak for no-animation path
-                try
-                {
-                    var hwndNoAnim = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                    if (hwndNoAnim != IntPtr.Zero)
-                    {
-                        int uncloakVal = 0;
-                        DwmSetWindowAttribute(hwndNoAnim, DWMWA_CLOAK, ref uncloakVal, sizeof(int));
-                    }
-                }
-                catch { }
 
                 this.Opacity = 1.0;
                 _isEdgeLocked = true;

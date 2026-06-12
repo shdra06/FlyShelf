@@ -190,6 +190,12 @@ namespace FlyShelf.Classes
         public string GlobalUrl => _cfDaemon.GlobalUrl;
         public int CurrentPort { get; private set; } = 3000;
 
+        /// <summary>
+        /// Forces an immediate tunnel health check — used on wake from sleep
+        /// to avoid waiting up to 60s for the periodic health timer.
+        /// </summary>
+        public void ForceCheckTunnelHealth() => _cfDaemon.ForceCheckTunnelHealth();
+
         private static readonly string[] _allowedRoots = {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf"),

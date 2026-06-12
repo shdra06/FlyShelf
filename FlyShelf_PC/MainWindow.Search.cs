@@ -293,6 +293,13 @@ namespace FlyShelf
 
         private void SortFilter_Click(object sender, RoutedEventArgs e)
         {
+            // In Notes mode, this button acts as the Reminder button
+            if (_isNotesActive)
+            {
+                ReminderBtn_Click(sender, e);
+                return;
+            }
+
             if (_isFilterBarActive)
             {
                 // Clicking the filter button while active → clear filter and close bar

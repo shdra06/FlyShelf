@@ -347,13 +347,17 @@ namespace FlyShelf
 
         static MainWindow()
         {
-            _cachedOpacityAnim = new System.Windows.Media.Animation.DoubleAnimation(0.01, 1, TimeSpan.FromMilliseconds(250))
+            // FIX: Start from 0 (not 0.01) — DWM skips Mica glass composition at opacity=0,
+            // but at 0.01 it forces per-frame Mica blending causing flickering artifacts.
+            // FIX: Both animations at 250ms — eliminates the 30ms desync window where
+            // the slide is still moving at full opacity (maximally visible jitter).
+            _cachedOpacityAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(250))
             {
                 EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
             };
             _cachedOpacityAnim.Freeze();
 
-            _cachedSlideInAnim = new System.Windows.Media.Animation.DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(280))
+            _cachedSlideInAnim = new System.Windows.Media.Animation.DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(250))
             {
                 EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
             };
@@ -366,7 +370,41 @@ namespace FlyShelf
         /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
         private void PlayShowAnimation()
         {
+            Classes.SpawnDiagnostic.Instance.MarkPhase("PLAY_SHOW_ANIM");
+            Classes.SpawnDiagnostic.Instance.MarkEvent("ANIM_START");
             _isShowAnimating = true;
+
+            // ═══ MICA BACKDROP SUSPEND ═══
+            // Temporarily disable Mica glass during animation.
+            // DWM's Mica compositor forces per-frame glass blending that creates
+            // 25-35ms frame drops (visible as jitter) when the window first appears.
+            // Setting backdrop to None lets DWM skip the expensive glass pass.
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    int backdropNone = 1; // DWMSBT_NONE
+                    DwmSetWindowAttribute(hwnd, 38, ref backdropNone, sizeof(int)); // DWMWA_SYSTEMBACKDROP_TYPE
+                }
+            }
+            catch { }
+
+            // FIX 5: Disable UseLayoutRounding during animation to prevent integer-snap
+            // oscillation. Fractional SlideY values (e.g., 4.78, 2.14) fight with rounding,
+            // causing content to snap between pixels each frame = 1px jitter.
+            RootContent.UseLayoutRounding = false;
+
+            // ═══ AERO UI: Suspend decorative overlays during animation ═══
+            // The AltClipboardPanel has 3 layered gradient borders (themed gradient,
+            // arctic frost, inner glow) each with CornerRadius=14 + ClipToBounds.
+            // These force WPF's compositor to do per-frame gradient blending + clipping.
+            // Since the window starts at opacity=0, these are invisible during early frames.
+            // Hiding them cuts compositing cost by ~60%.
+            if (_isAltUIActive && AltArcticOverlay != null)
+            {
+                AltArcticOverlay.Visibility = Visibility.Collapsed;
+            }
 
             // NOTE: Do NOT call UpdatePositionToLockedBottomEdge() here.
             // The initial positioning was already done in ShowNearPositionInternal using cached height.
@@ -386,14 +424,18 @@ namespace FlyShelf
             // it to attach a Completed handler, but Clone() unfreezes the animation, pulling
             // it back to the UI thread where GC pauses cause 30-43ms frame drops.
             //
-            // Instead, detect completion via CompositionTarget.Rendering by monitoring opacity.
-            // The slide animation (280ms) is longer than opacity (250ms), so we wait for slide=0.
+            // Instead, detect completion via CompositionTarget.Rendering by monitoring slide Y.
+            // Both animations are 250ms (synchronized), we wait for slide Y ≈ 0.
             this.BeginAnimation(OpacityProperty, _cachedOpacityAnim);
             _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, _cachedSlideInAnim);
 
-            // Detect animation completion on the render thread without unfreezing anything.
-            // Check when the slide Y reaches 0 (end of 280ms slide animation).
+            // Detect animation completion by frame count.
+            // Both animations are 250ms. At 60fps = ~16 frames. Wait 17 to be safe.
+            // NOTE: We can't reliably poll _cachedSlideTransform.Y because frozen
+            // animations may not update the local property value on the UI thread.
             int capturedGen = _spawnGeneration;
+            int animFrameCount = 0;
+            const int animFrameTarget = 20; // 250ms at 60fps ≈ 15 frames + 5 buffer for safety
             EventHandler completionHandler = null!;
             completionHandler = (s, e) =>
             {
@@ -403,26 +445,60 @@ namespace FlyShelf
                     System.Windows.Media.CompositionTarget.Rendering -= completionHandler;
                     return;
                 }
-                // Wait until slide animation has effectively finished (Y ≈ 0)
-                if (_cachedSlideTransform.Y > 0.05) return;
+                animFrameCount++;
+                if (animFrameCount < animFrameTarget) return;
 
                 System.Windows.Media.CompositionTarget.Rendering -= completionHandler;
 
                 _isShowAnimating = false;
                 _isEdgeLocked = true;
+                Classes.SpawnDiagnostic.Instance.MarkPhase("ANIM_COMPLETE");
+                Classes.SpawnDiagnostic.Instance.MarkEvent("ANIM_DONE");
+                // Stop diagnostic recording 200ms after completion to capture settle
+                var diagStopTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+                diagStopTimer.Tick += (_, _) => { diagStopTimer.Stop(); Classes.SpawnDiagnostic.Instance.StopRecording(); };
+                diagStopTimer.Start();
                 _showAnimEndTime = DateTime.UtcNow; // Start 500ms post-animation cooldown for SizeChanged
+
                 // Snap _lockedBottomEdge to the CURRENT window position instead of moving
                 // the window. This prevents a visible jump when ActualHeight differs from
                 // the cached height used during initial positioning.
                 if (this.ActualHeight > 0)
                     _lockedBottomEdge = this.Top + this.ActualHeight + 20;
 
-                // JITTER FIX: After animation completes, remove the animation clock.
-                // Leaving a TranslateTransform(Y≈0) with an active clock on a
-                // UseLayoutRounding window causes WPF to continuously apply sub-pixel
-                // corrections that shimmer on Mica surfaces.
-                _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, null);
-                _cachedSlideTransform.Y = 0;
+                // DEFERRED CLEANUP: Don't snap the transform or re-enable rounding on
+                // the same frame — that fights the last animation frame and causes a
+                // visible desync (slide snaps to 0 while opacity is still at 0.96).
+                // Wait one more render frame for the animation clocks to fully settle.
+                Dispatcher.InvokeAsync(() =>
+                {
+                    // Clear animation clocks and snap to final values
+                    _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, null);
+                    _cachedSlideTransform.Y = 0;
+                    this.BeginAnimation(OpacityProperty, null);
+                    this.Opacity = 1;
+                    // Re-enable UseLayoutRounding now that everything is at integer positions
+                    RootContent.UseLayoutRounding = true;
+
+                    // ═══ MICA BACKDROP RESTORE ═══
+                    // Re-enable Mica glass now that animation is done and all values are settled.
+                    try
+                    {
+                        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                        if (hwnd != IntPtr.Zero)
+                        {
+                            int backdropMica = 2; // DWMSBT_MAINWINDOW (Mica)
+                            DwmSetWindowAttribute(hwnd, 38, ref backdropMica, sizeof(int));
+                        }
+                    }
+                    catch { }
+
+                    // ═══ AERO UI: Restore decorative overlays ═══
+                    if (_isAltUIActive && AltArcticOverlay != null)
+                    {
+                        AltArcticOverlay.Visibility = Visibility.Visible;
+                    }
+                }, System.Windows.Threading.DispatcherPriority.Render);
             };
             System.Windows.Media.CompositionTarget.Rendering += completionHandler;
         }

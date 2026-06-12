@@ -14,7 +14,7 @@ import { ref, push, set, get, onValue, query, limitToLast, orderByChild, update,
 import * as DocumentPicker from 'expo-document-picker';
 import * as Clipboard from 'expo-clipboard';
 import * as FileSystem from 'expo-file-system/legacy';
-import { getSecureItem, setSecureItem } from '../../utils/secureStorage';
+import { getSecureItem, setSecureItem, removeSecureItem } from '../../utils/secureStorage';
 import * as MediaLibrary from 'expo-media-library';
 import { Image } from 'expo-image';
 
@@ -251,16 +251,47 @@ export default function SyncScreen() {
         syncLog('DL-QUEUE', `Downloading: ${item.title} via ${item.source}`);
         const dlHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
         if (pairingKeyRef.current) dlHeaders['X-Pairing-Key'] = pairingKeyRef.current;
-        // 60s timeout prevents stalled downloads from blocking the entire queue forever
-        const dlResult = await Promise.race([
-          FileSystem.downloadAsync(item.fileUrl, item.destPath, { headers: dlHeaders }),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Download timeout (60s)')), 60000)),
-        ]);
+
+        // Retry loop: 2 attempts with URL re-resolution on failure
+        let queueDlSuccess = false;
+        let currentFileUrl = item.fileUrl;
+        for (let queueAttempt = 0; queueAttempt < 2 && !queueDlSuccess; queueAttempt++) {
+          try {
+            // Re-resolve URL on retry (tunnel URL may have changed)
+            if (queueAttempt > 0 && currentFileUrl.includes('trycloudflare.com')) {
+              try {
+                const freshBase = await getCachedPcUrl();
+                if (freshBase && currentFileUrl.includes('?')) {
+                  const queryPart = currentFileUrl.substring(currentFileUrl.indexOf('?'));
+                  currentFileUrl = `${freshBase}/download${queryPart}`;
+                } else if (freshBase) {
+                  currentFileUrl = freshBase;
+                }
+              } catch {}
+              syncLog('DL-QUEUE', `Retry #${queueAttempt}: ${currentFileUrl.substring(0, 80)}`);
+            }
+            // 60s timeout prevents stalled downloads from blocking the entire queue forever
+            const dlResult = await Promise.race([
+              FileSystem.downloadAsync(currentFileUrl, item.destPath, { headers: dlHeaders }),
+              new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Download timeout (60s)')), 60000)),
+            ]);
+
+            if (dlResult && dlResult.status === 200) {
+              queueDlSuccess = true;
+            } else {
+              throw new Error(`HTTP ${dlResult?.status}`);
+            }
+          } catch (retryErr: any) {
+            if (queueAttempt >= 1) {
+              syncLog('DL-QUEUE', `❌ ${item.title} failed after 2 attempts: ${retryErr?.message || retryErr}`);
+            }
+          }
+        }
 
         // Remove progress card
         setClips(prev => prev.filter(c => c.id !== progressId));
 
-        if (dlResult && dlResult.status === 200) {
+        if (queueDlSuccess) {
           syncLog('DL-QUEUE', `✅ ${item.title} saved via ${item.source}`);
           setDownloadedItems(prev => { const n = new Set(prev); n.add(item.id || item.title); return n; });
           // Update clip with CachedUri
@@ -270,7 +301,7 @@ export default function SyncScreen() {
           if (Platform.OS === 'android') ToastAndroid.show(`✅ ${item.title} saved`, ToastAndroid.SHORT);
           if (item.id) { try { await markFileDownloaded(item.id); } catch {} }
         } else {
-          syncLog('DL-QUEUE', `❌ ${item.title} failed (HTTP ${dlResult?.status})`);
+          syncLog('DL-QUEUE', `❌ ${item.title} failed (all attempts exhausted)`);
           await FileSystem.deleteAsync(item.destPath, { idempotent: true }).catch(() => {});
         }
       } catch (err: any) {
@@ -402,7 +433,13 @@ export default function SyncScreen() {
             }
           } catch {}
         }
-      } catch {}
+      } catch {
+        // Invalidate stale Cloudflare pairing URL if health check failed
+        const pairedGlobal = await getSecureItem('pairedGlobalUrl').catch(() => null);
+        if (pairedGlobal && pairedGlobal.includes('trycloudflare.com')) {
+          removeSecureItem('pairedGlobalUrl').catch(() => {});
+        }
+      }
 
       // Priority 3: Last-known Cloudflare URL (Phase 4 — cached from previous session)
       try {
@@ -416,7 +453,10 @@ export default function SyncScreen() {
               cachedPcUrlTimestampRef.current = startNow;
               return lastCfUrl;
             }
-          } catch {}
+          } catch {
+            // Invalidate stale Cloudflare URL from storage
+            removeSecureItem('lastCloudflareUrl').catch(() => {});
+          }
         }
       } catch {}
 
@@ -869,6 +909,10 @@ export default function SyncScreen() {
     const peerDevicesRef = ref(database, `active_devices/${pk}`);
     const unsubscribeDevices = onValue(peerDevicesRef, async (snapshot) => {
       try {
+        if (!snapshot.exists()) {
+          // Firebase entry was auto-deleted — keep using cached URLs, don't clear them
+          return;
+        }
         let rawDevices: any[] = [];
         if (snapshot.exists()) {
           const data = snapshot.val();
@@ -1062,29 +1106,60 @@ export default function SyncScreen() {
           syncLog('IMG-DL', `${imgItem.Title} → ${downloadSource}: ${downloadUrl.substring(0, 80)}`);
           const dlHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
           if (pairingKeyRef.current) dlHeaders['X-Pairing-Key'] = pairingKeyRef.current;
-          const { uri, status } = await FileSystem.downloadAsync(downloadUrl, localUri, { headers: dlHeaders });
 
-          if (status === 200) {
-            const info = await FileSystem.getInfoAsync(uri);
-            if (info.exists && (info as any).size > 100) {
-              setClips(prev => prev.map(c =>
-                c.id === imgItem.id ? { ...c, Raw: uri, CachedUri: uri, _needsDownload: undefined } : c
-              ));
-              syncLog('IMG-DL', `✓ ${imgItem.Title} via ${downloadSource}`);
-              if (imgItem === needsDownload[0]) {
+          // Download with 30s timeout + 1 retry with URL re-resolution
+          let dlAttempt = 0;
+          let dlSuccess = false;
+          while (dlAttempt < 2 && !dlSuccess) {
+            try {
+              // Re-resolve URL on retry (tunnel URL may have changed)
+              if (dlAttempt > 0 && downloadUrl.includes('trycloudflare.com')) {
                 try {
-                  const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
-                  await Clipboard.setImageAsync(b64);
+                  const freshBase = await getCachedPcUrl();
+                  if (freshBase && downloadUrl.includes('?path=')) {
+                    const pathPart = downloadUrl.substring(downloadUrl.indexOf('?path='));
+                    downloadUrl = `${freshBase}/download${pathPart}`;
+                  } else if (freshBase) {
+                    downloadUrl = freshBase;
+                  }
                 } catch {}
+                syncLog('IMG-DL', `Retry #${dlAttempt}: ${downloadUrl.substring(0, 80)}`);
               }
-              if (AdvanceOverlay && isFloatingBallEnabled) {
-                try { AdvanceOverlay.pushClipToNativeDB(uri, imgItem.SourceDeviceName || 'PC'); } catch {}
+              const dlResult = await Promise.race([
+                FileSystem.downloadAsync(downloadUrl, localUri, { headers: dlHeaders }),
+                new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Download timeout (30s)')), 30000)),
+              ]);
+              const { uri, status } = dlResult as { uri: string; status: number };
+
+              if (status === 200) {
+                const info = await FileSystem.getInfoAsync(uri);
+                if (info.exists && (info as any).size > 100) {
+                  setClips(prev => prev.map(c =>
+                    c.id === imgItem.id ? { ...c, Raw: uri, CachedUri: uri, _needsDownload: undefined } : c
+                  ));
+                  syncLog('IMG-DL', `✓ ${imgItem.Title} via ${downloadSource}`);
+                  if (imgItem === needsDownload[0]) {
+                    try {
+                      const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 });
+                      await Clipboard.setImageAsync(b64);
+                    } catch {}
+                  }
+                  if (AdvanceOverlay && isFloatingBallEnabled) {
+                    try { AdvanceOverlay.pushClipToNativeDB(uri, imgItem.SourceDeviceName || 'PC'); } catch {}
+                  }
+                  if (Platform.OS === 'android') ToastAndroid.show(`🖼️ Screenshot synced from PC!`, ToastAndroid.SHORT);
+                }
+                dlSuccess = true;
+              } else {
+                throw new Error(`HTTP ${status}`);
               }
-              if (Platform.OS === 'android') ToastAndroid.show(`🖼️ Screenshot synced from PC!`, ToastAndroid.SHORT);
+            } catch (dlErr: any) {
+              dlAttempt++;
+              if (dlAttempt >= 2) {
+                syncLog('IMG-DL', `✗ ${imgItem.Title} after ${dlAttempt} attempts: ${dlErr?.message || dlErr}`);
+                try { await FileSystem.deleteAsync(localUri, { idempotent: true }); } catch {}
+              }
             }
-          } else {
-            syncLog('IMG-DL', `✗ ${imgItem.Title} (HTTP ${status})`);
-            try { await FileSystem.deleteAsync(localUri, { idempotent: true }); } catch {}
           }
         } catch (err: any) {
           syncLog('IMG-DL', `✗ ${imgItem.Title}: ${err?.message || err}`);
@@ -1121,7 +1196,11 @@ export default function SyncScreen() {
           try {
             const globalUrl = response.headers.get('X-Global-Url');
             if (globalUrl && globalUrl.includes('trycloudflare.com')) {
-              setSecureItem('lastCloudflareUrl', globalUrl).catch(() => {});
+              // Only persist if different from current cache (avoid redundant writes)
+              const currentCached = cachedPcUrlRef.current;
+              if (!currentCached || !currentCached.includes(globalUrl.split('//')[1]?.split('/')[0] || '')) {
+                setSecureItem('lastCloudflareUrl', globalUrl).catch(() => {});
+              }
             }
           } catch {}
           const data = await response.json();
@@ -1494,6 +1573,10 @@ export default function SyncScreen() {
             // 204 = timeout, no new events — loop again immediately
           } catch (innerErr: any) {
             if (!longPollActive) break;
+            // Invalidate stale Cloudflare URL on long-poll failure
+            if (url && url.includes('trycloudflare.com')) {
+              removeSecureItem('lastCloudflareUrl').catch(() => {});
+            }
             // Backoff on errors: 1s, 2s, 4s... max 10s (reduced from 30s)
             longPollBackoff = Math.min(longPollBackoff + 1, 4);
             const delay = Math.min(1000 * Math.pow(2, longPollBackoff), 10000);
@@ -2594,6 +2677,13 @@ export default function SyncScreen() {
             let done = false;
             while (attempt < 3 && !done) {
               attempt++;
+              // Re-resolve URL on retry (tunnel URL may have changed)
+              if (attempt > 1 && resolved.includes('trycloudflare.com')) {
+                try {
+                  const freshUrl = await getCachedPcUrl();
+                  if (freshUrl) resolved = freshUrl;
+                } catch {}
+              }
               try {
                 const res = await FileSystem.uploadAsync(`${resolved}/api/upload_chunk`, chunkTempUri, {
                   httpMethod: 'POST',

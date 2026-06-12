@@ -129,8 +129,41 @@ namespace FlyShelf.Classes
         /// </summary>
         public static string RegeneratePairingKey()
         {
+            string oldKey = SettingsManager.Current.PairingKey;
             SettingsManager.Current.PairingKey = Guid.NewGuid().ToString("N");
             SettingsManager.Save();
+
+            // SECURITY: Clean up all entries under the old pairing key to prevent data leakage.
+            // Without this, old active_devices, clipboard, and members entries are orphaned forever.
+            if (!string.IsNullOrEmpty(oldKey))
+            {
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        // Delete our device entry from the old key scope
+                        string myDeviceId = SettingsManager.Current.DeviceId;
+                        if (!string.IsNullOrEmpty(myDeviceId))
+                        {
+                            string url = await AuthUrl($"active_devices/{oldKey}/{myDeviceId}.json");
+                            await _httpClient.DeleteAsync(url);
+                        }
+                        // Remove our room membership from the old key
+                        string uid = await FirebaseAuthManager.GetUidAsync();
+                        if (!string.IsNullOrEmpty(uid))
+                        {
+                            string memberUrl = await AuthUrl($"members/{oldKey}/{uid}.json");
+                            await _httpClient.DeleteAsync(memberUrl);
+                        }
+                        Logger.LogAction("PAIR", $"Cleaned up old pairing key scope: {oldKey.Substring(0, 8)}...");
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("PAIR", $"Old key cleanup failed: {ex.Message}");
+                    }
+                });
+            }
+
             return SettingsManager.Current.PairingKey;
         }
 
@@ -345,6 +378,26 @@ namespace FlyShelf.Classes
             }
             Save();
             Logger.LogAction("PAIR", $"Removed device: {deviceId}");
+
+            // SECURITY: Also delete the ghost entry from Firebase active_devices
+            // Without this, unpaired devices persist in the Cloud topology indefinitely.
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    string pairingKey = SettingsManager.Current.PairingKey;
+                    if (!string.IsNullOrEmpty(pairingKey))
+                    {
+                        string url = await AuthUrl($"active_devices/{pairingKey}/{deviceId}.json");
+                        await _httpClient.DeleteAsync(url);
+                        Logger.LogAction("PAIR", $"Deleted ghost entry from Firebase: active_devices/{pairingKey}/{deviceId}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("PAIR", $"Firebase ghost cleanup failed: {ex.Message}");
+                }
+            });
         }
 
         // ═══ Short Pairing Code System ═══

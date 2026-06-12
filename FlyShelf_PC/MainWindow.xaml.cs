@@ -39,6 +39,7 @@ namespace FlyShelf
         private bool _isClosed = false;
         private double _lockedBottomEdge = 0;
         private bool _isEdgeLocked = false;
+        private bool _elementsRegistered = false;
         private DateTime _showAnimEndTime = DateTime.MinValue; // Timestamp when show animation completed — used for post-animation cooldown
         private Windows.TaskbarWindow? _taskbarWidget;
         private Windows.MascotCompanionWindow? _mascotCompanion;
