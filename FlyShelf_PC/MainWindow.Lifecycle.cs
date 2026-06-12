@@ -20,6 +20,7 @@ namespace FlyShelf
             base.OnActivated(e);
             if (_isAnimatingHide) return;
             if (_isShowAnimating) return; // Don't override opacity during show animation
+            if (this.Opacity < 0.05) return; // Guard: window is in invisible pre-animation phase (first spawn)
             // Guard: don't fight QuickLook for focus
             if (System.Windows.Application.Current.Windows.OfType<Window>()
                 .Any(w => w is FlyShelf.Windows.QuickLookWindow && w.IsActive)) return;
@@ -324,6 +325,7 @@ namespace FlyShelf
                 _lastPanelBeforeDismiss = null;
                 _desktopSwitchedSinceLastDismiss = true;
                 _isCurrentlySummoned = false;
+                UninstallKeyboardHook();
                 _isAnimatingHide = false;
                 this.Opacity = 0;
                 this.BeginAnimation(OpacityProperty, null);
@@ -345,18 +347,13 @@ namespace FlyShelf
 
         static MainWindow()
         {
-            // Opacity: 300ms QuarticEase — the first ~100ms runs at near-0% opacity (invisible),
-            // absorbing the 60-115ms of pre-animation setup work (CloseSearch, CurrentMode, layout).
-            // The visible fade-in is the last ~200ms: smooth and jitter-free.
-            _cachedOpacityAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(300))
+            _cachedOpacityAnim = new System.Windows.Media.Animation.DoubleAnimation(0.01, 1, TimeSpan.FromMilliseconds(250))
             {
-                EasingFunction = new System.Windows.Media.Animation.QuarticEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+                EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
             };
             _cachedOpacityAnim.Freeze();
 
-            // Slide: 350ms CubicEase from Y=8 → 0. Subtle enough that the first few frames
-            // of movement are sub-pixel (invisible) during setup, then smoothly decelerates to rest.
-            _cachedSlideInAnim = new System.Windows.Media.Animation.DoubleAnimation(8, 0, TimeSpan.FromMilliseconds(350))
+            _cachedSlideInAnim = new System.Windows.Media.Animation.DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(280))
             {
                 EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
             };
@@ -371,29 +368,77 @@ namespace FlyShelf
         {
             _isShowAnimating = true;
 
-            // Reset the cached transform for slide-in
+            // NOTE: Do NOT call UpdatePositionToLockedBottomEdge() here.
+            // The initial positioning was already done in ShowNearPositionInternal using cached height.
+            // Calling it again here with ActualHeight (which may differ) causes a visible position jump.
+
+            // Reset the slide transform to start position.
+            // CRITICAL: Don't reassign RenderTransform if it's already our cached instance —
+            // reassigning invalidates the entire visual tree's cached render transform,
+            // causing a DWM recomposition flash that looks like a tremor/shake.
             _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, null);
-            _cachedSlideTransform.Y = 8;
-            RootContent.RenderTransform = _cachedSlideTransform;
+            _cachedSlideTransform.Y = 6;
+            if (!ReferenceEquals(RootContent.RenderTransform, _cachedSlideTransform))
+                RootContent.RenderTransform = _cachedSlideTransform;
 
-            // Clear _isShowAnimating after 400ms (slide-in is 350ms)
-            if (_showAnimEndTimer == null)
-            {
-                _showAnimEndTimer = new System.Windows.Threading.DispatcherTimer
-                {
-                    Interval = TimeSpan.FromMilliseconds(400)
-                };
-                _showAnimEndTimer.Tick += (s, e) =>
-                {
-                    _showAnimEndTimer.Stop();
-                    _isShowAnimating = false;
-                };
-            }
-            _showAnimEndTimer.Stop();
-            _showAnimEndTimer.Start();
-
+            // PERF: Use the FROZEN opacity animation directly — it runs entirely on WPF's
+            // composition thread (GPU), immune to UI thread GC pauses. Previously we Clone()d
+            // it to attach a Completed handler, but Clone() unfreezes the animation, pulling
+            // it back to the UI thread where GC pauses cause 30-43ms frame drops.
+            //
+            // Instead, detect completion via CompositionTarget.Rendering by monitoring opacity.
+            // The slide animation (280ms) is longer than opacity (250ms), so we wait for slide=0.
             this.BeginAnimation(OpacityProperty, _cachedOpacityAnim);
             _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, _cachedSlideInAnim);
+
+            // FIRST-SPAWN FIX: WPF's composition cache is cold on first render —
+            // the initial frame may show a "half render box" with incomplete visuals
+            // (missing wallpaper, partially-drawn cards). Scrolling/clicking fixes it
+            // because those trigger InvalidateVisual internally. Do the same explicitly:
+            // queue a full visual tree repaint after the first animated frame renders.
+            if (!_hasCompletedFirstSpawn)
+            {
+                Dispatcher.InvokeAsync(() =>
+                {
+                    RootContent.InvalidateVisual();
+                    ShelfListView.InvalidateVisual();
+                }, System.Windows.Threading.DispatcherPriority.Background);
+            }
+
+            // Detect animation completion on the render thread without unfreezing anything.
+            // Check when the slide Y reaches 0 (end of 280ms slide animation).
+            int capturedGen = _spawnGeneration;
+            EventHandler completionHandler = null!;
+            completionHandler = (s, e) =>
+            {
+                // Bail if a new spawn started (stale handler)
+                if (_spawnGeneration != capturedGen)
+                {
+                    System.Windows.Media.CompositionTarget.Rendering -= completionHandler;
+                    return;
+                }
+                // Wait until slide animation has effectively finished (Y ≈ 0)
+                if (_cachedSlideTransform.Y > 0.05) return;
+
+                System.Windows.Media.CompositionTarget.Rendering -= completionHandler;
+
+                _isShowAnimating = false;
+                _isEdgeLocked = true;
+                _showAnimEndTime = DateTime.UtcNow; // Start 500ms post-animation cooldown for SizeChanged
+                // Snap _lockedBottomEdge to the CURRENT window position instead of moving
+                // the window. This prevents a visible jump when ActualHeight differs from
+                // the cached height used during initial positioning.
+                if (this.ActualHeight > 0)
+                    _lockedBottomEdge = this.Top + this.ActualHeight + 20;
+
+                // JITTER FIX: After animation completes, remove the animation clock.
+                // Leaving a TranslateTransform(Y≈0) with an active clock on a
+                // UseLayoutRounding window causes WPF to continuously apply sub-pixel
+                // corrections that shimmer on Mica surfaces.
+                _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, null);
+                _cachedSlideTransform.Y = 0;
+            };
+            System.Windows.Media.CompositionTarget.Rendering += completionHandler;
         }
 
         // PERF: Deferred mascot/GIF resume timer — mascot starts 1s after spawn, not during spawn
@@ -407,6 +452,7 @@ namespace FlyShelf
 
             // ═══ CRITICAL: Set unsummoned IMMEDIATELY ═══
             _isCurrentlySummoned = false;
+            UninstallKeyboardHook(); // Release arrow-key hook so keys return to the target app
 
             Classes.Logger.LogAction("VD_HIDE", $"AnimateAndHide | notes={_isNotesActive} todo={_isTodoActive} deskSwitchFlag={_desktopSwitchedSinceLastDismiss}");
 
@@ -438,11 +484,15 @@ namespace FlyShelf
                 this.BeginAnimation(OpacityProperty, null);
                 RootContent.Opacity = 1;
 
-                if (RootContent.RenderTransform is TranslateTransform tt)
-                {
-                    tt.BeginAnimation(TranslateTransform.YProperty, null);
-                }
-                RootContent.RenderTransform = null;
+                // JITTER FIX: Don't null-out RenderTransform on hide.
+                // Setting RenderTransform=null destroys WPF's cached render tree transform.
+                // On the next show, reassigning it causes a full visual tree invalidation
+                // and DWM recomposition flash that looks like a shake/tremor.
+                // Instead, just reset the cached transform's Y to 0 (a no-op visually).
+                _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, null);
+                _cachedSlideTransform.Y = 0;
+                if (!ReferenceEquals(RootContent.RenderTransform, _cachedSlideTransform))
+                    RootContent.RenderTransform = _cachedSlideTransform;
 
                 // Reset scroll
                 try

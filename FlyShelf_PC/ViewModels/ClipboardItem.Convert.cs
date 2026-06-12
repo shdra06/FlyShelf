@@ -71,7 +71,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                    string targetPdf = Path.Combine(Path.GetDirectoryName(FilePath) ?? Path.GetTempPath(), Path.GetFileNameWithoutExtension(FilePath) + "_Converted.pdf");
+                    string targetPdf = Path.Combine(Path.GetDirectoryName(FilePath) ?? Path.GetTempPath(), Path.GetFileNameWithoutExtension(FilePath) + $"_Converted_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
 
 
 
@@ -338,7 +338,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                        Path.GetFileNameWithoutExtension(FilePath) + ".pdf");
+                        Path.GetFileNameWithoutExtension(FilePath) + $"_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
 
 
 

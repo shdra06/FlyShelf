@@ -73,6 +73,10 @@ namespace FlyShelf.Windows
             {
                 UpdateSectionCard.Visibility = Visibility.Collapsed;
             }
+            // Hide Cloudflare UI — cloudflared.exe is excluded from Store builds
+            if (CloudflareSeparator != null) CloudflareSeparator.Visibility = Visibility.Collapsed;
+            if (CloudflareToggleSection != null) CloudflareToggleSection.Visibility = Visibility.Collapsed;
+            if (CloudflareStatusGrid != null) CloudflareStatusGrid.Visibility = Visibility.Collapsed;
 #endif
             if (StartupHelper.IsPackaged())
             {

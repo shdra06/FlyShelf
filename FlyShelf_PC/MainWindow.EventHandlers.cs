@@ -98,6 +98,11 @@ namespace FlyShelf
         private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             if (_isSuppressingSizeSync) return;
+            // Don't persist size during spawn animation or post-animation cooldown — prevents
+            // settings PropertyChanged feedback loop that causes the window to bounce
+            if (_isShowAnimating) return;
+            if (_showAnimEndTime != DateTime.MinValue &&
+                (DateTime.UtcNow - _showAnimEndTime).TotalMilliseconds < 500) return;
             // Don't persist the shrunken height caused by card deletion — it would corrupt
             // the stored MiniFormHeight, making future summons spawn at the wrong size.
             if (IsDeletingItem) return;

@@ -749,10 +749,10 @@
                                         <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableLocalLAN, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                     </Grid>
                                     
-                                    <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,16" />
+                                    <Border x:Name="CloudflareSeparator" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,16" />
                                     
                                     <!-- Cloudflare Toggle -->
-                                    <Grid>
+                                    <Grid x:Name="CloudflareToggleSection">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*" />
                                             <ColumnDefinition Width="Auto" />
@@ -806,7 +806,7 @@
                                         <Button Grid.Column="2" Content="Copy" Margin="12,0,0,0" Padding="8,2" FontSize="11" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Cursor="Hand" Click="CopyUrl_Click" Tag="{Binding LocalServer.DisplayUrl}" MinWidth="55" />
                                     </Grid>
                                     
-                                    <Grid HorizontalAlignment="Center" Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalCloudflare, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <Grid x:Name="CloudflareStatusGrid" HorizontalAlignment="Center" Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalCloudflare, Converter={StaticResource BooleanToVisibilityConverter}}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="80"/>
                                             <ColumnDefinition Width="Auto"/>

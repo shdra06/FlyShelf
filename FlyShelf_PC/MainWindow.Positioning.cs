@@ -1,5 +1,6 @@
 using FlyShelf.ViewModels;
 using System;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -17,6 +18,21 @@ namespace FlyShelf
         private DateTime _lastSortContextTime = DateTime.MinValue;
 
         private bool _borderColorSet = false;
+
+        // ═══ Low-Level Keyboard Hook for no-focus arrow navigation ═══
+        private const int VK_UP = 0x26;
+        private const int VK_DOWN = 0x28;
+        private const int VK_RETURN = 0x0D;
+        private const int VK_ESCAPE = 0x1B;
+        private IntPtr _keyboardHookId = IntPtr.Zero;
+        private Classes.NativeMethods.LowLevelKeyboardProc? _keyboardHookProc;
+        /// <summary>True when the clipboard was spawned in no-focus mode (stealFocus=false).
+        /// Used by CopyItemAndPaste to skip SetForegroundWindow since the target app already has focus.</summary>
+        private bool _spawnedWithoutFocus = false;
+        /// <summary>False until the first spawn animation completes. Used to allow extra
+        /// render frames on the very first spawn so WPF's initial layout pass finishes
+        /// before the fade-in animation starts (prevents first-spawn jitter).</summary>
+        private bool _hasCompletedFirstSpawn = false;
 
         private bool MoveToCurrentVirtualDesktop(IntPtr hwnd, bool force = false)
         {
@@ -84,7 +100,7 @@ namespace FlyShelf
         public void ShowNearPosition(double targetX, double targetY, int mode = 0, bool isPersistent = false, bool stealFocus = true, bool? knownOnOtherDesktop = null)
         {
             Classes.Logger.LogAction("TELEMETRY", $"ShowNearPosition entered, mode={mode}, isPersistent={isPersistent}, stealFocus={stealFocus}");
-            Classes.SpawnProfiler.Instance.BeginSpawn();
+            Classes.SpawnProfiler.Instance.BeginSpawn(this);
             
             // NOTE: VD handling removed — window is always pinned to all virtual desktops
             // (WS_EX_APPWINDOW is never set), so IsWindowOnCurrentVirtualDesktop always returns true.
@@ -110,6 +126,14 @@ namespace FlyShelf
 
             _spawnTime = DateTime.Now;
             _isPersistentMode = isPersistent;
+
+            // JITTER FIX: Disable edge-locking and mark show-animating BEFORE any mode change
+            // or layout work. Without this, the SizeChanged handler fires during mode setup
+            // with _isEdgeLocked=true from the PREVIOUS spawn, causing a 120px position bounce.
+            _isEdgeLocked = false;
+            if (Classes.SettingsManager.Current.EnableSummonAnimations)
+                _isShowAnimating = true;
+
             Classes.SpawnProfiler.Instance.Mark("PRE_ABORT_HIDE");
 
             // Abort hide animation if one is actively running
@@ -125,9 +149,12 @@ namespace FlyShelf
                     if (RootContent.RenderTransform is TranslateTransform tt)
                     {
                         tt.BeginAnimation(TranslateTransform.YProperty, null);
+                        tt.Y = 0;
                     }
                     RootContent.Opacity = 1;
-                    RootContent.RenderTransform = null;
+                    // JITTER FIX: Don't null RenderTransform — it invalidates WPF's
+                    // cached render tree and causes DWM recomposition flash/tremor.
+                    // Just ensure our cached transform is assigned with Y=0.
 
                     // Defer offscreen move to let WPF commit the 0% opacity frame onscreen first
                     Dispatcher.InvokeAsync(() => HideWindowInternal(), System.Windows.Threading.DispatcherPriority.Background);
@@ -140,7 +167,11 @@ namespace FlyShelf
                 this.Opacity = 0;
                 this.BeginAnimation(OpacityProperty, null);
                 RootContent.Opacity = 1;
-                RootContent.RenderTransform = null;
+                // JITTER FIX: Don't null RenderTransform — reset the cached transform instead.
+                _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, null);
+                _cachedSlideTransform.Y = 0;
+                if (!ReferenceEquals(RootContent.RenderTransform, _cachedSlideTransform))
+                    RootContent.RenderTransform = _cachedSlideTransform;
                 
                 // Defer offscreen move to let WPF commit the 0% opacity frame onscreen first
                 Dispatcher.InvokeAsync(() => HideWindowInternal(), System.Windows.Threading.DispatcherPriority.Background);
@@ -294,7 +325,7 @@ namespace FlyShelf
                 rawY = maxBottomEdge;
 
             _lockedBottomEdge = rawY;
-            _isEdgeLocked = false; // Lock the edge AFTER all positioning has been completed at the end of the method!
+            // _isEdgeLocked already set to false at the top of ShowNearPosition (before mode change)
 
             // ═══ CRITICAL: JITTER-FREE SPAWN SEQUENCE ═══
             // Order: Position → Activate → Animate
@@ -302,10 +333,13 @@ namespace FlyShelf
             // when the window moves from -20000 to visible area (DWM must composite the new window).
             // By positioning FIRST at opacity=0 (invisible), DWM settles before animation starts.
 
+            this.ShowActivated = stealFocus;
+            _spawnedWithoutFocus = !stealFocus;
+
             // 1. Clear old animation clocks THEN set opacity=0.
             //    Clearing first prevents an intermediate frame at the old animated value.
             this.BeginAnimation(OpacityProperty, null);
-            this.Opacity = 0;
+            this.Opacity = 0; // TRUE zero — completely invisible during positioning to prevent first-spawn flash
             Classes.SpawnProfiler.Instance.Mark("CLEAR_ANIM_CLOCKS");
             
             // Reset the cached slide transform instead of setting RenderTransform=null.
@@ -319,6 +353,8 @@ namespace FlyShelf
 
             _spawnGeneration++;
             _isCurrentlySummoned = true;
+            // _isShowAnimating already set to true at the top of ShowNearPosition (before mode change)
+            // Ensure it's still true here (belt-and-suspenders):
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
                 _isShowAnimating = true;
 
@@ -355,19 +391,55 @@ namespace FlyShelf
             }
             Classes.SpawnProfiler.Instance.Mark("ACTIVATION_DONE");
 
-            // 4. Start animation LAST — DWM has fully composited the window at opacity=0.
-            //    The composition thread clock starts from a clean, settled state.
+            // 4. Start animation after ONE rendered frame at opacity=0.
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
             {
-                PlayShowAnimation();
-                Classes.SpawnProfiler.Instance.Mark("PLAY_SHOW_ANIMATION");
+                double expectedTop = computedTop;
+                int framesAtCorrectPos = 0;
+                int totalFramesSeen = 0;
+                int maxFrames = 30;
+                EventHandler renderHandler = null!;
+                renderHandler = (s, e) =>
+                {
+                    totalFramesSeen++;
+                    if (totalFramesSeen > maxFrames)
+                    {
+                        System.Windows.Media.CompositionTarget.Rendering -= renderHandler;
+                        _hasCompletedFirstSpawn = true;
+                        PlayShowAnimation();
+                        Classes.SpawnProfiler.Instance.Mark("PLAY_SHOW_ANIMATION");
+                        return;
+                    }
+
+                    if (Math.Abs(this.Top - expectedTop) < 2.0)
+                    {
+                        if (!_hasCompletedFirstSpawn && framesAtCorrectPos == 0)
+                        {
+                            this.UpdateLayout();
+                            GC.Collect(0, GCCollectionMode.Forced, false);
+                            GC.WaitForPendingFinalizers();
+                        }
+
+                        framesAtCorrectPos++;
+                        int requiredFrames = _hasCompletedFirstSpawn ? 1 : 2;
+                        if (framesAtCorrectPos >= requiredFrames)
+                        {
+                            System.Windows.Media.CompositionTarget.Rendering -= renderHandler;
+                            _hasCompletedFirstSpawn = true;
+                            PlayShowAnimation();
+                            Classes.SpawnProfiler.Instance.Mark("PLAY_SHOW_ANIMATION");
+                        }
+                    }
+                };
+                System.Windows.Media.CompositionTarget.Rendering += renderHandler;
             }
             else
             {
                 this.Opacity = 1.0;
+                _isEdgeLocked = true;
+                UpdatePositionToLockedBottomEdge();
             }
 
-            _isEdgeLocked = true; // Lock the edge AFTER all positioning has been completed!
 
             // Explicitly set DWM border color on each summon to prevent OS/MicaWPF composition resets.
             // PERF: Defer to Background priority so it runs after the spawn animation is fully started.
@@ -414,13 +486,10 @@ namespace FlyShelf
                 }
                 _mascotDelayTimer.Start();
 
-                // Trigger visible high-quality render almost instantly after opening (20ms)
+                // Trigger visible high-quality render after the spawn animation completes (300ms)
                 if (_scrollHighQualityTimer == null)
                 {
-                    _scrollHighQualityTimer = new System.Windows.Threading.DispatcherTimer
-                    {
-                        Interval = TimeSpan.FromMilliseconds(20)
-                    };
+                    _scrollHighQualityTimer = new System.Windows.Threading.DispatcherTimer();
                     _scrollHighQualityTimer.Tick += (s, ev) =>
                     {
                         _scrollHighQualityTimer.Stop();
@@ -431,6 +500,7 @@ namespace FlyShelf
                 {
                     _scrollHighQualityTimer.Stop();
                 }
+                _scrollHighQualityTimer.Interval = TimeSpan.FromMilliseconds(300);
                 _scrollHighQualityTimer.Start();
 
                 // NOTE: DWM uncloaking was previously here but has been removed.
@@ -445,6 +515,19 @@ namespace FlyShelf
             {
                 Dispatcher.InvokeAsync(() => FocusFirstItemContainer(),
                     System.Windows.Threading.DispatcherPriority.Background);
+            }
+            else
+            {
+                // No-focus mode: install a low-level keyboard hook so arrow keys
+                // navigate the clipboard list without stealing focus from the target app.
+                InstallKeyboardHook();
+
+                // Pre-select the first item so the user sees what will be pasted
+                Dispatcher.InvokeAsync(() =>
+                {
+                    if (_viewModel.DroppedItems.Count > 0 && ShelfListView.SelectedIndex < 0)
+                        ShelfListView.SelectedIndex = 0;
+                }, System.Windows.Threading.DispatcherPriority.Background);
             }
         }
 
@@ -853,6 +936,116 @@ namespace FlyShelf
                 }
             }
             catch { }
+        }
+
+        // ═══ Low-Level Keyboard Hook — Arrow Navigation Without Focus ═══
+
+        /// <summary>
+        /// Installs a WH_KEYBOARD_LL hook so Up/Down/Enter/Escape work on the clipboard
+        /// even though it doesn't have keyboard focus (stealFocus=false).
+        /// </summary>
+        private void InstallKeyboardHook()
+        {
+            if (_keyboardHookId != IntPtr.Zero) return; // Already installed
+
+            _keyboardHookProc = KeyboardHookCallback;
+            using (var curProcess = System.Diagnostics.Process.GetCurrentProcess())
+            using (var curModule = curProcess.MainModule!)
+            {
+                _keyboardHookId = Classes.NativeMethods.SetWindowsHookEx(
+                    Classes.NativeMethods.WH_KEYBOARD_LL,
+                    _keyboardHookProc,
+                    Classes.NativeMethods.GetModuleHandle(curModule.ModuleName),
+                    0);
+            }
+        }
+
+        /// <summary>
+        /// Removes the low-level keyboard hook. Safe to call multiple times.
+        /// </summary>
+        private void UninstallKeyboardHook()
+        {
+            if (_keyboardHookId != IntPtr.Zero)
+            {
+                Classes.NativeMethods.UnhookWindowsHookEx(_keyboardHookId);
+                _keyboardHookId = IntPtr.Zero;
+            }
+            _keyboardHookProc = null;
+        }
+
+        /// <summary>
+        /// Low-level keyboard hook callback. Intercepts Up/Down/Enter/Escape ONLY when
+        /// the clipboard is visible (_isCurrentlySummoned) and navigates the ListView
+        /// programmatically — without stealing focus from the target application.
+        /// </summary>
+        private IntPtr KeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+        {
+            if (nCode >= 0 && wParam == (IntPtr)Classes.NativeMethods.WM_KEYDOWN && _isCurrentlySummoned && !_isAnimatingHide)
+            {
+                int vkCode = Marshal.ReadInt32(lParam);
+
+                if (vkCode == VK_DOWN)
+                {
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        int count = _viewModel.DroppedItems.Count;
+                        if (count == 0) return;
+                        int next = ShelfListView.SelectedIndex + 1;
+                        if (next >= count) next = count - 1;
+                        ShelfListView.SelectedIndex = next;
+                        ShelfListView.ScrollIntoView(ShelfListView.SelectedItem);
+                    });
+                    return (IntPtr)1; // Swallow the key
+                }
+
+                if (vkCode == VK_UP)
+                {
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        int count = _viewModel.DroppedItems.Count;
+                        if (count == 0) return;
+                        int prev = ShelfListView.SelectedIndex - 1;
+                        if (prev < 0) prev = 0;
+                        ShelfListView.SelectedIndex = prev;
+                        ShelfListView.ScrollIntoView(ShelfListView.SelectedItem);
+                    });
+                    return (IntPtr)1; // Swallow the key
+                }
+
+                if (vkCode == VK_RETURN)
+                {
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        if (ShelfListView.SelectedItem is ClipboardItem item)
+                        {
+                            _ = CopyItemAndPaste(item, hideWindow: true);
+                        }
+                    });
+                    return (IntPtr)1; // Swallow the key
+                }
+
+                if (vkCode == VK_ESCAPE)
+                {
+                    Dispatcher.InvokeAsync(() => AnimateAndHide());
+                    return (IntPtr)1; // Swallow the key
+                }
+            }
+
+            return Classes.NativeMethods.CallNextHookEx(_keyboardHookId, nCode, wParam, lParam);
+        }
+
+        private void UpdatePositionToLockedBottomEdge()
+        {
+            if (this.ActualHeight > 0)
+            {
+                var workArea = SystemParameters.WorkArea;
+                double newTop = _lockedBottomEdge - this.ActualHeight - 20;
+                if (newTop < workArea.Top + 16)
+                    newTop = workArea.Top + 16;
+                if (newTop + this.ActualHeight > workArea.Top + workArea.Height - 16)
+                    newTop = workArea.Top + workArea.Height - this.ActualHeight - 16;
+                this.Top = newTop;
+            }
         }
     }
 }

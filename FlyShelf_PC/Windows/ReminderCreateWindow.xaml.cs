@@ -100,6 +100,9 @@ namespace FlyShelf.Windows
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             TitleInput.Focus();
+            // Wire event AFTER initialization to prevent premature popup closure
+            // when SelectedDate is set in the constructor
+            CalendarControl.SelectedDatesChanged += Calendar_SelectedDatesChanged;
         }
 
         private void Header_MouseDown(object sender, MouseButtonEventArgs e)
@@ -117,8 +120,20 @@ namespace FlyShelf.Windows
 
         private void DatePicker_Click(object sender, MouseButtonEventArgs e)
         {
+            // Detach handler before opening to prevent spurious close
+            CalendarControl.SelectedDatesChanged -= Calendar_SelectedDatesChanged;
             CalendarPopup.IsOpen = !CalendarPopup.IsOpen;
             TimePopup.IsOpen = false;
+
+            if (CalendarPopup.IsOpen)
+            {
+                // Re-attach handler after WPF finishes its initialization events.
+                // DispatcherPriority.Input ensures all layout/render events have settled.
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, () =>
+                {
+                    CalendarControl.SelectedDatesChanged += Calendar_SelectedDatesChanged;
+                });
+            }
         }
 
         private void Calendar_SelectedDatesChanged(object sender, SelectionChangedEventArgs e)

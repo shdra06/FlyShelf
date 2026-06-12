@@ -39,6 +39,7 @@ namespace FlyShelf
         private bool _isClosed = false;
         private double _lockedBottomEdge = 0;
         private bool _isEdgeLocked = false;
+        private DateTime _showAnimEndTime = DateTime.MinValue; // Timestamp when show animation completed — used for post-animation cooldown
         private Windows.TaskbarWindow? _taskbarWidget;
         private Windows.MascotCompanionWindow? _mascotCompanion;
         private System.Windows.Threading.DispatcherTimer? _clipboardDebounceTimer;
@@ -149,6 +150,15 @@ namespace FlyShelf
                 int cornerPref = 2; // DWMWCP_ROUND
                 DwmSetWindowAttribute(helper.Handle, 33, ref cornerPref, sizeof(int)); // DWMWA_WINDOW_CORNER_PREFERENCE
 
+                // ═══ JITTER FIX: Disable DWM's own window transitions ═══
+                // DWM applies its own show/hide/move animations on windows (slide-in, fade, etc.).
+                // These DWM-level animations overlap with our WPF opacity+slide animation,
+                // causing visible "bouncing" that the WPF profiler can't detect because DWM
+                // operates at a lower composition layer.
+                // DWMWA_TRANSITIONS_FORCEDISABLED (2) = TRUE suppresses all DWM transitions.
+                int disableTransitions = 1; // TRUE
+                DwmSetWindowAttribute(helper.Handle, 3, ref disableTransitions, sizeof(int)); // DWMWA_TRANSITIONS_FORCEDISABLED
+
                 // Pin the entire application to all virtual desktops natively!
                 try
                 {
@@ -225,6 +235,19 @@ namespace FlyShelf
 
             this.SizeChanged += (s, e) =>
             {
+                // CRITICAL: Don't reposition during spawn animation — causes visible bouncing
+                // because ActualHeight fluctuates as content loads/generates, and each change
+                // triggers a Top recalculation that fights the initial positioning.
+                if (_isShowAnimating) return;
+
+                // POST-ANIMATION COOLDOWN: Block repositioning for 500ms after animation ends.
+                // RenderVisibleThumbnails fires at ~300ms (after animation ends at ~250ms),
+                // calling UpdateLayout() which triggers SizeChanged. Without this cooldown,
+                // the window bounces as content settles.
+                if (_showAnimEndTime != DateTime.MinValue &&
+                    (DateTime.UtcNow - _showAnimEndTime).TotalMilliseconds < 500)
+                    return;
+
                 if (_isEdgeLocked && this.ActualWidth > 0 && this.ActualHeight > 0)
                 {
                     var workArea = SystemParameters.WorkArea;
@@ -251,7 +274,12 @@ namespace FlyShelf
                             newTop = workArea.Top + 16;
                         if (newTop + this.ActualHeight > workArea.Top + workArea.Height - 16)
                             newTop = workArea.Top + workArea.Height - this.ActualHeight - 16;
-                        
+
+                        double drift = Math.Abs(newTop - this.Top);
+                        if (drift > 0.5)
+                        {
+                            Classes.Logger.LogAction("SIZE_BOUNCE", $"SizeChanged moving Top {this.Top:F1}→{newTop:F1} (Δ={drift:F1}px) H={this.ActualHeight:F0}→{e.NewSize.Height:F0} edge={_lockedBottomEdge:F1}");
+                        }
                         this.Top = newTop;
                     }
                 }
@@ -260,6 +288,10 @@ namespace FlyShelf
             // Restore keyboard focus to ListView or Notes textbox after window is moved/repositioned
             this.Activated += (s, e) =>
             {
+                // Skip re-focus during show animation or invisible pre-animation phase
+                // to prevent heavy layout/container generation causing first-spawn flash
+                if (_isShowAnimating || this.Opacity < 0.05) return;
+
                 // Skip re-focus if a topmost child window (QuickLook) is active — prevents infinite activation loop
                 if (System.Windows.Application.Current.Windows.OfType<Window>().Any(w => w.Topmost && w != this && w.IsActive)) return;
 
@@ -284,6 +316,10 @@ namespace FlyShelf
             _viewModel.PropertyChanged += (s, e) =>
             {
                 if (_isSuppressingSizeSync) return;
+                // Don't reposition during spawn animation or post-animation cooldown
+                if (_isShowAnimating) return;
+                if (_showAnimEndTime != DateTime.MinValue &&
+                    (DateTime.UtcNow - _showAnimEndTime).TotalMilliseconds < 500) return;
 
                 if (e.PropertyName == nameof(FlyShelfViewModel.CurrentFlyShelfMaxHeight))
                 {
@@ -563,10 +599,11 @@ namespace FlyShelf
             // (no more redundant early load that gets overwritten by theme init)
 
             // ═══ BACKDROP STRATEGY: Set once, never toggle ═══
-            // SystemBackdropType is set to Mica via XAML attribute.
-            // On Win10 (Build < 22000), Mica doesn't exist — fall back to solid background once.
-            // This is the ONLY place SystemBackdropType is ever modified at runtime.
-            if (Environment.OSVersion.Version.Build < 22000)
+            // DIAGNOSTIC: Mica disabled to test if DWM backdrop composition causes the
+            // intermittent 28-33ms frame drops during animation. DWM must re-sample and
+            // blur desktop pixels on every opacity change — this is the top suspect for
+            // the "unpredictable jitter" that happens on some spawns but not others.
+            // To restore Mica: wrap this block back in `if (Build < 22000)` check.
             {
                 this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
                 ApplyPopupBackground();
@@ -1073,6 +1110,7 @@ namespace FlyShelf
 
             _isCurrentlySummoned = false;
             _isEdgeLocked = false;
+            UninstallKeyboardHook(); // Safety net: ensure hook is released on deferred hide
 
             if (this.WindowState == WindowState.Minimized)
             {

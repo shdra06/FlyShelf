@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Windows.Media;
 
 namespace FlyShelf.Classes
@@ -26,6 +27,7 @@ namespace FlyShelf.Classes
         private bool _isCapturing;
         private int _spawnId;
         private string? _logPath;
+        private System.Windows.Window? _targetWindow;
 
         private struct SpawnStep
         {
@@ -38,7 +40,30 @@ namespace FlyShelf.Classes
             public int FrameNumber;
             public double DeltaMs;
             public double TotalMs;
+            public double Opacity;
+            public double SlideY;
+            public double WindowTop;
+            public double WindowHeight;
+            // Win32-level state (what DWM actually sees)
+            public bool WsVisible;     // WS_VISIBLE flag in GWL_STYLE
+            public int DwmCloaked;     // DwmGetWindowAttribute DWMWA_CLOAKED
+            public int Win32Left;      // GetWindowRect left
+            public int Win32Top;       // GetWindowRect top
+            public int Win32Height;    // GetWindowRect height (bottom - top)
+            // Content-level state
+            public double RootOpacity; // RootContent.Opacity (inner content opacity)
+            public double ScrollOffset;// ScrollViewer.VerticalOffset
         }
+
+        // Win32 interop for DWM-level state inspection
+        [DllImport("user32.dll")] private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+        [DllImport("user32.dll")] private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+        [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
+        [StructLayout(LayoutKind.Sequential)] private struct RECT { public int Left, Top, Right, Bottom; }
+        private const int GWL_STYLE = -16;
+        private const int WS_VISIBLE = 0x10000000;
+        private const int DWMWA_CLOAKED = 14;
+        private IntPtr _hwnd;
 
         private SpawnProfiler()
         {
@@ -57,11 +82,19 @@ namespace FlyShelf.Classes
         /// Call at the very start of the spawn pipeline (before any work).
         /// Resets all timers and starts capturing frame timings.
         /// </summary>
-        public void BeginSpawn()
+        public void BeginSpawn(System.Windows.Window? window = null)
         {
             _spawnId++;
             _steps.Clear();
             _frames.Clear();
+            _targetWindow = window;
+            _hwnd = IntPtr.Zero;
+            try
+            {
+                if (window != null)
+                    _hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            }
+            catch { }
             _sw.Restart();
             _lastFrameTicks = _sw.ElapsedTicks;
             _isCapturing = true;
@@ -99,15 +132,74 @@ namespace FlyShelf.Classes
             double deltaMs = (now - _lastFrameTicks) * 1000.0 / Stopwatch.Frequency;
             _lastFrameTicks = now;
 
+            // Capture actual visual state + window position
+            double opacity = 0;
+            double slideY = 0;
+            double windowTop = 0;
+            double windowHeight = 0;
+            bool wsVisible = false;
+            int dwmCloaked = 0;
+            int win32Left = 0, win32Top = 0, win32Height = 0;
+            double rootOpacity = 0;
+            double scrollOffset = 0;
+            try
+            {
+                if (_targetWindow is MainWindow mainWin)
+                {
+                    opacity = mainWin.Opacity;
+                    windowTop = mainWin.Top;
+                    windowHeight = mainWin.ActualHeight;
+                    var rootContent = mainWin.RootContent;
+                    if (rootContent != null)
+                    {
+                        rootOpacity = rootContent.Opacity;
+                        if (rootContent.RenderTransform is System.Windows.Media.TranslateTransform tt)
+                            slideY = tt.Y;
+                    }
+                    // Capture scroll position to detect content shifts
+                    try
+                    {
+                        var sv = FindChild<System.Windows.Controls.ScrollViewer>(mainWin.ShelfListView);
+                        if (sv != null) scrollOffset = sv.VerticalOffset;
+                    }
+                    catch { }
+                }
+                // Win32-level state: what DWM actually sees
+                if (_hwnd != IntPtr.Zero)
+                {
+                    int style = GetWindowLong(_hwnd, GWL_STYLE);
+                    wsVisible = (style & WS_VISIBLE) != 0;
+                    DwmGetWindowAttribute(_hwnd, DWMWA_CLOAKED, out dwmCloaked, sizeof(int));
+                    if (GetWindowRect(_hwnd, out RECT r))
+                    {
+                        win32Left = r.Left;
+                        win32Top = r.Top;
+                        win32Height = r.Bottom - r.Top;
+                    }
+                }
+            }
+            catch { }
+
             _frames.Add(new FrameTick
             {
                 FrameNumber = _frames.Count,
                 DeltaMs = deltaMs,
-                TotalMs = _sw.Elapsed.TotalMilliseconds
+                TotalMs = _sw.Elapsed.TotalMilliseconds,
+                Opacity = opacity,
+                SlideY = slideY,
+                WindowTop = windowTop,
+                WindowHeight = windowHeight,
+                WsVisible = wsVisible,
+                DwmCloaked = dwmCloaked,
+                Win32Left = win32Left,
+                Win32Top = win32Top,
+                Win32Height = win32Height,
+                RootOpacity = rootOpacity,
+                ScrollOffset = scrollOffset
             });
 
-            // Auto-stop after 500ms (30 frames at 60fps is plenty)
-            if (_sw.Elapsed.TotalMilliseconds > 500)
+            // Auto-stop after 1200ms to catch post-animation position jitter
+            if (_sw.Elapsed.TotalMilliseconds > 1200)
             {
                 EndCapture();
             }
@@ -154,56 +246,102 @@ namespace FlyShelf.Classes
                 writer.WriteLine();
 
                 // ─── Frame Timings ───
-                int droppedFrames = 0;
+                // Only count drops during VISIBLE animation (first 350ms).
+                // Drops after 350ms are post-animation cleanup (DWM border, mascot timer) — invisible.
+                int droppedInAnim = 0;   // drops during visible animation (0-350ms)
+                int droppedAfter = 0;    // drops after animation (>350ms)
+                int positionJitters = 0; // frames where Top changed by >1px
                 double maxDelta = 0;
                 double sumDelta = 0;
+                double prevTop = -1;
+                int prevWinH = -1;
+                int heightBounces = 0;
                 int frameCount = _frames.Count;
 
-                writer.WriteLine("  ┌─── FRAME TIMINGS (CompositionTarget.Rendering) ───");
-                writer.WriteLine("  │  Frame    Delta(ms)   Total(ms)   Status");
-                writer.WriteLine("  │  ─────    ─────────   ─────────   ──────");
+                writer.WriteLine("  ┌─── FRAME TIMINGS (CompositionTarget.Rendering) + DWM STATE ───");
+                writer.WriteLine("  │  Frame    Delta(ms)   Total(ms)   Opacity   SlideY   WinTop    WinH   Vis  Cloak  W32Top  W32H    Root   Status");
+                writer.WriteLine("  │  ─────    ─────────   ─────────   ───────   ──────   ──────    ────   ───  ─────  ──────  ────    ────   ──────");
                 
                 foreach (var frame in _frames)
                 {
-                    string status = "";
+                    bool inAnimWindow = frame.TotalMs <= 280;
+                    string status;
                     if (frame.DeltaMs > 25)
                     {
-                        status = "🔴 DROPPED (>25ms)";
-                        droppedFrames++;
+                        status = inAnimWindow ? "🔴 DROPPED (>25ms)" : "⚫ POST-ANIM";
+                        if (inAnimWindow) droppedInAnim++; else droppedAfter++;
                     }
                     else if (frame.DeltaMs > 16.67)
                     {
-                        status = "🟡 LATE (>16ms)";
-                        droppedFrames++;
+                        status = inAnimWindow ? "🟡 LATE" : "⚫ POST-ANIM";
                     }
                     else
                     {
                         status = "🟢 OK";
                     }
 
-                    writer.WriteLine($"  │  {frame.FrameNumber,5}    {frame.DeltaMs,9:F3}   {frame.TotalMs,9:F3}   {status}");
+                    // Detect position jitter: Top changed by >1px between frames during animation
+                    if (prevTop >= 0 && inAnimWindow && Math.Abs(frame.WindowTop - prevTop) > 1.0)
+                    {
+                        status += " ⚡ POS_JITTER";
+                        positionJitters++;
+                    }
+                    prevTop = frame.WindowTop;
+
+                    // DWM state flags: V=WS_VISIBLE, C=DwmCloaked value
+                    string vis = frame.WsVisible ? "V" : ".";
+                    string cloak = frame.DwmCloaked != 0 ? $"C{frame.DwmCloaked}" : ".";
+
+                    // Detect content bounce: Win32 height changed during animation
+                    if (prevWinH > 0 && inAnimWindow && Math.Abs(frame.Win32Height - prevWinH) > 2)
+                    {
+                        status += $" 🟠 H_BOUNCE({prevWinH}→{frame.Win32Height})";
+                        heightBounces++;
+                    }
+                    prevWinH = frame.Win32Height;
+
+                    writer.WriteLine($"  │  {frame.FrameNumber,5}    {frame.DeltaMs,9:F3}   {frame.TotalMs,9:F3}   {frame.Opacity,7:F3}   {frame.SlideY,6:F2}   {frame.WindowTop,6:F1}   {frame.WindowHeight,5:F0}    {vis}    {cloak,3}   {frame.Win32Top,6}  {frame.Win32Height,5}   R{frame.RootOpacity:F1}   {status}");
                     
-                    if (frame.FrameNumber > 0) // Skip first frame (delta is from BeginSpawn)
+                    if (frame.FrameNumber > 0)
                     {
                         sumDelta += frame.DeltaMs;
                         if (frame.DeltaMs > maxDelta) maxDelta = frame.DeltaMs;
                     }
                 }
-                writer.WriteLine($"  └─── Frames: {frameCount}, Dropped: {droppedFrames}, Max: {maxDelta:F2}ms, Avg: {(frameCount > 1 ? sumDelta / (frameCount - 1) : 0):F2}ms ───");
+                writer.WriteLine($"  └─── Frames: {frameCount}, Anim Drops: {droppedInAnim}, Post-Anim Drops: {droppedAfter}, Pos Jitters: {positionJitters}, H Bounces: {heightBounces}, Max: {maxDelta:F2}ms, Avg: {(frameCount > 1 ? sumDelta / (frameCount - 1) : 0):F2}ms ───");
                 writer.WriteLine();
 
-                // ─── Verdict ───
-                if (droppedFrames == 0)
-                    writer.WriteLine("  ✅ VERDICT: SMOOTH — No dropped frames detected.");
-                else if (droppedFrames <= 2)
-                    writer.WriteLine($"  ⚠️ VERDICT: MINOR JITTER — {droppedFrames} dropped frame(s). Max gap: {maxDelta:F2}ms.");
+                // ─── Verdict (only animation-window drops count) ───
+                if (droppedInAnim == 0 && positionJitters == 0)
+                    writer.WriteLine($"  ✅ VERDICT: SMOOTH — No dropped frames or position jitter in animation window (0-280ms).{(droppedAfter > 0 ? $" ({droppedAfter} post-anim drops ignored)" : "")}");
+                else if (positionJitters > 0)
+                    writer.WriteLine($"  ⚡ VERDICT: POSITION BOUNCE — {positionJitters} position jitter(s) detected! Window Top changed >1px between frames during animation.");
+                else if (droppedInAnim <= 1)
+                    writer.WriteLine($"  ⚠️ VERDICT: MINOR JITTER — {droppedInAnim} dropped frame(s) in animation window. Max gap: {maxDelta:F2}ms.");
                 else
-                    writer.WriteLine($"  🔴 VERDICT: JITTERY — {droppedFrames} dropped frame(s)! Max gap: {maxDelta:F2}ms. See frames above for root cause.");
+                    writer.WriteLine($"  🔴 VERDICT: JITTERY — {droppedInAnim} dropped frame(s) in animation window! Max gap: {maxDelta:F2}ms.");
 
                 writer.WriteLine();
                 writer.Flush();
             }
             catch { }
+        }
+
+        /// <summary>
+        /// Finds the first child of the specified type in the visual tree.
+        /// </summary>
+        private static T? FindChild<T>(System.Windows.DependencyObject? parent) where T : System.Windows.DependencyObject
+        {
+            if (parent == null) return null;
+            int count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(parent);
+            for (int i = 0; i < count; i++)
+            {
+                var child = System.Windows.Media.VisualTreeHelper.GetChild(parent, i);
+                if (child is T found) return found;
+                var result = FindChild<T>(child);
+                if (result != null) return result;
+            }
+            return null;
         }
     }
 }

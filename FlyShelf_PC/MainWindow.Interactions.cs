@@ -161,27 +161,55 @@ namespace FlyShelf
                 IsDragHovering = false;
             }
 
-            // Minimal delay — just enough for the target window to receive focus
-            await System.Threading.Tasks.Task.Delay(hideWindow ? 80 : 30);
-
-            if (_previousForegroundWindow != IntPtr.Zero)
+            if (_spawnedWithoutFocus)
             {
-                var sbTitle = new System.Text.StringBuilder(256);
-                GetWindowText(_previousForegroundWindow, sbTitle, 256);
-                string contextTitle = sbTitle.ToString();
-                
-                if (!string.IsNullOrWhiteSpace(contextTitle))
+                // ═══ NO-FOCUS PASTE PATH ═══
+                // The clipboard was shown with WS_EX_NOACTIVATE — the target app never lost focus.
+                // DO NOT call SetForegroundWindow: it's unnecessary and can cause focus fighting,
+                // caret resets, or paste failures. Just set clipboard data and simulate Ctrl+V.
+                // This matches how Windows native clipboard (Win+V) works.
+                await System.Threading.Tasks.Task.Delay(50); // Brief settle for clipboard data propagation
+
+                // Capture context title for the item (non-blocking)
+                if (_previousForegroundWindow != IntPtr.Zero)
                 {
-                    clipboardObj.AssociatedContextTitle = contextTitle;
+                    try
+                    {
+                        var sbTitle = new System.Text.StringBuilder(256);
+                        GetWindowText(_previousForegroundWindow, sbTitle, 256);
+                        string contextTitle = sbTitle.ToString();
+                        if (!string.IsNullOrWhiteSpace(contextTitle))
+                            clipboardObj.AssociatedContextTitle = contextTitle;
+                    }
+                    catch { }
                 }
-                
-                SetForegroundWindow(_previousForegroundWindow);
-                await System.Threading.Tasks.Task.Delay(50);
-                
-                if (GetForegroundWindow() != _previousForegroundWindow)
+            }
+            else
+            {
+                // ═══ FOCUS-STEAL PASTE PATH ═══
+                // The clipboard was shown activated (stealFocus=true) — need to restore focus
+                // to the previous window before simulating Ctrl+V.
+                await System.Threading.Tasks.Task.Delay(hideWindow ? 80 : 30);
+
+                if (_previousForegroundWindow != IntPtr.Zero)
                 {
+                    var sbTitle = new System.Text.StringBuilder(256);
+                    GetWindowText(_previousForegroundWindow, sbTitle, 256);
+                    string contextTitle = sbTitle.ToString();
+                    
+                    if (!string.IsNullOrWhiteSpace(contextTitle))
+                    {
+                        clipboardObj.AssociatedContextTitle = contextTitle;
+                    }
+                    
                     SetForegroundWindow(_previousForegroundWindow);
-                    await System.Threading.Tasks.Task.Delay(30);
+                    await System.Threading.Tasks.Task.Delay(50);
+                    
+                    if (GetForegroundWindow() != _previousForegroundWindow)
+                    {
+                        SetForegroundWindow(_previousForegroundWindow);
+                        await System.Threading.Tasks.Task.Delay(30);
+                    }
                 }
             }
 
@@ -397,6 +425,18 @@ namespace FlyShelf
         /// </summary>
         public void ToggleMainClipboard()
         {
+            // ═══ ANIMATION DEBOUNCE ═══
+            // If a show animation is actively running, ignore this toggle request entirely.
+            // Without this, rapid Alt+C presses (especially after desktop switches where
+            // zombieRecovered=true bypasses the TOGGLE_OFF check) would call ShowNearPosition
+            // again mid-animation, causing the "triple bounce" — the animation restarts
+            // from scratch on each re-entry, creating visible flicker.
+            if (_isShowAnimating)
+            {
+                Classes.Logger.LogAction("VD_TOGGLE", "DEBOUNCE: _isShowAnimating=true → ignoring toggle");
+                return;
+            }
+
             // ═══ DESKTOP SWITCH DETECTION ═══
             // Primary: cached GUID comparison (zero COM calls)
             bool isOnOtherDesktop = _summonedDesktopId != Guid.Empty &&
@@ -426,6 +466,7 @@ namespace FlyShelf
                     _lastPanelBeforeDismiss = null;
                     _desktopSwitchedSinceLastDismiss = true;
                     _isCurrentlySummoned = false;
+                    UninstallKeyboardHook();
                     _isAnimatingHide = false;
                     StopPanelAutoRevertTimer();
                     this.Opacity = 0;
@@ -449,6 +490,7 @@ namespace FlyShelf
                 EnsureClipboardMode();
                 _lastPanelBeforeDismiss = null;
                 _isCurrentlySummoned = false;
+                UninstallKeyboardHook();
                 _isAnimatingHide = false;
             }
 
@@ -470,6 +512,7 @@ namespace FlyShelf
                 _desktopSwitchedSinceLastDismiss = false;
                 _isAnimatingHide = false;
                 _isCurrentlySummoned = false;
+                UninstallKeyboardHook();
                 zombieRecovered = true;
             }
 

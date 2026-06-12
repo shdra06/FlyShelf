@@ -222,6 +222,7 @@ namespace FlyShelf.Classes
                 sb.AppendLine();
 
                 // cloudflared.exe binary check
+#if !MSIX_STORE
                 sb.AppendLine("── CLOUDFLARED BINARY ──");
                 string exePath = CloudflareDaemon.GetCloudflaredExePath();
                 bool isBundled = exePath.StartsWith(AppContext.BaseDirectory, StringComparison.OrdinalIgnoreCase);
@@ -238,6 +239,11 @@ namespace FlyShelf.Classes
                     sb.AppendLine($"  NOT FOUND at {exePath}");
                 }
                 sb.AppendLine();
+#else
+                sb.AppendLine("── CLOUDFLARED BINARY ──");
+                sb.AppendLine("  Excluded from Store build");
+                sb.AppendLine();
+#endif
 
                 // Firewall / Port Check
                 sb.AppendLine("── PORT ACCESSIBILITY ──");
