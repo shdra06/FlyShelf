@@ -753,13 +753,7 @@
                                     <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
                                 </Border>
                                 <ControlTemplate.Triggers>
-                                    <MultiDataTrigger>
-                                        <MultiDataTrigger.Conditions>
-                                            <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource Self}}" Value="True"/>
-                                            <Condition Binding="{Binding IsFirstTenItem}" Value="False"/>
-                                        </MultiDataTrigger.Conditions>
-                                        <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource ShelfCardSelectionBg}"/>
-                                    </MultiDataTrigger>
+
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
                         </Setter.Value>
@@ -814,29 +808,7 @@
                         </Border.RenderTransform>
 
                         <Grid>
-                            <!-- Premium Frosted Glass / Acrylic Backdrop Blur for Selected Cards -->
-                            <Border x:Name="SelectedBlurBg" CornerRadius="13" ClipToBounds="True" Visibility="Collapsed" IsHitTestVisible="False">
-                                <Grid>
-                                    <!-- Pre-blurred wallpaper cached on background thread — zero runtime GPU cost -->
-                                    <Image Source="{DynamicResource PreBlurredWallpaper}" 
-                                           Stretch="UniformToFill" 
-                                           Opacity="0.75" 
-                                           RenderOptions.BitmapScalingMode="LowQuality">
-                                        <Image.Style>
-                                            <Style TargetType="Image">
-                                                <Setter Property="Visibility" Value="Visible"/>
-                                                <Style.Triggers>
-                                                    <Trigger Property="Source" Value="{x:Null}">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                    </Trigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Image.Style>
-                                    </Image>
-                                    <!-- Sleek theme-colored tint overlay -->
-                                    <Border Background="{DynamicResource ShelfCardSelectionBg}" CornerRadius="13"/>
-                                </Grid>
-                            </Border>
+
 
                             <!-- Inner highlight border for frosted glass effect -->
                             <Border Name="InnerHighlightBorder" BorderThickness="1" CornerRadius="14" Padding="12">
@@ -1824,27 +1796,7 @@
                             <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource ShelfCardSelectionBorder}"/>
                         </DataTrigger>
 
-                        <!-- Selected State Trigger for Frosted Glass Backdrop Blur (requires Settings EnableBlurBehind) -->
-                        <MultiDataTrigger>
-                            <MultiDataTrigger.Conditions>
-                                <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True"/>
-                                <Condition Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableBlurBehind}" Value="True"/>
-                                <Condition Binding="{Binding IsFirstTenItem}" Value="False"/>
-                            </MultiDataTrigger.Conditions>
-                            <Setter TargetName="SelectedBlurBg" Property="Visibility" Value="Visible"/>
-                        </MultiDataTrigger>
 
-                        <!-- Mascot Theme Selection (Blur OFF) — Dynamic Cozy Accent Overlay -->
-                        <MultiDataTrigger>
-                            <MultiDataTrigger.Conditions>
-                                <Condition Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True"/>
-                                <Condition Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=ThemeDisplayMode}" Value="theme"/>
-                                <Condition Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableBlurBehind}" Value="False"/>
-                                <Condition Binding="{Binding IsFirstTenItem}" Value="False"/>
-                            </MultiDataTrigger.Conditions>
-                            <Setter TargetName="CardBorder" Property="Background" Value="{DynamicResource ShelfCardSelectionBg}"/>
-                            <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource ShelfCardSelectionBorder}"/>
-                        </MultiDataTrigger>
                     </DataTemplate.Triggers>
                 </DataTemplate>
             </ListView.ItemTemplate>

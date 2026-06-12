@@ -674,14 +674,11 @@ namespace FlyShelf
 
             _scrollDecayTimer.Start();
 
-            // Active Scrolling Throttling: trigger prefetch rendering every 80ms while actively scrolling.
-            // PERF: Only load first-10 images during active scroll — skip heavy BitmapImage decoding
-            // for older images to eliminate scroll jitter. Full load happens when scroll stops (30ms timer).
-            if ((DateTime.Now - _lastScrollRenderTime).TotalMilliseconds >= 80)
-            {
-                _lastScrollRenderTime = DateTime.Now;
-                RenderVisibleThumbnails(onlyFirstTen: true);
-            }
+            // SCROLL DRAG FIX: Do NOT call RenderVisibleThumbnails during active scrolling.
+            // Previously this called it every 80ms, but the UpdateLayout() + TransformToAncestor
+            // inside it blocks the SmoothScroll physics engine, causing drag when images
+            // enter/leave the viewport. All thumbnail loading is deferred to the 30ms
+            // post-scroll-stop timer below.
 
             // Start or reset the snappier 30ms stoppage timer to load visible high-quality thumbnails instantly when scroll stops
             if (_scrollHighQualityTimer == null)
@@ -718,8 +715,11 @@ namespace FlyShelf
                 {
                     if (!this.IsVisible) return;
 
-                    // Force visual layout pass to guarantee container generation
-                    ShelfListView.UpdateLayout();
+                    // SCROLL DRAG FIX: Do NOT call UpdateLayout() here.
+                    // It forces a synchronous full layout pass (including virtualizer
+                    // container recycling) that blocks the SmoothScroll physics engine.
+                    // WPF already runs layout before rendering, so TransformToAncestor
+                    // visibility checks work without it.
 
                     // Guard: Ensure containers are fully generated before evaluating visibility or eviction
                     if (ShelfListView.ItemContainerGenerator.Status != System.Windows.Controls.Primitives.GeneratorStatus.ContainersGenerated)
@@ -737,6 +737,10 @@ namespace FlyShelf
                         _evictionBackgroundTimer.Tick += (s, ev) =>
                         {
                             if (!this.IsVisible) return;
+                            // SCROLL DRAG FIX: Skip eviction timer during active scroll.
+                            // The full RenderVisibleThumbnails pipeline (TransformToAncestor
+                            // per item, PropertyChanged notifications) blocks the scroll engine.
+                            if (_viewModel.IsScrolling) return;
                             RenderVisibleThumbnails(onlyFirstTen: false);
                         };
                         _evictionBackgroundTimer.Start();
@@ -749,8 +753,10 @@ namespace FlyShelf
                     double viewportHeight = sv.ViewportHeight;
                     if (viewportHeight <= 0 || viewportWidth <= 0) return;
 
-                    // Prefetch overdraw: expand viewport vertically by 300px on top and bottom to proactively load adjacent images before they scroll into view
-                    Rect viewportRect = new Rect(0, -300, viewportWidth, viewportHeight + 600);
+                    // Prefetch overdraw: expand viewport by 800px above and below to proactively
+                    // load adjacent images well before they scroll into view. Combined with
+                    // coast-phase prefetching, this ensures images appear "instantly" loaded.
+                    Rect viewportRect = new Rect(0, -800, viewportWidth, viewportHeight + 1600);
                     int count = ShelfListView.Items.Count;
 
                     int imageCount = 0;
@@ -983,6 +989,33 @@ namespace FlyShelf
             if (nCode >= 0 && wParam == (IntPtr)Classes.NativeMethods.WM_KEYDOWN && _isCurrentlySummoned && !_isAnimatingHide)
             {
                 int vkCode = Marshal.ReadInt32(lParam);
+
+                // Only intercept navigation keys if the cursor is over the clipboard window.
+                // This lets the user "click outside" to give arrow keys back to their app,
+                // then "click on clipboard" to navigate it again — matching Win+V behavior.
+                if (vkCode == VK_DOWN || vkCode == VK_UP || vkCode == VK_RETURN || vkCode == VK_ESCAPE)
+                {
+                    bool cursorOnClipboard = false;
+                    try
+                    {
+                        if (Classes.NativeMethods.GetCursorPos(out var pt))
+                        {
+                            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                            if (hwnd != IntPtr.Zero && Classes.NativeMethods.GetWindowRect(hwnd, out var rect))
+                            {
+                                cursorOnClipboard = pt.X >= rect.Left && pt.X <= rect.Right &&
+                                                    pt.Y >= rect.Top && pt.Y <= rect.Bottom;
+                            }
+                        }
+                    }
+                    catch { }
+
+                    if (!cursorOnClipboard)
+                    {
+                        // Cursor is outside clipboard — let keys pass through to the target app
+                        return Classes.NativeMethods.CallNextHookEx(_keyboardHookId, nCode, wParam, lParam);
+                    }
+                }
 
                 if (vkCode == VK_DOWN)
                 {

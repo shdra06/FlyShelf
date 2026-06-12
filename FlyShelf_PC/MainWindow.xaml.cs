@@ -595,6 +595,15 @@ namespace FlyShelf
             ShelfListView.AddHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(ShelfListView_ScrollChanged));
             ShelfListView.MouseLeave += ShelfListView_MouseLeave;
 
+            // Hook coast-phase prefetch: during touchpad deceleration, SmoothScroll fires
+            // this event every ~200ms so we can preload images in the ±800px prefetch zone
+            // before they enter the viewport — premium "images always loaded" experience.
+            Classes.SmoothScroll.CoastPrefetchNeeded += () =>
+            {
+                Dispatcher.InvokeAsync(() => RenderVisibleThumbnails(onlyFirstTen: false),
+                    System.Windows.Threading.DispatcherPriority.Background);
+            };
+
             // Apply wallpaper is now handled by the deferred theme block at ApplicationIdle
             // (no more redundant early load that gets overwritten by theme init)
 

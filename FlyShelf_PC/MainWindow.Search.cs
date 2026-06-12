@@ -23,9 +23,14 @@ namespace FlyShelf
 
         private void SearchToggle_Click(object sender, RoutedEventArgs e)
         {
-            _isSearchActive = !_isSearchActive;
             if (_isSearchActive)
             {
+                // Close search — let CloseSearch() handle setting _isSearchActive = false
+                CloseSearch();
+            }
+            else
+            {
+                _isSearchActive = true;
                 if (_isFilterBarActive) ToggleFilterBar(false);
                 // Activate the window so it receives keyboard input (normally it's a non-activating overlay)
                 this.Activate();
@@ -51,10 +56,6 @@ namespace FlyShelf
 
                 // Trigger mascot search animation
                 try { Classes.AnimationTriggerService.Instance.OnSearchToggle(true); } catch { }
-            }
-            else
-            {
-                CloseSearch();
             }
         }
 
