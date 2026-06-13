@@ -18,6 +18,7 @@ namespace FlyShelf
         private TodoDay? _selectedTodoDay = null;
         private TextBox? _lastFocusedTodoTextBox = null;
         private DateTime _lastTodoItemAddedTime = DateTime.MinValue;
+        private bool _isTodoSidebarCollapsed = false;
 
 
 
@@ -51,7 +52,7 @@ namespace FlyShelf
             TodoDaySidebar.ItemsSource = TodoManager.Days;
 
             _isTodoActive = true;
-            StartPanelAutoRevertTimer();
+            // NOTE: No auto-revert timer — Todo panel should never auto-hide
 
             // Update taskbar/alt-tab title
             Title = "To-Do";
@@ -92,6 +93,31 @@ namespace FlyShelf
                 this.Topmost = false;
             }
             this.Focus();
+            SuppressDwmBorder();
+        }
+
+        private void TodoSidebarToggle_Click(object sender, MouseButtonEventArgs e)
+        {
+            _isTodoSidebarCollapsed = !_isTodoSidebarCollapsed;
+
+            if (_isTodoSidebarCollapsed)
+            {
+                // Collapse: hide sidebar border and set column width to 0
+                TodoSidebarBorder.Visibility = Visibility.Collapsed;
+                TodoSidebarColumn.Width = new GridLength(0);
+                TodoSidebarCollapseIcon.Text = "▸";
+                TodoSidebarExpandBtn.Visibility = Visibility.Visible;
+            }
+            else
+            {
+                // Expand: show sidebar border and restore column width
+                TodoSidebarExpandBtn.Visibility = Visibility.Collapsed;
+                TodoSidebarBorder.Visibility = Visibility.Visible;
+                TodoSidebarBorder.BeginAnimation(FrameworkElement.WidthProperty, null); // Clear any leftover animation
+                TodoSidebarBorder.Width = double.NaN;
+                TodoSidebarColumn.Width = new GridLength(54);
+                TodoSidebarCollapseIcon.Text = "◂";
+            }
         }
 
         private void CloseTodoPanel(bool immediate = false)
@@ -427,6 +453,80 @@ namespace FlyShelf
         {
             var tw = new FlyShelf.Windows.TimerWindow(null);
             tw.Show();
+        }
+
+        private void TodoItemTimer_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement fe && fe.DataContext is Classes.TodoItem item)
+            {
+                // If the item already has a timer duration set, launch with that duration
+                string context = item.HasTimer ? $"{item.TimerMinutes}m" : null;
+                var tw = new FlyShelf.Windows.TimerWindow(context, item.Text);
+                tw.TimerCompleted += (taskName) =>
+                {
+                    // When timer finishes, create an instant reminder notification
+                    Dispatcher.Invoke(() =>
+                    {
+                        try
+                        {
+                            string reminderTitle = string.IsNullOrEmpty(taskName) ? "Timer finished!" : $"Timer done: {taskName}";
+                            var reminder = Classes.ReminderManager.AddReminder(
+                                reminderTitle, "", DateTime.UtcNow, "Timer", Classes.RepeatMode.None);
+                            // Also fire an alert window immediately
+                            var alertWindow = new FlyShelf.Windows.ReminderAlertWindow(reminder);
+                            alertWindow.Show();
+                            alertWindow.Activate();
+                        }
+                        catch (Exception ex)
+                        {
+                            Classes.Logger.LogAction("TODO_TIMER", $"Failed to create completion reminder: {ex.Message}");
+                        }
+                    });
+                };
+                tw.Show();
+            }
+        }
+
+        private void TodoItemReminder_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement fe && fe.DataContext is Classes.TodoItem item)
+            {
+                string title = !string.IsNullOrEmpty(item.Text) ? item.Text : "To-Do Reminder";
+                DateTime defaultDue = DateTime.Today.AddDays(1).AddHours(9); // Tomorrow 9 AM
+
+                var reminderWindow = new FlyShelf.Windows.ReminderCreateWindow(title, defaultDue);
+                reminderWindow.Show();
+                reminderWindow.Activate();
+            }
+        }
+
+        private void TodoItemSetTimer_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement fe && fe.DataContext is Classes.TodoItem item)
+            {
+                // Cycle through common timer presets: none → 5m → 10m → 15m → 25m → 30m → 60m → none
+                int[] presets = { 5, 10, 15, 25, 30, 60 };
+                if (!item.HasTimer)
+                {
+                    item.TimerMinutes = presets[0];
+                }
+                else
+                {
+                    int currentIndex = Array.IndexOf(presets, item.TimerMinutes ?? 0);
+                    if (currentIndex >= 0 && currentIndex < presets.Length - 1)
+                    {
+                        item.TimerMinutes = presets[currentIndex + 1];
+                    }
+                    else
+                    {
+                        item.TimerMinutes = null; // Reset
+                    }
+                }
+                Classes.TodoManager.MarkDirty();
+            }
         }
 
         private void LaunchCustomTimer(string input)

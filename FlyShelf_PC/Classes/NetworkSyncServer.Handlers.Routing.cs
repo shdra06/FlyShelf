@@ -197,6 +197,14 @@ namespace FlyShelf.Classes
                         res.Close();
                         return;
                     }
+                    // SECURITY: Block WebSocket connections from recently-unpaired devices
+                    if (DevicePairingManager.IsDeviceBlocked(peerDeviceId))
+                    {
+                        Logger.LogAction("WS", $"⛔ WebSocket connection rejected from blocked device: {peerDeviceId}");
+                        res.StatusCode = 403;
+                        res.Close();
+                        return;
+                    }
                     Logger.LogAction("WS", $"✅ Peer WebSocket accepted from {peerDeviceId}");
                     var wsContext = await context.AcceptWebSocketAsync(null);
                     _ = Task.Run(() => HandlePeerWebSocket(wsContext.WebSocket, peerDeviceId));
@@ -364,17 +372,20 @@ namespace FlyShelf.Classes
             byte[] buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(65536);
             try
             {
-                while (ws.State == WebSocketState.Open)
+                while (ws.State == WebSocketState.Open && _isRunning)
                 {
                     using var ms = new MemoryStream();
                     WebSocketReceiveResult result;
                     do
                     {
-                        result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                        // Fix #10: Use a 2-minute timeout instead of CancellationToken.None
+                        // to prevent blocking forever on shutdown or zombie connections
+                        using var recvCts = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+                        result = await ws.ReceiveAsync(new ArraySegment<byte>(buffer), recvCts.Token);
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
                             Logger.LogAction("WS", $"Peer {peerDeviceId} closed WebSocket gracefully");
-                            await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None);
+                            try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None); } catch { }
                             return;
                         }
                         ms.Write(buffer, 0, result.Count);
@@ -406,6 +417,12 @@ namespace FlyShelf.Classes
                                     if (sourceDeviceId == SettingsManager.Current.DeviceId)
                                     {
                                         Logger.LogAction("WS", "Ignored loopback WS SyncText from self");
+                                        continue;
+                                    }
+                                    // SECURITY: Block WS text from recently-unpaired devices
+                                    if (DevicePairingManager.IsDeviceBlocked(sourceDeviceId))
+                                    {
+                                        Logger.LogAction("PEER", $"Rejected WS text from blocked device: {sourceDeviceId}");
                                         continue;
                                     }
                                     string itemType = root.TryGetProperty("itemType", out var itProp) ? itProp.GetString() : "Text";
@@ -460,6 +477,22 @@ namespace FlyShelf.Classes
                                             var skipResult = await ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, toRead), CancellationToken.None);
                                             if (skipResult.MessageType == WebSocketMessageType.Close) return;
                                             bytesSkipped += skipResult.Count;
+                                        }
+                                        continue;
+                                    }
+                                    // SECURITY: Block WS file from recently-unpaired devices
+                                    if (DevicePairingManager.IsDeviceBlocked(sourceDeviceId))
+                                    {
+                                        Logger.LogAction("PEER", $"Rejected WS file from blocked device: {sourceDeviceId} ({fileName})");
+                                        // Drain the WebSocket bytes to keep it alive
+                                        long bytesSkipped2 = 0;
+                                        while (bytesSkipped2 < fileSize)
+                                        {
+                                            long remain2 = fileSize - bytesSkipped2;
+                                            int toRead2 = (int)Math.Min(buffer.Length, remain2);
+                                            var skipResult2 = await ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, toRead2), CancellationToken.None);
+                                            if (skipResult2.MessageType == WebSocketMessageType.Close) return;
+                                            bytesSkipped2 += skipResult2.Count;
                                         }
                                         continue;
                                     }
@@ -586,6 +619,9 @@ namespace FlyShelf.Classes
                                     }
                                     catch (Exception)
                                     {
+                                        // Fix #2: Clean up partial file when WebSocket dies mid-transfer
+                                        try { if (File.Exists(finalPath)) File.Delete(finalPath); } catch { }
+
                                         if (placeholder != null)
                                         {
                                             System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.DroppedItems.Remove(placeholder));

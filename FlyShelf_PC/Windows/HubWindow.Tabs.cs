@@ -844,9 +844,18 @@ namespace FlyShelf.Windows
                     // Reset: remove color theme dictionary entirely
                     ThemeManager.Instance.RemoveColorTheme();
                     SettingsManager.Current.ColorThemeName = "Default";
+
+                    // Auto-apply FlyShelf (desktop wallpaper) display mode alongside Default theme
+                    if (SettingsManager.Current.ThemeDisplayMode == "glass")
+                        ThemeManager.Instance.RemoveGlassTheme();
+                    SettingsManager.Current.ThemeDisplayMode = "desktop";
+                    ThemeManager.Instance.SetActiveTheme(null);
+
                     SettingsManager.Save();
                     HighlightActiveColorTheme();
-                    ToastWindow.ShowToast("🎨 Theme reset to default");
+                    HighlightActiveDisplayMode();
+                    ApplyTheme(); // Re-apply HubWindow backdrop for the new display mode
+                    ToastWindow.ShowToast("🎨 Default + FlyShelf");
                 }
                 else
                 {

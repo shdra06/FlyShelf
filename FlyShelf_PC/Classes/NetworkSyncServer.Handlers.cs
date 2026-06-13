@@ -12,6 +12,7 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Net.WebSockets;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Linq;
 using System.Collections.Concurrent;
@@ -223,6 +224,18 @@ namespace FlyShelf.Classes
                 return;
             }
 
+            // SECURITY: Block text from recently-unpaired devices (auth bypass prevention)
+            if (DevicePairingManager.IsDeviceBlocked(sourceDeviceId))
+            {
+                Logger.LogAction("SYNC", $"Rejected text from blocked device: {sourceDeviceId}");
+                res.StatusCode = 403;
+                byte[] blockErr = Encoding.UTF8.GetBytes("{\"error\":\"Device blocked\"}");
+                res.ContentType = "application/json";
+                res.OutputStream.Write(blockErr, 0, blockErr.Length);
+                res.Close();
+                return;
+            }
+
             // Respond instantly — don't make Android wait for UI processing
             res.StatusCode = 200;
             res.Close();
@@ -339,6 +352,18 @@ namespace FlyShelf.Classes
                 return;
             }
 
+            // SECURITY: Block files from recently-unpaired devices (auth bypass prevention)
+            if (DevicePairingManager.IsDeviceBlocked(sourceDeviceId))
+            {
+                Logger.LogAction("SYNC", $"Rejected file from blocked device: {sourceDeviceId}");
+                res.StatusCode = 403;
+                byte[] blockErr = Encoding.UTF8.GetBytes("{\"error\":\"Device blocked\"}");
+                res.ContentType = "application/json";
+                res.OutputStream.Write(blockErr, 0, blockErr.Length);
+                res.Close();
+                return;
+            }
+
             // ── Incoming Sync Gate ──
             if (!SettingsManager.Current.EnableIncomingSync)
             {
@@ -421,9 +446,11 @@ namespace FlyShelf.Classes
                     long totalRead = 0;
                     int read;
                     var lastProgressUpdate = DateTime.MinValue;
+                    using var uploadCts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
 
-                    while ((read = await req.InputStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    while ((read = await req.InputStream.ReadAsync(buffer, 0, buffer.Length, uploadCts.Token)) > 0)
                     {
+                        uploadCts.CancelAfter(TimeSpan.FromSeconds(60)); // Reset timeout on each successful chunk
                         await tempFs.WriteAsync(buffer, 0, read);
                         totalRead += read;
 
@@ -563,6 +590,18 @@ namespace FlyShelf.Classes
                 return;
             }
 
+            // SECURITY: Block archives from recently-unpaired devices (auth bypass prevention)
+            if (DevicePairingManager.IsDeviceBlocked(sourceDeviceId))
+            {
+                Logger.LogAction("SYNC", $"Rejected archive from blocked device: {sourceDeviceId}");
+                res.StatusCode = 403;
+                byte[] blockErr = Encoding.UTF8.GetBytes("{\"error\":\"Device blocked\"}");
+                res.ContentType = "application/json";
+                res.OutputStream.Write(blockErr, 0, blockErr.Length);
+                res.Close();
+                return;
+            }
+
             // ── Incoming Sync Gate ──
             if (!SettingsManager.Current.EnableIncomingSync)
             {
@@ -637,7 +676,33 @@ namespace FlyShelf.Classes
 
                 using (var fs = new FileStream(finalPath, FileMode.Create, FileAccess.Write, FileShare.None))
                 {
-                    await req.InputStream.CopyToAsync(fs);
+                    if (totalBytes < 0)
+                    {
+                        // Chunked encoding — manual copy with size limit and per-chunk timeout
+                        long archiveTotalRead = 0;
+                        const long maxArchiveSize = 500L * 1024 * 1024; // 500MB
+                        byte[] copyBuf = new byte[65536];
+                        int copyRead;
+                        using var archiveCts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
+                        while ((copyRead = await req.InputStream.ReadAsync(copyBuf, 0, copyBuf.Length, archiveCts.Token)) > 0)
+                        {
+                            archiveCts.CancelAfter(TimeSpan.FromSeconds(60)); // Reset timeout per chunk
+                            archiveTotalRead += copyRead;
+                            if (archiveTotalRead > maxArchiveSize)
+                            {
+                                res.StatusCode = 413;
+                                try { await WriteJsonResponse(res, false, "Archive exceeds 500 MB size limit."); } catch { }
+                                return;
+                            }
+                            await fs.WriteAsync(copyBuf, 0, copyRead);
+                        }
+                    }
+                    else
+                    {
+                        // Known content length — use CopyToAsync with 5-minute timeout
+                        using var archiveCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                        await req.InputStream.CopyToAsync(fs, 81920, archiveCts.Token);
+                    }
                 }
 
                 if (originalDate.HasValue)
@@ -715,6 +780,18 @@ namespace FlyShelf.Classes
                 Logger.LogAction("SYNC_GATE", "Ignored loopback relay_upload from self");
                 res.StatusCode = 200;
                 try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { }
+                res.Close();
+                return;
+            }
+
+            // SECURITY: Block relay uploads from recently-unpaired devices (auth bypass prevention)
+            if (DevicePairingManager.IsDeviceBlocked(sourceDeviceId))
+            {
+                Logger.LogAction("SYNC", $"Rejected relay from blocked device: {sourceDeviceId}");
+                res.StatusCode = 403;
+                byte[] blockErr = Encoding.UTF8.GetBytes("{\"error\":\"Device blocked\"}");
+                res.ContentType = "application/json";
+                res.OutputStream.Write(blockErr, 0, blockErr.Length);
                 res.Close();
                 return;
             }
@@ -867,8 +944,9 @@ namespace FlyShelf.Classes
                 });
 
                 res.StatusCode = 200;
+                var relayResponsePayload = new { status = "ok", downloadUrl = downloadUrl, size = sizeStr };
                 byte[] okBytes = System.Text.Encoding.UTF8.GetBytes(
-                    $"{{\"status\":\"ok\",\"downloadUrl\":\"{downloadUrl}\",\"size\":\"{sizeStr}\"}}");
+                    System.Text.Json.JsonSerializer.Serialize(relayResponsePayload));
                 res.ContentType = "application/json";
                 await res.OutputStream.WriteAsync(okBytes, 0, okBytes.Length);
             }

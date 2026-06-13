@@ -193,12 +193,13 @@ namespace FlyShelf.Classes
                                 string localIp = prop.Value.TryGetProperty("LocalIp", out var lip) ? lip.GetString() ?? "" : "";
                                 string globalUrl = prop.Value.TryGetProperty("GlobalUrl", out var gurl) ? gurl.GetString() ?? "" : "";
 
-                                // TTL check: treat devices with heartbeat older than 2 minutes as offline
+                                // TTL check: treat devices with heartbeat older than 16 minutes as offline
+                                // (matches 15-min heartbeat interval — prevents false offline during normal operation)
                                 if (online && prop.Value.TryGetProperty("Timestamp", out var ts))
                                 {
                                     long deviceTs = (long)ts.GetDouble();
                                     long nowMs = NetworkClock.UtcNowMs;
-                                    if (nowMs - deviceTs > 120_000) online = false;
+                                    if (nowMs - deviceTs > 960_000) online = false;
                                 }
 
                                 devices.Add((prop.Name, name, type, online, localIp, globalUrl));

@@ -175,6 +175,12 @@ namespace FlyShelf.Classes
                 {
                     if (prop.Name == myDeviceId) continue;
 
+                    // SECURITY: Skip Firebase entries from blocked (recently-unpaired) devices
+                    if (DevicePairingManager.IsDeviceBlocked(prop.Name))
+                    {
+                        Logger.LogAction("CLOUD", $"Skipped peer update from blocked device: {prop.Name}");
+                        continue;
+                    }
                     // Check if any peer has a urlRequest for us
                     if (prop.Value.ValueKind == JsonValueKind.Object && prop.Value.TryGetProperty("urlRequest", out _))
                     {

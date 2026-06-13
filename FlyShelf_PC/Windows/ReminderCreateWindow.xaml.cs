@@ -27,6 +27,26 @@ namespace FlyShelf.Windows
             UpdateTimeDisplay();
         }
 
+        /// <summary>
+        /// Creates a reminder window pre-filled with title and default due date/time.
+        /// Used by Notes and Todo panels for contextual reminder creation.
+        /// </summary>
+        public ReminderCreateWindow(string prefillTitle, DateTime defaultDue) : this()
+        {
+            // Pre-fill the title
+            if (!string.IsNullOrEmpty(prefillTitle))
+            {
+                TitleInput.Text = prefillTitle;
+            }
+
+            // Set the default due date/time
+            _selectedDate = defaultDue.Date;
+            _selectedTime = defaultDue;
+            CalendarControl.SelectedDate = _selectedDate;
+            UpdateDateDisplay();
+            UpdateTimeDisplay();
+        }
+
         // ─── Initialization ───────────────────────────────────────
 
         private void BuildTimeSlots()

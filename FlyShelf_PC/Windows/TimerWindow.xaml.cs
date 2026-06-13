@@ -17,6 +17,12 @@ namespace FlyShelf.Windows
         private bool _isFinished;
         private Path _arcPath;
 
+        /// <summary>Name of the task this timer is associated with (for reminder integration)</summary>
+        public string TaskName { get; set; } = "";
+
+        /// <summary>Fires when the countdown timer reaches zero. Passes the TaskName.</summary>
+        public event Action<string>? TimerCompleted;
+
         // Gradient colors for the arc
         private static readonly Color StartColor = Color.FromRgb(0x8B, 0x5C, 0xF6); // #8B5CF6
         private static readonly Color MidColor = Color.FromRgb(0x3B, 0x82, 0xF6);   // #3B82F6
@@ -28,9 +34,10 @@ namespace FlyShelf.Windows
         private Brush _primaryTextBrush;
         private Brush _secondaryTextBrush;
 
-        public TimerWindow(string contextString = null)
+        public TimerWindow(string contextString = null, string taskName = null)
         {
             InitializeComponent();
+            TaskName = taskName ?? "";
             
             // Cache brushes NOW — avoids FindResource calls during tick which crash
             // when another window disrupts the visual tree
@@ -126,6 +133,7 @@ namespace FlyShelf.Windows
                     _timer.Stop();
                     _isRunning = false;
                     _isFinished = true;
+                    TimerCompleted?.Invoke(TaskName);
                     
                     PlayPauseIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Dismiss16;
                     PlayPauseBtn.Background = new SolidColorBrush(DangerColor);

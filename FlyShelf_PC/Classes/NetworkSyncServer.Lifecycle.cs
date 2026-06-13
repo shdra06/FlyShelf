@@ -175,6 +175,10 @@ namespace FlyShelf.Classes
                 Logger.LogAction("NETWORK", $"✅ Web server launched on {ServerUrl} (port {CurrentPort}, mode: {bindMode})");
                 NetworkActivityLog.Instance.ServerStatus = "Online";
 
+                // Fix #9: Detect network changes (WiFi reconnect, VPN toggle, IP change)
+                // and refresh the LAN URL so peers can still reach us
+                System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged += OnNetworkAddressChanged;
+
                 // Natively trigger Cloudflare alongside HTTP Socket conditionally
                 // If we used a TCP proxy, Cloudflare tunnels to publicPort which the TcpProxy handles.
                 // If we bound directly, Cloudflare tunnels to publicPort which HttpListener handles.
@@ -204,11 +208,12 @@ namespace FlyShelf.Classes
                 _heartbeatTimer = new System.Timers.Timer(900_000); // 15 minutes
                 _heartbeatTimer.Elapsed += (s, e) =>
                 {
-                    // PushTunnelUrl is now smart — it only writes to Firebase if URL changed
-                    _ = CloudDiscoveryManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl);
+                    // forceWrite: true — always update Firebase timestamp even if URL hasn't changed,
+                    // so other devices' TTL check doesn't mark us as offline between heartbeats.
+                    _ = CloudDiscoveryManager.PushTunnelUrl(GlobalUrl ?? ServerUrl, true, ServerUrl, forceWrite: true);
                     // Check for new devices that joined via pairing code
-                    // Only poll Firebase for handshakes within 10 min of generating a pairing code
-                    if ((DateTime.UtcNow - DevicePairingManager.LastPairingCodeGeneratedAt).TotalMinutes < 10)
+                    // Fix #3: Widened from 10 min to 20 min — ensures at least one check per 15-min timer cycle
+                    if ((DateTime.UtcNow - DevicePairingManager.LastPairingCodeGeneratedAt).TotalMinutes < 20)
                     {
                         _ = DevicePairingManager.CheckForHandshakes();
                     }
@@ -313,6 +318,9 @@ namespace FlyShelf.Classes
         // proxies the raw TCP stream to HttpListener on localhost:internalPort.
         // ═══════════════════════════════════════════════════════════════════
 
+        // Max concurrent proxy connections to prevent resource exhaustion
+        private static readonly SemaphoreSlim _proxySemaphore = new SemaphoreSlim(50, 50);
+
         private async Task TcpProxyLoop(int internalPort)
         {
             while (_proxyRunning && _proxyListener != null)
@@ -336,6 +344,12 @@ namespace FlyShelf.Classes
 
         private async Task ProxyConnection(System.Net.Sockets.TcpClient client, int targetPort)
         {
+            if (!await _proxySemaphore.WaitAsync(TimeSpan.FromSeconds(5)))
+            {
+                // Too many concurrent proxy connections — reject
+                try { client.Close(); } catch { }
+                return;
+            }
             try
             {
                 using (client)
@@ -393,13 +407,18 @@ namespace FlyShelf.Classes
                         await targetStream.WriteAsync(buffer, headerEndIndex, leftoverBytes);
                     }
 
-                    // Now relay the rest bi-directionally (body + response) without connection timeout
-                    var t1 = clientStream.CopyToAsync(targetStream);
-                    var t2 = targetStream.CopyToAsync(clientStream);
+                    // Bi-directional relay with 5-minute timeout to prevent zombie connections
+                    using var proxyCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                    var t1 = clientStream.CopyToAsync(targetStream, proxyCts.Token);
+                    var t2 = targetStream.CopyToAsync(clientStream, proxyCts.Token);
                     await Task.WhenAny(t1, t2);
                 }
             }
             catch { } // Connection closed — normal
+            finally
+            {
+                _proxySemaphore.Release();
+            }
         }
 
         // ═══════════════════════════════════════════════════════════════════
@@ -429,6 +448,11 @@ namespace FlyShelf.Classes
 
         private async Task TlsProxyConnection(System.Net.Sockets.TcpClient client)
         {
+            if (!await _proxySemaphore.WaitAsync(TimeSpan.FromSeconds(5)))
+            {
+                try { client.Close(); } catch { }
+                return;
+            }
             try
             {
                 using (client)
@@ -500,9 +524,10 @@ namespace FlyShelf.Classes
                         await targetStream.WriteAsync(buffer, headerEndIndex, leftoverBytes);
                     }
 
-                    // Bi-directional relay: sslStream ↔ targetStream
-                    var t1 = sslStream.CopyToAsync(targetStream);
-                    var t2 = targetStream.CopyToAsync(sslStream);
+                    // Bi-directional relay with 5-minute timeout: sslStream ↔ targetStream
+                    using var proxyCts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+                    var t1 = sslStream.CopyToAsync(targetStream, proxyCts.Token);
+                    var t2 = targetStream.CopyToAsync(sslStream, proxyCts.Token);
                     await Task.WhenAny(t1, t2);
                 }
             }
@@ -511,6 +536,10 @@ namespace FlyShelf.Classes
                 Logger.LogAction("TLS", $"Client TLS handshake failed: {ex.Message}");
             }
             catch { } // Connection closed — normal
+            finally
+            {
+                _proxySemaphore.Release();
+            }
         }
 
         public void Stop()
@@ -520,6 +549,7 @@ namespace FlyShelf.Classes
             _proxyRunning = false;
             ServerUrl = "Offline";
             try { _heartbeatTimer?.Stop(); _heartbeatTimer?.Dispose(); } catch { }
+            try { System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged; } catch { }
             _cfDaemon.Stop();
             try { PeerManager.Instance?.Stop(); } catch { }
             _ = CloudDiscoveryManager.PushTunnelUrl("offline", false, "", forceWrite: true);
@@ -559,6 +589,39 @@ namespace FlyShelf.Classes
                 }
             }
             catch { ServerUrl = $"http://localhost:{CurrentPort}"; }
+        }
+
+        /// <summary>
+        /// Fix #9: Called when a network adapter address changes (WiFi reconnect, VPN toggle, Ethernet plug).
+        /// Refreshes the LAN URL and pushes the updated address to Firebase + connected peers.
+        /// </summary>
+        private void OnNetworkAddressChanged(object? sender, EventArgs e)
+        {
+            try
+            {
+                string oldUrl = ServerUrl;
+                UpdateServerUrl();
+                string newDisplayUrl = DisplayUrl;
+
+                if (newDisplayUrl != CloudDiscoveryManager.CachedLocalUrl && newDisplayUrl != "Not Running" && newDisplayUrl != "Offline")
+                {
+                    Logger.LogAction("NETWORK", $"IP changed: {CloudDiscoveryManager.CachedLocalUrl} → {newDisplayUrl}");
+                    CloudDiscoveryManager.CachedLocalUrl = newDisplayUrl;
+
+                    // Push updated URL to Firebase for offline peers
+                    _ = CloudDiscoveryManager.PushTunnelUrl(GlobalUrl ?? newDisplayUrl, true, newDisplayUrl, forceWrite: true);
+
+                    // Broadcast to connected peers via WebSocket
+                    _ = Task.Run(async () =>
+                    {
+                        try { await PeerManager.Instance?.BroadcastUrlUpdate(newDisplayUrl, GlobalUrl ?? ""); }
+                        catch { }
+                    });
+
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.RefreshLocalServerData());
+                }
+            }
+            catch { /* Best-effort — don't crash on network change events */ }
         }
 
         private async Task ListenLoopAsync()

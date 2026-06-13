@@ -200,6 +200,23 @@ namespace FlyShelf.Classes
 
         public bool IsRunning => !_cts.IsCancellationRequested;
 
+        /// <summary>
+        /// Fix #1A: Disconnect and remove a specific peer (called when unpairing a device).
+        /// Cancels WebSocket, disposes socket, removes from peer dictionary and URL cache.
+        /// </summary>
+        public void DisconnectPeer(string deviceId)
+        {
+            if (_peers.TryRemove(deviceId, out var peer))
+            {
+                Logger.LogAction("PEER", $"Disconnecting unpaired peer: {peer.DeviceName}");
+                try { peer.WsCts?.Cancel(); } catch { }
+                try { peer.LiveSocket?.Dispose(); } catch { }
+                try { peer.LiveSocket = null; } catch { }
+                // Remove from URL cache
+                SaveUrlCache();
+            }
+        }
+
         public void Stop()
         {
             _cts.Cancel();
@@ -241,7 +258,6 @@ namespace FlyShelf.Classes
                 // Get locally paired devices to filter out stale/ghost entries in Firebase
                 var pairedDevices = DevicePairingManager.GetPairedDevices();
                 var pairedDeviceIds = new HashSet<string>(pairedDevices.Select(d => d.DeviceId), StringComparer.OrdinalIgnoreCase);
-                var pairedDeviceNames = new HashSet<string>(pairedDevices.Select(d => d.DeviceName), StringComparer.OrdinalIgnoreCase);
 
                 using var doc = JsonDocument.Parse(json);
                 int totalPeers = 0;
@@ -256,9 +272,9 @@ namespace FlyShelf.Classes
                     // Guard: skip ghost entries with empty DeviceId or DeviceName
                     if (string.IsNullOrWhiteSpace(devId) || string.IsNullOrWhiteSpace(name)) continue;
 
-                    // Security: Do NOT auto-register unknown devices — they must go through explicit pairing (QR/code).
-                    // Finding a device in the Firebase room is not sufficient proof of trust.
-                    if (!pairedDeviceIds.Contains(devId) && !pairedDeviceNames.Contains(name))
+                    // Fix #4: Only match by DeviceId — name matching is not secure and causes
+                    // collisions when multiple devices share the same DeviceName.
+                    if (!pairedDeviceIds.Contains(devId))
                     {
                         Logger.LogAction("PEER", $"⚠️ Unknown device in Firebase room (not paired): {name} ({devId}) — skipping. Use QR or code pairing to add.");
                         continue;
@@ -435,10 +451,9 @@ namespace FlyShelf.Classes
             // 3. Filter out unpaired devices (ghosts)
             var pairedDevices = DevicePairingManager.GetPairedDevices();
             var pairedDeviceIds = new HashSet<string>(pairedDevices.Select(d => d.DeviceId), StringComparer.OrdinalIgnoreCase);
-            var pairedDeviceNames = new HashSet<string>(pairedDevices.Select(d => d.DeviceName), StringComparer.OrdinalIgnoreCase);
 
-            // Security: Do NOT auto-register unknown devices during real-time updates
-            if (!pairedDeviceIds.Contains(deviceId) && !pairedDeviceNames.Contains(deviceName))
+            // Fix #4: Only match by DeviceId — name matching is not secure
+            if (!pairedDeviceIds.Contains(deviceId))
             {
                 Logger.LogAction("PEER", $"⚠️ Unknown device in real-time update (not paired): {deviceName} ({deviceId}) — ignoring.");
                 return;

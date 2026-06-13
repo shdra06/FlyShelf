@@ -164,7 +164,8 @@ namespace FlyShelf.Classes
             // Invalidate the sync cache so the next /api/sync poll returns fresh data
             _cachedSyncJson = null;
 
-            string payload = $"{{\"type\":\"{itemType}\",\"title\":\"{title.Replace("\"", "'").Replace("\n", " ")}\",\"ts\":{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}}}";
+            var payloadObj = new { type = itemType, title = title, ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() };
+            string payload = System.Text.Json.JsonSerializer.Serialize(payloadObj);
             
             // 1. Unblock long-poll waiters
             int waiterCount;

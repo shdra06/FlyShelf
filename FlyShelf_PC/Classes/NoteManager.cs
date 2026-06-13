@@ -77,7 +77,7 @@ namespace FlyShelf.Classes
         [JsonIgnore]
         public bool HasImage2 => !string.IsNullOrEmpty(_imagePath2) && File.Exists(_imagePath2);
 
-        private bool _isCollapsed;
+        private bool _isCollapsed = true;
         public bool IsCollapsed
         {
             get => _isCollapsed;

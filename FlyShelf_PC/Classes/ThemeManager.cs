@@ -798,94 +798,98 @@ namespace FlyShelf.Classes
                 SetAeroResource(app, "AltSubtitleFg", "#64748B");
             }
 
-            // Themed modes — bright, luminous Aero colors for each theme
+            // Themed modes — bright pastel backgrounds with black text for all themes
             switch (themeName)
             {
                 case "Midnight":
-                    SetAeroResource(app, "AltCardBg", "#C8303060");
-                    SetAeroResource(app, "AltCardBgHover", "#E0404078");
-                    SetAeroResource(app, "AltCardBorder", "#4070709A");
-                    SetAeroResource(app, "AltCardBorderHover", "#608080B0");
-                    SetAeroResource(app, "AltTextPrimary", "#F5F5FF");
-                    SetAeroResource(app, "AltTextSecondary", "#C8C8E0");
-                    SetAeroResource(app, "AltTextTertiary", "#A0A0C0");
-                    SetAeroResource(app, "AltSearchBg", "#58404068");
-                    SetAeroResource(app, "AltSearchBorder", "#4060608A");
-                    SetAeroResource(app, "AltSearchFg", "#C8C8E0");
-                    SetAeroResource(app, "AltBottomBarBg", "#D8282850");
-                    SetAeroResource(app, "AltBottomBarBorder", "#4060608A");
-                    SetAeroResource(app, "AltSidebarHover", "#38505078");
-                    SetAeroResource(app, "AltTimestampFg", "#B0B0D0");
-                    SetAeroResource(app, "AltSubtitleFg", "#B0B0D0");
+                    // Bright pastel blue — dark text on luminous blue background
+                    SetAeroResource(app, "AltCardBg", "#B8FFFFFF");
+                    SetAeroResource(app, "AltCardBgHover", "#E0FFFFFF");
+                    SetAeroResource(app, "AltCardBorder", "#20304080");
+                    SetAeroResource(app, "AltCardBorderHover", "#30405090");
+                    SetAeroResource(app, "AltTextPrimary", "#1A1A2E");
+                    SetAeroResource(app, "AltTextSecondary", "#2D2D44");
+                    SetAeroResource(app, "AltTextTertiary", "#555570");
+                    SetAeroResource(app, "AltSearchBg", "#90FFFFFF");
+                    SetAeroResource(app, "AltSearchBorder", "#20304080");
+                    SetAeroResource(app, "AltSearchFg", "#3D3D58");
+                    SetAeroResource(app, "AltBottomBarBg", "#D8E0E4F0");
+                    SetAeroResource(app, "AltBottomBarBorder", "#20304080");
+                    SetAeroResource(app, "AltSidebarHover", "#18000000");
+                    SetAeroResource(app, "AltTimestampFg", "#4A4A68");
+                    SetAeroResource(app, "AltSubtitleFg", "#4A4A68");
                     break;
                 case "Ocean":
-                    SetAeroResource(app, "AltCardBg", "#C8103848");
-                    SetAeroResource(app, "AltCardBgHover", "#E0184858");
-                    SetAeroResource(app, "AltCardBorder", "#3818B8E0");
-                    SetAeroResource(app, "AltCardBorderHover", "#5820C8F0");
-                    SetAeroResource(app, "AltTextPrimary", "#F0FAFF");
-                    SetAeroResource(app, "AltTextSecondary", "#90E0FF");
-                    SetAeroResource(app, "AltTextTertiary", "#58C8F0");
-                    SetAeroResource(app, "AltSearchBg", "#48106070");
-                    SetAeroResource(app, "AltSearchBorder", "#3818B8E0");
-                    SetAeroResource(app, "AltSearchFg", "#90E0FF");
-                    SetAeroResource(app, "AltBottomBarBg", "#D80C2838");
-                    SetAeroResource(app, "AltBottomBarBorder", "#3818B8E0");
-                    SetAeroResource(app, "AltSidebarHover", "#38187088");
-                    SetAeroResource(app, "AltTimestampFg", "#90E0FF");
-                    SetAeroResource(app, "AltSubtitleFg", "#90E0FF");
+                    // Bright pastel teal — dark text on luminous cyan background
+                    SetAeroResource(app, "AltCardBg", "#B8FFFFFF");
+                    SetAeroResource(app, "AltCardBgHover", "#E0FFFFFF");
+                    SetAeroResource(app, "AltCardBorder", "#20186878");
+                    SetAeroResource(app, "AltCardBorderHover", "#30207888");
+                    SetAeroResource(app, "AltTextPrimary", "#0A2028");
+                    SetAeroResource(app, "AltTextSecondary", "#1A3A44");
+                    SetAeroResource(app, "AltTextTertiary", "#3A6070");
+                    SetAeroResource(app, "AltSearchBg", "#90FFFFFF");
+                    SetAeroResource(app, "AltSearchBorder", "#20186878");
+                    SetAeroResource(app, "AltSearchFg", "#2A4A58");
+                    SetAeroResource(app, "AltBottomBarBg", "#D8E0F0F4");
+                    SetAeroResource(app, "AltBottomBarBorder", "#20186878");
+                    SetAeroResource(app, "AltSidebarHover", "#18000000");
+                    SetAeroResource(app, "AltTimestampFg", "#3A5A68");
+                    SetAeroResource(app, "AltSubtitleFg", "#3A5A68");
                     break;
                 case "Sunset":
-                    // Warm, glowing orange/amber — light and vibrant
-                    SetAeroResource(app, "AltCardBg", "#C8985030");
-                    SetAeroResource(app, "AltCardBgHover", "#E0B06038");
-                    SetAeroResource(app, "AltCardBorder", "#50F0A040");
-                    SetAeroResource(app, "AltCardBorderHover", "#70FFB050");
-                    SetAeroResource(app, "AltTextPrimary", "#FFFAE8D0");
-                    SetAeroResource(app, "AltTextSecondary", "#FFF0C880");
-                    SetAeroResource(app, "AltTextTertiary", "#F0D8A050");
-                    SetAeroResource(app, "AltSearchBg", "#48905030");
-                    SetAeroResource(app, "AltSearchBorder", "#50E89838");
-                    SetAeroResource(app, "AltSearchFg", "#FFF0C880");
-                    SetAeroResource(app, "AltBottomBarBg", "#D8884020");
-                    SetAeroResource(app, "AltBottomBarBorder", "#50F0A040");
-                    SetAeroResource(app, "AltSidebarHover", "#48A05830");
-                    SetAeroResource(app, "AltTimestampFg", "#F0D8A060");
-                    SetAeroResource(app, "AltSubtitleFg", "#F0D8A060");
+                    // Bright pastel peach/gold — dark text on luminous warm background
+                    SetAeroResource(app, "AltCardBg", "#B8FFFFFF");
+                    SetAeroResource(app, "AltCardBgHover", "#E0FFFFFF");
+                    SetAeroResource(app, "AltCardBorder", "#20804020");
+                    SetAeroResource(app, "AltCardBorderHover", "#30905028");
+                    SetAeroResource(app, "AltTextPrimary", "#2A1A08");
+                    SetAeroResource(app, "AltTextSecondary", "#4A3018");
+                    SetAeroResource(app, "AltTextTertiary", "#6A5030");
+                    SetAeroResource(app, "AltSearchBg", "#90FFFFFF");
+                    SetAeroResource(app, "AltSearchBorder", "#20804020");
+                    SetAeroResource(app, "AltSearchFg", "#5A4020");
+                    SetAeroResource(app, "AltBottomBarBg", "#D8F4EDE0");
+                    SetAeroResource(app, "AltBottomBarBorder", "#20804020");
+                    SetAeroResource(app, "AltSidebarHover", "#18000000");
+                    SetAeroResource(app, "AltTimestampFg", "#6A5030");
+                    SetAeroResource(app, "AltSubtitleFg", "#6A5030");
                     break;
                 case "Emerald":
-                    SetAeroResource(app, "AltCardBg", "#C8184828");
-                    SetAeroResource(app, "AltCardBgHover", "#E0205830");
-                    SetAeroResource(app, "AltCardBorder", "#3820D880");
-                    SetAeroResource(app, "AltCardBorderHover", "#5828E890");
-                    SetAeroResource(app, "AltTextPrimary", "#F0FFF5");
-                    SetAeroResource(app, "AltTextSecondary", "#88F0C0");
-                    SetAeroResource(app, "AltTextTertiary", "#58D8A0");
-                    SetAeroResource(app, "AltSearchBg", "#48185830");
-                    SetAeroResource(app, "AltSearchBorder", "#3820D880");
-                    SetAeroResource(app, "AltSearchFg", "#88F0C0");
-                    SetAeroResource(app, "AltBottomBarBg", "#D8103820");
-                    SetAeroResource(app, "AltBottomBarBorder", "#3820D880");
-                    SetAeroResource(app, "AltSidebarHover", "#38206838");
-                    SetAeroResource(app, "AltTimestampFg", "#88F0C0");
-                    SetAeroResource(app, "AltSubtitleFg", "#88F0C0");
+                    // Bright pastel green — dark text on luminous mint background
+                    SetAeroResource(app, "AltCardBg", "#B8FFFFFF");
+                    SetAeroResource(app, "AltCardBgHover", "#E0FFFFFF");
+                    SetAeroResource(app, "AltCardBorder", "#20186838");
+                    SetAeroResource(app, "AltCardBorderHover", "#30207848");
+                    SetAeroResource(app, "AltTextPrimary", "#0A2018");
+                    SetAeroResource(app, "AltTextSecondary", "#1A3A28");
+                    SetAeroResource(app, "AltTextTertiary", "#3A6048");
+                    SetAeroResource(app, "AltSearchBg", "#90FFFFFF");
+                    SetAeroResource(app, "AltSearchBorder", "#20186838");
+                    SetAeroResource(app, "AltSearchFg", "#2A4A38");
+                    SetAeroResource(app, "AltBottomBarBg", "#D8E0F4E8");
+                    SetAeroResource(app, "AltBottomBarBorder", "#20186838");
+                    SetAeroResource(app, "AltSidebarHover", "#18000000");
+                    SetAeroResource(app, "AltTimestampFg", "#3A5A48");
+                    SetAeroResource(app, "AltSubtitleFg", "#3A5A48");
                     break;
                 case "Lavender":
-                    SetAeroResource(app, "AltCardBg", "#C8382058");
-                    SetAeroResource(app, "AltCardBgHover", "#E0482870");
-                    SetAeroResource(app, "AltCardBorder", "#38C0A0FF");
-                    SetAeroResource(app, "AltCardBorderHover", "#58D0B0FF");
-                    SetAeroResource(app, "AltTextPrimary", "#FAF0FF");
-                    SetAeroResource(app, "AltTextSecondary", "#DCC8FF");
-                    SetAeroResource(app, "AltTextTertiary", "#C0A8F0");
-                    SetAeroResource(app, "AltSearchBg", "#48382060");
-                    SetAeroResource(app, "AltSearchBorder", "#38C0A0FF");
-                    SetAeroResource(app, "AltSearchFg", "#DCC8FF");
-                    SetAeroResource(app, "AltBottomBarBg", "#D8281848");
-                    SetAeroResource(app, "AltBottomBarBorder", "#38C0A0FF");
-                    SetAeroResource(app, "AltSidebarHover", "#38402868");
-                    SetAeroResource(app, "AltTimestampFg", "#DCC8FF");
-                    SetAeroResource(app, "AltSubtitleFg", "#DCC8FF");
+                    // Bright pastel purple — dark text on luminous lavender background
+                    SetAeroResource(app, "AltCardBg", "#B8FFFFFF");
+                    SetAeroResource(app, "AltCardBgHover", "#E0FFFFFF");
+                    SetAeroResource(app, "AltCardBorder", "#20503878");
+                    SetAeroResource(app, "AltCardBorderHover", "#30604888");
+                    SetAeroResource(app, "AltTextPrimary", "#1A1028");
+                    SetAeroResource(app, "AltTextSecondary", "#302040");
+                    SetAeroResource(app, "AltTextTertiary", "#584870");
+                    SetAeroResource(app, "AltSearchBg", "#90FFFFFF");
+                    SetAeroResource(app, "AltSearchBorder", "#20503878");
+                    SetAeroResource(app, "AltSearchFg", "#403058");
+                    SetAeroResource(app, "AltBottomBarBg", "#D8ECE4F4");
+                    SetAeroResource(app, "AltBottomBarBorder", "#20503878");
+                    SetAeroResource(app, "AltSidebarHover", "#18000000");
+                    SetAeroResource(app, "AltTimestampFg", "#504068");
+                    SetAeroResource(app, "AltSubtitleFg", "#504068");
                     break;
                 default:
                     // Unrecognized theme — treat as light
@@ -918,33 +922,33 @@ namespace FlyShelf.Classes
                         grad.StartPoint = new System.Windows.Point(0, 0);
                         grad.EndPoint = new System.Windows.Point(0.3, 1);
 
+                        // Bright pastel gradients — diffused luminosity, minimal top-to-bottom contrast
                         switch (themeName)
                         {
                             case "Midnight":
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF2E2E58"), 0.0));
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF222245"), 0.5));
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF181838"), 1.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFB0B8D8"), 0.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFB8C0DC"), 0.5));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFA8B0D0"), 1.0));
                                 break;
                             case "Ocean":
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF123548"), 0.0));
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF0E2838"), 0.5));
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF0A1E2E"), 1.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFA0D0E0"), 0.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFA8D4E2"), 0.5));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF98C8D8"), 1.0));
                                 break;
                             case "Sunset":
-                                // Bright warm orange gradient
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFD06828"), 0.0));
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFA85020"), 0.5));
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF803C18"), 1.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFFFC888"), 0.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFFFD098"), 0.5));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFFFBE78"), 1.0));
                                 break;
                             case "Emerald":
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF124028"), 0.0));
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF0E3020"), 0.5));
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF0A2418"), 1.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF98D8B8"), 0.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFA0DCBE"), 0.5));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF90D0B0"), 1.0));
                                 break;
                             case "Lavender":
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF382058"), 0.0));
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF2A1845"), 0.5));
-                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FF201038"), 1.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFC8B0E0"), 0.0));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFD0B8E4"), 0.5));
+                                grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFC0A8D8"), 1.0));
                                 break;
                             default: // ArcticSnow / Default — light gradient handled by overlay
                                 grad.GradientStops.Add(new System.Windows.Media.GradientStop(ColorFromHex("#FFF0F7FF"), 0.0));

@@ -225,7 +225,6 @@ export default function SyncScreen() {
       const item = downloadQueueRef.current.shift()!;
       const dedupKey = `${item.title}::${item.timestamp || item.fileUrl}`;
       if (processedDownloadsRef.current.has(dedupKey)) continue;
-      processedDownloadsRef.current.add(dedupKey);
 
       const progressId = `dl_queue_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
       try {
@@ -292,6 +291,7 @@ export default function SyncScreen() {
         setClips(prev => prev.filter(c => c.id !== progressId));
 
         if (queueDlSuccess) {
+          processedDownloadsRef.current.add(dedupKey);
           syncLog('DL-QUEUE', `✅ ${item.title} saved via ${item.source}`);
           setDownloadedItems(prev => { const n = new Set(prev); n.add(item.id || item.title); return n; });
           // Update clip with CachedUri
@@ -1939,6 +1939,7 @@ export default function SyncScreen() {
           const dlResult = await resumable.downloadAsync();
           setIncomingTransferProgress(p => { const n = {...p}; delete n[transferId]; return n; });
           if (dlResult && dlResult.status === 200) {
+            setDownloadedItems(prev => new Set(prev).add(item.id!));
             if (item.Type === 'ImageLink' || item.Type === 'Image') { try { const perm = await MediaLibrary.requestPermissionsAsync(); if (perm.status === 'granted') await MediaLibrary.saveToLibraryAsync(localUri); } catch (err) {} }
             // Track download via downloadedBy model
             if (item.id) { try { await markFileDownloaded(item.id); } catch {} }
@@ -1946,7 +1947,7 @@ export default function SyncScreen() {
             // Failed — delete partial/corrupt file (NEVER resume)
             await FileSystem.deleteAsync(localUri, { idempotent: true }).catch(() => {});
           }
-        } catch(e) { const transferId = item.id || (item.Title || '').replace(/[^a-zA-Z0-9.-]/g, '_'); setIncomingTransferProgress(p => { const n = {...p}; delete n[transferId]; return n; }); await FileSystem.deleteAsync(DOWNLOAD_BASE + (item.Title || '').replace(/[^a-zA-Z0-9.-]/g, '_'), { idempotent: true }).catch(() => {}); } finally { setDownloadedItems(prev => new Set(prev).add(item.id!)); }
+        } catch(e) { const transferId = item.id || (item.Title || '').replace(/[^a-zA-Z0-9.-]/g, '_'); setIncomingTransferProgress(p => { const n = {...p}; delete n[transferId]; return n; }); await FileSystem.deleteAsync(DOWNLOAD_BASE + (item.Title || '').replace(/[^a-zA-Z0-9.-]/g, '_'), { idempotent: true }).catch(() => {}); }
       } else { setDownloadedItems(prev => new Set(prev).add(item.id!)); }
     });
   }, [clips]);
@@ -1988,7 +1989,8 @@ export default function SyncScreen() {
           sourceDeviceId: `Mobile_${(deviceName || 'Phone').replace(/[^a-zA-Z0-9_]/g, '_')}`,
           timestamp: NetworkClock.now(),
         });
-        const response = await fetchWithTimeout(`${targetUrl}/api/sync_text`, { method: 'POST', headers: hdrs, body: jsonBody }, 3000);
+        const sendTimeout = targetUrl.includes('trycloudflare.com') ? 8000 : 3000;
+        const response = await fetchWithTimeout(`${targetUrl}/api/sync_text`, { method: 'POST', headers: hdrs, body: jsonBody }, sendTimeout);
         localSuccess = response.ok;
       } catch(e) { cachedPcUrlRef.current = null; }
       // Always add sent text to local clips so it appears in the feed

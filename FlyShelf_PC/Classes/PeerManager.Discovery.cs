@@ -229,8 +229,16 @@ namespace FlyShelf.Classes
                                 var pairedList = DevicePairingManager.GetPairedDevices();
                                 if (!pairedList.Any(d => d.DeviceId == packet.DeviceId))
                                 {
-                                    DevicePairingManager.TryPairDevice(pairingKey, packet.DeviceId, packet.DeviceName, "PC", senderIp);
-                                    Logger.LogAction("PEER_UDP", $"✅ Auto-registered device offline from validated broadcast: {packet.DeviceName}");
+                                    // Fix #1B: Don't auto-re-register devices that were recently unpaired
+                                    if (DevicePairingManager.IsRecentlyUnpaired(packet.DeviceId))
+                                    {
+                                        Logger.LogAction("PEER_UDP", $"⛔ Blocked auto-re-registration of recently unpaired device: {packet.DeviceName} ({packet.DeviceId})");
+                                    }
+                                    else
+                                    {
+                                        DevicePairingManager.TryPairDevice(pairingKey, packet.DeviceId, packet.DeviceName, "PC", senderIp);
+                                        Logger.LogAction("PEER_UDP", $"✅ Auto-registered device offline from validated broadcast: {packet.DeviceName}");
+                                    }
                                 }
                             }
 

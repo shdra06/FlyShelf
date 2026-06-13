@@ -595,13 +595,26 @@ public static partial class NativeMethods
             {
                 // Utility windows (HubWindow, EmojiPickerWindow, etc.) always get Mica/Acrylic blur when blur is enabled
                 micaWin.SystemBackdropType = (mode == "glass") ? MicaWPF.Core.Enums.BackdropType.Acrylic : MicaWPF.Core.Enums.BackdropType.Mica;
-                micaWin.Background = System.Windows.Media.Brushes.Transparent;
+                // Use a semi-transparent tinted background as fallback when Mica doesn't render
+                var tintColor = isLight
+                    ? System.Windows.Media.Color.FromArgb(200, 243, 243, 243)   // Light: bright grey tint
+                    : System.Windows.Media.Color.FromArgb(200, 32, 32, 32);     // Dark: Windows 11 dark grey tint
+                var tintBrush = new System.Windows.Media.SolidColorBrush(tintColor);
+                tintBrush.Freeze();
+                micaWin.Background = tintBrush;
                 if (rootGrid != null) rootGrid.Background = null;
             }
             else if (blurEnabled && mode == "mica")
             {
                 micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
-                micaWin.Background = System.Windows.Media.Brushes.Transparent;
+                // Semi-transparent fallback — blends with Mica when it works,
+                // provides a visible bright grey background when Mica fails to render
+                var tintColor = isLight
+                    ? System.Windows.Media.Color.FromArgb(200, 243, 243, 243)   // #F3F3F3 at ~78% opacity
+                    : System.Windows.Media.Color.FromArgb(200, 32, 32, 32);     // #202020 at ~78% opacity
+                var tintBrush = new System.Windows.Media.SolidColorBrush(tintColor);
+                tintBrush.Freeze();
+                micaWin.Background = tintBrush;
                 if (rootGrid != null) rootGrid.Background = null;
             }
             else if (blurEnabled && mode == "glass")
@@ -619,9 +632,11 @@ public static partial class NativeMethods
             }
             else
             {
-                // Solid background fallback for all modes where blur is disabled or wallpaper is solid
+                // Solid background fallback — use Windows 11 standard grey tones
                 micaWin.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
-                var bgColor = isLight ? System.Windows.Media.Color.FromRgb(245, 246, 248) : System.Windows.Media.Color.FromRgb(18, 18, 26);
+                var bgColor = isLight
+                    ? System.Windows.Media.Color.FromRgb(243, 243, 243)   // Windows 11 light bg
+                    : System.Windows.Media.Color.FromRgb(32, 32, 32);     // Windows 11 dark bg
                 var darkBg = new System.Windows.Media.SolidColorBrush(bgColor);
                 darkBg.Freeze();
                 micaWin.Background = darkBg;
@@ -630,7 +645,9 @@ public static partial class NativeMethods
         }
         else
         {
-            var bgColor = isLight ? System.Windows.Media.Color.FromRgb(245, 246, 248) : System.Windows.Media.Color.FromRgb(18, 18, 26);
+            var bgColor = isLight
+                ? System.Windows.Media.Color.FromRgb(243, 243, 243)
+                : System.Windows.Media.Color.FromRgb(32, 32, 32);
             var bgBrush = new System.Windows.Media.SolidColorBrush(bgColor);
             bgBrush.Freeze();
             window.Background = bgBrush;

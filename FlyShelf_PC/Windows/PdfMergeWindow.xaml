@@ -231,9 +231,9 @@
 
                                     <!-- Reorder Pages -->
                                     <ui:Button Appearance="Transparent" Tag="{Binding}" Click="ReorderPages_Click" 
-                                               ToolTip="Visual page reorder" Padding="5,4" Margin="0,0,2,0"
+                                               ToolTip="Visual page reorder" Padding="7,5" Margin="0,0,2,0"
                                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentMultiple24" FontSize="14"/></ui:Button.Icon>
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentMultiple24" FontSize="17"/></ui:Button.Icon>
                                     </ui:Button>
 
                                     <!-- Save single -->
@@ -262,7 +262,7 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             
-            <!-- Left: Add + Reverse -->
+            <!-- Left: Add -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                 <ui:Button x:Name="AddFilesBtn" Appearance="Secondary" Padding="12,7" Click="AddPdf_Click" FontSize="12" CornerRadius="8" Margin="0,0,6,0">
                     <StackPanel Orientation="Horizontal">
@@ -270,22 +270,19 @@
                         <TextBlock Text="Add Files" FontSize="12" FontWeight="Medium"/>
                     </StackPanel>
                 </ui:Button>
-                <ui:Button Appearance="Transparent" Padding="10,7" Click="ReverseAll_Click" ToolTip="Reverse file order" FontSize="12" CornerRadius="8">
+            </StackPanel>
+
+            <!-- Right: Cancel + Reverse + Save As + Merge -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                <ui:Button Content="Cancel" Appearance="Transparent" Margin="0,0,6,0" Padding="14,7" Click="Cancel_Click" FontSize="12" CornerRadius="8"/>
+                <ui:Button Appearance="Transparent" Margin="0,0,6,0" Padding="8,6" Click="ReverseAll_Click" ToolTip="Reverse file order" FontSize="12" CornerRadius="8">
                     <StackPanel Orientation="Horizontal">
-                        <ui:SymbolIcon Symbol="ArrowSort24" FontSize="13" Margin="0,0,5,0"/>
+                        <ui:SymbolIcon Symbol="ArrowSort24" FontSize="13" Margin="0,0,4,0"/>
                         <TextBlock Text="Reverse" FontSize="12"/>
                     </StackPanel>
                 </ui:Button>
-            </StackPanel>
-
-            <!-- Right: Cancel + Save As + Merge -->
-            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <ui:Button Content="Cancel" Appearance="Transparent" Margin="0,0,6,0" Padding="14,7" Click="Cancel_Click" FontSize="12" CornerRadius="8"/>
-                <ui:Button x:Name="SaveAsBtn" Appearance="Secondary" Margin="0,0,6,0" Padding="12,7" Click="SaveAs_Click" FontSize="12" CornerRadius="8">
-                    <StackPanel Orientation="Horizontal">
-                        <ui:SymbolIcon Symbol="Save24" FontSize="13" Margin="0,0,6,0"/>
-                        <TextBlock Text="Save As" FontSize="12" FontWeight="Medium"/>
-                    </StackPanel>
+                <ui:Button x:Name="SaveAsBtn" Appearance="Secondary" Margin="0,0,6,0" Padding="8,6" Click="SaveAs_Click" FontSize="13" CornerRadius="8">
+                    <TextBlock Text="Save As" FontSize="13" FontWeight="SemiBold"/>
                 </ui:Button>
                 <ui:Button x:Name="MergeBtn" Appearance="Primary" Padding="16,7" Click="Merge_Click" FontSize="12" CornerRadius="8">
                     <StackPanel Orientation="Horizontal">

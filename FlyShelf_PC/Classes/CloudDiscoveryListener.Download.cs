@@ -19,6 +19,8 @@ namespace FlyShelf.Classes
 {
     public partial class CloudDiscoveryListener
     {
+        private static readonly HttpClient _downloadClient = new HttpClient() { Timeout = TimeSpan.FromMinutes(10) };
+
         private async Task FetchAndInjectCloudFile(CloudItem cloudItem)
         {
             ClipboardItem? progressClip = null;
@@ -81,11 +83,8 @@ namespace FlyShelf.Classes
                 int maxRetries = 2;
                 int[] retryDelays = { 500, 1500 };
 
-                using var downloadClient = new HttpClient() { Timeout = TimeSpan.FromMinutes(10) };
+                var downloadClient = _downloadClient;
                 string pairingKey = DevicePairingManager.EnsurePairingKey();
-                if (!string.IsNullOrEmpty(pairingKey))
-                    downloadClient.DefaultRequestHeaders.Add("X-Pairing-Key", pairingKey);
-                downloadClient.DefaultRequestHeaders.Add("X-FlyShelf-Client", "DesktopSync");
                 
                 // Build fallback URL list: primary first, then alternatives
                 var urlsToTry = new List<string> { cloudItem.Raw };
@@ -175,6 +174,9 @@ namespace FlyShelf.Classes
                             }
 
                             var request = new HttpRequestMessage(HttpMethod.Get, tryUrl);
+                            if (!string.IsNullOrEmpty(pairingKey))
+                                request.Headers.TryAddWithoutValidation("X-Pairing-Key", pairingKey);
+                            request.Headers.TryAddWithoutValidation("X-FlyShelf-Client", "DesktopSync");
                             response = await downloadClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
 
                             if (response.IsSuccessStatusCode)
@@ -425,12 +427,13 @@ namespace FlyShelf.Classes
 
             try
             {
-                using var retryClient = new HttpClient() { Timeout = TimeSpan.FromMinutes(10) };
+                var retryClient = _downloadClient;
                 string retryPairingKey = DevicePairingManager.EnsurePairingKey();
+                var retryRequest = new HttpRequestMessage(HttpMethod.Get, url);
                 if (!string.IsNullOrEmpty(retryPairingKey))
-                    retryClient.DefaultRequestHeaders.Add("X-Pairing-Key", retryPairingKey);
-                retryClient.DefaultRequestHeaders.Add("X-FlyShelf-Client", "DesktopSync");
-                var retryResponse = await retryClient.GetAsync(url);
+                    retryRequest.Headers.TryAddWithoutValidation("X-Pairing-Key", retryPairingKey);
+                retryRequest.Headers.TryAddWithoutValidation("X-FlyShelf-Client", "DesktopSync");
+                var retryResponse = await retryClient.SendAsync(retryRequest);
                 if (retryResponse.IsSuccessStatusCode)
                 {
                     using var retryContent = await retryResponse.Content.ReadAsStreamAsync();

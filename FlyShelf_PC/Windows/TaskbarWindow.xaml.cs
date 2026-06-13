@@ -60,6 +60,13 @@ namespace FlyShelf.Windows
             _timer.Interval = TimeSpan.FromMilliseconds(500); // 2fps is plenty — taskbar rarely moves
             _timer.Tick += (s, e) => UpdatePosition();
 
+            // Listen for system preference changes (like taskbar auto-hide toggling)
+            try
+            {
+                Microsoft.Win32.SystemEvents.UserPreferenceChanged += SystemEvents_UserPreferenceChanged;
+            }
+            catch { }
+
             // Listen for the toggle setting change
             SettingsManager.Current.PropertyChanged += (s, e) =>
             {
@@ -181,6 +188,7 @@ namespace FlyShelf.Windows
         {
             _isClosed = true;
             try { _timer?.Stop(); } catch { }
+            try { Microsoft.Win32.SystemEvents.UserPreferenceChanged -= SystemEvents_UserPreferenceChanged; } catch { }
             base.OnClosed(e);
         }
 
@@ -382,9 +390,6 @@ namespace FlyShelf.Windows
             _lastTaskbarFrameRect = Rect.Empty;
             _positionUpdateInProgress = false;
 
-            // Speed up polling to track taskbar slide animation
-            _timer.Interval = TimeSpan.FromMilliseconds(150);
-
             Classes.Logger.LogAction("WIDGET", "Switched to FLOATING mode (taskbar auto-hide detected)");
         }
 
@@ -429,9 +434,6 @@ namespace FlyShelf.Windows
             // Force WPF visibility
             Visibility = Visibility.Visible;
 
-            // Slow down polling — embedded mode doesn't need rapid updates
-            _timer.Interval = TimeSpan.FromMilliseconds(500);
-
             Classes.Logger.LogAction("WIDGET", "Switched to EMBEDDED mode (taskbar auto-hide disabled) — all caches reset");
         }
 
@@ -461,7 +463,6 @@ namespace FlyShelf.Windows
                 if (autoHide)
                 {
                     _isFloatingMode = true;
-                    _timer.Interval = TimeSpan.FromMilliseconds(150); // Fast polling for auto-hide tracking
 
                     int exStyle = GetWindowLong(taskbarWindowHandle, GWL_EXSTYLE);
                     exStyle |= WS_EX_TOOLWINDOW;
@@ -549,23 +550,10 @@ namespace FlyShelf.Windows
 
                 if (_isFloatingMode)
                 {
-                    // Floating mode: sync visibility with the auto-hide taskbar
+                    // Floating mode: always keep the widget visible in the corner
                     if (taskbarHandle != IntPtr.Zero)
                     {
-                        bool taskbarVisible = IsTaskbarCurrentlyVisible(taskbarHandle);
-                        if (!taskbarVisible)
-                        {
-                            // Taskbar is hidden — hide the widget too
-                            if (Visibility != Visibility.Hidden)
-                            {
-                                Visibility = Visibility.Hidden;
-                            }
-                        }
-                        else
-                        {
-                            // Taskbar is showing — position and show the widget
-                            Dispatcher.BeginInvoke(() => { CalculateFloatingPosition(interop.Handle, taskbarHandle); }, DispatcherPriority.Background);
-                        }
+                        Dispatcher.BeginInvoke(() => { CalculateFloatingPosition(interop.Handle, taskbarHandle); }, DispatcherPriority.Background);
                     }
                 }
                 else
@@ -584,6 +572,73 @@ namespace FlyShelf.Windows
                 }
             }
             catch { }
+        }
+
+        public void ForceReposition()
+        {
+            if (_isClosed || !SettingsManager.Current.EnableTaskbarWidget) return;
+
+            // Invalidate all position/size caches to force a layout recalculation
+            _lastWidgetLeft = -1;
+            _lastWidgetTop = -1;
+            _lastWidgetW = -1;
+            _lastWidgetH = -1;
+            _cachedFreeZoneLeft = -1;
+            _lastFreeZoneScan = DateTime.MinValue;
+            _lastTaskbarWidth = -1;
+            _lastTaskbarHeight = -1;
+            _lastTaskbarFrameRect = Rect.Empty;
+            _cachedWidgetsButtonRight = -1;
+            _lastWidgetsButtonScan = DateTime.MinValue;
+
+            // Trigger the initial update
+            UpdatePosition();
+
+            // Schedule a series of subsequent updates to guarantee correct placement
+            // as Windows transitions the taskbar animation
+            ScheduleDelayedUpdates();
+        }
+
+        private void ScheduleDelayedUpdates()
+        {
+            int[] delays = { 100, 350, 700, 1100, 1600 };
+            foreach (var delay in delays)
+            {
+                Task.Delay(delay).ContinueWith(_ =>
+                {
+                    Dispatcher.BeginInvoke(new Action(() =>
+                    {
+                        if (_isClosed || !SettingsManager.Current.EnableTaskbarWidget) return;
+
+                        _lastWidgetLeft = -1;
+                        _lastWidgetTop = -1;
+                        _lastWidgetW = -1;
+                        _lastWidgetH = -1;
+                        _cachedFreeZoneLeft = -1;
+                        _lastFreeZoneScan = DateTime.MinValue;
+                        _lastTaskbarWidth = -1;
+                        _lastTaskbarHeight = -1;
+                        _lastTaskbarFrameRect = Rect.Empty;
+
+                        UpdatePosition();
+                    }), DispatcherPriority.Background);
+                });
+            }
+        }
+
+        private void SystemEvents_UserPreferenceChanged(object sender, Microsoft.Win32.UserPreferenceChangedEventArgs e)
+        {
+            if (_isClosed) return;
+            if (e.Category == Microsoft.Win32.UserPreferenceCategory.General ||
+                e.Category == Microsoft.Win32.UserPreferenceCategory.Policy ||
+                e.Category == Microsoft.Win32.UserPreferenceCategory.Window)
+            {
+                Classes.Logger.LogAction("WIDGET", $"UserPreferenceChanged ({e.Category}) detected — forcing immediate reposition");
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    ForceReposition();
+                }), DispatcherPriority.Background);
+            }
         }
 
         /// <summary>

@@ -51,9 +51,11 @@ namespace FlyShelf.Classes
         // When this equals total paired devices, Firebase clipboard push can be skipped.
         public static int DirectlyConnectedDeviceCount { get; set; } = 0;
         
-        // Time-windowed dedup: track fingerprint ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ last push time (10s cooldown)
+        // Time-windowed dedup: track fingerprint → last push time (10s cooldown)
         private static readonly Dictionary<string, long> _recentPushTimes = new();
-        private const int DEDUP_COOLDOWN_MS = 10_000; // 10 seconds ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â  same content within this window is skipped
+        // Track whether last push of this content actually succeeded (prevents dedup from swallowing retries)
+        private static readonly Dictionary<string, bool> _recentPushSuccess = new();
+        private const int DEDUP_COOLDOWN_MS = 10_000; // 10 seconds — same content within this window is skipped
         private const int AUTO_DELETE_TEXT_MS = 5 * 60_000; // 5 minutes
         private const int AUTO_DELETE_FILE_MS = 6 * 60 * 60_000; // 6 hours safety net
 
@@ -114,14 +116,16 @@ namespace FlyShelf.Classes
                 return;
             }
 
-            // Time-windowed dedup: skip if same content was pushed within last 10 seconds
+            // Time-windowed dedup: skip if same content was pushed SUCCESSFULLY within last 10 seconds
             string fingerprint = $"{item.ItemType}::{(item.RawContent ?? "").Substring(0, Math.Min(200, (item.RawContent ?? "").Length))}";
             long nowMs = NetworkClock.UtcNowMs;
             lock (_recentPushTimes)
             {
                 if (_recentPushTimes.TryGetValue(fingerprint, out long lastPushTime))
                 {
-                    if (nowMs - lastPushTime < DEDUP_COOLDOWN_MS)
+                    // Only dedup if the previous push of this content was SUCCESSFUL
+                    bool lastSucceeded = _recentPushSuccess.TryGetValue(fingerprint, out bool s) && s;
+                    if (nowMs - lastPushTime < DEDUP_COOLDOWN_MS && lastSucceeded)
                     {
                         Logger.LogAction("FIREBASE SYNC", "Skipped rapid-fire duplicate (same content within 10s cooldown)");
                         return;
@@ -131,7 +135,7 @@ namespace FlyShelf.Classes
                 
                 // Clean old fingerprints (older than 60s)
                 var stale = _recentPushTimes.Where(kv => nowMs - kv.Value > 60_000).Select(kv => kv.Key).ToList();
-                foreach (var key in stale) _recentPushTimes.Remove(key);
+                foreach (var key in stale) { _recentPushTimes.Remove(key); _recentPushSuccess.Remove(key); }
             }
 
             // Safety: If no DeviceName is set, use the machine name so we can always filter self-echoes
@@ -171,22 +175,26 @@ namespace FlyShelf.Classes
 
                     if (delivered > 0)
                     {
+                        lock (_recentPushTimes) { _recentPushSuccess[fingerprint] = true; }
                         Logger.LogAction("PEER SYNC", $"Delivered to {delivered} peer(s) directly via P2P");
                     }
                     else
                     {
+                        lock (_recentPushTimes) { _recentPushSuccess[fingerprint] = false; }
                         Logger.LogAction("PEER SYNC", $"⚠️ Direct P2P delivery failed — no peers accepted the {(isTextType ? "text" : "file")}");
                         throw new InvalidOperationException($"Direct P2P delivery failed: 0 peers accepted the {(isTextType ? "text" : "file")}.");
                     }
                 }
                 else
                 {
+                    lock (_recentPushTimes) { _recentPushSuccess[fingerprint] = false; }
                     Logger.LogAction("PEER SYNC", $"⚠️ No online peers available for direct P2P transport.");
                     throw new InvalidOperationException("No online peers available for direct P2P transport.");
                 }
             }
             catch (Exception ex)
             {
+                lock (_recentPushTimes) { _recentPushSuccess[fingerprint] = false; }
                 Logger.LogAction("PEER SYNC ERROR", ex.Message);
                 throw;
             }

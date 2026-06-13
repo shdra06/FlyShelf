@@ -283,6 +283,7 @@ namespace FlyShelf.Classes
 
                 await ws.ConnectAsync(new Uri(wsUrl), peer.WsCts.Token);
                 peer.LiveSocket = ws;
+                peer.WsReconnectAttempts = 0; // Reset backoff on successful connection
                 Logger.LogAction("WS", $"🔗 WebSocket connected to {peer.DeviceName} via {peer.Transport}");
 
                 // Monitor the WebSocket — when it drops, peer is dead
@@ -414,7 +415,11 @@ namespace FlyShelf.Classes
                     try { peer.WsCts?.Cancel(); } catch { }
                     try { peer.LiveSocket?.Dispose(); } catch { }
                     peer.LiveSocket = null;
-                    // Re-establish WebSocket for instant death detection + direct sends
+                    // Re-establish WebSocket with exponential backoff to prevent tight reconnect loops
+                    peer.WsReconnectAttempts++;
+                    int delay = Math.Min(1000 * (1 << Math.Min(peer.WsReconnectAttempts, 5)), 30000);
+                    Logger.LogAction("WS", $"⏳ Reconnecting WebSocket to {peer.DeviceName} in {delay}ms (attempt #{peer.WsReconnectAttempts})");
+                    await Task.Delay(delay);
                     _ = Task.Run(() => ConnectWebSocket(peer));
                 }
                 else
@@ -583,7 +588,12 @@ namespace FlyShelf.Classes
 
                 try
                 {
-                    await peer.SendSemaphore.WaitAsync(TimeSpan.FromSeconds(3));
+                    bool acquired = await peer.SendSemaphore.WaitAsync(TimeSpan.FromSeconds(3));
+                    if (!acquired)
+                    {
+                        Logger.LogAction("PEER", $"Skipping URL broadcast to {peer.DeviceName} — send semaphore busy");
+                        continue;
+                    }
                     try
                     {
                         using var sendCts = new CancellationTokenSource(5000);

@@ -32,6 +32,7 @@ namespace FlyShelf
         private static readonly SolidColorBrush _notesHeaderBrush = new(Color.FromRgb(0x1A, 0x1A, 0x2E));
         private TextBox? _lastFocusedBulletTextBox = null;
         private DateTime _lastBulletAddedTime = DateTime.MinValue;
+        private bool _isNotesSidebarCollapsed = false;
 
         // ═══════════════════════════════════════════════════════════
         // TOGGLE NOTES PANEL
@@ -67,7 +68,7 @@ namespace FlyShelf
             RebuildSidebar();
 
             _isNotesActive = true;
-            StartPanelAutoRevertTimer();
+            // NOTE: No auto-revert timer — Notes panel should never auto-hide
 
             // Update taskbar/alt-tab title
             Title = "Notes";
@@ -186,7 +187,7 @@ namespace FlyShelf
             if (helper.Handle != IntPtr.Zero)
             {
                 int exStyle = GetWindowLong(helper.Handle, GWL_EXSTYLE);
-                if (_isNotesActive || _isTodoActive)
+                if (_isNotesActive || _isTodoActive || _isSearchActive)
                 {
                     // Remove WS_EX_NOACTIVATE so the window can receive keyboard focus
                     // DO NOT add WS_EX_APPWINDOW — it unpins the window from all virtual
@@ -522,7 +523,48 @@ namespace FlyShelf
         {
             if (_selectedNoteDay != null)
             {
+                // Currently viewing a specific day — switch to month view
                 SelectNoteMonth(_selectedNoteDay.Date.Month, _selectedNoteDay.Date.Year);
+            }
+            else if (_selectedMonth != -1 && _selectedYear != -1)
+            {
+                // Currently in month view — navigate to the most recent day
+                var newestDay = NoteManager.Days
+                    .Where(d => d.Date.Month == _selectedMonth && d.Date.Year == _selectedYear)
+                    .OrderByDescending(d => d.Date)
+                    .FirstOrDefault();
+                if (newestDay != null)
+                {
+                    SelectNoteDay(newestDay);
+                }
+            }
+        }
+
+        private void NotesSidebarToggle_Click(object sender, MouseButtonEventArgs e)
+        {
+            _isNotesSidebarCollapsed = !_isNotesSidebarCollapsed;
+
+            if (_isNotesSidebarCollapsed)
+            {
+                // Collapse: animate width to 0
+                var anim = new DoubleAnimation(NotesSidebarBorder.ActualWidth, 0, TimeSpan.FromMilliseconds(150))
+                {
+                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
+                };
+                anim.Completed += (s, ev) =>
+                {
+                    NotesSidebarBorder.Visibility = Visibility.Collapsed;
+                    NotesSidebarCollapseIcon.Text = "▸";
+                };
+                NotesSidebarBorder.BeginAnimation(FrameworkElement.WidthProperty, anim);
+            }
+            else
+            {
+                // Expand: show and animate width back
+                NotesSidebarBorder.Visibility = Visibility.Visible;
+                NotesSidebarBorder.BeginAnimation(FrameworkElement.WidthProperty, null); // Clear animation
+                NotesSidebarBorder.Width = double.NaN; // Reset to Auto
+                NotesSidebarCollapseIcon.Text = "◂";
             }
         }
 
@@ -530,14 +572,11 @@ namespace FlyShelf
         {
             if (sender is FrameworkElement fe && fe.DataContext is NotesSidebarItem item)
             {
+                // Month headers are non-clickable labels
                 if (item.IsMonthHeader)
-                {
-                    SelectNoteMonth(item.MonthValue, item.YearValue);
-                }
-                else
-                {
-                    SelectNoteDay(item.Day);
-                }
+                    return;
+
+                SelectNoteDay(item.Day);
             }
         }
 
@@ -840,12 +879,42 @@ namespace FlyShelf
             }
         }
 
+        private void NoteBulletReminder_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is NoteBullet bullet)
+            {
+                string title = !string.IsNullOrEmpty(bullet.Header) ? bullet.Header : 
+                               (!string.IsNullOrEmpty(bullet.Content) ? (bullet.Content.Length > 50 ? bullet.Content[..50] + "..." : bullet.Content) : "Note Reminder");
+                
+                // Default to tomorrow 9:00 AM
+                DateTime defaultDue = DateTime.Today.AddDays(1).AddHours(9);
+                if (_selectedNoteDay != null && _selectedNoteDay.Date.Date > DateTime.Today)
+                {
+                    defaultDue = _selectedNoteDay.Date.Date.AddHours(9);
+                }
+
+                var reminderWindow = new FlyShelf.Windows.ReminderCreateWindow(title, defaultDue);
+                reminderWindow.Show();
+                reminderWindow.Activate();
+            }
+        }
+
+
         private void NoteBulletDelete_Click(object sender, MouseButtonEventArgs e)
         {
             if (_selectedNoteDay == null) return;
             if (sender is FrameworkElement fe && fe.DataContext is NoteBullet bullet)
             {
-                NoteManager.RemoveBullet(_selectedNoteDay, bullet);
+                var result = MessageBox.Show(
+                    "Are you sure you want to delete this note?",
+                    "Confirm Delete",
+                    MessageBoxButton.YesNo,
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    NoteManager.RemoveBullet(_selectedNoteDay, bullet);
+                }
             }
         }
 
@@ -994,7 +1063,22 @@ namespace FlyShelf
 
         private void NotesModeToggle_Click(object sender, MouseButtonEventArgs e)
         {
-            if (_selectedNoteDay == null) return;
+            // If in Month View (no specific day selected), navigate to the most recent day in that month
+            if (_selectedNoteDay == null)
+            {
+                if (_selectedMonth != -1 && _selectedYear != -1)
+                {
+                    var newestDay = NoteManager.Days
+                        .Where(d => d.Date.Month == _selectedMonth && d.Date.Year == _selectedYear)
+                        .OrderByDescending(d => d.Date)
+                        .FirstOrDefault();
+                    if (newestDay != null)
+                    {
+                        SelectNoteDay(newestDay);
+                    }
+                }
+                return;
+            }
 
             _selectedNoteDay.IsFreeformMode = !_selectedNoteDay.IsFreeformMode;
             NoteManager.MarkDirty();
@@ -1024,7 +1108,7 @@ namespace FlyShelf
                 ActivateNotesWindow();
                 if (_selectedNoteDay.Bullets.Count == 0)
                 {
-                    _lastBulletAddedTime = DateTime.MinValue; // Reset cooldown
+                    _lastBulletAddedTime = DateTime.MinValue;
                     AddNewBulletAndFocus();
                 }
                 else
@@ -1204,32 +1288,67 @@ namespace FlyShelf
         private void NotesMonthPicker_Click(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true; // Prevent event from bubbling further
-            // Build the list of months with data
-            var months = new List<NotesMonthPickerItem>();
+
+            // Rebuild the sidebar to show ALL months that have notes data.
+            // Each month appears as a non-clickable header followed by its day items.
+            _sidebarItems.Clear();
             int maxDays = Classes.LicenseManager.GetNoteHistoryDays();
             DateTime cutoff = maxDays < int.MaxValue ? DateTime.Today.AddDays(-maxDays) : DateTime.MinValue;
 
-            var groupedMonths = NoteManager.Days
-                .Where(d => d.Date >= cutoff)
-                .GroupBy(d => new { d.Date.Year, d.Date.Month })
-                .OrderByDescending(g => g.Key.Year)
-                .ThenByDescending(g => g.Key.Month);
+            int lastMonth = -1;
+            int lastYear = -1;
 
-            foreach (var group in groupedMonths)
+            foreach (var day in NoteManager.Days)
             {
-                var firstDay = group.First();
-                months.Add(new NotesMonthPickerItem
+                if (day.Date < cutoff) continue;
+
+                int month = day.Date.Month;
+                int year = day.Date.Year;
+
+                if (month != lastMonth || year != lastYear)
                 {
-                    MonthName = firstDay.Date.ToString("MMMM"),
-                    YearText = group.Key.Year.ToString(),
-                    DayCount = $"({group.Count()} days)",
-                    Month = group.Key.Month,
-                    Year = group.Key.Year
+                    // Full month name as header (e.g. "JUNE 2026")
+                    string monthFull = day.Date.ToString("MMM").ToUpper();
+                    _sidebarItems.Add(new NotesSidebarItem
+                    {
+                        IsMonthHeader = true,
+                        Label = monthFull,
+                        FullLabel = day.Date.ToString("MMMM yyyy"),
+                        MonthValue = month,
+                        YearValue = year,
+                        IsSelected = false
+                    });
+
+                    lastMonth = month;
+                    lastYear = year;
+                }
+
+                _sidebarItems.Add(new NotesSidebarItem
+                {
+                    IsMonthHeader = false,
+                    Label = day.DayNumber,
+                    MonthLabel = day.MonthName,
+                    FullLabel = day.DisplayDate,
+                    IsToday = day.IsToday,
+                    Day = day,
+                    MonthValue = month,
+                    YearValue = year,
+                    IsSelected = (_selectedNoteDay == day)
                 });
             }
 
-            NotesMonthList.ItemsSource = months;
-            NotesMonthPopup.IsOpen = true;
+            NotesDaySidebar.ItemsSource = null;
+            NotesDaySidebar.ItemsSource = _sidebarItems;
+
+            // Ensure sidebar is visible (expand if collapsed)
+            if (_isNotesSidebarCollapsed)
+            {
+                _isNotesSidebarCollapsed = false;
+                NotesSidebarBorder.Visibility = Visibility.Visible;
+                NotesSidebarBorder.BeginAnimation(FrameworkElement.WidthProperty, null);
+                NotesSidebarBorder.Width = double.NaN;
+                NotesSidebarCollapseIcon.Text = "◂";
+            }
         }
 
         private void NotesMonthItem_Click(object sender, MouseButtonEventArgs e)
@@ -1237,37 +1356,153 @@ namespace FlyShelf
             if (sender is FrameworkElement fe && fe.DataContext is NotesMonthPickerItem item)
             {
                 NotesMonthPopup.IsOpen = false;
-                SelectNoteMonth(item.Month, item.Year);
+
+                // Navigate to the first (most recent) day in that month
+                var firstDay = NoteManager.Days
+                    .Where(d => d.Date.Month == item.Month && d.Date.Year == item.Year)
+                    .OrderByDescending(d => d.Date)
+                    .FirstOrDefault();
+
+                if (firstDay != null)
+                {
+                    // Rebuild sidebar to show all months, then select the day
+                    NotesMonthPicker_Click(sender, e);
+                    SelectNoteDay(firstDay);
+                }
+                else
+                {
+                    SelectNoteMonth(item.Month, item.Year);
+                }
             }
         }
 
         private void NotesTemplates_Click(object sender, MouseButtonEventArgs e)
         {
-            e.Handled = true; // Prevent event from bubbling further
+            e.Handled = true;
             if (sender is FrameworkElement fe)
             {
                 var menu = new ContextMenu();
-                
+
                 var item1 = new MenuItem { Header = "🛒 Grocery List" };
-                item1.Click += (s, ev) => ApplyNotesTemplate(new[] { "Milk", "Eggs", "Veggies", "Bread", "Fruit" });
-                
+                item1.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
+                    ("Dairy", "Milk, Eggs, Cheese, Yogurt"),
+                    ("Produce", "Veggies, Fruits, Herbs"),
+                    ("Pantry", "Bread, Rice, Pasta, Cereal"),
+                    ("Frozen & Snacks", "")
+                });
+
                 var item2 = new MenuItem { Header = "💼 Daily Standup" };
-                item2.Click += (s, ev) => ApplyNotesTemplate(new[] { "Yesterday: ", "Today: ", "Blockers: " });
-                
+                item2.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
+                    ("Yesterday", ""),
+                    ("Today", ""),
+                    ("Blockers", ""),
+                    ("Notes", "")
+                });
+
                 var item3 = new MenuItem { Header = "📝 Meeting Notes" };
-                item3.Click += (s, ev) => ApplyNotesTemplate(new[] { "Agenda: ", "Discussion: ", "Action Items: " });
-                
+                item3.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
+                    ("Attendees", ""),
+                    ("Agenda", ""),
+                    ("Discussion", ""),
+                    ("Action Items", ""),
+                    ("Follow-up", "")
+                });
+
                 var item4 = new MenuItem { Header = "🏋️ Workout Planner" };
-                item4.Click += (s, ev) => ApplyNotesTemplate(new[] { "Warmup: ", "Main Routine: ", "Cooldown: " });
+                item4.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
+                    ("Warmup", "5 min cardio"),
+                    ("Main Set", ""),
+                    ("Cooldown", "Stretching & foam roll")
+                });
+
+                var sep1 = new Separator();
+
+                var item5 = new MenuItem { Header = "🎯 Project Planning" };
+                item5.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
+                    ("Goal", ""),
+                    ("Tasks", ""),
+                    ("Timeline", ""),
+                    ("Risks & Mitigations", "")
+                });
+
+                var item6 = new MenuItem { Header = "📊 Weekly Review" };
+                item6.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
+                    ("Wins", ""),
+                    ("Challenges", ""),
+                    ("Lessons Learned", ""),
+                    ("Next Week Priorities", "")
+                });
+
+                var item7 = new MenuItem { Header = "🧠 Brain Dump" };
+                item7.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
+                    ("Ideas", ""),
+                    ("To Research", ""),
+                    ("Questions", "")
+                });
+
+                var item8 = new MenuItem { Header = "📚 Reading Notes" };
+                item8.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
+                    ("Key Takeaways", ""),
+                    ("Quotes", ""),
+                    ("Reflections", "")
+                });
 
                 menu.Items.Add(item1);
                 menu.Items.Add(item2);
                 menu.Items.Add(item3);
                 menu.Items.Add(item4);
+                menu.Items.Add(sep1);
+                menu.Items.Add(item5);
+                menu.Items.Add(item6);
+                menu.Items.Add(item7);
+                menu.Items.Add(item8);
 
                 menu.PlacementTarget = fe;
                 menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
                 menu.IsOpen = true;
+            }
+        }
+
+        private void ApplyNotesTemplateWithHeaders((string header, string content)[] items)
+        {
+            var targetDay = GetTargetDayForAdd();
+            if (targetDay == null) return;
+
+            if (targetDay.IsFreeformMode)
+            {
+                // In freeform mode, format as structured text
+                var sb = new System.Text.StringBuilder();
+                foreach (var (header, content) in items)
+                {
+                    sb.AppendLine($"## {header}");
+                    if (!string.IsNullOrEmpty(content))
+                        sb.AppendLine($"  {content}");
+                    sb.AppendLine();
+                }
+                NotesFreeformBox.Text += sb.ToString();
+                targetDay.FreeformContent = NotesFreeformBox.Text;
+                NoteManager.MarkDirty();
+            }
+            else
+            {
+                foreach (var (header, content) in items)
+                {
+                    var bullet = NoteManager.AddBullet(targetDay);
+                    bullet.Header = header;
+                    bullet.Content = content;
+                    bullet.IsCollapsed = false; // Templates should start expanded
+                }
+
+                if (_selectedNoteDay == null && _selectedMonth != -1)
+                {
+                    RebuildSidebar();
+                    SelectNoteMonth(_selectedMonth, _selectedYear);
+                }
+                else
+                {
+                    NotesBulletList.ItemsSource = null;
+                    NotesBulletList.ItemsSource = targetDay.Bullets;
+                }
             }
         }
 

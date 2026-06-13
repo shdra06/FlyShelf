@@ -58,45 +58,24 @@ namespace FlyShelf
         private void RestoreMicaBlur()
         {
             ClearWallpaperLayers();
-            bool blurEnabled = Classes.SettingsManager.Current.EnableBlurBehind 
-                               && Classes.NativeMethods.ShouldUseBlur();
-            if (blurEnabled)
+
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+            if (hwnd != IntPtr.Zero)
             {
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                if (hwnd != IntPtr.Zero)
-                {
-                    Classes.NativeMethods.DisableCustomAcrylic(hwnd);
-                }
-
-                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.Mica;
-                this.Background = Brushes.Transparent;
-                if (RootContent != null)
-                    RootContent.Background = new SolidColorBrush(Color.FromArgb(0x01, 0, 0, 0)); // Near-transparent for hit-testing
-
-                // Deferred second cleanup: the Win32 Acrylic accent policy (SetWindowCompositionAttribute)
-                // can linger even after DisableCustomAcrylic because DWM needs a compositor frame to process
-                // the change. This deferred call ensures the Acrylic look is fully purged after DWM catches up.
-                if (hwnd != IntPtr.Zero)
-                {
-                    var capturedHwnd = hwnd;
-                    Dispatcher.InvokeAsync(() =>
-                    {
-                        try { Classes.NativeMethods.DisableCustomAcrylic(capturedHwnd); }
-                        catch { }
-                    }, System.Windows.Threading.DispatcherPriority.Background);
-                }
+                Classes.NativeMethods.DisableCustomAcrylic(hwnd);
             }
-            else
-            {
-                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                if (hwnd != IntPtr.Zero)
-                {
-                    Classes.NativeMethods.DisableCustomAcrylic(hwnd);
-                }
 
-                this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
-                ApplyPopupBackground(); // solid dark + software blur fallback
-            }
+            // ═══ SOLID GREY BACKGROUND ═══
+            // Mica blur doesn't render well on the clipboard popup, so we use a clean
+            // Windows-native dark grey (#2B2B2B) instead of the DWM Mica backdrop.
+            // The main PC app (HubWindow) keeps its own Mica blur — only the clipboard is changed.
+            this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
+            var greyBg = new SolidColorBrush(Color.FromRgb(0x2B, 0x2B, 0x2B));
+            greyBg.Freeze();
+            this.Background = greyBg;
+            if (RootContent != null)
+                RootContent.Background = greyBg;
+
             ResetSelectionAccent();
         }
 

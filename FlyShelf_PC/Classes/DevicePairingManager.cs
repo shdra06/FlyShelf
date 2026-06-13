@@ -49,6 +49,29 @@ namespace FlyShelf.Classes
 
         private static List<PairedDevice> _pairedDevices = new();
         private static readonly object _lock = new();
+
+        // ═══ Recently-unpaired tracking: prevents UDP auto-re-registration of unpaired devices ═══
+        private static readonly HashSet<string> _recentlyUnpaired = new(StringComparer.OrdinalIgnoreCase);
+        private static readonly object _unpairedLock = new();
+
+        /// <summary>
+        /// Returns true if the device was recently unpaired (prevents UDP auto-re-registration).
+        /// </summary>
+        public static bool IsRecentlyUnpaired(string deviceId)
+        {
+            lock (_unpairedLock) { return _recentlyUnpaired.Contains(deviceId); }
+        }
+
+        /// <summary>
+        /// Returns true if the device is blocked (recently unpaired).
+        /// Used to reject incoming text/file/WebSocket data from devices that
+        /// still hold a valid pairing key but have been explicitly unpaired.
+        /// </summary>
+        public static bool IsDeviceBlocked(string? deviceId)
+        {
+            if (string.IsNullOrEmpty(deviceId)) return false;
+            lock (_unpairedLock) { return _recentlyUnpaired.Contains(deviceId); }
+        }
         
         /// <summary>Fires whenever a device is successfully paired. UI can subscribe to auto-refresh.</summary>
         public static event Action<string> OnDevicePaired;
@@ -81,6 +104,11 @@ namespace FlyShelf.Classes
         /// </summary>
         public static string EnsurePairingKey()
         {
+            // Fix #6: Clear any stale pairing code from a previous session
+            // Prevents the UI from showing codes that are no longer valid in Firebase.
+            // Firebase cleanup happens on next PublishPairingCode call.
+            CurrentPairingCode = null;
+
             string configKey = SettingsManager.Current.PairingKey ?? "";
             
             // Self-healing alignment: If we have paired devices, but the config key is different or empty,
@@ -378,6 +406,19 @@ namespace FlyShelf.Classes
             }
             Save();
             Logger.LogAction("PAIR", $"Removed device: {deviceId}");
+
+            // Fix #1A: Disconnect and remove the peer from PeerManager to prevent ghost connections
+            try
+            {
+                PeerManager.Instance?.DisconnectPeer(deviceId);
+            }
+            catch { }
+
+            // Fix #1B: Track recently-unpaired device to prevent UDP auto-re-registration
+            lock (_unpairedLock)
+            {
+                _recentlyUnpaired.Add(deviceId);
+            }
 
             // SECURITY: Also delete the ghost entry from Firebase active_devices
             // Without this, unpaired devices persist in the Cloud topology indefinitely.

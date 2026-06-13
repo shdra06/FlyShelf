@@ -146,7 +146,7 @@ namespace FlyShelf.Classes
                 
                 _ = WriteHandshakeToFirebase(info.pairingKey, info.deviceId);
                 
-                return (true, info.deviceName);
+                return (true, info.deviceName + " ⏳");
             }
 
             return (false, info.deviceName);

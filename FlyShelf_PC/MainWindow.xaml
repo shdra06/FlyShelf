@@ -252,218 +252,263 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 
-                <!-- Search Bar — expands inline when toggled -->
-                <Border x:Name="SearchBarContainer" Grid.Column="0" VerticalAlignment="Center" Margin="0,0,6,0" Visibility="Collapsed"
-                        Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="8" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" Padding="6,2"
+                <!-- Inline Search Bar (covers the left area up to the search icon) -->
+                <Border x:Name="SearchBarContainer" Grid.Column="0" Visibility="Collapsed" VerticalAlignment="Center"
+                        Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="8"
+                        BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                        Padding="6,0" Margin="0,0,6,0" Height="32" HorizontalAlignment="Stretch"
                         Panel.ZIndex="10" PreviewMouseLeftButtonDown="SearchBar_PreviewMouseDown"
-                        RenderTransformOrigin="0.5,0">
+                        RenderTransformOrigin="1,0.5">
                     <Border.RenderTransform>
-                        <TranslateTransform Y="0"/>
+                        <ScaleTransform ScaleX="1" ScaleY="1"/>
                     </Border.RenderTransform>
-                    <Grid>
+                    <Grid VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <Grid Grid.Column="0" Background="Transparent">
-                            <TextBlock x:Name="SearchPlaceholder" Text="Search" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" FontSize="12" IsHitTestVisible="False" Margin="10,0,0,0"/>
-                            <TextBox x:Name="SearchTextBox" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
-                                     FontSize="12" VerticalAlignment="Center" CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Padding="4,2" Margin="0"
-                                     HorizontalContentAlignment="Left"
-                                     TextChanged="SearchTextBox_TextChanged" PreviewKeyDown="SearchTextBox_PreviewKeyDown">
-                                <TextBox.Style>
-                                    <Style TargetType="TextBox">
-                                        <Setter Property="Background" Value="Transparent"/>
-                                        <Setter Property="BorderThickness" Value="0"/>
-                                        <Setter Property="Focusable" Value="True"/>
-                                        <Setter Property="Template">
-                                            <Setter.Value>
-                                                <ControlTemplate TargetType="TextBox">
-                                                    <Border Background="Transparent" Padding="{TemplateBinding Padding}">
-                                                        <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
-                                                    </Border>
-                                                </ControlTemplate>
-                                            </Setter.Value>
-                                        </Setter>
-                                    </Style>
-                                </TextBox.Style>
-                            </TextBox>
-                        </Grid>
+                        <!-- Search icon -->
+                        <ui:SymbolIcon Grid.Column="0" Symbol="Search24" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" Margin="2,0,6,0"/>
+                        <!-- Search input with integrated placeholder -->
+                        <TextBox x:Name="SearchTextBox" Grid.Column="1" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
+                                 FontSize="13" VerticalAlignment="Center" VerticalContentAlignment="Center" 
+                                 CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Padding="0" Margin="0"
+                                 HorizontalContentAlignment="Left" MinWidth="80"
+                                 TextChanged="SearchTextBox_TextChanged" PreviewKeyDown="SearchTextBox_PreviewKeyDown">
+                            <TextBox.Style>
+                                <Style TargetType="TextBox">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="BorderThickness" Value="0"/>
+                                    <Setter Property="Focusable" Value="True"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="TextBox">
+                                                <Grid Background="Transparent">
+                                                    <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0" Padding="0" VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
+                                                    <TextBlock x:Name="PlaceholderText" Text="Search clipboard..." 
+                                                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
+                                                               VerticalAlignment="Center" FontSize="13" IsHitTestVisible="False" Margin="0"
+                                                               Visibility="Collapsed"/>
+                                                </Grid>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="Text" Value="">
+                                                        <Setter TargetName="PlaceholderText" Property="Visibility" Value="Visible"/>
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </TextBox.Style>
+                        </TextBox>
                         <!-- Clear search button -->
-                        <ui:Button Grid.Column="1" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource SubtleTextColor}" Click="ClearSearch_Click" ToolTip="Clear Search" Margin="2,0,0,0" Padding="4,2" CornerRadius="6">
+                        <ui:Button Grid.Column="2" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource SubtleTextColor}" Click="ClearSearch_Click" ToolTip="Clear Search" Margin="4,0,0,0" Padding="4,2" CornerRadius="6">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss12" FontSize="10"/></ui:Button.Icon>
                         </ui:Button>
                     </Grid>
                 </Border>
                 
-                <Border Grid.Column="0" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
-                
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Grid Grid.Column="1" HorizontalAlignment="Right">
+                    <!-- Layer 1: Toolbar buttons (hidden when search is active) -->
+                    <StackPanel x:Name="ToolbarButtonsPanel" Orientation="Horizontal" HorizontalAlignment="Right">
                     
-                    <!-- Search Toggle -->
-                    <ui:Button x:Name="SearchToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="SearchToggle_Click" ToolTip="Search Clipboard (Ctrl+F)" Margin="0,0,6,0">
-                        <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" /></ui:Button.Icon>
-                    </ui:Button>
+                        <!-- Search Toggle -->
+                        <ui:Button x:Name="SearchToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="SearchToggle_Click" ToolTip="Search Clipboard (Ctrl+F)" Margin="0,0,6,0">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" /></ui:Button.Icon>
+                        </ui:Button>
  
-                     <!-- Bouncy Drag Drop Arrow Indicator — borderless, appears only when dragging -->
-                     <Grid Width="28" Height="28" Margin="0,0,6,0" VerticalAlignment="Center" HorizontalAlignment="Center">
-                         <Grid.Style>
-                             <Style TargetType="Grid">
-                                 <Setter Property="Visibility" Value="Collapsed"/>
-                                 <Style.Triggers>
-                                     <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                         <Setter Property="Visibility" Value="Visible"/>
-                                     </DataTrigger>
-                                 </Style.Triggers>
-                             </Style>
-                         </Grid.Style>
-                         <ui:SymbolIcon Symbol="ArrowDown24" Foreground="{DynamicResource SyncIncomingColor}" RenderTransformOrigin="0.5,0.5" HorizontalAlignment="Center" VerticalAlignment="Center">
-                             <ui:SymbolIcon.RenderTransform>
-                                 <TranslateTransform x:Name="ArrowTranslate" Y="0"/>
-                             </ui:SymbolIcon.RenderTransform>
-                             <ui:SymbolIcon.Style>
-                                 <Style TargetType="ui:SymbolIcon">
+                         <!-- Bouncy Drag Drop Arrow Indicator — borderless, appears only when dragging -->
+                         <Grid Width="28" Height="28" Margin="0,0,6,0" VerticalAlignment="Center" HorizontalAlignment="Center">
+                             <Grid.Style>
+                                 <Style TargetType="Grid">
+                                     <Setter Property="Visibility" Value="Collapsed"/>
                                      <Style.Triggers>
                                          <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                             <DataTrigger.EnterActions>
-                                                 <BeginStoryboard x:Name="BounceArrowStory">
-                                                     <Storyboard RepeatBehavior="Forever">
-                                                         <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
-                                                                          From="-4" To="4" Duration="0:0:0.6" AutoReverse="True">
-                                                             <DoubleAnimation.EasingFunction>
-                                                                 <SineEase EasingMode="EaseInOut"/>
-                                                             </DoubleAnimation.EasingFunction>
-                                                         </DoubleAnimation>
-                                                     </Storyboard>
-                                                 </BeginStoryboard>
-                                             </DataTrigger.EnterActions>
-                                             <DataTrigger.ExitActions>
-                                                 <StopStoryboard BeginStoryboardName="BounceArrowStory"/>
-                                             </DataTrigger.ExitActions>
+                                             <Setter Property="Visibility" Value="Visible"/>
                                          </DataTrigger>
                                      </Style.Triggers>
                                  </Style>
-                             </ui:SymbolIcon.Style>
-                         </ui:SymbolIcon>
-                     </Grid>
+                             </Grid.Style>
+                             <ui:SymbolIcon Symbol="ArrowDown24" Foreground="{DynamicResource SyncIncomingColor}" RenderTransformOrigin="0.5,0.5" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                 <ui:SymbolIcon.RenderTransform>
+                                     <TranslateTransform x:Name="ArrowTranslate" Y="0"/>
+                                 </ui:SymbolIcon.RenderTransform>
+                                 <ui:SymbolIcon.Style>
+                                     <Style TargetType="ui:SymbolIcon">
+                                         <Style.Triggers>
+                                             <DataTrigger Binding="{Binding IsDragHovering, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                 <DataTrigger.EnterActions>
+                                                     <BeginStoryboard x:Name="BounceArrowStory">
+                                                         <Storyboard RepeatBehavior="Forever">
+                                                             <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(TranslateTransform.Y)"
+                                                                              From="-4" To="4" Duration="0:0:0.6" AutoReverse="True">
+                                                                 <DoubleAnimation.EasingFunction>
+                                                                     <SineEase EasingMode="EaseInOut"/>
+                                                                 </DoubleAnimation.EasingFunction>
+                                                             </DoubleAnimation>
+                                                         </Storyboard>
+                                                     </BeginStoryboard>
+                                                 </DataTrigger.EnterActions>
+                                                 <DataTrigger.ExitActions>
+                                                     <StopStoryboard BeginStoryboardName="BounceArrowStory"/>
+                                                 </DataTrigger.ExitActions>
+                                             </DataTrigger>
+                                         </Style.Triggers>
+                                     </Style>
+                                 </ui:SymbolIcon.Style>
+                             </ui:SymbolIcon>
+                         </Grid>
  
-                     <!-- Quick Notes Toggle -->
-                     <ui:Button x:Name="NotesToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="NotesToggle_Click" ToolTip="Quick Notes" Margin="0,0,6,0">
-                         <ui:Button.Resources>
-                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
-                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
-                             <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#C4B5FD"/>
-                         </ui:Button.Resources>
-                         <ui:Button.Icon><ui:SymbolIcon Symbol="List24" /></ui:Button.Icon>
-                     </ui:Button>
+                         <!-- Quick Notes Toggle -->
+                         <ui:Button x:Name="NotesToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="NotesToggle_Click" ToolTip="Quick Notes" Margin="0,0,6,0">
+                             <ui:Button.Resources>
+                                 <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
+                                 <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
+                                 <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#C4B5FD"/>
+                             </ui:Button.Resources>
+                             <ui:Button.Icon><ui:SymbolIcon Symbol="List24" /></ui:Button.Icon>
+                         </ui:Button>
 
-                     <!-- To-Do List Toggle -->
-                     <ui:Button x:Name="TodoToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="TodoToggle_Click" ToolTip="To-Do List" Margin="0,0,6,0">
-                         <ui:Button.Resources>
-                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
-                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
-                             <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#C4B5FD"/>
-                         </ui:Button.Resources>
-                         <ui:Button.Icon><ui:SymbolIcon Symbol="TaskListSquareLtr24" /></ui:Button.Icon>
-                     </ui:Button>
+                         <!-- To-Do List Toggle -->
+                         <ui:Button x:Name="TodoToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="TodoToggle_Click" ToolTip="To-Do List" Margin="0,0,6,0">
+                             <ui:Button.Resources>
+                                 <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
+                                 <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
+                                 <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#C4B5FD"/>
+                             </ui:Button.Resources>
+                             <ui:Button.Icon><ui:SymbolIcon Symbol="TaskListSquareLtr24" /></ui:Button.Icon>
+                         </ui:Button>
 
-                     <!-- Sort/Filter by Category -->
-                     <ui:Button x:Name="SortFilterBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="SortFilter_Click" ToolTip="Filter by Category" Margin="0,0,6,0">
-                         <ui:Button.Icon><ui:FontIcon Glyph="&#xE71C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" /></ui:Button.Icon>
-                     </ui:Button>
+                         <!-- Sort/Filter by Category -->
+                         <ui:Button x:Name="SortFilterBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="SortFilter_Click" ToolTip="Filter by Category" Margin="0,0,6,0">
+                             <ui:Button.Icon><ui:FontIcon Glyph="&#xE71C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" /></ui:Button.Icon>
+                         </ui:Button>
 
-                     <!-- Stopwatch Button (only visible in To-Do list mode) -->
-                     <ui:Button x:Name="TodoStopwatchBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="TodoStopwatch_Click" ToolTip="Stopwatch Timer" Margin="0,0,6,0" Visibility="Collapsed">
-                         <ui:Button.Resources>
-                             <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
-                             <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
-                             <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#C4B5FD"/>
-                         </ui:Button.Resources>
-                         <ui:Button.Icon><ui:SymbolIcon Symbol="Timer24" /></ui:Button.Icon>
-                     </ui:Button>
+                         <!-- Stopwatch Button (only visible in To-Do list mode) -->
+                         <ui:Button x:Name="TodoStopwatchBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="TodoStopwatch_Click" ToolTip="Stopwatch Timer" Margin="0,0,6,0" Visibility="Collapsed">
+                             <ui:Button.Resources>
+                                 <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
+                                 <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
+                                 <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#C4B5FD"/>
+                             </ui:Button.Resources>
+                             <ui:Button.Icon><ui:SymbolIcon Symbol="Timer24" /></ui:Button.Icon>
+                         </ui:Button>
 
-                      <!-- More Options Button (always visible) -->
-                      <ui:Button x:Name="MoreBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="MoreBtn_Click" ToolTip="More Options" Margin="0,0,6,0" Visibility="Collapsed">
-                          <ui:Button.Icon><ui:SymbolIcon Symbol="MoreHorizontal24" /></ui:Button.Icon>
-                      </ui:Button>
+                          <!-- More Options Button -->
+                          <ui:Button x:Name="MoreBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="MoreBtn_Click" ToolTip="More Options" Margin="0,0,6,0" Visibility="Collapsed">
+                              <ui:Button.Icon><ui:SymbolIcon Symbol="MoreHorizontal24" /></ui:Button.Icon>
+                          </ui:Button>
 
-                      <!-- ═══ Update Available Badge ═══ -->
-                      <Border x:Name="UpdateBadge" Visibility="Collapsed" Cursor="Hand"
-                              CornerRadius="8" Margin="0,0,6,0" Padding="6,4" VerticalAlignment="Center"
-                              MouseLeftButtonDown="UpdateBadge_Click"
-                              ToolTip="Update available — click to open Hub">
-                          <Border.Background>
-                              <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                  <GradientStop Color="#2810B981" Offset="0"/>
-                                  <GradientStop Color="#1834D399" Offset="1"/>
-                              </LinearGradientBrush>
-                          </Border.Background>
-                          <Border.BorderBrush>
-                              <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                  <GradientStop Color="#5010B981" Offset="0"/>
-                                  <GradientStop Color="#3034D399" Offset="1"/>
-                              </LinearGradientBrush>
-                          </Border.BorderBrush>
-                          <Border.BorderThickness>1</Border.BorderThickness>
-                          <StackPanel Orientation="Horizontal">
-                              <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="13" Foreground="#10B981" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                              <TextBlock x:Name="UpdateBadgeText" Text="Update" FontSize="10" FontWeight="SemiBold" Foreground="#34D399" VerticalAlignment="Center"/>
-                          </StackPanel>
-                      </Border>
+                          <!-- ═══ Update Available Badge ═══ -->
+                          <Border x:Name="UpdateBadge" Visibility="Collapsed" Cursor="Hand"
+                                  CornerRadius="8" Margin="0,0,6,0" Padding="6,4" VerticalAlignment="Center"
+                                  MouseLeftButtonDown="UpdateBadge_Click"
+                                  ToolTip="Update available — click to open Hub">
+                              <Border.Background>
+                                  <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                      <GradientStop Color="#2810B981" Offset="0"/>
+                                      <GradientStop Color="#1834D399" Offset="1"/>
+                                  </LinearGradientBrush>
+                              </Border.Background>
+                              <Border.BorderBrush>
+                                  <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                      <GradientStop Color="#5010B981" Offset="0"/>
+                                      <GradientStop Color="#3034D399" Offset="1"/>
+                                  </LinearGradientBrush>
+                              </Border.BorderBrush>
+                              <Border.BorderThickness>1</Border.BorderThickness>
+                              <StackPanel Orientation="Horizontal">
+                                  <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="13" Foreground="#10B981" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                  <TextBlock x:Name="UpdateBadgeText" Text="Update" FontSize="10" FontWeight="SemiBold" Foreground="#34D399" VerticalAlignment="Center"/>
+                              </StackPanel>
+                          </Border>
 
-                      <ui:Button Style="{StaticResource PremiumHeaderButtonStyle}" Click="CloseWindow_Click" ToolTip="Hide (Esc)">
-                          <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" Filled="True"/></ui:Button.Icon>
-                      </ui:Button>
-                </StackPanel>
+                          <ui:Button Style="{StaticResource PremiumHeaderButtonStyle}" Click="CloseWindow_Click" ToolTip="Hide (Esc)">
+                              <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" Filled="True"/></ui:Button.Icon>
+                          </ui:Button>
+                    </StackPanel>
+                </Grid>
             </Grid>
 
-            <!-- Dynamic Inline Category Filter Panel -->
+            <!-- Dynamic Inline Category Filter Panel — Premium Pill Chips -->
             <Border x:Name="SortFilterInlineBar" Margin="14,0,14,8" Visibility="Collapsed" Opacity="0"
-                    CornerRadius="10" Padding="4"
-                    Background="{DynamicResource MicaWPF.Brushes.SmokeFillColorDefault}" 
-                    BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                    CornerRadius="14" Padding="6,5"
+                    Background="{DynamicResource MicaWPF.Brushes.SmokeFillColorDefault}"
+                    BorderBrush="#12000000" BorderThickness="1"
                     RenderTransformOrigin="0.5,0">
                 <Border.RenderTransform>
                     <TranslateTransform Y="0"/>
                 </Border.RenderTransform>
                 <Border.Effect>
-                    <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.15" Color="#000000"/>
+                    <DropShadowEffect BlurRadius="18" ShadowDepth="2" Opacity="0.10" Color="#000000" Direction="270"/>
                 </Border.Effect>
-                <UniformGrid Rows="1" HorizontalAlignment="Center" MaxWidth="420" Width="{Binding ActualWidth, ElementName=TopHeaderGrid}">
-                    <Border x:Name="FilterBtn_Images" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="Images"
-                            Background="Transparent" BorderThickness="0" Padding="0,5">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+
+                    <!-- Images Chip -->
+                    <Border x:Name="FilterBtn_Images" CornerRadius="10" Margin="3,0" Cursor="Hand"
+                            MouseLeftButtonDown="FilterCategory_Click" Tag="Images"
+                            Background="{DynamicResource FilterImageBg}"
+                            BorderBrush="{DynamicResource FilterImageBorder}" BorderThickness="1"
+                            Padding="12,6" SnapsToDevicePixels="True">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="Image24" Foreground="{DynamicResource TypeImageColor}" FontSize="13" Margin="0,0,4,0"/>
-                            <TextBlock Text="Img" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                            <ui:SymbolIcon Symbol="Image24" Foreground="{DynamicResource TypeImageColor}" FontSize="14" Margin="0,0,5,0"/>
+                            <TextBlock Text="Images" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
-                    <Border x:Name="FilterBtn_Pinned" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="Pinned"
-                            Background="Transparent" BorderThickness="0" Padding="0,5">
+
+                    <!-- Pinned Chip -->
+                    <Border x:Name="FilterBtn_Pinned" CornerRadius="10" Margin="3,0" Cursor="Hand"
+                            MouseLeftButtonDown="FilterCategory_Click" Tag="Pinned"
+                            Background="{DynamicResource FilterPinnedBg}"
+                            BorderBrush="{DynamicResource FilterPinnedBorder}" BorderThickness="1"
+                            Padding="12,6" SnapsToDevicePixels="True">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="Pin24" Foreground="{DynamicResource PinActiveColor}" Filled="True" FontSize="13" Margin="0,0,4,0"/>
-                            <TextBlock Text="Pin" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                            <ui:SymbolIcon Symbol="Pin24" Foreground="{DynamicResource PinActiveColor}" Filled="True" FontSize="14" Margin="0,0,5,0"/>
+                            <TextBlock Text="Pinned" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
-                    <Border x:Name="FilterBtn_Pdf" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="PDF"
-                            Background="Transparent" BorderThickness="0" Padding="0,5">
+
+                    <!-- PDF Chip -->
+                    <Border x:Name="FilterBtn_Pdf" CornerRadius="10" Margin="3,0" Cursor="Hand"
+                            MouseLeftButtonDown="FilterCategory_Click" Tag="PDF"
+                            Background="{DynamicResource FilterPdfBg}"
+                            BorderBrush="{DynamicResource FilterPdfBorder}" BorderThickness="1"
+                            Padding="12,6" SnapsToDevicePixels="True">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="{DynamicResource DangerColor}" FontSize="13" Margin="0,0,4,0"/>
-                            <TextBlock Text="PDF" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                            <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="{DynamicResource DangerColor}" FontSize="14" Margin="0,0,5,0"/>
+                            <TextBlock Text="PDF" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
-                    <Border x:Name="FilterBtn_Docs" CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterCategory_Click" Tag="Docs"
-                            Background="Transparent" BorderThickness="0" Padding="0,5">
+
+                    <!-- Docs Chip -->
+                    <Border x:Name="FilterBtn_Docs" CornerRadius="10" Margin="3,0" Cursor="Hand"
+                            MouseLeftButtonDown="FilterCategory_Click" Tag="Docs"
+                            Background="{DynamicResource FilterDocsBg}"
+                            BorderBrush="{DynamicResource FilterDocsBorder}" BorderThickness="1"
+                            Padding="12,6" SnapsToDevicePixels="True">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="Document24" Foreground="{DynamicResource DeviceLaptopColor}" FontSize="13" Margin="0,0,4,0"/>
-                            <TextBlock Text="Doc" FontSize="10.5" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                            <ui:SymbolIcon Symbol="Document24" Foreground="{DynamicResource InfoColor}" FontSize="14" Margin="0,0,5,0"/>
+                            <TextBlock Text="Docs" FontSize="11" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
-                    <Border CornerRadius="7" Margin="2,0" Cursor="Hand" MouseLeftButtonDown="FilterClear_Click"
-                            Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
-                            BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" Padding="0,5">
+
+                    <!-- Separator -->
+                    <Border Width="1" Height="20" Margin="6,0" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" VerticalAlignment="Center"/>
+
+                    <!-- Dismiss Chip -->
+                    <Border CornerRadius="10" Margin="3,0" Cursor="Hand" MouseLeftButtonDown="FilterClear_Click"
+                            Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
+                            BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                            Padding="8,6" SnapsToDevicePixels="True" ToolTip="Clear Filter">
                         <ui:SymbolIcon Symbol="Dismiss16" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" HorizontalAlignment="Center"/>
                     </Border>
-                </UniformGrid>
+
+                </StackPanel>
             </Border>
 
             <!-- Sync Direction Control Bar — Inline popup for granular incoming/outgoing toggles -->
@@ -1091,6 +1136,8 @@
                                             <Setter Property="Visibility" Value="Collapsed"/>
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                <!-- Hide search for password items -->
+                                                <DataTrigger Binding="{Binding IsPassword}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
@@ -2211,13 +2258,17 @@
                                         <!-- ICON -->
                                         <Grid Grid.Column="1" Width="32" Height="32" Margin="8,8,6,8">
                                             <Border CornerRadius="7" ClipToBounds="True"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding Icon}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style><Image Source="{Binding Icon}" Width="32" Height="32" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/></Border>
-                                            <Border CornerRadius="7" Width="32" Height="32"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Icon}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Border.Background><SolidColorBrush Color="#000000" Opacity="0.05"/></Border.Background><ui:SymbolIcon FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="Document24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_File}"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Symbol" Value="TextT24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Text}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Symbol" Value="Code24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Code}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Symbol" Value="Image24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Image}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Symbol" Value="DocumentPdf24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Pdf}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Symbol" Value="Globe24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Url}"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
+                                            <!-- Expand/Collapse button for long text -->
+                                            <Border CornerRadius="7" Width="32" Height="32" Cursor="Hand"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsLongText}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Border.Background><SolidColorBrush Color="#3B82F6" Opacity="0.08"/></Border.Background><Border.InputBindings><MouseBinding MouseAction="LeftClick" Command="{Binding ToggleExpandCommand}"/></Border.InputBindings><ui:SymbolIcon FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="ChevronDown24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Text}"/><Style.Triggers><DataTrigger Binding="{Binding IsExpanded}" Value="True"><Setter Property="Symbol" Value="ChevronUp24"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
+                                            <!-- Fallback icon for non-text items without a custom icon -->
+                                            <Border CornerRadius="7" Width="32" Height="32"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Icon}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Border.Background><SolidColorBrush Color="#000000" Opacity="0.05"/></Border.Background><ui:SymbolIcon FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="Document24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_File}"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Symbol" Value="Code24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Code}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Symbol" Value="Image24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Image}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Symbol" Value="DocumentPdf24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Pdf}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Symbol" Value="Globe24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Url}"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
                                         </Grid>
                                         <!-- TEXT BODY -->
                                         <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="2,5,4,5">
-                                            <Border CornerRadius="6" ClipToBounds="True" Margin="0,0,8,4" HorizontalAlignment="Stretch"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Image Source="{Binding Icon}" MaxHeight="90" Stretch="Uniform" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="HighQuality"/></Border>
-                                            <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AltTextPrimary}" TextTrimming="CharacterEllipsis" MaxHeight="18" LineHeight="18"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
-                                            <TextBlock Text="{Binding FormatIdentifier}" FontSize="11" Margin="0,2,0,0" Foreground="{DynamicResource AltSubtitleFg}" TextTrimming="CharacterEllipsis" MaxHeight="15" LineHeight="15" Opacity="0.7"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                                            <Border CornerRadius="6" ClipToBounds="True" Margin="0,0,8,4" HorizontalAlignment="Stretch"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Image Source="{Binding Icon, IsAsync=True}" MaxHeight="90" Stretch="Uniform" HorizontalAlignment="Left" RenderOptions.BitmapScalingMode="HighQuality"/></Border>
+                                            <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AltTextPrimary}" TextTrimming="CharacterEllipsis" MaxHeight="18" LineHeight="18"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                                            <TextBlock Text="{Binding FileName}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource AltTextPrimary}" TextWrapping="Wrap" MaxHeight="{Binding CollapsedMaxHeight}" LineHeight="18"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                                            <TextBlock Text="{Binding FormatIdentifier}" FontSize="11" Margin="0,2,0,0" Foreground="{DynamicResource AltSubtitleFg}" TextTrimming="CharacterEllipsis" MaxHeight="15" LineHeight="15" Opacity="0.7"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                                         </StackPanel>
                                         <!-- TIMESTAMP + PIN -->
                                         <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="4,0,10,0" HorizontalAlignment="Right">
@@ -2281,8 +2332,8 @@
                         <ColumnDefinition Width="Auto"/> <!-- Back -->
                         <ColumnDefinition Width="Auto"/> <!-- Day label -->
                         <ColumnDefinition Width="*"/>    <!-- Spacer -->
-                        <ColumnDefinition Width="Auto"/> <!-- Mode toggle -->
                         <ColumnDefinition Width="Auto"/> <!-- Templates -->
+                        <ColumnDefinition Width="Auto"/> <!-- Mode toggle -->
                         <ColumnDefinition Width="Auto"/> <!-- Add -->
                     </Grid.ColumnDefinitions>
 
@@ -2292,24 +2343,25 @@
                         <ui:SymbolIcon Symbol="ArrowLeft24" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="14"/>
                     </Border>
 
-                    <!-- Current day label -->
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0">
+                    <!-- Current day label (clickable for month navigation) -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0"
+                                Cursor="Hand" MouseLeftButtonDown="CurrentDayLabel_Click" ToolTip="Toggle Day / Month View">
                         <ui:SymbolIcon Symbol="List24" Foreground="#8B5CF6" FontSize="14" Margin="0,0,5,0"/>
                         <TextBlock x:Name="NotesCurrentDayLabel" Text="27, May" FontSize="12" FontWeight="SemiBold" 
                                    Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
 
+                    <!-- Templates -->
+                    <Border x:Name="NotesTemplatesBtn" Grid.Column="3" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesTemplates_Click" Padding="6,3" Margin="0,0,4,0"
+                            Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1" ToolTip="Note Templates">
+                        <ui:SymbolIcon Symbol="DocumentCopy24" Foreground="#8B5CF6" FontSize="13"/>
+                    </Border>
+
                     <!-- Mode toggle: Bullets ↔ Freeform -->
-                    <Border Grid.Column="3" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesModeToggle_Click" Padding="8,3" Margin="0,0,4,0"
+                    <Border Grid.Column="4" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesModeToggle_Click" Padding="8,3" Margin="0,0,4,0"
                             Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1" ToolTip="Toggle Bullets / Freeform">
                         <TextBlock x:Name="NotesModeToggleText" Text="📄 Freeform" FontSize="10" FontWeight="SemiBold" 
                                    Foreground="#C4B5FD" VerticalAlignment="Center"/>
-                    </Border>
-
-                    <!-- Templates -->
-                    <Border x:Name="NotesTemplatesBtn" Grid.Column="4" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesTemplates_Click" Padding="6,3" Margin="0,0,4,0"
-                            Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1" ToolTip="Note Templates">
-                        <ui:SymbolIcon Symbol="DocumentCopy24" Foreground="#8B5CF6" FontSize="13"/>
                     </Border>
 
                     <!-- Add bullet -->
@@ -2325,6 +2377,7 @@
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/> <!-- Thin date sidebar -->
+                    <ColumnDefinition Width="Auto"/> <!-- Collapse chevron -->
                     <ColumnDefinition Width="*"/>    <!-- Content -->
                 </Grid.ColumnDefinitions>
 
@@ -2381,12 +2434,14 @@
                                                 <Setter TargetName="DayPill" Property="BorderBrush" Value="#8B5CF6"/>
                                                 <Setter TargetName="DayPill" Property="BorderThickness" Value="1"/>
                                             </DataTrigger>
-                                            <!-- IsMonthHeader: swap day layout for month box -->
+                                            <!-- IsMonthHeader: swap day layout for month box (non-clickable label) -->
                                             <DataTrigger Binding="{Binding IsMonthHeader}" Value="True">
                                                 <Setter TargetName="DayLayout" Property="Visibility" Value="Collapsed"/>
                                                 <Setter TargetName="MonthBox" Property="Visibility" Value="Visible"/>
                                                 <Setter TargetName="DayPill" Property="Padding" Value="1,2"/>
                                                 <Setter TargetName="DayPill" Property="Margin" Value="1,4,1,2"/>
+                                                <Setter TargetName="DayPill" Property="Cursor" Value="Arrow"/>
+                                                <Setter TargetName="DayPill" Property="IsHitTestVisible" Value="False"/>
                                             </DataTrigger>
                                             <!-- Selected Month highlight -->
                                             <MultiDataTrigger>
@@ -2408,6 +2463,14 @@
                             </ItemsControl>
                         </ScrollViewer>
                     </DockPanel>
+                </Border>
+
+                <!-- Sidebar collapse/expand chevron -->
+                <Border Grid.Column="1" Width="12" Cursor="Hand" Background="#0AFFFFFF"
+                        MouseLeftButtonDown="NotesSidebarToggle_Click" ToolTip="Toggle Sidebar"
+                        VerticalAlignment="Stretch">
+                    <TextBlock x:Name="NotesSidebarCollapseIcon" Text="◂" FontSize="10" FontWeight="Bold"
+                               Foreground="#6B6B9A" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                 </Border>
 
                 <!-- Month Picker Popup -->
@@ -2451,7 +2514,7 @@
                 </Popup>
 
                 <!-- ═══ NOTES CONTENT AREA ═══ -->
-                <Grid x:Name="NotesContentArea" Grid.Column="1">
+                <Grid x:Name="NotesContentArea" Grid.Column="2">
                     <!-- BULLET MODE: Scrollable list of bullet cards -->
                     <ScrollViewer x:Name="NotesBulletScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <ItemsControl x:Name="NotesBulletList">
@@ -2476,6 +2539,7 @@
                                                     <ColumnDefinition Width="Auto"/> <!-- Bullet dot -->
                                                     <ColumnDefinition Width="*"/>    <!-- Header Box + Spacer -->
                                                     <ColumnDefinition Width="Auto"/> <!-- Last Edited Time -->
+                                                    <ColumnDefinition Width="Auto"/> <!-- Reminder -->
                                                     <ColumnDefinition Width="Auto"/> <!-- Delete -->
                                                     <ColumnDefinition Width="Auto"/> <!-- Collapse -->
                                                 </Grid.ColumnDefinitions>
@@ -2529,14 +2593,21 @@
                                                            Foreground="#8B8BA8" VerticalAlignment="Center" Margin="0,0,6,0"
                                                            IsHitTestVisible="False" Opacity="0.8"/>
                                                 
+                                                <!-- Reminder button (visible on hover) -->
+                                                <Border x:Name="BulletReminderBtn" Grid.Column="3" CornerRadius="4" Cursor="Hand" 
+                                                        Padding="3,1" Margin="0,0,3,0" Visibility="Collapsed"
+                                                        Background="#18F59E0B" MouseLeftButtonDown="NoteBulletReminder_Click" ToolTip="Set Reminder">
+                                                    <ui:SymbolIcon Symbol="Alert16" Foreground="#F59E0B" FontSize="10"/>
+                                                </Border>
+                                                
                                                 <!-- Delete button (visible on hover) -->
-                                                <Border x:Name="BulletDeleteBtn" Grid.Column="3" CornerRadius="4" Cursor="Hand" 
+                                                <Border x:Name="BulletDeleteBtn" Grid.Column="4" CornerRadius="4" Cursor="Hand" 
                                                         Padding="3,1" Margin="0,0,3,0" Visibility="Collapsed"
                                                         Background="#20EF4444" MouseLeftButtonDown="NoteBulletDelete_Click" ToolTip="Delete">
                                                     <ui:SymbolIcon Symbol="Delete16" Foreground="#EF4444" FontSize="10"/>
                                                 </Border>
                                                 <!-- Collapse toggle -->
-                                                <Border Grid.Column="4" CornerRadius="4" Cursor="Hand" Padding="4,1"
+                                                <Border Grid.Column="5" CornerRadius="4" Cursor="Hand" Padding="4,1"
                                                         MouseLeftButtonDown="NoteBulletCollapse_Click" Background="Transparent">
                                                     <TextBlock Text="{Binding CollapseIcon}" FontSize="11" FontWeight="Bold" 
                                                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
@@ -2665,6 +2736,7 @@
                                     <DataTemplate.Triggers>
                                         <!-- Show delete button on card hover -->
                                         <Trigger SourceName="BulletCard" Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="BulletReminderBtn" Property="Visibility" Value="Visible"/>
                                             <Setter TargetName="BulletDeleteBtn" Property="Visibility" Value="Visible"/>
                                         </Trigger>
                                     </DataTemplate.Triggers>
@@ -2854,36 +2926,58 @@
             <!-- ═══ CONTENT AREA (Sidebar + List) ═══ -->
             <Grid Grid.Row="1" Background="{DynamicResource MicaWPF.Brushes.SolidBackgroundFillColorBase}">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="54"/>  <!-- Collapsed Day Sidebar (left) -->
-                    <ColumnDefinition Width="*"/>   <!-- To-Do List Area (right) -->
+                    <ColumnDefinition x:Name="TodoSidebarColumn" Width="54"/>  <!-- Day Sidebar (collapses to 0) -->
+                    <ColumnDefinition Width="*"/>   <!-- To-Do List Area -->
                 </Grid.ColumnDefinitions>
 
-                <!-- ═══ DAY SIDEBAR (Newest-first list of dates) ═══ -->
-                <Border Grid.Column="0" BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="0,0,1,0" Background="{DynamicResource MicaWPF.Brushes.ControlAltFillColorTertiary}">
-                    <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
-                        <ItemsControl x:Name="TodoDaySidebar" Margin="0,4,0,0">
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <!-- Day badge container -->
-                                    <Border x:Name="TodoDayBorder" CornerRadius="8" Width="40" Height="40" Margin="0,0,0,6"
-                                            Cursor="Hand" MouseLeftButtonDown="TodoDayItem_Click"
-                                            BorderThickness="1" SnapsToDevicePixels="True"
-                                            Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}"
-                                            BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}"
-                                            ToolTip="{Binding FullLabel}">
-                                        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
-                                            <!-- Day number -->
-                                            <TextBlock Text="{Binding DayNumber}" FontSize="15" FontWeight="Bold" 
-                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextAlignment="Center" Margin="0,-2,0,0"/>
-                                            <!-- Abbreviated Month -->
-                                            <TextBlock Text="{Binding MonthName}" FontSize="8" FontWeight="SemiBold" 
-                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextAlignment="Center" Margin="0,-2,0,0" Opacity="0.8"/>
-                                        </StackPanel>
-                                    </Border>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-                    </ScrollViewer>
+                <!-- ═══ DAY SIDEBAR (Toggle + Newest-first list of dates) ═══ -->
+                <Border x:Name="TodoSidebarBorder" Grid.Column="0" BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="0,0,1,0" Background="{DynamicResource MicaWPF.Brushes.ControlAltFillColorTertiary}">
+                    <DockPanel>
+                        <!-- Toggle button at top -->
+                        <Border DockPanel.Dock="Top" Cursor="Hand" Height="22"
+                                Background="{DynamicResource MicaWPF.Brushes.ControlAltFillColorTertiary}"
+                                MouseLeftButtonDown="TodoSidebarToggle_Click" ToolTip="Toggle Sidebar">
+                            <TextBlock x:Name="TodoSidebarCollapseIcon" Text="◂" FontSize="10" FontWeight="Bold"
+                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
+                                       VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </Border>
+                        <!-- Date list -->
+                        <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl x:Name="TodoDaySidebar" Margin="0,4,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <!-- Day badge container -->
+                                        <Border x:Name="TodoDayBorder" CornerRadius="8" Width="40" Height="40" Margin="0,0,0,6"
+                                                Cursor="Hand" MouseLeftButtonDown="TodoDayItem_Click"
+                                                BorderThickness="1" SnapsToDevicePixels="True"
+                                                Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}"
+                                                BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}"
+                                                ToolTip="{Binding FullLabel}">
+                                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                <!-- Day number -->
+                                                <TextBlock Text="{Binding DayNumber}" FontSize="15" FontWeight="Bold" 
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextAlignment="Center" Margin="0,-2,0,0"/>
+                                                <!-- Abbreviated Month -->
+                                                <TextBlock Text="{Binding MonthName}" FontSize="8" FontWeight="SemiBold" 
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextAlignment="Center" Margin="0,-2,0,0" Opacity="0.8"/>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
+
+                <!-- Small expand button (visible when sidebar collapsed) -->
+                <Border x:Name="TodoSidebarExpandBtn" Grid.Column="1" Width="16" HorizontalAlignment="Left" VerticalAlignment="Top"
+                        Cursor="Hand" Height="22" Visibility="Collapsed"
+                        Background="{DynamicResource MicaWPF.Brushes.ControlAltFillColorTertiary}"
+                        BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="0,0,1,1"
+                        MouseLeftButtonDown="TodoSidebarToggle_Click" ToolTip="Show Sidebar" Panel.ZIndex="5">
+                    <TextBlock Text="▸" FontSize="10" FontWeight="Bold"
+                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
+                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
                 </Border>
 
                 <!-- ═══ TO-DO LIST CONTENT AREA ═══ -->
@@ -2993,34 +3087,90 @@
                                                 </TextBlock.Style>
                                             </TextBlock>
 
-                                            <!-- Time & Delete Button (vertically stacked, stretched delete button) -->
+                                            <!-- Time & Action Buttons (vertically stacked) -->
                                             <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="8,0,4,0" HorizontalAlignment="Right" MinWidth="54">
                                                 <!-- Time showing when the task was assigned/created -->
                                                 <TextBlock Text="{Binding CreatedAtDisplay}" FontSize="9.5" 
                                                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
                                                            HorizontalAlignment="Center" IsHitTestVisible="False" Opacity="0.8"/>
-                                                
-                                                <!-- Delete button -->
-                                                <Border x:Name="TodoItemDeleteBtn" CornerRadius="5" Cursor="Hand" Margin="0,5,0,0" Padding="0,3.5"
-                                                        MouseLeftButtonDown="TodoItemDelete_Click" ToolTip="Delete Task">
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Background" Value="{DynamicResource DangerBgSubtle}"/>
-                                                            <Setter Property="BorderBrush" Value="{DynamicResource DangerBgHover}"/>
-                                                            <Setter Property="BorderThickness" Value="1"/>
-                                                            <Style.Triggers>
-                                                                <Trigger Property="IsMouseOver" Value="True">
-                                                                    <Setter Property="Background" Value="{DynamicResource DangerBgHover}"/>
-                                                                    <Setter Property="BorderBrush" Value="{DynamicResource DangerBorder}"/>
-                                                                </Trigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
-                                                    <ui:SymbolIcon Symbol="Delete16" Foreground="{DynamicResource DangerColor}" FontSize="11" HorizontalAlignment="Center"/>
-                                                </Border>
+
+                                                <!-- Timer/Reminder status badges (always visible when set) -->
+                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,2,0,0">
+                                                    <!-- Timer preset badge -->
+                                                    <Border x:Name="TodoTimerBadge" CornerRadius="4" Padding="4,1" Margin="0,0,2,0"
+                                                            Background="#1810B981" Cursor="Hand"
+                                                            MouseLeftButtonDown="TodoItemSetTimer_Click" ToolTip="Click to cycle timer preset">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasTimer}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock Text="{Binding TimerDisplay}" FontSize="8.5" FontWeight="SemiBold" Foreground="#10B981"/>
+                                                    </Border>
+                                                    <!-- Reminder badge -->
+                                                    <Border x:Name="TodoReminderBadge" CornerRadius="4" Padding="4,1"
+                                                            Background="#18F59E0B">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasReminder}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <TextBlock Text="{Binding ReminderDisplay}" FontSize="8.5" FontWeight="SemiBold" Foreground="#F59E0B"/>
+                                                    </Border>
+                                                </StackPanel>
+
+                                                <!-- Action buttons row (visible on hover) -->
+                                                <StackPanel x:Name="TodoActionBtns" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,3,0,0" Visibility="Collapsed">
+                                                    <!-- Timer button -->
+                                                    <Border CornerRadius="4" Cursor="Hand" Padding="4,2" Margin="0,0,2,0"
+                                                            Background="#1810B981" BorderBrush="#3010B981" BorderThickness="1"
+                                                            MouseLeftButtonDown="TodoItemTimer_Click" ToolTip="Start Timer">
+                                                        <ui:SymbolIcon Symbol="Timer16" Foreground="#10B981" FontSize="10"/>
+                                                    </Border>
+                                                    <!-- Reminder button -->
+                                                    <Border CornerRadius="4" Cursor="Hand" Padding="4,2" Margin="0,0,2,0"
+                                                            Background="#18F59E0B" BorderBrush="#30F59E0B" BorderThickness="1"
+                                                            MouseLeftButtonDown="TodoItemReminder_Click" ToolTip="Set Reminder">
+                                                        <ui:SymbolIcon Symbol="Alert16" Foreground="#F59E0B" FontSize="10"/>
+                                                    </Border>
+                                                    <!-- Delete button -->
+                                                    <Border CornerRadius="4" Cursor="Hand" Padding="4,2"
+                                                            MouseLeftButtonDown="TodoItemDelete_Click" ToolTip="Delete Task">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Background" Value="{DynamicResource DangerBgSubtle}"/>
+                                                                <Setter Property="BorderBrush" Value="{DynamicResource DangerBgHover}"/>
+                                                                <Setter Property="BorderThickness" Value="1"/>
+                                                                <Style.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter Property="Background" Value="{DynamicResource DangerBgHover}"/>
+                                                                        <Setter Property="BorderBrush" Value="{DynamicResource DangerBorder}"/>
+                                                                    </Trigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <ui:SymbolIcon Symbol="Delete16" Foreground="{DynamicResource DangerColor}" FontSize="10"/>
+                                                    </Border>
+                                                </StackPanel>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
+                                    <DataTemplate.Triggers>
+                                        <!-- Show action buttons on card hover -->
+                                        <Trigger SourceName="TodoCard" Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="TodoActionBtns" Property="Visibility" Value="Visible"/>
+                                        </Trigger>
+                                    </DataTemplate.Triggers>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>

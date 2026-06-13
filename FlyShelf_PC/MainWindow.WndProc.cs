@@ -40,6 +40,18 @@ namespace FlyShelf
 
         private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
+            const int WM_NCACTIVATE = 0x0086;
+            const int WM_ACTIVATE = 0x0006;
+            if (msg == WM_NCACTIVATE || msg == WM_ACTIVATE)
+            {
+                try
+                {
+                    int cn = DWMWA_COLOR_NONE;
+                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                }
+                catch { }
+            }
+
             const int WM_MOUSEACTIVATE = 0x0021;
             const int MA_NOACTIVATE = 3;
 
@@ -170,6 +182,14 @@ namespace FlyShelf
             else if (msg == Classes.NativeMethods.WM_SETTINGCHANGE)
             {
                 _cachedDesktopWallpaperPath = null;
+
+                // Reposition the taskbar widget immediately when settings (like taskbar auto-hide) change
+                try
+                {
+                    _taskbarWidget?.ForceReposition();
+                }
+                catch { }
+
                 // Only re-apply desktop wallpaper if we're in FlyShelf mode AND no manual wallpaper is set
                 if ((Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica") == "desktop")
                 {

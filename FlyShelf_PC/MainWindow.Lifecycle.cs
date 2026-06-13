@@ -26,6 +26,18 @@ namespace FlyShelf
                 .Any(w => w is FlyShelf.Windows.QuickLookWindow && w.IsActive)) return;
             this.Opacity = 1.0;
             
+            // Set DWM border color synchronously to prevent flashing
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    int cn = DWMWA_COLOR_NONE;
+                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                }
+            }
+            catch { }
+            
             // Defer DWM border color setting to Background priority to prevent blocking DWM frame synchronization on activation
             Dispatcher.InvokeAsync(() =>
             {
@@ -103,6 +115,18 @@ namespace FlyShelf
         {
             // Intentional no-op: clipboard stays visible when clicking elsewhere.
             // Dismiss only via explicit user action (close button, Alt+C, widget, desktop switch).
+
+            // Set DWM border color synchronously to prevent flashing
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    int cn = DWMWA_COLOR_NONE;
+                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                }
+            }
+            catch { }
 
             // Defer DWM border color setting to Background priority to prevent blocking DWM frame synchronization on deactivation
             Dispatcher.InvokeAsync(() =>

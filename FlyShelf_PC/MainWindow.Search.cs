@@ -32,18 +32,31 @@ namespace FlyShelf
             {
                 _isSearchActive = true;
                 if (_isFilterBarActive) ToggleFilterBar(false);
-                // Activate the window so it receives keyboard input (normally it's a non-activating overlay)
+
+                // Remove WS_EX_NOACTIVATE dynamically so the window can receive focus/keyboard input
+                UpdateWindowActivationStyle();
+
+                // Activate the window so it receives keyboard input
                 this.Activate();
+
+                // Hide the search button so the search bar covers its area too
+                SearchToggleBtn.Visibility = Visibility.Collapsed;
                 SearchBarContainer.Visibility = Visibility.Visible;
-                if (SearchToggleBtn != null)
+
+                // Smooth scale-in animation from right (ScaleX 0→1) + fade in
+                var scaleTransform = SearchBarContainer.RenderTransform as System.Windows.Media.ScaleTransform;
+                if (scaleTransform != null)
                 {
-                    SearchToggleBtn.Foreground = (System.Windows.Media.Brush)FindResource("SystemAccentColorLight1Brush");
+                    var scaleAnim = new System.Windows.Media.Animation.DoubleAnimation(0.3, 1.0, TimeSpan.FromMilliseconds(200))
+                    {
+                        EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+                    };
+                    scaleTransform.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, scaleAnim);
                 }
-                
-                // Smooth slide-down + fade-in animation
-                var slideAnim = Classes.AnimationHelper.SlideIn();
-                var fadeAnim = Classes.AnimationHelper.FadeIn();
-                SearchBarContainer.RenderTransform.BeginAnimation(System.Windows.Media.TranslateTransform.YProperty, slideAnim);
+                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(180))
+                {
+                    EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+                };
                 SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
                 
                 // Delay focus — the TextBox needs to be visible and rendered first
@@ -65,7 +78,7 @@ namespace FlyShelf
             if (_isClosingSearch) return;
 
             string query = SearchTextBox.Text;
-            SearchPlaceholder.Visibility = string.IsNullOrEmpty(query) ? Visibility.Visible : Visibility.Collapsed;
+            // Placeholder visibility is now handled by ControlTemplate triggers
 
             if (_isNotesActive)
             {
@@ -154,11 +167,38 @@ namespace FlyShelf
                 _isSearchActive = false;
                 _searchDebounceTimer?.Stop();
                 SearchTextBox.Text = "";           // fires TextChanged, but the guard above blocks it
-                SearchBarContainer.Visibility = Visibility.Collapsed;
-                if (SearchToggleBtn != null)
+
+                // Restore WS_EX_NOACTIVATE dynamically immediately
+                UpdateWindowActivationStyle();
+
+                // Smooth scale-out + fade-out, then collapse
+                var scaleTransform = SearchBarContainer.RenderTransform as System.Windows.Media.ScaleTransform;
+                var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1.0, 0.0, TimeSpan.FromMilliseconds(150))
                 {
-                    SearchToggleBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
+                    EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn }
+                };
+                fadeOut.Completed += (s, ev) =>
+                {
+                    SearchBarContainer.Visibility = Visibility.Collapsed;
+                    // Reset transforms for next open
+                    if (scaleTransform != null)
+                        scaleTransform.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
+                    SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, null);
+                    SearchBarContainer.Opacity = 1.0;
+                    if (scaleTransform != null) scaleTransform.ScaleX = 1.0;
+
+                    // Restore the search toggle button
+                    SearchToggleBtn.Visibility = Visibility.Visible;
+                };
+                if (scaleTransform != null)
+                {
+                    var scaleOut = new System.Windows.Media.Animation.DoubleAnimation(1.0, 0.3, TimeSpan.FromMilliseconds(150))
+                    {
+                        EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn }
+                    };
+                    scaleTransform.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, scaleOut);
                 }
+                SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, fadeOut);
 
                 // Stop mascot search animation
                 try { Classes.AnimationTriggerService.Instance.OnSearchToggle(false); } catch { }
@@ -368,14 +408,53 @@ namespace FlyShelf
         {
             if (btn == null) return;
             bool isActive = _activeCategoryFilter == category;
-            var accent = (System.Windows.Media.Color)FindResource("SystemAccentColor");
+
+            // Per-category accent colors for active state highlighting
+            System.Windows.Media.Color categoryColor = category switch
+            {
+                "Images" => System.Windows.Media.Color.FromRgb(0xF4, 0x72, 0xB6), // #F472B6 pink
+                "Pinned" => System.Windows.Media.Color.FromRgb(0xFB, 0xBF, 0x24), // #FBBF24 amber
+                "PDF"    => System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44), // #EF4444 red
+                "Docs"   => System.Windows.Media.Color.FromRgb(0x60, 0xA5, 0xFA), // #60A5FA blue
+                _        => (System.Windows.Media.Color)FindResource("SystemAccentColor")
+            };
+
             if (isActive)
             {
-                btn.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x38, accent.R, accent.G, accent.B));
+                // Strong tinted background + prominent border for the active chip
+                btn.Background = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromArgb(0x40, categoryColor.R, categoryColor.G, categoryColor.B));
+                btn.BorderBrush = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromArgb(0x60, categoryColor.R, categoryColor.G, categoryColor.B));
+                btn.BorderThickness = new Thickness(1.5);
             }
             else
             {
-                btn.Background = System.Windows.Media.Brushes.Transparent;
+                // Restore default subtle tinted background from resources
+                string bgKey = category switch
+                {
+                    "Images" => "FilterImageBg",
+                    "Pinned" => "FilterPinnedBg",
+                    "PDF"    => "FilterPdfBg",
+                    "Docs"   => "FilterDocsBg",
+                    _        => null
+                };
+                string borderKey = category switch
+                {
+                    "Images" => "FilterImageBorder",
+                    "Pinned" => "FilterPinnedBorder",
+                    "PDF"    => "FilterPdfBorder",
+                    "Docs"   => "FilterDocsBorder",
+                    _        => null
+                };
+
+                btn.Background = bgKey != null
+                    ? (System.Windows.Media.Brush)FindResource(bgKey)
+                    : System.Windows.Media.Brushes.Transparent;
+                btn.BorderBrush = borderKey != null
+                    ? (System.Windows.Media.Brush)FindResource(borderKey)
+                    : System.Windows.Media.Brushes.Transparent;
+                btn.BorderThickness = new Thickness(1);
             }
         }
 

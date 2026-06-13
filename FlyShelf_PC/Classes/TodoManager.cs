@@ -30,6 +30,34 @@ namespace FlyShelf.Classes
 
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
+        /// <summary>Timer duration in minutes for this task (null = no timer set)</summary>
+        private int? _timerMinutes;
+        public int? TimerMinutes
+        {
+            get => _timerMinutes;
+            set { if (_timerMinutes != value) { _timerMinutes = value; OnPropertyChanged(nameof(TimerMinutes)); OnPropertyChanged(nameof(HasTimer)); OnPropertyChanged(nameof(TimerDisplay)); } }
+        }
+
+        /// <summary>Optional reminder due time for this task</summary>
+        private DateTime? _reminderAt;
+        public DateTime? ReminderAt
+        {
+            get => _reminderAt;
+            set { if (_reminderAt != value) { _reminderAt = value; OnPropertyChanged(nameof(ReminderAt)); OnPropertyChanged(nameof(HasReminder)); OnPropertyChanged(nameof(ReminderDisplay)); } }
+        }
+
+        [JsonIgnore]
+        public bool HasTimer => _timerMinutes.HasValue && _timerMinutes > 0;
+
+        [JsonIgnore]
+        public bool HasReminder => _reminderAt.HasValue;
+
+        [JsonIgnore]
+        public string TimerDisplay => HasTimer ? $"{_timerMinutes}m" : "";
+
+        [JsonIgnore]
+        public string ReminderDisplay => HasReminder ? _reminderAt!.Value.ToString("h:mm tt") : "";
+
         [JsonIgnore]
         public string CreatedAtDisplay => CreatedAt.ToString("h:mm tt");
 

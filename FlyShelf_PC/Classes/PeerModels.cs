@@ -42,6 +42,9 @@ namespace FlyShelf.Classes
         public SemaphoreSlim HandshakeLock { get; } = new(1, 1); // Prevents concurrent handshakes from HeartbeatLoop/DiscoveryLoop/UDP/PeerAnnounce/UrlUpdate
         public readonly object StateLock = new(); // Protects atomic IsAlive + Transport updates
 
+        // Exponential backoff for WebSocket reconnection (prevents tight reconnect loops)
+        public int WsReconnectAttempts;
+
         // Active file transfer tracking (prevents marking peer dead mid-transfer)
         public int ActiveTransfers;
     }
