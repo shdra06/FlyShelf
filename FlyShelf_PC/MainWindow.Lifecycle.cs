@@ -34,7 +34,7 @@ namespace FlyShelf
                     var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                     if (hwnd != IntPtr.Zero)
                     {
-                        int cn = DWMWA_COLOR_DARK_GRAY;
+                        int cn = DWMWA_COLOR_NONE;
                         DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                     }
                 }
@@ -112,7 +112,7 @@ namespace FlyShelf
                     var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                     if (hwnd != IntPtr.Zero)
                     {
-                        int cn = DWMWA_COLOR_DARK_GRAY;
+                        int cn = DWMWA_COLOR_NONE;
                         DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                     }
                 }
@@ -126,41 +126,45 @@ namespace FlyShelf
         /// </summary>
         private void ForegroundChangedCallback(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
         {
-            if (hwnd != IntPtr.Zero)
-            {
-                // Get thread/process ID of the new foreground window
-                GetWindowThreadProcessId(hwnd, out uint focusedProcId);
-                uint currProcId = (uint)System.Environment.ProcessId;
+            if (hwnd == IntPtr.Zero) return;
 
-                // Cache the last active external window, filtering out our own app, taskbar, desktop, and standard system Windows Core UI
-                if (focusedProcId != currProcId)
+            // Get thread/process ID of the new foreground window
+            GetWindowThreadProcessId(hwnd, out uint focusedProcId);
+            uint currProcId = (uint)System.Environment.ProcessId;
+
+            // Cache the last active external window, filtering out our own app, taskbar, desktop, and standard system Windows Core UI
+            if (focusedProcId != currProcId)
+            {
+                var sbClass = new System.Text.StringBuilder(256);
+                GetClassName(hwnd, sbClass, 256);
+                string clsName = sbClass.ToString();
+                if (clsName != "Shell_TrayWnd" && 
+                    clsName != "Shell_SecondaryTrayWnd" && 
+                    clsName != "WorkerW" && 
+                    clsName != "Progman" && 
+                    clsName != "Windows.UI.Core.CoreWindow" &&
+                    clsName != "MultitaskingViewFrame")
                 {
-                    var sbClass = new System.Text.StringBuilder(256);
-                    GetClassName(hwnd, sbClass, 256);
-                    string clsName = sbClass.ToString();
-                    if (clsName != "Shell_TrayWnd" && 
-                        clsName != "Shell_SecondaryTrayWnd" && 
-                        clsName != "WorkerW" && 
-                        clsName != "Progman" && 
-                        clsName != "Windows.UI.Core.CoreWindow" &&
-                        clsName != "MultitaskingViewFrame")
-                    {
-                        _lastActiveExternalWindow = hwnd;
-                    }
+                    _lastActiveExternalWindow = hwnd;
                 }
             }
 
-            // Only auto-dismiss when the user switches virtual desktops.
-            // All other focus changes (clicking another app, etc.) are ignored.
-            if (!_isCurrentlySummoned || _isAnimatingHide) return;
+            // Capture UI state on the UI thread before launching the background check task
+            bool isSummoned = _isCurrentlySummoned;
+            bool isHideAnimating = _isAnimatingHide;
+            bool isNotes = _isNotesActive;
+            bool isTodo = _isTodoActive;
+            Guid summonedId = _summonedDesktopId;
+            IntPtr lastActiveExt = _lastActiveExternalWindow;
+            bool lastActiveExtWasOnCurrent = _lastActiveExternalWindowWasOnCurrentAtSummon;
+            double msSinceSpawn = (DateTime.Now - _spawnTime).TotalMilliseconds;
 
-            // Check if our window is still on the current virtual desktop
+            // Run the check asynchronously on a background thread so we NEVER block the UI thread on focus changes
             try
             {
                 var myHwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (myHwnd != IntPtr.Zero)
                 {
-                    // Run the check asynchronously on a background thread so we NEVER block the UI thread on focus changes
                     System.Threading.Tasks.Task.Run(() =>
                     {
                         try
@@ -172,101 +176,114 @@ namespace FlyShelf
 
                             var localVdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
                             
-                            bool desktopSwitched = false;
-
-                            Classes.Logger.LogAction("VD_CB", $"BG_CHECK | summoned={_isCurrentlySummoned} notes={_isNotesActive} todo={_isTodoActive} summonedId={_summonedDesktopId:N}");
-
                             // Get thread/process ID of the new foreground window
-                            uint focusedProcId = 0;
-                            if (hwnd != IntPtr.Zero)
-                            {
-                                GetWindowThreadProcessId(hwnd, out focusedProcId);
-                            }
-                            uint currProcId = (uint)System.Environment.ProcessId;
+                            uint focusedProcIdCheck = 0;
+                            GetWindowThreadProcessId(hwnd, out focusedProcIdCheck);
+                            uint currProcIdCheck = (uint)System.Environment.ProcessId;
 
-                            // ═══ DESKTOP SWITCH DETECTION ═══
-                            // Strategy: Get the FOREGROUND window's desktop GUID and compare
-                            // with _summonedDesktopId. This is the most reliable signal because
-                            // it doesn't depend on our own window's VDM state (which is broken
-                            // for pinned windows).
-                            if (hwnd != IntPtr.Zero && hwnd != myHwnd && focusedProcId != currProcId)
+                            Guid currentDesktopId = Guid.Empty;
+
+                            // ═══ DESKTOP GUID RESOLUTION ═══
+                            if (hwnd != IntPtr.Zero && hwnd != myHwnd && focusedProcIdCheck != currProcIdCheck)
                             {
-                                int hr = localVdm.GetWindowDesktopId(hwnd, out Guid currentDesktopId);
-                                if (hr == 0 && currentDesktopId != Guid.Empty)
+                                int hr = localVdm.GetWindowDesktopId(hwnd, out Guid fgDesktopId);
+                                if (hr == 0 && fgDesktopId != Guid.Empty)
                                 {
-                                    // Always track the current desktop (used by ToggleMainClipboard)
-                                    _currentDesktopId = currentDesktopId;
+                                    currentDesktopId = fgDesktopId;
+                                    // Always update the cached current desktop ID on the UI thread
+                                    Application.Current.Dispatcher.InvokeAsync(() =>
+                                    {
+                                        _currentDesktopId = fgDesktopId;
+                                    });
+                                }
+                            }
 
-                                    Classes.Logger.LogAction("VD_CB", $"CHECK1: fgDesktop={currentDesktopId:N} summonedId={_summonedDesktopId:N} match={currentDesktopId == _summonedDesktopId}");
+                            // Only perform dismiss logic if the window is currently active and not animating hide.
+                            // GUARD: If the window was summoned less than 500ms ago, do NOT dismiss it.
+                            // This blocks delayed virtual desktop callbacks from immediately closing a newly summoned window.
+                            if (isSummoned && !isHideAnimating && msSinceSpawn >= 500)
+                            {
+                                bool desktopSwitched = false;
 
-                                    if (_summonedDesktopId != Guid.Empty && currentDesktopId != _summonedDesktopId)
+                                Classes.Logger.LogAction("VD_CB", $"BG_CHECK | summoned={isSummoned} notes={isNotes} todo={isTodo} summonedId={summonedId:N}");
+
+                                if (currentDesktopId != Guid.Empty)
+                                {
+                                    Classes.Logger.LogAction("VD_CB", $"CHECK1: fgDesktop={currentDesktopId:N} summonedId={summonedId:N} match={currentDesktopId == summonedId}");
+
+                                    if (summonedId != Guid.Empty && currentDesktopId != summonedId)
                                     {
                                         desktopSwitched = true;
                                         Classes.Logger.LogAction("VD_CB", "CHECK1: DESKTOP SWITCH DETECTED via GUID comparison");
                                     }
-                                    if (_summonedDesktopId == Guid.Empty)
+                                    if (summonedId == Guid.Empty)
                                     {
-                                        _summonedDesktopId = currentDesktopId;
+                                        Application.Current.Dispatcher.InvokeAsync(() =>
+                                        {
+                                            _summonedDesktopId = currentDesktopId;
+                                        });
                                     }
                                 }
-                            }
 
-                            // Fallback: check _lastActiveExternalWindow
-                            if (!desktopSwitched && _lastActiveExternalWindowWasOnCurrentAtSummon && 
-                                _lastActiveExternalWindow != IntPtr.Zero && IsWindow(_lastActiveExternalWindow))
-                            {
-                                int hr = localVdm.IsWindowOnCurrentVirtualDesktop(_lastActiveExternalWindow, out int onCurrent);
-                                if (hr == 0 && onCurrent == 0)
+                                // Fallback: check _lastActiveExternalWindow
+                                if (!desktopSwitched && lastActiveExtWasOnCurrent && 
+                                    lastActiveExt != IntPtr.Zero && IsWindow(lastActiveExt))
                                 {
-                                    desktopSwitched = true;
-                                    // Invalidate _currentDesktopId since we couldn't get the new desktop's GUID
-                                    _currentDesktopId = Guid.Empty;
-                                    Classes.Logger.LogAction("VD_CB", "CHECK2: _lastActiveExternalWindow NOT on current VD → desktop switch detected");
-                                }
-                            }
-
-                            // Ultimate fallback for Notes/Todo: when WS_EX_APPWINDOW is set,
-                            // the window is tied to a specific desktop despite being "pinned".
-                            if (!desktopSwitched && (_isNotesActive || _isTodoActive))
-                            {
-                                int hr = localVdm.IsWindowOnCurrentVirtualDesktop(myHwnd, out int onCurrent);
-                                if (hr == 0 && onCurrent == 0)
-                                {
-                                    desktopSwitched = true;
-                                    _currentDesktopId = Guid.Empty;
-                                    Classes.Logger.LogAction("VD_CB", "CHECK3: Our own window NOT on current VD (Notes/Todo WS_EX_APPWINDOW) → desktop switch detected");
-                                }
-                            }
-
-                            Classes.Logger.LogAction("VD_CB", $"RESULT: desktopSwitched={desktopSwitched}");
-
-                            if (desktopSwitched)
-                            {
-                                int capturedGeneration = _spawnGeneration;
-                                Classes.Logger.LogAction("VD_CB", $"DISMISS: Dispatching AnimateAndHide to UI thread (gen={capturedGeneration})");
-
-                                // User switched to a different virtual desktop — force clipboard mode
-                                Application.Current.Dispatcher.InvokeAsync(() =>
-                                {
-                                    if (_spawnGeneration != capturedGeneration) return;
-
-                                    // ═══ NUCLEAR RESET: Force clipboard mode on desktop switch ═══
-                                    // Close any active panels and clear ALL panel state.
-                                    // This guarantees Alt+C on the new desktop shows a fresh clipboard.
-                                    EnsureClipboardMode();
-                                    _lastPanelBeforeDismiss = null;
-                                    _desktopSwitchedSinceLastDismiss = true;
-
-                                    if (_isCurrentlySummoned && !_isAnimatingHide)
+                                    int hr = localVdm.IsWindowOnCurrentVirtualDesktop(lastActiveExt, out int onCurrent);
+                                    if (hr == 0 && onCurrent == 0)
                                     {
-                                        Classes.Logger.LogAction("VD_CB", $"DISMISS: Executing on UI thread. notes={_isNotesActive} todo={_isTodoActive}");
-                                        AnimateAndHide();
+                                        desktopSwitched = true;
+                                        Application.Current.Dispatcher.InvokeAsync(() =>
+                                        {
+                                            _currentDesktopId = Guid.Empty;
+                                        });
+                                        Classes.Logger.LogAction("VD_CB", "CHECK2: _lastActiveExternalWindow NOT on current VD → desktop switch detected");
                                     }
-                                    else
+                                }
+
+                                // Ultimate fallback for Notes/Todo
+                                if (!desktopSwitched && (isNotes || isTodo))
+                                {
+                                    int hr = localVdm.IsWindowOnCurrentVirtualDesktop(myHwnd, out int onCurrent);
+                                    if (hr == 0 && onCurrent == 0)
                                     {
-                                        Classes.Logger.LogAction("VD_CB", $"DISMISS: Not summoned but reset to clipboard mode (notes={_isNotesActive} todo={_isTodoActive})");
+                                        desktopSwitched = true;
+                                        Application.Current.Dispatcher.InvokeAsync(() =>
+                                        {
+                                            _currentDesktopId = Guid.Empty;
+                                        });
+                                        Classes.Logger.LogAction("VD_CB", "CHECK3: Our own window NOT on current VD (Notes/Todo WS_EX_APPWINDOW) → desktop switch detected");
                                     }
-                                });
+                                }
+
+                                Classes.Logger.LogAction("VD_CB", $"RESULT: desktopSwitched={desktopSwitched}");
+
+                                if (desktopSwitched)
+                                {
+                                    int capturedGeneration = _spawnGeneration;
+                                    Classes.Logger.LogAction("VD_CB", $"DISMISS: Dispatching AnimateAndHide to UI thread (gen={capturedGeneration})");
+
+                                    // User switched to a different virtual desktop — force clipboard mode
+                                    Application.Current.Dispatcher.InvokeAsync(() =>
+                                    {
+                                        if (_spawnGeneration != capturedGeneration) return;
+
+                                        // ═══ NUCLEAR RESET: Force clipboard mode on desktop switch ═══
+                                        EnsureClipboardMode();
+                                        _lastPanelBeforeDismiss = null;
+                                        _desktopSwitchedSinceLastDismiss = true;
+
+                                        if (_isCurrentlySummoned && !_isAnimatingHide)
+                                        {
+                                            Classes.Logger.LogAction("VD_CB", $"DISMISS: Executing on UI thread. notes={_isNotesActive} todo={_isTodoActive}");
+                                            AnimateAndHide();
+                                        }
+                                        else
+                                        {
+                                            Classes.Logger.LogAction("VD_CB", $"DISMISS: Not summoned but reset to clipboard mode (notes={_isNotesActive} todo={_isTodoActive})");
+                                        }
+                                    });
+                                }
                             }
                         }
                         catch { }
@@ -278,6 +295,7 @@ namespace FlyShelf
         private bool _isPersistentMode = false;
         private bool _isAnimatingHide = false;
         private bool _isShowAnimating = false;
+        private DateTime _showAnimationEndTime = DateTime.MinValue;
         private bool _isApplyingTheme = false;
         private volatile int _spawnGeneration = 0; // Incremented on each spawn to invalidate stale callbacks
         private bool _desktopSwitchedSinceLastDismiss = false; // True when dismiss was triggered by a desktop switch
@@ -329,8 +347,14 @@ namespace FlyShelf
                 _isAnimatingHide = false;
                 this.Opacity = 0;
                 this.BeginAnimation(OpacityProperty, null);
-                this.Left = -20000;
-                this.Top = -20000;
+                // JITTER FIX: Hide via Win32 instead of moving to -20000
+                try
+                {
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                        Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
+                }
+                catch { }
 
                 // Release memory
                 OptimizeMemoryUsage();
@@ -349,15 +373,14 @@ namespace FlyShelf
         {
             // FIX: Start from 0 (not 0.01) — DWM skips Mica glass composition at opacity=0,
             // but at 0.01 it forces per-frame Mica blending causing flickering artifacts.
-            // FIX: Both animations at 250ms — eliminates the 30ms desync window where
-            // the slide is still moving at full opacity (maximally visible jitter).
-            _cachedOpacityAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(250))
+            // Snappy animations: Both animations at 150ms for lightweight and ultra-responsive feel.
+            _cachedOpacityAnim = new System.Windows.Media.Animation.DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150))
             {
                 EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
             };
             _cachedOpacityAnim.Freeze();
 
-            _cachedSlideInAnim = new System.Windows.Media.Animation.DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(250))
+            _cachedSlideInAnim = new System.Windows.Media.Animation.DoubleAnimation(6, 0, TimeSpan.FromMilliseconds(150))
             {
                 EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
             };
@@ -370,15 +393,14 @@ namespace FlyShelf
         /// <summary>Fast appear animation on inner content (preserves Mica glass).</summary>
         private void PlayShowAnimation()
         {
-            Classes.SpawnDiagnostic.Instance.MarkPhase("PLAY_SHOW_ANIM");
-            Classes.SpawnDiagnostic.Instance.MarkEvent("ANIM_START");
+            // Classes.SpawnDiagnostic.Instance.MarkPhase("PLAY_SHOW_ANIM");
+            // Classes.SpawnDiagnostic.Instance.MarkEvent("ANIM_START");
             _isShowAnimating = true;
+            _showAnimationEndTime = DateTime.UtcNow.AddMilliseconds(150);
 
             // ═══ MICA BACKDROP SUSPEND ═══
-            // Temporarily disable Mica glass during animation.
-            // DWM's Mica compositor forces per-frame glass blending that creates
-            // 25-35ms frame drops (visible as jitter) when the window first appears.
-            // Setting backdrop to None lets DWM skip the expensive glass pass.
+            // Temporarily disable Mica glass during animation to make the window
+            // completely transparent (invisible) while RootContent.Opacity is 0.
             try
             {
                 var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
@@ -415,7 +437,7 @@ namespace FlyShelf
             // reassigning invalidates the entire visual tree's cached render transform,
             // causing a DWM recomposition flash that looks like a tremor/shake.
             _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, null);
-            _cachedSlideTransform.Y = 6;
+            _cachedSlideTransform.Y = 0; // Keep at 0 to avoid slide offset
             if (!ReferenceEquals(RootContent.RenderTransform, _cachedSlideTransform))
                 RootContent.RenderTransform = _cachedSlideTransform;
 
@@ -424,40 +446,30 @@ namespace FlyShelf
             // it to attach a Completed handler, but Clone() unfreezes the animation, pulling
             // it back to the UI thread where GC pauses cause 30-43ms frame drops.
             //
-            // Instead, detect completion via CompositionTarget.Rendering by monitoring slide Y.
-            // Both animations are 250ms (synchronized), we wait for slide Y ≈ 0.
-            this.BeginAnimation(OpacityProperty, _cachedOpacityAnim);
+            // Instead, detect completion via a frame-rate independent timer.
+            // Both animations are 150ms.
+            this.BeginAnimation(OpacityProperty, null);
+            this.Opacity = 1.0;
+            RootContent.BeginAnimation(UIElement.OpacityProperty, _cachedOpacityAnim);
             _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, _cachedSlideInAnim);
 
-            // Detect animation completion by frame count.
-            // Both animations are 250ms. At 60fps = ~16 frames. Wait 17 to be safe.
-            // NOTE: We can't reliably poll _cachedSlideTransform.Y because frozen
-            // animations may not update the local property value on the UI thread.
             int capturedGen = _spawnGeneration;
-            int animFrameCount = 0;
-            const int animFrameTarget = 20; // 250ms at 60fps ≈ 15 frames + 5 buffer for safety
-            EventHandler completionHandler = null!;
-            completionHandler = (s, e) =>
+            var animTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render);
+            animTimer.Interval = TimeSpan.FromMilliseconds(150);
+            animTimer.Tick += (s, ev) =>
             {
-                // Bail if a new spawn started (stale handler)
-                if (_spawnGeneration != capturedGen)
-                {
-                    System.Windows.Media.CompositionTarget.Rendering -= completionHandler;
-                    return;
-                }
-                animFrameCount++;
-                if (animFrameCount < animFrameTarget) return;
-
-                System.Windows.Media.CompositionTarget.Rendering -= completionHandler;
+                animTimer.Stop();
+                // Bail if a new spawn started (stale handler) or if the window was dismissed
+                if (_spawnGeneration != capturedGen || !_isCurrentlySummoned) return;
 
                 _isShowAnimating = false;
                 _isEdgeLocked = true;
-                Classes.SpawnDiagnostic.Instance.MarkPhase("ANIM_COMPLETE");
-                Classes.SpawnDiagnostic.Instance.MarkEvent("ANIM_DONE");
+                // Classes.SpawnDiagnostic.Instance.MarkPhase("ANIM_COMPLETE");
+                // Classes.SpawnDiagnostic.Instance.MarkEvent("ANIM_DONE");
                 // Stop diagnostic recording 200ms after completion to capture settle
-                var diagStopTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
-                diagStopTimer.Tick += (_, _) => { diagStopTimer.Stop(); Classes.SpawnDiagnostic.Instance.StopRecording(); };
-                diagStopTimer.Start();
+                // var diagStopTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+                // diagStopTimer.Tick += (_, _) => { diagStopTimer.Stop(); Classes.SpawnDiagnostic.Instance.StopRecording(); };
+                // diagStopTimer.Start();
                 _showAnimEndTime = DateTime.UtcNow; // Start 500ms post-animation cooldown for SizeChanged
 
                 // Snap _lockedBottomEdge to the CURRENT window position instead of moving
@@ -472,9 +484,13 @@ namespace FlyShelf
                 // Wait one more render frame for the animation clocks to fully settle.
                 Dispatcher.InvokeAsync(() =>
                 {
+                    if (_spawnGeneration != capturedGen || !_isCurrentlySummoned) return;
+
                     // Clear animation clocks and snap to final values
                     _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, null);
                     _cachedSlideTransform.Y = 0;
+                    RootContent.BeginAnimation(UIElement.OpacityProperty, null);
+                    RootContent.Opacity = 1;
                     this.BeginAnimation(OpacityProperty, null);
                     this.Opacity = 1;
                     // Re-enable UseLayoutRounding now that everything is at integer positions
@@ -500,7 +516,7 @@ namespace FlyShelf
                     }
                 }, System.Windows.Threading.DispatcherPriority.Render);
             };
-            System.Windows.Media.CompositionTarget.Rendering += completionHandler;
+            animTimer.Start();
         }
 
         /// <summary>
@@ -552,6 +568,7 @@ namespace FlyShelf
 
             // ═══ CRITICAL: Set unsummoned IMMEDIATELY ═══
             _isCurrentlySummoned = false;
+            _isShowAnimating = false; // Reset show animating flag on dismiss
             UninstallKeyboardHook(); // Release arrow-key hook so keys return to the target app
 
             Classes.Logger.LogAction("VD_HIDE", $"AnimateAndHide | notes={_isNotesActive} todo={_isTodoActive} deskSwitchFlag={_desktopSwitchedSinceLastDismiss}");
@@ -580,9 +597,10 @@ namespace FlyShelf
             try
             {
                 // Make window invisible
-                this.Opacity = 0;
+                RootContent.BeginAnimation(UIElement.OpacityProperty, null);
+                RootContent.Opacity = 0;
                 this.BeginAnimation(OpacityProperty, null);
-                RootContent.Opacity = 1;
+                this.Opacity = 0;
 
                 // JITTER FIX: Don't null-out RenderTransform on hide.
                 // Setting RenderTransform=null destroys WPF's cached render tree transform.
@@ -698,7 +716,9 @@ namespace FlyShelf
 
         public void OptimizeMemoryUsage()
         {
-            // 1. Evict non-pinned image/QR thumbnails to free heavy image memory, keeping top 5 always loaded
+            // 1. Evict non-pinned image/QR thumbnails to free heavy image memory, keeping top 6 always loaded
+            //    Increasing this limit keeps more parsed templates and decoded images warm in RAM,
+            //    completely hiding the sudden appearance/decode lags on summon.
             try
             {
                 if (_viewModel?.DroppedItems != null)
@@ -711,9 +731,9 @@ namespace FlyShelf
                         if (item.ItemType == ClipboardItemType.Image || item.ItemType == ClipboardItemType.QRCode)
                         {
                             imageCount++;
-                            if (imageCount <= 5)
+                            if (imageCount <= 6)
                             {
-                                // Keep the top 5 images loaded in RAM to hide the sudden appearance on summon
+                                // Keep the top 6 images loaded in RAM to hide the sudden appearance on summon
                                 continue;
                             }
 
@@ -730,24 +750,31 @@ namespace FlyShelf
             }
             catch { }
 
-            // 2. GC + working set trim — keep 30MB minimum to avoid cold-start animation jitter.
-            // SetProcessWorkingSetSize(-1,-1) evicts ALL pages including WPF rendering pipeline,
-            // causing page faults on first spawn. A 30MB floor keeps composition thread buffers resident.
+            // 2. GC + working set trim — keep 60MB minimum to avoid cold-start animation jitter.
+            //    By checking if process memory is already under 65MB, we avoid unnecessary collections,
+            //    allowing WPF styles, visual templates, and asset caches to remain fully resident.
+            //    If we exceed 65MB, we trim down to a 60MB floor.
             System.Threading.Tasks.Task.Run(() =>
             {
                 try
                 {
-                    // Gen 1 optimized collection — reclaims short-lived objects without freezing UI
-                    System.GC.Collect(1, System.GCCollectionMode.Optimized, false);
-                    System.GC.WaitForPendingFinalizers();
-
-                    // Set working set to 30MB min / 60MB max — keeps WPF rendering pages resident
-                    // while still releasing image bitmap pages back to OS standby list
-                    const nint MIN_WS = 30 * 1024 * 1024;  // 30 MB
-                    const nint MAX_WS = 60 * 1024 * 1024;  // 60 MB
                     using (var currentProcess = System.Diagnostics.Process.GetCurrentProcess())
                     {
-                        SetProcessWorkingSetSize(currentProcess.Handle, MIN_WS, MAX_WS);
+                        currentProcess.Refresh();
+                        long workingSet = currentProcess.WorkingSet64;
+
+                        // Only trim if working set is higher than 65MB
+                        if (workingSet > 65 * 1024 * 1024)
+                        {
+                            // Gen 1 optimized collection — reclaims short-lived objects without freezing UI
+                            System.GC.Collect(1, System.GCCollectionMode.Optimized, false);
+                            System.GC.WaitForPendingFinalizers();
+
+                            // Set working set floor to 60MB to ensure WPF pages and templates are kept resident
+                            const nint MIN_WS = 60 * 1024 * 1024;   // 60 MB
+                            const nint MAX_WS = 120 * 1024 * 1024;  // 120 MB
+                            SetProcessWorkingSetSize(currentProcess.Handle, MIN_WS, MAX_WS);
+                        }
                     }
                 }
                 catch { }

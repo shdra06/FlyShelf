@@ -382,6 +382,9 @@ namespace FlyShelf.Windows
             _lastTaskbarFrameRect = Rect.Empty;
             _positionUpdateInProgress = false;
 
+            // Speed up polling to track taskbar slide animation
+            _timer.Interval = TimeSpan.FromMilliseconds(150);
+
             Classes.Logger.LogAction("WIDGET", "Switched to FLOATING mode (taskbar auto-hide detected)");
         }
 
@@ -426,6 +429,9 @@ namespace FlyShelf.Windows
             // Force WPF visibility
             Visibility = Visibility.Visible;
 
+            // Slow down polling — embedded mode doesn't need rapid updates
+            _timer.Interval = TimeSpan.FromMilliseconds(500);
+
             Classes.Logger.LogAction("WIDGET", "Switched to EMBEDDED mode (taskbar auto-hide disabled) — all caches reset");
         }
 
@@ -455,6 +461,7 @@ namespace FlyShelf.Windows
                 if (autoHide)
                 {
                     _isFloatingMode = true;
+                    _timer.Interval = TimeSpan.FromMilliseconds(150); // Fast polling for auto-hide tracking
 
                     int exStyle = GetWindowLong(taskbarWindowHandle, GWL_EXSTYLE);
                     exStyle |= WS_EX_TOOLWINDOW;
@@ -542,10 +549,23 @@ namespace FlyShelf.Windows
 
                 if (_isFloatingMode)
                 {
-                    // Floating mode: always keep the widget visible in the corner
+                    // Floating mode: sync visibility with the auto-hide taskbar
                     if (taskbarHandle != IntPtr.Zero)
                     {
-                        Dispatcher.BeginInvoke(() => { CalculateFloatingPosition(interop.Handle, taskbarHandle); }, DispatcherPriority.Background);
+                        bool taskbarVisible = IsTaskbarCurrentlyVisible(taskbarHandle);
+                        if (!taskbarVisible)
+                        {
+                            // Taskbar is hidden — hide the widget too
+                            if (Visibility != Visibility.Hidden)
+                            {
+                                Visibility = Visibility.Hidden;
+                            }
+                        }
+                        else
+                        {
+                            // Taskbar is showing — position and show the widget
+                            Dispatcher.BeginInvoke(() => { CalculateFloatingPosition(interop.Handle, taskbarHandle); }, DispatcherPriority.Background);
+                        }
                     }
                 }
                 else

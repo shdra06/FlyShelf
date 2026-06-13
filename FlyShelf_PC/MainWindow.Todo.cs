@@ -19,6 +19,8 @@ namespace FlyShelf
         private TextBox? _lastFocusedTodoTextBox = null;
         private DateTime _lastTodoItemAddedTime = DateTime.MinValue;
 
+
+
         private void TodoToggle_Click(object sender, RoutedEventArgs e)
         {
             if (_isTodoActive)
@@ -146,6 +148,19 @@ namespace FlyShelf
 
         private void TodoPanel_PreviewMouseDown(object sender, MouseButtonEventArgs e)
         {
+            // Skip activation when click targets a popup-triggering element (templates button).
+            // PreviewMouseDown (tunnel) fires before MouseLeftButtonDown; calling Activate()
+            // during the tunnel phase immediately closes ContextMenus/Popups that are about to open.
+            if (e.OriginalSource is DependencyObject source)
+            {
+                var parent = source;
+                while (parent != null)
+                {
+                    if (parent is FrameworkElement fe && fe.Name == "TodoTemplatesBtn")
+                        return;
+                    parent = VisualTreeHelper.GetParent(parent);
+                }
+            }
             ActivateWindowWithoutStealingFocus();
         }
 
@@ -410,126 +425,8 @@ namespace FlyShelf
 
         private void TodoStopwatch_Click(object sender, RoutedEventArgs e)
         {
-            var menu = new System.Windows.Controls.ContextMenu
-            {
-                PlacementTarget = TodoStopwatchBtn,
-                Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
-                StaysOpen = true,
-                HorizontalOffset = -40
-            };
-
-            // Common time presets
-            var presets = new[]
-            {
-                ("1 min",    "1m"),
-                ("2 min",    "2m"),
-                ("5 min",    "5m"),
-                ("10 min",   "10m"),
-                ("15 min",   "15m"),
-                ("25 min  🍅", "25m"),   // Pomodoro
-                ("30 min",   "30m"),
-                ("45 min",   "45m"),
-                ("1 hour",   "1h"),
-                ("2 hours",  "2h"),
-            };
-
-            foreach (var (label, code) in presets)
-            {
-                var item = new System.Windows.Controls.MenuItem
-                {
-                    Header = label,
-                    Tag = code,
-                    FontSize = 12.5,
-                    Padding = new Thickness(10, 6, 10, 6)
-                };
-                item.Click += (s, ev) =>
-                {
-                    var tw = new FlyShelf.Windows.TimerWindow((string)((System.Windows.Controls.MenuItem)s).Tag);
-                    tw.Show();
-                };
-                menu.Items.Add(item);
-            }
-
-            menu.Items.Add(new System.Windows.Controls.Separator());
-
-            // Custom time input
-            var customPanel = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Margin = new Thickness(10, 4, 10, 6)
-            };
-
-            var customInput = new TextBox
-            {
-                Width = 70,
-                FontSize = 12,
-                VerticalContentAlignment = VerticalAlignment.Center,
-                Padding = new Thickness(6, 4, 6, 4),
-                ToolTip = "e.g. 12, 90, 3:30",
-                Foreground = (Brush)(TryFindResource("MicaWPF.Brushes.TextFillColorPrimary") ?? Brushes.White),
-                Background = (Brush)(TryFindResource("MicaWPF.Brushes.SubtleFillColorSecondary") ?? new SolidColorBrush(Color.FromArgb(0x18, 0xFF, 0xFF, 0xFF))),
-                BorderBrush = (Brush)(TryFindResource("MicaWPF.Brushes.ControlStrokeColorDefault") ?? new SolidColorBrush(Color.FromArgb(0x30, 0xFF, 0xFF, 0xFF))),
-                BorderThickness = new Thickness(1),
-                Text = ""
-            };
-
-            var unitLabel = new TextBlock
-            {
-                Text = "min",
-                FontSize = 11,
-                VerticalAlignment = VerticalAlignment.Center,
-                Foreground = (Brush)(TryFindResource("MicaWPF.Brushes.TextFillColorTertiary") ?? Brushes.Gray),
-                Margin = new Thickness(4, 0, 6, 0)
-            };
-
-            var goBtn = new System.Windows.Controls.Button
-            {
-                Content = "▶",
-                FontSize = 12,
-                Padding = new Thickness(8, 4, 8, 4),
-                VerticalAlignment = VerticalAlignment.Center,
-                Cursor = Cursors.Hand,
-                ToolTip = "Start Timer"
-            };
-
-            goBtn.Click += (s, ev) =>
-            {
-                LaunchCustomTimer(customInput.Text);
-                menu.IsOpen = false;
-            };
-
-            customInput.PreviewKeyDown += (s, ev) =>
-            {
-                if (ev.Key == Key.Enter)
-                {
-                    LaunchCustomTimer(customInput.Text);
-                    menu.IsOpen = false;
-                    ev.Handled = true;
-                }
-            };
-
-            customPanel.Children.Add(customInput);
-            customPanel.Children.Add(unitLabel);
-            customPanel.Children.Add(goBtn);
-
-            var customMenuItem = new System.Windows.Controls.MenuItem
-            {
-                Header = customPanel,
-                StaysOpenOnClick = true
-            };
-            menu.Items.Add(customMenuItem);
-
-            menu.IsOpen = true;
-
-            // Focus the custom input after the menu opens
-            menu.Opened += (s, ev) =>
-            {
-                customInput.Dispatcher.InvokeAsync(() =>
-                {
-                    customInput.Focus();
-                    Keyboard.Focus(customInput);
-                }, System.Windows.Threading.DispatcherPriority.Input);
-            };
+            var tw = new FlyShelf.Windows.TimerWindow(null);
+            tw.Show();
         }
 
         private void LaunchCustomTimer(string input)
@@ -558,6 +455,53 @@ namespace FlyShelf
                 var tw = new FlyShelf.Windows.TimerWindow(trimmed);
                 tw.Show();
             }
+        }
+
+        private void TodoTemplates_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true; // Prevent event from bubbling further
+            if (sender is FrameworkElement fe)
+            {
+                var menu = new ContextMenu();
+                
+                var item1 = new MenuItem { Header = "🛒 Grocery Shopping" };
+                item1.Click += (s, ev) => ApplyTodoTemplate(new[] { "Buy milk", "Buy eggs", "Buy veggies", "Buy bread", "Buy fruits" });
+                
+                var item2 = new MenuItem { Header = "🧹 Weekly Chores" };
+                item2.Click += (s, ev) => ApplyTodoTemplate(new[] { "Clean room", "Do laundry", "Throw trash", "Vacuum floor" });
+                
+                var item3 = new MenuItem { Header = "💼 Work Standup Routine" };
+                item3.Click += (s, ev) => ApplyTodoTemplate(new[] { "Check emails & Slack", "Update Jira tickets", "Team standup meeting", "Plan daily tasks" });
+                
+                var item4 = new MenuItem { Header = "✈️ Travel Packing" };
+                item4.Click += (s, ev) => ApplyTodoTemplate(new[] { "Pack passport & documents", "Pack chargers & electronics", "Pack clothes & shoes", "Pack toiletries" });
+
+                menu.Items.Add(item1);
+                menu.Items.Add(item2);
+                menu.Items.Add(item3);
+                menu.Items.Add(item4);
+
+                menu.PlacementTarget = fe;
+                menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                menu.IsOpen = true;
+            }
+        }
+
+        private void ApplyTodoTemplate(string[] tasks)
+        {
+            if (_selectedTodoDay == null) return;
+            
+            // If the last item is empty and it's the only one, remove it so we can insert the template cleanly
+            if (_selectedTodoDay.Items.Count == 1 && string.IsNullOrWhiteSpace(_selectedTodoDay.Items[0].Text))
+            {
+                TodoManager.RemoveItem(_selectedTodoDay, _selectedTodoDay.Items[0]);
+            }
+
+            foreach (var task in tasks)
+            {
+                TodoManager.AddItem(_selectedTodoDay, task);
+            }
+            UpdateTodoProgress(_selectedTodoDay);
         }
     }
 }

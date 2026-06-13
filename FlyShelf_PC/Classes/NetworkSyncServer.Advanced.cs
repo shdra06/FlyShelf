@@ -326,7 +326,7 @@ namespace FlyShelf.Classes
                     }
                 }
 
-                // Fallback: Try Microsoft Word COM automation
+                // Fallback: Try Microsoft Word COM automation with full dialog suppression
                 if (!converted)
                 {
                     try
@@ -336,11 +336,37 @@ namespace FlyShelf.Classes
                         {
                             dynamic word = Activator.CreateInstance(wordType);
                             word.Visible = false;
-                            dynamic doc = word.Documents.Open(inputPath);
-                            doc.SaveAs2(pdfPath, 17); // 17 = wdFormatPDF
-                            doc.Close(false);
-                            word.Quit();
+                            word.DisplayAlerts = 0;           // wdAlertsNone — suppress ALL dialogs
+                            word.AutomationSecurity = 3;       // msoAutomationSecurityForceDisable
+                            try { word.Options.DoNotPromptForConvert = true; } catch { }
+
+                            dynamic doc = word.Documents.Open(
+                                inputPath,          // FileName
+                                false,              // ConfirmConversions
+                                true,               // ReadOnly
+                                false,              // AddToRecentFiles
+                                "",                 // PasswordDocument
+                                "",                 // PasswordTemplate
+                                true,               // Revert
+                                "",                 // WritePasswordDocument
+                                "",                 // WritePasswordTemplate
+                                Type.Missing,       // Format
+                                Type.Missing,       // Encoding
+                                false,              // Visible
+                                false,              // OpenAndRepair
+                                Type.Missing,       // DocumentDirection
+                                true,               // NoEncodingDialog
+                                Type.Missing        // XMLTransform
+                            );
+
+                            // ExportAsFixedFormat is silent — no save dialog
+                            doc.ExportAsFixedFormat(
+                                pdfPath, 17, false, 0, 0, 1, 1, 0, true, true, 0, true, true, false);
+
+                            doc.Close(0); // wdDoNotSaveChanges
+                            word.Quit(0);
                             converted = File.Exists(pdfPath);
+                            System.Runtime.InteropServices.Marshal.ReleaseComObject(doc);
                             System.Runtime.InteropServices.Marshal.ReleaseComObject(word);
                         }
                     }

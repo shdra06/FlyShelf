@@ -232,6 +232,7 @@ namespace FlyShelf.Classes
         private static readonly string _notesImagesDir = Path.Combine(_appDataDir, "Notes", "Images");
 
         private static ObservableCollection<NoteDay> _days = new();
+        private static List<NoteDay> _allDays = new();
         private static Timer? _saveTimer;
         private static readonly object _lock = new();
         private static volatile bool _isDirty;
@@ -260,6 +261,7 @@ namespace FlyShelf.Classes
                     if (!File.Exists(_notesPath))
                     {
                         _days = new ObservableCollection<NoteDay>();
+                        _allDays = new List<NoteDay>();
                         _isLoaded = true;
                         return;
                     }
@@ -279,26 +281,15 @@ namespace FlyShelf.Classes
                         }
 
                         // Sort newest first
-                        var sorted = loaded.OrderByDescending(d => d.Date).ToList();
-                        _days = new ObservableCollection<NoteDay>(sorted);
-
-                        // Trim notes beyond tier history limit
-                        int maxDays = LicenseManager.GetNoteHistoryDays();
-                        if (maxDays < int.MaxValue)
-                        {
-                            DateTime cutoff = DateTime.Today.AddDays(-maxDays);
-                            var trimmed = sorted.Where(d => d.Date >= cutoff).ToList();
-                            if (sorted.Count > trimmed.Count)
-                            {
-                                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
-                                    UpgradePrompt.ShowNoteHistoryLimit());
-                            }
-                            _days = new ObservableCollection<NoteDay>(trimmed);
-                        }
+                        _allDays = loaded.OrderByDescending(d => d.Date).ToList();
+                        
+                        // Populate visible days list
+                        FilterVisibleDays();
                     }
                     else
                     {
                         _days = new ObservableCollection<NoteDay>();
+                        _allDays = new List<NoteDay>();
                     }
                     _isLoaded = true;
                 }
@@ -323,8 +314,8 @@ namespace FlyShelf.Classes
                                 {
                                     d.Date = d.Date.Kind == DateTimeKind.Utc ? d.Date.ToLocalTime().Date : d.Date.Date;
                                 }
-                                var sorted = loadedBackup.OrderByDescending(d => d.Date).ToList();
-                                _days = new ObservableCollection<NoteDay>(sorted);
+                                _allDays = loadedBackup.OrderByDescending(d => d.Date).ToList();
+                                FilterVisibleDays();
                                 _isLoaded = true;
                                 Logger.LogAction("NOTES", "Successfully recovered notes from backup file (.bak)!");
                                 return;
@@ -337,24 +328,63 @@ namespace FlyShelf.Classes
                     }
 
                     _days = new ObservableCollection<NoteDay>();
+                    _allDays = new List<NoteDay>();
                 }
             }
         }
 
-        /// <summary>
-        /// Ensures today's NoteDay exists. Returns it.
-        /// </summary>
+        private static void FilterVisibleDays()
+        {
+            int maxDays = LicenseManager.GetNoteHistoryDays();
+            if (maxDays < int.MaxValue)
+            {
+                DateTime cutoff = DateTime.Today.AddDays(-maxDays);
+                var visible = _allDays.Where(d => d.Date.Date >= cutoff.Date).ToList();
+                if (_allDays.Count > visible.Count)
+                {
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        UpgradePrompt.ShowNoteHistoryLimit());
+                }
+                _days = new ObservableCollection<NoteDay>(visible);
+            }
+            else
+            {
+                _days = new ObservableCollection<NoteDay>(_allDays);
+            }
+        }
+
+        public static NoteDay GetOrCreateDay(DateTime date)
+        {
+            lock (_lock)
+            {
+                var dateOnly = date.Date;
+                var existing = _allDays.FirstOrDefault(d => d.Date.Date == dateOnly);
+                if (existing == null)
+                {
+                    existing = new NoteDay { Date = dateOnly };
+                    _allDays.Add(existing);
+                    _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
+                    
+                    // If it falls within the visible days, insert it into _days too
+                    int maxDays = LicenseManager.GetNoteHistoryDays();
+                    if (maxDays == int.MaxValue || dateOnly >= DateTime.Today.AddDays(-maxDays))
+                    {
+                        int insertIdx = 0;
+                        while (insertIdx < _days.Count && _days[insertIdx].Date > dateOnly)
+                        {
+                            insertIdx++;
+                        }
+                        _days.Insert(insertIdx, existing);
+                    }
+                    ScheduleSave();
+                }
+                return existing;
+            }
+        }
+
         public static NoteDay EnsureToday()
         {
-            var today = DateTime.Today;
-            var existing = _days.FirstOrDefault(d => d.Date.Date == today);
-            if (existing != null) return existing;
-
-            var newDay = new NoteDay { Date = today };
-            // Insert at top (newest first)
-            _days.Insert(0, newDay);
-            ScheduleSave();
-            return newDay;
+            return GetOrCreateDay(DateTime.Today);
         }
 
         /// <summary>Check if a day exists.</summary>
@@ -449,6 +479,41 @@ namespace FlyShelf.Classes
                 try { snapshot = _days.ToList(); } catch { return; }
             }
 
+            List<NoteDay> finalSerializeList;
+            lock (_lock)
+            {
+                // Merge snapshot back into _allDays
+                var visibleDates = new HashSet<DateTime>(snapshot.Select(d => d.Date.Date));
+                int maxDays = LicenseManager.GetNoteHistoryDays();
+                DateTime? cutoff = maxDays < int.MaxValue ? (DateTime?)DateTime.Today.AddDays(-maxDays) : null;
+
+                // 1. Remove visible days from _allDays if they are no longer present in the snapshot (user deleted them)
+                _allDays.RemoveAll(d => {
+                    if (cutoff.HasValue && d.Date.Date < cutoff.Value.Date) return false; // Keep hidden history
+                    return !visibleDates.Contains(d.Date.Date); // Delete if it was visible but user removed it
+                });
+
+                // 2. Add or update days from snapshot
+                foreach (var snapDay in snapshot)
+                {
+                    int idx = _allDays.FindIndex(d => d.Date.Date == snapDay.Date.Date);
+                    if (idx >= 0)
+                    {
+                        _allDays[idx] = snapDay;
+                    }
+                    else
+                    {
+                        _allDays.Add(snapDay);
+                    }
+                }
+
+                // Sort newest first
+                _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
+                
+                // Copy for thread-safe serialization
+                finalSerializeList = _allDays.ToList();
+            }
+
             // Run serialization and file IO on a background thread so it doesn't block the UI thread
             System.Threading.Tasks.Task.Run(() =>
             {
@@ -459,7 +524,7 @@ namespace FlyShelf.Classes
                         if (!Directory.Exists(_appDataDir))
                             Directory.CreateDirectory(_appDataDir);
 
-                        string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+                        string json = JsonSerializer.Serialize(finalSerializeList, new JsonSerializerOptions
                         {
                             WriteIndented = false,
                             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull

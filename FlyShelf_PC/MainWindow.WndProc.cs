@@ -21,6 +21,7 @@ namespace FlyShelf
         private int _clipboardUpdateToken;
         private DateTime _lastClipboardCaptureTime = DateTime.MinValue;
         private DateTime _lastHotkeyTime = DateTime.MinValue;
+        private bool _waitingForHotkeyRelease = false;
 
         // ═══ SendInput for auto-paste after shortcut expansion ═══
         [DllImport("user32.dll", SetLastError = true)]
@@ -105,22 +106,8 @@ namespace FlyShelf
                 int hotkeyId = wParam.ToInt32();
                 if (hotkeyId == HOTKEY_ID)
                 {
-                    // Debounce: prevent double-fire from WM_HOTKEY auto-repeat/ghost messages
-                    var now = DateTime.UtcNow;
-                    if ((now - _lastHotkeyTime).TotalMilliseconds < 300)
-                    {
-                        Classes.Logger.LogAction("TELEMETRY", "Hotkey Alt+C DEBOUNCED (too fast)");
-                        handled = true;
-                        return IntPtr.Zero;
-                    }
-                    _lastHotkeyTime = now;
-
                     Classes.Logger.LogAction("TELEMETRY", "Hotkey Alt+C received inside WndProc");
-                    // PERF: Defer spawn out of WndProc — when Alt+C is pressed quickly,
-                    // WM_SYSKEYDOWN/WM_SYSKEYUP messages are still queued behind WM_HOTKEY.
-                    // Running spawn synchronously inside HwndHook causes those keyboard messages
-                    // to be processed between animation frames (25-40ms stalls).
-                    // Input priority lets the keyboard queue drain first → jitter-free animation.
+                    // Defer spawn out of WndProc to let keyboard queue drain first.
                     Dispatcher.InvokeAsync(() => ToggleMainClipboard(), System.Windows.Threading.DispatcherPriority.Input);
                     handled = true;
                 }

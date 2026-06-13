@@ -557,7 +557,7 @@ namespace FlyShelf
             var handle = new WindowInteropHelper(this).Handle;
             if (handle != IntPtr.Zero)
             {
-                int borderColor = DWMWA_COLOR_DARK_GRAY;
+                int borderColor = DWMWA_COLOR_NONE;
                 DwmSetWindowAttribute(handle, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
             }
 
@@ -569,7 +569,7 @@ namespace FlyShelf
                     var hwnd = new WindowInteropHelper(this).Handle;
                     if (hwnd != IntPtr.Zero)
                     {
-                        int cn = DWMWA_COLOR_DARK_GRAY;
+                        int cn = DWMWA_COLOR_NONE;
                         DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                     }
                 }
@@ -609,11 +609,10 @@ namespace FlyShelf
             // (no more redundant early load that gets overwritten by theme init)
 
             // ═══ BACKDROP STRATEGY: Set once, never toggle ═══
-            // DIAGNOSTIC: Mica disabled to test if DWM backdrop composition causes the
-            // intermittent 28-33ms frame drops during animation. DWM must re-sample and
-            // blur desktop pixels on every opacity change — this is the top suspect for
-            // the "unpredictable jitter" that happens on some spawns but not others.
-            // To restore Mica: wrap this block back in `if (Build < 22000)` check.
+            // On Win11+ with blur enabled, use Mica glass. Otherwise fallback to solid background.
+            // ROOT CAUSE RESOLVED: The jitter was caused by DWM redirection surface reallocation
+            // from the -20000 coordinate jump, not Mica composition. Mica is safe to enable.
+            if (!Classes.NativeMethods.ShouldUseBlur())
             {
                 this.SystemBackdropType = MicaWPF.Core.Enums.BackdropType.None;
                 ApplyPopupBackground();
@@ -898,7 +897,7 @@ namespace FlyShelf
                                     var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                                     if (hwnd != IntPtr.Zero)
                                     {
-                                        int cn = DWMWA_COLOR_DARK_GRAY;
+                                        int cn = DWMWA_COLOR_NONE;
                                         DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                                     }
                                 }
@@ -977,7 +976,7 @@ namespace FlyShelf
                         var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                         if (hwnd != IntPtr.Zero)
                         {
-                            int cn = DWMWA_COLOR_DARK_GRAY;
+                            int cn = DWMWA_COLOR_NONE;
                             DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                         }
                     }
@@ -1128,8 +1127,19 @@ namespace FlyShelf
                 this.WindowState = WindowState.Normal;
                 _isProgrammaticMinimize = false;
             }
-            this.Left = -20000;
-            this.Top = -20000;
+
+            // JITTER FIX: Use native ShowWindow(SW_HIDE) instead of moving to -20000.
+            // Moving the window far offscreen forces DWM to invalidate its redirection surface.
+            // When the window is re-shown, DWM must reallocate and re-rasterize the entire
+            // surface (~45ms stall), causing visible jitter on the first animation frames.
+            // SW_HIDE keeps the DWM surface warm at the last visible position.
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                    Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
+            }
+            catch { }
 
             // Actively optimize and release memory whenever the window is hidden/unsummoned
             OptimizeMemoryUsage();

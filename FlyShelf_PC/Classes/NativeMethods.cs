@@ -579,7 +579,7 @@ public static partial class NativeMethods
                 }
 
                 // Override active window border color to prevent accent border leakage
-                int borderColor = isLight ? 0x00D5D6D8 : 0x002D2D2D;
+                int borderColor = window is MainWindow ? DWMWA_COLOR_NONE : (isLight ? 0x00D5D6D8 : 0x002D2D2D);
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
             }
         }
@@ -650,7 +650,7 @@ public static partial class NativeMethods
                     var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
                     if (hwnd != IntPtr.Zero)
                     {
-                        int borderColor = DWMWA_COLOR_DARK_GRAY;
+                        int borderColor = window is MainWindow ? DWMWA_COLOR_NONE : DWMWA_COLOR_DARK_GRAY;
                         DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
                     }
                 }

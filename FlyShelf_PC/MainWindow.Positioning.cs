@@ -33,6 +33,7 @@ namespace FlyShelf
         /// render frames on the very first spawn so WPF's initial layout pass finishes
         /// before the fade-in animation starts (prevents first-spawn jitter).</summary>
         private bool _hasCompletedFirstSpawn = false;
+        private bool _needsDwmDesktopSettleWait = false;
 
         private bool MoveToCurrentVirtualDesktop(IntPtr hwnd, bool force = false)
         {
@@ -102,6 +103,23 @@ namespace FlyShelf
             Classes.Logger.LogAction("TELEMETRY", $"ShowNearPosition entered, mode={mode}, isPersistent={isPersistent}, stealFocus={stealFocus}");
             Classes.SpawnProfiler.Instance.BeginSpawn(this);
             
+            // ═══ DESKTOP SWITCH JITTER PREVENTER ═══
+            // If we are summoning the window after a virtual desktop switch, DWM requires
+            // some time to register/reallocate the redirection surface and complete the active desktop switch transition.
+            // We set _needsDwmDesktopSettleWait = true to defer the animation start by 100ms
+            // while keeping the window at Opacity=0. This lets DWM settle and prevents any frame drops during the animation.
+            bool isOnOtherDesktop = knownOnOtherDesktop == true || 
+                                    (_summonedDesktopId != Guid.Empty &&
+                                     _currentDesktopId != Guid.Empty &&
+                                     _currentDesktopId != _summonedDesktopId);
+
+            if (isOnOtherDesktop || _desktopSwitchedSinceLastDismiss)
+            {
+                _needsDwmDesktopSettleWait = true;
+                _desktopSwitchedSinceLastDismiss = false;
+                Classes.Logger.LogAction("DESKTOP", "Desktop switch detected during summon — setting _needsDwmDesktopSettleWait to true.");
+            }
+
             // NOTE: VD handling removed — window is always pinned to all virtual desktops
             // (WS_EX_APPWINDOW is never set), so IsWindowOnCurrentVirtualDesktop always returns true.
 
@@ -136,10 +154,13 @@ namespace FlyShelf
 
             Classes.SpawnProfiler.Instance.Mark("PRE_ABORT_HIDE");
 
+            bool needsDefer = false;
+
             // Abort hide animation if one is actively running
             if (_isAnimatingHide)
             {
                 _isAnimatingHide = false;
+                needsDefer = true;
                 try
                 {
                     // Set base opacity to 0 and clear animation clocks immediately.
@@ -151,15 +172,15 @@ namespace FlyShelf
                         tt.Y = 0;
                     }
                     RootContent.Opacity = 1;
-                    // NO deferred HideWindowInternal — ShowNearPositionInternal will
-                    // position the window correctly. The deferred hide was racing with
-                    // the new show, moving the window offscreen mid-animation.
+                    _isCurrentlySummoned = false; // Bypass guard
+                    HideWindowInternal(); // Move offscreen immediately to hide from the DWM composition surface
                 }
                 catch { }
             }
 
             if (_isCurrentlySummoned)
             {
+                needsDefer = true;
                 this.Opacity = 0;
                 this.BeginAnimation(OpacityProperty, null);
                 RootContent.Opacity = 1;
@@ -167,8 +188,8 @@ namespace FlyShelf
                 _cachedSlideTransform.Y = 0;
                 if (!ReferenceEquals(RootContent.RenderTransform, _cachedSlideTransform))
                     RootContent.RenderTransform = _cachedSlideTransform;
-                // NO deferred HideWindowInternal — same reason as above.
-                // The window will be repositioned by ShowNearPositionInternal below.
+                _isCurrentlySummoned = false; // Bypass guard
+                HideWindowInternal(); // Move offscreen immediately to hide from the DWM composition surface
             }
 
             Classes.SpawnProfiler.Instance.Mark("PRE_SET_MODE");
@@ -176,10 +197,25 @@ namespace FlyShelf
             _viewModel.CurrentMode = mode;
             Classes.SpawnProfiler.Instance.Mark("SET_MODE");
 
-            // PERF: Call synchronously — no deferred callback.
-            // Window is at Left=-20000, Opacity=0, so there's nothing to "commit" first.
-            // This eliminates 1 full frame (~16ms) of latency vs the old Dispatcher.InvokeAsync(Loaded).
-            ShowNearPositionInternal(targetX, targetY, mode, isPersistent, stealFocus);
+            // Capture parameters for background callback
+            double finalX = targetX;
+            double finalY = targetY;
+            int finalMode = mode;
+            bool finalPersistent = isPersistent;
+            bool finalStealFocus = stealFocus;
+
+            if (needsDefer)
+            {
+                Classes.Logger.LogAction("TELEMETRY", "Deferring ShowNearPositionInternal to Background priority to prevent re-summon flashes.");
+                Dispatcher.InvokeAsync(() =>
+                {
+                    ShowNearPositionInternal(finalX, finalY, finalMode, finalPersistent, finalStealFocus);
+                }, System.Windows.Threading.DispatcherPriority.Background);
+            }
+            else
+            {
+                ShowNearPositionInternal(targetX, targetY, mode, isPersistent, stealFocus);
+            }
         }
 
         private void ShowNearPositionInternal(double targetX, double targetY, int mode, bool isPersistent, bool stealFocus)
@@ -219,7 +255,14 @@ namespace FlyShelf
                             if (_summonedDesktopId == Guid.Empty)
                             {
                                 bgVdm.GetWindowDesktopId(capturedLastExternal, out Guid dId);
-                                if (dId != Guid.Empty) _summonedDesktopId = dId;
+                                if (dId != Guid.Empty)
+                                {
+                                    Dispatcher.InvokeAsync(() =>
+                                    {
+                                        _summonedDesktopId = dId;
+                                        _currentDesktopId = dId;
+                                    });
+                                }
                             }
                         }
                     }
@@ -228,9 +271,26 @@ namespace FlyShelf
                     if (_summonedDesktopId == Guid.Empty && capturedFg != IntPtr.Zero && capturedFg != hwndCopyForDesktop)
                     {
                         bgVdm.GetWindowDesktopId(capturedFg, out Guid desktopId);
-                        if (desktopId != Guid.Empty) _summonedDesktopId = desktopId;
+                        if (desktopId != Guid.Empty)
+                        {
+                            Dispatcher.InvokeAsync(() =>
+                            {
+                                _summonedDesktopId = desktopId;
+                                _currentDesktopId = desktopId;
+                            });
+                        }
                     }
                     
+                    // Sync current desktop ID with summoned ID if we have it
+                    Guid currentSummonedId = _summonedDesktopId;
+                    if (currentSummonedId != Guid.Empty)
+                    {
+                        Dispatcher.InvokeAsync(() =>
+                        {
+                            _currentDesktopId = currentSummonedId;
+                        });
+                    }
+
                     Classes.Logger.LogAction("DESKTOP", $"Summoned on virtual desktop: {_summonedDesktopId}, prevWindowWasOnCurrent: {_lastActiveExternalWindowWasOnCurrentAtSummon}");
                 }
                 catch (Exception ex)
@@ -330,21 +390,35 @@ namespace FlyShelf
             this.ShowActivated = stealFocus;
             _spawnedWithoutFocus = !stealFocus;
 
-            // 1. Clear old animation clocks THEN set opacity=0.
-            //    Clearing first prevents an intermediate frame at the old animated value.
+            // 1. Clear old animation clocks. Keep window opaque but clear content opacity.
+            RootContent.BeginAnimation(UIElement.OpacityProperty, null);
+            RootContent.Opacity = 0; // True zero on content so it is invisible
             this.BeginAnimation(OpacityProperty, null);
-            this.Opacity = 0; // TRUE zero — completely invisible during positioning to prevent first-spawn flash
+            this.Opacity = 1.0; // Keep window opaque to avoid layered composition changes
+
+            // Preemptively suspend Mica backdrop before moving onscreen to avoid backdrop pop
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    int backdropNone = 1; // DWMSBT_NONE
+                    DwmSetWindowAttribute(hwnd, 38, ref backdropNone, sizeof(int));
+                }
+            }
+            catch { }
 
             // ═══ PRE-EMPTIVE GC: Drain Gen0 pressure before animation ═══
             // Diagnostic logs show intermittent 26ms GC pauses between BeginAnimation()
             // and the first render frame. Clean spawns get 2 frames at opacity=0 (GC happened
             // before), jittery spawns lose a frame to GC (first visible frame jumps to 0.30).
             // Running Gen0 GC now (while still invisible) prevents GC during the animation.
-            GC.Collect(0, GCCollectionMode.Optimized, false, false);
+            // GC.Collect(0, GCCollectionMode.Optimized, false, false);
 
-            Classes.SpawnProfiler.Instance.Mark("CLEAR_ANIM_CLOCKS");
+            // Classes.SpawnProfiler.Instance.Mark("CLEAR_ANIM_CLOCKS");
 
             // ═══ SPAWN DIAGNOSTIC: Wire up & start recording ═══
+            /*
             var diag = Classes.SpawnDiagnostic.Instance;
             diag.GetIsShowAnimating = () => _isShowAnimating;
             diag.GetIsCurrentlySummoned = () => _isCurrentlySummoned;
@@ -361,8 +435,10 @@ namespace FlyShelf
             diag.GetShelfListView = () => ShelfListView;
             diag.MarkPhase("CLEAR_ANIM");
             diag.BeginRecording(this);
+            */
 
             // ═══ ELEMENT POSITION TRACKER: Per-element jitter detection ═══
+            /*
             var ept = Classes.ElementPositionTracker.Instance;
             ept.GetSlideTransformY = () => _cachedSlideTransform.Y;
             // Register all major elements — first time only
@@ -382,6 +458,7 @@ namespace FlyShelf
             }
             ept.MarkPhase("SETUP");
             ept.BeginRecording(this);
+            */
             
             // Reset the cached slide transform instead of setting RenderTransform=null.
             // Setting null invalidates the entire render tree; resetting Y is a no-op.
@@ -391,7 +468,6 @@ namespace FlyShelf
                 existingTT.Y = 0;
             }
             RootContent.Opacity = 1;
-
             _spawnGeneration++;
             _isCurrentlySummoned = true;
             // _isShowAnimating already set to true at the top of ShowNearPosition (before mode change)
@@ -399,68 +475,88 @@ namespace FlyShelf
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
                 _isShowAnimating = true;
 
-            // 2. Move onscreen FIRST — window is at opacity=0, completely invisible.
-            //    This lets DWM composite the window in the correct position BEFORE animation.
-            diag.MarkEvent("SET_LEFT");
-            this.Left = Math.Round(rawX);
             double computedTop = _lockedBottomEdge - realHeight - 20;
             if (computedTop < workArea.Top + 16)
                 computedTop = workArea.Top + 16;
             if (computedTop + realHeight > workArea.Top + workArea.Height - 16)
                 computedTop = workArea.Top + workArea.Height - realHeight - 16;
-            this.Top = Math.Round(computedTop);
-            diag.MarkPhase("MOVED_ONSCREEN");
-            diag.MarkEvent("SET_TOP");
-            Classes.SpawnProfiler.Instance.Mark("MOVE_ONSCREEN");
+
+            // 2. Move onscreen FIRST — window is at opacity=0, completely invisible.
+            //    Setting Left/Top sequentially in WPF causes two distinct Win32 SetWindowPos calls,
+            //    which triggers activation fights and causes layout/rendering stutters.
+            //    Instead, we perform a single, atomic native SetWindowPos call to move the window.
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+                    int x = (int)Math.Round(rawX * dpi.DpiScaleX);
+                    int y = (int)Math.Round(computedTop * dpi.DpiScaleY);
+                    
+                    uint flags = Classes.NativeMethods.SWP_NOSIZE | Classes.NativeMethods.SWP_SHOWWINDOW;
+                    if (!stealFocus)
+                    {
+                        flags |= Classes.NativeMethods.SWP_NOACTIVATE;
+                    }
+                    
+                    Classes.NativeMethods.SetWindowPos(hwnd, -1 /*HWND_TOPMOST*/, x, y, 0, 0, flags);
+                    
+                    // Sync WPF properties (will be a no-op if already updated by WM_WINDOWPOSCHANGED)
+                    this.Left = Math.Round(rawX);
+                    this.Top = Math.Round(computedTop);
+                }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("SPAWN_ERR", $"SetWindowPos failed: {ex.Message}");
+                this.Left = Math.Round(rawX);
+                this.Top = Math.Round(computedTop);
+            }
 
             // 3. Bring to front — window is positioned but still invisible (opacity=0).
-            if (!stealFocus)
-            {
-                try
-                {
-                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                    if (hwnd != IntPtr.Zero)
-                    {
-                        Classes.NativeMethods.SetWindowPos(hwnd,
-                            -1 /*HWND_TOPMOST*/, 0, 0, 0, 0,
-                            Classes.NativeMethods.SWP_NOMOVE | Classes.NativeMethods.SWP_NOSIZE |
-                            Classes.NativeMethods.SWP_NOACTIVATE);
-                    }
-                }
-                catch { }
-            }
-            else
+            if (stealFocus)
             {
                 this.Activate();
             }
-            diag.MarkPhase("ACTIVATED");
-            diag.MarkEvent("ACTIVATION_DONE");
-            Classes.SpawnProfiler.Instance.Mark("ACTIVATION_DONE");
+            // diag.MarkPhase("ACTIVATED");
+            // diag.MarkEvent("ACTIVATION_DONE");
+            // Classes.SpawnProfiler.Instance.Mark("ACTIVATION_DONE");
 
             // 4. Start animation.
             if (Classes.SettingsManager.Current.EnableSummonAnimations)
             {
-                if (_hasCompletedFirstSpawn)
+                if (_needsDwmDesktopSettleWait)
+                {
+                    _needsDwmDesktopSettleWait = false;
+                    Classes.Logger.LogAction("DESKTOP", "Slow Path: Deferring animation start by 50ms for DWM virtual desktop settle.");
+                    
+                    // Force the window to be onscreen but invisible (Opacity = 0)
+                    this.Opacity = 0;
+ 
+                    // Wait 50ms at Opacity=0 to let DWM settle on the new desktop
+                    var settleTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render);
+                    settleTimer.Interval = TimeSpan.FromMilliseconds(50);
+                    int capturedSpawnGen = _spawnGeneration;
+                    settleTimer.Tick += (s, ev) =>
+                    {
+                        settleTimer.Stop();
+                        if (_spawnGeneration != capturedSpawnGen || !_isCurrentlySummoned) return; // stale summon or dismissed
+                        
+                        Classes.Logger.LogAction("DESKTOP", "Slow Path: 50ms wait complete, starting animation.");
+                        PlayShowAnimation();
+                    };
+                    settleTimer.Start();
+                }
+                else if (_hasCompletedFirstSpawn)
                 {
                     // ═══ FAST PATH (subsequent spawns) ═══
-                    // Wait exactly ONE render frame at opacity=0 before starting animation.
-                    // This invisible frame serves two critical purposes:
-                    // 1. DWM CACHE WARM-UP: After virtual desktop switches, DWM's texture
-                    //    cache for this window is invalidated. Without this frame, DWM must
-                    //    recomposite the entire window surface on the first VISIBLE frame,
-                    //    causing a 30ms stall (the jitter after desktop switching).
-                    // 2. GC BUFFER: Even with pre-emptive Gen0 GC, a render frame at opacity=0
-                    //    absorbs any residual GC pressure without visible impact.
-                    int capturedGen = _spawnGeneration;
-                    EventHandler warmupHandler = null!;
-                    warmupHandler = (s, e) =>
-                    {
-                        System.Windows.Media.CompositionTarget.Rendering -= warmupHandler;
-                        if (_spawnGeneration != capturedGen) return; // stale spawn
-                        PlayShowAnimation();
-                        Classes.SpawnProfiler.Instance.Mark("PLAY_SHOW_ANIMATION");
-                    };
-                    System.Windows.Media.CompositionTarget.Rendering += warmupHandler;
+                    // Play animation IMMEDIATELY — no render frame wait.
+                    // DWM transitions are disabled, window is already positioned,
+                    // and the visual tree is warm. Waiting a frame here creates
+                    // a visible 30ms gap (the jitter the user sees).
+                    PlayShowAnimation();
+                    Classes.SpawnProfiler.Instance.Mark("PLAY_SHOW_ANIMATION");
                 }
                 else
                 {
@@ -469,11 +565,11 @@ namespace FlyShelf
                     // On first spawn, the visual tree is cold (no items templated yet).
                     int capturedSpawnGen = _spawnGeneration;
                     EventHandler renderHandler = null!;
-                    renderHandler = (s, e) =>
+                    renderHandler = (s, ev) =>
                     {
                         System.Windows.Media.CompositionTarget.Rendering -= renderHandler;
-                        if (_spawnGeneration != capturedSpawnGen) return; // stale
-
+                        if (_spawnGeneration != capturedSpawnGen || !_isCurrentlySummoned) return; // stale or dismissed
+ 
                         _hasCompletedFirstSpawn = true;
                         PlayShowAnimation();
                         ForceFirstSpawnRepaint();
@@ -484,7 +580,6 @@ namespace FlyShelf
             }
             else
             {
-
                 this.Opacity = 1.0;
                 _isEdgeLocked = true;
                 UpdatePositionToLockedBottomEdge();
@@ -500,7 +595,7 @@ namespace FlyShelf
                     var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                     if (hwnd != IntPtr.Zero)
                     {
-                        int cn = DWMWA_COLOR_DARK_GRAY;
+                        int cn = DWMWA_COLOR_NONE;
                         DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                     }
                 }

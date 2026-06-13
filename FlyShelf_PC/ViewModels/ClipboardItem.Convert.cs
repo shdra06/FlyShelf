@@ -35,6 +35,8 @@ namespace FlyShelf.ViewModels
                 {
                     if (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath)) return;
 
+                    string ext = Path.GetExtension(FilePath).ToUpperInvariant();
+
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         FlyShelf.Windows.ToastWindow.ShowToast("Converting to PDF... ♻️")
                     );
@@ -43,74 +45,36 @@ namespace FlyShelf.ViewModels
                         Path.GetDirectoryName(FilePath) ?? Path.GetTempPath(),
                         Path.GetFileNameWithoutExtension(FilePath) + $"_Converted_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
 
-                    // Use Word COM interop directly via dynamic — no PowerShell window, no dialogs
-                    dynamic? wordApp = null;
-                    dynamic? doc = null;
                     bool converted = false;
 
-                    try
+                    // ═══════════════════════════════════════════════════════
+                    // STRATEGY 1: TXT/MD — Native PDF generation (no Word needed)
+                    // ═══════════════════════════════════════════════════════
+                    if (ext == ".TXT" || ext == ".MD" || ext == ".LOG" || ext == ".CSV")
                     {
-                        var wordType = Type.GetTypeFromProgID("Word.Application");
-                        if (wordType == null)
-                        {
-                            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                                FlyShelf.Windows.ToastWindow.ShowToast("Microsoft Word is not installed ❌"));
-                            return;
-                        }
-
-                        wordApp = Activator.CreateInstance(wordType);
-                        wordApp.Visible = false;
-                        wordApp.DisplayAlerts = 0;           // wdAlertsNone — suppress ALL dialogs
-                        wordApp.AutomationSecurity = 3;      // msoAutomationSecurityForceDisable — block macros/security prompts
-
-                        // Open with all dialog-triggering options disabled
-                        doc = wordApp.Documents.Open(
-                            FilePath,                   // FileName
-                            false,                      // ConfirmConversions
-                            true,                       // ReadOnly
-                            false,                      // AddToRecentFiles
-                            Type.Missing,               // PasswordDocument
-                            Type.Missing,               // PasswordTemplate
-                            Type.Missing,               // Revert
-                            Type.Missing,               // WritePasswordDocument
-                            Type.Missing,               // WritePasswordTemplate
-                            Type.Missing,               // Format
-                            Type.Missing,               // Encoding
-                            false,                      // Visible — don't show the document window
-                            false,                      // OpenAndRepair
-                            Type.Missing,               // DocumentDirection
-                            true,                       // NoEncodingDialog — suppress encoding dialog
-                            Type.Missing                // XMLTransform
-                        );
-
-                        // ExportAsFixedFormat produces PDF natively without any save dialogs
-                        doc.ExportAsFixedFormat(
-                            targetPdf,                  // OutputFileName
-                            17,                         // wdExportFormatPDF
-                            false,                      // OpenAfterExport
-                            0,                          // OptimizeFor: wdExportOptimizeForPrint
-                            0,                          // Range: wdExportAllDocument
-                            1,                          // From
-                            1,                          // To
-                            0,                          // Item: wdExportDocumentContent
-                            true,                       // IncludeDocProps
-                            true,                       // KeepIRM
-                            0,                          // CreateBookmarks: wdExportCreateNoBookmarks
-                            true,                       // DocStructureTags
-                            true,                       // BitmapMissingFonts
-                            false                       // UseISO19005_1 (PDF/A)
-                        );
-
-                        converted = File.Exists(targetPdf);
-                    }
-                    finally
-                    {
-                        // Clean up COM objects — prevent orphaned WINWORD.EXE processes
-                        try { if (doc != null) { doc.Close(0 /* wdDoNotSaveChanges */); System.Runtime.InteropServices.Marshal.ReleaseComObject(doc); } } catch { }
-                        try { if (wordApp != null) { wordApp.Quit(0); System.Runtime.InteropServices.Marshal.ReleaseComObject(wordApp); } } catch { }
+                        converted = ConvertTextToPdfNative(FilePath, targetPdf);
                     }
 
-                    if (converted)
+                    // ═══════════════════════════════════════════════════════
+                    // STRATEGY 2: LibreOffice headless (silent, no popups)
+                    // ═══════════════════════════════════════════════════════
+                    if (!converted)
+                    {
+                        converted = TryLibreOfficeConvert(FilePath, targetPdf);
+                    }
+
+                    // ═══════════════════════════════════════════════════════
+                    // STRATEGY 3: Word COM with full dialog suppression + timeout
+                    // ═══════════════════════════════════════════════════════
+                    if (!converted && (ext == ".DOCX" || ext == ".DOC" || ext == ".RTF"))
+                    {
+                        converted = TryWordComConvert(FilePath, targetPdf);
+                    }
+
+                    // ═══════════════════════════════════════════════════════
+                    // RESULT
+                    // ═══════════════════════════════════════════════════════
+                    if (converted && File.Exists(targetPdf))
                     {
                         System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         {
@@ -125,7 +89,7 @@ namespace FlyShelf.ViewModels
                     else
                     {
                         System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                            FlyShelf.Windows.ToastWindow.ShowToast("Conversion Failed: Could not create PDF ❌")
+                            FlyShelf.Windows.ToastWindow.ShowToast("Conversion Failed: Install LibreOffice or Microsoft Word ❌")
                         );
                     }
                 }
@@ -137,6 +101,342 @@ namespace FlyShelf.ViewModels
                 }
             });
 #endif
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // NATIVE TXT/MD → PDF  (no external dependencies at all)
+        // ═══════════════════════════════════════════════════════════════
+        private static bool ConvertTextToPdfNative(string inputPath, string outputPdf)
+        {
+            try
+            {
+                string text = File.ReadAllText(inputPath);
+                if (string.IsNullOrEmpty(text)) text = "(empty file)";
+
+                // PDF page constants (A4 in points)
+                double pageW = 595.28, pageH = 841.89;
+                double margin = 50;
+                double usableW = pageW - 2 * margin;
+                double fontSize = 10;
+                double lineHeight = fontSize * 1.4;
+                double charsPerLine = (int)(usableW / (fontSize * 0.52)); // approximate monospace width
+                double linesPerPage = (int)((pageH - 2 * margin) / lineHeight);
+
+                // Word-wrap and paginate
+                var allLines = new List<string>();
+                foreach (var rawLine in text.Replace("\r\n", "\n").Replace("\r", "\n").Split('\n'))
+                {
+                    if (rawLine.Length <= charsPerLine)
+                    {
+                        allLines.Add(rawLine);
+                    }
+                    else
+                    {
+                        // Wrap long lines
+                        for (int i = 0; i < rawLine.Length; i += (int)charsPerLine)
+                        {
+                            int len = Math.Min((int)charsPerLine, rawLine.Length - i);
+                            allLines.Add(rawLine.Substring(i, len));
+                        }
+                    }
+                }
+
+                // Split into pages
+                var pages = new List<List<string>>();
+                for (int i = 0; i < allLines.Count; i += (int)linesPerPage)
+                {
+                    int count = Math.Min((int)linesPerPage, allLines.Count - i);
+                    pages.Add(allLines.GetRange(i, count));
+                }
+                if (pages.Count == 0) pages.Add(new List<string> { "(empty)" });
+
+                // Write PDF
+                using (var fs = new FileStream(outputPdf, FileMode.Create))
+                using (var writer = new StreamWriter(fs, System.Text.Encoding.ASCII))
+                {
+                    var offsets = new List<long>();
+                    writer.Write("%PDF-1.4\n");
+                    writer.Flush();
+
+                    // Obj 1: Catalog
+                    offsets.Add(fs.Position);
+                    writer.Write("1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n");
+                    writer.Flush();
+
+                    // Obj 2: Pages
+                    offsets.Add(fs.Position);
+                    string kids = string.Join(" ", Enumerable.Range(0, pages.Count).Select(i => $"{3 + i * 2} 0 R"));
+                    writer.Write($"2 0 obj\n<< /Type /Pages /Kids [{kids}] /Count {pages.Count} >>\nendobj\n");
+                    writer.Flush();
+
+                    int nextObj = 3;
+                    // Font object (Helvetica — built-in, always available)
+                    int fontObj = nextObj + pages.Count * 2;
+                    
+                    for (int p = 0; p < pages.Count; p++)
+                    {
+                        // Page object
+                        int pageObj = nextObj + p * 2;
+                        int contentObj = pageObj + 1;
+
+                        // Build content stream
+                        var contentLines = new List<string>();
+                        contentLines.Add($"BT\n/F1 {fontSize:F0} Tf\n{margin:F2} {(pageH - margin):F2} Td\n{lineHeight:F2} TL\n");
+                        foreach (var line in pages[p])
+                        {
+                            contentLines.Add($"({EscapePdfString(line)}) '\n");
+                        }
+                        contentLines.Add("ET\n");
+                        string contentStream = string.Join("", contentLines);
+                        byte[] contentBytes = System.Text.Encoding.ASCII.GetBytes(contentStream);
+
+                        offsets.Add(fs.Position);
+                        writer.Write($"{pageObj} 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {pageW:F2} {pageH:F2}] /Contents {contentObj} 0 R /Resources << /Font << /F1 {fontObj} 0 R >> >> >>\nendobj\n");
+                        writer.Flush();
+
+                        offsets.Add(fs.Position);
+                        writer.Write($"{contentObj} 0 obj\n<< /Length {contentBytes.Length} >>\nstream\n");
+                        writer.Flush();
+                        fs.Write(contentBytes, 0, contentBytes.Length);
+                        writer.Write("endstream\nendobj\n");
+                        writer.Flush();
+                    }
+
+                    // Font object
+                    offsets.Add(fs.Position);
+                    writer.Write($"{fontObj} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n");
+                    writer.Flush();
+
+                    // xref table
+                    long xrefOffset = fs.Position;
+                    int totalObjs = offsets.Count + 1;
+                    writer.Write($"xref\n0 {totalObjs}\n");
+                    writer.Write("0000000000 65535 f \n");
+                    foreach (var off in offsets)
+                        writer.Write($"{off:D10} 00000 n \n");
+                    writer.Write($"trailer\n<< /Size {totalObjs} /Root 1 0 R >>\nstartxref\n{xrefOffset}\n%%EOF\n");
+                    writer.Flush();
+                }
+
+                return File.Exists(outputPdf) && new FileInfo(outputPdf).Length > 0;
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Classes.Logger.LogAction("CONVERT", $"Native TXT->PDF failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static string EscapePdfString(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            return s
+                .Replace("\\", "\\\\")
+                .Replace("(", "\\(")
+                .Replace(")", "\\)")
+                .Replace("\t", "    ");
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // LIBREOFFICE HEADLESS — Fully silent, no GUI, no popups
+        // ═══════════════════════════════════════════════════════════════
+        private static bool TryLibreOfficeConvert(string inputPath, string outputPdf)
+        {
+            try
+            {
+                string[] libreOfficePaths = new[]
+                {
+                    @"C:\Program Files\LibreOffice\program\soffice.exe",
+                    @"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "LibreOffice", "program", "soffice.exe")
+                };
+
+                string sofficePath = libreOfficePaths.FirstOrDefault(p => File.Exists(p));
+                if (sofficePath == null) return false;
+
+                string outDir = Path.GetDirectoryName(outputPdf) ?? Path.GetTempPath();
+                string expectedName = Path.GetFileNameWithoutExtension(inputPath) + ".pdf";
+                string expectedPath = Path.Combine(outDir, expectedName);
+
+                var psi = new ProcessStartInfo
+                {
+                    FileName = sofficePath,
+                    Arguments = $"--headless --norestore --nofirststartwizard --convert-to pdf --outdir \"{outDir}\" \"{inputPath}\"",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+
+                using (var proc = Process.Start(psi))
+                {
+                    if (proc == null) return false;
+                    bool exited = proc.WaitForExit(60000); // 60s timeout
+                    if (!exited)
+                    {
+                        try { proc.Kill(); } catch { }
+                        return false;
+                    }
+
+                    if (proc.ExitCode == 0 && File.Exists(expectedPath))
+                    {
+                        // LibreOffice names the output after the input, rename to our target
+                        if (expectedPath != outputPdf)
+                        {
+                            try { File.Move(expectedPath, outputPdf, true); } catch { }
+                        }
+                        return File.Exists(outputPdf);
+                    }
+                }
+                return false;
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Classes.Logger.LogAction("CONVERT", $"LibreOffice conversion failed: {ex.Message}");
+                return false;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // WORD COM — Full dialog suppression + 60s timeout with kill
+        // ═══════════════════════════════════════════════════════════════
+        private static bool TryWordComConvert(string inputPath, string outputPdf)
+        {
+            dynamic? wordApp = null;
+            dynamic? doc = null;
+            Process? wordProcess = null;
+
+            try
+            {
+                var wordType = Type.GetTypeFromProgID("Word.Application");
+                if (wordType == null) return false;
+
+                wordApp = Activator.CreateInstance(wordType);
+
+                // ── SUPPRESS ALL DIALOGS AND POPUPS ──
+                wordApp.Visible = false;
+                wordApp.DisplayAlerts = 0;              // wdAlertsNone
+                wordApp.AutomationSecurity = 3;          // msoAutomationSecurityForceDisable
+                wordApp.Options.DoNotPromptForConvert = true;
+
+                // Suppress Protected View for all sources
+                try
+                {
+                    wordApp.Options.WarnBeforeSavingPrintOrMailMerge = false;
+                }
+                catch { }
+                try
+                {
+                    // Disable Protected View triggers
+                    var protView = wordApp.Application.ProtectedViewWindows;
+                }
+                catch { }
+
+                // Track the Word process for timeout kill
+                try
+                {
+                    int hwnd = wordApp.Application.Hwnd;
+                    if (hwnd != 0)
+                    {
+                        wordProcess = Process.GetProcesses()
+                            .Where(p => p.ProcessName.Equals("WINWORD", StringComparison.OrdinalIgnoreCase))
+                            .OrderByDescending(p => p.StartTime)
+                            .FirstOrDefault();
+                    }
+                }
+                catch { }
+
+                // Open document with all dialog-triggering options disabled
+                var openTask = Task.Run(() =>
+                {
+                    doc = wordApp.Documents.Open(
+                        inputPath,              // FileName
+                        false,                  // ConfirmConversions — NO conversion dialog
+                        true,                   // ReadOnly
+                        false,                  // AddToRecentFiles
+                        "",                     // PasswordDocument — empty string, not Missing
+                        "",                     // PasswordTemplate
+                        true,                   // Revert (don't ask to revert)
+                        "",                     // WritePasswordDocument
+                        "",                     // WritePasswordTemplate
+                        Type.Missing,           // Format
+                        Type.Missing,           // Encoding
+                        false,                  // Visible
+                        false,                  // OpenAndRepair
+                        Type.Missing,           // DocumentDirection
+                        true,                   // NoEncodingDialog — suppress encoding dialog
+                        Type.Missing            // XMLTransform
+                    );
+                });
+
+                // Wait with timeout — if Word shows a dialog, it blocks
+                if (!openTask.Wait(TimeSpan.FromSeconds(30)))
+                {
+                    FlyShelf.Classes.Logger.LogAction("CONVERT", "Word open timed out (likely dialog)");
+                    ForceKillWord(wordProcess);
+                    return false;
+                }
+
+                if (doc == null) return false;
+
+                // Export to PDF with timeout
+                var exportTask = Task.Run(() =>
+                {
+                    doc.ExportAsFixedFormat(
+                        outputPdf,              // OutputFileName
+                        17,                     // wdExportFormatPDF
+                        false,                  // OpenAfterExport
+                        0,                      // OptimizeFor: wdExportOptimizeForPrint
+                        0,                      // Range: wdExportAllDocument
+                        1,                      // From
+                        1,                      // To
+                        0,                      // Item: wdExportDocumentContent
+                        true,                   // IncludeDocProps
+                        true,                   // KeepIRM
+                        0,                      // CreateBookmarks: wdExportCreateNoBookmarks
+                        true,                   // DocStructureTags
+                        true,                   // BitmapMissingFonts
+                        false                   // UseISO19005_1 (PDF/A)
+                    );
+                });
+
+                if (!exportTask.Wait(TimeSpan.FromSeconds(45)))
+                {
+                    FlyShelf.Classes.Logger.LogAction("CONVERT", "Word export timed out (likely dialog)");
+                    ForceKillWord(wordProcess);
+                    return false;
+                }
+
+                return File.Exists(outputPdf) && new FileInfo(outputPdf).Length > 0;
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Classes.Logger.LogAction("CONVERT", $"Word COM failed: {ex.Message}");
+                return false;
+            }
+            finally
+            {
+                // Clean up COM objects — prevent orphaned WINWORD.EXE
+                try { if (doc != null) { doc.Close(0 /* wdDoNotSaveChanges */); System.Runtime.InteropServices.Marshal.ReleaseComObject(doc); } } catch { }
+                try { if (wordApp != null) { wordApp.Quit(0); System.Runtime.InteropServices.Marshal.ReleaseComObject(wordApp); } } catch { }
+            }
+        }
+
+        /// <summary>
+        /// Force kill a Word process that is likely stuck on a dialog.
+        /// </summary>
+        private static void ForceKillWord(Process? wordProcess)
+        {
+            try
+            {
+                if (wordProcess != null && !wordProcess.HasExited)
+                {
+                    wordProcess.Kill();
+                    FlyShelf.Classes.Logger.LogAction("CONVERT", $"Force-killed WINWORD PID {wordProcess.Id}");
+                }
+            }
+            catch { }
         }
 
         /// <summary>

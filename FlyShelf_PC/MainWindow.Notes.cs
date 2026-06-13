@@ -25,6 +25,9 @@ namespace FlyShelf
         private System.Windows.Threading.DispatcherTimer? _panelAutoRevertTimer;
         private bool _isNotesLoaded = false;
         private NoteDay? _selectedNoteDay = null;
+        private int _selectedMonth = -1;
+        private int _selectedYear = -1;
+        private List<NotesSidebarItem> _sidebarItems = new();
         private Brush? _originalHeaderBg = null;
         private static readonly SolidColorBrush _notesHeaderBrush = new(Color.FromRgb(0x1A, 0x1A, 0x2E));
         private TextBox? _lastFocusedBulletTextBox = null;
@@ -61,7 +64,7 @@ namespace FlyShelf
             var today = NoteManager.EnsureToday();
 
             // Bind days list
-            NotesDaySidebar.ItemsSource = NoteManager.Days;
+            RebuildSidebar();
 
             _isNotesActive = true;
             StartPanelAutoRevertTimer();
@@ -129,6 +132,9 @@ namespace FlyShelf
 
             // Step 3: Set keyboard focus to the notes panel itself
             this.Focus();
+
+            // Step 4: Suppress DWM accent border that Activate() triggers
+            SuppressDwmBorder();
         }
 
         /// <summary>
@@ -146,6 +152,27 @@ namespace FlyShelf
                     this.Topmost = false;
                 }
             }
+            // Suppress DWM accent border that Activate() triggers
+            SuppressDwmBorder();
+        }
+
+        /// <summary>
+        /// Removes the DWM-drawn accent border (appears red/accent-colored) that Windows
+        /// applies when a window is activated via Activate(). Clipboard mode never calls
+        /// Activate() so it never gets this border.
+        /// </summary>
+        private void SuppressDwmBorder()
+        {
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    int cn = DWMWA_COLOR_NONE;
+                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                }
+            }
+            catch { }
         }
 
         /// <summary>
@@ -236,6 +263,9 @@ namespace FlyShelf
         {
             _isNotesActive = false;
 
+            // Close month picker popup if open
+            NotesMonthPopup.IsOpen = false;
+
             // Restore taskbar/alt-tab title
             Title = "FlyShelf";
 
@@ -315,6 +345,20 @@ namespace FlyShelf
         /// </summary>
         private void NotesPanel_PreviewMouseDown(object sender, MouseButtonEventArgs e)
         {
+            // Skip activation when click targets popup-triggering elements (month picker, templates).
+            // PreviewMouseDown (tunnel) fires before MouseLeftButtonDown; calling Activate()
+            // during the tunnel phase immediately closes Popups/ContextMenus that are about to open.
+            if (e.OriginalSource is DependencyObject source)
+            {
+                var parent = source;
+                while (parent != null)
+                {
+                    if (parent is FrameworkElement fe && 
+                        (fe.Name == "NotesMonthPickerBtn" || fe.Name == "NotesTemplatesBtn"))
+                        return;
+                    parent = VisualTreeHelper.GetParent(parent);
+                }
+            }
             ActivateWindowWithoutStealingFocus();
         }
 
@@ -325,6 +369,8 @@ namespace FlyShelf
         private void SelectNoteDay(NoteDay day)
         {
             _selectedNoteDay = day;
+            _selectedMonth = -1;
+            _selectedYear = -1;
 
             // Clear search if active
             if (_isSearchActive)
@@ -333,7 +379,7 @@ namespace FlyShelf
             }
 
             // Update sidebar selection highlight
-            UpdateDaySidebarSelection();
+            UpdateSidebarSelectionVisuals();
 
             // Bind content
             NotesBulletList.ItemsSource = day.Bullets;
@@ -378,26 +424,151 @@ namespace FlyShelf
             NotesCurrentDayLabel.Text = "Notes · " + day.DisplayDate;
         }
 
-        private void UpdateDaySidebarSelection()
+        private void RebuildSidebar()
         {
-            // Handled via data binding — IsToday and selection state
+            _sidebarItems.Clear();
+            int lastMonth = -1;
+            int lastYear = -1;
+
+            foreach (var day in NoteManager.Days)
+            {
+                int month = day.Date.Month;
+                int year = day.Date.Year;
+
+                if (month != lastMonth || year != lastYear)
+                {
+                    string monthShort = day.Date.ToString("MMM");
+                    _sidebarItems.Add(new NotesSidebarItem
+                    {
+                        IsMonthHeader = true,
+                        Label = monthShort.ToUpper(),
+                        FullLabel = day.Date.ToString("MMMM yyyy"),
+                        MonthValue = month,
+                        YearValue = year,
+                        IsSelected = (_selectedMonth == month && _selectedYear == year && _selectedNoteDay == null)
+                    });
+
+                    lastMonth = month;
+                    lastYear = year;
+                }
+
+                _sidebarItems.Add(new NotesSidebarItem
+                {
+                    IsMonthHeader = false,
+                    Label = day.DayNumber,
+                    MonthLabel = day.MonthName,
+                    FullLabel = day.DisplayDate,
+                    IsToday = day.IsToday,
+                    Day = day,
+                    MonthValue = month,
+                    YearValue = year,
+                    IsSelected = (_selectedNoteDay == day)
+                });
+            }
+
+            NotesDaySidebar.ItemsSource = null;
+            NotesDaySidebar.ItemsSource = _sidebarItems;
+        }
+
+        private void UpdateSidebarSelectionVisuals()
+        {
+            foreach (var item in _sidebarItems)
+            {
+                if (item.IsMonthHeader)
+                {
+                    item.IsSelected = (_selectedMonth == item.MonthValue && _selectedYear == item.YearValue && _selectedNoteDay == null);
+                }
+                else
+                {
+                    item.IsSelected = (_selectedNoteDay == item.Day);
+                }
+            }
+        }
+
+        private void SelectNoteMonth(int month, int year)
+        {
+            _selectedNoteDay = null;
+            _selectedMonth = month;
+            _selectedYear = year;
+
+            if (_isSearchActive)
+            {
+                CloseSearch();
+            }
+
+            var monthDate = new DateTime(year, month, 1);
+            NotesCurrentDayLabel.Text = "Notes · " + monthDate.ToString("MMMM yyyy");
+
+            UpdateSidebarSelectionVisuals();
+
+            var monthDays = NoteManager.Days.Where(d => d.Date.Month == month && d.Date.Year == year).ToList();
+            var combinedBullets = new ObservableCollection<NoteBullet>();
+            foreach (var d in monthDays)
+            {
+                foreach (var b in d.Bullets)
+                {
+                    combinedBullets.Add(b);
+                }
+            }
+
+            NotesBulletList.ItemsSource = combinedBullets;
+
+            NotesBulletList.Visibility = Visibility.Visible;
+            NotesFreeformArea.Visibility = Visibility.Collapsed;
+            NotesModeToggleText.Text = "📄 Month View";
+        }
+
+        private void CurrentDayLabel_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (_selectedNoteDay != null)
+            {
+                SelectNoteMonth(_selectedNoteDay.Date.Month, _selectedNoteDay.Date.Year);
+            }
         }
 
         private void NotesDayItem_Click(object sender, MouseButtonEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is NoteDay day)
+            if (sender is FrameworkElement fe && fe.DataContext is NotesSidebarItem item)
             {
-                SelectNoteDay(day);
+                if (item.IsMonthHeader)
+                {
+                    SelectNoteMonth(item.MonthValue, item.YearValue);
+                }
+                else
+                {
+                    SelectNoteDay(item.Day);
+                }
             }
         }
 
-        // ═══════════════════════════════════════════════════════════
-        // BULLET CRUD
-        // ═══════════════════════════════════════════════════════════
+        private NoteDay? GetTargetDayForAdd()
+        {
+            if (_selectedNoteDay != null) return _selectedNoteDay;
+
+            if (_selectedMonth != -1 && _selectedYear != -1)
+            {
+                var today = DateTime.Today;
+                if (today.Month == _selectedMonth && today.Year == _selectedYear)
+                {
+                    return NoteManager.GetOrCreateDay(today);
+                }
+
+                var newest = NoteManager.Days
+                    .Where(d => d.Date.Month == _selectedMonth && d.Date.Year == _selectedYear)
+                    .OrderByDescending(d => d.Date)
+                    .FirstOrDefault();
+
+                if (newest != null) return newest;
+
+                return NoteManager.GetOrCreateDay(new DateTime(_selectedYear, _selectedMonth, 1));
+            }
+            return null;
+        }
 
         private void AddNewBulletAndFocus()
         {
-            if (_selectedNoteDay == null) return;
+            var targetDay = GetTargetDayForAdd();
+            if (targetDay == null) return;
 
             // Spam proof check: enforce 1 second cooldown
             if ((DateTime.Now - _lastBulletAddedTime).TotalMilliseconds < 1000)
@@ -406,7 +577,13 @@ namespace FlyShelf
             }
             _lastBulletAddedTime = DateTime.Now;
 
-            var bullet = NoteManager.AddBullet(_selectedNoteDay);
+            var bullet = NoteManager.AddBullet(targetDay);
+
+            if (_selectedNoteDay == null && _selectedMonth != -1)
+            {
+                RebuildSidebar();
+                SelectNoteMonth(_selectedMonth, _selectedYear);
+            }
 
             // Focus the new bullet's TextBox after render
             Dispatcher.InvokeAsync(() =>
@@ -427,7 +604,7 @@ namespace FlyShelf
 
         private void NotesAddBullet_Click(object sender, MouseButtonEventArgs e)
         {
-            if (_selectedNoteDay == null) return;
+            if (GetTargetDayForAdd() == null) return;
             AddNewBulletAndFocus();
         }
 
@@ -1020,6 +1197,113 @@ namespace FlyShelf
             }
         }
 
+        // ═══════════════════════════════════════════════════════════
+        // MONTH PICKER — Navigate notes by month
+        // ═══════════════════════════════════════════════════════════
+
+        private void NotesMonthPicker_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true; // Prevent event from bubbling further
+            // Build the list of months with data
+            var months = new List<NotesMonthPickerItem>();
+            int maxDays = Classes.LicenseManager.GetNoteHistoryDays();
+            DateTime cutoff = maxDays < int.MaxValue ? DateTime.Today.AddDays(-maxDays) : DateTime.MinValue;
+
+            var groupedMonths = NoteManager.Days
+                .Where(d => d.Date >= cutoff)
+                .GroupBy(d => new { d.Date.Year, d.Date.Month })
+                .OrderByDescending(g => g.Key.Year)
+                .ThenByDescending(g => g.Key.Month);
+
+            foreach (var group in groupedMonths)
+            {
+                var firstDay = group.First();
+                months.Add(new NotesMonthPickerItem
+                {
+                    MonthName = firstDay.Date.ToString("MMMM"),
+                    YearText = group.Key.Year.ToString(),
+                    DayCount = $"({group.Count()} days)",
+                    Month = group.Key.Month,
+                    Year = group.Key.Year
+                });
+            }
+
+            NotesMonthList.ItemsSource = months;
+            NotesMonthPopup.IsOpen = true;
+        }
+
+        private void NotesMonthItem_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is NotesMonthPickerItem item)
+            {
+                NotesMonthPopup.IsOpen = false;
+                SelectNoteMonth(item.Month, item.Year);
+            }
+        }
+
+        private void NotesTemplates_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true; // Prevent event from bubbling further
+            if (sender is FrameworkElement fe)
+            {
+                var menu = new ContextMenu();
+                
+                var item1 = new MenuItem { Header = "🛒 Grocery List" };
+                item1.Click += (s, ev) => ApplyNotesTemplate(new[] { "Milk", "Eggs", "Veggies", "Bread", "Fruit" });
+                
+                var item2 = new MenuItem { Header = "💼 Daily Standup" };
+                item2.Click += (s, ev) => ApplyNotesTemplate(new[] { "Yesterday: ", "Today: ", "Blockers: " });
+                
+                var item3 = new MenuItem { Header = "📝 Meeting Notes" };
+                item3.Click += (s, ev) => ApplyNotesTemplate(new[] { "Agenda: ", "Discussion: ", "Action Items: " });
+                
+                var item4 = new MenuItem { Header = "🏋️ Workout Planner" };
+                item4.Click += (s, ev) => ApplyNotesTemplate(new[] { "Warmup: ", "Main Routine: ", "Cooldown: " });
+
+                menu.Items.Add(item1);
+                menu.Items.Add(item2);
+                menu.Items.Add(item3);
+                menu.Items.Add(item4);
+
+                menu.PlacementTarget = fe;
+                menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                menu.IsOpen = true;
+            }
+        }
+
+        private void ApplyNotesTemplate(string[] lines)
+        {
+            var targetDay = GetTargetDayForAdd();
+            if (targetDay == null) return;
+
+            if (targetDay.IsFreeformMode)
+            {
+                string templateText = string.Join(Environment.NewLine, lines.Select(l => "• " + l)) + Environment.NewLine;
+                NotesFreeformBox.Text += templateText;
+                targetDay.FreeformContent = NotesFreeformBox.Text;
+                NoteManager.MarkDirty();
+            }
+            else
+            {
+                foreach (var line in lines)
+                {
+                    var bullet = NoteManager.AddBullet(targetDay);
+                    bullet.Content = line;
+                }
+                
+                if (_selectedNoteDay == null && _selectedMonth != -1)
+                {
+                    RebuildSidebar();
+                    SelectNoteMonth(_selectedMonth, _selectedYear);
+                }
+                else
+                {
+                    NotesBulletList.ItemsSource = null;
+                    NotesBulletList.ItemsSource = targetDay.Bullets;
+                }
+            }
+        }
+
     }
 
     /// <summary>ViewModel for search results display.</summary>
@@ -1029,5 +1313,39 @@ namespace FlyShelf
         public string Content { get; set; } = "";
         public NoteDay Day { get; set; } = null!;
         public NoteBullet Bullet { get; set; } = null!;
+    }
+
+    /// <summary>ViewModel for sidebar display representing day or month box.</summary>
+    public class NotesSidebarItem : System.ComponentModel.INotifyPropertyChanged
+    {
+        public bool IsMonthHeader { get; set; }
+        public string Label { get; set; } = "";
+        public string MonthLabel { get; set; } = "";
+        public string FullLabel { get; set; } = "";
+        public bool IsToday { get; set; }
+
+        private bool _isSelected;
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set { if (_isSelected != value) { _isSelected = value; OnPropertyChanged(nameof(IsSelected)); } }
+        }
+
+        public NoteDay Day { get; set; } = null!;
+        public int MonthValue { get; set; }
+        public int YearValue { get; set; }
+
+        public event System.ComponentModel.PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(name));
+    }
+
+    /// <summary>ViewModel for the month picker popup items.</summary>
+    public class NotesMonthPickerItem
+    {
+        public string MonthName { get; set; } = "";
+        public string YearText { get; set; } = "";
+        public string DayCount { get; set; } = "";
+        public int Month { get; set; }
+        public int Year { get; set; }
     }
 }

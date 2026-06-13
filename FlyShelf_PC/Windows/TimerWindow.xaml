@@ -2,6 +2,7 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:controls="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="Timer" Height="220" Width="180"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None" 
@@ -23,16 +24,73 @@
             
             <Grid>
                 <!-- Tiny Close Button in top right curve -->
-                <Button Margin="0,12,20,0" HorizontalAlignment="Right" VerticalAlignment="Top"
-                        Width="18" Height="18" Padding="0"
+                <Button Margin="0,12,16,0" HorizontalAlignment="Right" VerticalAlignment="Top"
+                        Width="18" Height="18" Padding="0" Panel.ZIndex="10"
                         Background="Transparent" BorderBrush="Transparent" 
                         Click="Close_Click" Cursor="Hand" ToolTip="Close Timer">
                     <TextBlock Text="✕" FontSize="10" Opacity="0.5" 
                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
                 </Button>
 
-                <!-- MAIN STACKPANEL -->
-                <StackPanel VerticalAlignment="Top" Margin="0,22,0,0">
+                <!-- SETUP PANEL (Visible when not running/active) -->
+                <StackPanel x:Name="SetupPanel" VerticalAlignment="Center" Margin="12,18,12,12" Visibility="Visible">
+                    <!-- Title/Icon -->
+                    <ui:SymbolIcon Symbol="Timer24" FontSize="26" Foreground="#8B5CF6" HorizontalAlignment="Center" Margin="0,0,0,4"/>
+                    <TextBlock Text="SET TIMER" FontSize="9.5" FontWeight="Bold" HorizontalAlignment="Center" 
+                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,12"/>
+
+                    <!-- Custom input row -->
+                    <Grid HorizontalAlignment="Center" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Custom TextBox Wrapper (Border for rounded corners and focus visual) -->
+                        <Border x:Name="InputBorder" Width="52" Height="26" CornerRadius="6" Background="#15FFFFFF" BorderThickness="1">
+                            <Border.Style>
+                                <Style TargetType="Border">
+                                    <Setter Property="BorderBrush" Value="#25FFFFFF"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsFocused, ElementName=CustomTimeInput}" Value="True">
+                                            <Setter Property="BorderBrush" Value="#8B5CF6"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Border.Style>
+                            <TextBox x:Name="CustomTimeInput" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                                     FontSize="12" FontWeight="SemiBold" Text="5" Padding="0" MaxLength="5"
+                                     Background="Transparent" BorderThickness="0" Foreground="White" 
+                                     CaretBrush="White" SelectionBrush="#8B5CF6"
+                                     PreviewKeyDown="CustomTimeInput_PreviewKeyDown">
+                                <TextBox.Template>
+                                    <ControlTemplate TargetType="TextBox">
+                                        <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" VerticalAlignment="Center"/>
+                                    </ControlTemplate>
+                                </TextBox.Template>
+                            </TextBox>
+                        </Border>
+
+                        <!-- Start Button -->
+                        <ui:Button Grid.Column="2" Content="Start" FontSize="11" FontWeight="Bold" Width="44" Height="26" 
+                                   Appearance="Primary" CornerRadius="6" Padding="0" 
+                                   Click="StartCustom_Click" Cursor="Hand"/>
+                    </Grid>
+
+                    <!-- Presets Grid -->
+                    <UniformGrid Columns="3" Rows="2" Margin="2,0,2,0">
+                        <ui:Button Content="1m" FontSize="10.5" Click="Preset_Click" Tag="1m" Margin="2" Padding="0" Height="22" Background="#10FFFFFF" BorderBrush="#15FFFFFF" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" CornerRadius="6"/>
+                        <ui:Button Content="5m" FontSize="10.5" Click="Preset_Click" Tag="5m" Margin="2" Padding="0" Height="22" Background="#10FFFFFF" BorderBrush="#15FFFFFF" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" CornerRadius="6"/>
+                        <ui:Button Content="10m" FontSize="10.5" Click="Preset_Click" Tag="10m" Margin="2" Padding="0" Height="22" Background="#10FFFFFF" BorderBrush="#15FFFFFF" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" CornerRadius="6"/>
+                        <ui:Button Content="25m" FontSize="10" Click="Preset_Click" Tag="25m" Margin="2" Padding="0" Height="22" Background="#10FFFFFF" BorderBrush="#15FFFFFF" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" CornerRadius="6"/>
+                        <ui:Button Content="30m" FontSize="10.5" Click="Preset_Click" Tag="30m" Margin="2" Padding="0" Height="22" Background="#10FFFFFF" BorderBrush="#15FFFFFF" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" CornerRadius="6"/>
+                        <ui:Button Content="1h" FontSize="10.5" Click="Preset_Click" Tag="60m" Margin="2" Padding="0" Height="22" Background="#10FFFFFF" BorderBrush="#15FFFFFF" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" CornerRadius="6"/>
+                    </UniformGrid>
+                </StackPanel>
+
+                <!-- RUNNING/ACTIVE PANEL -->
+                <StackPanel x:Name="RunningPanel" VerticalAlignment="Top" Margin="0,22,0,0" Visibility="Collapsed">
                     <!-- Circular progress ring -->
                     <Grid Width="96" Height="96" HorizontalAlignment="Center">
                         <!-- Background track -->
@@ -61,46 +119,30 @@
                             <TextBlock Name="TimeDisplay" Text="05:00" FontSize="20" FontWeight="Bold" 
                                        FontFamily="Segoe UI Variable, Segoe UI" TextAlignment="Center"
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                            
-                            <!-- Percentage -->
-                            <TextBlock Name="PercentText" Text="100%" FontSize="8" FontWeight="Medium" 
-                                       TextAlignment="Center" Opacity="0.4" Margin="0,-2,0,0"
-                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
-                            
-                            <!-- Status label -->
-                            <TextBlock Name="StatusText" Text="READY" FontSize="6" FontWeight="SemiBold" 
-                                       TextAlignment="Center" Opacity="0.3" Margin="0,2,0,0"
-                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
                         </StackPanel>
                     </Grid>
 
-                    <!-- Control Buttons inside flat base -->
-                    <Grid Margin="0,14,0,0" HorizontalAlignment="Center">
+                    <!-- Control Buttons at the bottom (side-by-side, icon-only) -->
+                    <Grid Margin="0,12,0,0" HorizontalAlignment="Center">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="12"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- Primary action (Start/Pause/Resume/Dismiss) -->
-                        <Border Name="PrimaryBtnBorder" Grid.Column="0" CornerRadius="12" Cursor="Hand" MouseLeftButtonDown="Action_Click"
-                                MinWidth="64" Padding="10,4" Height="26">
-                            <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                    <GradientStop Color="#8B5CF6" Offset="0"/>
-                                    <GradientStop Color="#6366F1" Offset="1"/>
-                                </LinearGradientBrush>
-                            </Border.Background>
-                            <TextBlock Name="ActionText" Text="Start" FontSize="11" FontWeight="SemiBold" 
-                                       Foreground="White" TextAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
+                        <!-- Play/Pause Button -->
+                        <ui:Button x:Name="PlayPauseBtn" Grid.Column="0" Width="30" Height="30" CornerRadius="15"
+                                   Background="#8B5CF6" BorderBrush="Transparent" Foreground="White" Padding="0"
+                                   Click="Action_Click" Cursor="Hand" ToolTip="Play/Pause">
+                            <ui:SymbolIcon x:Name="PlayPauseIcon" Symbol="Pause16" FontSize="12"/>
+                        </ui:Button>
 
-                        <!-- Reset button -->
-                        <Border Name="ResetBtnBorder" Grid.Column="2" CornerRadius="12" Cursor="Hand" MouseLeftButtonDown="Reset_Click"
-                                MinWidth="40" Padding="8,4" Background="{DynamicResource ThemeOverlayBgSelected}" Opacity="0.6" Height="26">
-                            <TextBlock Text="Reset" FontSize="11" TextAlignment="Center" VerticalAlignment="Center"
-                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
-                        </Border>
+                        <!-- Reset Button -->
+                        <ui:Button x:Name="ResetBtn" Grid.Column="2" Width="30" Height="30" CornerRadius="15"
+                                   Background="#1FFFFFFF" BorderBrush="#15FFFFFF" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Padding="0"
+                                   Click="Reset_Click" Cursor="Hand" ToolTip="Reset Timer">
+                            <ui:SymbolIcon Symbol="ArrowCounterclockwise16" FontSize="12"/>
+                        </ui:Button>
                     </Grid>
                 </StackPanel>
             </Grid>

@@ -28,7 +28,7 @@ namespace FlyShelf.Windows
         private Brush _primaryTextBrush;
         private Brush _secondaryTextBrush;
 
-        public TimerWindow(string contextString)
+        public TimerWindow(string contextString = null)
         {
             InitializeComponent();
             
@@ -40,14 +40,42 @@ namespace FlyShelf.Windows
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) }; // Smooth 20fps updates
             _timer.Tick += Timer_Tick;
 
-            ParseContext(contextString);
-            _totalDuration = _remaining;
-            DrawProgressArc(1.0);
-            Action_Click(null, null); // Auto Start
+            if (string.IsNullOrEmpty(contextString))
+            {
+                // Show Setup mode
+                SetupPanel.Visibility = Visibility.Visible;
+                RunningPanel.Visibility = Visibility.Collapsed;
+                _remaining = TimeSpan.FromMinutes(5); // Default setup value
+                _totalDuration = _remaining;
+                
+                this.Loaded += (s, e) =>
+                {
+                    CustomTimeInput.Focus();
+                    CustomTimeInput.SelectAll();
+                };
+            }
+            else
+            {
+                // Show Running mode and auto-start
+                SetupPanel.Visibility = Visibility.Collapsed;
+                RunningPanel.Visibility = Visibility.Visible;
+                
+                ParseContext(contextString);
+                _totalDuration = _remaining;
+                DrawProgressArc(1.0);
+                Action_Click(null, (RoutedEventArgs)null); // Auto Start
+            }
         }
 
         private void ParseContext(string ctx)
         {
+            if (string.IsNullOrEmpty(ctx))
+            {
+                _remaining = TimeSpan.FromMinutes(5);
+                UpdateTimeDisplay();
+                return;
+            }
+
             try {
                 ctx = ctx.ToLower();
                 int minutes = 5;
@@ -98,15 +126,13 @@ namespace FlyShelf.Windows
                     _timer.Stop();
                     _isRunning = false;
                     _isFinished = true;
-                    ActionText.Text = "✓  Dismiss";
-                    PrimaryBtnBorder.Background = new SolidColorBrush(DangerColor);
+                    
+                    PlayPauseIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Dismiss16;
+                    PlayPauseBtn.Background = new SolidColorBrush(DangerColor);
+                    
                     TimeDisplay.Text = "00:00";
                     TimeDisplay.Foreground = new SolidColorBrush(DangerColor);
-                    PercentText.Text = "0%";
-                    PercentText.Foreground = new SolidColorBrush(DangerColor);
-                    StatusText.Text = "TIME'S UP!";
-                    StatusText.Opacity = 1.0;
-                    StatusText.Foreground = new SolidColorBrush(DangerColor);
+                    
                     DrawProgressArc(0);
                     try { System.Media.SystemSounds.Exclamation.Play(); } catch { }
                     this.Topmost = true;
@@ -127,29 +153,18 @@ namespace FlyShelf.Windows
                 double progress = _totalDuration.TotalSeconds > 0 ? _remaining.TotalSeconds / _totalDuration.TotalSeconds : 0;
                 DrawProgressArc(progress);
 
-                // Update percentage
-                int pct = (int)(progress * 100);
-                PercentText.Text = $"{pct}%";
-
                 // Color transitions based on remaining time — uses cached brushes, never FindResource
                 if (progress < 0.1)
                 {
                     TimeDisplay.Foreground = new SolidColorBrush(DangerColor);
-                    PercentText.Foreground = new SolidColorBrush(DangerColor);
-                    StatusText.Text = "HURRY!";
-                    StatusText.Opacity = 0.8;
                 }
                 else if (progress < 0.25)
                 {
                     TimeDisplay.Foreground = new SolidColorBrush(WarningColor);
-                    StatusText.Text = "LOW";
-                    StatusText.Opacity = 0.5;
                 }
                 else
                 {
                     TimeDisplay.Foreground = _primaryTextBrush;
-                    StatusText.Text = "RUNNING";
-                    StatusText.Opacity = 0.3;
                 }
             }
             catch (Exception ex)
@@ -283,28 +298,18 @@ namespace FlyShelf.Windows
                 _timer.Stop();
                 _isRunning = false;
                 _lastTickSecond = DateTime.MinValue;
-                ActionText.Text = "▶  Resume";
-                StatusText.Text = "PAUSED";
-                StatusText.Opacity = 0.6;
-                PrimaryBtnBorder.Background = new LinearGradientBrush(
-                    new GradientStopCollection {
-                        new GradientStop(Color.FromRgb(0x22, 0xC5, 0x5E), 0),
-                        new GradientStop(Color.FromRgb(0x16, 0xA3, 0x4A), 1)
-                    }, new Point(0, 0), new Point(1, 1));
+                
+                PlayPauseIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Play16;
+                PlayPauseBtn.Background = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E)); // Green for play
             }
             else
             {
                 _lastTickSecond = DateTime.Now;
                 _timer.Start();
                 _isRunning = true;
-                ActionText.Text = "❚❚  Pause";
-                StatusText.Text = "RUNNING";
-                StatusText.Opacity = 0.3;
-                PrimaryBtnBorder.Background = new LinearGradientBrush(
-                    new GradientStopCollection {
-                        new GradientStop(Color.FromRgb(0x8B, 0x5C, 0xF6), 0),
-                        new GradientStop(Color.FromRgb(0x63, 0x66, 0xF1), 1)
-                    }, new Point(0, 0), new Point(1, 1));
+                
+                PlayPauseIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Pause16;
+                PlayPauseBtn.Background = new SolidColorBrush(Color.FromRgb(0x8B, 0x5C, 0xF6)); // Purple for pause
             }
         }
 
@@ -313,27 +318,25 @@ namespace FlyShelf.Windows
             Action_Click(sender, (RoutedEventArgs?)null);
         }
 
-        private void Reset_Click(object sender, MouseButtonEventArgs e)
+        private void Reset_Click(object? sender, RoutedEventArgs? e)
         {
             _timer.Stop();
             _isRunning = false;
             _isFinished = false;
             _lastTickSecond = DateTime.MinValue;
-            _remaining = _totalDuration;
-            UpdateTimeDisplay();
-            DrawProgressArc(1.0);
-            ActionText.Text = "▶  Start";
-            StatusText.Text = "READY";
-            StatusText.Opacity = 0.3;
-            PercentText.Text = "100%";
-            PercentText.Foreground = _secondaryTextBrush;
-            TimeDisplay.Foreground = _primaryTextBrush;
-            TimeDisplay.Opacity = 1.0;
-            PrimaryBtnBorder.Background = new LinearGradientBrush(
-                new GradientStopCollection {
-                    new GradientStop(Color.FromRgb(0x8B, 0x5C, 0xF6), 0),
-                    new GradientStop(Color.FromRgb(0x63, 0x66, 0xF1), 1)
-                }, new Point(0, 0), new Point(1, 1));
+            
+            // Revert back to setup panel
+            SetupPanel.Visibility = Visibility.Visible;
+            RunningPanel.Visibility = Visibility.Collapsed;
+            
+            if (_totalDuration.TotalSeconds > 0)
+            {
+                CustomTimeInput.Text = ((int)_totalDuration.TotalMinutes).ToString();
+            }
+            
+            // Re-focus text box
+            CustomTimeInput.Focus();
+            CustomTimeInput.SelectAll();
         }
 
         private void TitleBar_MouseDown(object sender, MouseButtonEventArgs e)
@@ -354,6 +357,86 @@ namespace FlyShelf.Windows
         {
             _timer?.Stop();
             base.OnClosed(e);
+        }
+
+        // Event Handlers for Setup Mode
+
+        private void StartCustom_Click(object sender, RoutedEventArgs e)
+        {
+            StartWithInput(CustomTimeInput.Text);
+        }
+
+        private void CustomTimeInput_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Enter)
+            {
+                StartWithInput(CustomTimeInput.Text);
+                e.Handled = true;
+            }
+        }
+
+        private void StartWithInput(string input)
+        {
+            if (string.IsNullOrWhiteSpace(input)) return;
+            string trimmed = input.Trim();
+            
+            if (int.TryParse(trimmed, out int mins) && mins > 0)
+            {
+                StartTimer(TimeSpan.FromMinutes(mins));
+            }
+            else if (trimmed.Contains(":"))
+            {
+                try
+                {
+                    var parts = trimmed.Split(':');
+                    if (parts.Length == 2 && int.TryParse(parts[0], out int m) && int.TryParse(parts[1], out int s))
+                    {
+                        StartTimer(new TimeSpan(0, m, s));
+                    }
+                }
+                catch { }
+            }
+            else
+            {
+                ParseContext(trimmed);
+                if (_remaining.TotalSeconds > 0)
+                {
+                    StartTimer(_remaining);
+                }
+            }
+        }
+
+        private void Preset_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement element && element.Tag is string tag)
+            {
+                ParseContext(tag);
+                if (_remaining.TotalSeconds > 0)
+                {
+                    StartTimer(_remaining);
+                }
+            }
+        }
+
+        private void StartTimer(TimeSpan duration)
+        {
+            _remaining = duration;
+            _totalDuration = duration;
+            
+            SetupPanel.Visibility = Visibility.Collapsed;
+            RunningPanel.Visibility = Visibility.Visible;
+            
+            UpdateTimeDisplay();
+            DrawProgressArc(1.0);
+            
+            _isFinished = false;
+            _isRunning = false;
+            
+            // Set initial state of play/pause button
+            PlayPauseIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Pause16;
+            PlayPauseBtn.Background = new SolidColorBrush(Color.FromRgb(0x8B, 0x5C, 0xF6));
+            
+            Action_Click(null, (RoutedEventArgs)null);
         }
     }
 }

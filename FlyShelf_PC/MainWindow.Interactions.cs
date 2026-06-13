@@ -425,18 +425,6 @@ namespace FlyShelf
         /// </summary>
         public void ToggleMainClipboard()
         {
-            // ═══ ANIMATION DEBOUNCE ═══
-            // If a show animation is actively running, ignore this toggle request entirely.
-            // Without this, rapid Alt+C presses (especially after desktop switches where
-            // zombieRecovered=true bypasses the TOGGLE_OFF check) would call ShowNearPosition
-            // again mid-animation, causing the "triple bounce" — the animation restarts
-            // from scratch on each re-entry, creating visible flicker.
-            if (_isShowAnimating)
-            {
-                Classes.Logger.LogAction("VD_TOGGLE", "DEBOUNCE: _isShowAnimating=true → ignoring toggle");
-                return;
-            }
-
             // ═══ DESKTOP SWITCH DETECTION ═══
             // Primary: cached GUID comparison (zero COM calls)
             bool isOnOtherDesktop = _summonedDesktopId != Guid.Empty &&
@@ -471,8 +459,14 @@ namespace FlyShelf
                     StopPanelAutoRevertTimer();
                     this.Opacity = 0;
                     this.BeginAnimation(OpacityProperty, null);
-                    this.Left = -20000;
-                    this.Top = -20000;
+                    // JITTER FIX: Hide via Win32 instead of moving to -20000
+                    try
+                    {
+                        var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                        if (hwnd != IntPtr.Zero)
+                            Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
+                    }
+                    catch { }
                     // Don't return — fall through to clipboard show path
                 }
                 else
@@ -503,7 +497,7 @@ namespace FlyShelf
             // Window is offscreen and not summoned — just reset state.
             // No Hide+Show cycle needed since window is always pinned to all desktops.
             bool zombieRecovered = false;
-            if (!_isCurrentlySummoned && this.Left < -10000)
+            if (!_isCurrentlySummoned && !this.IsVisible)
             {
                 this.Opacity = 0;
                 this.BeginAnimation(OpacityProperty, null);
@@ -523,16 +517,21 @@ namespace FlyShelf
                 _lastPanelBeforeDismiss = null;
             }
 
-            // If the overlay is already visible and in Mode 1, hide it.
-            // Require Opacity > 0.5 to avoid cancelling a show animation that hasn't finished yet.
-            // Without this, rapid Alt+C during the fade-in would hide the window before it appears.
-            if (!zombieRecovered && _isCurrentlySummoned && _viewModel.CurrentMode == 1 && !_isAnimatingHide && this.Opacity > 0.5)
+            if (!zombieRecovered && _isCurrentlySummoned && _viewModel.CurrentMode == 1 && !_isAnimatingHide)
             {
                 Classes.Logger.LogAction("VD_TOGGLE", $"TOGGLE_OFF: Already visible (Opacity={this.Opacity:F2}) → AnimateAndHide");
                 AnimateAndHide();
             }
             else
             {
+                // If the show animation is still in progress (or within its 150ms duration),
+                // we CANNOT trigger a show/summon. It can only be used for dismiss.
+                if (DateTime.UtcNow < _showAnimationEndTime)
+                {
+                    Classes.Logger.LogAction("VD_TOGGLE", "SHOW_PATH IGNORED: Show animation is still in progress.");
+                    return;
+                }
+
                 Classes.Logger.LogAction("VD_TOGGLE", $"SHOW_PATH: zombieRecovered={zombieRecovered} summoned={_isCurrentlySummoned}");
 
                 // ═══ RESET FILTERS ON RESUMMON ═══
@@ -578,8 +577,8 @@ namespace FlyShelf
                     Classes.Logger.LogAction("SUMMON", $"Spawn fallback (bottom-left) at logical X={targetX}, Y={targetY}");
                 }
 
-                Classes.Logger.LogAction("VD_TOGGLE", $"SHOW: Calling ShowNearPosition at ({targetX:F0}, {targetY:F0}), knownOnOther={isOnOtherDesktop}");
-                ShowNearPosition(targetX, targetY, 1, false, false, knownOnOtherDesktop: isOnOtherDesktop);
+                Classes.Logger.LogAction("VD_TOGGLE", $"SHOW: Calling ShowNearPosition at ({targetX:F0}, {targetY:F0}), knownOnOther={wasDesktopSwitch}");
+                ShowNearPosition(targetX, targetY, 1, false, false, knownOnOtherDesktop: wasDesktopSwitch);
 
                 // ═══ SAME-DESKTOP PANEL RESTORE ═══
                 // If the last panel was Notes/Todo and this is NOT a desktop switch,

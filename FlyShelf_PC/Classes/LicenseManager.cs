@@ -78,7 +78,7 @@ namespace FlyShelf.Classes
         public const int FREE_TABLE_EXTRACT_DAILY = 15;
         public const int FREE_PIN_LIMIT = 20;
         public const int FREE_TODO_DAILY = 10;
-        public const int FREE_NOTE_DAYS = 30;
+        public const int FREE_NOTE_DAYS = 60;
 
         // ═══ KEY VALIDATION SECRET (XOR-obfuscated so it's not plaintext in the binary) ═══
         // Obfuscated with XOR key — decoded at runtime only when needed
