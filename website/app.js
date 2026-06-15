@@ -19,6 +19,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   })();
 
+  /* ==========================================
+     NAVBAR AUTO-SLIM ON SCROLL
+     Adds .scrolled class when past 80px
+     ========================================== */
+  (function navbarSlim() {
+    const nav = document.getElementById('main-nav');
+    if (!nav) return;
+    let ticking = false;
+    window.addEventListener('scroll', () => {
+      if (!ticking) {
+        requestAnimationFrame(() => {
+          nav.classList.toggle('scrolled', window.scrollY > 80);
+          ticking = false;
+        });
+        ticking = true;
+      }
+    }, { passive: true });
+  })();
 
   /* ==========================================
      0.0.1 ANDROID DETECTION & APK CTA SWAP

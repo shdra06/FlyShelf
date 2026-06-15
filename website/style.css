@@ -358,7 +358,33 @@ body {
   background: var(--bg-glass);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  transition: var(--transition-smooth);
+  transition: height 0.3s ease, top 0.3s ease, padding 0.3s ease, border-radius 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Slim navbar on scroll */
+.navbar.scrolled {
+  top: 8px;
+  height: 48px;
+  padding: 0 24px;
+  border-radius: 24px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.25);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+.navbar.scrolled .nav-brand {
+  font-size: 1.15rem;
+}
+.navbar.scrolled .nav-brand img {
+  width: 20px !important;
+  height: 20px !important;
+}
+.navbar.scrolled .nav-links a {
+  font-size: 0.8rem;
+  padding: 6px 10px;
+}
+.navbar.scrolled .nav-actions .btn-premium {
+  padding: 7px 18px;
+  font-size: 0.8rem;
 }
 
 .nav-brand {
@@ -369,6 +395,7 @@ body {
   font-size: 1.4rem;
   letter-spacing: -0.5px;
   cursor: pointer;
+  transition: font-size 0.3s ease;
 }
 
 .brand-icon {
