@@ -438,8 +438,18 @@ namespace FlyShelf.Classes
                 Margin = new Thickness(16) // Space for the shadow
             };
 
-            // Allow window drag from any empty area
-            outerBorder.MouseLeftButtonDown += (s, e) => { try { dialog.DragMove(); } catch { } };
+            // Allow window drag from any empty area (but not from buttons)
+            outerBorder.MouseLeftButtonDown += (s, e) => {
+                if (e.OriginalSource is System.Windows.Controls.Primitives.ButtonBase) return;
+                // Walk up visual tree to check if inside a button
+                var src = e.OriginalSource as DependencyObject;
+                while (src != null)
+                {
+                    if (src is System.Windows.Controls.Primitives.ButtonBase || src is System.Windows.Controls.Button) return;
+                    src = System.Windows.Media.VisualTreeHelper.GetParent(src);
+                }
+                try { dialog.DragMove(); } catch { }
+            };
 
             var rootGrid = new Grid();
             rootGrid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(6) });    // Row 0: Accent stripe

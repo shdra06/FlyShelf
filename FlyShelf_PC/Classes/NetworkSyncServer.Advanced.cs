@@ -297,6 +297,7 @@ namespace FlyShelf.Classes
 
                 // Try LibreOffice conversion first (most reliable cross-platform)
                 bool converted = false;
+#if !MSIX_STORE
                 string[] libreOfficePaths = new[] {
                     @"C:\Program Files\LibreOffice\program\soffice.exe",
                     @"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
@@ -325,6 +326,7 @@ namespace FlyShelf.Classes
                         }
                     }
                 }
+#endif
 
                 // Fallback: Try Microsoft Word COM automation with full dialog suppression
                 if (!converted)

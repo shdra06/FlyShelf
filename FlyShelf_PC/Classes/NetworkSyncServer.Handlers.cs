@@ -59,7 +59,7 @@ namespace FlyShelf.Classes
             {
                 long now = Environment.TickCount64;
                 int currentCount = 0;
-                System.Windows.Application.Current.Dispatcher.Invoke(() => { currentCount = _viewModel.DroppedItems.Count; });
+                System.Windows.Application.Current.Dispatcher.Invoke(() => { currentCount = _viewModel.DroppedItems.Count; }, System.Windows.Threading.DispatcherPriority.Normal, System.Threading.CancellationToken.None, TimeSpan.FromSeconds(2));
 
                 // Use cached response if still fresh and item count unchanged
                 var cached = _cachedSyncJson; // Capture reference to avoid TOCTOU race
@@ -111,7 +111,7 @@ namespace FlyShelf.Classes
                     _cachedSyncJson = Encoding.UTF8.GetBytes(json);
                     _cachedSyncTimestamp = now;
                     _cachedItemCount = currentCount;
-                });
+                }, System.Windows.Threading.DispatcherPriority.Normal, System.Threading.CancellationToken.None, TimeSpan.FromSeconds(2));
 
                 var freshCache = _cachedSyncJson!; // Capture reference after Dispatcher.Invoke
                 res.ContentType = "application/json; charset=utf-8";

@@ -1,4 +1,6 @@
-﻿using System;
+using System;
+using System.Globalization;
+using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -6,15 +8,35 @@ using System.Threading.Tasks;
 namespace FlyShelf.Classes
 {
     /// <summary>
-    /// Lightweight internal clock. Single NTP query to time.google.com at startup.
-    /// If OS clock is wrong, applies an offset. If OS clock later gets corrected, uses OS time.
-    /// No timers, no periodic resync, no extra RAM.
+    /// Lightweight internal clock with multi-server NTP and persistent time anchoring.
+    /// Queries multiple NTP servers at startup for resilience. Persists the last known-good
+    /// NTP time with Environment.TickCount64 so elapsed time can be computed even when
+    /// NTP is blocked, without trusting the OS clock.
     /// </summary>
     public static class NetworkClock
     {
         private static TimeSpan _offset = TimeSpan.Zero;
         private static bool _synced = false;
         private static bool _driftDetected = false;
+
+        // Persistent anchor state
+        private static DateTimeOffset _anchorNtpTime;
+        private static long _anchorTickCount;
+        private static bool _anchorLoaded = false;
+
+        private static readonly string _appDataDir =
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf");
+        private static readonly string _anchorFilePath =
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", ".ntp_anchor");
+
+        /// <summary>NTP servers to try in order until one succeeds.</summary>
+        private static readonly string[] NtpServers = new[]
+        {
+            "time.google.com",
+            "time.windows.com",
+            "pool.ntp.org",
+            "time.cloudflare.com"
+        };
 
         /// <summary>Corrected UTC time. Uses offset only if OS clock was wrong at startup.</summary>
         public static DateTimeOffset UtcNow
@@ -35,18 +57,66 @@ namespace FlyShelf.Classes
         /// <summary>True if NTP sync completed successfully.</summary>
         public static bool IsSynced => _synced;
 
+        /// <summary>True if NTP synced OR a valid persisted anchor exists (time can be trusted).</summary>
+        public static bool IsTimeTrusted => _synced || _anchorLoaded;
+
         /// <summary>
-        /// One-shot sync with time.google.com. Call once at startup.
+        /// Returns the best available UTC time with a trust indicator.
+        /// - If NTP synced: returns NTP-corrected time (trusted).
+        /// - If not synced but a persisted anchor exists: computes elapsed time from
+        ///   TickCount64 delta (cannot be manipulated by changing OS clock) and adds
+        ///   it to the stored NTP time (trusted).
+        /// - If neither: returns OS clock (untrusted).
+        /// </summary>
+        public static (DateTimeOffset time, bool isTrusted) GetTrustedUtcNow()
+        {
+            // Best case: live NTP sync
+            if (_synced)
+            {
+                return (UtcNow, true);
+            }
+
+            // Fallback: persisted anchor + monotonic TickCount64 elapsed time
+            if (_anchorLoaded)
+            {
+                long elapsedMs = Environment.TickCount64 - _anchorTickCount;
+                var computedTime = _anchorNtpTime.AddMilliseconds(elapsedMs);
+                return (computedTime, true);
+            }
+
+            // No trusted source available
+            return (DateTimeOffset.UtcNow, false);
+        }
+
+        /// <summary>
+        /// One-shot sync at startup. Tries multiple NTP servers in order.
         /// If OS clock is off by more than 5 seconds, stores the offset.
+        /// On success, persists an anchor file for future sessions.
         /// </summary>
         public static async Task InitializeAsync()
         {
+            // Try to load persisted anchor first (available immediately if NTP fails)
+            LoadAnchor();
+
             try
             {
-                var ntpTime = await QueryNtpAsync("time.google.com");
+                DateTimeOffset? ntpTime = null;
+
+                // Try each NTP server until one succeeds
+                foreach (var server in NtpServers)
+                {
+                    ntpTime = await QueryNtpAsync(server);
+                    if (ntpTime.HasValue)
+                    {
+                        Logger.LogAction("CLOCK", $"NTP synced via {server}");
+                        break;
+                    }
+                }
+
                 if (!ntpTime.HasValue)
                 {
-                    Logger.LogAction("CLOCK", "NTP query failed — using OS clock");
+                    Logger.LogAction("CLOCK", "All NTP servers failed — " +
+                        (_anchorLoaded ? "using persisted anchor" : "using OS clock"));
                     return;
                 }
 
@@ -62,10 +132,71 @@ namespace FlyShelf.Classes
                 {
                     Logger.LogAction("CLOCK", $"✅ OS clock is accurate (drift: {_offset.TotalMilliseconds:F0}ms)");
                 }
+
+                // Persist the anchor for future sessions
+                PersistAnchor(ntpTime.Value);
             }
             catch (Exception ex)
             {
-                Logger.LogAction("CLOCK", $"NTP failed: {ex.Message} — using OS clock");
+                Logger.LogAction("CLOCK", $"NTP failed: {ex.Message} — " +
+                    (_anchorLoaded ? "using persisted anchor" : "using OS clock"));
+            }
+        }
+
+        /// <summary>
+        /// Saves NTP time and TickCount64 to disk so future sessions can compute
+        /// trusted time even without NTP connectivity.
+        /// Format: &lt;NTP_ISO_timestamp&gt;|&lt;TickCount64&gt;
+        /// </summary>
+        private static void PersistAnchor(DateTimeOffset ntpTime)
+        {
+            try
+            {
+                Directory.CreateDirectory(_appDataDir);
+                string content = $"{ntpTime.ToUniversalTime():O}|{Environment.TickCount64}";
+                File.WriteAllText(_anchorFilePath, content);
+                Logger.LogAction("CLOCK", "Persisted NTP anchor");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("CLOCK", $"Failed to persist NTP anchor: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Loads persisted NTP anchor from disk. Sets _anchorLoaded if valid.
+        /// </summary>
+        private static void LoadAnchor()
+        {
+            try
+            {
+                if (!File.Exists(_anchorFilePath)) return;
+
+                string content = File.ReadAllText(_anchorFilePath).Trim();
+                string[] parts = content.Split('|');
+                if (parts.Length != 2) return;
+
+                if (!DateTimeOffset.TryParse(parts[0], CultureInfo.InvariantCulture,
+                    DateTimeStyles.RoundtripKind, out var storedTime))
+                    return;
+
+                if (!long.TryParse(parts[1], out long storedTick))
+                    return;
+
+                // Sanity check: stored time should be reasonable (between 2024 and 2100)
+                if (storedTime.Year < 2024 || storedTime.Year > 2100) return;
+
+                // Sanity check: TickCount64 should have moved forward since the anchor was saved
+                if (Environment.TickCount64 < storedTick) return;
+
+                _anchorNtpTime = storedTime;
+                _anchorTickCount = storedTick;
+                _anchorLoaded = true;
+                Logger.LogAction("CLOCK", "Loaded persisted NTP anchor");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("CLOCK", $"Failed to load NTP anchor: {ex.Message}");
             }
         }
 

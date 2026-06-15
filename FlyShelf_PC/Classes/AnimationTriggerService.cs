@@ -40,7 +40,6 @@ namespace FlyShelf.Classes
         // ═══ State ═══
         private bool _searchActive = false;
         private bool _isInitialized = false;
-        private DispatcherTimer? _idleTimer;
         private DateTime _lastActivity = DateTime.Now;
 
         private AnimationTriggerService() { }
@@ -215,7 +214,6 @@ namespace FlyShelf.Classes
 
         public void Dispose()
         {
-            _idleTimer?.Stop();
             ThemeManager.Instance.ActiveThemeChanged -= OnThemeChanged;
         }
     }

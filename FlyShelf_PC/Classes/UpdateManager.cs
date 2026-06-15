@@ -334,13 +334,17 @@ namespace FlyShelf.Classes
                 {
                     if (LatestVersion == CurrentVersion)
                     {
+                        // Repair mode: allow without hash since we're re-downloading the same version
                         Logger.LogAction("UPDATE", "⚠️ Warning: No SHA-256 hash provided for current version repair — proceeding with size check only.");
                         StatusChanged?.Invoke("Verified via size check (repair mode).");
                     }
                     else
                     {
-                        Logger.LogAction("UPDATE", "⚠️ Warning: No SHA-256 hash provided in version.json or release assets — proceeding with transport layer security (HTTPS) and size checks only.");
-                        StatusChanged?.Invoke("Verified via transport security.");
+                        // Version upgrade: hash is mandatory for security
+                        Logger.LogAction("UPDATE", "❌ REJECTED: No SHA-256 hash provided for version upgrade — refusing to apply unverified update.");
+                        StatusChanged?.Invoke("❌ Update rejected — integrity hash missing. Please retry later.");
+                        try { File.Delete(tempExePath); } catch { }
+                        return false;
                     }
                 }
 
@@ -581,13 +585,25 @@ namespace FlyShelf.Classes
                 WindowStyle = ProcessWindowStyle.Hidden,
                 UseShellExecute = true // Required so it survives our process exit
             };
-            Process.Start(psi);
-
-            // Exit current app — the new EXE is watching our PID
-            System.Windows.Application.Current.Dispatcher.Invoke(() =>
+            try
             {
-                System.Windows.Application.Current.Shutdown();
-            });
+                Process.Start(psi);
+
+                // Exit current app — the new EXE is watching our PID
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    System.Windows.Application.Current.Shutdown();
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("UPDATE", $"Failed to launch self-updater: {ex.Message}");
+                StatusChanged?.Invoke("Update failed — could not launch updater.");
+                System.Windows.Application.Current.Dispatcher.Invoke(() =>
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("Update failed — could not launch updater. Please try again.");
+                });
+            }
 #endif
         }
 
@@ -669,6 +685,21 @@ namespace FlyShelf.Classes
                 {
                     Log("FATAL: Cannot determine own EXE path.");
                     return true;
+                }
+
+                // Backup old EXE before overwriting — enables manual recovery if new version is broken
+                string backupPath = targetPath + ".bak";
+                try
+                {
+                    if (File.Exists(targetPath))
+                    {
+                        File.Copy(targetPath, backupPath, overwrite: true);
+                        Log($"Backed up old EXE to {backupPath}");
+                    }
+                }
+                catch (Exception bex)
+                {
+                    Log($"Warning: Could not backup old EXE: {bex.Message} — proceeding anyway");
                 }
 
                 Log($"Copying {selfPath} → {targetPath}");

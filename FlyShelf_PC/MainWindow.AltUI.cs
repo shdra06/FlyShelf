@@ -41,6 +41,13 @@ namespace FlyShelf
             if (useAlt && _altScrollTimer == null)
                 InitAltScrollHandler();
 
+            // Trigger initial thumbnail rendering for visible images
+            if (useAlt)
+            {
+                Dispatcher.InvokeAsync(() => RenderAltVisibleThumbnails(),
+                    System.Windows.Threading.DispatcherPriority.Loaded);
+            }
+
             // Hide floating multi-action bar in alt mode
             // (Merge PDF and Unpin bar only works with original UI)
         }
@@ -277,7 +284,18 @@ namespace FlyShelf
         // ═══════════════════════════════════════════════════════════════
 
         private System.Windows.Threading.DispatcherTimer _altScrollTimer;
+        private System.Windows.Threading.DispatcherTimer _altThumbnailTimer;
+        private ScrollViewer _altScrollViewer;
         private bool _isAltScrolling;
+
+        private ScrollViewer GetAltScrollViewer()
+        {
+            if (_altScrollViewer == null && AltShelfListView != null)
+            {
+                _altScrollViewer = FindVisualChild<ScrollViewer>(AltShelfListView);
+            }
+            return _altScrollViewer;
+        }
 
         private void InitAltScrollHandler()
         {
@@ -301,7 +319,145 @@ namespace FlyShelf
                 if (_viewModel != null) _viewModel.AllowHover = false;
                 _altScrollTimer?.Stop();
                 _altScrollTimer?.Start();
+
+                // Trigger thumbnail loading when scroll stops (30ms debounce)
+                if (_altThumbnailTimer == null)
+                {
+                    _altThumbnailTimer = new System.Windows.Threading.DispatcherTimer
+                    {
+                        Interval = TimeSpan.FromMilliseconds(30)
+                    };
+                    _altThumbnailTimer.Tick += (s2, e2) =>
+                    {
+                        _altThumbnailTimer.Stop();
+                        RenderAltVisibleThumbnails();
+                    };
+                }
+                else
+                {
+                    _altThumbnailTimer.Stop();
+                }
+                _altThumbnailTimer.Start();
             }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // Alt UI Thumbnail Rendering
+        // Loads 300px thumbnails for image/QR items visible in the
+        // AltShelfListView viewport. Mirrors RenderVisibleThumbnails
+        // from MainWindow.Positioning.cs but targets the alt list.
+        // ═══════════════════════════════════════════════════════════════
+
+        private void RenderAltVisibleThumbnails()
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    if (!this.IsVisible || !_isAltUIActive) return;
+                    if (AltShelfListView == null) return;
+                    if (AltShelfListView.ItemContainerGenerator.Status != System.Windows.Controls.Primitives.GeneratorStatus.ContainersGenerated)
+                        return;
+
+                    var sv = GetAltScrollViewer();
+                    if (sv == null) return;
+
+                    double viewportWidth = sv.ViewportWidth;
+                    double viewportHeight = sv.ViewportHeight;
+                    if (viewportHeight <= 0 || viewportWidth <= 0) return;
+
+                    // Prefetch 800px above and below viewport
+                    System.Windows.Rect viewportRect = new System.Windows.Rect(0, -800, viewportWidth, viewportHeight + 1600);
+                    int count = AltShelfListView.Items.Count;
+                    int imageCount = 0;
+
+                    for (int i = 0; i < count; i++)
+                    {
+                        var item = AltShelfListView.Items[i] as ViewModels.ClipboardItem;
+                        if (item == null) continue;
+                        if (item.ItemType != ViewModels.ClipboardItemType.Image && item.ItemType != ViewModels.ClipboardItemType.QRCode) continue;
+
+                        imageCount++;
+                        bool isFirst5 = imageCount <= 5;
+
+                        var container = AltShelfListView.ItemContainerGenerator.ContainerFromIndex(i) as FrameworkElement;
+                        bool isVisible = false;
+
+                        if (isFirst5)
+                        {
+                            isVisible = true;
+                        }
+                        else if (container != null && container.IsLoaded)
+                        {
+                            try
+                            {
+                                GeneralTransform transform = container.TransformToAncestor(sv);
+                                System.Windows.Rect bounds = transform.TransformBounds(new System.Windows.Rect(0, 0, container.ActualWidth, container.ActualHeight));
+                                isVisible = viewportRect.IntersectsWith(bounds);
+                            }
+                            catch { }
+                        }
+
+                        if (isVisible)
+                        {
+                            item.LeftViewportTime = null;
+                            if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality)
+                            {
+                                item.IsLoadingHighQuality = true;
+                                string filePath = item.FilePath;
+                                int currentIndex = i;
+
+                                _ = System.Threading.Tasks.Task.Run(() =>
+                                {
+                                    try
+                                    {
+                                        var bmp = ViewModels.FlyShelfViewModel.LoadImageThumbnail(filePath, 300);
+                                        if (bmp != null)
+                                        {
+                                            Dispatcher.InvokeAsync(() =>
+                                            {
+                                                item.Icon = bmp;
+                                                item.IsLoadedHighQuality = true;
+                                                item.IsLoadingHighQuality = false;
+
+                                                // Fade-in animation
+                                                var element = AltShelfListView.ItemContainerGenerator.ContainerFromIndex(currentIndex) as FrameworkElement;
+                                                if (element != null && element.IsLoaded)
+                                                {
+                                                    var img = FindVisualChild<System.Windows.Controls.Image>(element, "ItemIcon");
+                                                    if (img != null)
+                                                    {
+                                                        var anim = new System.Windows.Media.Animation.DoubleAnimation
+                                                        {
+                                                            From = 0.2,
+                                                            To = 1.0,
+                                                            Duration = TimeSpan.FromMilliseconds(150),
+                                                            EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
+                                                        };
+                                                        img.BeginAnimation(UIElement.OpacityProperty, anim);
+                                                    }
+                                                }
+                                            }, System.Windows.Threading.DispatcherPriority.Normal);
+                                        }
+                                        else
+                                        {
+                                            Dispatcher.InvokeAsync(() => { item.IsLoadingHighQuality = false; });
+                                        }
+                                    }
+                                    catch
+                                    {
+                                        Dispatcher.InvokeAsync(() => { item.IsLoadingHighQuality = false; });
+                                    }
+                                });
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Classes.Logger.LogAction("ALT_THUMB_ERR", ex.Message);
+                }
+            }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -329,6 +485,19 @@ namespace FlyShelf
             else
             {
                 FlyShelf.Windows.ToastWindow.ShowToast("Select an item first");
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // Alt UI Merge/Convert — toggle checkbox + floating action bar
+        // ═══════════════════════════════════════════════════════════════
+
+        private void AltPdfMergeToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is ViewModels.ClipboardItem item)
+            {
+                item.IsCheckedForMerge = !item.IsCheckedForMerge;
+                UpdatePdfMergeToolbar();
             }
         }
     }

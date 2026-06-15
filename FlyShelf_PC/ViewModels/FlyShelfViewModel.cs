@@ -516,7 +516,14 @@ namespace FlyShelf.ViewModels
                     string dir = System.IO.Path.GetDirectoryName(item.FilePath);
                     if (!string.IsNullOrEmpty(dir) && System.IO.Directory.Exists(dir))
                     {
-                        System.Diagnostics.Process.Start("explorer.exe", $"\"{dir}\"");
+                        try
+                        {
+                            System.Diagnostics.Process.Start("explorer.exe", $"\"{dir}\"");
+                        }
+                        catch (Exception ex)
+                        {
+                            Classes.Logger.LogAction("EXPLORER", $"Fallback open failed: {ex.Message}");
+                        }
                     }
                 }
             });
@@ -611,9 +618,14 @@ namespace FlyShelf.ViewModels
             };
         }
 
+        private System.Windows.Threading.DispatcherTimer? _firstTenDebounceTimer;
+
         public void UpdateFirstTenFlags()
         {
-            for (int i = 0; i < DroppedItems.Count; i++)
+            // PERF: Only the first 11 items can ever change their IsFirstTenItem state.
+            // Items beyond index 10 are already false and won't fire PropertyChanged.
+            int limit = Math.Min(DroppedItems.Count, 11);
+            for (int i = 0; i < limit; i++)
             {
                 var item = DroppedItems[i];
                 if (item != null)

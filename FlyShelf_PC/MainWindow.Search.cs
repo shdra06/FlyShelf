@@ -17,6 +17,7 @@ namespace FlyShelf
     public partial class MainWindow
     {
         private bool _isSearchActive = false;
+        public bool IsSearchActive => _isSearchActive;
         private bool _isFilterBarActive = false;
         private bool _isClosingSearch = false;   // re-entrancy guard for CloseSearch
         private DateTime _overflowPopupLastClosed = DateTime.MinValue;
@@ -30,34 +31,39 @@ namespace FlyShelf
             }
             else
             {
+                // If Todo is active, close it first — search only works on clipboard/notes
+                if (_isTodoActive) CloseTodoPanel(immediate: true);
+
                 _isSearchActive = true;
                 if (_isFilterBarActive) ToggleFilterBar(false);
 
                 // Remove WS_EX_NOACTIVATE dynamically so the window can receive focus/keyboard input
                 UpdateWindowActivationStyle();
 
+                // Suppress DWM accent border before Activate() triggers it
+                SuppressDwmBorder();
+
                 // Activate the window so it receives keyboard input
                 this.Activate();
 
-                // Hide the search button so the search bar covers its area too
+                // Hide toolbar buttons so the search bar gets full width (keep MoreBtn + Close visible)
                 SearchToggleBtn.Visibility = Visibility.Collapsed;
-                SearchBarContainer.Visibility = Visibility.Visible;
+                NotesToggleBtn.Visibility = Visibility.Collapsed;
+                TodoToggleBtn.Visibility = Visibility.Collapsed;
+                SortFilterBtn.Visibility = Visibility.Collapsed;
 
-                // Smooth scale-in animation from right (ScaleX 0→1) + fade in
+                // ── Clear any stale animations and force-reset transform + opacity ──
                 var scaleTransform = SearchBarContainer.RenderTransform as System.Windows.Media.ScaleTransform;
                 if (scaleTransform != null)
                 {
-                    var scaleAnim = new System.Windows.Media.Animation.DoubleAnimation(0.3, 1.0, TimeSpan.FromMilliseconds(200))
-                    {
-                        EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-                    };
-                    scaleTransform.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, scaleAnim);
+                    scaleTransform.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
+                    scaleTransform.ScaleX = 1.0;
                 }
-                var fadeAnim = new System.Windows.Media.Animation.DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(180))
-                {
-                    EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut }
-                };
-                SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, fadeAnim);
+                SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, null);
+                SearchBarContainer.Opacity = 1.0;
+
+                // Instant show — no animation to prevent half-collapsed state
+                SearchBarContainer.Visibility = Visibility.Visible;
                 
                 // Delay focus — the TextBox needs to be visible and rendered first
                 Dispatcher.InvokeAsync(() =>
@@ -137,6 +143,7 @@ namespace FlyShelf
         private void SearchBar_PreviewMouseDown(object sender, MouseButtonEventArgs e)
         {
             // Activate window and focus the textbox when clicking anywhere on the search bar
+            SuppressDwmBorder();
             this.Activate();
             Dispatcher.InvokeAsync(() =>
             {
@@ -171,34 +178,19 @@ namespace FlyShelf
                 // Restore WS_EX_NOACTIVATE dynamically immediately
                 UpdateWindowActivationStyle();
 
-                // Smooth scale-out + fade-out, then collapse
-                var scaleTransform = SearchBarContainer.RenderTransform as System.Windows.Media.ScaleTransform;
-                var fadeOut = new System.Windows.Media.Animation.DoubleAnimation(1.0, 0.0, TimeSpan.FromMilliseconds(150))
-                {
-                    EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn }
-                };
-                fadeOut.Completed += (s, ev) =>
-                {
-                    SearchBarContainer.Visibility = Visibility.Collapsed;
-                    // Reset transforms for next open
-                    if (scaleTransform != null)
-                        scaleTransform.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
-                    SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, null);
-                    SearchBarContainer.Opacity = 1.0;
-                    if (scaleTransform != null) scaleTransform.ScaleX = 1.0;
+                // ── Restore toolbar buttons respecting current mode ──
+                UpdateToolbarButtonsVisibility();
 
-                    // Restore the search toggle button
-                    SearchToggleBtn.Visibility = Visibility.Visible;
-                };
+                // Instant collapse — no animation to prevent half-visible state
+                SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, null);
+                SearchBarContainer.Opacity = 1.0;
+                var scaleTransform = SearchBarContainer.RenderTransform as System.Windows.Media.ScaleTransform;
                 if (scaleTransform != null)
                 {
-                    var scaleOut = new System.Windows.Media.Animation.DoubleAnimation(1.0, 0.3, TimeSpan.FromMilliseconds(150))
-                    {
-                        EasingFunction = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseIn }
-                    };
-                    scaleTransform.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, scaleOut);
+                    scaleTransform.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
+                    scaleTransform.ScaleX = 1.0;
                 }
-                SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, fadeOut);
+                SearchBarContainer.Visibility = Visibility.Collapsed;
 
                 // Stop mascot search animation
                 try { Classes.AnimationTriggerService.Instance.OnSearchToggle(false); } catch { }
@@ -558,7 +550,6 @@ namespace FlyShelf
         {
             try
             {
-                var view = System.Windows.Data.CollectionViewSource.GetDefaultView(_viewModel.DroppedItems);
                 var listView = ShelfListView?.Items;
                 var altListView = AltShelfListView?.Items;
 
@@ -599,11 +590,10 @@ namespace FlyShelf
                     };
                 }
 
-                if (view != null)
-                {
-                    view.Filter = filterPredicate;
-                }
-
+                // PERF: Only set Filter on the actual ListView ItemCollections.
+                // Removed redundant CollectionViewSource.GetDefaultView() assignment —
+                // it returns the same ICollectionView that ListView.Items wraps,
+                // so setting both caused a double UI refresh on every filter change.
                 if (listView != null && listView.CanFilter)
                 {
                     listView.Filter = filterPredicate;

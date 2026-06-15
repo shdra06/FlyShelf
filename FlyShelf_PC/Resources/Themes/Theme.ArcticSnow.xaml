@@ -42,10 +42,11 @@
     <Color x:Key="ThemeHeaderBtnFgPressedColor">#334155</Color>
 
     <!-- ── Overlay ───────────────────────────────────────────────────── -->
-    <SolidColorBrush x:Key="ThemeOverlayBg"          Color="#08000000" />
-    <SolidColorBrush x:Key="ThemeOverlayBgHover"     Color="#12000000" />
-    <SolidColorBrush x:Key="ThemeOverlayBgSelected"  Color="#0A000000" />
-    <SolidColorBrush x:Key="ThemeOverlayBgPressed"   Color="#06000000" />
+    <SolidColorBrush x:Key="ThemeOverlayBg"          Color="#0E000000" />
+    <SolidColorBrush x:Key="ThemeOverlayBgHover"     Color="#18000000" />
+    <SolidColorBrush x:Key="ThemeOverlayBgSelected"  Color="#10000000" />
+    <SolidColorBrush x:Key="ThemeOverlayBgPressed"   Color="#0A000000" />
+
     <SolidColorBrush x:Key="ThemeOverlayBorder"       Color="#14000000" />
     <SolidColorBrush x:Key="ThemeOverlayBorderHover"  Color="#22000000" />
     <SolidColorBrush x:Key="ThemeOverlayBorderStrong" Color="#30000000" />

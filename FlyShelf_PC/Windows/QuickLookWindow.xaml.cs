@@ -23,13 +23,15 @@ namespace FlyShelf.Windows
         // May differ from _originalWidth/_originalHeight if the image was upscaled for better OCR.
         private double _ocrBitmapWidth = 0;
         private double _ocrBitmapHeight = 0;
+        private bool _autoTriggerOcr = false;
 
-        public QuickLookWindow(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null)
+        public QuickLookWindow(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null, bool autoTriggerOcr = false)
         {
             InitializeComponent();
             FlyShelf.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             _item = item;
             _ocrResult = preLoadedOcr;
+            _autoTriggerOcr = autoTriggerOcr;
 
             PreviewImage.Visibility = Visibility.Collapsed;
             if (ImageModeGrid != null) ImageModeGrid.Visibility = Visibility.Collapsed;
@@ -50,6 +52,14 @@ namespace FlyShelf.Windows
         {
             ApplyTheme();
             await LoadContentAsync();
+
+            // Auto-trigger OCR when opened from "Extract Text (OCR)" context menu.
+            // This ensures the same code path as clicking the T button manually,
+            // so bounding boxes are always perfectly aligned with the displayed image.
+            if (_autoTriggerOcr && _isImageLoaded && OcrBtn != null && OcrBtn.IsEnabled)
+            {
+                OcrButton_Click(OcrBtn, new RoutedEventArgs());
+            }
         }
 
         private void ApplyTheme()
@@ -83,6 +93,7 @@ namespace FlyShelf.Windows
                             {
                                 bmp.BeginInit();
                                 bmp.CacheOption = BitmapCacheOption.OnLoad;
+                                bmp.DecodePixelWidth = 4096; // Cap decode to prevent OOM on very large images
                                 bmp.StreamSource = imgStream;
                                 bmp.EndInit();
                             }

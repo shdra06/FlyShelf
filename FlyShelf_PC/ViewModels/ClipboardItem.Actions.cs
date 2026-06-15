@@ -212,27 +212,32 @@ namespace FlyShelf.ViewModels
 
 
 
-                    // Show FULL command text so users can make an informed decision
+                    // Truncate preview to prevent the MessageBox from overflowing the screen
                     string fullPreview = RawContent ?? "";
+                    string displayPreview;
+                    if (fullPreview.Length > 300)
+                    {
+                        displayPreview = fullPreview.Substring(0, 300) + $"\n\n... ({fullPreview.Length - 300:N0} more characters truncated)";
+                    }
+                    else
+                    {
+                        displayPreview = fullPreview;
+                    }
+
+                    // Limit line count too — long single-line content is fine, but many lines overflow
+                    var previewLines = displayPreview.Split('\n');
+                    if (previewLines.Length > 20)
+                    {
+                        displayPreview = string.Join("\n", previewLines.Take(20)) + $"\n\n... ({previewLines.Length - 20} more lines truncated)";
+                    }
+
                     result = System.Windows.MessageBox.Show(
 
-
-
                         "You are about to execute raw clipboard text directly in your native Command Prompt.\n\n" +
-
-
-
                         "Are you absolutely sure you want to run this command? Malicious scripts can heavily damage your operating system:\n\n" +
-
-
-
-                        fullPreview,
-
-
+                        displayPreview,
 
                         "Security Warning: Terminal Hook Execution",
-
-
 
                         System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning);
 

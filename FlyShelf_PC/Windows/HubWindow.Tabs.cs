@@ -760,6 +760,7 @@ namespace FlyShelf.Windows
                     SettingsManager.Current.ThemeDisplayMode = "glass";
                     ThemeManager.Instance.SetActiveTheme(null);
                     ThemeManager.Instance.ApplyGlassTheme();
+                    ThemeManager.Instance.ApplyAeroThemeOverrides("__glass__");
                     ToastWindow.ShowToast("✨ Acrylic Blur");
                 }
                 else if (tag == "__desktop__")
@@ -822,7 +823,8 @@ namespace FlyShelf.Windows
                     }
                     else
                     {
-                        btn.BorderBrush = defaultBrush;
+                        // Use SetResourceReference to preserve DynamicResource binding across theme changes
+                        btn.SetResourceReference(System.Windows.Controls.Border.BorderBrushProperty, "MicaWPF.Brushes.ControlStrokeColorDefault");
                         btn.BorderThickness = new Thickness(1);
                     }
                 }
@@ -856,6 +858,13 @@ namespace FlyShelf.Windows
                     HighlightActiveDisplayMode();
                     ApplyTheme(); // Re-apply HubWindow backdrop for the new display mode
                     ToastWindow.ShowToast("🎨 Default + FlyShelf");
+
+                    // Refresh wallpaper preview after the MainWindow theme handler has applied the desktop wallpaper
+                    Dispatcher.InvokeAsync(async () =>
+                    {
+                        await System.Threading.Tasks.Task.Delay(500);
+                        RefreshWallpaperPreview();
+                    });
                 }
                 else
                 {
@@ -906,7 +915,8 @@ namespace FlyShelf.Windows
                     }
                     else
                     {
-                        btn.BorderBrush = defaultBrush;
+                        // Use SetResourceReference to preserve DynamicResource binding across theme changes
+                        btn.SetResourceReference(System.Windows.Controls.Border.BorderBrushProperty, "MicaWPF.Brushes.ControlStrokeColorDefault");
                         btn.BorderThickness = new Thickness(1);
                     }
                 }

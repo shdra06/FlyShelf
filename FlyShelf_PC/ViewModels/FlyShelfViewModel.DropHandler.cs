@@ -822,10 +822,18 @@ namespace FlyShelf.ViewModels
             const uint SHGFI_USEFILEATTRIBUTES = 0x10;
             const uint FILE_ATTRIBUTE_NORMAL = 0x80;
 
-            // PRIORITY 1: If the file exists on disk, query the shell without
-            // SHGFI_USEFILEATTRIBUTES. This returns the icon of the actual default
-            // application (e.g. VLC's cone for .mp4) rather than a generic type icon.
-            if (!string.IsNullOrEmpty(filePath) && System.IO.File.Exists(filePath))
+            // For document types (PDF, DOCX, etc.), always use extension-based lookup
+            // so every file of the same type shows the same consistent icon (the default
+            // app's file-type icon) rather than varying per-file association.
+            string ext = System.IO.Path.GetExtension(filePath)?.ToLowerInvariant() ?? "";
+            bool forceGenericIcon = ext is ".pdf" or ".doc" or ".docx" or ".xls" or ".xlsx"
+                                         or ".ppt" or ".pptx" or ".odt" or ".ods" or ".odp"
+                                         or ".rtf" or ".csv" or ".epub";
+
+            // PRIORITY 1: If the file exists on disk and is NOT a document type,
+            // query the shell without SHGFI_USEFILEATTRIBUTES. This returns the icon
+            // of the actual default application (e.g. VLC's cone for .mp4).
+            if (!forceGenericIcon && !string.IsNullOrEmpty(filePath) && System.IO.File.Exists(filePath))
             {
                 try
                 {

@@ -14,23 +14,23 @@
     <Color x:Key="ThemeAccentDarkColor">#6D28D9</Color>
 
     <!-- Header button chrome -->
-    <SolidColorBrush x:Key="ThemeHeaderBtnBg"             Color="#55000000"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnBorder"         Color="#30FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnFg"             Color="#E8FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnBgHover"        Color="#70000000"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnBorderHover"    Color="#50FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBg"             Color="#FF6B3FA0"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBorder"         Color="#FF8850C0"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnFg"             Color="#F0FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBgHover"        Color="#FF7D4CB8"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBorderHover"    Color="#FFA060D8"/>
     <SolidColorBrush x:Key="ThemeHeaderBtnFgHover"        Color="#FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnBgPressed"      Color="#40000000"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnBorderPressed"  Color="#25FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeHeaderBtnFgPressed"      Color="#D0FFFFFF"/>
-    <Color x:Key="ThemeHeaderBtnBgColor">#55000000</Color>
-    <Color x:Key="ThemeHeaderBtnBorderColor">#30FFFFFF</Color>
-    <Color x:Key="ThemeHeaderBtnBgHoverColor">#70000000</Color>
-    <Color x:Key="ThemeHeaderBtnBorderHoverColor">#50FFFFFF</Color>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBgPressed"      Color="#FF9058D0"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnBorderPressed"  Color="#FFA060D8"/>
+    <SolidColorBrush x:Key="ThemeHeaderBtnFgPressed"      Color="#E0FFFFFF"/>
+    <Color x:Key="ThemeHeaderBtnBgColor">#FF6B3FA0</Color>
+    <Color x:Key="ThemeHeaderBtnBorderColor">#FF8850C0</Color>
+    <Color x:Key="ThemeHeaderBtnBgHoverColor">#FF7D4CB8</Color>
+    <Color x:Key="ThemeHeaderBtnBorderHoverColor">#FFA060D8</Color>
     <Color x:Key="ThemeHeaderBtnFgHoverColor">#FFFFFF</Color>
-    <Color x:Key="ThemeHeaderBtnBgPressedColor">#40000000</Color>
-    <Color x:Key="ThemeHeaderBtnBorderPressedColor">#25FFFFFF</Color>
-    <Color x:Key="ThemeHeaderBtnFgPressedColor">#D0FFFFFF</Color>
+    <Color x:Key="ThemeHeaderBtnBgPressedColor">#FF9058D0</Color>
+    <Color x:Key="ThemeHeaderBtnBorderPressedColor">#FFA060D8</Color>
+    <Color x:Key="ThemeHeaderBtnFgPressedColor">#E0FFFFFF</Color>
 
     <!-- Overlay chrome -->
     <SolidColorBrush x:Key="ThemeOverlayBg"           Color="#12FFFFFF"/>
@@ -54,23 +54,28 @@
     <SolidColorBrush x:Key="ThemeCodePreviewBg"   Color="#FF1E1E1E"/>
 
     <!-- Chevron -->
-    <SolidColorBrush x:Key="ThemeChevronBg"          Color="#CC202024"/>
-    <SolidColorBrush x:Key="ThemeChevronBorder"      Color="#33FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeChevronBgHover"     Color="#E62C2C32"/>
-    <SolidColorBrush x:Key="ThemeChevronBorderHover" Color="#66FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeChevronBg"          Color="#EE4E2E80"/>
+    <SolidColorBrush x:Key="ThemeChevronBorder"      Color="#FF6E42A8"/>
+    <SolidColorBrush x:Key="ThemeChevronBgHover"     Color="#F55C3890"/>
+    <SolidColorBrush x:Key="ThemeChevronBorderHover" Color="#FF8050B8"/>
 
     <!-- Overlay buttons -->
-    <SolidColorBrush x:Key="ThemeOverlayButtonBg"     Color="#D0181818"/>
-    <SolidColorBrush x:Key="ThemeOverlayButtonBorder" Color="#40FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeOverlayButtonBg"     Color="#F04E2E80"/>
+    <SolidColorBrush x:Key="ThemeOverlayButtonBorder" Color="#FF6E42A8"/>
 
     <!-- Floating bar -->
-    <SolidColorBrush x:Key="ThemeFloatingBarBg"       Color="#D0181818"/>
-    <SolidColorBrush x:Key="ThemeFloatingBarBorder"   Color="#30FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeFloatingBarBg"       Color="#F04A2B78"/>
+    <SolidColorBrush x:Key="ThemeFloatingBarBorder"   Color="#FF6840A0"/>
+
+    <!-- Overflow popup -->
+    <SolidColorBrush x:Key="ThemeOverflowBg"           Color="#F04A2B78"/>
+    <SolidColorBrush x:Key="ThemeOverflowBorder"       Color="#606840A0"/>
+    <Color x:Key="ThemeOverflowShadowColor">#3E2468</Color>
 
     <!-- Toast -->
-    <SolidColorBrush x:Key="ThemeToastBg"          Color="#E8101018"/>
-    <SolidColorBrush x:Key="ThemeToastBorder"      Color="#18FFFFFF"/>
-    <SolidColorBrush x:Key="ThemeToastInnerGlow"   Color="#08FFFFFF"/>
+    <SolidColorBrush x:Key="ThemeToastBg"          Color="#F53E2468"/>
+    <SolidColorBrush x:Key="ThemeToastBorder"      Color="#FF5E38A0"/>
+    <SolidColorBrush x:Key="ThemeToastInnerGlow"   Color="#20A78BFA"/>
 
     <!-- Empty state icon -->
     <SolidColorBrush x:Key="ThemeEmptyIcon"        Color="#40FFFFFF"/>

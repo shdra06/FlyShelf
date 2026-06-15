@@ -192,31 +192,37 @@ namespace FlyShelf.Windows
 
         private void Snooze5_Click(object sender, MouseButtonEventArgs e)
         {
+            e.Handled = true;
             SnoozeAndDismiss(TimeSpan.FromMinutes(5), "Snoozed 5m ⏰");
         }
 
         private void Snooze15_Click(object sender, MouseButtonEventArgs e)
         {
+            e.Handled = true;
             SnoozeAndDismiss(TimeSpan.FromMinutes(15), "Snoozed 15m ⏰");
         }
 
         private void Snooze30_Click(object sender, MouseButtonEventArgs e)
         {
+            e.Handled = true;
             SnoozeAndDismiss(TimeSpan.FromMinutes(30), "Snoozed 30m ⏰");
         }
 
         private void Snooze60_Click(object sender, MouseButtonEventArgs e)
         {
+            e.Handled = true;
             SnoozeAndDismiss(TimeSpan.FromHours(1), "Snoozed 1h ⏰");
         }
 
         private void Snooze180_Click(object sender, MouseButtonEventArgs e)
         {
+            e.Handled = true;
             SnoozeAndDismiss(TimeSpan.FromHours(3), "Snoozed 3h ⏰");
         }
 
         private void SnoozeTomorrow_Click(object sender, MouseButtonEventArgs e)
         {
+            e.Handled = true;
             var tomorrow9am = DateTime.Today.AddDays(1).AddHours(9);
             var duration = tomorrow9am.ToUniversalTime() - DateTime.UtcNow;
             if (duration <= TimeSpan.Zero) duration = TimeSpan.FromHours(12);
@@ -238,6 +244,7 @@ namespace FlyShelf.Windows
         // ═══ DONE ═══
         private void Done_Click(object sender, MouseButtonEventArgs e)
         {
+            e.Handled = true;
             try
             {
                 ReminderManager.DismissReminder(_reminder.Id);

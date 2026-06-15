@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
@@ -14,6 +15,7 @@ namespace FlyShelf.Windows
     {
         private string _currentFilter = "Upcoming";
         private readonly ObservableCollection<ReminderItem> _filteredReminders = new();
+        private NotifyCollectionChangedEventHandler? _collectionChangedHandler;
 
         public ReminderHistoryWindow()
         {
@@ -23,7 +25,8 @@ namespace FlyShelf.Windows
             RemindersList.ItemsSource = _filteredReminders;
 
             // Refresh when the source collection changes
-            ReminderManager.Reminders.CollectionChanged += (s, e) => RefreshList();
+            _collectionChangedHandler = (s, e) => RefreshList();
+            ReminderManager.Reminders.CollectionChanged += _collectionChangedHandler;
 
             // Esc to close
             this.PreviewKeyDown += (s, e) =>
@@ -170,6 +173,20 @@ namespace FlyShelf.Windows
                 ToastWindow.ShowToast($"Deleted: {reminder.Title}");
                 RefreshList();
             }
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // CLEANUP
+        // ═══════════════════════════════════════════════════════
+
+        protected override void OnClosed(EventArgs e)
+        {
+            if (_collectionChangedHandler != null)
+            {
+                ReminderManager.Reminders.CollectionChanged -= _collectionChangedHandler;
+                _collectionChangedHandler = null;
+            }
+            base.OnClosed(e);
         }
     }
 }

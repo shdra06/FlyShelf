@@ -12,7 +12,7 @@ namespace FlyShelf.Classes
 {
     public partial class CloudDiscoveryManager
     {
-        private static readonly HttpClient _client = new HttpClient();
+        private static readonly HttpClient _client = new HttpClient() { Timeout = TimeSpan.FromSeconds(15) };
         private static string FIREBASE_BASE => FirebaseAuthManager.FirebaseDatabaseUrl;
         
         /// <summary>

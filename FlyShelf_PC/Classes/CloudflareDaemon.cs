@@ -516,14 +516,21 @@ namespace FlyShelf.Classes
                 Logger.LogAction("CLOUDFLARE HEALTH", $"Force check failed: {ex.Message}");
             }
             // Tunnel is dead — restart immediately
-            Logger.LogAction("CLOUDFLARE HEALTH", "🔄 Post-sleep tunnel dead — force-restarting...");
-            StopHealthMonitor();
-            _consecutiveFailures++;
-            GlobalUrl = "Restarting tunnel...";
-            GlobalUrlUpdated?.Invoke(GlobalUrl);
-            KillExisting();
-            await Task.Delay(2000);
-            _ = Task.Run(() => StartTunnelCore());
+            try
+            {
+                Logger.LogAction("CLOUDFLARE HEALTH", "🔄 Post-sleep tunnel dead — force-restarting...");
+                StopHealthMonitor();
+                _consecutiveFailures++;
+                GlobalUrl = "Restarting tunnel...";
+                GlobalUrlUpdated?.Invoke(GlobalUrl);
+                KillExisting();
+                await Task.Delay(2000);
+                _ = Task.Run(() => StartTunnelCore());
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("CLOUDFLARE HEALTH", $"Force-restart failed: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -681,6 +688,7 @@ namespace FlyShelf.Classes
         public event Action<string> GlobalUrlUpdated;
         public Task StartAsync(int localPort) => Task.CompletedTask;
         public void Stop() { }
+        public void ForceCheckTunnelHealth() { }
         public static string GetCloudflaredExePath() => "";
     }
 #endif

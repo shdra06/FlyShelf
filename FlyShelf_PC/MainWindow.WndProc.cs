@@ -42,7 +42,8 @@ namespace FlyShelf
         {
             const int WM_NCACTIVATE = 0x0086;
             const int WM_ACTIVATE = 0x0006;
-            if (msg == WM_NCACTIVATE || msg == WM_ACTIVATE)
+            const int WM_NCPAINT = 0x0085;
+            if (msg == WM_NCACTIVATE || msg == WM_ACTIVATE || msg == WM_NCPAINT)
             {
                 try
                 {
@@ -50,6 +51,16 @@ namespace FlyShelf
                     DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                 }
                 catch { }
+
+                Dispatcher.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        int cn = DWMWA_COLOR_NONE;
+                        DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
+                    }
+                    catch { }
+                }, System.Windows.Threading.DispatcherPriority.Send);
             }
 
             const int WM_MOUSEACTIVATE = 0x0021;
@@ -100,6 +111,7 @@ namespace FlyShelf
                             if (isInputControl)
                             {
                                 // User clicked a search input, let it activate normally
+                                SuppressDwmBorder();
                                 this.Activate();
                                 return IntPtr.Zero;
                             }

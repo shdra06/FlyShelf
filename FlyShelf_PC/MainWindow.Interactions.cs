@@ -57,7 +57,21 @@ namespace FlyShelf
             if (e.OriginalSource is DependencyObject sourceElement)
             {
                 // PDF merge toggle: already handled in PreviewMouseLeftButtonDown
-                if (HasAncestorTag(sourceElement, "PdfMergeToggle"))
+                if (HasAncestorTag(sourceElement, "PdfMergeToggle") || HasAncestorTag(sourceElement, "AltPdfMergeToggle"))
+                {
+                    e.Handled = true;
+                    return;
+                }
+
+                // Aero expand/collapse toggle: already handled
+                if (HasAncestorTag(sourceElement, "AeroExpandToggle"))
+                {
+                    e.Handled = true;
+                    return;
+                }
+
+                // Aero hover actions: already handled / prevent paste-and-hide
+                if (HasAncestorTag(sourceElement, "AeroHoverActions"))
                 {
                     e.Handled = true;
                     return;
@@ -226,6 +240,9 @@ namespace FlyShelf
             _shouldPreventDrag = false;
             _justDeletedAnItem = false;
 
+            var listView = sender as System.Windows.Controls.ListView;
+            if (listView == null) return;
+
             // GUARD: Don't select items when clicking/dragging the scrollbar
             if (e.OriginalSource is DependencyObject src &&
                 FindVisualParent<System.Windows.Controls.Primitives.ScrollBar>(src) != null)
@@ -237,21 +254,21 @@ namespace FlyShelf
             if (e.OriginalSource is DependencyObject sourceElement)
             {
                 // PDF merge toggle: toggle state here and fully consume
-                if (HasAncestorTag(sourceElement, "PdfMergeToggle"))
+                if (HasAncestorTag(sourceElement, "PdfMergeToggle") || HasAncestorTag(sourceElement, "AltPdfMergeToggle"))
                 {
                     _shouldPreventDrag = true;
                     // Debounce: ignore rapid-fire from held mouse button
                     if ((DateTime.Now - _lastMergeToggleTime).TotalMilliseconds > 300)
                     {
                         _lastMergeToggleTime = DateTime.Now;
-                        var toggleContainer = ItemsControl.ContainerFromElement(ShelfListView, sourceElement) as ListViewItem;
+                        var toggleContainer = ItemsControl.ContainerFromElement(listView, sourceElement) as ListViewItem;
                         if (toggleContainer?.DataContext is ClipboardItem item)
                         {
                             item.IsCheckedForMerge = !item.IsCheckedForMerge;
                             UpdatePdfMergeToolbar();
 
                             // Select this item in the ListView
-                            ShelfListView.SelectedItem = item;
+                            listView.SelectedItem = item;
 
                             // Focus the container
                             toggleContainer.Focus();
@@ -259,6 +276,21 @@ namespace FlyShelf
                         }
                     }
                     e.Handled = true;
+                    return;
+                }
+
+                // Aero expand/collapse toggle: don't paste-and-hide
+                if (HasAncestorTag(sourceElement, "AeroExpandToggle"))
+                {
+                    _shouldPreventDrag = true;
+                    e.Handled = true;
+                    return;
+                }
+
+                // Aero hover actions: don't start dragging on them
+                if (HasAncestorTag(sourceElement, "AeroHoverActions"))
+                {
+                    _shouldPreventDrag = true;
                     return;
                 }
 
@@ -270,13 +302,13 @@ namespace FlyShelf
                     return;
                 }
 
-                var itemContainer = ItemsControl.ContainerFromElement(ShelfListView, sourceElement) as ListViewItem;
+                var itemContainer = ItemsControl.ContainerFromElement(listView, sourceElement) as ListViewItem;
                 if (itemContainer != null && itemContainer.DataContext is ClipboardItem)
                 {
                     if (!Keyboard.IsKeyDown(Key.LeftCtrl) && !Keyboard.IsKeyDown(Key.RightCtrl) &&
                         !Keyboard.IsKeyDown(Key.LeftShift) && !Keyboard.IsKeyDown(Key.RightShift))
                     {
-                        ShelfListView.SelectedItems.Clear();
+                        listView.SelectedItems.Clear();
                     }
                     itemContainer.IsSelected = true;
                 }
@@ -315,9 +347,12 @@ namespace FlyShelf
                 if (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
                     Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance)
                 {
-                    if (ShelfListView.SelectedItems.Count > 0)
+                    var listView = sender as System.Windows.Controls.ListView;
+                    if (listView == null) return;
+
+                    if (listView.SelectedItems.Count > 0)
                     {
-                        var firstItem = ShelfListView.SelectedItems.Cast<ClipboardItem>().FirstOrDefault();
+                        var firstItem = listView.SelectedItems.Cast<ClipboardItem>().FirstOrDefault();
                         if (firstItem == null) return;
 
                         DataObject dataObj = new DataObject();
@@ -363,11 +398,9 @@ namespace FlyShelf
 
                             // Explicit Win32 Shell 'Copy' Effect override (Required for Windows Explorer Drag Drop)
                             byte[] moveEffect = new byte[] { 5, 0, 0, 0 }; // DragDropEffects.Copy
-                            using (var dropEffect = new System.IO.MemoryStream())
-                            {
-                                dropEffect.Write(moveEffect, 0, moveEffect.Length);
-                                dataObj.SetData("Preferred DropEffect", dropEffect);
-                            }
+                            var dropEffect = new System.IO.MemoryStream();
+                            dropEffect.Write(moveEffect, 0, moveEffect.Length);
+                            dataObj.SetData("Preferred DropEffect", dropEffect);
                         }
                         else 
                         {
@@ -378,7 +411,7 @@ namespace FlyShelf
                         _didDragOut = true;
                         try
                         {
-                            DragDropEffects result = DragDrop.DoDragDrop(ShelfListView, dataObj, DragDropEffects.Copy | DragDropEffects.Move);
+                            DragDropEffects result = DragDrop.DoDragDrop(listView, dataObj, DragDropEffects.Copy | DragDropEffects.Move);
                             
                             // Items remain persistent on the shelf after drag-out
                         }
@@ -411,7 +444,8 @@ namespace FlyShelf
                 }
             }
 
-            if (ShelfListView.SelectedItem is ClipboardItem item)
+            var listView = sender as System.Windows.Controls.ListView;
+            if (listView?.SelectedItem is ClipboardItem item)
             {
                 item.Execute();
             }
@@ -682,11 +716,14 @@ namespace FlyShelf
         {
             if (IsDeletingItem) return;
 
+            var listView = sender as System.Windows.Controls.ListView;
+            if (listView == null) return;
+
             // Only manage the Unpin button here. Merge bar is controlled by checkbox toggles.
-            if (ShelfListView.SelectedItems.Count > 1)
+            if (listView.SelectedItems.Count > 1)
             {
                 int pinnedCount = 0;
-                foreach (var item in ShelfListView.SelectedItems)
+                foreach (var item in listView.SelectedItems)
                 {
                     if (item is ClipboardItem clipItem && clipItem.IsPinned)
                         pinnedCount++;

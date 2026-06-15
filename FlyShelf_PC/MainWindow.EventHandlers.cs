@@ -11,6 +11,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 
 namespace FlyShelf
 {
@@ -551,239 +552,147 @@ namespace FlyShelf
         {
             if (items == null || items.Count == 0) return;
 
-            var log = new System.Collections.Generic.List<string>();
-            log.Add($"═══ DELETE @ {DateTime.Now:HH:mm:ss.fff} ═══");
-
-            var sv = GetShelfScrollViewer();
-            var verticalScrollBar = sv != null ? FindVisualChild<System.Windows.Controls.Primitives.ScrollBar>(sv) : null;
-            var originalScrollBarVisibility = verticalScrollBar?.Visibility ?? Visibility.Visible;
-
-            try
+            // Cooldown / batch safety: if we delete a massive number of items, do it instantly
+            if (items.Count > 5)
             {
                 IsDeletingItem = true;
                 _isSuppressingSizeSync = true;
-
-                if (verticalScrollBar != null)
+                try
                 {
-                    verticalScrollBar.Visibility = Visibility.Hidden;
-                }
-
-                double savedOffset = sv?.VerticalOffset ?? 0;
-
-                log.Add($"  BEFORE: Offset={savedOffset:F2}  Extent={sv?.ExtentHeight:F2}  Viewport={sv?.ViewportHeight:F2}  ScrollableH={sv?.ScrollableHeight:F2}");
-                var beforePositions = CaptureVisibleCardPositions(log, "BEFORE");
-
-                // Capture anchor: first visible container at or below header area
-                int anchorIndex = -1;
-                double anchorOffsetInViewport = 0;
-                if (sv != null)
-                {
-                    for (int i = 0; i < ShelfListView.Items.Count; i++)
+                    foreach (var item in items)
                     {
-                        var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(i) as ListViewItem;
-                        if (container == null) continue;
-                        try
-                        {
-                            var transform = container.TransformToAncestor(this);
-                            var pos = transform.Transform(new Point(0, 0));
-                            if (pos.Y >= 50)
-                            {
-                                anchorIndex = i;
-                                anchorOffsetInViewport = pos.Y;
-                                break;
-                            }
-                        }
-                        catch { }
+                        _viewModel.RemoveItem(item);
                     }
                 }
-                log.Add($"  Anchor: idx={anchorIndex}  Y={anchorOffsetInViewport:F1}");
-
-                int deletedIndex = items.Count > 0 ? ShelfListView.Items.IndexOf(items[0]) : -1;
-                log.Add($"  Deleting: idx={deletedIndex}  count={items.Count}");
-
-                // Calculate the corrected anchor index after deletion
-                int correctedAnchorIndex = anchorIndex;
-                if (anchorIndex >= 0)
+                finally
                 {
-                    if (deletedIndex >= 0 && deletedIndex < anchorIndex)
-                        correctedAnchorIndex = anchorIndex - 1;
-                    else if (deletedIndex >= 0 && deletedIndex == anchorIndex)
-                        correctedAnchorIndex = anchorIndex;
+                    IsDeletingItem = false;
+                    _isSuppressingSizeSync = false;
+                    if (_isEdgeLocked && this.ActualHeight > 0)
+                    {
+                        _lockedBottomEdge = this.Top + this.ActualHeight + 20;
+                    }
                 }
 
-                // REDUCE VIRTUALIZATION CACHE to prevent off-screen re-estimation
-                VirtualizingPanel.SetCacheLength(ShelfListView, new VirtualizationCacheLength(0, 0));
-                log.Add($"  CACHE → 0,0");
-
-                // Remove the item(s)
-                foreach (var item in items)
-                {
-                    _viewModel.RemoveItem(item);
-                }
-
-                // FILTER PERSISTENCE: Reapply category/search filters synchronously after removal.
-                // Without this, the filter delegate on the CollectionView can be lost during the
-                // subsequent UpdateLayout() + VirtualizationCacheLength manipulation, causing the
-                // user to suddenly see all items instead of the filtered subset.
                 if (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox.Text)))
                 {
                     ReapplyActiveFilters();
                 }
+                ForceMouseReEvaluation();
+                return;
+            }
 
-                log.Add($"  AFTER REMOVE: Offset={sv?.VerticalOffset:F2}  Extent={sv?.ExtentHeight:F2}  ScrollableH={sv?.ScrollableHeight:F2}");
+            IsDeletingItem = true;
+            _isSuppressingSizeSync = true;
 
-                // Immediate scroll restore — the permanent 250px bottom padding
-                // provides enough extra scrollable range to prevent bottom-of-list clamping
-                if (sv != null && savedOffset > 0)
+            // Find all loaded container items to animate
+            var containersToAnimate = new System.Collections.Generic.List<Tuple<ListViewItem, double>>();
+
+            foreach (var item in items)
+            {
+                var c1 = ShelfListView.ItemContainerGenerator.ContainerFromItem(item) as ListViewItem;
+                if (c1 != null && c1.IsLoaded)
                 {
-                    double clampedOffset = Math.Min(savedOffset, sv.ScrollableHeight);
-                    sv.ScrollToVerticalOffset(clampedOffset);
-                    log.Add($"  IMMEDIATE RESTORE: {savedOffset:F2} → {clampedOffset:F2}");
+                    containersToAnimate.Add(new Tuple<ListViewItem, double>(c1, c1.ActualHeight));
                 }
-
-                // SYNCHRONOUS CORRECTION while CacheLength=0,0
-                // With zero cache, UpdateLayout() won't trigger massive re-estimation,
-                // so it's safe to call synchronously without causing cascading jitter.
-                if (sv != null && correctedAnchorIndex >= 0)
+                var c2 = AltShelfListView.ItemContainerGenerator.ContainerFromItem(item) as ListViewItem;
+                if (c2 != null && c2.IsLoaded)
                 {
-                    sv.UpdateLayout();
-                    log.Add($"  SYNC LAYOUT: Offset={sv.VerticalOffset:F2}  Extent={sv.ExtentHeight:F2}");
+                    containersToAnimate.Add(new Tuple<ListViewItem, double>(c2, c2.ActualHeight));
+                }
+            }
 
-                    for (int pass = 0; pass < 3; pass++)
+            if (containersToAnimate.Count == 0)
+            {
+                // No visible containers to animate — remove instantly
+                try
+                {
+                    foreach (var item in items)
                     {
-                        if (correctedAnchorIndex < 0 || correctedAnchorIndex >= ShelfListView.Items.Count) break;
-                        var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(correctedAnchorIndex) as ListViewItem;
-                        if (container == null) break;
-                        try
-                        {
-                            var transform = container.TransformToAncestor(this);
-                            var currentPos = transform.Transform(new Point(0, 0));
-                            double drift = currentPos.Y - anchorOffsetInViewport;
-                            log.Add($"  SYNC PASS {pass}: anchorY={currentPos.Y:F1}  drift={drift:+0.0;-0.0}px");
-                            if (Math.Abs(drift) <= 0.5) { log.Add($"  SYNC CONVERGED on pass {pass}"); break; }
-                            double correctedOffset = sv.VerticalOffset + drift;
-                            correctedOffset = Math.Max(0, Math.Min(correctedOffset, sv.ScrollableHeight));
-                            sv.ScrollToVerticalOffset(correctedOffset);
-                            sv.UpdateLayout();
-                        }
-                        catch { break; }
+                        _viewModel.RemoveItem(item);
                     }
                 }
-
-                // RESTORE CACHE SYNCHRONOUSLY — doing this in a deferred callback
-                // caused a visible "double refresh" (one frame without hover buttons,
-                // then another frame with them). By restoring cache in the same
-                // synchronous block, WPF renders only ONE frame with everything settled.
-                if (sv != null && correctedAnchorIndex >= 0)
+                finally
                 {
-                    int capturedIndex = correctedAnchorIndex;
-                    double capturedTargetY = anchorOffsetInViewport;
-
-                    // Restore cache to normal
-                    VirtualizingPanel.SetCacheLength(ShelfListView, new VirtualizationCacheLength(3, 3));
-                    sv.UpdateLayout();
-                    log.Add($"  CACHE → 3,3  Offset={sv.VerticalOffset:F2}  Extent={sv.ExtentHeight:F2}");
-
-                    // FILTER PERSISTENCE: Reapply filters after cache restoration + UpdateLayout,
-                    // which is the transition most likely to reset the CollectionView filter.
-                    if (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox.Text)))
+                    IsDeletingItem = false;
+                    _isSuppressingSizeSync = false;
+                    if (_isEdgeLocked && this.ActualHeight > 0)
                     {
-                        ReapplyActiveFilters();
+                        _lockedBottomEdge = this.Top + this.ActualHeight + 20;
                     }
-
-                    // Correct any drift from cache restoration
-                    if (capturedIndex >= 0 && capturedIndex < ShelfListView.Items.Count)
-                    {
-                        var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(capturedIndex) as ListViewItem;
-                        if (container != null)
-                        {
-                            try
-                            {
-                                var transform = container.TransformToAncestor(this);
-                                var currentPos = transform.Transform(new Point(0, 0));
-                                double drift = currentPos.Y - capturedTargetY;
-                                log.Add($"  POST-CACHE: anchorY={currentPos.Y:F1}  drift={drift:+0.0;-0.0}px");
-                                if (Math.Abs(drift) > 0.5)
-                                {
-                                    double correctedOffset = sv.VerticalOffset + drift;
-                                    correctedOffset = Math.Max(0, Math.Min(correctedOffset, sv.ScrollableHeight));
-                                    sv.ScrollToVerticalOffset(correctedOffset);
-                                    sv.UpdateLayout();
-                                    log.Add($"  POST-CACHE FIX: → {correctedOffset:F2}");
-                                }
-                            }
-                            catch { }
-                        }
-                    }
-
-                    // Final drift check
-                    CaptureVisibleCardPositions(log, "FINAL");
-                    if (beforePositions != null)
-                    {
-                        var afterPositions = GetVisibleCardPositionMap();
-                        log.Add($"  POSITION DRIFT:");
-                        bool anyDrift = false;
-                        foreach (var kvp in beforePositions)
-                        {
-                            if (afterPositions.TryGetValue(kvp.Key, out double afterY))
-                            {
-                                double d = afterY - kvp.Value;
-                                if (Math.Abs(d) > 0.1) { log.Add($"    {kvp.Key}: {d:+0.0;-0.0}px"); anyDrift = true; }
-                            }
-                        }
-                        if (!anyDrift) log.Add($"    (none — all cards stayed put!)");
-                    }
-
-                    // FORCE MOUSE RE-EVALUATION synchronously — the next card has
-                    // already slid into position under the cursor, so re-set the cursor
-                    // to its own position to trigger IsMouseOver on the new card.
-                    ForceMouseReEvaluation();
-                }
-                else
-                {
-                    // No anchor — just restore cache and force mouse re-evaluation
-                    VirtualizingPanel.SetCacheLength(ShelfListView, new VirtualizationCacheLength(3, 3));
-
-                    // FILTER PERSISTENCE: Also reapply filters in the no-anchor path
-                    if (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox.Text)))
-                    {
-                        ReapplyActiveFilters();
-                    }
-
-                    ForceMouseReEvaluation();
                 }
 
-                // Write diagnostic log in deferred callback (file I/O only, no layout changes)
-                Dispatcher.InvokeAsync(() =>
+                if (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox.Text)))
                 {
+                    ReapplyActiveFilters();
+                }
+                ForceMouseReEvaluation();
+                return;
+            }
+
+            int animationsRunning = containersToAnimate.Count;
+            var duration = TimeSpan.FromMilliseconds(180);
+            var ease = new QuadraticEase { EasingMode = EasingMode.EaseInOut };
+
+            Action onAnimationCompleted = () =>
+            {
+                animationsRunning--;
+                if (animationsRunning <= 0)
+                {
+                    // Physically remove the items from the view model
                     try
                     {
-                        log.Add("");
-                        string logPath = System.IO.Path.Combine(
-                            System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? ".",
-                            "deletion_debug.log");
-                        System.IO.File.AppendAllLines(logPath, log);
+                        foreach (var it in items)
+                        {
+                            _viewModel.RemoveItem(it);
+                        }
                     }
-                    catch { }
-                }, System.Windows.Threading.DispatcherPriority.Background);
-            }
-            catch { }
-            finally
+                    finally
+                    {
+                        IsDeletingItem = false;
+                        _isSuppressingSizeSync = false;
+                        if (_isEdgeLocked && this.ActualHeight > 0)
+                        {
+                            _lockedBottomEdge = this.Top + this.ActualHeight + 20;
+                        }
+                    }
+
+                    // Reset container properties so they can be recycled safely
+                    foreach (var tuple in containersToAnimate)
+                    {
+                        var container = tuple.Item1;
+                        container.BeginAnimation(ListViewItem.HeightProperty, null);
+                        container.BeginAnimation(ListViewItem.OpacityProperty, null);
+                        container.Height = double.NaN;
+                        container.Opacity = 1.0;
+                        container.IsHitTestVisible = true;
+                    }
+
+                    // Reapply filters if needed
+                    if (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox.Text)))
+                    {
+                        ReapplyActiveFilters();
+                    }
+                    ForceMouseReEvaluation();
+                }
+            };
+
+            foreach (var tuple in containersToAnimate)
             {
-                if (verticalScrollBar != null)
-                {
-                    verticalScrollBar.Visibility = originalScrollBarVisibility;
-                }
+                var container = tuple.Item1;
+                double actualHeight = tuple.Item2;
 
-                _isDeletionScrollGuardActive = false;
-                _deletionLog = null;
-                _isSuppressingSizeSync = false;
-                IsDeletingItem = false;
+                container.IsHitTestVisible = false;
 
-                if (_isEdgeLocked && this.ActualHeight > 0)
-                {
-                    _lockedBottomEdge = this.Top + this.ActualHeight + 20;
-                }
+                // Animate height from actual height down to 0
+                var hAnim = new DoubleAnimation(actualHeight, 0, duration) { EasingFunction = ease };
+                // Smoothly fade out opacity
+                var oAnim = new DoubleAnimation(1.0, 0.0, duration) { EasingFunction = ease };
+
+                hAnim.Completed += (s, e) => onAnimationCompleted();
+
+                container.BeginAnimation(ListViewItem.HeightProperty, hAnim);
+                container.BeginAnimation(ListViewItem.OpacityProperty, oAnim);
             }
         }
 
@@ -869,26 +778,42 @@ namespace FlyShelf
         {
             if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
             {
-                if (!string.IsNullOrEmpty(item.FilePath) && System.IO.File.Exists(item.FilePath))
+                try
                 {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(item.FilePath) { UseShellExecute = true });
+                    if (!string.IsNullOrEmpty(item.FilePath) && System.IO.File.Exists(item.FilePath))
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(item.FilePath) { UseShellExecute = true });
+                    }
+                    else if (item.ItemType == FlyShelf.ViewModels.ClipboardItemType.Url && !string.IsNullOrEmpty(item.RawContent))
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(item.RawContent) { UseShellExecute = true });
+                    }
                 }
-                else if (item.ItemType == FlyShelf.ViewModels.ClipboardItemType.Url && !string.IsNullOrEmpty(item.RawContent))
+                catch (Exception)
                 {
-                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(item.RawContent) { UseShellExecute = true });
+                    FlyShelf.Windows.ToastWindow.ShowToast("Could not open file");
                 }
+                e.Handled = true;
+            }
+        }
+
+        private void OpenExplorer_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                _viewModel.OpenFileLocationCommand.Execute(item);
                 e.Handled = true;
             }
         }
 
         private FlyShelf.Windows.QuickLookWindow _activeQuickLook;
 
-        internal void ShowQuickLookForItem(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null)
+        internal void ShowQuickLookForItem(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null, bool autoTriggerOcr = false)
         {
             try { _activeQuickLook?.Close(); } catch { }
             _activeQuickLook = null;
 
-            var qLook = new FlyShelf.Windows.QuickLookWindow(item, preLoadedOcr);
+            var qLook = new FlyShelf.Windows.QuickLookWindow(item, preLoadedOcr, autoTriggerOcr);
             qLook.Closed += (s, args) => { if (_activeQuickLook == s) _activeQuickLook = null; };
             _activeQuickLook = qLook;
             qLook.Show();
@@ -1127,12 +1052,14 @@ namespace FlyShelf
         {
             if (e.Key == Key.Delete && ShelfListView.SelectedItems.Count > 0)
             {
+                if (_isNotesActive || _isTodoActive) return; // Prevent deleting clipboard items while in overlay panels
                 var itemsToRemove = ShelfListView.SelectedItems.Cast<ClipboardItem>().ToList();
                 AnimateAndRemoveItems(itemsToRemove);
                 e.Handled = true;
             }
             else if (e.Key == Key.Enter && ShelfListView.SelectedItem is ClipboardItem selected)
             {
+                if (_isNotesActive || _isTodoActive) return; // Prevent pasting clipboard items while in overlay panels
                 _ = CopyItemAndPaste(selected, hideWindow: true);
                 e.Handled = true;
             }

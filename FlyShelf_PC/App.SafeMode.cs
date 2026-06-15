@@ -102,12 +102,17 @@ public partial class App
                 try
                 {
                     _mutex?.Dispose();
+#if MSIX_STORE
+                    // Store apps cannot self-restart; just shutdown gracefully
+                    Application.Current.Shutdown();
+#else
                     Process.Start(new ProcessStartInfo
                     {
                         FileName = Environment.ProcessPath ?? System.IO.Path.Combine(AppContext.BaseDirectory, "FlyShelf.exe"),
                         UseShellExecute = true
                     });
                     Application.Current.Shutdown();
+#endif
                 }
                 catch (Exception ex) { MessageBox.Show($"Failed to restart: {ex.Message}"); }
             };
@@ -211,6 +216,10 @@ public partial class App
 
         try
         {
+#if MSIX_STORE
+            // Store apps cannot self-restart; just exit
+            Environment.Exit(1);
+#else
             string exePath = Environment.ProcessPath ?? System.IO.Path.Combine(AppContext.BaseDirectory, "FlyShelf.exe");
             Process.Start(new ProcessStartInfo
             {
@@ -218,6 +227,7 @@ public partial class App
                 Arguments = "--safemode",
                 UseShellExecute = true
             });
+#endif
         }
         catch { }
 

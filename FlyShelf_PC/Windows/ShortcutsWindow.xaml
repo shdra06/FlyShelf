@@ -44,16 +44,28 @@
                 </StackPanel>
             </StackPanel>
 
-            <!-- Count pill -->
-            <Border Grid.Column="2" CornerRadius="20" Padding="14,6" VerticalAlignment="Center">
-                <Border.Background>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                        <GradientStop Color="#0A8B5CF6" Offset="0"/>
-                        <GradientStop Color="#08FFFFFF" Offset="1"/>
-                    </LinearGradientBrush>
-                </Border.Background>
-                <TextBlock x:Name="ShortcutCountLabel" Text="0/20" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
-            </Border>
+            <!-- Count pill and Plus button -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- Add Shortcut Toggle Button -->
+                <ui:Button x:Name="ToggleAddMenuBtn" Appearance="Transparent" Click="ToggleAddMenuBtn_Click"
+                           ToolTip="Add New Shortcut" Padding="6" Margin="0,0,8,0" CornerRadius="8"
+                           Background="Transparent" BorderThickness="0" WindowChrome.IsHitTestVisibleInChrome="True">
+                    <ui:Button.Icon>
+                        <ui:SymbolIcon x:Name="ToggleAddMenuIcon" Symbol="Add24" FontSize="18" Foreground="{DynamicResource TypeGroupColor}"/>
+                    </ui:Button.Icon>
+                </ui:Button>
+
+                <!-- Count pill -->
+                <Border CornerRadius="20" Padding="14,6" VerticalAlignment="Center">
+                    <Border.Background>
+                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                            <GradientStop Color="#0A8B5CF6" Offset="0"/>
+                            <GradientStop Color="#08FFFFFF" Offset="1"/>
+                        </LinearGradientBrush>
+                    </Border.Background>
+                    <TextBlock x:Name="ShortcutCountLabel" Text="0/20" FontSize="11.5" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                </Border>
+            </StackPanel>
         </Grid>
 
         <!-- ═══ Info Banner ═══ -->
@@ -114,19 +126,17 @@
                                                 <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
 
-                                            <!-- Trigger Badge (purple gradient pill) -->
-                                            <Grid Grid.Column="0" Width="38" Height="38" Margin="0,0,12,0">
-                                                <Border CornerRadius="9">
-                                                    <Border.Background>
-                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                            <GradientStop Color="#158B5CF6" Offset="0"/>
-                                                            <GradientStop Color="#088B5CF6" Offset="1"/>
-                                                        </LinearGradientBrush>
-                                                    </Border.Background>
-                                                    <TextBlock Text="{Binding Trigger}" FontSize="11.5" FontWeight="Bold" FontFamily="Cascadia Code, Consolas, Segoe UI"
-                                                               Foreground="{DynamicResource TypeGroupColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                            </Grid>
+                                            <!-- Trigger Badge (purple gradient pill, auto-sized so it's never cut off) -->
+                                            <Border Grid.Column="0" CornerRadius="8" Padding="10,6" Margin="0,0,12,0" VerticalAlignment="Center">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                        <GradientStop Color="#158B5CF6" Offset="0"/>
+                                                        <GradientStop Color="#088B5CF6" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <TextBlock Text="{Binding Trigger}" FontSize="12.5" FontWeight="Bold" FontFamily="Cascadia Code, Consolas, Segoe UI"
+                                                           Foreground="{DynamicResource TypeGroupColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
 
                                             <!-- Label + Expansion -->
                                             <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,8,0">
@@ -193,13 +203,13 @@
         </Border>
 
         <!-- ═══ Bottom: Add New Shortcut Bar ═══ -->
-        <Grid Grid.Row="3" Margin="0,14,0,0">
-            <Border CornerRadius="10" Padding="14,10"
+        <Grid x:Name="AddShortcutPanel" Grid.Row="3" Margin="0,10,0,0" Visibility="Collapsed">
+            <Border CornerRadius="10" Padding="12,8"
                     Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
                     BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                 <StackPanel>
                     <!-- Trigger + Label row -->
-                    <Grid Margin="0,0,0,8">
+                    <Grid Margin="0,0,0,6">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="120"/>
                             <ColumnDefinition Width="8"/>
@@ -211,10 +221,10 @@
 
                     <!-- Expansion input -->
                     <ui:TextBox x:Name="ExpansionInput" PlaceholderText="e.g. 42 Maple Street, Apt 7B, New York, NY 10001" FontSize="12"
-                                AcceptsReturn="True" TextWrapping="Wrap" MinLines="2" MaxLines="3" Margin="0,0,0,10"/>
+                                AcceptsReturn="True" TextWrapping="Wrap" MinLines="1" MaxLines="2" Margin="0,0,0,8"/>
 
                     <!-- Add button -->
-                    <ui:Button x:Name="AddShortcutBtn" Appearance="Primary" Padding="16,7" Click="AddShortcut_Click" FontSize="12" CornerRadius="8" HorizontalAlignment="Right">
+                    <ui:Button x:Name="AddShortcutBtn" Appearance="Primary" Padding="14,6" Click="AddShortcut_Click" FontSize="12" CornerRadius="8" HorizontalAlignment="Right">
                         <StackPanel Orientation="Horizontal">
                             <ui:SymbolIcon Symbol="Add24" FontSize="13" Margin="0,0,6,0"/>
                             <TextBlock Text="Add Shortcut" FontSize="12" FontWeight="SemiBold"/>

@@ -6,14 +6,14 @@
         Topmost="True" ShowActivated="True" ShowInTaskbar="False"
         ResizeMode="NoResize" SizeToContent="Height" Width="380"
         WindowStartupLocation="CenterScreen"
-        Loaded="Window_Loaded">
+        Loaded="Window_Loaded" PreviewMouseDown="Window_PreviewMouseDown">
 
     <Window.Resources>
         <!-- ═══ Dark TextBox Template ═══ -->
         <Style x:Key="DarkTextBoxStyle" TargetType="TextBox">
             <Setter Property="Background" Value="#10FFFFFF"/>
             <Setter Property="Foreground" Value="{DynamicResource ThemeTextPrimary}"/>
-            <Setter Property="BorderBrush" Value="#20FFFFFF"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeOverlayBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CaretBrush" Value="{DynamicResource ThemeTextPrimary}"/>
             <Setter Property="SelectionBrush" Value="#50F59E0B"/>
@@ -31,7 +31,7 @@
                                 <Setter Property="BorderBrush" Value="#50F59E0B"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter Property="BorderBrush" Value="#30FFFFFF"/>
+                                <Setter Property="BorderBrush" Value="{DynamicResource ThemeOverlayBorderHover}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -42,7 +42,7 @@
         <!-- ═══ Dark Calendar Style ═══ -->
         <Style x:Key="DarkCalendarDayButton" TargetType="CalendarDayButton">
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="#E0E0E0"/>
+            <Setter Property="Foreground" Value="{DynamicResource ThemeTextPrimary}"/>
             <Setter Property="MinWidth" Value="32"/>
             <Setter Property="MinHeight" Value="32"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
@@ -57,7 +57,7 @@
                         </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="#18FFFFFF"/>
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource ThemeOverlayBgHover}"/>
                             </Trigger>
                             <Trigger Property="IsSelected" Value="True">
                                 <Setter TargetName="Bg" Property="Background" Value="#40F59E0B"/>
@@ -69,7 +69,7 @@
                                 <Setter TargetName="Bg" Property="BorderThickness" Value="1"/>
                             </Trigger>
                             <Trigger Property="IsInactive" Value="True">
-                                <Setter Property="Foreground" Value="#40FFFFFF"/>
+                                <Setter Property="Foreground" Value="{DynamicResource ThemeTextMuted}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -79,7 +79,7 @@
 
         <Style x:Key="DarkCalendarButton" TargetType="CalendarButton">
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="#E0E0E0"/>
+            <Setter Property="Foreground" Value="{DynamicResource ThemeTextPrimary}"/>
             <Setter Property="MinWidth" Value="40"/>
             <Setter Property="MinHeight" Value="32"/>
             <Setter Property="HorizontalContentAlignment" Value="Center"/>
@@ -92,7 +92,7 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bg" Property="Background" Value="#18FFFFFF"/>
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource ThemeOverlayBgHover}"/>
                             </Trigger>
                             <Trigger Property="HasSelectedDays" Value="True">
                                 <Setter TargetName="Bg" Property="Background" Value="#30F59E0B"/>
@@ -114,7 +114,7 @@
                             <!-- Day-of-week header text -->
                             <DataTemplate x:Key="{x:Static CalendarItem.DayTitleTemplateResourceKey}">
                                 <TextBlock Text="{Binding}" FontSize="11" FontWeight="SemiBold"
-                                           Foreground="#80FFFFFF" HorizontalAlignment="Center"
+                                           Foreground="{DynamicResource ThemeTextSecondary}" HorizontalAlignment="Center"
                                            VerticalAlignment="Center" Margin="0,4"/>
                             </DataTemplate>
                         </ControlTemplate.Resources>
@@ -131,7 +131,7 @@
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
                                 <Button x:Name="PART_PreviousButton" Grid.Column="0"
-                                        Content="◀" FontSize="11" Foreground="#A0FFFFFF"
+                                        Content="◀" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}"
                                         Background="Transparent" BorderThickness="0"
                                         Cursor="Hand" Padding="8,4" HorizontalAlignment="Left">
                                     <Button.Template>
@@ -141,7 +141,7 @@
                                             </Border>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="bg" Property="Background" Value="#18FFFFFF"/>
+                                                    <Setter TargetName="bg" Property="Background" Value="{DynamicResource ThemeOverlayBgHover}"/>
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
@@ -158,14 +158,14 @@
                                             </Border>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="bg" Property="Background" Value="#18FFFFFF"/>
+                                                    <Setter TargetName="bg" Property="Background" Value="{DynamicResource ThemeOverlayBgHover}"/>
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
                                     </Button.Template>
                                 </Button>
                                 <Button x:Name="PART_NextButton" Grid.Column="2"
-                                        Content="▶" FontSize="11" Foreground="#A0FFFFFF"
+                                        Content="▶" FontSize="11" Foreground="{DynamicResource ThemeTextSecondary}"
                                         Background="Transparent" BorderThickness="0"
                                         Cursor="Hand" Padding="8,4" HorizontalAlignment="Right">
                                     <Button.Template>
@@ -175,7 +175,7 @@
                                             </Border>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter TargetName="bg" Property="Background" Value="#18FFFFFF"/>
+                                                    <Setter TargetName="bg" Property="Background" Value="{DynamicResource ThemeOverlayBgHover}"/>
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>
@@ -215,7 +215,7 @@
         </Style>
 
         <Style x:Key="DarkCalendarStyle" TargetType="Calendar">
-            <Setter Property="Foreground" Value="#E0E0E0"/>
+            <Setter Property="Foreground" Value="{DynamicResource ThemeTextPrimary}"/>
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="CalendarDayButtonStyle" Value="{StaticResource DarkCalendarDayButton}"/>
@@ -234,7 +234,7 @@
         </Border.Effect>
 
         <!-- Inner glass border -->
-        <Border CornerRadius="15" Padding="20" BorderThickness="1" BorderBrush="#0AFFFFFF">
+        <Border CornerRadius="15" Padding="20" BorderThickness="1" BorderBrush="{DynamicResource ThemeOverlayBorder}">
             <StackPanel>
 
                 <!-- ═══ HEADER ═══ -->
@@ -311,11 +311,11 @@
 
                         <!-- Calendar Popup -->
                         <Popup x:Name="CalendarPopup" PlacementTarget="{Binding ElementName=DatePickerBtn}"
-                               Placement="Bottom" StaysOpen="False" AllowsTransparency="True"
+                               Placement="Bottom" StaysOpen="True" AllowsTransparency="True"
                                VerticalOffset="4" PopupAnimation="Fade">
                             <Border CornerRadius="12" Padding="8" BorderThickness="1"
-                                    Background="#FF1E1E2A"
-                                    BorderBrush="#30FFFFFF">
+                                    Background="{DynamicResource ThemeOverflowBg}"
+                                    BorderBrush="{DynamicResource ThemeOverflowBorder}">
                                 <Border.Effect>
                                     <DropShadowEffect BlurRadius="20" ShadowDepth="4" Opacity="0.4" Color="Black"/>
                                 </Border.Effect>
@@ -350,7 +350,7 @@
 
                         <!-- Time Popup -->
                         <Popup x:Name="TimePopup" PlacementTarget="{Binding ElementName=TimePickerBtn}"
-                               Placement="Bottom" StaysOpen="False" AllowsTransparency="True"
+                               Placement="Bottom" StaysOpen="True" AllowsTransparency="True"
                                VerticalOffset="4" PopupAnimation="Fade">
                             <Border CornerRadius="12" Padding="4" BorderThickness="1"
                                     Background="{DynamicResource ThemeOverflowBg}"
@@ -437,7 +437,7 @@
                 </StackPanel>
 
                 <!-- ═══ SEPARATOR ═══ -->
-                <Border Height="1" Background="#15FFFFFF" Margin="0,14,0,12"/>
+                <Border Height="1" Background="{DynamicResource ThemeSeparator}" Margin="0,14,0,12"/>
 
                 <!-- ═══ SUBMIT BUTTON ═══ -->
                 <Border x:Name="SubmitButton" CornerRadius="10" Padding="0,11" Cursor="Hand"

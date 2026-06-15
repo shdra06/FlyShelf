@@ -154,6 +154,9 @@
                     <ui:NavigationViewItem x:Name="LogsNavItem" Content="Logs" Tag="Logs" PreviewMouseLeftButtonDown="Nav_Click">
                         <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Document24"/></ui:NavigationViewItem.Icon>
                     </ui:NavigationViewItem>
+                    <ui:NavigationViewItem Content="Tutorial" Tag="Tutorial" PreviewMouseLeftButtonDown="Nav_Click">
+                        <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="BookOpen24"/></ui:NavigationViewItem.Icon>
+                    </ui:NavigationViewItem>
                     <ui:NavigationViewItem Content="About" Tag="About" PreviewMouseLeftButtonDown="Nav_Click">
                         <ui:NavigationViewItem.Icon><ui:SymbolIcon Symbol="Info24"/></ui:NavigationViewItem.Icon>
                     </ui:NavigationViewItem>
@@ -766,8 +769,36 @@
                                             </StackPanel>
                                             <TextBlock Text="Securely broadcast your clipboard worldwide via a TryCloudflare reverse proxy inside FlyShelf." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,4,16,0" TextWrapping="Wrap" LineHeight="18"/>
                                         </StackPanel>
-                                        <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalCloudflare, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                        <!-- Regular toggle (visible in non-Store builds) -->
+                                        <ui:ToggleSwitch x:Name="CloudflareToggleSwitch" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalCloudflare, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                     </Grid>
+                                    
+                                    <!-- Store-only: Locked overlay with download message (hidden by default, shown in Store builds via code-behind) -->
+                                    <Border x:Name="CloudflareStoreLockBanner" Visibility="Collapsed"
+                                            Background="#18F59E0B" BorderBrush="#44F59E0B" BorderThickness="1" CornerRadius="8" 
+                                            Padding="14,10" Margin="0,6,0,0">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="🔒" FontSize="18" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                <TextBlock Text="This feature is not available in the Microsoft Store version." 
+                                                           FontSize="12" FontWeight="SemiBold" Foreground="#F59E0B" TextWrapping="Wrap"/>
+                                                <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap" 
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}">
+                                                    <Run Text="To unlock Cloudflare tunneling, download FlyShelf directly from "/>
+                                                    <Hyperlink x:Name="CloudflareWebsiteLink" Foreground="#10B981" 
+                                                               NavigateUri="https://github.com/shdra06/FlyShelf" 
+                                                               RequestNavigate="CloudflareWebsiteLink_Navigate">
+                                                        <Run Text="our website"/>
+                                                    </Hyperlink>
+                                                    <Run Text="."/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
                                 </StackPanel>
                             </Border>
                             
@@ -1205,22 +1236,24 @@
                                 </Border.Background>
                             </Border>
 
-                            <!--  2-COLUMN CARD GRID -->
+                            <!-- ═══ SECTION 1: GENERAL ═══ -->
+                            <StackPanel Margin="0,0,0,6">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="⚙️" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="General" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                </StackPanel>
+                                <Border Height="1" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,8,0,12"/>
+                            </StackPanel>
+
+                            <!-- ── Section 1: General ── Device Identity + License Key (2-col grid) -->
                             <Grid Margin="0,0,0,12">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="12"/>
                                     <ColumnDefinition Width="*"/>
                                 </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
 
-                                <!-- ROW 0, COL 0: Device Identity -->
+                                <!-- COL 0: Device Identity -->
                                 <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource PremiumSettingStyle}">
                                     <StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
@@ -1240,7 +1273,7 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- ROW 0, COL 2: License Key Activation -->
+                                <!-- COL 2: License Key Activation -->
                                 <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource PremiumSettingStyle}">
                                     <StackPanel>
                                         <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
@@ -1293,17 +1326,85 @@
                                         </Border>
                                     </StackPanel>
                                 </Border>
+                            </Grid>
 
-                                <!-- ROW 1, COL 0: Drag Behavior -->
-                                <Border Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" Style="{StaticResource PremiumSettingStyle}">
+                            <!-- General Toggles (2-col grid) -->
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="12"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <!-- ROW 0, COL 0: Run at Startup -->
+                                <Border Grid.Row="0" Grid.Column="0" Style="{StaticResource PremiumSettingStyle}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                            <GradientStop Color="#10B981" Offset="0"/>
+                                                            <GradientStop Color="#34D399" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                    <ui:SymbolIcon Symbol="Play24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="Run at Startup" FontWeight="Bold" FontSize="14" Foreground="#34D399" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <TextBlock Text="Launch FlyShelf automatically when you log into Windows." 
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                        </StackPanel>
+                                        <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=AutoStartEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                </Border>
+
+                                <!-- ROW 0, COL 2: Notifications -->
+                                <Border Grid.Row="0" Grid.Column="2" Style="{StaticResource PremiumSettingStyle}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                            <GradientStop Color="#F59E0B" Offset="0"/>
+                                                            <GradientStop Color="#FBBF24" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                    <ui:SymbolIcon Symbol="Alert24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="Notifications" FontWeight="Bold" FontSize="14" Foreground="#FBBF24" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <TextBlock Text="Show toast notifications for clipboard events, sync status, and other app activity." 
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                        </StackPanel>
+                                        <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableNotifications, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                </Border>
+
+                                <!-- ROW 2, COL 0: Drag Behavior -->
+                                <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource PremiumSettingStyle}">
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0">
-                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
-                                                <Border Width="32" Height="32" CornerRadius="8" Margin="0,0,10,0">
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
                                                     <Border.Background>
                                                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                                             <GradientStop Color="#10B981" Offset="0"/>
@@ -1314,14 +1415,118 @@
                                                 </Border>
                                                 <TextBlock Text="Drag Behavior" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                                             </StackPanel>
-                                            <TextBlock Text="Keep items in history after dragging out of FlyShelf." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="11" TextWrapping="Wrap" LineHeight="16" Margin="0,0,12,0"/>
+                                            <TextBlock Text="Keep items in history after dragging out of FlyShelf." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" TextWrapping="Wrap" LineHeight="17" Margin="38,0,12,0"/>
                                         </StackPanel>
                                         <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=KeepItemOnDragOut, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                     </Grid>
                                 </Border>
 
-                                <!-- ROW 2: Full-width Clipboard Size card -->
-                                <Border Grid.Row="2" Grid.Column="0" Style="{StaticResource PremiumSettingStyle}">
+                                <!-- ROW 2, COL 2: Save Configuration -->
+                                <Border Grid.Row="2" Grid.Column="2" Style="{StaticResource PremiumSettingStyle}">
+                                    <StackPanel VerticalAlignment="Center">
+                                        <ui:Button Appearance="Primary" Click="SaveSettings_Click" HorizontalAlignment="Stretch" Content="Save Configuration" Padding="10,8" CornerRadius="8" FontWeight="SemiBold"/>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+
+
+                            <!-- ═══ SECTION 2: CLIPBOARD & BEHAVIOR ═══ -->
+                            <StackPanel Margin="0,24,0,6">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📋" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Clipboard &amp; Behavior" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                </StackPanel>
+                                <Border Height="1" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,8,0,12"/>
+                            </StackPanel>
+
+                            <!-- Clipboard Toggles (2-col grid) -->
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- COL 0: Shake to Open -->
+                                <Border Grid.Column="0" Style="{StaticResource PremiumSettingStyle}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                            <GradientStop Color="#8B5CF6" Offset="0"/>
+                                                            <GradientStop Color="#A78BFA" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                    <ui:SymbolIcon Symbol="CursorClick24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="Shake to Open" FontWeight="Bold" FontSize="14" Foreground="#A78BFA" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <TextBlock Text="Rapidly shake your mouse while holding left-click to summon FlyShelf at your cursor position." 
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                        </StackPanel>
+                                        <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableShakeToOpen, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                </Border>
+
+                                <!-- COL 2: Auto Cleanup -->
+                                <Border Grid.Column="2" Style="{StaticResource PremiumSettingStyle}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                            <GradientStop Color="#F59E0B" Offset="0"/>
+                                                            <GradientStop Color="#FBBF24" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                    <ui:SymbolIcon Symbol="Delete24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="Auto Cleanup" FontWeight="Bold" FontSize="14" Foreground="#FBBF24" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <TextBlock Text="Automatically delete unpinned entries older than the retention period. Pinned items are never deleted." 
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                        </StackPanel>
+                                        <ComboBox x:Name="RetentionCombo" Grid.Column="1" VerticalAlignment="Center" MinWidth="120" SelectionChanged="RetentionCombo_SelectionChanged">
+                                            <ComboBoxItem Content="7 days" Tag="7"/>
+                                            <ComboBoxItem Content="14 days" Tag="14"/>
+                                            <ComboBoxItem Content="30 days" Tag="30"/>
+                                            <ComboBoxItem Content="Never" Tag="0"/>
+                                        </ComboBox>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+
+
+                            <!-- ═══ SECTION 3: SIZE & LAYOUT ═══ -->
+                            <StackPanel Margin="0,24,0,6">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="📐" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Size &amp; Layout" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                </StackPanel>
+                                <Border Height="1" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,8,0,12"/>
+                            </StackPanel>
+
+                            <!-- Clipboard Size + FlyShelf Size (2-col grid) -->
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <!-- COL 0: Clipboard Size -->
+                                <Border Grid.Column="0" Style="{StaticResource PremiumSettingStyle}">
                                     <Grid>
                                         <StackPanel>
                                             <Grid Margin="0,0,0,4">
@@ -1375,7 +1580,7 @@
                                                     <Grid>
                                                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                         <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipW_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
-                                                        <Slider Grid.Column="1" Minimum="200" Maximum="500" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormWidth}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                                        <Slider Grid.Column="1" Minimum="200" Maximum="500" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormWidth}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="ClipboardSizeSlider_ValueChanged"/>
                                                         <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipW_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
                                                     </Grid>
                                                 </StackPanel>
@@ -1390,7 +1595,7 @@
                                                     <Grid>
                                                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                         <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipH_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
-                                                        <Slider Grid.Column="1" Minimum="300" Maximum="700" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormHeight}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                                        <Slider Grid.Column="1" Minimum="300" Maximum="700" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MediumFormHeight}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="ClipboardSizeSlider_ValueChanged"/>
                                                         <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="ClipH_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
                                                     </Grid>
                                                 </StackPanel>
@@ -1400,8 +1605,8 @@
                                     </Grid>
                                 </Border>
 
-                                <!-- ROW 2, COL 2: FlyShelf Size -->
-                                <Border Grid.Row="2" Grid.Column="2" Style="{StaticResource PremiumSettingStyle}">
+                                <!-- COL 2: FlyShelf Size -->
+                                <Border Grid.Column="2" Style="{StaticResource PremiumSettingStyle}">
                                     <Grid>
                                         <StackPanel>
                                             <Grid Margin="0,0,0,4">
@@ -1455,7 +1660,7 @@
                                                     <Grid>
                                                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                         <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropW_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
-                                                        <Slider Grid.Column="1" Minimum="180" Maximum="400" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormWidth}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                                        <Slider Grid.Column="1" Minimum="180" Maximum="400" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormWidth}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="FlyShelfSizeSlider_ValueChanged"/>
                                                         <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropW_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
                                                     </Grid>
                                                 </StackPanel>
@@ -1470,7 +1675,7 @@
                                                     <Grid>
                                                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                                         <ui:Button Grid.Column="0" Content="-" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropH_Minus" FontSize="14" FontWeight="Bold" Margin="0,0,4,0"/>
-                                                        <Slider Grid.Column="1" Minimum="100" Maximum="350" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormHeight}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center"/>
+                                                        <Slider Grid.Column="1" Minimum="100" Maximum="350" Value="{Binding Source={x:Static settings:SettingsManager.Current}, Path=MiniFormHeight}" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="FlyShelfSizeSlider_ValueChanged"/>
                                                         <ui:Button Grid.Column="2" Content="+" Padding="4,1" CornerRadius="4" Appearance="Secondary" Click="DropH_Plus" FontSize="14" FontWeight="Bold" Margin="4,0,0,0"/>
                                                     </Grid>
                                                 </StackPanel>
@@ -1479,153 +1684,82 @@
                                         <Grid Background="Transparent" MouseDown="SizingLockedCard_MouseDown" Visibility="Collapsed" x:Name="FlyShelfSizeLockedOverlay"/>
                                     </Grid>
                                 </Border>
-
-                                <!-- ROW 3: Full-width Save -->
-                                <Border Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="3" Style="{StaticResource PremiumSettingStyle}">
-                                    <StackPanel VerticalAlignment="Center">
-                                        <ui:Button Appearance="Primary" Click="SaveSettings_Click" HorizontalAlignment="Stretch" Content="Save Configuration" Padding="10,8" CornerRadius="8" FontWeight="SemiBold"/>
-                                    </StackPanel>
-                                </Border>
-
-
                             </Grid>
 
-                            <!-- Run at Startup -->
-                            <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,12,0,12">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                            <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
-                                                <Border.Background>
-                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                        <GradientStop Color="#10B981" Offset="0"/>
-                                                        <GradientStop Color="#34D399" Offset="1"/>
-                                                    </LinearGradientBrush>
-                                                </Border.Background>
-                                                <ui:SymbolIcon Symbol="Play24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <TextBlock Text="Run at Startup" FontWeight="Bold" FontSize="14" Foreground="#34D399" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                        <TextBlock Text="Launch FlyShelf automatically when you log into Windows." 
-                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
-                                    </StackPanel>
-                                    <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=AutoStartEnabled, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                </Grid>
-                            </Border>
 
-                            <!-- Shake to Open -->
-                            <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                            <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
-                                                <Border.Background>
-                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                        <GradientStop Color="#8B5CF6" Offset="0"/>
-                                                        <GradientStop Color="#A78BFA" Offset="1"/>
-                                                    </LinearGradientBrush>
-                                                </Border.Background>
-                                                <ui:SymbolIcon Symbol="CursorClick24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <TextBlock Text="Shake to Open" FontWeight="Bold" FontSize="14" Foreground="#A78BFA" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                        <TextBlock Text="Rapidly shake your mouse while holding left-click to summon FlyShelf at your cursor position." 
-                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
-                                    </StackPanel>
-                                    <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableShakeToOpen, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                </Grid>
-                            </Border>
+                            <!-- ═══ SECTION 4: WIDGET ═══ -->
+                            <StackPanel Margin="0,24,0,6">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🧩" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Widget" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                </StackPanel>
+                                <Border Height="1" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,8,0,12"/>
+                            </StackPanel>
 
-                            <!-- Aero Clipboard UI -->
-                            <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                            <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
-                                                <Border.Background>
-                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                        <GradientStop Color="#0EA5E9" Offset="0"/>
-                                                        <GradientStop Color="#38BDF8" Offset="1"/>
-                                                    </LinearGradientBrush>
-                                                </Border.Background>
-                                                <ui:SymbolIcon Symbol="DesignIdeas24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <TextBlock Text="Aero Clipboard UI" FontWeight="Bold" FontSize="14" Foreground="#38BDF8" VerticalAlignment="Center"/>
-                                        </StackPanel>
-                                        <TextBlock Text="Switch to a clean minimal clipboard design with compact accent-bar cards and themed gradient backgrounds." 
-                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
-                                    </StackPanel>
-                                    <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=UseAlternateClipboardUI, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                </Grid>
-                            </Border>
+                            <!-- Widget Toggles (2-col grid) -->
+                            <Grid Margin="0,0,0,12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="12"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
 
-                            <!-- Theme & Appearance -->
-                            <!-- Taskbar Widget Toggle -->
-                            <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                            <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
-                                                <Border.Background>
-                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                        <GradientStop Color="#0EA5E9" Offset="0"/>
-                                                        <GradientStop Color="#38BDF8" Offset="1"/>
-                                                    </LinearGradientBrush>
-                                                </Border.Background>
-                                                <ui:SymbolIcon Symbol="Pin24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <TextBlock Text="Taskbar Widget" FontWeight="Bold" FontSize="14" Foreground="#38BDF8" VerticalAlignment="Center"/>
+                                <!-- COL 0: Taskbar Widget -->
+                                <Border Grid.Column="0" Style="{StaticResource PremiumSettingStyle}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                            <GradientStop Color="#0EA5E9" Offset="0"/>
+                                                            <GradientStop Color="#38BDF8" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                    <ui:SymbolIcon Symbol="Pin24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="Taskbar Widget" FontWeight="Bold" FontSize="14" Foreground="#38BDF8" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <TextBlock Text="Show the FlyShelf quick-access widget embedded in your taskbar. System tray icon stays visible regardless." 
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
                                         </StackPanel>
-                                        <TextBlock Text="Show the FlyShelf quick-access widget embedded in your taskbar. System tray icon stays visible regardless." 
-                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
-                                    </StackPanel>
-                                    <ui:ToggleSwitch x:Name="TaskbarWidgetToggle" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableTaskbarWidget, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Checked="TaskbarWidgetToggle_Changed" Unchecked="TaskbarWidgetToggle_Changed" />
-                                </Grid>
-                            </Border>
+                                        <ui:ToggleSwitch x:Name="TaskbarWidgetToggle" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableTaskbarWidget, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Checked="TaskbarWidgetToggle_Changed" Unchecked="TaskbarWidgetToggle_Changed" />
+                                    </Grid>
+                                </Border>
 
-                            <!-- Desktop Mascot Kill Switch -->
-                            <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
-                                            <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
-                                                <Border.Background>
-                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                        <GradientStop Color="#A855F7" Offset="0"/>
-                                                        <GradientStop Color="#C084FC" Offset="1"/>
-                                                    </LinearGradientBrush>
-                                                </Border.Background>
-                                                <ui:SymbolIcon Symbol="Emoji24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <TextBlock Text="Desktop Mascot" FontWeight="Bold" FontSize="14" Foreground="#C084FC" VerticalAlignment="Center"/>
+                                <!-- COL 2: Desktop Mascot -->
+                                <Border Grid.Column="2" Style="{StaticResource PremiumSettingStyle}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                            <GradientStop Color="#A855F7" Offset="0"/>
+                                                            <GradientStop Color="#C084FC" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                    <ui:SymbolIcon Symbol="Emoji24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="Desktop Mascot" FontWeight="Bold" FontSize="14" Foreground="#C084FC" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <TextBlock Text="Show your pet mascot companion on the desktop. The mascot reacts to clipboard events, idles when inactive, and can be dragged around freely." 
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
                                         </StackPanel>
-                                        <TextBlock Text="Show your pet mascot companion on the desktop. The mascot reacts to clipboard events, idles when inactive, and can be dragged around freely." 
-                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
-                                    </StackPanel>
-                                    <ui:ToggleSwitch x:Name="DesktopMascotToggle" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableDesktopMascot, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                </Grid>
-                            </Border>
+                                        <ui:ToggleSwitch x:Name="DesktopMascotToggle" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableDesktopMascot, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                    </Grid>
+                                </Border>
+                            </Grid>
 
+                            <!-- Widget Positioning -->
                             <Border x:Name="WidgetPositioningSection" Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12"
                                     Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableTaskbarWidget, Converter={StaticResource BooleanToVisibilityConverter}}">
                                 <StackPanel VerticalAlignment="Center">
@@ -1695,7 +1829,18 @@
 
                                 </StackPanel>
                             </Border>
-                            <!-- Auto Cleanup -->
+
+
+                            <!-- ═══ SECTION 5: THEME & APPEARANCE ═══ -->
+                            <StackPanel Margin="0,24,0,6">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🎨" FontSize="18" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Theme &amp; Appearance" FontSize="18" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                </StackPanel>
+                                <Border Height="1" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,8,0,12"/>
+                            </StackPanel>
+
+                            <!-- Aero Clipboard UI -->
                             <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12">
                                 <Grid>
                                     <Grid.ColumnDefinitions>
@@ -1707,28 +1852,23 @@
                                             <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
                                                 <Border.Background>
                                                     <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                        <GradientStop Color="#F59E0B" Offset="0"/>
-                                                        <GradientStop Color="#FBBF24" Offset="1"/>
+                                                        <GradientStop Color="#0EA5E9" Offset="0"/>
+                                                        <GradientStop Color="#38BDF8" Offset="1"/>
                                                     </LinearGradientBrush>
                                                 </Border.Background>
-                                                <ui:SymbolIcon Symbol="Delete24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                <ui:SymbolIcon Symbol="DesignIdeas24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
-                                            <TextBlock Text="Auto Cleanup" FontWeight="Bold" FontSize="14" Foreground="#FBBF24" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Aero Clipboard UI" FontWeight="Bold" FontSize="14" Foreground="#38BDF8" VerticalAlignment="Center"/>
                                         </StackPanel>
-                                        <TextBlock Text="Automatically delete unpinned clipboard entries older than the retention period. Pinned items are never deleted." 
+                                        <TextBlock Text="Switch to a clean minimal clipboard design with compact accent-bar cards and themed gradient backgrounds." 
                                                    Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
                                     </StackPanel>
-                                    <ComboBox x:Name="RetentionCombo" Grid.Column="1" VerticalAlignment="Center" MinWidth="120" SelectionChanged="RetentionCombo_SelectionChanged">
-                                        <ComboBoxItem Content="7 days" Tag="7"/>
-                                        <ComboBoxItem Content="14 days" Tag="14"/>
-                                        <ComboBoxItem Content="30 days" Tag="30"/>
-                                        <ComboBoxItem Content="Never" Tag="0"/>
-                                    </ComboBox>
+                                    <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=UseAlternateClipboardUI, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
                                 </Grid>
                             </Border>
 
-                            <!-- Theme & Appearance -->
-                            <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,12,0,20">
+                            <!-- Theme & Appearance: Wallpaper + Blur -->
+                            <Border Style="{StaticResource PremiumSettingStyle}" Margin="0,0,0,12">
                                 <StackPanel>
                                     <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
                                         <Border Width="32" Height="32" CornerRadius="8" Margin="0,0,10,0">
@@ -2636,6 +2776,201 @@
                         </StackPanel>
                     </ScrollViewer>
                 </Grid>
+
+                <!-- ═══════════════════ TUTORIAL GRID ═══════════════════ -->
+                <Grid x:Name="TutorialGrid" Visibility="Collapsed">
+                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                        <StackPanel Margin="0,8,0,0">
+
+                            <!-- Header -->
+                            <StackPanel Margin="0,0,0,6">
+                                <TextBlock Text="Learn FlyShelf" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
+                                <TextBlock Text="Master every feature with quick guides &amp; shortcuts" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,4,0,0" TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Border Height="2" CornerRadius="1" HorizontalAlignment="Left" Width="60" Margin="0,8,0,20">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                        <GradientStop Color="#6366F1" Offset="0"/>
+                                        <GradientStop Color="#8B5CF6" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+
+                            <!-- Tutorial Cards 2-Column Grid -->
+                            <UniformGrid Columns="2" Margin="0,0,0,20">
+
+                                <!-- Card 1: Summon & Dismiss -->
+                                <Border CornerRadius="16" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="0,0,8,16" Cursor="Hand">
+                                    <StackPanel>
+                                        <Border Width="48" Height="48" CornerRadius="12" Margin="0,0,0,14" HorizontalAlignment="Left">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#A78BFA" Offset="0"/>
+                                                    <GradientStop Color="#7C3AED" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <ui:SymbolIcon Symbol="Keyboard24" FontSize="20" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock Text="Summon &amp; Dismiss" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}" Margin="0,0,0,6"/>
+                                        <TextBlock Text="Press Alt+C to open your clipboard from anywhere. Press again or Esc to hide." FontSize="12" Foreground="#94A3B8" TextWrapping="Wrap" LineHeight="18"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Card 2: Drag & Drop -->
+                                <Border CornerRadius="16" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="8,0,0,16" Cursor="Hand">
+                                    <StackPanel>
+                                        <Border Width="48" Height="48" CornerRadius="12" Margin="0,0,0,14" HorizontalAlignment="Left">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#22D3EE" Offset="0"/>
+                                                    <GradientStop Color="#06B6D4" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <ui:SymbolIcon Symbol="CursorClick24" FontSize="20" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock Text="Drag &amp; Drop" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}" Margin="0,0,0,6"/>
+                                        <TextBlock Text="Drag files, images, or text into FlyShelf. Drag items out to paste them anywhere." FontSize="12" Foreground="#94A3B8" TextWrapping="Wrap" LineHeight="18"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Card 3: Cross-Device Sync -->
+                                <Border CornerRadius="16" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="0,0,8,16" Cursor="Hand">
+                                    <StackPanel>
+                                        <Border Width="48" Height="48" CornerRadius="12" Margin="0,0,0,14" HorizontalAlignment="Left">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#10B981" Offset="0"/>
+                                                    <GradientStop Color="#059669" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <ui:SymbolIcon Symbol="Globe24" FontSize="20" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock Text="Cross-Device Sync" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}" Margin="0,0,0,6"/>
+                                        <TextBlock Text="Pair your phone to sync clipboard between devices in real-time." FontSize="12" Foreground="#94A3B8" TextWrapping="Wrap" LineHeight="18"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Card 4: Quick Notes & To-Do -->
+                                <Border CornerRadius="16" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="8,0,0,16" Cursor="Hand">
+                                    <StackPanel>
+                                        <Border Width="48" Height="48" CornerRadius="12" Margin="0,0,0,14" HorizontalAlignment="Left">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#FBBF24" Offset="0"/>
+                                                    <GradientStop Color="#F59E0B" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <ui:SymbolIcon Symbol="Notepad24" FontSize="20" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock Text="Quick Notes &amp; To-Do" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}" Margin="0,0,0,6"/>
+                                        <TextBlock Text="Click the notes icon to jot quick notes. Toggle the to-do list for tasks." FontSize="12" Foreground="#94A3B8" TextWrapping="Wrap" LineHeight="18"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Card 5: Themes & Wallpapers -->
+                                <Border CornerRadius="16" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="0,0,8,16" Cursor="Hand">
+                                    <StackPanel>
+                                        <Border Width="48" Height="48" CornerRadius="12" Margin="0,0,0,14" HorizontalAlignment="Left">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#F472B6" Offset="0"/>
+                                                    <GradientStop Color="#EC4899" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <ui:SymbolIcon Symbol="Color24" FontSize="20" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock Text="Themes &amp; Wallpapers" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}" Margin="0,0,0,6"/>
+                                        <TextBlock Text="Open Settings to pick color themes and custom wallpapers for your shelf." FontSize="12" Foreground="#94A3B8" TextWrapping="Wrap" LineHeight="18"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Card 6: Smart Paste -->
+                                <Border CornerRadius="16" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="8,0,0,16" Cursor="Hand">
+                                    <StackPanel>
+                                        <Border Width="48" Height="48" CornerRadius="12" Margin="0,0,0,14" HorizontalAlignment="Left">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#6366F1" Offset="0"/>
+                                                    <GradientStop Color="#4F46E5" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <ui:SymbolIcon Symbol="Clipboard24" FontSize="20" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock Text="Smart Paste" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}" Margin="0,0,0,6"/>
+                                        <TextBlock Text="Press Alt+1 through Alt+0 to instantly paste your 10 most recent items." FontSize="12" Foreground="#94A3B8" TextWrapping="Wrap" LineHeight="18"/>
+                                    </StackPanel>
+                                </Border>
+
+                            </UniformGrid>
+
+                            <!-- Keyboard Shortcuts Card -->
+                            <Border CornerRadius="16" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="24" Margin="0,0,0,20">
+                                <StackPanel>
+                                    <TextBlock Text="⌨️ Keyboard Shortcuts" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Margin="0,0,0,16"/>
+
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Alt+C" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}"/>
+                                        <TextBlock Grid.Column="1" Text="Summon / Dismiss Clipboard" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Alt+1 to Alt+0" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}"/>
+                                        <TextBlock Grid.Column="1" Text="Quick Paste Items 1–10" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Ctrl+F" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}"/>
+                                        <TextBlock Grid.Column="1" Text="Search Clipboard" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Esc" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}"/>
+                                        <TextBlock Grid.Column="1" Text="Hide Clipboard" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Drag In" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}"/>
+                                        <TextBlock Grid.Column="1" Text="Add items to shelf" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Drag Out" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}"/>
+                                        <TextBlock Grid.Column="1" Text="Paste items anywhere" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Replay Onboarding Button -->
+                            <ui:Button x:Name="ReplayOnboardingBtn" Appearance="Secondary" Padding="16,10" CornerRadius="10" HorizontalAlignment="Center" Margin="0,0,0,24" Click="ReplayOnboarding_Click">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="🔄" FontSize="14" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Replay Welcome Tour" FontWeight="SemiBold" FontSize="13" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </ui:Button>
+
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+
 
             </Grid>
 

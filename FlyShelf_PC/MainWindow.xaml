@@ -15,7 +15,7 @@
         WindowStyle="None" ResizeMode="NoResize" Background="Transparent" SystemBackdropType="Mica"
         ShowInTaskbar="False" Margin="0" Topmost="True" ShowActivated="False"
         AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver"
-        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Animated" UseLayoutRounding="True"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Display" TextOptions.TextHintingMode="Fixed" UseLayoutRounding="True" SnapsToDevicePixels="True"
         Loaded="MicaWindow_Loaded" Deactivated="MicaWindow_Deactivated">
 
     <controls:MicaWindow.Resources>
@@ -53,15 +53,6 @@
                 </Style.Resources>
             </Style>
 
-            <!-- Named style for Sync Circular Arrows button based on Premium Glassmorphism Style -->
-            <Style x:Key="ToolbarSyncButtonStyle" TargetType="ui:Button" BasedOn="{StaticResource PremiumHeaderButtonStyle}">
-                <Setter Property="Foreground" Value="#E5FFFFFF"/>
-                <Style.Triggers>
-                    <DataTrigger Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableCloudDiscovery}" Value="True">
-                        <Setter Property="Foreground" Value="#10B981"/>
-                    </DataTrigger>
-                </Style.Triggers>
-            </Style>
 
             <!-- Shared ContextMenu cached at Window level to prevent duplicate MenuItem element allocations -->
             <ContextMenu x:Key="CardContextMenu" StaysOpen="True">
@@ -170,6 +161,11 @@
 
                 <Separator />
 
+                <!-- ═══ FILE-BACKED: Rename ═══ -->
+                <MenuItem Header="✏️ Rename" Click="RenameItem_Click"
+                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                          Visibility="{Binding PlacementTarget.DataContext.CanRename, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+
                 <!-- ═══ FILE-BACKED: Show in Explorer ═══ -->
                 <MenuItem Header="Show in Explorer" 
                           Command="{Binding PlacementTarget.Tag.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
@@ -256,7 +252,7 @@
                 <Border x:Name="SearchBarContainer" Grid.Column="0" Visibility="Collapsed" VerticalAlignment="Center"
                         Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="8"
                         BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
-                        Padding="6,0" Margin="0,0,6,0" Height="32" HorizontalAlignment="Stretch"
+                        Padding="4,0,4,0" Margin="0,0,6,0" Height="32" MinWidth="200" HorizontalAlignment="Stretch"
                         Panel.ZIndex="10" PreviewMouseLeftButtonDown="SearchBar_PreviewMouseDown"
                         RenderTransformOrigin="1,0.5">
                     <Border.RenderTransform>
@@ -264,17 +260,14 @@
                     </Border.RenderTransform>
                     <Grid VerticalAlignment="Center">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
-                        <!-- Search icon -->
-                        <ui:SymbolIcon Grid.Column="0" Symbol="Search24" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" Margin="2,0,6,0"/>
                         <!-- Search input with integrated placeholder -->
-                        <TextBox x:Name="SearchTextBox" Grid.Column="1" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
+                        <TextBox x:Name="SearchTextBox" Grid.Column="0" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
                                  FontSize="13" VerticalAlignment="Center" VerticalContentAlignment="Center" 
                                  CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Padding="0" Margin="0"
-                                 HorizontalContentAlignment="Left" MinWidth="80"
+                                 HorizontalContentAlignment="Left" MinWidth="120"
                                  TextChanged="SearchTextBox_TextChanged" PreviewKeyDown="SearchTextBox_PreviewKeyDown">
                             <TextBox.Style>
                                 <Style TargetType="TextBox">
@@ -285,7 +278,7 @@
                                         <Setter.Value>
                                             <ControlTemplate TargetType="TextBox">
                                                 <Grid Background="Transparent">
-                                                    <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0" Padding="0" VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
+                                                    <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="-2,0,0,0" Padding="0" VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
                                                     <TextBlock x:Name="PlaceholderText" Text="Search clipboard..." 
                                                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
                                                                VerticalAlignment="Center" FontSize="13" IsHitTestVisible="False" Margin="0"
@@ -303,7 +296,9 @@
                             </TextBox.Style>
                         </TextBox>
                         <!-- Clear search button -->
-                        <ui:Button Grid.Column="2" Focusable="False" Appearance="Secondary" Foreground="{DynamicResource SubtleTextColor}" Click="ClearSearch_Click" ToolTip="Clear Search" Margin="4,0,0,0" Padding="4,2" CornerRadius="6">
+                        <ui:Button Grid.Column="1" Focusable="False" Appearance="Transparent" Foreground="{DynamicResource SubtleTextColor}" Click="ClearSearch_Click" ToolTip="Clear Search" 
+                                   Margin="2,0,0,0" Padding="4,4" CornerRadius="6" Width="24" Height="24" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                   Background="Transparent" BorderThickness="0">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss12" FontSize="10"/></ui:Button.Icon>
                         </ui:Button>
                     </Grid>
@@ -365,7 +360,7 @@
                              <ui:Button.Resources>
                                  <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
                                  <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
-                                 <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#C4B5FD"/>
+                                 <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{DynamicResource ThemeAccentLightColor}"/>
                              </ui:Button.Resources>
                              <ui:Button.Icon><ui:SymbolIcon Symbol="List24" /></ui:Button.Icon>
                          </ui:Button>
@@ -375,7 +370,7 @@
                              <ui:Button.Resources>
                                  <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
                                  <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
-                                 <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#C4B5FD"/>
+                                 <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{DynamicResource ThemeAccentLightColor}"/>
                              </ui:Button.Resources>
                              <ui:Button.Icon><ui:SymbolIcon Symbol="TaskListSquareLtr24" /></ui:Button.Icon>
                          </ui:Button>
@@ -390,7 +385,7 @@
                              <ui:Button.Resources>
                                  <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
                                  <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
-                                 <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#C4B5FD"/>
+                                 <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="{DynamicResource ThemeAccentLightColor}"/>
                              </ui:Button.Resources>
                              <ui:Button.Icon><ui:SymbolIcon Symbol="Timer24" /></ui:Button.Icon>
                          </ui:Button>
@@ -446,65 +441,65 @@
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
 
                     <!-- Images Chip -->
-                    <Border x:Name="FilterBtn_Images" CornerRadius="10" Margin="3,0" Cursor="Hand"
+                    <Border x:Name="FilterBtn_Images" CornerRadius="10" Margin="1,0" Cursor="Hand"
                             MouseLeftButtonDown="FilterCategory_Click" Tag="Images"
                             Background="{DynamicResource FilterImageBg}"
                             BorderBrush="{DynamicResource FilterImageBorder}" BorderThickness="1"
-                            Padding="12,6" SnapsToDevicePixels="True">
+                            Padding="8,5" SnapsToDevicePixels="True">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="Image24" Foreground="{DynamicResource TypeImageColor}" FontSize="14" Margin="0,0,5,0"/>
-                            <TextBlock Text="Images" FontSize="11" FontWeight="SemiBold"
+                            <ui:SymbolIcon Symbol="Image24" Foreground="{DynamicResource TypeImageColor}" FontSize="13" Margin="0,0,4,0"/>
+                            <TextBlock Text="Images" FontSize="10.5" FontWeight="SemiBold"
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
 
                     <!-- Pinned Chip -->
-                    <Border x:Name="FilterBtn_Pinned" CornerRadius="10" Margin="3,0" Cursor="Hand"
+                    <Border x:Name="FilterBtn_Pinned" CornerRadius="10" Margin="1,0" Cursor="Hand"
                             MouseLeftButtonDown="FilterCategory_Click" Tag="Pinned"
                             Background="{DynamicResource FilterPinnedBg}"
                             BorderBrush="{DynamicResource FilterPinnedBorder}" BorderThickness="1"
-                            Padding="12,6" SnapsToDevicePixels="True">
+                            Padding="8,5" SnapsToDevicePixels="True">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="Pin24" Foreground="{DynamicResource PinActiveColor}" Filled="True" FontSize="14" Margin="0,0,5,0"/>
-                            <TextBlock Text="Pinned" FontSize="11" FontWeight="SemiBold"
+                            <ui:SymbolIcon Symbol="Pin24" Foreground="{DynamicResource PinActiveColor}" Filled="True" FontSize="13" Margin="0,0,4,0"/>
+                            <TextBlock Text="Pinned" FontSize="10.5" FontWeight="SemiBold"
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
 
                     <!-- PDF Chip -->
-                    <Border x:Name="FilterBtn_Pdf" CornerRadius="10" Margin="3,0" Cursor="Hand"
+                    <Border x:Name="FilterBtn_Pdf" CornerRadius="10" Margin="1,0" Cursor="Hand"
                             MouseLeftButtonDown="FilterCategory_Click" Tag="PDF"
                             Background="{DynamicResource FilterPdfBg}"
                             BorderBrush="{DynamicResource FilterPdfBorder}" BorderThickness="1"
-                            Padding="12,6" SnapsToDevicePixels="True">
+                            Padding="8,5" SnapsToDevicePixels="True">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="{DynamicResource DangerColor}" FontSize="14" Margin="0,0,5,0"/>
-                            <TextBlock Text="PDF" FontSize="11" FontWeight="SemiBold"
+                            <ui:SymbolIcon Symbol="DocumentPdf24" Foreground="{DynamicResource DangerColor}" FontSize="13" Margin="0,0,4,0"/>
+                            <TextBlock Text="PDF" FontSize="10.5" FontWeight="SemiBold"
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
 
                     <!-- Docs Chip -->
-                    <Border x:Name="FilterBtn_Docs" CornerRadius="10" Margin="3,0" Cursor="Hand"
+                    <Border x:Name="FilterBtn_Docs" CornerRadius="10" Margin="1,0" Cursor="Hand"
                             MouseLeftButtonDown="FilterCategory_Click" Tag="Docs"
                             Background="{DynamicResource FilterDocsBg}"
                             BorderBrush="{DynamicResource FilterDocsBorder}" BorderThickness="1"
-                            Padding="12,6" SnapsToDevicePixels="True">
+                            Padding="8,5" SnapsToDevicePixels="True">
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <ui:SymbolIcon Symbol="Document24" Foreground="{DynamicResource InfoColor}" FontSize="14" Margin="0,0,5,0"/>
-                            <TextBlock Text="Docs" FontSize="11" FontWeight="SemiBold"
+                            <ui:SymbolIcon Symbol="Document24" Foreground="{DynamicResource InfoColor}" FontSize="13" Margin="0,0,4,0"/>
+                            <TextBlock Text="Docs" FontSize="10.5" FontWeight="SemiBold"
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
 
                     <!-- Separator -->
-                    <Border Width="1" Height="20" Margin="6,0" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" VerticalAlignment="Center"/>
+                    <Border Width="1" Height="20" Margin="3,0" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" VerticalAlignment="Center"/>
 
                     <!-- Dismiss Chip -->
-                    <Border CornerRadius="10" Margin="3,0" Cursor="Hand" MouseLeftButtonDown="FilterClear_Click"
+                    <Border CornerRadius="10" Margin="1,0" Cursor="Hand" MouseLeftButtonDown="FilterClear_Click"
                             Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
                             BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
-                            Padding="8,6" SnapsToDevicePixels="True" ToolTip="Clear Filter">
+                            Padding="6,5" SnapsToDevicePixels="True" ToolTip="Clear Filter">
                         <ui:SymbolIcon Symbol="Dismiss16" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" HorizontalAlignment="Center"/>
                     </Border>
 
@@ -600,90 +595,43 @@
                     <StackPanel Orientation="Horizontal">
                         <!-- Emoji Picker -->
                         <ui:Button x:Name="EmojiBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,4,0" Padding="0">
-                            <ui:Button.Resources>
-                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#38EAB308"/>
-                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#75EAB308"/>
-                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FEF08A"/>
-                                
-                                <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#1AEAB308"/>
-                                <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#30EAB308"/>
-                            </ui:Button.Resources>
                             <emoji:TextBlock Text="😊" FontSize="16" 
                                              VerticalAlignment="Center" HorizontalAlignment="Center"
                                              Margin="0,-1,0,0"/>
                         </ui:Button>
 
                         <!-- Merge PDF button — hidden by default, replaces emoji space when PDFs selected -->
-                        <ui:Button x:Name="MergePdfToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,4,0" Foreground="{DynamicResource DangerColor}">
-                            <ui:Button.Resources>
-                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28EF4444"/>
-                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#60EF4444"/>
-                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FECDD3"/>
-                            </ui:Button.Resources>
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24" Foreground="{DynamicResource DangerColor}"/></ui:Button.Icon>
+                        <ui:Button x:Name="MergePdfToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,4,0">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24"/></ui:Button.Icon>
                         </ui:Button>
                         
                         <!-- Global Sync Toggle -->
-                        <ui:Button x:Name="SyncToolbarBtn" Style="{StaticResource ToolbarSyncButtonStyle}" Click="ToggleGlobalSync_Click" ToolTip="Toggle All Sync" Margin="0,0,4,0">
-                            <ui:Button.Resources>
-                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#2810B981"/>
-                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#6010B981"/>
-                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#A7F3D0"/>
-                            </ui:Button.Resources>
+                        <ui:Button x:Name="SyncToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ToggleGlobalSync_Click" ToolTip="Toggle All Sync" Margin="0,0,4,0">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowSync24" Filled="True"/></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Unpin toolbar button — hidden by default, replaces sync space when pinned items selected -->
-                        <ui:Button x:Name="UnpinToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="UnpinSelectedBtn_Click" ToolTip="Unpin Selected Items" Margin="0,0,4,0" Foreground="{DynamicResource WarningColor}">
-                            <ui:Button.Resources>
-                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28F59E0B"/>
-                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#60F59E0B"/>
-                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FDE68A"/>
-                            </ui:Button.Resources>
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="PinOff24" Foreground="{DynamicResource WarningColor}"/></ui:Button.Icon>
+                        <ui:Button x:Name="UnpinToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="UnpinSelectedBtn_Click" ToolTip="Unpin Selected Items" Margin="0,0,4,0">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="PinOff24"/></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Shortcuts Button -->
                         <ui:Button x:Name="ShortcutsToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ShortcutsBtn_Click" ToolTip="Text Shortcuts" Margin="0,0,4,0">
-                            <ui:Button.Resources>
-                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
-                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
-                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#C4B5FD"/>
-                            </ui:Button.Resources>
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Rocket24" /></ui:Button.Icon>
                         </ui:Button>
 
-                        <!-- Reminder Button -->
-                        <ui:Button x:Name="ReminderToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ReminderBtn_Click" ToolTip="Set Reminder" Margin="0,0,4,0">
-                            <ui:Button.Resources>
-                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28F59E0B"/>
-                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#60F59E0B"/>
-                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FDE68A"/>
-                            </ui:Button.Resources>
+                        <!-- Reminders Button -->
+                        <ui:Button x:Name="ReminderToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ReminderBtn_Click" ToolTip="Reminders" Margin="0,0,4,0">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Alert24" /></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Clear Shelf Button -->
-                        <ui:Button x:Name="ClearAllToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ClearAllToolbar_Click" ToolTip="Clear Shelf (Delete Unpinned)" Margin="0,0,4,0"
-                                   Foreground="{DynamicResource DangerColor}">
-                            <ui:Button.Resources>
-                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28EF4444"/>
-                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#60EF4444"/>
-                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FECDD3"/>
-                                
-                                <SolidColorBrush x:Key="ButtonBackgroundPressed" Color="#1AEF4444"/>
-                                <SolidColorBrush x:Key="ButtonBorderBrushPressed" Color="#30EF4444"/>
-                            </ui:Button.Resources>
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" Foreground="{DynamicResource DangerColor}"/></ui:Button.Icon>
+                        <ui:Button x:Name="ClearAllToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ClearAllToolbar_Click" ToolTip="Clear Shelf (Delete Unpinned)" Margin="0,0,4,0">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24"/></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Open Settings Hub -->
                         <ui:Button x:Name="OpenSettingsBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="OpenApp_Click" ToolTip="Open Hub (Settings)">
-                            <ui:Button.Resources>
-                                <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28F59E0B"/>
-                                <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#60F59E0B"/>
-                                <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#FDE68A"/>
-                            </ui:Button.Resources>
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Settings24" /></ui:Button.Icon>
                         </ui:Button>
                     </StackPanel>
@@ -930,9 +878,6 @@
                                                 <DataTrigger Binding="{Binding HasSmartAction}" Value="True">
                                                     <Setter Property="Visibility" Value="Visible"/>
                                                 </DataTrigger>
-                                                <DataTrigger Binding="{Binding SmartActionType}" Value="ConvertToPdf">
-                                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                                </DataTrigger>
                                                 <DataTrigger Binding="{Binding SmartActionType}" Value="OpenPDF">
                                                     <Setter Property="Visibility" Value="Collapsed"/>
                                                 </DataTrigger>
@@ -1016,7 +961,7 @@
                                         </Style>
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource PinActiveColor}" ToolTip="Show in Explorer"
-                                               Command="{Binding DataContext.OpenFileLocationCommand, ElementName=ShelfListView}" CommandParameter="{Binding}">
+                                               PreviewMouseLeftButtonDown="OpenExplorer_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
@@ -1032,7 +977,7 @@
                                         </Style>
                                     </Border.Style>
                                     <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource PinActiveColor}" ToolTip="Open Folder"
-                                               Command="{Binding DataContext.OpenFileLocationCommand, ElementName=ShelfListView}" CommandParameter="{Binding}">
+                                               PreviewMouseLeftButtonDown="OpenExplorer_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
@@ -2088,13 +2033,14 @@
                     </StackPanel>
 
                     <!-- Search Pill -->
-                    <Border Grid.Column="1" Margin="12,0,6,0" Height="26" CornerRadius="13" Padding="8,0"
+                    <Border Grid.Column="1" Margin="12,0,6,0" Height="30" CornerRadius="15" Padding="10,0"
                             Background="{DynamicResource AltSearchBg}" BorderBrush="{DynamicResource AltSearchBorder}" BorderThickness="1"
-                            VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonDown="AltSearchToggle_Click">
+                            VerticalAlignment="Center" Cursor="Hand" MouseLeftButtonDown="AltSearchToggle_Click"
+                            MinWidth="80">
                         <Grid VerticalAlignment="Center">
                             <StackPanel x:Name="AltSearchPlaceholder" Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                <ui:SymbolIcon Symbol="Search24" FontSize="11" Foreground="{DynamicResource AltSearchFg}" Margin="0,0,5,0"/>
-                                <TextBlock Text="Search" FontSize="11" Foreground="{DynamicResource AltSearchFg}" VerticalAlignment="Center"/>
+                                <ui:SymbolIcon Symbol="Search24" FontSize="12" Foreground="{DynamicResource AltSearchFg}" Margin="0,0,5,0"/>
+                                <TextBlock Text="Search" FontSize="12" Foreground="{DynamicResource AltSearchFg}" VerticalAlignment="Center"/>
                             </StackPanel>
                             <Grid x:Name="AltSearchContainer" Visibility="Collapsed" VerticalAlignment="Center">
                                 <Grid.ColumnDefinitions>
@@ -2102,12 +2048,29 @@
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <ui:SymbolIcon Grid.Column="0" Symbol="Search24" FontSize="11" Foreground="{DynamicResource AltSearchFg}" Margin="0,0,5,0" VerticalAlignment="Center"/>
-                                <TextBox x:Name="AltSearchTextBox" Grid.Column="1" Background="Transparent" BorderThickness="0" Padding="0,1"
-                                         FontSize="11" Foreground="{DynamicResource AltTextPrimary}" CaretBrush="{DynamicResource AltTextPrimary}"
-                                         TextChanged="AltSearch_TextChanged" VerticalAlignment="Center"/>
-                                <Border Grid.Column="2" Width="16" Height="16" CornerRadius="8" Background="#15000000"
-                                        Cursor="Hand" MouseLeftButtonDown="AltSearchToggle_Click" VerticalAlignment="Center" Margin="3,0,0,0">
+                                <ui:SymbolIcon Grid.Column="0" Symbol="Search24" FontSize="12" Foreground="{DynamicResource AltSearchFg}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBox x:Name="AltSearchTextBox" Grid.Column="1" Padding="0" Margin="0"
+                                         FontSize="12" Foreground="{DynamicResource AltTextPrimary}" CaretBrush="{DynamicResource AltTextPrimary}"
+                                         TextChanged="AltSearch_TextChanged" VerticalAlignment="Center" VerticalContentAlignment="Center"
+                                         MinWidth="100">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox">
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="BorderThickness" Value="0"/>
+                                            <Setter Property="Focusable" Value="True"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="TextBox">
+                                                        <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False"
+                                                                      Margin="0" Padding="0" VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </TextBox.Style>
+                                </TextBox>
+                                <Border Grid.Column="2" Width="18" Height="18" CornerRadius="9" Background="#15000000"
+                                        Cursor="Hand" MouseLeftButtonDown="AltSearchToggle_Click" VerticalAlignment="Center" Margin="4,0,0,0">
                                     <ui:SymbolIcon Symbol="Dismiss16" FontSize="8" Foreground="{DynamicResource AltTextSecondary}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                 </Border>
                             </Grid>
@@ -2234,7 +2197,7 @@
                                             <ColumnDefinition Width="4"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
                                         <!-- HOVER ACTION BUTTONS -->
-                                        <StackPanel Grid.Column="0" Grid.ColumnSpan="4" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,4,0" Panel.ZIndex="5" Orientation="Horizontal">
+                                        <StackPanel Grid.Column="0" Grid.ColumnSpan="4" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,4,0" Panel.ZIndex="5" Orientation="Horizontal" Tag="AeroHoverActions">
                                             <StackPanel.Style><Style TargetType="StackPanel"><Setter Property="Opacity" Value="0"/><Setter Property="IsHitTestVisible" Value="False"/>
                                                 <Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions>
                                                     <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True"/>
@@ -2246,22 +2209,90 @@
                                                 </MultiDataTrigger></Style.Triggers>
                                             </Style></StackPanel.Style>
                                             <StackPanel.Resources><Style x:Key="AeroPill" TargetType="Border"><Setter Property="CornerRadius" Value="5"/><Setter Property="Background" Value="{DynamicResource AltBottomBarBg}"/><Setter Property="BorderBrush" Value="{DynamicResource AltCardBorder}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="Width" Value="24"/><Setter Property="Height" Value="24"/><Setter Property="Margin" Value="0,0,1,0"/><Setter Property="Cursor" Value="Hand"/></Style></StackPanel.Resources>
-                                            <Border Margin="0,0,1,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="QRCode"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="12" Foreground="{DynamicResource AltAccent_Image}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" PreviewMouseLeftButtonDown="QuickLookSpecific_Click"/></Border>
-                                            <Border Margin="0,0,1,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Document"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="File"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Open24" FontSize="12" Foreground="{DynamicResource AltAccent_Document}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" PreviewMouseLeftButtonDown="OpenSpecific_Click"/></Border>
-                                            <Border Margin="0,0,1,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Search24" FontSize="12" Foreground="{DynamicResource AltAccent_Url}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" PreviewMouseLeftButtonDown="GoogleSearchSpecific_Click"/></Border>
-                                            <Border Margin="0,0,1,0"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsPassword}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Eye24" Filled="True" FontSize="12" Foreground="{DynamicResource AltAccent_Password}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" PreviewMouseLeftButtonDown="PeekPasswordSpecific_Click" ToolTip="Peek password (5s)"/></Border>
-                                            <Border Style="{StaticResource AeroPill}"><ui:SymbolIcon FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" PreviewMouseLeftButtonDown="PinSpecific_Click"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="Pin24"/><Setter Property="Filled" Value="True"/><Setter Property="Foreground" Value="{DynamicResource AltPinDot}"/><Style.Triggers><DataTrigger Binding="{Binding IsPinned}" Value="True"><Setter Property="Symbol" Value="PinOff24"/><Setter Property="Foreground" Value="{DynamicResource AltTextTertiary}"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
-                                            <Border Style="{StaticResource AeroPill}"><ui:SymbolIcon Symbol="Delete24" Filled="True" FontSize="12" Foreground="{DynamicResource DangerColor}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand" PreviewMouseLeftButtonDown="DeleteSpecific_Click"/></Border>
+                                            <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="QuickLookSpecific_Click"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="QRCode"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="12" Foreground="{DynamicResource AltAccent_Image}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
+                                            <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="OpenSpecific_Click"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Document"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="File"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Video"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Audio"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Archive"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Presentation"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Open24" FontSize="12" Foreground="{DynamicResource AltAccent_Document}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
+                                            <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="GoogleSearchSpecific_Click"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Search24" FontSize="12" Foreground="{DynamicResource AltAccent_Url}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
+                                            <Border Margin="0,0,1,0" PreviewMouseLeftButtonDown="PeekPasswordSpecific_Click" ToolTip="Peek password (5s)"><Border.Style><Style TargetType="Border" BasedOn="{StaticResource AeroPill}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsPassword}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Eye24" Filled="True" FontSize="12" Foreground="{DynamicResource AltAccent_Password}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
+                                            <Border Style="{StaticResource AeroPill}" PreviewMouseLeftButtonDown="PinSpecific_Click"><ui:SymbolIcon FontSize="12" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="Pin24"/><Setter Property="Filled" Value="True"/><Setter Property="Foreground" Value="{DynamicResource AltPinDot}"/><Style.Triggers><DataTrigger Binding="{Binding IsPinned}" Value="True"><Setter Property="Symbol" Value="PinOff24"/><Setter Property="Foreground" Value="{DynamicResource AltTextTertiary}"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
+                                            <Border Style="{StaticResource AeroPill}" PreviewMouseLeftButtonDown="DeleteSpecific_Click"><ui:SymbolIcon Symbol="Delete24" Filled="True" FontSize="12" Foreground="{DynamicResource DangerColor}" HorizontalAlignment="Center" VerticalAlignment="Center" Cursor="Hand"/></Border>
                                         </StackPanel>
+                                        <!-- PDF MERGE TOGGLE — top-left checkbox for PDF/Document/Image items -->
+                                        <Button Grid.Column="0" Grid.ColumnSpan="2" VerticalAlignment="Top" HorizontalAlignment="Left"
+                                                Margin="0,-2,0,0" Panel.ZIndex="10" Focusable="False"
+                                                Tag="AltPdfMergeToggle" Click="AltPdfMergeToggle_Click">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Setter Property="Cursor" Value="Hand"/>
+                                                    <Setter Property="OverridesDefaultStyle" Value="True"/>
+                                                    <Setter Property="Background" Value="Transparent"/>
+                                                    <Setter Property="Template">
+                                                        <Setter.Value>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Grid Width="22" Height="22" Background="Transparent">
+                                                                    <Border x:Name="UncheckedBg" Width="18" Height="18" CornerRadius="5"
+                                                                            Background="#60FFFFFF" BorderBrush="#40EF4444" BorderThickness="1.5"/>
+                                                                    <Border x:Name="CheckedBg" Width="18" Height="18" CornerRadius="5"
+                                                                            Background="#EF4444" BorderBrush="#EF4444" BorderThickness="1.5" Visibility="Collapsed"/>
+                                                                    <TextBlock x:Name="CheckMark" Text="✓" FontSize="11" FontWeight="Bold"
+                                                                               Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                               Margin="0,-1,0,0" Visibility="Collapsed"/>
+                                                                </Grid>
+                                                                <ControlTemplate.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsCheckedForMerge}" Value="True">
+                                                                        <Setter TargetName="UncheckedBg" Property="Visibility" Value="Collapsed"/>
+                                                                        <Setter TargetName="CheckedBg" Property="Visibility" Value="Visible"/>
+                                                                        <Setter TargetName="CheckMark" Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter TargetName="UncheckedBg" Property="BorderBrush" Value="#EF4444"/>
+                                                                        <Setter TargetName="UncheckedBg" Property="Background" Value="#40EF4444"/>
+                                                                    </Trigger>
+                                                                </ControlTemplate.Triggers>
+                                                            </ControlTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                    <Style.Triggers>
+                                                        <!-- Show on hover for PDF -->
+                                                        <MultiDataTrigger><MultiDataTrigger.Conditions>
+                                                            <Condition Binding="{Binding IsPdfPreview}" Value="True"/>
+                                                            <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True"/>
+                                                        </MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger>
+                                                        <MultiDataTrigger><MultiDataTrigger.Conditions>
+                                                            <Condition Binding="{Binding IsPdfPreview}" Value="True"/>
+                                                            <Condition Binding="{Binding IsCheckedForMerge}" Value="True"/>
+                                                        </MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger>
+                                                        <!-- Show on hover for Document -->
+                                                        <MultiDataTrigger><MultiDataTrigger.Conditions>
+                                                            <Condition Binding="{Binding IsDocPreview}" Value="True"/>
+                                                            <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True"/>
+                                                        </MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger>
+                                                        <MultiDataTrigger><MultiDataTrigger.Conditions>
+                                                            <Condition Binding="{Binding IsDocPreview}" Value="True"/>
+                                                            <Condition Binding="{Binding IsCheckedForMerge}" Value="True"/>
+                                                        </MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger>
+                                                        <!-- Show on hover for Image -->
+                                                        <MultiDataTrigger><MultiDataTrigger.Conditions>
+                                                            <Condition Binding="{Binding IsImagePreview}" Value="True"/>
+                                                            <Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True"/>
+                                                        </MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger>
+                                                        <MultiDataTrigger><MultiDataTrigger.Conditions>
+                                                            <Condition Binding="{Binding IsImagePreview}" Value="True"/>
+                                                            <Condition Binding="{Binding IsCheckedForMerge}" Value="True"/>
+                                                        </MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
                                         <!-- ACCENT BAR -->
                                         <Border Grid.Column="0" Width="3" CornerRadius="2" Margin="1,6,0,6" HorizontalAlignment="Left"><Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{DynamicResource AltAccent_Default}"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Background" Value="{DynamicResource AltAccent_Text}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Background" Value="{DynamicResource AltAccent_Code}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Background" Value="{DynamicResource AltAccent_Image}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Background" Value="{DynamicResource AltAccent_Pdf}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Background" Value="{DynamicResource AltAccent_Url}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Document"><Setter Property="Background" Value="{DynamicResource AltAccent_Document}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Archive"><Setter Property="Background" Value="{DynamicResource AltAccent_Archive}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Folder"><Setter Property="Background" Value="{DynamicResource AltAccent_Folder}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Video"><Setter Property="Background" Value="{DynamicResource AltAccent_Video}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Audio"><Setter Property="Background" Value="{DynamicResource AltAccent_Audio}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Password"><Setter Property="Background" Value="{DynamicResource AltAccent_Password}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Presentation"><Setter Property="Background" Value="{DynamicResource AltAccent_Presentation}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="QRCode"><Setter Property="Background" Value="{DynamicResource AltAccent_QRCode}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Group"><Setter Property="Background" Value="{DynamicResource AltAccent_Group}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="File"><Setter Property="Background" Value="{DynamicResource AltAccent_File}"/></DataTrigger></Style.Triggers></Style></Border.Style></Border>
                                         <!-- ICON -->
                                         <Grid Grid.Column="1" Width="32" Height="32" Margin="8,8,6,8">
                                             <Border CornerRadius="7" ClipToBounds="True"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Visible"/><Style.Triggers><DataTrigger Binding="{Binding Icon}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding IsImagePreview}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style><Image Source="{Binding Icon}" Width="32" Height="32" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="HighQuality"/></Border>
                                             <!-- Expand/Collapse button for long text -->
-                                            <Border CornerRadius="7" Width="32" Height="32" Cursor="Hand"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsLongText}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Border.Background><SolidColorBrush Color="#3B82F6" Opacity="0.08"/></Border.Background><Border.InputBindings><MouseBinding MouseAction="LeftClick" Command="{Binding ToggleExpandCommand}"/></Border.InputBindings><ui:SymbolIcon FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="ChevronDown24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Text}"/><Style.Triggers><DataTrigger Binding="{Binding IsExpanded}" Value="True"><Setter Property="Symbol" Value="ChevronUp24"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
-                                            <!-- Fallback icon for non-text items without a custom icon -->
-                                            <Border CornerRadius="7" Width="32" Height="32"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Icon}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Border.Background><SolidColorBrush Color="#000000" Opacity="0.05"/></Border.Background><ui:SymbolIcon FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="Document24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_File}"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Symbol" Value="Code24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Code}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Symbol" Value="Image24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Image}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Symbol" Value="DocumentPdf24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Pdf}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Symbol" Value="Globe24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Url}"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
+                                            <Border CornerRadius="7" Width="32" Height="32" Cursor="Hand" Tag="AeroExpandToggle"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding IsLongText}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Border.Style><Border.Background><SolidColorBrush Color="#3B82F6" Opacity="0.08"/></Border.Background><Border.InputBindings><MouseBinding MouseAction="LeftClick" Command="{Binding ToggleExpandCommand}"/></Border.InputBindings><ui:SymbolIcon FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="ChevronDown24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Text}"/><Style.Triggers><DataTrigger Binding="{Binding IsExpanded}" Value="True"><Setter Property="Symbol" Value="ChevronUp24"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
+                                            <!-- Fallback icon for items without a custom icon (text, url, code, etc.) -->
+                                            <Border CornerRadius="7" Width="32" Height="32"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding Icon}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding IsLongText}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Border.Style><Border.Background><SolidColorBrush Color="#000000" Opacity="0.05"/></Border.Background><ui:SymbolIcon FontSize="15" HorizontalAlignment="Center" VerticalAlignment="Center"><ui:SymbolIcon.Style><Style TargetType="ui:SymbolIcon"><Setter Property="Symbol" Value="Document24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_File}"/><Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Text"><Setter Property="Symbol" Value="TextDescription24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Text}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Symbol" Value="Code24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Code}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Symbol" Value="Image24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Image}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Symbol" Value="DocumentPdf24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Pdf}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Url"><Setter Property="Symbol" Value="Globe24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Url}"/></DataTrigger><DataTrigger Binding="{Binding ItemType}" Value="Password"><Setter Property="Symbol" Value="ShieldKeyhole24"/><Setter Property="Foreground" Value="{DynamicResource AltAccent_Password}"/></DataTrigger></Style.Triggers></Style></ui:SymbolIcon.Style></ui:SymbolIcon></Border>
                                         </Grid>
                                         <!-- TEXT BODY -->
                                         <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="2,5,4,5">
@@ -2314,6 +2345,7 @@
               RenderTransformOrigin="0.5,0" PreviewMouseDown="NotesPanel_PreviewMouseDown"
               TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
               RenderOptions.ClearTypeHint="Enabled" UseLayoutRounding="True" SnapsToDevicePixels="True"
+              Validation.ErrorTemplate="{x:Null}"
               Background="#1A1A2E">
             <Grid.RenderTransform>
                 <TranslateTransform Y="0"/>
@@ -2376,88 +2408,42 @@
             <!-- ═══ MAIN CONTENT: SIDEBAR + NOTEPAD ═══ -->
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/> <!-- Thin date sidebar -->
-                    <ColumnDefinition Width="Auto"/> <!-- Collapse chevron -->
+                    <ColumnDefinition x:Name="NotesSidebarColumn" Width="54"/>  <!-- Day Sidebar (collapses to 0) -->
                     <ColumnDefinition Width="*"/>    <!-- Content -->
                 </Grid.ColumnDefinitions>
 
-                <!-- DATE SIDEBAR with month picker at bottom -->
-                <Border x:Name="NotesSidebarBorder" Grid.Column="0" CornerRadius="0" Padding="0" Margin="0,0,0,0" MinWidth="28"
-                        Background="#16162A" 
-                        BorderBrush="#2A2A45" BorderThickness="0,0,1,0">
-                    <DockPanel LastChildFill="True">
-                        <!-- Month navigator button (docked to bottom) -->
-                        <Border DockPanel.Dock="Bottom" Padding="2,4" BorderBrush="#2A2A45" BorderThickness="0,1,0,0">
-                            <Border x:Name="NotesMonthPickerBtn" CornerRadius="6" Padding="4,5" Margin="1,2" Cursor="Hand"
-                                    Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1"
-                                    HorizontalAlignment="Center" MouseLeftButtonDown="NotesMonthPicker_Click"
-                                    ToolTip="Browse months">
-                                <TextBlock x:Name="NotesMonthPickerLabel" Text="&#x1F4C5;" FontSize="11" FontWeight="Bold" 
-                                           Foreground="#C4B5FD" TextAlignment="Center" HorizontalAlignment="Center"/>
-                            </Border>
+                <!-- ═══ DAY SIDEBAR (Toggle + Newest-first list of dates) ═══ -->
+                <Border x:Name="NotesSidebarBorder" Grid.Column="0" BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="0,0,1,0" Background="{DynamicResource MicaWPF.Brushes.ControlAltFillColorTertiary}">
+                    <DockPanel>
+                        <!-- Toggle button at top -->
+                        <Border DockPanel.Dock="Top" Cursor="Hand" Height="28"
+                                Background="Transparent"
+                                MouseLeftButtonDown="NotesSidebarToggle_Click" ToolTip="Collapse Sidebar">
+                            <TextBlock x:Name="NotesSidebarCollapseIcon" Text="◂" FontSize="16" FontWeight="Bold"
+                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
+                                       VerticalAlignment="Center" HorizontalAlignment="Center"/>
                         </Border>
-                        <!-- Day list (fills remaining space) -->
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Padding="2,4,2,0">
-                            <ItemsControl x:Name="NotesDaySidebar">
+                        <!-- Date list -->
+                        <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                            <ItemsControl x:Name="NotesDaySidebar" Margin="0,4,0,0">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
-                                        <Border x:Name="DayPill" CornerRadius="6" Padding="4,5" Margin="1,1" Cursor="Hand"
-                                                MouseLeftButtonDown="NotesDayItem_Click" ToolTip="{Binding FullLabel}"
-                                                Background="Transparent" BorderThickness="0">
-                                            <Grid>
-                                                <!-- Day Item Layout -->
-                                                <StackPanel x:Name="DayLayout" HorizontalAlignment="Center">
-                                                    <TextBlock Text="{Binding Label}" FontSize="11" FontWeight="Bold" 
-                                                               Foreground="#D0D0E0" 
-                                                               TextAlignment="Center" HorizontalAlignment="Center"/>
-                                                    <TextBlock x:Name="MonthLabel" Text="{Binding MonthLabel}" FontSize="8" FontWeight="Medium" 
-                                                               Foreground="#7878A0" 
-                                                               TextAlignment="Center" HorizontalAlignment="Center" Margin="0,-1,0,0"
-                                                               Visibility="Collapsed"/>
-                                                </StackPanel>
-                                                <!-- Month Header Layout (Collapsed by default) -->
-                                                <Border x:Name="MonthBox" CornerRadius="4" Padding="3,1" Background="#258B5CF6" BorderBrush="#508B5CF6" BorderThickness="1" Visibility="Collapsed" Width="26">
-                                                    <TextBlock Text="{Binding Label}" FontSize="8" FontWeight="Bold" Foreground="#C4B5FD" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                                </Border>
-                                            </Grid>
+                                        <!-- Day badge container -->
+                                        <Border x:Name="NotesDayBorder" CornerRadius="8" Width="40" Height="40" Margin="0,0,0,6"
+                                                Cursor="Hand" MouseLeftButtonDown="NotesDayItem_Click"
+                                                BorderThickness="1" SnapsToDevicePixels="True"
+                                                Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}"
+                                                BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}"
+                                                ToolTip="{Binding FullLabel}">
+                                            <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                <!-- Day number -->
+                                                <TextBlock Text="{Binding DayNumber}" FontSize="15" FontWeight="Bold" 
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextAlignment="Center" Margin="0,-2,0,0"/>
+                                                <!-- Abbreviated Month -->
+                                                <TextBlock Text="{Binding MonthName}" FontSize="8" FontWeight="SemiBold" 
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextAlignment="Center" Margin="0,-2,0,0" Opacity="0.8"/>
+                                            </StackPanel>
                                         </Border>
-                                        <DataTemplate.Triggers>
-                                            <!-- Today highlight -->
-                                            <DataTrigger Binding="{Binding IsToday}" Value="True">
-                                                <Setter TargetName="DayPill" Property="Background" Value="#208B5CF6"/>
-                                                <Setter TargetName="DayPill" Property="BorderBrush" Value="#408B5CF6"/>
-                                                <Setter TargetName="DayPill" Property="BorderThickness" Value="1"/>
-                                            </DataTrigger>
-                                            <!-- Selected highlight -->
-                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
-                                                <Setter TargetName="DayPill" Property="Background" Value="#408B5CF6"/>
-                                                <Setter TargetName="DayPill" Property="BorderBrush" Value="#8B5CF6"/>
-                                                <Setter TargetName="DayPill" Property="BorderThickness" Value="1"/>
-                                            </DataTrigger>
-                                            <!-- IsMonthHeader: swap day layout for month box (non-clickable label) -->
-                                            <DataTrigger Binding="{Binding IsMonthHeader}" Value="True">
-                                                <Setter TargetName="DayLayout" Property="Visibility" Value="Collapsed"/>
-                                                <Setter TargetName="MonthBox" Property="Visibility" Value="Visible"/>
-                                                <Setter TargetName="DayPill" Property="Padding" Value="1,2"/>
-                                                <Setter TargetName="DayPill" Property="Margin" Value="1,4,1,2"/>
-                                                <Setter TargetName="DayPill" Property="Cursor" Value="Arrow"/>
-                                                <Setter TargetName="DayPill" Property="IsHitTestVisible" Value="False"/>
-                                            </DataTrigger>
-                                            <!-- Selected Month highlight -->
-                                            <MultiDataTrigger>
-                                                <MultiDataTrigger.Conditions>
-                                                    <Condition Binding="{Binding IsMonthHeader}" Value="True"/>
-                                                    <Condition Binding="{Binding IsSelected}" Value="True"/>
-                                                </MultiDataTrigger.Conditions>
-                                                <Setter TargetName="MonthBox" Property="Background" Value="#508B5CF6"/>
-                                                <Setter TargetName="MonthBox" Property="BorderBrush" Value="#C4B5FD"/>
-                                            </MultiDataTrigger>
-                                            <!-- Hover: show month for day items -->
-                                            <Trigger SourceName="DayPill" Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="MonthLabel" Property="Visibility" Value="Visible"/>
-                                                <Setter TargetName="DayPill" Property="Background" Value="#2A2A45"/>
-                                            </Trigger>
-                                        </DataTemplate.Triggers>
                                     </DataTemplate>
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
@@ -2465,12 +2451,14 @@
                     </DockPanel>
                 </Border>
 
-                <!-- Sidebar collapse/expand chevron -->
-                <Border Grid.Column="1" Width="12" Cursor="Hand" Background="#0AFFFFFF"
-                        MouseLeftButtonDown="NotesSidebarToggle_Click" ToolTip="Toggle Sidebar"
-                        VerticalAlignment="Stretch">
-                    <TextBlock x:Name="NotesSidebarCollapseIcon" Text="◂" FontSize="10" FontWeight="Bold"
-                               Foreground="#6B6B9A" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                <!-- Expand arrow (visible when sidebar collapsed) -->
+                <Border x:Name="NotesSidebarExpandBtn" Grid.Column="1" Width="20" HorizontalAlignment="Left" VerticalAlignment="Stretch"
+                        Cursor="Hand" Visibility="Collapsed"
+                        Background="Transparent" BorderThickness="0"
+                        MouseLeftButtonDown="NotesSidebarToggle_Click" ToolTip="Show Sidebar" Panel.ZIndex="5">
+                    <TextBlock Text="▸" FontSize="16" FontWeight="Bold"
+                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
+                               VerticalAlignment="Center" HorizontalAlignment="Center"/>
                 </Border>
 
                 <!-- Month Picker Popup -->
@@ -2514,7 +2502,7 @@
                 </Popup>
 
                 <!-- ═══ NOTES CONTENT AREA ═══ -->
-                <Grid x:Name="NotesContentArea" Grid.Column="2">
+                <Grid x:Name="NotesContentArea" Grid.Column="1">
                     <!-- BULLET MODE: Scrollable list of bullet cards -->
                     <ScrollViewer x:Name="NotesBulletScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <ItemsControl x:Name="NotesBulletList">
@@ -2522,7 +2510,8 @@
                                 <DataTemplate>
                                     <!-- Bullet Card -->
                                     <Border x:Name="BulletCard" CornerRadius="8" Margin="6,0,6,4" Padding="0" ClipToBounds="True"
-                                            BorderThickness="1" BorderBrush="#2A2A45">
+                                            BorderThickness="1" BorderBrush="#2A2A45"
+                                            PreviewMouseLeftButtonDown="BulletCard_PreviewMouseDown">
                                         <Border.Background>
                                             <SolidColorBrush Color="#222240"/>
                                         </Border.Background>
@@ -2597,7 +2586,7 @@
                                                 <Border x:Name="BulletReminderBtn" Grid.Column="3" CornerRadius="4" Cursor="Hand" 
                                                         Padding="3,1" Margin="0,0,3,0" Visibility="Collapsed"
                                                         Background="#18F59E0B" MouseLeftButtonDown="NoteBulletReminder_Click" ToolTip="Set Reminder">
-                                                    <ui:SymbolIcon Symbol="Alert16" Foreground="#F59E0B" FontSize="10"/>
+                                                    <ui:SymbolIcon Symbol="Alert24" FontSize="11" Foreground="#F59E0B" VerticalAlignment="Center"/>
                                                 </Border>
                                                 
                                                 <!-- Delete button (visible on hover) -->
@@ -2607,7 +2596,7 @@
                                                     <ui:SymbolIcon Symbol="Delete16" Foreground="#EF4444" FontSize="10"/>
                                                 </Border>
                                                 <!-- Collapse toggle -->
-                                                <Border Grid.Column="5" CornerRadius="4" Cursor="Hand" Padding="4,1"
+                                                <Border x:Name="BulletCollapseBtn" Grid.Column="5" CornerRadius="4" Cursor="Hand" Padding="4,1"
                                                         MouseLeftButtonDown="NoteBulletCollapse_Click" Background="Transparent">
                                                     <TextBlock Text="{Binding CollapseIcon}" FontSize="11" FontWeight="Bold" 
                                                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
@@ -2748,8 +2737,9 @@
                     <!-- FREEFORM MODE: Text area + images strip -->
                     <ScrollViewer x:Name="NotesFreeformArea" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel>
+                            <Grid>
                             <TextBox x:Name="NotesFreeformBox" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True"
-                                     FontSize="12.5" Background="Transparent" BorderThickness="0" Padding="10,8" MinHeight="120"
+                                     FontSize="12.5" Background="Transparent" BorderThickness="0" Padding="10,8,36,8" MinHeight="120"
                                      Foreground="#E8E8F0"
                                      CaretBrush="#E8E8F0"
                                      SelectionBrush="#608B5CF6"
@@ -2772,6 +2762,17 @@
                                     </Style>
                                 </TextBox.Style>
                             </TextBox>
+                            
+                            <!-- Freeform Reminder Button (top-right floating) -->
+                            <Border x:Name="FreeformReminderBtn" CornerRadius="6" Cursor="Hand" 
+                                    HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Padding="5,4" Margin="0,6,6,0"
+                                    Background="#18F59E0B" BorderBrush="#30F59E0B" BorderThickness="1"
+                                    MouseLeftButtonDown="NotesFreeformReminder_Click" ToolTip="Set Reminder from Notes">
+                                <ui:SymbolIcon Symbol="Alert24" FontSize="12" Foreground="#F59E0B" VerticalAlignment="Center"/>
+                            </Border>
+                            </Grid>
+
 
                             <!-- Freeform images strip (pasted images shown below text) -->
                             <ItemsControl x:Name="NotesFreeformImageList" Margin="0,4,0,0">
@@ -2860,6 +2861,7 @@
               RenderTransformOrigin="0.5,0" PreviewMouseDown="TodoPanel_PreviewMouseDown"
               TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
               RenderOptions.ClearTypeHint="Enabled" UseLayoutRounding="True" SnapsToDevicePixels="True"
+              Validation.ErrorTemplate="{x:Null}"
               Background="Transparent">
             <Grid.RenderTransform>
                 <TranslateTransform Y="0"/>
@@ -2934,11 +2936,11 @@
                 <Border x:Name="TodoSidebarBorder" Grid.Column="0" BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="0,0,1,0" Background="{DynamicResource MicaWPF.Brushes.ControlAltFillColorTertiary}">
                     <DockPanel>
                         <!-- Toggle button at top -->
-                        <Border DockPanel.Dock="Top" Cursor="Hand" Height="22"
-                                Background="{DynamicResource MicaWPF.Brushes.ControlAltFillColorTertiary}"
-                                MouseLeftButtonDown="TodoSidebarToggle_Click" ToolTip="Toggle Sidebar">
-                            <TextBlock x:Name="TodoSidebarCollapseIcon" Text="◂" FontSize="10" FontWeight="Bold"
-                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
+                        <Border DockPanel.Dock="Top" Cursor="Hand" Height="28"
+                                Background="Transparent"
+                                MouseLeftButtonDown="TodoSidebarToggle_Click" ToolTip="Collapse Sidebar">
+                            <TextBlock x:Name="TodoSidebarCollapseIcon" Text="◂" FontSize="16" FontWeight="Bold"
+                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
                                        VerticalAlignment="Center" HorizontalAlignment="Center"/>
                         </Border>
                         <!-- Date list -->
@@ -2969,14 +2971,13 @@
                     </DockPanel>
                 </Border>
 
-                <!-- Small expand button (visible when sidebar collapsed) -->
-                <Border x:Name="TodoSidebarExpandBtn" Grid.Column="1" Width="16" HorizontalAlignment="Left" VerticalAlignment="Top"
-                        Cursor="Hand" Height="22" Visibility="Collapsed"
-                        Background="{DynamicResource MicaWPF.Brushes.ControlAltFillColorTertiary}"
-                        BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="0,0,1,1"
+                <!-- Expand arrow (visible when sidebar collapsed) -->
+                <Border x:Name="TodoSidebarExpandBtn" Grid.Column="1" Width="20" HorizontalAlignment="Left" VerticalAlignment="Stretch"
+                        Cursor="Hand" Visibility="Collapsed"
+                        Background="Transparent" BorderThickness="0"
                         MouseLeftButtonDown="TodoSidebarToggle_Click" ToolTip="Show Sidebar" Panel.ZIndex="5">
-                    <TextBlock Text="▸" FontSize="10" FontWeight="Bold"
-                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
+                    <TextBlock Text="▸" FontSize="16" FontWeight="Bold"
+                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
                                VerticalAlignment="Center" HorizontalAlignment="Center"/>
                 </Border>
 
@@ -3204,4 +3205,3 @@
     </Grid>
     </Border>
 </controls:MicaWindow>
-

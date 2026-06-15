@@ -345,6 +345,14 @@ namespace FlyShelf
             double safeWidth = double.IsNaN(this.Width) ? 360 : this.Width;
             if (safeWidth <= 0) safeWidth = 320;
 
+            // SAFETY FALLBACK: If coordinates are uninitialized or invalid (e.g. -1 or NaN), default to bottom-left corner of the primary monitor
+            if (targetX == -1 || targetY == -1 || double.IsNaN(targetX) || double.IsNaN(targetY))
+            {
+                targetX = workArea.Left + 16 + (safeWidth / 2);
+                targetY = workArea.Top + workArea.Height;
+                Classes.Logger.LogAction("POSITION_FALLBACK", $"Invalid coords overridden to bottom-left fallback: X={targetX}, Y={targetY}");
+            }
+
             double rawX = targetX - (safeWidth / 2);
             if (rawX + safeWidth > workArea.Left + workArea.Width - 16)
                 rawX = workArea.Left + workArea.Width - safeWidth - 16;
@@ -390,11 +398,40 @@ namespace FlyShelf
             this.ShowActivated = stealFocus;
             _spawnedWithoutFocus = !stealFocus;
 
-            // 1. Clear old animation clocks. Keep window opaque but clear content opacity.
+            // 1. Clear old animation clocks. Keep window completely invisible during positioning to prevent solid box flash.
             RootContent.BeginAnimation(UIElement.OpacityProperty, null);
-            RootContent.Opacity = 0; // True zero on content so it is invisible
+            RootContent.Opacity = 1.0; 
             this.BeginAnimation(OpacityProperty, null);
-            this.Opacity = 1.0; // Keep window opaque to avoid layered composition changes
+            this.Opacity = 0; // True zero on window so it is invisible
+
+            // Force zero opacity at Win32 level immediately before moving/showing
+            try
+            {
+                var hwndLayered = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwndLayered != IntPtr.Zero)
+                {
+                    int exStyle = GetWindowLong(hwndLayered, GWL_EXSTYLE);
+                    if ((exStyle & WS_EX_LAYERED) == 0)
+                    {
+                        SetWindowLong(hwndLayered, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+                    }
+                    SetLayeredWindowAttributes(hwndLayered, 0, 0, LWA_ALPHA);
+                }
+            }
+            catch { }
+
+            // Preemptively cloak the window at the DWM level so it is 100% invisible 
+            // when moved onscreen and shown, preventing any flash of a black/white border box.
+            try
+            {
+                var hwndCloak = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwndCloak != IntPtr.Zero)
+                {
+                    int cloakVal = 1;
+                    DwmSetWindowAttribute(hwndCloak, DWMWA_CLOAK, ref cloakVal, sizeof(int));
+                }
+            }
+            catch { }
 
             // Preemptively suspend Mica backdrop before moving onscreen to avoid backdrop pop
             try
@@ -580,6 +617,34 @@ namespace FlyShelf
             }
             else
             {
+                // Force 100% opacity at Win32 level before uncloaking in no-animation path
+                try
+                {
+                    var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwnd != IntPtr.Zero)
+                    {
+                        int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                        if ((exStyle & WS_EX_LAYERED) == 0)
+                        {
+                            SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+                        }
+                        SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
+                    }
+                }
+                catch { }
+
+                // Uncloak for no-animation path
+                try
+                {
+                    var hwndUncloak = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                    if (hwndUncloak != IntPtr.Zero)
+                    {
+                        int uncloakVal = 0;
+                        DwmSetWindowAttribute(hwndUncloak, DWMWA_CLOAK, ref uncloakVal, sizeof(int));
+                    }
+                }
+                catch { }
+
                 this.Opacity = 1.0;
                 _isEdgeLocked = true;
                 UpdatePositionToLockedBottomEdge();

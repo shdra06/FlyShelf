@@ -15,22 +15,12 @@
 
         <!-- ═══ MAIN CARD ═══ -->
         <Border x:Name="AlertBorder" Grid.Row="0" CornerRadius="18" Padding="0"
-                MinWidth="350">
-            <Border.Background>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                    <GradientStop Color="#1E1E2E" Offset="0"/>
-                    <GradientStop Color="#181825" Offset="1"/>
-                </LinearGradientBrush>
-            </Border.Background>
-            <Border.BorderBrush>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                    <GradientStop Color="#25FFFFFF" Offset="0"/>
-                    <GradientStop Color="#08FFFFFF" Offset="1"/>
-                </LinearGradientBrush>
-            </Border.BorderBrush>
-            <Border.BorderThickness>1</Border.BorderThickness>
+                MinWidth="350"
+                Background="{DynamicResource ThemeOverflowBg}"
+                BorderBrush="{DynamicResource ThemeOverflowBorder}"
+                BorderThickness="1">
             <Border.Effect>
-                <DropShadowEffect BlurRadius="40" ShadowDepth="8" Opacity="0.6" Color="#000000"/>
+                <DropShadowEffect BlurRadius="40" ShadowDepth="8" Opacity="0.6" Color="{DynamicResource ThemeOverflowShadowColor}"/>
             </Border.Effect>
             <Border.RenderTransform>
                 <TranslateTransform x:Name="AlertTranslate" Y="15"/>
@@ -38,7 +28,7 @@
 
             <!-- Inner glow layer -->
             <Border CornerRadius="17" Padding="18,16,18,16" BorderThickness="1"
-                    BorderBrush="#08FFFFFF">
+                    BorderBrush="{DynamicResource ThemeOverlayBorder}">
                 <StackPanel>
 
                     <!-- ═══ HEADER ═══ -->
@@ -67,7 +57,7 @@
 
                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
                             <TextBlock Text="Upcoming Reminder" FontSize="13" FontWeight="SemiBold"
-                                       Foreground="#E0E0E0"/>
+                                       Foreground="{DynamicResource ThemeTextPrimary}"/>
                             <TextBlock x:Name="TimeText" FontSize="11" Foreground="#F59E0B" Margin="0,1,0,0"/>
                         </StackPanel>
 
@@ -140,7 +130,7 @@
 
                     <!-- ═══ SNOOZE SECTION ═══ -->
                     <TextBlock Text="SNOOZE FOR" FontSize="10" FontWeight="Bold"
-                               Foreground="#555" Margin="0,0,0,8"/>
+                               Foreground="{DynamicResource ThemeTextMuted}" Margin="0,0,0,8"/>
 
                     <!-- Snooze pills row 1 -->
                     <WrapPanel Margin="0,0,0,6">
@@ -159,7 +149,7 @@
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
-                            <TextBlock Text="5 min" FontSize="12" Foreground="#CCC" FontWeight="Medium"/>
+                            <TextBlock Text="5 min" FontSize="12" Foreground="{DynamicResource ThemeTextPrimary}" FontWeight="Medium"/>
                         </Border>
 
                         <Border CornerRadius="8" Padding="12,7" Margin="0,0,6,6" Cursor="Hand"
@@ -195,7 +185,7 @@
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
-                            <TextBlock Text="30 min" FontSize="12" Foreground="#CCC" FontWeight="Medium"/>
+                            <TextBlock Text="30 min" FontSize="12" Foreground="{DynamicResource ThemeTextPrimary}" FontWeight="Medium"/>
                         </Border>
 
                         <Border CornerRadius="8" Padding="12,7" Margin="0,0,6,6" Cursor="Hand"
@@ -213,7 +203,7 @@
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
-                            <TextBlock Text="1 hour" FontSize="12" Foreground="#CCC" FontWeight="Medium"/>
+                            <TextBlock Text="1 hour" FontSize="12" Foreground="{DynamicResource ThemeTextPrimary}" FontWeight="Medium"/>
                         </Border>
 
                         <Border CornerRadius="8" Padding="12,7" Margin="0,0,6,6" Cursor="Hand"
@@ -231,7 +221,7 @@
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
-                            <TextBlock Text="3 hours" FontSize="12" Foreground="#CCC" FontWeight="Medium"/>
+                            <TextBlock Text="3 hours" FontSize="12" Foreground="{DynamicResource ThemeTextPrimary}" FontWeight="Medium"/>
                         </Border>
 
                         <Border CornerRadius="8" Padding="12,7" Margin="0,0,0,6" Cursor="Hand"
@@ -251,7 +241,7 @@
                             </Border.Style>
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock Text="🌅" FontSize="11" VerticalAlignment="Center" Margin="0,0,4,0"/>
-                                <TextBlock Text="Tomorrow" FontSize="12" Foreground="#CCC" FontWeight="Medium"/>
+                                <TextBlock Text="Tomorrow" FontSize="12" Foreground="{DynamicResource ThemeTextPrimary}" FontWeight="Medium"/>
                             </StackPanel>
                         </Border>
                     </WrapPanel>
@@ -297,7 +287,7 @@
 
         <!-- ═══ ARROW TAIL ═══ -->
         <Path x:Name="ArrowTail" Grid.Row="1" HorizontalAlignment="Center" Margin="0,-1,0,0"
-              Fill="#1E1E2E" Stroke="#20FFFFFF" StrokeThickness="1">
+              Fill="{DynamicResource ThemeOverflowBg}" Stroke="{DynamicResource ThemeOverlayBorder}" StrokeThickness="1">
             <Path.Data>
                 <PathGeometry>
                     <PathFigure StartPoint="0,0" IsClosed="True">

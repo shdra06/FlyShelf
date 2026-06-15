@@ -39,7 +39,9 @@ namespace FlyShelf.Windows
                 TitleInput.Text = prefillTitle;
             }
 
-            // Set the default due date/time
+            // Set the default due date/time (clamp to today if in the past)
+            if (defaultDue < DateTime.Now)
+                defaultDue = DateTime.Today.AddHours(DateTime.Now.Hour).AddMinutes(DateTime.Now.Minute);
             _selectedDate = defaultDue.Date;
             _selectedTime = defaultDue;
             CalendarControl.SelectedDate = _selectedDate;
@@ -88,21 +90,24 @@ namespace FlyShelf.Windows
         private void SetTimeToNearestSlot()
         {
             var now = DateTime.Now;
-            int minutes = now.Minute;
-            int remainder = minutes % 15;
-            var nextSlot = remainder == 0
-                ? now.AddMinutes(15)
-                : now.AddMinutes(15 - remainder);
+            // Round up to the next full hour
+            var nextHour = now.Minute == 0 && now.Second == 0
+                ? now
+                : now.Date.AddHours(now.Hour + 1);
 
+            _selectedDate = DateTime.Today;
             _selectedTime = new DateTime(DateTime.Today.Year, DateTime.Today.Month, DateTime.Today.Day,
-                nextSlot.Hour, nextSlot.Minute, 0);
+                nextHour.Hour, 0, 0);
 
-            if (nextSlot.Date > now.Date)
+            // If rounding pushed past midnight, bump date to tomorrow
+            if (nextHour.Date > now.Date)
             {
-                _selectedDate = nextSlot.Date;
-                CalendarControl.SelectedDate = _selectedDate;
-                UpdateDateDisplay();
+                _selectedDate = nextHour.Date;
+                _selectedTime = new DateTime(nextHour.Year, nextHour.Month, nextHour.Day, 0, 0, 0);
             }
+
+            CalendarControl.SelectedDate = _selectedDate;
+            UpdateDateDisplay();
         }
 
         private void UpdateDateDisplay()
@@ -120,15 +125,55 @@ namespace FlyShelf.Windows
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
             TitleInput.Focus();
-            // Wire event AFTER initialization to prevent premature popup closure
-            // when SelectedDate is set in the constructor
             CalendarControl.SelectedDatesChanged += Calendar_SelectedDatesChanged;
+        }
+
+        private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            // Close popups when clicking outside them
+            if (CalendarPopup.IsOpen && !IsClickInsidePopup(CalendarPopup, e) && !IsClickInsideElement(DatePickerBtn, e))
+            {
+                CalendarPopup.IsOpen = false;
+            }
+            if (TimePopup.IsOpen && !IsClickInsidePopup(TimePopup, e) && !IsClickInsideElement(TimePickerBtn, e))
+            {
+                TimePopup.IsOpen = false;
+            }
+        }
+
+        private bool IsClickInsidePopup(System.Windows.Controls.Primitives.Popup popup, MouseButtonEventArgs e)
+        {
+            if (popup.Child == null) return false;
+            var pos = e.GetPosition(popup.Child);
+            var bounds = new Rect(0, 0, ((FrameworkElement)popup.Child).ActualWidth, ((FrameworkElement)popup.Child).ActualHeight);
+            return bounds.Contains(pos);
+        }
+
+        private bool IsClickInsideElement(FrameworkElement element, MouseButtonEventArgs e)
+        {
+            var pos = e.GetPosition(element);
+            return pos.X >= 0 && pos.Y >= 0 && pos.X <= element.ActualWidth && pos.Y <= element.ActualHeight;
         }
 
         private void Header_MouseDown(object sender, MouseButtonEventArgs e)
         {
+            // Don't drag when clicking the close button
+            if (e.OriginalSource is FrameworkElement fe && IsDescendantOf(fe, "Close"))
+                return;
             if (e.ChangedButton == MouseButton.Left)
                 DragMove();
+        }
+
+        private static bool IsDescendantOf(DependencyObject child, string ancestorTooltip)
+        {
+            var parent = child;
+            while (parent != null)
+            {
+                if (parent is FrameworkElement fe2 && fe2.ToolTip?.ToString() == ancestorTooltip)
+                    return true;
+                parent = VisualTreeHelper.GetParent(parent);
+            }
+            return false;
         }
 
         private void Close_Click(object sender, RoutedEventArgs e)
@@ -140,25 +185,14 @@ namespace FlyShelf.Windows
 
         private void DatePicker_Click(object sender, MouseButtonEventArgs e)
         {
-            // Detach handler before opening to prevent spurious close
-            CalendarControl.SelectedDatesChanged -= Calendar_SelectedDatesChanged;
+            e.Handled = true;
             CalendarPopup.IsOpen = !CalendarPopup.IsOpen;
             TimePopup.IsOpen = false;
-
-            if (CalendarPopup.IsOpen)
-            {
-                // Re-attach handler after WPF finishes its initialization events.
-                // DispatcherPriority.Input ensures all layout/render events have settled.
-                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, () =>
-                {
-                    CalendarControl.SelectedDatesChanged += Calendar_SelectedDatesChanged;
-                });
-            }
         }
 
         private void Calendar_SelectedDatesChanged(object sender, SelectionChangedEventArgs e)
         {
-            if (CalendarControl.SelectedDate.HasValue)
+            if (CalendarControl.SelectedDate.HasValue && CalendarPopup.IsOpen)
             {
                 _selectedDate = CalendarControl.SelectedDate.Value;
                 UpdateDateDisplay();
@@ -170,6 +204,7 @@ namespace FlyShelf.Windows
 
         private void TimePicker_Click(object sender, MouseButtonEventArgs e)
         {
+            e.Handled = true;
             TimePopup.IsOpen = !TimePopup.IsOpen;
             CalendarPopup.IsOpen = false;
             ScrollToSelectedTime();
@@ -340,7 +375,10 @@ namespace FlyShelf.Windows
 
             Logger.LogAction("REMINDER", $"Created: \"{title}\" due {combinedLocal:MMM dd h:mm tt} repeat={_selectedRepeat}");
             ToastWindow.ShowToast("Reminder set! 🔔");
-            Close();
+
+            // Immediately hide then close to ensure the window disappears
+            try { Hide(); } catch { }
+            try { Close(); } catch { }
         }
 
         private void FlashTitleError()

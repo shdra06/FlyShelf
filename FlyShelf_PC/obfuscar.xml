@@ -14,6 +14,9 @@
   <Var name="SuppressIldasm" value="true" />
   
   <Module file="FlyShelf.dll">
+    <!-- Module-level string hiding (reinforces global setting within the assembly) -->
+    <Var name="HideStrings" value="true" />
+    
     <!-- Skip WPF/XAML-generated code -->
     <SkipNamespace name="XamlGeneratedNamespace" />
     
@@ -26,5 +29,12 @@
     
     <!-- Skip XAML event handlers (use 'public' since 'private' isn't supported) -->
     <SkipMethod type="*" attrib="public" rx="^(.*_Click|.*_Loaded|.*_Changed|.*_Checked|.*_Unchecked|.*_Selected|.*_Toggled|.*_MouseDown|.*_KeyDown|.*_PreviewKeyDown|.*_MouseEnter|.*_MouseLeave|.*_TextChanged|.*_Drop|.*_DragOver|.*_SelectionChanged|.*_Scroll|.*_Closing|.*_Activated|.*_Deactivated)" />
+    
+    <!-- ═══ SECURITY-CRITICAL: Force full obfuscation on sensitive classes ═══ -->
+    <!-- These MUST NOT be skipped — they contain license logic, secrets, and crypto -->
+    <ForceType name="FlyShelf.Classes.LicenseManager" />
+    <ForceType name="FlyShelf.Classes.SecureStorage" />
+    <ForceType name="FlyShelf.Classes.NetworkClock" />
+    <ForceType name="FlyShelf.Classes.FirebaseSecrets" />
   </Module>
 </Obfuscator>

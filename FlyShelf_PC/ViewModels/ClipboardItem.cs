@@ -401,6 +401,9 @@ namespace FlyShelf.ViewModels
         /// <summary>True for any item backed by a file on disk (images, docs, archives, etc.)</summary>
         public bool HasFilePath => !string.IsNullOrEmpty(FilePath);
         public bool CanShowInExplorer => HasFilePath || ItemType == ClipboardItemType.Group;
+        /// <summary>True when the item can be renamed in FlyShelf (file-backed items only, not passwords).</summary>
+        public bool CanRename => HasFilePath && !IsPassword && ItemType != ClipboardItemType.Text
+            && ItemType != ClipboardItemType.Code && ItemType != ClipboardItemType.Url;
 
         private bool _isSuggestedContext;
         [JsonIgnore]

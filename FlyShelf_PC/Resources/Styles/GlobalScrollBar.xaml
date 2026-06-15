@@ -9,15 +9,13 @@
     <Style x:Key="Win11ScrollBarThumb" TargetType="Thumb">
         <Setter Property="OverridesDefaultStyle" Value="True"/>
         <Setter Property="IsTabStop" Value="False"/>
-        <Setter Property="Height" Value="80"/>
-        <Setter Property="MinHeight" Value="80"/>
-        <Setter Property="MaxHeight" Value="80"/>
+        <Setter Property="MinHeight" Value="36"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
                     <Grid Background="Transparent">
                         <Border x:Name="ThumbBorder"
-                                Background="#888888"
+                                Background="{DynamicResource ThemeAccent}"
                                 Opacity="0.4"
                                 CornerRadius="3"
                                 HorizontalAlignment="Stretch"
@@ -27,12 +25,12 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="ThumbBorder" Property="Margin" Value="1,0,1,0"/>
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#B0B0B0"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="{DynamicResource ThemeAccentLight}"/>
                             <Setter TargetName="ThumbBorder" Property="Opacity" Value="0.8"/>
                         </Trigger>
                         <Trigger Property="IsDragging" Value="True">
                             <Setter TargetName="ThumbBorder" Property="Margin" Value="1,0,1,0"/>
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#FFFFFF"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="{DynamicResource ThemeAccentLight}"/>
                             <Setter TargetName="ThumbBorder" Property="Opacity" Value="0.95"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
@@ -45,15 +43,13 @@
     <Style x:Key="Win11ScrollBarThumbHorizontal" TargetType="Thumb">
         <Setter Property="OverridesDefaultStyle" Value="True"/>
         <Setter Property="IsTabStop" Value="False"/>
-        <Setter Property="Width" Value="60"/>
-        <Setter Property="MinWidth" Value="60"/>
-        <Setter Property="MaxWidth" Value="60"/>
+        <Setter Property="MinWidth" Value="36"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
                     <Grid Background="Transparent">
                         <Border x:Name="ThumbBorder"
-                                Background="#888888"
+                                Background="{DynamicResource ThemeAccent}"
                                 Opacity="0.4"
                                 CornerRadius="3"
                                 HorizontalAlignment="Stretch"
@@ -63,12 +59,12 @@
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
                             <Setter TargetName="ThumbBorder" Property="Margin" Value="0,1,0,1"/>
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#B0B0B0"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="{DynamicResource ThemeAccentLight}"/>
                             <Setter TargetName="ThumbBorder" Property="Opacity" Value="0.8"/>
                         </Trigger>
                         <Trigger Property="IsDragging" Value="True">
                             <Setter TargetName="ThumbBorder" Property="Margin" Value="0,1,0,1"/>
-                            <Setter TargetName="ThumbBorder" Property="Background" Value="#FFFFFF"/>
+                            <Setter TargetName="ThumbBorder" Property="Background" Value="{DynamicResource ThemeAccentLight}"/>
                             <Setter TargetName="ThumbBorder" Property="Opacity" Value="0.95"/>
                         </Trigger>
                     </ControlTemplate.Triggers>

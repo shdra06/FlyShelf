@@ -64,6 +64,7 @@ namespace FlyShelf
         private Guid _summonedDesktopId = Guid.Empty;
         private Guid _currentDesktopId = Guid.Empty; // Updated on every foreground change from the fg window's desktop GUID
         private bool _lastActiveExternalWindowWasOnCurrentAtSummon = false;
+        internal bool _isFirstLaunchAfterOnboarding = false; // Set by App.xaml.cs after onboarding completes
 
         private FlyShelf.Classes.NativeMethods.IVirtualDesktopManager? _vdm = null;
         private FlyShelf.Classes.NativeMethods.IVirtualDesktopManager? GetVirtualDesktopManager()
@@ -98,7 +99,26 @@ namespace FlyShelf
         [DllImport("dwmapi.dll")]
         public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
         public const int DWMWA_BORDER_COLOR = 34;
-        public const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
+        public static int DWMWA_COLOR_NONE
+        {
+            get
+            {
+                try
+                {
+                    var mainWin = System.Windows.Application.Current.MainWindow as MainWindow;
+                    if (mainWin != null)
+                    {
+                        bool isFocusPanel = mainWin.IsNotesActive || mainWin.IsTodoActive || mainWin.IsSearchActive;
+                        if (!isFocusPanel)
+                        {
+                            return unchecked((int)0xFFFFFFFE); // Clipboard mode: no border at all
+                        }
+                    }
+                    return Classes.SettingsManager.Current.ColorScheme == 1 ? 0x00D5D6D8 : 0x002D2D2D;
+                }
+                catch { return 0x002D2D2D; }
+            }
+        }
         public const int DWMWA_COLOR_DARK_GRAY = 0x002D2D2D;
         public const int DWMWA_CLOAK = 13;
 
@@ -408,10 +428,17 @@ namespace FlyShelf
                 }
                 else if (e.Action == NotifyCollectionChangedAction.Remove)
                 {
-                    // For removals, reapply filters synchronously to prevent filter loss
-                    if (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox?.Text)))
+                    // PERF: Skip filter reapplication during animated deletion.
+                    // AnimateAndRemoveItems sets IsDeletingItem=true and calls
+                    // ReapplyActiveFilters() once in its completion callback.
+                    // Without this guard, filters were being refreshed 6-7 times
+                    // per delete (sync + deferred here + animation callback).
+                    if (!IsDeletingItem)
                     {
-                        ReapplyActiveFilters();
+                        if (_activeCategoryFilter != null || (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox?.Text)))
+                        {
+                            ReapplyActiveFilters();
+                        }
                     }
 
                     Dispatcher.InvokeAsync(() =>
@@ -420,9 +447,6 @@ namespace FlyShelf
                         {
                             DismissMergeState();
                         }
-
-                        // Reapply active category/search filters to keep the filtered view persistent after deleting an item
-                        ReapplyActiveFilters();
                     }, System.Windows.Threading.DispatcherPriority.Background);
                 }
             };
@@ -584,6 +608,19 @@ namespace FlyShelf
             catch (Exception ex)
             {
                 Classes.Logger.LogAction("WIDGET_FAIL", $"Failed to create taskbar widget: {ex.Message}");
+            }
+
+            // ═══ FIRST-LAUNCH: Auto-summon clipboard after onboarding ═══
+            // If the user just completed onboarding, show the clipboard briefly after a delay
+            // so they see it appear naturally (reinforcing the Alt+C lesson)
+            if (_isFirstLaunchAfterOnboarding)
+            {
+                _isFirstLaunchAfterOnboarding = false;
+                Dispatcher.InvokeAsync(async () =>
+                {
+                    await System.Threading.Tasks.Task.Delay(2500);
+                    try { ToggleMainClipboard(); } catch { }
+                }, System.Windows.Threading.DispatcherPriority.Background);
             }
 
             // Launch desktop mascot companion if enabled
@@ -814,12 +851,13 @@ namespace FlyShelf
                                     Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
                                     RestoreAcrylicBlur();
                                     Classes.ThemeManager.Instance.ApplyGlassTheme();
+                                    Classes.ThemeManager.Instance.ApplyAeroThemeOverrides("__glass__");
                                     Classes.Logger.LogAction("THEME", "Mode: Glass (Acrylic Blur) — glassmorphism UI applied");
                                 }
                                 else if (displayMode == "desktop")
                                 {
                                     // ═══ FLYSHELF (DESKTOP WALLPAPER) MODE ═══
-                                    // Manual wallpaper takes top priority until explicitly removed
+                                    // Priority: Manual wallpaper > Color theme wallpaper > Desktop wallpaper
                                     ApplyNonMicaBackground();
                                     string manualWp = Classes.SettingsManager.Current.ManualWallpaperPath ?? "";
                                     if (!string.IsNullOrEmpty(manualWp) && System.IO.File.Exists(manualWp))
@@ -830,18 +868,45 @@ namespace FlyShelf
                                     }
                                     else
                                     {
-                                        // Fallback to desktop wallpaper
-                                        string desktopWp = GetDesktopWallpaperPath();
-                                        if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
+                                        // Check if a color theme with its own wallpaper is active
+                                        string colorThemeWp = Classes.SettingsManager.Current.ClipboardWallpaperPath ?? "";
+                                        bool hasColorThemeWp = colorThemeWp.Contains("ColorThemeWallpapers", System.StringComparison.OrdinalIgnoreCase)
+                                                              && System.IO.File.Exists(colorThemeWp);
+                                        if (!hasColorThemeWp)
                                         {
-                                            Classes.SettingsManager.Current.ClipboardWallpaperPath = desktopWp;
+                                            // Re-apply color theme wallpaper if a color theme is active
+                                            string activeColorTheme = Classes.SettingsManager.Current.ColorThemeName ?? "";
+                                            if (!string.IsNullOrEmpty(activeColorTheme) && !activeColorTheme.Equals("Default", System.StringComparison.OrdinalIgnoreCase)
+                                                && !activeColorTheme.Equals("ArcticSnow", System.StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                Classes.ThemeManager.Instance.ApplyColorTheme(activeColorTheme);
+                                                colorThemeWp = Classes.SettingsManager.Current.ClipboardWallpaperPath ?? "";
+                                                hasColorThemeWp = colorThemeWp.Contains("ColorThemeWallpapers", System.StringComparison.OrdinalIgnoreCase)
+                                                                  && System.IO.File.Exists(colorThemeWp);
+                                            }
+                                        }
+
+                                        if (hasColorThemeWp)
+                                        {
+                                            // Color theme wallpaper takes priority over desktop wallpaper
                                             ApplyWallpaper();
-                                            Classes.Logger.LogAction("THEME", $"Mode: FlyShelf — desktop wallpaper: {desktopWp}");
+                                            Classes.Logger.LogAction("THEME", $"Mode: FlyShelf — color theme wallpaper: {colorThemeWp}");
                                         }
                                         else
                                         {
-                                            Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
-                                            Classes.Logger.LogAction("THEME", "Mode: FlyShelf — no desktop wallpaper found, solid dark bg");
+                                            // Fallback to desktop wallpaper
+                                            string desktopWp = GetDesktopWallpaperPath();
+                                            if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
+                                            {
+                                                Classes.SettingsManager.Current.ClipboardWallpaperPath = desktopWp;
+                                                ApplyWallpaper();
+                                                Classes.Logger.LogAction("THEME", $"Mode: FlyShelf — desktop wallpaper: {desktopWp}");
+                                            }
+                                            else
+                                            {
+                                                Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
+                                                Classes.Logger.LogAction("THEME", "Mode: FlyShelf — no wallpaper found, solid dark bg");
+                                            }
                                         }
                                     }
                                 }
@@ -891,6 +956,18 @@ namespace FlyShelf
                             finally
                             {
                                 _isApplyingTheme = false;
+
+                                // Re-apply Aero UI color overrides after any theme/mode change
+                                // to prevent the alternate clipboard from losing its color theme
+                                try
+                                {
+                                    string currentDisplayMode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                                    string aeroThemeKey = currentDisplayMode == "glass"
+                                        ? "__glass__"
+                                        : (Classes.SettingsManager.Current.ColorThemeName ?? "Default");
+                                    Classes.ThemeManager.Instance.ApplyAeroThemeOverrides(aeroThemeKey);
+                                }
+                                catch { }
                                 // Re-apply DWM border color override after backdrop/theme changes to prevent system accent color leakage
                                 try
                                 {
@@ -915,10 +992,11 @@ namespace FlyShelf
                         Classes.SettingsManager.Current.ClipboardWallpaperPath = "";
                         RestoreAcrylicBlur();
                         Classes.ThemeManager.Instance.ApplyGlassTheme();
+                        Classes.ThemeManager.Instance.ApplyAeroThemeOverrides("__glass__");
                     }
                     else if (startupMode == "desktop")
                     {
-                        // Desktop wallpaper mode — manual wallpaper takes priority
+                        // Desktop wallpaper mode — Priority: Manual > Color theme > Desktop
                         ApplyNonMicaBackground();
                         string manualWp = Classes.SettingsManager.Current.ManualWallpaperPath ?? "";
                         if (!string.IsNullOrEmpty(manualWp) && System.IO.File.Exists(manualWp))
@@ -928,12 +1006,33 @@ namespace FlyShelf
                         }
                         else
                         {
-                            _cachedDesktopWallpaperPath = null; // Force re-read
-                            string desktopWp = GetDesktopWallpaperPath();
-                            if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
+                            // Check for active color theme wallpaper
+                            string activeColorTheme = Classes.SettingsManager.Current.ColorThemeName ?? "";
+                            bool hasColorThemeWp = false;
+                            if (!string.IsNullOrEmpty(activeColorTheme) && !activeColorTheme.Equals("Default", System.StringComparison.OrdinalIgnoreCase)
+                                && !activeColorTheme.Equals("ArcticSnow", System.StringComparison.OrdinalIgnoreCase))
                             {
-                                Classes.SettingsManager.Current.ClipboardWallpaperPath = desktopWp;
+                                // Apply the color theme (which sets ClipboardWallpaperPath to theme wallpaper)
+                                Classes.ThemeManager.Instance.ApplyColorTheme(activeColorTheme);
+                                string colorThemeWp = Classes.SettingsManager.Current.ClipboardWallpaperPath ?? "";
+                                hasColorThemeWp = colorThemeWp.Contains("ColorThemeWallpapers", System.StringComparison.OrdinalIgnoreCase)
+                                                  && System.IO.File.Exists(colorThemeWp);
+                            }
+
+                            if (hasColorThemeWp)
+                            {
                                 ApplyWallpaper();
+                            }
+                            else
+                            {
+                                // Fallback to desktop wallpaper
+                                _cachedDesktopWallpaperPath = null; // Force re-read
+                                string desktopWp = GetDesktopWallpaperPath();
+                                if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
+                                {
+                                    Classes.SettingsManager.Current.ClipboardWallpaperPath = desktopWp;
+                                    ApplyWallpaper();
+                                }
                             }
                         }
                     }

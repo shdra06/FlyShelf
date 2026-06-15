@@ -341,6 +341,223 @@ $word.Quit()
             OpenPasswordManagerWindow(item, false);
         }
 
+        /// <summary>
+        /// Renames the display name of a file-backed item in FlyShelf.
+        /// The actual file on disk is NOT modified — only the in-app label changes.
+        /// </summary>
+        private void RenameItem_Click(object sender, RoutedEventArgs e)
+        {
+            var item = GetClipItemFromSender(sender);
+            if (item == null) return;
+
+            // Extract current display name with extension
+            string initialName = item.FileName ?? (string.IsNullOrEmpty(item.FilePath) ? "" : System.IO.Path.GetFileName(item.FilePath));
+
+            // Build a simple inline rename dialog
+            var dlg = new Window
+            {
+                WindowStyle = WindowStyle.None,
+                AllowsTransparency = true,
+                Background = System.Windows.Media.Brushes.Transparent,
+                Width = 380,
+                SizeToContent = SizeToContent.Height,
+                WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                Topmost = true,
+                ShowInTaskbar = false,
+                ResizeMode = ResizeMode.NoResize
+            };
+
+            var outerBorder = new System.Windows.Controls.Border
+            {
+                CornerRadius = new CornerRadius(14),
+                Padding = new Thickness(18, 16, 18, 16),
+                Background = (System.Windows.Media.Brush)FindResource("ThemeOverflowBg"),
+                BorderBrush = (System.Windows.Media.Brush)FindResource("ThemeOverflowBorder"),
+                BorderThickness = new Thickness(1),
+                Effect = new System.Windows.Media.Effects.DropShadowEffect
+                {
+                    BlurRadius = 25, ShadowDepth = 4, Opacity = 0.25, Color = System.Windows.Media.Colors.Black
+                }
+            };
+
+            var stack = new System.Windows.Controls.StackPanel();
+
+            // Title
+            var title = new System.Windows.Controls.TextBlock
+            {
+                Text = "Rename File",
+                FontSize = 14,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (System.Windows.Media.Brush)FindResource("ThemeTextPrimary"),
+                Margin = new Thickness(2, 0, 0, 8)
+            };
+            stack.Children.Add(title);
+
+            // TextBox template overrides OS default styles to guarantee theming consistency
+            var tbTemplate = new ControlTemplate(typeof(System.Windows.Controls.TextBox));
+            var borderFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.Border));
+            borderFactory.Name = "Border";
+            borderFactory.SetValue(System.Windows.Controls.Border.CornerRadiusProperty, new CornerRadius(6));
+            borderFactory.SetValue(System.Windows.Controls.Border.BackgroundProperty, new TemplateBindingExtension(System.Windows.Controls.TextBox.BackgroundProperty));
+            borderFactory.SetValue(System.Windows.Controls.Border.BorderBrushProperty, new TemplateBindingExtension(System.Windows.Controls.TextBox.BorderBrushProperty));
+            borderFactory.SetValue(System.Windows.Controls.Border.BorderThicknessProperty, new TemplateBindingExtension(System.Windows.Controls.TextBox.BorderThicknessProperty));
+            borderFactory.SetValue(System.Windows.Controls.Border.PaddingProperty, new TemplateBindingExtension(System.Windows.Controls.TextBox.PaddingProperty));
+
+            var scrollFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.ScrollViewer));
+            scrollFactory.Name = "PART_ContentHost";
+            borderFactory.AppendChild(scrollFactory);
+            tbTemplate.VisualTree = borderFactory;
+
+            // TextBox
+            var tb = new System.Windows.Controls.TextBox
+            {
+                Text = initialName,
+                FontSize = 12.5,
+                Padding = new Thickness(10, 8, 10, 8),
+                Background = (System.Windows.Media.Brush)FindResource("ThemeOverlayBg"),
+                Foreground = (System.Windows.Media.Brush)FindResource("ThemeTextPrimary"),
+                BorderBrush = (System.Windows.Media.Brush)FindResource("ThemeOverlayBorder"),
+                BorderThickness = new Thickness(1),
+                CaretBrush = (System.Windows.Media.Brush)FindResource("ThemeTextPrimary"),
+                SelectionBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x50, 0xF5, 0x9E, 0x0B)),
+                Template = tbTemplate
+            };
+            stack.Children.Add(tb);
+
+            // File Path display
+            if (!string.IsNullOrEmpty(item.FilePath))
+            {
+                var pathLabel = new System.Windows.Controls.TextBlock
+                {
+                    Text = item.FilePath,
+                    FontSize = 10,
+                    Foreground = (System.Windows.Media.Brush)FindResource("ThemeTextMuted"),
+                    Margin = new Thickness(2, 6, 2, 0),
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    ToolTip = item.FilePath
+                };
+                stack.Children.Add(pathLabel);
+            }
+
+            // Buttons row
+            var btnPanel = new System.Windows.Controls.StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 14, 0, 0)
+            };
+
+            // Button ControlTemplate (eliminates standard Windows border/shading defaults)
+            var btnTemplate = new ControlTemplate(typeof(System.Windows.Controls.Button));
+            var btnBorderFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.Border));
+            btnBorderFactory.SetValue(System.Windows.Controls.Border.CornerRadiusProperty, new CornerRadius(6));
+            btnBorderFactory.SetValue(System.Windows.Controls.Border.BackgroundProperty, new TemplateBindingExtension(System.Windows.Controls.Button.BackgroundProperty));
+            btnBorderFactory.SetValue(System.Windows.Controls.Border.BorderBrushProperty, new TemplateBindingExtension(System.Windows.Controls.Button.BorderBrushProperty));
+            btnBorderFactory.SetValue(System.Windows.Controls.Border.BorderThicknessProperty, new TemplateBindingExtension(System.Windows.Controls.Button.BorderThicknessProperty));
+            btnBorderFactory.SetValue(System.Windows.Controls.Border.PaddingProperty, new TemplateBindingExtension(System.Windows.Controls.Button.PaddingProperty));
+
+            var contentFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.ContentPresenter));
+            contentFactory.SetValue(System.Windows.Controls.ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            contentFactory.SetValue(System.Windows.Controls.ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+            btnBorderFactory.AppendChild(contentFactory);
+            btnTemplate.VisualTree = btnBorderFactory;
+
+            var triggerHover = new Trigger { Property = System.Windows.Controls.Button.IsMouseOverProperty, Value = true };
+            triggerHover.Setters.Add(new Setter(System.Windows.Controls.Button.BackgroundProperty, (System.Windows.Media.Brush)FindResource("ThemeOverlayBgHover")));
+            btnTemplate.Triggers.Add(triggerHover);
+
+            var cancelBtn = new System.Windows.Controls.Button
+            {
+                Content = "Cancel",
+                Padding = new Thickness(16, 6, 16, 6),
+                FontSize = 12,
+                Margin = new Thickness(0, 0, 8, 0),
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Background = System.Windows.Media.Brushes.Transparent,
+                Foreground = (System.Windows.Media.Brush)FindResource("ThemeTextSecondary"),
+                BorderBrush = (System.Windows.Media.Brush)FindResource("ThemeOverlayBorder"),
+                BorderThickness = new Thickness(1),
+                Template = btnTemplate
+            };
+            cancelBtn.Click += (_, __) => dlg.Close();
+
+            var saveBtnTemplate = new ControlTemplate(typeof(System.Windows.Controls.Button));
+            var saveBorderFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.Border));
+            saveBorderFactory.SetValue(System.Windows.Controls.Border.CornerRadiusProperty, new CornerRadius(6));
+            saveBorderFactory.SetValue(System.Windows.Controls.Border.BackgroundProperty, new TemplateBindingExtension(System.Windows.Controls.Button.BackgroundProperty));
+            saveBorderFactory.SetValue(System.Windows.Controls.Border.PaddingProperty, new TemplateBindingExtension(System.Windows.Controls.Button.PaddingProperty));
+            
+            var saveContentFactory = new FrameworkElementFactory(typeof(System.Windows.Controls.ContentPresenter));
+            saveContentFactory.SetValue(System.Windows.Controls.ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            saveContentFactory.SetValue(System.Windows.Controls.ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Center);
+            saveBorderFactory.AppendChild(saveContentFactory);
+            saveBtnTemplate.VisualTree = saveBorderFactory;
+
+            var saveBtn = new System.Windows.Controls.Button
+            {
+                Content = "Save",
+                Padding = new Thickness(20, 6, 20, 6),
+                FontSize = 12,
+                FontWeight = FontWeights.SemiBold,
+                Cursor = System.Windows.Input.Cursors.Hand,
+                Background = (System.Windows.Media.Brush)FindResource("ThemeAccentBg"),
+                Foreground = System.Windows.Media.Brushes.White,
+                BorderThickness = new Thickness(0),
+                Template = saveBtnTemplate
+            };
+
+            bool saved = false;
+            saveBtn.Click += (_, __) => { saved = true; dlg.Close(); };
+
+            btnPanel.Children.Add(cancelBtn);
+            btnPanel.Children.Add(saveBtn);
+            stack.Children.Add(btnPanel);
+
+            outerBorder.Child = stack;
+            dlg.Content = outerBorder;
+
+            // Allow Enter to save, Escape to cancel
+            dlg.PreviewKeyDown += (_, ke) =>
+            {
+                if (ke.Key == System.Windows.Input.Key.Enter) { saved = true; dlg.Close(); ke.Handled = true; }
+                else if (ke.Key == System.Windows.Input.Key.Escape) { dlg.Close(); ke.Handled = true; }
+            };
+
+            // Allow dragging the dialog
+            outerBorder.MouseLeftButtonDown += (_, me) => { try { dlg.DragMove(); } catch { } };
+
+            // Focus and select only the filename part (ignoring extension) on load
+            dlg.ContentRendered += (_, __) =>
+            {
+                tb.Focus();
+                string text = tb.Text;
+                if (!string.IsNullOrEmpty(text))
+                {
+                    int lastDot = text.LastIndexOf('.');
+                    if (lastDot > 0 && lastDot < text.Length - 1)
+                    {
+                        tb.Select(0, lastDot);
+                    }
+                    else
+                    {
+                        tb.SelectAll();
+                    }
+                }
+            };
+
+            dlg.ShowDialog();
+
+            if (saved)
+            {
+                string newName = tb.Text?.Trim() ?? "";
+                if (!string.IsNullOrEmpty(newName))
+                {
+                    item.FileName = newName;
+                    FlyShelf.Windows.ToastWindow.ShowToast($"Renamed to \"{newName}\" ✏️");
+                }
+            }
+        }
+
         private void RenamePasswordLabel_Click(object sender, RoutedEventArgs e)
         {
             var item = GetClipItemFromSender(sender);

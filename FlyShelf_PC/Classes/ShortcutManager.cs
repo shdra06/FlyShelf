@@ -64,7 +64,7 @@ namespace FlyShelf.Classes
 
     public static class ShortcutManager
     {
-        public const int MaxShortcuts = 30;
+        public static int MaxShortcuts => LicenseManager.IsPro ? 50 : 20;
 
         public static ObservableCollection<TextShortcut> Shortcuts { get; private set; } = new();
 

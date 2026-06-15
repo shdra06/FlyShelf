@@ -40,7 +40,7 @@ public static partial class NativeMethods
     // DWM Attributes
     internal const int DWMWA_EXTENDED_FRAME_BOUNDS = 9;
     internal const int DWMWA_BORDER_COLOR = 34;
-    internal const int DWMWA_COLOR_NONE = unchecked((int)0xFFFFFFFE);
+    internal static int DWMWA_COLOR_NONE => unchecked((int)0xFFFFFFFE); // Always fully invisible
     internal const int DWMWA_COLOR_DARK_GRAY = 0x002D2D2D;
     internal const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
     internal const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
@@ -579,7 +579,7 @@ public static partial class NativeMethods
                 }
 
                 // Override active window border color to prevent accent border leakage
-                int borderColor = window is MainWindow ? DWMWA_COLOR_NONE : (isLight ? 0x00D5D6D8 : 0x002D2D2D);
+                                    int borderColor = DWMWA_COLOR_NONE;
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
             }
         }
@@ -659,7 +659,20 @@ public static partial class NativeMethods
     {
         if (sender is System.Windows.Window window)
         {
-            // Defer DWM border color setting to Background priority to prevent DWM from overriding it during activation
+            // Set DWM border color synchronously to prevent flashing
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    bool isLight = SettingsManager.Current.ColorScheme == 1;
+                                        int borderColor = DWMWA_COLOR_NONE;
+                    DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
+                }
+            }
+            catch { }
+
+            // Defer setting to Send priority so it runs immediately after the activation message is processed by DefWindowProc
             window.Dispatcher.InvokeAsync(() =>
             {
                 try
@@ -667,12 +680,13 @@ public static partial class NativeMethods
                     var hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
                     if (hwnd != IntPtr.Zero)
                     {
-                        int borderColor = window is MainWindow ? DWMWA_COLOR_NONE : DWMWA_COLOR_DARK_GRAY;
+                        bool isLight = SettingsManager.Current.ColorScheme == 1;
+                                            int borderColor = DWMWA_COLOR_NONE;
                         DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
                     }
                 }
                 catch { }
-            }, System.Windows.Threading.DispatcherPriority.Background);
+            }, System.Windows.Threading.DispatcherPriority.Send);
         }
     }
 

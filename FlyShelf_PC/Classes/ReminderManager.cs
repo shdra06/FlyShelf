@@ -64,7 +64,7 @@ namespace FlyShelf.Classes
             set { if (_snoozedUntil != value) { _snoozedUntil = value; OnPropertyChanged(nameof(SnoozedUntil)); OnPropertyChanged(nameof(IsOverdue)); } }
         }
 
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         private string _category = "";
         public string Category
@@ -189,7 +189,7 @@ namespace FlyShelf.Classes
                 DueAt = dueAtUtc,
                 Category = category,
                 Repeat = repeat,
-                CreatedAt = DateTime.Now
+                CreatedAt = DateTime.UtcNow
             };
 
             lock (_lock)
@@ -272,6 +272,9 @@ namespace FlyShelf.Classes
                 _ => current
             };
 
+            // Safety guard: if mode is None, next == current, so the while loop below would be infinite
+            if (mode == RepeatMode.None) return next;
+
             // Skip past dates until future
             var now = DateTime.UtcNow;
             while (next <= now)
@@ -292,7 +295,7 @@ namespace FlyShelf.Classes
         {
             lock (_lock)
             {
-                var cutoff = DateTime.Now.AddDays(-30);
+                var cutoff = DateTime.UtcNow.AddDays(-30);
                 var old = _reminders.Where(r => r.IsDone && r.CreatedAt < cutoff).ToList();
                 foreach (var item in old)
                     _reminders.Remove(item);

@@ -14,7 +14,7 @@
     Version="2.5.0.0"
     ProcessorArchitecture="x64" />
 
-  <mp:PhoneIdentity PhoneProductId="a1b2c3d4-e5f6-7890-abcd-ef1234567890" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
+  <mp:PhoneIdentity PhoneProductId="c1ba92ce-7355-4ff8-89e1-6c830457ecdf" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
     <DisplayName>FlyShelf</DisplayName>

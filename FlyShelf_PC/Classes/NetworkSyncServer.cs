@@ -338,7 +338,7 @@ namespace FlyShelf.Classes
                         if (!string.IsNullOrEmpty(item.ZippedArchivePath))
                             paths.Add(Path.GetFullPath(item.ZippedArchivePath));
                     }
-                });
+                }, System.Windows.Threading.DispatcherPriority.Normal, System.Threading.CancellationToken.None, TimeSpan.FromSeconds(2));
             }
             catch { }
             return paths;

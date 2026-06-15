@@ -21,7 +21,9 @@ namespace FlyShelf
 {
     public partial class MainWindow
     {
+        private static FlyShelf.Windows.ReminderCreateWindow? _activeReminderCreateWindow;
         private bool _isNotesActive = false;
+        public bool IsNotesActive => _isNotesActive;
         private System.Windows.Threading.DispatcherTimer? _panelAutoRevertTimer;
         private bool _isNotesLoaded = false;
         private NoteDay? _selectedNoteDay = null;
@@ -33,6 +35,7 @@ namespace FlyShelf
         private TextBox? _lastFocusedBulletTextBox = null;
         private DateTime _lastBulletAddedTime = DateTime.MinValue;
         private bool _isNotesSidebarCollapsed = false;
+        private System.Windows.Threading.DispatcherTimer? _notesSidebarAutoCollapseTimer;
 
         // ═══════════════════════════════════════════════════════════
         // TOGGLE NOTES PANEL
@@ -61,11 +64,41 @@ namespace FlyShelf
                 _isNotesLoaded = true;
             }
 
+
             // Ensure today exists and select it
             var today = NoteManager.EnsureToday();
+            _selectedNoteDay = today;
 
             // Bind days list
             RebuildSidebar();
+
+            // Ensure sidebar is expanded when opening
+            if (_isNotesSidebarCollapsed)
+            {
+                _isNotesSidebarCollapsed = false;
+                NotesSidebarExpandBtn.Visibility = Visibility.Collapsed;
+                NotesSidebarBorder.Visibility = Visibility.Visible;
+                NotesSidebarBorder.BeginAnimation(FrameworkElement.WidthProperty, null);
+                NotesSidebarBorder.Width = double.NaN;
+                NotesSidebarColumn.Width = new GridLength(54);
+                NotesSidebarCollapseIcon.Text = "◂";
+            }
+
+            // Auto-collapse sidebar after 10 seconds
+            _notesSidebarAutoCollapseTimer?.Stop();
+            _notesSidebarAutoCollapseTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(10)
+            };
+            _notesSidebarAutoCollapseTimer.Tick += (s, ev) =>
+            {
+                _notesSidebarAutoCollapseTimer.Stop();
+                if (_isNotesActive && !_isNotesSidebarCollapsed)
+                {
+                    CollapseNotesSidebar();
+                }
+            };
+            _notesSidebarAutoCollapseTimer.Start();
 
             _isNotesActive = true;
             // NOTE: No auto-revert timer — Notes panel should never auto-hide
@@ -97,10 +130,11 @@ namespace FlyShelf
             NotesToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Clipboard24 };
             NotesToggleBtn.ToolTip = "Back to Clipboard";
 
-            // Swap filter button → reminder button in Notes mode
+            // Swap filter button → reminders button in Notes mode
             if (SortFilterBtn != null)
             {
-                SortFilterBtn.Icon = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Alert24 };
+                SortFilterBtn.Icon = null;
+                SortFilterBtn.Content = new Wpf.Ui.Controls.SymbolIcon { Symbol = Wpf.Ui.Controls.SymbolRegular.Alert24, FontSize = 15 };
                 SortFilterBtn.ToolTip = "Reminders";
             }
 
@@ -121,21 +155,21 @@ namespace FlyShelf
         /// </summary>
         private void ActivateNotesWindow()
         {
-            // Step 1: Activate the WPF window (requests OS focus)
+            // Step 1: Suppress DWM accent border before Activate() triggers it
+            SuppressDwmBorder();
+
+            // Step 2: Activate the WPF window (requests OS focus)
             this.Activate();
 
-            // Step 2: Temporarily toggle Topmost to force Win32 SetForegroundWindow
+            // Step 3: Temporarily toggle Topmost to force Win32 SetForegroundWindow
             if (!this.Topmost)
             {
                 this.Topmost = true;
                 this.Topmost = false;
             }
 
-            // Step 3: Set keyboard focus to the notes panel itself
+            // Step 4: Set keyboard focus to the notes panel itself
             this.Focus();
-
-            // Step 4: Suppress DWM accent border that Activate() triggers
-            SuppressDwmBorder();
         }
 
         /// <summary>
@@ -144,6 +178,9 @@ namespace FlyShelf
         /// </summary>
         private void ActivateWindowWithoutStealingFocus()
         {
+            // Suppress DWM accent border before Activate() triggers it
+            SuppressDwmBorder();
+
             if (!this.IsActive)
             {
                 this.Activate();
@@ -153,8 +190,6 @@ namespace FlyShelf
                     this.Topmost = false;
                 }
             }
-            // Suppress DWM accent border that Activate() triggers
-            SuppressDwmBorder();
         }
 
         /// <summary>
@@ -285,6 +320,7 @@ namespace FlyShelf
             // Restore filter button from reminder mode
             if (SortFilterBtn != null)
             {
+                SortFilterBtn.Content = null;
                 SortFilterBtn.Icon = new Wpf.Ui.Controls.FontIcon { Glyph = "\uE71C", FontFamily = new System.Windows.Media.FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets") };
                 SortFilterBtn.ToolTip = "Filter by Category";
             }
@@ -369,6 +405,24 @@ namespace FlyShelf
 
         private void SelectNoteDay(NoteDay day)
         {
+            // Auto-determine mode based on existing content
+            bool hasBullets = day.Bullets.Any(b => !string.IsNullOrWhiteSpace(b.Header) || !string.IsNullOrWhiteSpace(b.Content) || b.HasImage);
+            bool hasFreeform = !string.IsNullOrWhiteSpace(day.FreeformContent) || day.FreeformImages.Count > 0;
+
+            if (hasBullets && !hasFreeform)
+            {
+                day.IsFreeformMode = false;
+            }
+            else if (hasFreeform && !hasBullets)
+            {
+                day.IsFreeformMode = true;
+            }
+            else if (!hasBullets && !hasFreeform)
+            {
+                // New/empty notes: always open in freeform mode by default
+                day.IsFreeformMode = true;
+            }
+
             _selectedNoteDay = day;
             _selectedMonth = -1;
             _selectedYear = -1;
@@ -427,61 +481,35 @@ namespace FlyShelf
 
         private void RebuildSidebar()
         {
-            _sidebarItems.Clear();
-            int lastMonth = -1;
-            int lastYear = -1;
-
-            foreach (var day in NoteManager.Days)
-            {
-                int month = day.Date.Month;
-                int year = day.Date.Year;
-
-                if (month != lastMonth || year != lastYear)
-                {
-                    string monthShort = day.Date.ToString("MMM");
-                    _sidebarItems.Add(new NotesSidebarItem
-                    {
-                        IsMonthHeader = true,
-                        Label = monthShort.ToUpper(),
-                        FullLabel = day.Date.ToString("MMMM yyyy"),
-                        MonthValue = month,
-                        YearValue = year,
-                        IsSelected = (_selectedMonth == month && _selectedYear == year && _selectedNoteDay == null)
-                    });
-
-                    lastMonth = month;
-                    lastYear = year;
-                }
-
-                _sidebarItems.Add(new NotesSidebarItem
-                {
-                    IsMonthHeader = false,
-                    Label = day.DayNumber,
-                    MonthLabel = day.MonthName,
-                    FullLabel = day.DisplayDate,
-                    IsToday = day.IsToday,
-                    Day = day,
-                    MonthValue = month,
-                    YearValue = year,
-                    IsSelected = (_selectedNoteDay == day)
-                });
-            }
-
-            NotesDaySidebar.ItemsSource = null;
-            NotesDaySidebar.ItemsSource = _sidebarItems;
+            // Direct-bind to NoteManager.Days — same pattern as Todo sidebar
+            NotesDaySidebar.ItemsSource = NoteManager.Days;
         }
 
         private void UpdateSidebarSelectionVisuals()
         {
-            foreach (var item in _sidebarItems)
+            if (NotesDaySidebar == null) return;
+
+            for (int i = 0; i < NotesDaySidebar.Items.Count; i++)
             {
-                if (item.IsMonthHeader)
+                var item = NotesDaySidebar.Items[i];
+                var container = NotesDaySidebar.ItemContainerGenerator.ContainerFromItem(item);
+                if (container is ContentPresenter cp)
                 {
-                    item.IsSelected = (_selectedMonth == item.MonthValue && _selectedYear == item.YearValue && _selectedNoteDay == null);
-                }
-                else
-                {
-                    item.IsSelected = (_selectedNoteDay == item.Day);
+                    var mainBorder = FindVisualChild<Border>(cp, "NotesDayBorder");
+                    if (mainBorder != null)
+                    {
+                        bool isSelected = item == _selectedNoteDay;
+                        if (isSelected)
+                        {
+                            mainBorder.Background = new SolidColorBrush(Color.FromArgb(0x2A, 0x8B, 0x5C, 0xF6));
+                            mainBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(0x60, 0x8B, 0x5C, 0xF6));
+                        }
+                        else
+                        {
+                            mainBorder.Background = new SolidColorBrush(Color.FromArgb(0x06, 0xFF, 0xFF, 0xFF));
+                            mainBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF));
+                        }
+                    }
                 }
             }
         }
@@ -540,43 +568,43 @@ namespace FlyShelf
             }
         }
 
+        private void CollapseNotesSidebar()
+        {
+            _isNotesSidebarCollapsed = true;
+            NotesSidebarBorder.Visibility = Visibility.Collapsed;
+            NotesSidebarColumn.Width = new GridLength(0);
+            NotesSidebarCollapseIcon.Text = "▸";
+            NotesSidebarExpandBtn.Visibility = Visibility.Visible;
+        }
+
         private void NotesSidebarToggle_Click(object sender, MouseButtonEventArgs e)
         {
+            // Cancel auto-collapse timer on manual interaction
+            _notesSidebarAutoCollapseTimer?.Stop();
+
             _isNotesSidebarCollapsed = !_isNotesSidebarCollapsed;
 
             if (_isNotesSidebarCollapsed)
             {
-                // Collapse: animate width to 0
-                var anim = new DoubleAnimation(NotesSidebarBorder.ActualWidth, 0, TimeSpan.FromMilliseconds(150))
-                {
-                    EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
-                };
-                anim.Completed += (s, ev) =>
-                {
-                    NotesSidebarBorder.Visibility = Visibility.Collapsed;
-                    NotesSidebarCollapseIcon.Text = "▸";
-                };
-                NotesSidebarBorder.BeginAnimation(FrameworkElement.WidthProperty, anim);
+                CollapseNotesSidebar();
             }
             else
             {
-                // Expand: show and animate width back
+                // Expand: show sidebar border and restore column width
+                NotesSidebarExpandBtn.Visibility = Visibility.Collapsed;
                 NotesSidebarBorder.Visibility = Visibility.Visible;
-                NotesSidebarBorder.BeginAnimation(FrameworkElement.WidthProperty, null); // Clear animation
-                NotesSidebarBorder.Width = double.NaN; // Reset to Auto
+                NotesSidebarBorder.BeginAnimation(FrameworkElement.WidthProperty, null); // Clear any leftover animation
+                NotesSidebarBorder.Width = double.NaN;
+                NotesSidebarColumn.Width = new GridLength(54);
                 NotesSidebarCollapseIcon.Text = "◂";
             }
         }
 
         private void NotesDayItem_Click(object sender, MouseButtonEventArgs e)
         {
-            if (sender is FrameworkElement fe && fe.DataContext is NotesSidebarItem item)
+            if (sender is FrameworkElement fe && fe.DataContext is NoteDay day)
             {
-                // Month headers are non-clickable labels
-                if (item.IsMonthHeader)
-                    return;
-
-                SelectNoteDay(item.Day);
+                SelectNoteDay(day);
             }
         }
 
@@ -879,26 +907,108 @@ namespace FlyShelf
             }
         }
 
+        /// <summary>
+        /// Auto-expand a collapsed bullet card when clicked anywhere on it.
+        /// Only expands — does not re-collapse (use the collapse toggle for that).
+        /// </summary>
+        private void BulletCard_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            // Traverse up the visual tree from the original source to see if we clicked an interactive action button
+            DependencyObject dep = e.OriginalSource as DependencyObject;
+            while (dep != null && dep != sender)
+            {
+                if (dep is FrameworkElement fe)
+                {
+                    if (fe.Name == "BulletDeleteBtn" || fe.Name == "BulletReminderBtn" || fe.Name == "BulletCollapseBtn")
+                    {
+                        // Let the specific button handler deal with it
+                        return;
+                    }
+                }
+                dep = VisualTreeHelper.GetParent(dep);
+            }
+
+            if (sender is FrameworkElement cardFe && cardFe.DataContext is NoteBullet bullet && bullet.IsCollapsed)
+            {
+                bullet.IsCollapsed = false;
+                NoteManager.MarkDirty();
+            }
+        }
+
         private void NoteBulletReminder_Click(object sender, MouseButtonEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is NoteBullet bullet)
             {
-                string title = !string.IsNullOrEmpty(bullet.Header) ? bullet.Header : 
-                               (!string.IsNullOrEmpty(bullet.Content) ? (bullet.Content.Length > 50 ? bullet.Content[..50] + "..." : bullet.Content) : "Note Reminder");
-                
-                // Default to tomorrow 9:00 AM
-                DateTime defaultDue = DateTime.Today.AddDays(1).AddHours(9);
-                if (_selectedNoteDay != null && _selectedNoteDay.Date.Date > DateTime.Today)
+                // Build the raw text from the bullet's header and/or content
+                string noteText = !string.IsNullOrEmpty(bullet.Header) ? bullet.Header :
+                                   (!string.IsNullOrEmpty(bullet.Content) ? (bullet.Content.Length > 120 ? bullet.Content[..120] : bullet.Content) : "");
+
+                // Use the NLP parser to extract a clean title and calculated due date
+                var (parsedTitle, calculatedDue) = Classes.NaturalLanguageReminderParser.Parse(noteText, DateTime.Now);
+
+                // If the note belongs to a future date, use that date's 9 AM as minimum
+                if (_selectedNoteDay != null && _selectedNoteDay.Date.Date > DateTime.Today && calculatedDue < _selectedNoteDay.Date.Date.AddHours(9))
                 {
-                    defaultDue = _selectedNoteDay.Date.Date.AddHours(9);
+                    calculatedDue = _selectedNoteDay.Date.Date.AddHours(9);
                 }
 
-                var reminderWindow = new FlyShelf.Windows.ReminderCreateWindow(title, defaultDue);
+                try { _activeReminderCreateWindow?.Close(); } catch { }
+                var reminderWindow = new FlyShelf.Windows.ReminderCreateWindow(parsedTitle, calculatedDue);
                 reminderWindow.Show();
                 reminderWindow.Activate();
+                _activeReminderCreateWindow = reminderWindow;
             }
         }
 
+
+        /// <summary>
+        /// Freeform notes reminder button — parses the selected text (or full freeform content)
+        /// using NLP to extract a clean title and auto-calculated due date.
+        /// </summary>
+        private void NotesFreeformReminder_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (_selectedNoteDay == null) return;
+
+            // Prefer selected text if the user highlighted a specific line/phrase; otherwise use entire content
+            string noteText = "";
+            if (NotesFreeformBox != null && !string.IsNullOrWhiteSpace(NotesFreeformBox.SelectedText))
+            {
+                noteText = NotesFreeformBox.SelectedText.Trim();
+            }
+            else if (NotesFreeformBox != null && !string.IsNullOrWhiteSpace(NotesFreeformBox.Text))
+            {
+                // Use the full freeform text, capped at a reasonable length for parsing
+                noteText = NotesFreeformBox.Text.Trim();
+                if (noteText.Length > 200) noteText = noteText[..200];
+            }
+
+            if (string.IsNullOrWhiteSpace(noteText))
+            {
+                // Nothing to parse — open with defaults
+                var defaultDue = DateTime.Today.AddDays(1).AddHours(9);
+                try { _activeReminderCreateWindow?.Close(); } catch { }
+                var reminderWindow = new FlyShelf.Windows.ReminderCreateWindow("Note Reminder", defaultDue);
+                reminderWindow.Show();
+                reminderWindow.Activate();
+                _activeReminderCreateWindow = reminderWindow;
+                return;
+            }
+
+            // Use the NLP parser to extract a clean title and calculated due date
+            var (parsedTitle, calculatedDue) = Classes.NaturalLanguageReminderParser.Parse(noteText, DateTime.Now);
+
+            // If the note belongs to a future date, use that date's 9 AM as minimum
+            if (_selectedNoteDay.Date.Date > DateTime.Today && calculatedDue < _selectedNoteDay.Date.Date.AddHours(9))
+            {
+                calculatedDue = _selectedNoteDay.Date.Date.AddHours(9);
+            }
+
+            try { _activeReminderCreateWindow?.Close(); } catch { }
+            var window = new FlyShelf.Windows.ReminderCreateWindow(parsedTitle, calculatedDue);
+            window.Show();
+            window.Activate();
+            _activeReminderCreateWindow = window;
+        }
 
         private void NoteBulletDelete_Click(object sender, MouseButtonEventArgs e)
         {
@@ -1287,68 +1397,38 @@ namespace FlyShelf
 
         private void NotesMonthPicker_Click(object sender, MouseButtonEventArgs e)
         {
-            e.Handled = true; // Prevent event from bubbling further
+            e.Handled = true;
 
-            // Rebuild the sidebar to show ALL months that have notes data.
-            // Each month appears as a non-clickable header followed by its day items.
-            _sidebarItems.Clear();
-            int maxDays = Classes.LicenseManager.GetNoteHistoryDays();
-            DateTime cutoff = maxDays < int.MaxValue ? DateTime.Today.AddDays(-maxDays) : DateTime.MinValue;
+            // Build month list for popup
+            var monthsWithContent = NoteManager.Days
+                .Where(d => {
+                    bool hasBullets = d.Bullets.Any(b => !string.IsNullOrWhiteSpace(b.Header) || !string.IsNullOrWhiteSpace(b.Content) || b.HasImage);
+                    bool hasFreeform = !string.IsNullOrWhiteSpace(d.FreeformContent) || d.FreeformImages.Count > 0;
+                    return hasBullets || hasFreeform;
+                })
+                .Select(d => new { d.Date.Month, d.Date.Year })
+                .Distinct()
+                .OrderByDescending(m => m.Year)
+                .ThenByDescending(m => m.Month)
+                .ToList();
 
-            int lastMonth = -1;
-            int lastYear = -1;
-
-            foreach (var day in NoteManager.Days)
+            var today = DateTime.Today;
+            if (!monthsWithContent.Any(m => m.Month == today.Month && m.Year == today.Year))
             {
-                if (day.Date < cutoff) continue;
-
-                int month = day.Date.Month;
-                int year = day.Date.Year;
-
-                if (month != lastMonth || year != lastYear)
-                {
-                    // Full month name as header (e.g. "JUNE 2026")
-                    string monthFull = day.Date.ToString("MMM").ToUpper();
-                    _sidebarItems.Add(new NotesSidebarItem
-                    {
-                        IsMonthHeader = true,
-                        Label = monthFull,
-                        FullLabel = day.Date.ToString("MMMM yyyy"),
-                        MonthValue = month,
-                        YearValue = year,
-                        IsSelected = false
-                    });
-
-                    lastMonth = month;
-                    lastYear = year;
-                }
-
-                _sidebarItems.Add(new NotesSidebarItem
-                {
-                    IsMonthHeader = false,
-                    Label = day.DayNumber,
-                    MonthLabel = day.MonthName,
-                    FullLabel = day.DisplayDate,
-                    IsToday = day.IsToday,
-                    Day = day,
-                    MonthValue = month,
-                    YearValue = year,
-                    IsSelected = (_selectedNoteDay == day)
-                });
+                monthsWithContent.Insert(0, new { Month = today.Month, Year = today.Year });
             }
 
-            NotesDaySidebar.ItemsSource = null;
-            NotesDaySidebar.ItemsSource = _sidebarItems;
-
-            // Ensure sidebar is visible (expand if collapsed)
-            if (_isNotesSidebarCollapsed)
+            var items = monthsWithContent.Select(m => new NotesMonthPickerItem
             {
-                _isNotesSidebarCollapsed = false;
-                NotesSidebarBorder.Visibility = Visibility.Visible;
-                NotesSidebarBorder.BeginAnimation(FrameworkElement.WidthProperty, null);
-                NotesSidebarBorder.Width = double.NaN;
-                NotesSidebarCollapseIcon.Text = "◂";
-            }
+                MonthName = new DateTime(m.Year, m.Month, 1).ToString("MMMM"),
+                YearText = m.Year.ToString(),
+                DayCount = NoteManager.Days.Count(d => d.Date.Month == m.Month && d.Date.Year == m.Year) + " days",
+                Month = m.Month,
+                Year = m.Year
+            }).ToList();
+
+            NotesMonthList.ItemsSource = items;
+            NotesMonthPopup.IsOpen = !NotesMonthPopup.IsOpen;
         }
 
         private void NotesMonthItem_Click(object sender, MouseButtonEventArgs e)
@@ -1365,8 +1445,6 @@ namespace FlyShelf
 
                 if (firstDay != null)
                 {
-                    // Rebuild sidebar to show all months, then select the day
-                    NotesMonthPicker_Click(sender, e);
                     SelectNoteDay(firstDay);
                 }
                 else

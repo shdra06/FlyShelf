@@ -15,6 +15,7 @@ public partial class App : Application
 
     /// <summary>Reference to open PDF merge window; shake suppressed only when it's focused.</summary>
     internal static Window? ActiveMergeWindow = null;
+    private static bool _justCompletedOnboarding = false; // Set when onboarding wizard completes in this session
 
     // Shake Detection State
     private static int _shakeCount = 0;
@@ -290,6 +291,31 @@ public partial class App : Application
                 namingWindow.ShowDialog();
             }
 
+            // ═══ FIRST-TIME ONBOARDING WIZARD ═══
+            // Show the welcome tutorial on first launch to teach Alt+C, widget, themes, etc.
+            if (!FlyShelf.Classes.SettingsManager.Current.HasCompletedOnboarding)
+            {
+                try
+                {
+                    // Enable widget by default for new users
+                    FlyShelf.Classes.SettingsManager.Current.EnableTaskbarWidget = true;
+
+                    var onboarding = new FlyShelf.Windows.OnboardingWindow();
+                    onboarding.ShowDialog();
+
+                    // Mark onboarding as completed (also done inside OnboardingWindow on "Get Started")
+                    FlyShelf.Classes.SettingsManager.Current.HasCompletedOnboarding = true;
+                    _justCompletedOnboarding = true;
+                    FlyShelf.Classes.SettingsManager.Save();
+                }
+                catch (Exception ex)
+                {
+                    FlyShelf.Classes.Logger.LogAction("ONBOARDING", $"Onboarding failed: {ex.Message}");
+                    FlyShelf.Classes.SettingsManager.Current.HasCompletedOnboarding = true;
+                    FlyShelf.Classes.SettingsManager.Save();
+                }
+            }
+
             // Provide immediate feedback that the service captured the network without waiting for graphics
             FlyShelf.Windows.ToastWindow.ShowToast("Service online");
 
@@ -345,6 +371,13 @@ public partial class App : Application
                 {
                     _mainWinInstance = new MainWindow();
                     MainWindow = _mainWinInstance;
+
+                    // Flag the MainWindow to auto-summon clipboard if onboarding just completed
+                    if (FlyShelf.Classes.SettingsManager.Current.HasCompletedOnboarding 
+                        && _justCompletedOnboarding)
+                    {
+                        _mainWinInstance._isFirstLaunchAfterOnboarding = true;
+                    }
                     
                     // Load persisted clipboard history asynchronously (text + images survive restarts)
                     _ = (_mainWinInstance.DataContext as ViewModels.FlyShelfViewModel)?.LoadPersistedHistoryAsync();
@@ -426,6 +459,18 @@ public partial class App : Application
 
         FlyShelf.Classes.Logger.Shutdown();
         base.OnExit(e);
+    }
+
+    /// <summary>
+    /// Handle Windows shutdown / user logoff — flush all data to disk
+    /// before the session ends. Belt-and-suspenders alongside OnExit.
+    /// </summary>
+    protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+    {
+        try { FlyShelf.Classes.ReminderManager.SaveNow(); } catch { }
+        try { FlyShelf.Classes.NoteManager.SaveNow(); } catch { }
+        try { FlyShelf.Classes.TodoManager.SaveNow(); } catch { }
+        base.OnSessionEnding(e);
     }
 
     // Store-compliant Shake-to-Open Background Polling (No low-level system hooks!)
@@ -566,16 +611,18 @@ public partial class App : Application
                                         _lastClipboardLaunchTime = Environment.TickCount64;
                                         FlyShelf.Classes.Logger.LogAction("SHAKE", $"🚀 Launching Clipboard Mini-Shelf at screen coordinates ({triggerX}, {triggerY}).");
 
-                                        _instance?.Dispatcher.InvokeAsync(async () => 
+                                        _instance?.Dispatcher.InvokeAsync(() => 
                                         {
-                                            await System.Threading.Tasks.Task.Delay(150); // Lowered delay to 150ms for instant summon feedback
                                             if (ActiveMergeWindow != null && ActiveMergeWindow.IsActive)
                                             {
                                                 FlyShelf.Classes.Logger.LogAction("SHAKE", "❌ Rejected: PDF Merger window is active.");
                                                 return;
                                             }
                                             _instance.LaunchClipboardManager(triggerX, triggerY, false, 0, false);
-                                        }, System.Windows.Threading.DispatcherPriority.Background);
+                                            // Force a synchronous layout pass so the visual tree is fully rendered
+                                            // before the window becomes visible — prevents the half-rendered state
+                                            App._mainWinInstance?.UpdateLayout();
+                                        }, System.Windows.Threading.DispatcherPriority.Normal);
                                     }
                                 }
                             }

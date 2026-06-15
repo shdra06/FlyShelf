@@ -9,10 +9,12 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace FlyShelf.Classes
@@ -58,6 +60,64 @@ namespace FlyShelf.Classes
 
         private static LicenseData _data = new();
         private static bool _loaded = false;
+
+        // ═══ ANTI-TAMPER: Runtime integrity sentinel (v2.4.0) ═══
+        // Computed from Tier+LicenseKey on activation/load. If _data.Tier is
+        // patched in memory (e.g. Cheat Engine), the sentinel won't match.
+        private static int _tierSentinel = 0;
+        private static int _antiDebugCounter = 0;
+        private static bool _debuggerDetected = false;
+
+        // ═══ ANTI-DEBUG: Native API imports (v2.4.0) ═══
+        [DllImport("kernel32.dll")]
+        private static extern bool IsDebuggerPresent();
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool CheckRemoteDebuggerPresent(IntPtr hProcess, out bool isDebuggerPresent);
+
+        /// <summary>
+        /// Multi-layer debugger detection: managed debugger, native debugger, and remote debugger.
+        /// Called periodically (every 5th IsPro access) to catch runtime attachments.
+        /// </summary>
+        private static bool DetectDebugger()
+        {
+            try
+            {
+                // Layer 1: Managed debugger (Visual Studio, dnSpy debugger mode)
+                if (System.Diagnostics.Debugger.IsAttached) return true;
+
+                // Layer 2: Native debugger (x64dbg, WinDbg, Cheat Engine debugger)
+                if (IsDebuggerPresent()) return true;
+
+                // Layer 3: Remote debugger (attached from another process)
+                CheckRemoteDebuggerPresent(System.Diagnostics.Process.GetCurrentProcess().Handle, out bool remote);
+                if (remote) return true;
+            }
+            catch { /* P/Invoke may fail on non-Windows — ignore */ }
+            return false;
+        }
+
+        /// <summary>
+        /// Computes a sentinel value from Tier + LicenseKey + a runtime salt.
+        /// Must match _tierSentinel for IsPro to return true.
+        /// This prevents memory-patching _data.Tier from "free" to "pro".
+        /// </summary>
+        private static int ComputeTierSentinel(string tier, string key)
+        {
+            try
+            {
+                using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(GetKeySecret()));
+                byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(tier + "|" + key + "|" + _appDataDir));
+                return BitConverter.ToInt32(hash, 0);
+            }
+            catch { return 0; }
+        }
+
+        /// <summary>Updates the sentinel to match current _data state.</summary>
+        private static void UpdateTierSentinel()
+        {
+            _tierSentinel = ComputeTierSentinel(_data.Tier, _data.LicenseKey);
+        }
 
         // ═══ Server-side validation endpoint (v2.1.0) ═══
         private const string VERCEL_API_BASE = "https://fly-shelf.vercel.app/api";
@@ -106,8 +166,40 @@ namespace FlyShelf.Classes
         {
             get
             {
+                // ═══ ANTI-DEBUG CHECK (v2.4.0) ═══
+                // Periodic debugger detection — every 5th access to avoid perf overhead.
+                // Once detected, permanently returns false until restart.
+                if (_debuggerDetected) return false;
+                if (Interlocked.Increment(ref _antiDebugCounter) % 5 == 0)
+                {
+                    if (DetectDebugger())
+                    {
+                        _debuggerDetected = true;
+                        Logger.LogAction("SECURITY", "⚠️ Debugger detected — Pro features disabled");
+                        return false;
+                    }
+                }
+
                 EnsureLoaded();
-                return _data.Tier == "pro" && !string.IsNullOrEmpty(_data.LicenseKey);
+
+                // Basic tier check
+                if (_data.Tier != "pro" || string.IsNullOrEmpty(_data.LicenseKey))
+                    return false;
+
+                // ═══ TIER SENTINEL CHECK (v2.4.0) ═══
+                // Verify the in-memory Tier wasn't patched by Cheat Engine / memory editor.
+                // The sentinel is computed from Tier + LicenseKey + a salt and must match.
+                if (_tierSentinel != ComputeTierSentinel(_data.Tier, _data.LicenseKey))
+                {
+                    Logger.LogAction("SECURITY", "⚠️ Tier sentinel mismatch — possible memory tampering detected");
+                    _data.Tier = "free";
+                    _data.LicenseKey = "";
+                    _tierSentinel = 0;
+                    try { Save(); } catch { }
+                    return false;
+                }
+
+                return true;
             }
         }
 
@@ -485,6 +577,7 @@ namespace FlyShelf.Classes
             _data.DeviceId = deviceId;
             _data.ActivationToken = serverToken;
             _data.LastValidated = activationTime;
+            UpdateTierSentinel(); // v2.4.0: Set sentinel so IsPro integrity check passes
             Logger.LogAction("LICENSE", $"Pro license activated with server JWT: {MaskedKey}");
             Save();
 
@@ -558,6 +651,7 @@ namespace FlyShelf.Classes
             _data.ActivatedAt = "";
             _data.ActivationToken = "";
             _data.LastValidated = "";
+            UpdateTierSentinel(); // v2.4.0: Reset sentinel for free tier
             Save();
             Logger.LogAction("LICENSE", "License deactivated — reverted to Free tier");
 
@@ -624,6 +718,9 @@ namespace FlyShelf.Classes
                                     try { SaveInternal(); } catch { }
                                 }
                             }
+
+                            // ═══ SECURITY v2.4.0: Compute tier sentinel after load ═══
+                            UpdateTierSentinel();
                         }
                     }
                 }
@@ -694,18 +791,17 @@ namespace FlyShelf.Classes
         /// </summary>
         private static void EnsureTodayReset()
         {
-            // Primary: NTP-synced time from time.google.com (tamper-resistant)
-            // Fallback: OS local time (if offline / NTP hasn't initialized)
-            DateTime correctedNow = NetworkClock.IsSynced
-                ? NetworkClock.Now.DateTime
-                : DateTime.Now;
+            // [SECURITY FIX v2.4.0]: Use trusted time (NTP > persisted anchor + monotonic clock > OS)
+            // Prevents daily limit reset bypass via system clock manipulation
+            var (trustedNow, _) = NetworkClock.GetTrustedUtcNow();
+            DateTime correctedNow = trustedNow.ToLocalTime().DateTime;
             string today = correctedNow.Date.ToString("yyyy-MM-dd");
 
             if (_data.DailyUsage.Date != today)
             {
                 _data.DailyUsage = new DailyUsageData { Date = today };
                 Save();
-                Logger.LogAction("LICENSE", $"Daily usage counters reset (new day: {today}, source: {(NetworkClock.IsSynced ? "NTP" : "OS")})");
+                Logger.LogAction("LICENSE", $"Daily usage counters reset (new day: {today}, trusted: {NetworkClock.IsTimeTrusted})");
             }
         }
 
@@ -824,7 +920,7 @@ namespace FlyShelf.Classes
                         if (!string.IsNullOrEmpty(token))
                         {
                             _data.ActivationToken = token;
-                            _data.LastValidated = (NetworkClock.IsSynced ? NetworkClock.UtcNow : DateTimeOffset.UtcNow).ToString("o");
+                            _data.LastValidated = NetworkClock.GetTrustedUtcNow().time.ToString("o");
                             Save();
                             Logger.LogAction("LICENSE_SERVER", "✅ Silent JWT migration successful");
                         }
@@ -865,12 +961,13 @@ namespace FlyShelf.Classes
                 // Check if revalidation is needed (every 7 days)
                 if (DateTimeOffset.TryParse(_data.LastValidated, out var lastValidated))
                 {
-                    // [SECURITY FIX v2.3.0]: Use NTP time to prevent clock-rollback bypass
-                    DateTimeOffset now = NetworkClock.IsSynced ? NetworkClock.UtcNow : DateTimeOffset.UtcNow;
+                    // [SECURITY FIX v2.4.0]: Use trusted time (NTP > persisted anchor + monotonic clock > OS)
+                    // Prevents clock-rollback bypass when NTP is blocked
+                    var (now, isTrusted) = NetworkClock.GetTrustedUtcNow();
                     double daysSinceValidation = (now - lastValidated).TotalDays;
                     if (daysSinceValidation < REVALIDATION_INTERVAL_DAYS)
                     {
-                        Logger.LogAction("LICENSE_SERVER", $"JWT still fresh ({daysSinceValidation:F1}d since last validation, source: {(NetworkClock.IsSynced ? "NTP" : "OS")}) — skipping revalidation");
+                        Logger.LogAction("LICENSE_SERVER", $"JWT still fresh ({daysSinceValidation:F1}d since last validation, trusted: {isTrusted}) — skipping revalidation");
                         return;
                     }
                 }
@@ -891,7 +988,7 @@ namespace FlyShelf.Classes
                         // Success — update token and timestamp
                         string newToken = root.GetProperty("token").GetString() ?? _data.ActivationToken;
                         _data.ActivationToken = newToken;
-                        _data.LastValidated = (NetworkClock.IsSynced ? NetworkClock.UtcNow : DateTimeOffset.UtcNow).ToString("o");
+                        _data.LastValidated = NetworkClock.GetTrustedUtcNow().time.ToString("o");
                         Save();
                         Logger.LogAction("LICENSE_SERVER", "✅ JWT revalidation successful — token refreshed");
                         return;
@@ -920,7 +1017,7 @@ namespace FlyShelf.Classes
                             if (!string.IsNullOrEmpty(newToken))
                             {
                                 _data.ActivationToken = newToken;
-                                _data.LastValidated = (NetworkClock.IsSynced ? NetworkClock.UtcNow : DateTimeOffset.UtcNow).ToString("o");
+                                _data.LastValidated = NetworkClock.GetTrustedUtcNow().time.ToString("o");
                                 Save();
                                 Logger.LogAction("LICENSE_SERVER", "✅ Re-activation successful after invalid JWT");
                             }
@@ -935,16 +1032,16 @@ namespace FlyShelf.Classes
                 }
                 catch (Exception ex) when (ex is HttpRequestException || ex is TaskCanceledException)
                 {
-                    // Network failure — apply grace period with NTP time
+                    // Network failure — apply grace period with trusted time
                     if (DateTimeOffset.TryParse(_data.LastValidated, out var lastCheck))
                     {
-                        // [SECURITY FIX v2.3.0]: Use NTP time to prevent clock-rollback bypass
-                        DateTimeOffset now = NetworkClock.IsSynced ? NetworkClock.UtcNow : DateTimeOffset.UtcNow;
+                        // [SECURITY FIX v2.4.0]: Use trusted time (NTP > monotonic anchor > OS)
+                        var (now, isTrusted) = NetworkClock.GetTrustedUtcNow();
                         double daysOffline = (now - lastCheck).TotalDays;
                         if (daysOffline >= OFFLINE_GRACE_PERIOD_DAYS)
                         {
                             // [SECURITY FIX v2.3.0]: DEACTIVATE after grace period — not just warn
-                            Logger.LogAction("LICENSE_SERVER", $"Offline for {daysOffline:F0}d (grace: {OFFLINE_GRACE_PERIOD_DAYS}d, source: {(NetworkClock.IsSynced ? "NTP" : "OS")}) — DEACTIVATING");
+                            Logger.LogAction("LICENSE_SERVER", $"Offline for {daysOffline:F0}d (grace: {OFFLINE_GRACE_PERIOD_DAYS}d, trusted: {isTrusted}) — DEACTIVATING");
                             DeactivateLicense();
                             System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                                 Windows.ToastWindow.ShowToast("⚠️ License expired — please connect to internet and re-activate your license key."));
@@ -988,6 +1085,36 @@ namespace FlyShelf.Classes
         private static string _expectedAssemblyHash = null;
         private static bool _integrityChecked = false;
 
+        /// <summary>
+        /// HMAC-signs the assembly hash so the .assembly_hash file can't be tampered with.
+        /// An attacker can't just delete the file and write a new hash — they'd need the HMAC secret.
+        /// Format: "hash|hmac_of_hash"
+        /// </summary>
+        private static string SignAssemblyHash(string hash)
+        {
+            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(GetKeySecret()));
+            byte[] sig = hmac.ComputeHash(Encoding.UTF8.GetBytes(hash + "|integrity"));
+            string sigHex = BitConverter.ToString(sig).Replace("-", "").Substring(0, 16).ToLowerInvariant();
+            return hash + "|" + sigHex;
+        }
+
+        private static bool VerifySignedHash(string stored, out string hash)
+        {
+            hash = null;
+            if (string.IsNullOrEmpty(stored)) return false;
+            var parts = stored.Split('|');
+            if (parts.Length == 1)
+            {
+                // Legacy unsigned hash — accept but will be re-signed on next write
+                hash = parts[0];
+                return true;
+            }
+            if (parts.Length != 2) return false;
+            hash = parts[0];
+            string expectedSigned = SignAssemblyHash(hash);
+            return stored == expectedSigned;
+        }
+
         public static void VerifyAssemblyIntegrity()
         {
             if (_integrityChecked) return;
@@ -1010,42 +1137,72 @@ namespace FlyShelf.Classes
                 string hashFile = Path.Combine(_appDataDir, ".assembly_hash");
                 if (File.Exists(hashFile))
                 {
-                    string storedHash = File.ReadAllText(hashFile).Trim();
+                    string storedRaw = File.ReadAllText(hashFile).Trim();
+
+                    // v2.4.0: Verify HMAC signature on stored hash to prevent attacker
+                    // from pre-computing and writing a new hash for their patched binary
+                    if (!VerifySignedHash(storedRaw, out string storedHash))
+                    {
+                        Logger.LogAction("INTEGRITY", "⚠️ .assembly_hash signature invalid — file was tampered");
+                        // Treat as hash mismatch — force revalidation
+                        storedHash = "tampered";
+                    }
+
                     if (!string.IsNullOrEmpty(storedHash) && storedHash != currentHash)
                     {
-                        // Binary changed — likely a legitimate update, NOT tampering.
-                        // Update the stored hash and verify license server-side in background.
-                        Logger.LogAction("INTEGRITY", $"Binary hash changed (update detected). Old: {storedHash.Substring(0, 12)}..., New: {currentHash.Substring(0, 12)}...");
-                        
-                        // Always update the hash — prevents repeated warnings on every launch
-                        Directory.CreateDirectory(_appDataDir);
-                        File.WriteAllText(hashFile, currentHash);
-                        
-                        // If user has Pro, verify server-side in background (non-blocking)
+                        // Binary changed — could be legitimate update or binary patching.
+                        Logger.LogAction("INTEGRITY", $"Binary hash changed. Old: {storedHash.Substring(0, Math.Min(12, storedHash.Length))}..., New: {currentHash.Substring(0, 12)}...");
+
                         if (_data.Tier == "pro" && !string.IsNullOrEmpty(_data.LicenseKey))
                         {
-                            Logger.LogAction("INTEGRITY", "Pro license detected after update — scheduling background revalidation");
+                            // v2.4.0 SECURITY FIX: Force immediate server re-activation.
+                            // Clear JWT so next revalidation requires full re-activation.
+                            // DON'T update the hash file until revalidation succeeds.
+                            _data.ActivationToken = "";
+                            _data.LastValidated = "";
+                            try { SaveInternal(); } catch { }
+                            Logger.LogAction("INTEGRITY", "Pro JWT cleared — server re-activation required");
+
                             _ = Task.Run(async () =>
                             {
                                 try
                                 {
                                     await Task.Delay(5000); // Wait for network to initialize
                                     await RevalidateLicenseAsync();
-                                    Logger.LogAction("INTEGRITY", "Post-update license revalidation completed");
+
+                                    if (_data.Tier == "pro" && !string.IsNullOrEmpty(_data.ActivationToken))
+                                    {
+                                        // Revalidation succeeded — legitimate update confirmed
+                                        Directory.CreateDirectory(_appDataDir);
+                                        File.WriteAllText(hashFile, SignAssemblyHash(currentHash));
+                                        Logger.LogAction("INTEGRITY", "✅ Post-update revalidation successful — hash updated");
+                                    }
+                                    else
+                                    {
+                                        // Server rejected — binary may be tampered
+                                        Logger.LogAction("INTEGRITY", "⚠️ Post-update revalidation FAILED — license deactivated");
+                                    }
                                 }
                                 catch (Exception ex)
                                 {
-                                    Logger.LogAction("INTEGRITY", $"Post-update revalidation failed (license preserved): {ex.Message}");
+                                    // Network failure — allow 48h grace for legitimate offline updates
+                                    Logger.LogAction("INTEGRITY", $"Post-update revalidation network error: {ex.Message}");
                                 }
                             });
+                        }
+                        else
+                        {
+                            // Free tier — just update hash
+                            Directory.CreateDirectory(_appDataDir);
+                            File.WriteAllText(hashFile, SignAssemblyHash(currentHash));
                         }
                         return;
                     }
                 }
 
-                // Store/update the hash on clean runs
+                // Store/update the signed hash on clean runs
                 Directory.CreateDirectory(_appDataDir);
-                File.WriteAllText(hashFile, currentHash);
+                File.WriteAllText(hashFile, SignAssemblyHash(currentHash));
                 Logger.LogAction("INTEGRITY", $"✅ Assembly integrity verified: {currentHash.Substring(0, 12)}...");
             }
             catch (Exception ex)

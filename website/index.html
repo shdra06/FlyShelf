@@ -52,7 +52,7 @@
           "priceCurrency": "USD"
         },
         "description": "Free clipboard manager for Windows PC & Android. Save clipboard history (2,500 items), sync across devices via P2P LAN and Cloudflare tunnels, merge PDFs, extract text with OCR, and manage passwords.",
-        "featureList": "Clipboard History, Cross-Device Sync, PDF Merger, OCR Text Extraction, Table Extraction, Quick Notes, To-Do Lists, Text Shortcuts, Speed Timer, Emoji Picker, Color Themes, Password Vault",
+        "featureList": "Clipboard History, Cross-Device Sync, PDF Merger, OCR Text Extraction, Table Extraction, Quick Notes, To-Do Lists, Text Shortcuts, Speed Timer, Emoji Picker, Color Themes, Password Vault, Smart Reminders, QuickLook Preview, Audio Playback",
         "license": "https://github.com/shdra06/FlyShelf/blob/main/LICENSE",
         "author": {
           "@type": "Person",
@@ -109,7 +109,7 @@
             "name": "How does cross-device clipboard sync work?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "FlyShelf syncs your clipboard between Windows PC and Android using three transport methods: Direct P2P over LAN (fastest, 100+ Mbps), Cloudflare secure tunnels (worldwide), and Firebase RTDB relay (lightweight text fallback). All transfers are end-to-end encrypted."
+              "text": "FlyShelf syncs your clipboard between Windows PC and Android using three transport methods: Direct P2P over LAN (fastest, 100+ Mbps), Cloudflare secure tunnels (worldwide), and cloud relay (lightweight text fallback). All transfers are end-to-end encrypted."
             }
           },
           {
@@ -117,7 +117,7 @@
             "name": "Is my clipboard data private and secure?",
             "acceptedAnswer": {
               "@type": "Answer",
-              "text": "100% private. FlyShelf uses peer-to-peer connections — your data never passes through our servers. All transfers are encrypted with DPAPI and SyncCrypto. No analytics, no telemetry, no cloud storage of your content."
+              "text": "100% private. FlyShelf uses peer-to-peer connections — your data never passes through our servers. All transfers are protected with military-grade AES-256 encryption, end-to-end. No analytics, no telemetry, no cloud storage of your content."
             }
           },
           {
@@ -285,11 +285,11 @@
           </li>
           <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
             <span class="icon-badge amber"><ion-icon name="flame"></ion-icon></span>
-            <span><strong>Firebase RTDB relay</strong> — lightweight text sync when direct connection unavailable</span>
+            <span><strong>Cloud relay</strong> — lightweight text sync when direct connection is unavailable</span>
           </li>
           <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
             <span class="icon-badge emerald"><ion-icon name="shield-checkmark-outline"></ion-icon></span>
-            <span><strong>End-to-end encrypted</strong> — DPAPI + SyncCrypto for all transfers</span>
+            <span><strong>End-to-end encrypted</strong> — Military-grade AES-256 encryption protects every transfer, end-to-end</span>
           </li>
         </ul>
       </div>
@@ -306,11 +306,11 @@
         <ul style="list-style: none; padding: 0; display: flex; flex-direction: column; gap: 14px;">
           <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
             <span class="icon-badge emerald"><ion-icon name="bar-chart-outline"></ion-icon></span>
-            <span><strong>Extract tables from screenshots</strong> — Bradley-Roth AI + Gemini fallback</span>
+            <span><strong>Extract tables from screenshots</strong> — AI-powered detection with automatic row and column recognition</span>
           </li>
           <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
             <span class="icon-badge cyan"><ion-icon name="search-outline"></ion-icon></span>
-            <span><strong>OCR text extraction</strong> — Windows OCR engine, handles images up to 4000px</span>
+            <span><strong>Text recognition (OCR)</strong> — instantly reads text from any image, screenshot, or document</span>
           </li>
           <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
             <span class="icon-badge purple"><ion-icon name="cube-outline"></ion-icon></span>
@@ -334,7 +334,8 @@
     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center;">
       <!-- IMAGE side -->
       <div>
-        <img src="img_themes.png" alt="FlyShelf 7 premium color themes" style="width: 100%; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08);">
+        <!-- <img src="img_themes.png" alt="FlyShelf 7 premium color themes" style="width: 100%; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08);"> -->
+        <video src="flyshelf_theming.mp4" autoplay loop muted playsinline alt="FlyShelf 7 premium color themes" style="width: 100%; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08);"></video>
       </div>
       <!-- TEXT side -->
       <div>
@@ -394,6 +395,18 @@
             <span class="icon-badge red"><ion-icon name="key-outline"></ion-icon></span>
             <span><strong>Password Manager</strong> — mask, view, edit clipboard passwords</span>
           </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge cyan"><ion-icon name="notifications-outline"></ion-icon></span>
+            <span><strong>Smart Reminders</strong> — set reminders with natural language like 'meeting at 9 am tomorrow'</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge emerald"><ion-icon name="eye-outline"></ion-icon></span>
+            <span><strong>QuickLook</strong> — instant full preview of images, PDFs, and documents in a floating window</span>
+          </li>
+          <li style="display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 0.95rem; line-height: 1.5;">
+            <span class="icon-badge purple"><ion-icon name="musical-notes-outline"></ion-icon></span>
+            <span><strong>Audio Playback</strong> — preview MP3, WAV, FLAC, and OGG files directly from clipboard</span>
+          </li>
         </ul>
       </div>
       <!-- IMAGE side -->
@@ -422,7 +435,7 @@
               <span class="titlebar-dot"></span>
               <span class="titlebar-dot"></span>
             </div>
-            <div style="font-size: 0.65rem; color: var(--text-muted); font-family: monospace;">WinSumo Dashboard</div>
+            <div style="font-size: 0.65rem; color: var(--text-muted); font-family: monospace;">FlyShelf Dashboard</div>
             <div></div>
           </div>
           <div class="mockup-body" id="pc-clipboard-items">
@@ -438,12 +451,12 @@
               <span class="badge badge-cyan">TERM</span>
             </div>
             
-            <div class="sync-card" role="button" tabindex="0" data-content="https://flyshelf.app/docs/pairing-guide" data-type="URL" data-badge="LINK">
+            <div class="sync-card" role="button" tabindex="0" data-content="https://fly-shelf.vercel.app/docs/pairing-guide" data-type="URL" data-badge="LINK">
               <div class="sync-card-left">
                 <div class="sync-card-icon"><ion-icon name="link-outline"></ion-icon></div>
                 <div class="sync-card-text">
                   <div class="sync-card-title">FlyShelf Pairing Docs</div>
-                  <div class="sync-card-subtitle">https://flyshelf.app/docs/pairing-guide</div>
+                  <div class="sync-card-subtitle">https://fly-shelf.vercel.app/docs/pairing-guide</div>
                 </div>
               </div>
               <span class="badge badge-purple">LINK</span>
@@ -481,7 +494,7 @@
             <div class="pill-dot"></div>
           </div>
           <div class="selector-pill fb-pill" role="button" tabindex="0" data-path="firebase" id="path-firebase">
-            <span>Firebase RTDB</span>
+            <span>Cloud Relay</span>
             <div class="pill-dot"></div>
           </div>
         </div>
@@ -668,7 +681,7 @@
           <div class="widget-body">
             <div class="utm-widget-box">
               <div class="utm-input-container">
-                <textarea class="utm-input-area" id="utm-url-input" aria-label="URL to sanitize">https://flyshelf.app/docs?utm_source=newsletter&utm_medium=email&utm_campaign=launch_v6&fbclid=ab12cd34ef56</textarea>
+                <textarea class="utm-input-area" id="utm-url-input" aria-label="URL to sanitize">https://fly-shelf.vercel.app/docs?utm_source=newsletter&utm_medium=email&utm_campaign=launch_v6&fbclid=ab12cd34ef56</textarea>
               </div>
               <div class="utm-action-row">
                 <button class="btn-utm-scrub" id="btn-utm-scrub-trigger">Sanitize Link</button>
@@ -798,8 +811,8 @@
   <section class="scroll-reveal" id="features" style="padding: 60px 20px; max-width: 1100px; margin: 0 auto;">
     <div class="section-header">
       <span class="badge badge-emerald">Complete Toolkit</span>
-      <h2>30+ Clipboard Manager Features in One App</h2>
-      <p>30+ productivity tools built right into your clipboard manager.</p>
+      <h2>35+ Clipboard Manager Features in One App</h2>
+      <p>35+ productivity tools built right into your clipboard manager.</p>
     </div>
     <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 30px;">
       <!-- 1 -->
@@ -873,6 +886,24 @@
         <div class="feature-icon-box red" style="margin: 0 auto 12px auto;"><ion-icon name="key-outline"></ion-icon></div>
         <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Password Vault</div>
         <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Masked clipboard text</div>
+      </div>
+      <!-- 13 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box amber" style="margin: 0 auto 12px auto;"><ion-icon name="notifications-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Smart Reminders</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Natural language scheduling</div>
+      </div>
+      <!-- 14 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box cyan" style="margin: 0 auto 12px auto;"><ion-icon name="eye-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">QuickLook Preview</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Instant file preview</div>
+      </div>
+      <!-- 15 -->
+      <div class="glass feature-card-grid-item" style="padding: 20px; border-radius: 14px; text-align: center; border: 1px solid rgba(255,255,255,0.06); display: flex; flex-direction: column; align-items: center;">
+        <div class="feature-icon-box purple" style="margin: 0 auto 12px auto;"><ion-icon name="musical-notes-outline"></ion-icon></div>
+        <div style="font-weight: 700; font-size: 0.85rem; color: var(--text-primary);">Audio Playback</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Play clips inline</div>
       </div>
     </div>
   </section>

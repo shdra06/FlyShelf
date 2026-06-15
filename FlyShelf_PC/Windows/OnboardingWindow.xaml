@@ -1,0 +1,334 @@
+<Window x:Class="FlyShelf.Windows.OnboardingWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        Title="Welcome to FlyShelf" Width="720" Height="520"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent"
+        WindowStartupLocation="CenterScreen" ResizeMode="NoResize"
+        ShowInTaskbar="False"
+        MouseLeftButtonDown="Window_MouseLeftButtonDown">
+
+    <Grid Margin="20">
+        <!-- ═══ Outer Shell with DropShadow ═══ -->
+        <Border CornerRadius="20" BorderThickness="1" BorderBrush="#2A2B3F">
+            <Border.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                    <GradientStop Color="#1A1B2E" Offset="0"/>
+                    <GradientStop Color="#0F1021" Offset="1"/>
+                </LinearGradientBrush>
+            </Border.Background>
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="40" Opacity="0.5" ShadowDepth="0" Color="#000000"/>
+            </Border.Effect>
+
+            <Grid>
+                <!-- ═══ Skip Button (top-right) ═══ -->
+                <TextBlock Text="Skip" FontSize="13" Foreground="#64748B" Cursor="Hand"
+                           HorizontalAlignment="Right" VerticalAlignment="Top"
+                           Margin="0,20,28,0" MouseLeftButtonDown="Skip_Click">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Foreground" Value="#94A3B8"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+
+                <!-- ═══ Main Content Area ═══ -->
+                <Grid Margin="48,40,48,72">
+                    <!-- ══════════════════════════════════════ -->
+                    <!-- STEP 1: Welcome                       -->
+                    <!-- ══════════════════════════════════════ -->
+                    <StackPanel x:Name="Step1" VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <Image Source="pack://application:,,,/Resources/FlyShelfMascot.png"
+                               Width="120" Height="120" Margin="0,0,0,24"
+                               HorizontalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
+                        <TextBlock Text="Welcome to FlyShelf" FontSize="32" FontWeight="Bold"
+                                   Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <TextBlock Text="Your intelligent clipboard companion" FontSize="16"
+                                   Foreground="#94A3B8" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                        <TextBlock Text="Copy anything. Find everything. Paste instantly." FontSize="13"
+                                   Foreground="#64748B" HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- ══════════════════════════════════════ -->
+                    <!-- STEP 2: Alt+C Summon                  -->
+                    <!-- ══════════════════════════════════════ -->
+                    <StackPanel x:Name="Step2" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
+                        <!-- Keyboard keys visual -->
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,32">
+                            <Border CornerRadius="8" Padding="16,10" Background="#2A2D3E" BorderBrush="#3A3D4E" BorderThickness="1">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="8" Opacity="0.3" ShadowDepth="2" Direction="270" Color="#000000"/>
+                                </Border.Effect>
+                                <TextBlock Text="Alt" FontSize="24" FontWeight="Bold" Foreground="#A78BFA"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <TextBlock Text="+" FontSize="24" FontWeight="Bold" Foreground="#64748B"
+                                       VerticalAlignment="Center" Margin="14,0"/>
+                            <Border CornerRadius="8" Padding="16,10" Background="#2A2D3E" BorderBrush="#3A3D4E" BorderThickness="1">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="8" Opacity="0.3" ShadowDepth="2" Direction="270" Color="#000000"/>
+                                </Border.Effect>
+                                <TextBlock Text="C" FontSize="24" FontWeight="Bold" Foreground="#A78BFA"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                        </StackPanel>
+
+                        <TextBlock Text="Summon Your Shelf" FontSize="24" FontWeight="Bold"
+                                   Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                        <TextBlock Text="Press Alt+C anytime to summon or dismiss your clipboard shelf"
+                                   FontSize="14" Foreground="#94A3B8" HorizontalAlignment="Center"
+                                   TextAlignment="Center" Margin="0,0,0,8"/>
+                        <TextBlock Text="Works from anywhere — even fullscreen apps" FontSize="13"
+                                   Foreground="#64748B" HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- ══════════════════════════════════════ -->
+                    <!-- STEP 3: Taskbar Widget                -->
+                    <!-- ══════════════════════════════════════ -->
+                    <StackPanel x:Name="Step3" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
+                        <ui:SymbolIcon Symbol="AppsList24" FontSize="48" Foreground="#22D3EE"
+                                       HorizontalAlignment="Center" Margin="0,0,0,24"/>
+                        <TextBlock Text="Taskbar Widget" FontSize="24" FontWeight="Bold"
+                                   Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                        <TextBlock Text="Quick access lives in your taskbar. Click the widget to open your clipboard instantly."
+                                   FontSize="14" Foreground="#94A3B8" HorizontalAlignment="Center"
+                                   TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420" Margin="0,0,0,16"/>
+                        <TextBlock Text="Enabled automatically for you ✓" FontSize="12"
+                                   Foreground="#10B981" HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- ══════════════════════════════════════ -->
+                    <!-- STEP 4: Key Features (2×2 grid)       -->
+                    <!-- ══════════════════════════════════════ -->
+                    <StackPanel x:Name="Step4" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock Text="Powerful Features" FontSize="24" FontWeight="Bold"
+                                   Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,28"/>
+
+                        <Grid HorizontalAlignment="Center">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Card 1: Clipboard History -->
+                            <Border Grid.Row="0" Grid.Column="0" CornerRadius="12" Padding="16"
+                                    Background="#1E2035" BorderBrush="#2A2D3E" BorderThickness="1"
+                                    Width="240" Margin="0,0,10,10">
+                                <StackPanel>
+                                    <ui:SymbolIcon Symbol="ClipboardPaste24" FontSize="24" Foreground="#A78BFA"
+                                                   HorizontalAlignment="Left" Margin="0,0,0,10"/>
+                                    <TextBlock Text="Clipboard History" FontSize="13" FontWeight="Bold"
+                                               Foreground="White" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Every copy saved automatically" FontSize="11"
+                                               Foreground="#94A3B8" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Card 2: Cross-Device Sync -->
+                            <Border Grid.Row="0" Grid.Column="1" CornerRadius="12" Padding="16"
+                                    Background="#1E2035" BorderBrush="#2A2D3E" BorderThickness="1"
+                                    Width="240" Margin="10,0,0,10">
+                                <StackPanel>
+                                    <ui:SymbolIcon Symbol="Globe24" FontSize="24" Foreground="#22D3EE"
+                                                   HorizontalAlignment="Left" Margin="0,0,0,10"/>
+                                    <TextBlock Text="Cross-Device Sync" FontSize="13" FontWeight="Bold"
+                                               Foreground="White" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Share between PC and phone" FontSize="11"
+                                               Foreground="#94A3B8" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Card 3: Quick Notes & To-Do -->
+                            <Border Grid.Row="1" Grid.Column="0" CornerRadius="12" Padding="16"
+                                    Background="#1E2035" BorderBrush="#2A2D3E" BorderThickness="1"
+                                    Width="240" Margin="0,10,10,0">
+                                <StackPanel>
+                                    <ui:SymbolIcon Symbol="Notepad24" FontSize="24" Foreground="#FBBF24"
+                                                   HorizontalAlignment="Left" Margin="0,0,0,10"/>
+                                    <TextBlock Text="Quick Notes &amp; To-Do" FontSize="13" FontWeight="Bold"
+                                               Foreground="White" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Built-in notes and task lists" FontSize="11"
+                                               Foreground="#94A3B8" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Card 4: Smart Categories -->
+                            <Border Grid.Row="1" Grid.Column="1" CornerRadius="12" Padding="16"
+                                    Background="#1E2035" BorderBrush="#2A2D3E" BorderThickness="1"
+                                    Width="240" Margin="10,10,0,0">
+                                <StackPanel>
+                                    <ui:SymbolIcon Symbol="Filter24" FontSize="24" Foreground="#34D399"
+                                                   HorizontalAlignment="Left" Margin="0,0,0,10"/>
+                                    <TextBlock Text="Smart Categories" FontSize="13" FontWeight="Bold"
+                                               Foreground="White" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Auto-organized by content type" FontSize="11"
+                                               Foreground="#94A3B8" TextWrapping="Wrap"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </StackPanel>
+
+                    <!-- ══════════════════════════════════════ -->
+                    <!-- STEP 5: Choose Your Vibe              -->
+                    <!-- ══════════════════════════════════════ -->
+                    <StackPanel x:Name="Step5" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
+                        <TextBlock Text="Choose Your Vibe" FontSize="24" FontWeight="Bold"
+                                   Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                        <TextBlock Text="Pick a color theme — you can always change it later" FontSize="14"
+                                   Foreground="#94A3B8" HorizontalAlignment="Center" Margin="0,0,0,36"/>
+
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <!-- Midnight -->
+                            <StackPanel Margin="10,0">
+                                <Border x:Name="MidnightBorder" Width="64" Height="64" CornerRadius="16"
+                                        Background="#312E81" Cursor="Hand" BorderThickness="2"
+                                        BorderBrush="#50FFFFFF" Tag="Midnight"
+                                        MouseLeftButtonDown="ThemeBtn_Click">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Opacity" Value="0.85"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                </Border>
+                                <TextBlock Text="Midnight" FontSize="10" Foreground="#94A3B8"
+                                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                            </StackPanel>
+
+                            <!-- Ocean -->
+                            <StackPanel Margin="10,0">
+                                <Border x:Name="OceanBorder" Width="64" Height="64" CornerRadius="16"
+                                        Background="#0E7490" Cursor="Hand" BorderThickness="2"
+                                        BorderBrush="#50FFFFFF" Tag="Ocean"
+                                        MouseLeftButtonDown="ThemeBtn_Click">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Opacity" Value="0.85"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                </Border>
+                                <TextBlock Text="Ocean" FontSize="10" Foreground="#94A3B8"
+                                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                            </StackPanel>
+
+                            <!-- Sunset -->
+                            <StackPanel Margin="10,0">
+                                <Border x:Name="SunsetBorder" Width="64" Height="64" CornerRadius="16"
+                                        Background="#C2410C" Cursor="Hand" BorderThickness="2"
+                                        BorderBrush="#50FFFFFF" Tag="Sunset"
+                                        MouseLeftButtonDown="ThemeBtn_Click">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Opacity" Value="0.85"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                </Border>
+                                <TextBlock Text="Sunset" FontSize="10" Foreground="#94A3B8"
+                                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                            </StackPanel>
+
+                            <!-- Emerald -->
+                            <StackPanel Margin="10,0">
+                                <Border x:Name="EmeraldBorder" Width="64" Height="64" CornerRadius="16"
+                                        Background="#047857" Cursor="Hand" BorderThickness="2"
+                                        BorderBrush="#50FFFFFF" Tag="Emerald"
+                                        MouseLeftButtonDown="ThemeBtn_Click">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Opacity" Value="0.85"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                </Border>
+                                <TextBlock Text="Emerald" FontSize="10" Foreground="#94A3B8"
+                                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                            </StackPanel>
+
+                            <!-- Lavender -->
+                            <StackPanel Margin="10,0">
+                                <Border x:Name="LavenderBorder" Width="64" Height="64" CornerRadius="16"
+                                        Background="#7C3AED" Cursor="Hand" BorderThickness="2"
+                                        BorderBrush="#50FFFFFF" Tag="Lavender"
+                                        MouseLeftButtonDown="ThemeBtn_Click">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="Opacity" Value="0.85"/>
+                                                </Trigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                </Border>
+                                <TextBlock Text="Lavender" FontSize="10" Foreground="#94A3B8"
+                                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </StackPanel>
+                </Grid>
+
+                <!-- ═══ Bottom Bar: Dots + Next Button ═══ -->
+                <Grid VerticalAlignment="Bottom" Margin="28,0,28,24">
+                    <!-- Step indicator dots (center) -->
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Ellipse x:Name="Dot1" Width="10" Height="10" Margin="4,0"
+                                 Fill="#6366F1"/>
+                        <Ellipse x:Name="Dot2" Width="6" Height="6" Margin="4,0"
+                                 Fill="#374151"/>
+                        <Ellipse x:Name="Dot3" Width="6" Height="6" Margin="4,0"
+                                 Fill="#374151"/>
+                        <Ellipse x:Name="Dot4" Width="6" Height="6" Margin="4,0"
+                                 Fill="#374151"/>
+                        <Ellipse x:Name="Dot5" Width="6" Height="6" Margin="4,0"
+                                 Fill="#374151"/>
+                    </StackPanel>
+
+                    <!-- Next / Get Started button (right) -->
+                    <Border HorizontalAlignment="Right" CornerRadius="12" Padding="16,8"
+                            Cursor="Hand" MouseLeftButtonDown="NextBtn_Click">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#6366F1" Offset="0"/>
+                                <GradientStop Color="#8B5CF6" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Opacity" Value="0.9"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <TextBlock x:Name="NextBtnText" Text="Next →" FontSize="13" FontWeight="SemiBold"
+                                   Foreground="White"/>
+                    </Border>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -623,6 +623,40 @@
     <SolidColorBrush x:Key="FloatingUnpinIcon"        Color="#FDE68A" options:Freeze="True"/>
     <SolidColorBrush x:Key="FloatingUnpinText"        Color="#FFFBEB" options:Freeze="True"/>
 
+    <!-- ═══════════════════════════════════════════════════════════════
+         Aero Clipboard — Glass Slab Overrides
+         When the Glass theme is loaded, the Aero clipboard becomes a
+         fully translucent frosted-glass panel with light text on dark.
+         These override the default opaque Alt* brushes from AltClipboardStyles.xaml.
+         ═══════════════════════════════════════════════════════════════ -->
+
+    <!-- Glass Aero Card (frosted translucent white on dark backdrop) -->
+    <SolidColorBrush x:Key="AltCardBg"              Color="#15FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltCardBgHover"          Color="#25FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltCardBorder"           Color="#20FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltCardBorderHover"      Color="#38FFFFFF" options:Freeze="True"/>
+
+    <!-- Glass Aero Header / Search -->
+    <SolidColorBrush x:Key="AltHeaderBg"             Color="#10FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltSearchBg"             Color="#12FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltSearchBorder"         Color="#25FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltSearchFg"             Color="#80FFFFFF" options:Freeze="True"/>
+
+    <!-- Glass Aero Text (light text on dark/transparent backdrop) -->
+    <SolidColorBrush x:Key="AltTextPrimary"          Color="#F0FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltTextSecondary"        Color="#B0FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltTextTertiary"         Color="#70FFFFFF" options:Freeze="True"/>
+
+    <!-- Glass Aero Misc -->
+    <SolidColorBrush x:Key="AltPinDot"               Color="#FBBF24"   options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltTimestampFg"          Color="#70FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltSubtitleFg"           Color="#70FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltCloseHoverBg"         Color="#30EF4444" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltSidebarHover"         Color="#18FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltBottomBarBg"          Color="#10FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltBottomBarBorder"      Color="#20FFFFFF" options:Freeze="True"/>
+    <SolidColorBrush x:Key="AltIconFallbackBg"       Color="#0AFFFFFF" options:Freeze="True"/>
+
     <!-- ═══ Glass theme marker (used for detection in code) ═══ -->
     <SolidColorBrush x:Key="FlyShelf.GlassThemeActive" Color="Transparent" options:Freeze="True"/>
 

@@ -230,6 +230,130 @@ Inspiration: Rainmeter skins (Mond, Frost Glass, Droptop 4),
 
 
 ───────────────────────────────────────────────────────────────────
+  SEMANTIC CLIPBOARD SEARCH (Requires ONNX model + tokenizer)
+───────────────────────────────────────────────────────────────────
+
+Model:   all-MiniLM-L6-v2 (INT8 quantized ONNX, ~22MB on disk)
+NuGet:   Microsoft.ML.Tokenizers (for BertTokenizer vocab.txt)
+         Microsoft.ML.OnnxRuntime (already in project)
+RAM:     ~30-40MB when active, 0MB when idle (lazy-loaded)
+Latency: ~2-5ms per query on CPU
+
+[ ] SemanticSearchEngine.cs — Core singleton class
+    - Lazy-load ONNX InferenceSession only when search ≥ 3 chars
+    - Auto-dispose after 60 seconds of search inactivity → 0MB idle
+    - Thread-safe with SemaphoreSlim(1) around load/unload
+    - ONNX options: IntraOpNumThreads=2, GraphOptimizationLevel=ALL
+    - Same pattern as existing OnnxTableDetector.cs
+
+[ ] Text Embedding Pipeline
+    - BertTokenizer (vocab.txt) → input_ids + attention_mask
+    - ONNX inference → last_hidden_state tensor
+    - Mean pooling (weighted by attention mask) → 384-dim vector
+    - L2 normalize → final embedding
+
+[ ] Image Search via OCR Text
+    - For image items: embed the OCR-extracted text (from existing
+      Windows OCR in ClipboardItem.Ocr.cs)
+    - No separate image embedding model needed
+    - Images without OCR text: match on FileName only
+    - Keeps RAM well under budget
+
+[ ] Embedding Cache (Persistent)
+    - Binary file at %AppData%/FlyShelf/semantic_cache.bin
+    - Format: [int32 keyLen][utf8 key][384 × float32] per entry
+    - Keyed by ItemId (stable hash) — survives app restarts
+    - New items embedded in background on thread pool as copied
+    - In FlyShelfViewModel.Persistence.AddClipboardItem():
+      _ = Task.Run(() => SemanticSearchEngine.Instance.EmbedItemAsync(newItem));
+
+[ ] Search Integration (MainWindow.Search.cs)
+    - ApplySearchFilter() flow:
+      query < 3 chars → keyword match only (unchanged)
+      query ≥ 3 chars → keyword match + async semantic search
+                       → merge results: keyword hits first,
+                         then semantic-only hits ranked by
+                         cosine similarity score
+    - CancellationTokenSource for debounced semantic queries
+    - Subtle "🧠" indicator when semantic mode is active
+
+[ ] SearchResultComparer Enhancement
+    - Add Dictionary<string, float> for semantic similarity scores
+    - Priority 0 (highest): keyword match with semantic boost
+    - Priority 1: keyword match only
+    - Priority 2: semantic-only match (ranked by cosine score)
+    - Priority 3: extension/type match
+
+[ ] Model Files (ship with app)
+    - Models/semantic/model_quantized.onnx (~22MB)
+    - Models/semantic/vocab.txt (~226KB)
+    - Downloaded from HuggingFace sentence-transformers/all-MiniLM-L6-v2
+
+Example searches that would work:
+    "deploy commands"    → finds "git push heroku main"
+    "login credentials"  → finds "admin:p4ssw0rd@server.com"
+    "meeting notes"      → finds "standup summary Q3 planning"
+    "error messages"     → finds "NullReferenceException at line 42"
+    "design colors"      → finds "#8B5CF6 indigo palette"
+
+
+───────────────────────────────────────────────────────────────────
+  SMART PRODUCTIVITY FEATURES (No AI model required — pure C#)
+───────────────────────────────────────────────────────────────────
+
+[ ] Smart Paste Transformations (0MB RAM)
+    - Ctrl+Shift+V opens "Paste As..." popup
+    - Options: Plain Text, UPPERCASE, lowercase, Title Case,
+      Markdown→HTML, JSON formatted, Remove line breaks,
+      Strip whitespace, Code block wrap
+    - Pure C# string transforms — no dependencies
+
+[ ] Clipboard Pinboards / Collections (0MB RAM)
+    - Named folders: "Work Links", "Code Snippets", "Addresses"
+    - Add Collection string property to ClipboardItem
+    - Drag clips into collections, filter by collection
+    - Persistent JSON storage alongside pinned_items.json
+
+[ ] Sensitive Data Auto-Detection (0MB RAM)
+    - Regex patterns for: API keys (sk-proj-*, ghp_*, etc.),
+      credit cards (4242...), SSN, private keys, JWT tokens
+    - Auto-mask display with "••••" and lock icon
+    - "Reveal" button on hover
+    - Auto-expire sensitive items after configurable time
+
+[ ] Context-Aware Source Tracking (0MB RAM)
+    - GetForegroundWindow() + GetWindowText() at copy time
+    - Show "Copied from: VS Code" badge on clip card
+    - Filter by source app in filter bar
+    - Store as SourceAppName property on ClipboardItem
+
+[ ] Live Color Picker & Palette (0MB RAM)
+    - Detect hex/RGB/HSL color codes via regex
+    - Show color swatch on clip card
+    - Click to open palette builder
+    - Supports HEX, RGB, HSL, Tailwind, CSS named colors
+
+[ ] Clipboard Queue / Paste Stack (0MB RAM)
+    - Win+C enters "Queue Mode" → copy items 1, 2, 3
+    - Each Ctrl+V pastes next item in FIFO order
+    - Visual indicator showing queue position
+    - Queue data structure with SendInput paste hook
+
+[ ] JSON / XML / Code Formatter (0MB RAM)
+    - Auto-detect structured data on copy
+    - "Format" button on clip card → pretty-printed view
+    - System.Text.Json for JSON, System.Xml for XML
+    - Syntax highlighting in QuickLook preview
+
+[ ] Ollama / Local LLM Connector (0MB RAM in FlyShelf)
+    - Settings → "Local AI Server: localhost:11434"
+    - Right-click any clip → "Summarize", "Rewrite",
+      "Translate", "Explain Code"
+    - Simple HTTP client to Ollama's OpenAI-compatible API
+    - All AI processing delegated to Ollama → 0MB in FlyShelf
+
+
+───────────────────────────────────────────────────────────────────
   NOTES
 ───────────────────────────────────────────────────────────────────
 
@@ -242,3 +366,8 @@ Inspiration: Rainmeter skins (Mond, Frost Glass, Droptop 4),
 - Full design reference: flyshelf_ui_design_bible.md
 - Research sources: Rainmeter skins, Fluent Design 2, Paste macOS,
   Discord/Spotify/Notion UX, clipboard manager competitors
+- Semantic search research: all-MiniLM-L6-v2 INT8, Microsoft.ML.Tokenizers,
+  AllMiniLmL6V2Sharp NuGet, HuggingFace ONNX exports
+- Competitive analysis: Ditto, Paste (macOS), CopyQ, PowerToys Advanced Paste,
+  Horizon AI Clipboard, ClipZ, CopyMate, UiPath Clipboard AI
+

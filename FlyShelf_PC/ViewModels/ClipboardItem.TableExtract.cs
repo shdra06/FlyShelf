@@ -449,7 +449,15 @@ namespace FlyShelf.ViewModels
                 int targetScale = (tableBox != null) ? 2 : 1;
                 int padding = 40;
 
-                if (tableBox != null)
+                // Windows OCR max supported dimension is ~4000px.
+                // If the 1x crop is already > 1500px, skip 2x upscaling to stay within limits.
+                if (tableBox != null && Math.Max(raw1x.PixelWidth, raw1x.PixelHeight) > 1500)
+                {
+                    targetScale = 1;
+                    Classes.Logger.LogAction("TABLE_EXTRACT", $"Crop is {raw1x.PixelWidth}x{raw1x.PixelHeight} — skipping 2x upscale to stay within OCR limits.");
+                }
+
+                if (tableBox != null && targetScale == 2)
                 {
                     // ── 2x bilinear upscaled pipeline for cropped table ──
                     global::Windows.Graphics.Imaging.SoftwareBitmap raw2x = ScaleBilinear(raw1x, 0, 0, raw1x.PixelWidth, raw1x.PixelHeight, 2);
@@ -490,8 +498,14 @@ namespace FlyShelf.ViewModels
                     1, // scale = 1 since rawProcessed is already at the target scale (2x or 1x)
                     padding);
 
-                // Save the processed/cleaned image to disk for Quick Look text overlay
-                await SaveSoftwareBitmapToFileAsync(rawProcessed, FilePath);
+                // Capture the processed crop dimensions BEFORE disposal —
+                // needed for correct boundary clamping (crop-local vs full-image coords)
+                int processedW1x = rawProcessed.PixelWidth / targetScale;
+                int processedH1x = rawProcessed.PixelHeight / targetScale;
+
+                // NOTE: We intentionally do NOT save rawProcessed back to FilePath.
+                // The original image must be preserved — overwriting it with the grid-erased
+                // binarized version would corrupt the user's screenshot permanently.
 
                 if (rawProcessed != raw1x)
                 {
@@ -515,20 +529,17 @@ namespace FlyShelf.ViewModels
                         return;
                     }
 
-                    // ── STEP 1d: Enhance contrast for OCR ──
-                    // Smart dark/light detection + enhancement for maximum text recognition
-                    try
-                    {
-                        var enhancedOcr = Classes.OcrPreprocessor.SmartEnhance(ocrBitmap);
-                        ocrBitmap.Dispose();
-                        ocrBitmap = enhancedOcr;
-                    }
-                    catch (Exception enhanceEx)
-                    {
-                        Classes.Logger.LogAction("TABLE_OCR_ENHANCE", $"Enhancement failed (using original): {enhanceEx.Message}");
-                    }
+                    // NOTE: SmartEnhance is intentionally NOT applied here.
+                    // Table extraction has its own preprocessing (PreprocessImage, NeutralizeHighlightColumns,
+                    // EraseGridLines) that preserves grid structure. SmartEnhance destroys table data by
+                    // inverting dark themes and wiping colored cell backgrounds (luminance>140 + saturation>20 → white).
 
-                    // ── STEP 1e: Run Windows OCR on the enhanced, scaled & padded raw crop ──
+                    // NOTE: Premultiplied alpha conversion is intentionally skipped here.
+                    // The working version (d74ec47) ran OCR directly on the Straight-mode bitmap
+                    // from CropScaleAndPadSoftwareBitmap. Converting to Premultiplied was added later
+                    // but degrades OCR accuracy for table extraction.
+
+                    // Run Windows OCR on the scaled & padded raw crop
                     var ocrResult = await ocrEngine.RecognizeAsync(ocrBitmap);
                     ocrBitmap.Dispose();
 
@@ -570,20 +581,26 @@ namespace FlyShelf.ViewModels
                     }).ToList();
 
                     // Estimate borders and boundaries
+                    // When tableBox != null, the image was cropped — use crop dimensions, not full image
+                    double refWidth = (tableBox != null) ? processedW1x : originalWidth;
+                    double refHeight = (tableBox != null) ? processedH1x : originalHeight;
+
                     double avgColW = 50.0;
                     if (cols1x.Count >= 2) avgColW = (cols1x[cols1x.Count - 1] - cols1x[0]) / (double)(cols1x.Count - 1);
                     double avgRowH = 25.0;
                     if (rows1x.Count >= 2) avgRowH = (rows1x[rows1x.Count - 1] - rows1x[0]) / (double)(rows1x.Count - 1);
+
+                    Classes.Logger.LogAction("TABLE_BOUNDARY", $"Reference dimensions: {refWidth}x{refHeight} (tableBox={tableBox != null}). Grid: cols1x={cols1x.Count}, rows1x={rows1x.Count}. AvgColW={avgColW:F0}, AvgRowH={avgRowH:F0}");
 
                     double tableTop = rows1x.Count > 0 ? rows1x[0] : 0;
                     if (rows1x.Count > 0 && words1x.Any(w => w.CenterY < rows1x[0] && w.CenterY >= rows1x[0] - avgRowH * 1.2))
                     {
                         tableTop = Math.Max(0.0, rows1x[0] - avgRowH);
                     }
-                    double tableBottom = rows1x.Count > 0 ? rows1x[rows1x.Count - 1] : 0;
+                    double tableBottom = rows1x.Count > 0 ? rows1x[rows1x.Count - 1] : refHeight;
                     if (rows1x.Count > 0 && words1x.Any(w => w.CenterY > rows1x[rows1x.Count - 1] && w.CenterY <= rows1x[rows1x.Count - 1] + avgRowH * 1.2))
                     {
-                        tableBottom = Math.Min(originalHeight, rows1x[rows1x.Count - 1] + avgRowH);
+                        tableBottom = Math.Min(refHeight, rows1x[rows1x.Count - 1] + avgRowH);
                     }
 
                     double tableLeft = cols1x.Count > 0 ? cols1x[0] : 0;
@@ -591,11 +608,13 @@ namespace FlyShelf.ViewModels
                     {
                         tableLeft = Math.Max(0.0, cols1x[0] - avgColW);
                     }
-                    double tableRight = cols1x.Count > 0 ? cols1x[cols1x.Count - 1] : originalWidth;
+                    double tableRight = cols1x.Count > 0 ? cols1x[cols1x.Count - 1] : refWidth;
                     if (cols1x.Count > 0 && words1x.Any(w => w.CenterX > cols1x[cols1x.Count - 1] && w.CenterX <= cols1x[cols1x.Count - 1] + avgColW * 1.2))
                     {
-                        tableRight = Math.Min(originalWidth, cols1x[cols1x.Count - 1] + avgColW);
+                        tableRight = Math.Min(refWidth, cols1x[cols1x.Count - 1] + avgColW);
                     }
+
+                    Classes.Logger.LogAction("TABLE_BOUNDARY", $"Table bounds (1x): L={tableLeft:F0} R={tableRight:F0} T={tableTop:F0} B={tableBottom:F0}");
 
                     // Filter detected grid lines to within the boundaries
                     var finalCols1x = cols1x.Where(c => c >= tableLeft - 5 && c <= tableRight + 5).ToList();
@@ -624,7 +643,12 @@ namespace FlyShelf.ViewModels
                         w.CenterY <= ocrTableBottom + 5
                     ).ToList();
 
-                    Classes.Logger.LogAction("TABLE_OCR", $"Found {allWords.Count} words inside table boundaries (discarded {rawWords.Count - allWords.Count} outside)");
+                    Classes.Logger.LogAction("TABLE_OCR", $"Found {allWords.Count} words inside table boundaries (discarded {rawWords.Count - allWords.Count} outside). OCR bounds: L={ocrTableLeft:F0} R={ocrTableRight:F0} T={ocrTableTop:F0} B={ocrTableBottom:F0}");
+                    if (rawWords.Count > 0 && allWords.Count == 0)
+                    {
+                        // Diagnostic: log word coordinate range to detect future mismatches
+                        Classes.Logger.LogAction("TABLE_OCR_DEBUG", $"Word X range: {rawWords.Min(w => w.CenterX):F0}-{rawWords.Max(w => w.CenterX):F0}, Y range: {rawWords.Min(w => w.CenterY):F0}-{rawWords.Max(w => w.CenterY):F0}");
+                    }
 
                     if (allWords.Count < 3)
                     {
@@ -1827,13 +1851,25 @@ namespace FlyShelf.ViewModels
                         global::Windows.Graphics.Imaging.ExifOrientationMode.RespectExifOrientation,
                         global::Windows.Graphics.Imaging.ColorManagementMode.ColorManageToSRgb))
                     {
+                        // Windows OCR requires Bgra8/Premultiplied
+                        global::Windows.Graphics.Imaging.SoftwareBitmap ocrReady = softwareBitmap;
+                        if (softwareBitmap.BitmapPixelFormat != global::Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8 ||
+                            softwareBitmap.BitmapAlphaMode != global::Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied)
+                        {
+                            ocrReady = global::Windows.Graphics.Imaging.SoftwareBitmap.Convert(
+                                softwareBitmap,
+                                global::Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
+                                global::Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
+                        }
+
                         var ocrEngine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromLanguage(
                             new global::Windows.Globalization.Language("en-US"));
                         if (ocrEngine == null) ocrEngine = global::Windows.Media.Ocr.OcrEngine.TryCreateFromUserProfileLanguages();
 
                         if (ocrEngine != null)
                         {
-                            var result = await ocrEngine.RecognizeAsync(softwareBitmap);
+                            var result = await ocrEngine.RecognizeAsync(ocrReady);
+                            if (ocrReady != softwareBitmap) ocrReady.Dispose();
                             if (result != null)
                             {
                                 int count = 0;

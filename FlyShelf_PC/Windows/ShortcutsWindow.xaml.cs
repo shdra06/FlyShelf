@@ -192,6 +192,23 @@ namespace FlyShelf.Windows
             }
         }
 
+        private void ToggleAddMenuBtn_Click(object sender, RoutedEventArgs e)
+        {
+            if (AddShortcutPanel.Visibility == Visibility.Visible)
+            {
+                AddShortcutPanel.Visibility = Visibility.Collapsed;
+                ToggleAddMenuIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Add24;
+                ToggleAddMenuBtn.ToolTip = "Add New Shortcut";
+            }
+            else
+            {
+                AddShortcutPanel.Visibility = Visibility.Visible;
+                ToggleAddMenuIcon.Symbol = Wpf.Ui.Controls.SymbolRegular.Dismiss24;
+                ToggleAddMenuBtn.ToolTip = "Close Add Panel";
+                TriggerInput.Focus();
+            }
+        }
+
         // ═══════════════════════════════════════════════════════
         // HELPERS
         // ═══════════════════════════════════════════════════════

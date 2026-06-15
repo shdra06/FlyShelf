@@ -65,11 +65,15 @@ namespace FlyShelf.Classes
                     string responseJson = await response.Content.ReadAsStringAsync();
 
                     using JsonDocument doc = JsonDocument.Parse(responseJson);
-                    var textObj = doc.RootElement
-                                     .GetProperty("candidates")[0]
-                                     .GetProperty("content")
-                                     .GetProperty("parts")[0]
-                                     .GetProperty("text");
+                    var candidates = doc.RootElement.GetProperty("candidates");
+                    if (candidates.GetArrayLength() == 0)
+                        throw new Exception("Gemini returned no candidates (response may have been filtered).");
+
+                    var parts = candidates[0].GetProperty("content").GetProperty("parts");
+                    if (parts.GetArrayLength() == 0)
+                        throw new Exception("Gemini candidate contained no parts.");
+
+                    var textObj = parts[0].GetProperty("text");
 
                     string rawExtraction = textObj.GetString() ?? string.Empty;
                     // Pre-process any rogue markdown block wraps inserted by LLMs

@@ -462,14 +462,10 @@ namespace FlyShelf.Windows
                 bool autoHide = IsTaskbarAutoHideEnabled();
                 if (autoHide)
                 {
-                    _isFloatingMode = true;
-
-                    int exStyle = GetWindowLong(taskbarWindowHandle, GWL_EXSTYLE);
-                    exStyle |= WS_EX_TOOLWINDOW;
-                    SetWindowLong(taskbarWindowHandle, GWL_EXSTYLE, exStyle);
-
-                    CalculateFloatingPosition(taskbarWindowHandle, taskbarHandle);
-                    Classes.Logger.LogAction("WIDGET", "SetupWindow complete — floating mode (auto-hide)");
+                    // Taskbar auto-hide is ON — hide the widget entirely
+                    _isFloatingMode = true; // Track state so we know to re-embed when auto-hide turns off
+                    Visibility = Visibility.Hidden;
+                    Classes.Logger.LogAction("WIDGET", "SetupWindow: taskbar auto-hide ON — widget hidden");
                 }
                 else
                 {
@@ -538,23 +534,30 @@ namespace FlyShelf.Windows
 
                 if (autoHide && !_isFloatingMode)
                 {
-                    // Switched to auto-hide — switch to floating mode
-                    SwitchToFloatingMode(interop.Handle);
+                    // Switched to auto-hide — hide the widget entirely
+                    _isFloatingMode = true;
+                    Visibility = Visibility.Hidden;
+                    Classes.Logger.LogAction("WIDGET", "Auto-hide enabled — widget hidden");
+                    return;
                 }
                 else if (!autoHide && _isFloatingMode)
                 {
-                    // Auto-hide turned off — re-embed in taskbar
+                    // Auto-hide turned off — re-show and re-embed in taskbar
+                    _isFloatingMode = false;
+                    Visibility = Visibility.Visible;
                     if (taskbarHandle != IntPtr.Zero)
-                        SwitchToEmbeddedMode(interop.Handle, taskbarHandle);
+                    {
+                        SetupWindow(); // Re-setup in embedded mode
+                    }
+                    Classes.Logger.LogAction("WIDGET", "Auto-hide disabled — widget re-shown and re-embedded");
                 }
 
                 if (_isFloatingMode)
                 {
-                    // Floating mode: always keep the widget visible in the corner
-                    if (taskbarHandle != IntPtr.Zero)
-                    {
-                        Dispatcher.BeginInvoke(() => { CalculateFloatingPosition(interop.Handle, taskbarHandle); }, DispatcherPriority.Background);
-                    }
+                    // Auto-hide is on — keep widget hidden
+                    if (Visibility != Visibility.Hidden)
+                        Visibility = Visibility.Hidden;
+                    return;
                 }
                 else
                 {
@@ -1333,11 +1336,25 @@ namespace FlyShelf.Windows
                      : GetSelectedTaskbarHandle(out _);
                 if (taskbarHandle != IntPtr.Zero && taskbarWindowHandle != IntPtr.Zero)
                 {
+                    // Check if the widget is actually embedded in the taskbar!
+                    IntPtr parent = NativeMethods.GetParent(taskbarWindowHandle);
+                    if (parent == IntPtr.Zero && !_isFloatingMode)
+                    {
+                        // Not yet embedded and not in floating mode — position is not yet valid!
+                        return new Point(-1, -1);
+                    }
+
                     double dpiScale = GetDpiForWindow(taskbarHandle) / 96.0;
                     if (dpiScale <= 0) dpiScale = 1.0;
 
                     GetWindowRect(taskbarWindowHandle, out RECT rect);
                     
+                    // If the position is at (0, 0), it's also invalid (not yet positioned/embedded on startup)
+                    if (rect.Left == 0 && rect.Top == 0)
+                    {
+                        return new Point(-1, -1);
+                    }
+
                     double physicalWidth = rect.Right - rect.Left;
                     double physicalCenterX = rect.Left + (physicalWidth / 2.0);
 

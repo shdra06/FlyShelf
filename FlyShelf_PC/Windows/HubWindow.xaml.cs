@@ -73,9 +73,9 @@ namespace FlyShelf.Windows
             {
                 UpdateSectionCard.Visibility = Visibility.Collapsed;
             }
-            // Hide Cloudflare UI — cloudflared.exe is excluded from Store builds
-            if (CloudflareSeparator != null) CloudflareSeparator.Visibility = Visibility.Collapsed;
-            if (CloudflareToggleSection != null) CloudflareToggleSection.Visibility = Visibility.Collapsed;
+            // Cloudflare UI — show as locked with download message in Store builds
+            if (CloudflareToggleSwitch != null) { CloudflareToggleSwitch.IsEnabled = false; CloudflareToggleSwitch.Opacity = 0.4; }
+            if (CloudflareStoreLockBanner != null) CloudflareStoreLockBanner.Visibility = Visibility.Visible;
             if (CloudflareStatusGrid != null) CloudflareStatusGrid.Visibility = Visibility.Collapsed;
 #endif
             if (StartupHelper.IsPackaged())
@@ -408,7 +408,7 @@ namespace FlyShelf.Windows
                 var hwnd = new WindowInteropHelper(this).Handle;
                 if (hwnd != IntPtr.Zero)
                 {
-                    int colorNone = DWMWA_COLOR_DARK_GRAY;
+                    int colorNone = unchecked((int)0xFFFFFFFE); // DWMWA_COLOR_NONE — fully invisible border
                     DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref colorNone, Marshal.SizeOf<int>());
 
                     // Force dark caption color to prevent title bar red accent color bleeding
@@ -440,6 +440,7 @@ namespace FlyShelf.Windows
                 if (SettingsGrid != null) SettingsGrid.Visibility = tag == "Settings" ? Visibility.Visible : Visibility.Collapsed;
                 if (LogsGrid != null) LogsGrid.Visibility = tag == "Logs" ? Visibility.Visible : Visibility.Collapsed;
                 if (AboutGrid != null) AboutGrid.Visibility = tag == "About" ? Visibility.Visible : Visibility.Collapsed;
+                if (TutorialGrid != null) TutorialGrid.Visibility = tag == "Tutorial" ? Visibility.Visible : Visibility.Collapsed;
                 
                 if (tag == "Logs") RefreshLogs_Click(null, null);
                 if (tag == "Settings")
@@ -535,6 +536,23 @@ namespace FlyShelf.Windows
             }
         }
 
+        private void CloudflareWebsiteLink_Navigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = e.Uri.AbsoluteUri,
+                    UseShellExecute = true
+                });
+                e.Handled = true;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("HYPERLINK_ERROR", $"Failed to open cloudflare download link: {ex.Message}");
+            }
+        }
+
         private bool _isRetentionChanging = false;
         private void RetentionCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
@@ -604,16 +622,26 @@ namespace FlyShelf.Windows
         }
 
         // Clipboard +/- steppers
-        private void ClipW_Plus(object sender, RoutedEventArgs e) { SettingsManager.Current.MediumFormWidth = Math.Min(500, SettingsManager.Current.MediumFormWidth + 5); }
-        private void ClipW_Minus(object sender, RoutedEventArgs e) { SettingsManager.Current.MediumFormWidth = Math.Max(200, SettingsManager.Current.MediumFormWidth - 5); }
-        private void ClipH_Plus(object sender, RoutedEventArgs e) { SettingsManager.Current.MediumFormHeight = Math.Min(700, SettingsManager.Current.MediumFormHeight + 5); }
-        private void ClipH_Minus(object sender, RoutedEventArgs e) { SettingsManager.Current.MediumFormHeight = Math.Max(300, SettingsManager.Current.MediumFormHeight - 5); }
+        private void ClipW_Plus(object sender, RoutedEventArgs e) { SettingsManager.Current.MediumFormWidth = Math.Min(500, SettingsManager.Current.MediumFormWidth + 5); PreviewClipboardSize_Click(null, null); }
+        private void ClipW_Minus(object sender, RoutedEventArgs e) { SettingsManager.Current.MediumFormWidth = Math.Max(200, SettingsManager.Current.MediumFormWidth - 5); PreviewClipboardSize_Click(null, null); }
+        private void ClipH_Plus(object sender, RoutedEventArgs e) { SettingsManager.Current.MediumFormHeight = Math.Min(700, SettingsManager.Current.MediumFormHeight + 5); PreviewClipboardSize_Click(null, null); }
+        private void ClipH_Minus(object sender, RoutedEventArgs e) { SettingsManager.Current.MediumFormHeight = Math.Max(300, SettingsManager.Current.MediumFormHeight - 5); PreviewClipboardSize_Click(null, null); }
+
+        private void ClipboardSizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (this.IsLoaded) PreviewClipboardSize_Click(null, null);
+        }
 
         // FlyShelf +/- steppers
-        private void DropW_Plus(object sender, RoutedEventArgs e) { SettingsManager.Current.MiniFormWidth = Math.Min(400, SettingsManager.Current.MiniFormWidth + 5); }
-        private void DropW_Minus(object sender, RoutedEventArgs e) { SettingsManager.Current.MiniFormWidth = Math.Max(180, SettingsManager.Current.MiniFormWidth - 5); }
-        private void DropH_Plus(object sender, RoutedEventArgs e) { SettingsManager.Current.MiniFormHeight = Math.Min(350, SettingsManager.Current.MiniFormHeight + 5); }
-        private void DropH_Minus(object sender, RoutedEventArgs e) { SettingsManager.Current.MiniFormHeight = Math.Max(100, SettingsManager.Current.MiniFormHeight - 5); }
+        private void DropW_Plus(object sender, RoutedEventArgs e) { SettingsManager.Current.MiniFormWidth = Math.Min(400, SettingsManager.Current.MiniFormWidth + 5); PreviewFlyShelfSize_Click(null, null); }
+        private void DropW_Minus(object sender, RoutedEventArgs e) { SettingsManager.Current.MiniFormWidth = Math.Max(180, SettingsManager.Current.MiniFormWidth - 5); PreviewFlyShelfSize_Click(null, null); }
+        private void DropH_Plus(object sender, RoutedEventArgs e) { SettingsManager.Current.MiniFormHeight = Math.Min(350, SettingsManager.Current.MiniFormHeight + 5); PreviewFlyShelfSize_Click(null, null); }
+        private void DropH_Minus(object sender, RoutedEventArgs e) { SettingsManager.Current.MiniFormHeight = Math.Max(100, SettingsManager.Current.MiniFormHeight - 5); PreviewFlyShelfSize_Click(null, null); }
+
+        private void FlyShelfSizeSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (this.IsLoaded) PreviewFlyShelfSize_Click(null, null);
+        }
 
         // Live Preview buttons
         private void PreviewClipboardSize_Click(object sender, RoutedEventArgs e)
@@ -993,6 +1021,20 @@ namespace FlyShelf.Windows
                     Logger.LogAction("HUB_THUMB_ERR", $"Error in RenderHubVisibleThumbnails: {ex.Message}");
                 }
             }, System.Windows.Threading.DispatcherPriority.Normal);
+        }
+
+        private void ReplayOnboarding_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var onboarding = new OnboardingWindow();
+                onboarding.Owner = this;
+                onboarding.ShowDialog();
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("TUTORIAL", $"Replay onboarding failed: {ex.Message}");
+            }
         }
     }
 }

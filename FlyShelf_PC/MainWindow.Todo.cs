@@ -13,12 +13,16 @@ namespace FlyShelf
 {
     public partial class MainWindow
     {
+        private static FlyShelf.Windows.TimerWindow? _activeTimerWindow;
+        private static FlyShelf.Windows.ReminderCreateWindow? _activeTodoReminderWindow;
         private bool _isTodoActive = false;
+        public bool IsTodoActive => _isTodoActive;
         private bool _isTodoLoaded = false;
         private TodoDay? _selectedTodoDay = null;
         private TextBox? _lastFocusedTodoTextBox = null;
         private DateTime _lastTodoItemAddedTime = DateTime.MinValue;
         private bool _isTodoSidebarCollapsed = false;
+        private System.Windows.Threading.DispatcherTimer? _todoSidebarAutoCollapseTimer;
 
 
 
@@ -54,6 +58,34 @@ namespace FlyShelf
             _isTodoActive = true;
             // NOTE: No auto-revert timer — Todo panel should never auto-hide
 
+            // Ensure sidebar is expanded when opening
+            if (_isTodoSidebarCollapsed)
+            {
+                _isTodoSidebarCollapsed = false;
+                TodoSidebarExpandBtn.Visibility = Visibility.Collapsed;
+                TodoSidebarBorder.Visibility = Visibility.Visible;
+                TodoSidebarBorder.BeginAnimation(FrameworkElement.WidthProperty, null);
+                TodoSidebarBorder.Width = double.NaN;
+                TodoSidebarColumn.Width = new GridLength(54);
+                TodoSidebarCollapseIcon.Text = "◂";
+            }
+
+            // Auto-collapse sidebar after 10 seconds
+            _todoSidebarAutoCollapseTimer?.Stop();
+            _todoSidebarAutoCollapseTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(10)
+            };
+            _todoSidebarAutoCollapseTimer.Tick += (s, ev) =>
+            {
+                _todoSidebarAutoCollapseTimer.Stop();
+                if (_isTodoActive && !_isTodoSidebarCollapsed)
+                {
+                    CollapseTodoSidebar();
+                }
+            };
+            _todoSidebarAutoCollapseTimer.Start();
+
             // Update taskbar/alt-tab title
             Title = "To-Do";
 
@@ -86,6 +118,7 @@ namespace FlyShelf
 
         private void ActivateTodoWindow()
         {
+            SuppressDwmBorder();
             this.Activate();
             if (!this.Topmost)
             {
@@ -93,27 +126,34 @@ namespace FlyShelf
                 this.Topmost = false;
             }
             this.Focus();
-            SuppressDwmBorder();
+        }
+
+        private void CollapseTodoSidebar()
+        {
+            _isTodoSidebarCollapsed = true;
+            TodoSidebarBorder.Visibility = Visibility.Collapsed;
+            TodoSidebarColumn.Width = new GridLength(0);
+            TodoSidebarCollapseIcon.Text = "▸";
+            TodoSidebarExpandBtn.Visibility = Visibility.Visible;
         }
 
         private void TodoSidebarToggle_Click(object sender, MouseButtonEventArgs e)
         {
+            // Cancel auto-collapse timer on manual interaction
+            _todoSidebarAutoCollapseTimer?.Stop();
+
             _isTodoSidebarCollapsed = !_isTodoSidebarCollapsed;
 
             if (_isTodoSidebarCollapsed)
             {
-                // Collapse: hide sidebar border and set column width to 0
-                TodoSidebarBorder.Visibility = Visibility.Collapsed;
-                TodoSidebarColumn.Width = new GridLength(0);
-                TodoSidebarCollapseIcon.Text = "▸";
-                TodoSidebarExpandBtn.Visibility = Visibility.Visible;
+                CollapseTodoSidebar();
             }
             else
             {
                 // Expand: show sidebar border and restore column width
                 TodoSidebarExpandBtn.Visibility = Visibility.Collapsed;
                 TodoSidebarBorder.Visibility = Visibility.Visible;
-                TodoSidebarBorder.BeginAnimation(FrameworkElement.WidthProperty, null); // Clear any leftover animation
+                TodoSidebarBorder.BeginAnimation(FrameworkElement.WidthProperty, null);
                 TodoSidebarBorder.Width = double.NaN;
                 TodoSidebarColumn.Width = new GridLength(54);
                 TodoSidebarCollapseIcon.Text = "◂";
@@ -451,8 +491,10 @@ namespace FlyShelf
 
         private void TodoStopwatch_Click(object sender, RoutedEventArgs e)
         {
+            try { _activeTimerWindow?.Close(); } catch { }
             var tw = new FlyShelf.Windows.TimerWindow(null);
             tw.Show();
+            _activeTimerWindow = tw;
         }
 
         private void TodoItemTimer_Click(object sender, MouseButtonEventArgs e)
@@ -462,6 +504,7 @@ namespace FlyShelf
             {
                 // If the item already has a timer duration set, launch with that duration
                 string context = item.HasTimer ? $"{item.TimerMinutes}m" : null;
+                try { _activeTimerWindow?.Close(); } catch { }
                 var tw = new FlyShelf.Windows.TimerWindow(context, item.Text);
                 tw.TimerCompleted += (taskName) =>
                 {
@@ -485,6 +528,7 @@ namespace FlyShelf
                     });
                 };
                 tw.Show();
+                _activeTimerWindow = tw;
             }
         }
 
@@ -496,9 +540,11 @@ namespace FlyShelf
                 string title = !string.IsNullOrEmpty(item.Text) ? item.Text : "To-Do Reminder";
                 DateTime defaultDue = DateTime.Today.AddDays(1).AddHours(9); // Tomorrow 9 AM
 
+                try { _activeTodoReminderWindow?.Close(); } catch { }
                 var reminderWindow = new FlyShelf.Windows.ReminderCreateWindow(title, defaultDue);
                 reminderWindow.Show();
                 reminderWindow.Activate();
+                _activeTodoReminderWindow = reminderWindow;
             }
         }
 
@@ -538,22 +584,28 @@ namespace FlyShelf
             // Support mm:ss format (e.g. "3:30")
             if (trimmed.Contains(":"))
             {
+                try { _activeTimerWindow?.Close(); } catch { }
                 var tw = new FlyShelf.Windows.TimerWindow(trimmed);
                 tw.Show();
+                _activeTimerWindow = tw;
                 return;
             }
 
             // Try parse as number → treat as minutes
             if (int.TryParse(trimmed, out int mins) && mins > 0)
             {
+                try { _activeTimerWindow?.Close(); } catch { }
                 var tw = new FlyShelf.Windows.TimerWindow($"{mins}m");
                 tw.Show();
+                _activeTimerWindow = tw;
             }
             else
             {
                 // Fallback: pass as-is and let TimerWindow.ParseContext handle it
+                try { _activeTimerWindow?.Close(); } catch { }
                 var tw = new FlyShelf.Windows.TimerWindow(trimmed);
                 tw.Show();
+                _activeTimerWindow = tw;
             }
         }
 

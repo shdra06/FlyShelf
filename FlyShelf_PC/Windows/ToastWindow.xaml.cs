@@ -239,6 +239,9 @@ namespace FlyShelf.Windows
         /// </summary>
         public static void ShowToast(string message)
         {
+            // Respect user preference to disable notifications
+            try { if (!FlyShelf.Classes.SettingsManager.Current.EnableNotifications) return; } catch { }
+
             string smartMessage = MakeMessageSmart(message);
 
             // Anti-spam: skip exact duplicate within 500ms

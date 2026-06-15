@@ -100,3 +100,4 @@ FlyShelf_Payment/functions/node_modules/
 # ─── Microsoft Store Build Output ─────────────────────────────
 MicrosoftBuild/Output/
 FlyShelf_Mobile_All.apk
+.vercel

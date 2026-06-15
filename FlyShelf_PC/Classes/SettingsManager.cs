@@ -245,6 +245,14 @@ namespace FlyShelf.Classes
         private bool _useAlternateClipboardUI = false;
         public bool UseAlternateClipboardUI { get => _useAlternateClipboardUI; set => SetProperty(ref _useAlternateClipboardUI, value); }
 
+        // Toast Notifications — allow users to disable in-app toasts
+        private bool _enableNotifications = true;
+        public bool EnableNotifications { get => _enableNotifications; set => SetProperty(ref _enableNotifications, value); }
+
+        // First-time onboarding — tracks whether the user has completed the startup tutorial
+        private bool _hasCompletedOnboarding = false;
+        public bool HasCompletedOnboarding { get => _hasCompletedOnboarding; set => SetProperty(ref _hasCompletedOnboarding, value); }
+
         /// <summary>
         /// Reflection-based property copying to keep the static Current reference stable.
         /// </summary>

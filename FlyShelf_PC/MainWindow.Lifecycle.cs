@@ -38,7 +38,7 @@ namespace FlyShelf
             }
             catch { }
             
-            // Defer DWM border color setting to Background priority to prevent blocking DWM frame synchronization on activation
+            // Defer DWM border color setting to Send priority to prevent blocking DWM frame synchronization on activation while applying it immediately
             Dispatcher.InvokeAsync(() =>
             {
                 try
@@ -51,7 +51,7 @@ namespace FlyShelf
                     }
                 }
                 catch { }
-            }, System.Windows.Threading.DispatcherPriority.Background);
+            }, System.Windows.Threading.DispatcherPriority.Send);
         }
 
 
@@ -128,7 +128,7 @@ namespace FlyShelf
             }
             catch { }
 
-            // Defer DWM border color setting to Background priority to prevent blocking DWM frame synchronization on deactivation
+            // Defer DWM border color setting to Send priority to prevent blocking DWM frame synchronization on deactivation
             Dispatcher.InvokeAsync(() =>
             {
                 try
@@ -141,7 +141,7 @@ namespace FlyShelf
                     }
                 }
                 catch { }
-            }, System.Windows.Threading.DispatcherPriority.Background);
+            }, System.Windows.Threading.DispatcherPriority.Send);
         }
 
         /// <summary>
@@ -422,6 +422,37 @@ namespace FlyShelf
             _isShowAnimating = true;
             _showAnimationEndTime = DateTime.UtcNow.AddMilliseconds(150);
 
+            // Ensure WS_EX_LAYERED is set and opacity is 0 at the Win32 level BEFORE uncloaking.
+            // This prevents a 1-2 frame flash of a solid window box when DWM uncloaks it
+            // before WPF's composition thread has updated the layered window attributes.
+            try
+            {
+                var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwnd != IntPtr.Zero)
+                {
+                    int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
+                    if ((exStyle & WS_EX_LAYERED) == 0)
+                    {
+                        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+                    }
+                    SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
+                }
+            }
+            catch { }
+
+            // ═══ DWM UNCLOAK ═══
+            // Uncloak the window now that it is positioned and ready to fade in
+            try
+            {
+                var hwndUncloak = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                if (hwndUncloak != IntPtr.Zero)
+                {
+                    int uncloakVal = 0;
+                    DwmSetWindowAttribute(hwndUncloak, DWMWA_CLOAK, ref uncloakVal, sizeof(int));
+                }
+            }
+            catch { }
+
             // ═══ MICA BACKDROP SUSPEND ═══
             // Temporarily disable Mica glass during animation to make the window
             // completely transparent (invisible) while RootContent.Opacity is 0.
@@ -472,9 +503,9 @@ namespace FlyShelf
             //
             // Instead, detect completion via a frame-rate independent timer.
             // Both animations are 150ms.
-            this.BeginAnimation(OpacityProperty, null);
-            this.Opacity = 1.0;
-            RootContent.BeginAnimation(UIElement.OpacityProperty, _cachedOpacityAnim);
+            RootContent.BeginAnimation(UIElement.OpacityProperty, null);
+            RootContent.Opacity = 1.0;
+            this.BeginAnimation(OpacityProperty, _cachedOpacityAnim);
             _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, _cachedSlideInAnim);
 
             int capturedGen = _spawnGeneration;
@@ -534,9 +565,15 @@ namespace FlyShelf
                     catch { }
 
                     // ═══ AERO UI: Restore decorative overlays ═══
+                    // Only show the white frost overlay for Default/ArcticSnow (light themes).
+                    // For color-themed palettes, the themed gradient must remain visible.
                     if (_isAltUIActive && AltArcticOverlay != null)
                     {
-                        AltArcticOverlay.Visibility = Visibility.Visible;
+                        string activeColorTheme = Classes.SettingsManager.Current.ColorThemeName ?? "Default";
+                        bool isLightTheme = string.IsNullOrEmpty(activeColorTheme)
+                                            || activeColorTheme.Equals("Default", System.StringComparison.OrdinalIgnoreCase)
+                                            || activeColorTheme.Equals("ArcticSnow", System.StringComparison.OrdinalIgnoreCase);
+                        AltArcticOverlay.Visibility = isLightTheme ? Visibility.Visible : Visibility.Collapsed;
                     }
                 }, System.Windows.Threading.DispatcherPriority.Render);
             };
