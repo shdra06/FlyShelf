@@ -238,6 +238,16 @@ namespace FlyShelf
                 byte bgAlpha = 0x25;     // Clean, visible selection background tint alpha (approx 15%)
                 byte focusAlpha = 0xB0;
 
+                // If the wallpaper is extremely dark, we increase alpha values slightly to make the neon glow extra distinct!
+                // NOTE: Must compute luma BEFORE the HSL adjustment overwrites `dominant` with a normalized pastel.
+                double originalLuma = 0.299 * dominant.R + 0.587 * dominant.G + 0.114 * dominant.B;
+                if (originalLuma < 160)
+                {
+                    borderAlpha = 0xD8; // Beautiful high-visibility glowing border outline
+                    bgAlpha = 0x3E;     // Highly readable translucent selection background overlay
+                    focusAlpha = 0xEA;  // Clear, distinct focus outline
+                }
+
                 // 1. Convert dominant color to HSL space to isolate Hue
                 RgbToHsl(dominant, out double h, out double s, out double l);
 
@@ -249,15 +259,6 @@ namespace FlyShelf
 
                 // Convert HSL back to RGB
                 dominant = HslToRgb(h, s, l);
-
-                // If the wallpaper is extremely dark, we increase alpha values slightly to make the neon glow extra distinct!
-                double originalLuma = 0.299 * dominant.R + 0.587 * dominant.G + 0.114 * dominant.B;
-                if (originalLuma < 160)
-                {
-                    borderAlpha = 0xD8; // Beautiful high-visibility glowing border outline
-                    bgAlpha = 0x3E;     // Highly readable translucent selection background overlay
-                    focusAlpha = 0xEA;  // Clear, distinct focus outline
-                }
 
                 var selBorder = new SolidColorBrush(
                     Color.FromArgb(borderAlpha, dominant.R, dominant.G, dominant.B));
@@ -513,6 +514,7 @@ namespace FlyShelf
                 int w = formatted.PixelWidth;
                 int h = formatted.PixelHeight;
                 int stride = w * 4;
+                // PERF: consider sampling fewer pixels — currently copies entire buffer for 9 sample points
                 byte[] pixels = new byte[stride * h];
                 formatted.CopyPixels(pixels, stride, 0);
 

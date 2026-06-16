@@ -13,6 +13,9 @@ namespace FlyShelf.Classes
         private InferenceSession _session;
         private readonly string _modelPath;
         private readonly object _lock = new object();
+        private System.Threading.Timer _inactivityTimer;
+        private DateTime _lastUsedTime;
+        private static readonly TimeSpan InactivityTimeout = TimeSpan.FromMinutes(1);
 
         public bool IsLoaded => _session != null;
 
@@ -25,7 +28,11 @@ namespace FlyShelf.Classes
         {
             lock (_lock)
             {
-                if (_session != null) return;
+                if (_session != null)
+                {
+                    ResetInactivityTimer();
+                    return;
+                }
 
                 if (!File.Exists(_modelPath))
                     throw new FileNotFoundException($"Table detect ONNX model not found at: {_modelPath}");
@@ -38,14 +45,55 @@ namespace FlyShelf.Classes
                 };
                 
                 _session = new InferenceSession(_modelPath, options);
+                Logger.LogAction("ONNX_LOAD", "ONNX Table Detect model loaded successfully.");
+                ResetInactivityTimer();
             }
+        }
+
+        private void ResetInactivityTimer()
+        {
+            _lastUsedTime = DateTime.Now;
+            if (_inactivityTimer == null)
+            {
+                _inactivityTimer = new System.Threading.Timer(OnInactivityTimerFired, null, InactivityTimeout, System.Threading.Timeout.InfiniteTimeSpan);
+            }
+            else
+            {
+                _inactivityTimer.Change(InactivityTimeout, System.Threading.Timeout.InfiniteTimeSpan);
+            }
+        }
+
+        private void OnInactivityTimerFired(object state)
+        {
+            lock (_lock)
+            {
+                if (_session == null) return;
+
+                var elapsed = DateTime.Now - _lastUsedTime;
+                if (elapsed >= InactivityTimeout)
+                {
+                    Logger.LogAction("ONNX_UNLOAD", "ONNX Table Detect model auto-unloaded due to 1 minute of inactivity.");
+                    DisposeSession();
+                }
+                else
+                {
+                    var remaining = InactivityTimeout - elapsed;
+                    _inactivityTimer?.Change(remaining, System.Threading.Timeout.InfiniteTimeSpan);
+                }
+            }
+        }
+
+        private void DisposeSession()
+        {
+            _session?.Dispose();
+            _session = null;
+            _inactivityTimer?.Dispose();
+            _inactivityTimer = null;
         }
 
         public async Task<TableGrid> DetectTableStructureAsync(string filePath)
         {
-            if (_session == null) Initialize();
-
-            // Load and preprocess image into float array
+            // Load and preprocess image into float array first (avoid holding/initializing session during await)
             var (tensorData, scale, padX, padY) = await TableImagePreprocessor.PreprocessForYoloAsync(filePath);
 
             var inputs = new List<NamedOnnxValue>
@@ -58,6 +106,9 @@ namespace FlyShelf.Classes
 
             lock (_lock)
             {
+                if (_session == null) Initialize();
+                else ResetInactivityTimer();
+
                 using (var outputs = _session.Run(inputs))
                 {
                     var firstOutput = outputs.FirstOrDefault();
@@ -279,8 +330,10 @@ namespace FlyShelf.Classes
 
         public void Dispose()
         {
-            _session?.Dispose();
-            _session = null;
+            lock (_lock)
+            {
+                DisposeSession();
+            }
         }
     }
 

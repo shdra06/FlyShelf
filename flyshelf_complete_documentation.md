@@ -1,6 +1,6 @@
-﻿# FlyShelf â€” Complete Application Documentation
+# FlyShelf â€” Complete Application Documentation
 
-> **Version:** 2.5.1 | **Platform:** Windows 10/11 (PC) + Android (Companion) | **Author:** Shivendra
+> **Version:** 3.0.0 | **Platform:** Windows 10/11 (PC) + Android (Companion) | **Author:** Shivendra
 
 ---
 
@@ -8,7 +8,7 @@
 
 **FlyShelf** is a **cross-device clipboard manager and file transfer tool** for Windows. It intercepts everything you copy â€” text, images, files, code, URLs â€” organizes it in a floating overlay, and **syncs it across all your devices** (PC â†” PC, PC â†” Android) over LAN and the internet.
 
-**Think of it as:** Windows Clipboard History (Win+V) on steroids â€” with drag-and-drop, cross-device sync, smart content detection, an embedded web server, and a Cloudflare tunnel for internet access.
+**Think of it as:** Windows Clipboard History (Win+V) on steroids â€” with drag-and-drop, cross-device sync, smart content detection, an embedded web server, and a Cloudflare tunnel for internet access. *(Note: Global Transfer via Cloudflare is disabled in the Microsoft Store version to comply with Store policies).*
 
 ---
 
@@ -105,7 +105,8 @@ Each `ClipboardItem` runs `EvaluateSmartActions()` which detects special content
 - **Graph Plotter:** If the equation contains `x` (e.g., `x^2 + 3x`), a "Plot Graph" button appears. Opens `GraphWindow.xaml` with a zoomable/pannable WPF Canvas plot.
 - **Color Picker:** Detects `#FF5733`, `rgb(255,87,51)`, `hsl(14,100%,60%)` in text. Shows a color swatch preview. Click to copy in hex/rgb/hsl formats. (`ColorHelper.cs`)
 - **URL Cleaning:** Automatically strips UTM tracking parameters (`utm_source`, `fbclid`, etc.) from URLs.
-- **Timer:** Typing `/5` sets a 5-minute countdown timer (`TimerWindow.xaml`).
+- **Timer & Reminders:** Typing `/5` sets a 5-minute countdown timer. Typing natural language like "remind me in 30 minutes to check build" uses `NaturalLanguageReminderParser.cs` to set reminders.
+- **OCR Text Extraction:** Uses NPU-accelerated Windows AI TextRecognizer (`ModernOcrEngine.cs`) to instantly extract text from images.
 - **QR Scanner:** Images are scanned for QR codes using ZXing. If found, the decoded text is surfaced.
 
 ### 4.5 Image & Screenshot Handling

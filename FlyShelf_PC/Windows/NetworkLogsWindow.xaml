@@ -8,7 +8,8 @@
         WindowStartupLocation="CenterScreen"
         SystemBackdropType="Mica"
         Background="Transparent"
-        Closing="Window_Closing">
+        Closing="Window_Closing"
+        Icon="/Resources/FlyShelfLogo.ico">
 
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="38" ResizeBorderThickness="6" CornerRadius="8" GlassFrameThickness="-1" />

@@ -14,22 +14,6 @@ namespace FlyShelf.Classes
         private bool _keepItemOnDragOut = true;
         public bool KeepItemOnDragOut { get => _keepItemOnDragOut; set => SetProperty(ref _keepItemOnDragOut, value); }
         
-        private string _geminiApiKey = "";
-        /// <summary>Stored encrypted via DPAPI. Getter returns plaintext, setter accepts plaintext.</summary>
-        [JsonIgnore]
-        public string GeminiApiKey
-        {
-            get => _geminiApiKey;
-            set => SetProperty(ref _geminiApiKey, value);
-        }
-        
-        /// <summary>Serialized to JSON — holds the DPAPI-encrypted blob of GeminiApiKey.</summary>
-        public string GeminiApiKeyEncrypted
-        {
-            get => string.IsNullOrEmpty(_geminiApiKey) ? "" : SecureStorage.Encrypt(_geminiApiKey);
-            set => _geminiApiKey = string.IsNullOrEmpty(value) ? "" : SecureStorage.Decrypt(value);
-        }
-
         private int _mediumFormWidth = 360;
         public int MediumFormWidth { get => _mediumFormWidth; set => SetProperty(ref _mediumFormWidth, value); }
 

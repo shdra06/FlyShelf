@@ -12,8 +12,8 @@ namespace FlyShelf.Classes
         /// <summary>Logging is active in Debug builds for development diagnostics.</summary>
         public static bool IsEnabled = true;
 #else
-        /// <summary>Temporarily enabled in Release for VD diagnostics. Set back to false when done.</summary>
-        public static bool IsEnabled = true;
+        /// <summary>Logging is disabled in Release/Store builds — no disk I/O on user machines.</summary>
+        public static bool IsEnabled = false;
 #endif
 
         private static readonly string LogDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs");

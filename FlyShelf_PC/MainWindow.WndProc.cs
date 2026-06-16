@@ -23,20 +23,7 @@ namespace FlyShelf
         private DateTime _lastHotkeyTime = DateTime.MinValue;
         private bool _waitingForHotkeyRelease = false;
 
-        // ═══ SendInput for auto-paste after shortcut expansion ═══
-        [DllImport("user32.dll", SetLastError = true)]
-        private static extern uint SendInput(uint nInputs, INPUT_SC[] pInputs, int cbSize);
 
-        [StructLayout(LayoutKind.Sequential)]
-        private struct INPUT_SC { public uint type; public INPUTUNION_SC u; }
-        [StructLayout(LayoutKind.Explicit)]
-        private struct INPUTUNION_SC { [FieldOffset(0)] public KEYBDINPUT_SC ki; }
-        [StructLayout(LayoutKind.Sequential)]
-        private struct KEYBDINPUT_SC { public ushort wVk; public ushort wScan; public uint dwFlags; public uint time; public IntPtr dwExtraInfo; }
-        private const uint INPUT_KEYBOARD_SC = 1;
-        private const uint KEYEVENTF_KEYUP_SC = 0x0002;
-        private const ushort VK_CONTROL_SC = 0x11;
-        private const ushort VK_V_SC = 0x56;
 
         private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
@@ -131,8 +118,10 @@ namespace FlyShelf
                 if (hotkeyId == HOTKEY_ID)
                 {
                     Classes.Logger.LogAction("TELEMETRY", "Hotkey Alt+C received inside WndProc");
-                    // Defer spawn out of WndProc to let keyboard queue drain first.
-                    Dispatcher.InvokeAsync(() => ToggleMainClipboard(), System.Windows.Threading.DispatcherPriority.Input);
+                    // Defer spawn out of WndProc — Background priority ensures WndProc fully
+                    // returns before toggle runs (Input priority fires inside the message loop,
+                    // causing "Dispatcher processing has been suspended" crash).
+                    Dispatcher.InvokeAsync(() => ToggleMainClipboard(), System.Windows.Threading.DispatcherPriority.Background);
                     handled = true;
                 }
                 else if (hotkeyId >= HOTKEY_QUICKPASTE_BASE + 1 && hotkeyId <= HOTKEY_QUICKPASTE_BASE + 10)
@@ -228,7 +217,7 @@ namespace FlyShelf
             else if (msg == WM_CLIPBOARDUPDATE)
             {
                 // GUARD: Skip clipboard events triggered by our own writes
-                if (_isWritingClipboard)
+                if (_isWritingClipboard || _clipboardPanelSuppressed)
                 {
                     handled = true;
                     return IntPtr.Zero;
@@ -392,7 +381,7 @@ namespace FlyShelf
                     else
                     {
                         string ext = System.IO.Path.GetExtension(files[0]).ToLower();
-                        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".gif")
+                        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".bmp" || ext == ".gif" || ext == ".webp")
                         {
                             files = null; // Image file — prefer bitmap for richer preview
                         }
@@ -444,7 +433,7 @@ namespace FlyShelf
                             return;
                         }
 
-                        try { Clipboard.SetText(""); } catch { }
+                        try { Clipboard.Clear(); } catch { }
 
                         // Validate format before attempting activation
                         if (keyCandidate.StartsWith("FS-PRO-", StringComparison.OrdinalIgnoreCase) && keyCandidate.Length >= 23)

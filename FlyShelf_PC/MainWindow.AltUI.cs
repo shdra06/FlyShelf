@@ -101,7 +101,7 @@ namespace FlyShelf
                 {
                     if (obj is ViewModels.ClipboardItem item)
                     {
-                        return (item.FileName ?? "").IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0;
+                        return Classes.FuzzyMatcher.IsMatchAny(query, item.FileName, item.RawContent);
                     }
                     return false;
                 };
@@ -198,7 +198,7 @@ namespace FlyShelf
                 if (FindName(names[i]) is System.Windows.Controls.Border btn)
                 {
                     btn.Background = categories[i] == category
-                        ? (System.Windows.Media.Brush)FindResource("ThemeAccentBg")
+                        ? (TryFindResource("ThemeAccentBg") as System.Windows.Media.SolidColorBrush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.DodgerBlue))
                         : System.Windows.Media.Brushes.Transparent;
                 }
             }
@@ -240,9 +240,11 @@ namespace FlyShelf
                 }
 
                 var shortcutsWindow = new Windows.ShortcutsWindow();
-                shortcutsWindow.Owner = System.Windows.Application.Current.MainWindow;
+                shortcutsWindow.Topmost = true;
                 shortcutsWindow.Show();
                 shortcutsWindow.Activate();
+                shortcutsWindow.Focus();
+                shortcutsWindow.Topmost = false;
             }
             catch (Exception ex)
             {
@@ -253,28 +255,31 @@ namespace FlyShelf
         private void AltMoreOptions_Click(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
-            if (OverflowPopup != null)
+            if (OverflowPopup == null) return;
+
+            // Capture state BEFORE any focus-loss event can close the popup.
+            // StaysOpen="False" fires its close asynchronously, so IsOpen is
+            // still true here when the user clicks the button to dismiss it.
+            bool wasOpen = OverflowPopup.IsOpen;
+
+            // Always close first (no-op if already closed)
+            if (wasOpen)
             {
-                // If already open, close it
-                if (OverflowPopup.IsOpen)
-                {
-                    OverflowPopup.IsOpen = false;
-                    return;
-                }
-
-                // Debounce: if StaysOpen="False" just closed the popup from
-                // this same click, don't reopen it (toggle OFF behavior)
-                if ((DateTime.Now - _overflowPopupLastClosed).TotalMilliseconds < 350)
-                {
-                    return;
-                }
-
-                OverflowPopup.PlacementTarget = sender as UIElement;
-                OverflowPopup.Placement = PlacementMode.Top;
-                OverflowPopup.HorizontalOffset = 0;
-                OverflowPopup.VerticalOffset = -4;
-                OverflowPopup.IsOpen = true;
+                OverflowPopup.IsOpen = false;
+                return; // toggle OFF — done
             }
+
+            // Also guard against the race where StaysOpen=False already closed
+            // it in this same click cycle (closed timestamp very recent)
+            if ((DateTime.Now - _overflowPopupLastClosed).TotalMilliseconds < 350)
+                return;
+
+            // Toggle ON — open the popup
+            OverflowPopup.PlacementTarget = sender as UIElement;
+            OverflowPopup.Placement = PlacementMode.Top;
+            OverflowPopup.HorizontalOffset = 0;
+            OverflowPopup.VerticalOffset = -4;
+            OverflowPopup.IsOpen = true;
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -405,7 +410,7 @@ namespace FlyShelf
                             {
                                 item.IsLoadingHighQuality = true;
                                 string filePath = item.FilePath;
-                                int currentIndex = i;
+                                var capturedItem = item;
 
                                 _ = System.Threading.Tasks.Task.Run(() =>
                                 {
@@ -416,12 +421,12 @@ namespace FlyShelf
                                         {
                                             Dispatcher.InvokeAsync(() =>
                                             {
-                                                item.Icon = bmp;
-                                                item.IsLoadedHighQuality = true;
-                                                item.IsLoadingHighQuality = false;
+                                                capturedItem.Icon = bmp;
+                                                capturedItem.IsLoadedHighQuality = true;
+                                                capturedItem.IsLoadingHighQuality = false;
 
                                                 // Fade-in animation
-                                                var element = AltShelfListView.ItemContainerGenerator.ContainerFromIndex(currentIndex) as FrameworkElement;
+                                                var element = AltShelfListView.ItemContainerGenerator.ContainerFromItem(capturedItem) as FrameworkElement;
                                                 if (element != null && element.IsLoaded)
                                                 {
                                                     var img = FindVisualChild<System.Windows.Controls.Image>(element, "ItemIcon");

@@ -36,6 +36,13 @@ namespace FlyShelf
         private DateTime _lastBulletAddedTime = DateTime.MinValue;
         private bool _isNotesSidebarCollapsed = false;
         private System.Windows.Threading.DispatcherTimer? _notesSidebarAutoCollapseTimer;
+        private bool _notesCharLimitWarned = false; // Prevents spamming 5K warning toast
+        private const int NOTES_SOFT_LIMIT = 5000;  // Show warning at 5K chars
+        private const int NOTES_HARD_LIMIT = 10000; // Hard cap at 10K chars
+        private ContextMenu? _activeNoteDropdownMenu = null; // Track open menu for toggle behavior
+        private string? _notesUndoText = null;  // Stores pre-AI text for undo
+        private FreeformSection? _notesUndoSection = null; // Which section the undo applies to
+        private bool _freeformBulletMode = false; // True while typing inline bullets in freeform
 
         // ═══════════════════════════════════════════════════════════
         // TOGGLE NOTES PANEL
@@ -51,6 +58,7 @@ namespace FlyShelf
 
         private void OpenNotesPanel()
         {
+
             // Close other modes
             if (_isTodoActive) CloseTodoPanel(immediate: true);
             if (_isSearchActive) CloseSearch(switchingPanel: true);
@@ -80,24 +88,30 @@ namespace FlyShelf
                 NotesSidebarBorder.Visibility = Visibility.Visible;
                 NotesSidebarBorder.BeginAnimation(FrameworkElement.WidthProperty, null);
                 NotesSidebarBorder.Width = double.NaN;
-                NotesSidebarColumn.Width = new GridLength(54);
+                NotesSidebarColumn.Width = new GridLength(42);
                 NotesSidebarCollapseIcon.Text = "◂";
             }
 
             // Auto-collapse sidebar after 10 seconds
-            _notesSidebarAutoCollapseTimer?.Stop();
-            _notesSidebarAutoCollapseTimer = new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = TimeSpan.FromSeconds(10)
-            };
-            _notesSidebarAutoCollapseTimer.Tick += (s, ev) =>
+            if (_notesSidebarAutoCollapseTimer != null)
             {
                 _notesSidebarAutoCollapseTimer.Stop();
-                if (_isNotesActive && !_isNotesSidebarCollapsed)
+            }
+            else
+            {
+                _notesSidebarAutoCollapseTimer = new System.Windows.Threading.DispatcherTimer
                 {
-                    CollapseNotesSidebar();
-                }
-            };
+                    Interval = TimeSpan.FromSeconds(10)
+                };
+                _notesSidebarAutoCollapseTimer.Tick += (s, ev) =>
+                {
+                    _notesSidebarAutoCollapseTimer.Stop();
+                    if (_isNotesActive && !_isNotesSidebarCollapsed)
+                    {
+                        CollapseNotesSidebar();
+                    }
+                };
+            }
             _notesSidebarAutoCollapseTimer.Start();
 
             _isNotesActive = true;
@@ -122,7 +136,7 @@ namespace FlyShelf
                 _originalHeaderBg = HeaderAndFiltersStack.Background;
             HeaderAndFiltersStack.Background = _notesHeaderBrush;
             // Also apply ClearType hints to the header while notes are active
-            TextOptions.SetTextFormattingMode(HeaderAndFiltersStack, TextFormattingMode.Display);
+            TextOptions.SetTextFormattingMode(HeaderAndFiltersStack, TextFormattingMode.Ideal);
             TextOptions.SetTextRenderingMode(HeaderAndFiltersStack, TextRenderingMode.ClearType);
             RenderOptions.SetClearTypeHint(HeaderAndFiltersStack, ClearTypeHint.Enabled);
 
@@ -264,8 +278,7 @@ namespace FlyShelf
             {
                 if (_selectedNoteDay.IsFreeformMode)
                 {
-                    NotesFreeformBox.Focus();
-                    Keyboard.Focus(NotesFreeformBox);
+                    FocusFreeformLastSection();
                 }
                 else
                 {
@@ -426,6 +439,8 @@ namespace FlyShelf
             _selectedNoteDay = day;
             _selectedMonth = -1;
             _selectedYear = -1;
+            _notesCharLimitWarned = false; // Reset warning flag for the new note
+            _freeformBulletMode = false;   // Reset inline-bullet mode for new note
 
             // Clear search if active
             if (_isSearchActive)
@@ -438,7 +453,8 @@ namespace FlyShelf
 
             // Bind content
             NotesBulletList.ItemsSource = day.Bullets;
-            NotesFreeformBox.Text = day.FreeformContent ?? "";
+            day.MigrateFreeformIfNeeded(); // Ensure at least one section exists
+            NotesFreeformSectionsList.ItemsSource = day.FreeformSections;
 
             // Bind freeform images
             NotesFreeformImageList.ItemsSource = day.FreeformImages;
@@ -449,11 +465,10 @@ namespace FlyShelf
                 NotesBulletList.Visibility = Visibility.Collapsed;
                 NotesFreeformArea.Visibility = Visibility.Visible;
                 NotesModeToggleText.Text = "● Bullets";
-                // Defer focus to freeform text box
+                // Defer focus to last freeform section text box
                 Dispatcher.InvokeAsync(() =>
                 {
-                    NotesFreeformBox.Focus();
-                    Keyboard.Focus(NotesFreeformBox);
+                    FocusFreeformLastSection();
                 }, System.Windows.Threading.DispatcherPriority.Input);
             }
             else
@@ -477,6 +492,7 @@ namespace FlyShelf
 
             // Update day label
             NotesCurrentDayLabel.Text = "Notes · " + day.DisplayDate;
+            UpdateNoteBulletCount();
         }
 
         private void RebuildSidebar()
@@ -595,7 +611,7 @@ namespace FlyShelf
                 NotesSidebarBorder.Visibility = Visibility.Visible;
                 NotesSidebarBorder.BeginAnimation(FrameworkElement.WidthProperty, null); // Clear any leftover animation
                 NotesSidebarBorder.Width = double.NaN;
-                NotesSidebarColumn.Width = new GridLength(54);
+                NotesSidebarColumn.Width = new GridLength(42);
                 NotesSidebarCollapseIcon.Text = "◂";
             }
         }
@@ -637,6 +653,34 @@ namespace FlyShelf
             var targetDay = GetTargetDayForAdd();
             if (targetDay == null) return;
 
+            // ── Empty-card guard ────────────────────────────────────
+            // If the last bullet is already completely empty, just focus it
+            // instead of stacking another blank card on top of it.
+            if (targetDay.Bullets.Count > 0)
+            {
+                var last = targetDay.Bullets[^1];
+                bool lastIsEmpty = string.IsNullOrWhiteSpace(last.Header)
+                                && string.IsNullOrWhiteSpace(last.Content)
+                                && last.SubBullets.Count == 0
+                                && !last.HasImage && !last.HasImage2;
+                if (lastIsEmpty)
+                {
+                    // Focus that existing empty card's content box
+                    Dispatcher.InvokeAsync(() =>
+                    {
+                        NotesBulletList.UpdateLayout();
+                        var container = NotesBulletList.ItemContainerGenerator.ContainerFromItem(last);
+                        if (container is ContentPresenter cp)
+                        {
+                            var tb = FindVisualChild<TextBox>(cp, "NoteBulletContentBox");
+                            tb?.Focus();
+                            if (tb != null) Keyboard.Focus(tb);
+                        }
+                    }, System.Windows.Threading.DispatcherPriority.Background);
+                    return;
+                }
+            }
+
             // Spam proof check: enforce 1 second cooldown
             if ((DateTime.Now - _lastBulletAddedTime).TotalMilliseconds < 1000)
             {
@@ -669,10 +713,285 @@ namespace FlyShelf
             }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
+        /// <summary>
+        /// Adds a new SubBulletItem to the parent NoteBullet that currently has keyboard focus,
+        /// then focuses the new sub-bullet's TextBox.
+        /// </summary>
+        private void AddSubBulletAndFocus(NoteBullet parentBullet)
+        {
+            if (parentBullet == null) return;
+
+            // Ensure the card is expanded so sub-bullets are visible
+            parentBullet.IsCollapsed = false;
+
+            var sub = new FlyShelf.Classes.SubBulletItem();
+            parentBullet.SubBullets.Add(sub);
+            parentBullet.OnSubBulletsChanged(); // notify HasSubBullets
+            NoteManager.MarkDirty();
+
+            // Focus the new sub-bullet TextBox after the ItemsControl renders it
+            Dispatcher.InvokeAsync(() =>
+            {
+                var container = NotesBulletList.ItemContainerGenerator.ContainerFromItem(parentBullet);
+                if (container is ContentPresenter cp)
+                {
+                    var ic = FindVisualChild<ItemsControl>(cp, "SubBulletsItemsControl");
+                    if (ic != null)
+                    {
+                        ic.UpdateLayout();
+                        var subContainer = ic.ItemContainerGenerator.ContainerFromItem(sub);
+                        if (subContainer is ContentPresenter subCp)
+                        {
+                            var tb = FindVisualChild<TextBox>(subCp, "SubBulletTextBox");
+                            tb?.Focus();
+                            if (tb != null) Keyboard.Focus(tb);
+                        }
+                    }
+                }
+            }, System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        /// <summary>
+        /// Key handler for sub-bullet TextBoxes:
+        ///   Enter            → create next sub-bullet in same parent
+        ///   Shift+Enter      → dismantle (collapse) sub-bullets, return focus to card body
+        ///   Backspace(empty) → remove this sub-bullet, focus previous or parent
+        /// </summary>
+        private void SubBulletText_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (sender is not TextBox tb) return;
+            if (tb.Tag is not FlyShelf.Classes.SubBulletItem sub) return;
+
+            // Walk up the visual tree to find the parent NoteBullet via DataContext
+            NoteBullet? parentBullet = null;
+            DependencyObject? walk = VisualTreeHelper.GetParent(tb);
+            while (walk != null)
+            {
+                if (walk is FrameworkElement fe && fe.DataContext is NoteBullet nb)
+                {
+                    parentBullet = nb;
+                    break;
+                }
+                walk = VisualTreeHelper.GetParent(walk);
+            }
+            if (parentBullet == null) return;
+
+            if (e.Key == Key.Enter && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                // Shift+Enter → remove current sub-bullet if empty, return focus to card body
+                e.Handled = true;
+
+                // Remove the current sub-bullet if it's empty
+                if (string.IsNullOrWhiteSpace(tb.Text))
+                {
+                    parentBullet.SubBullets.Remove(sub);
+                    NoteManager.MarkDirty();
+                }
+
+                Dispatcher.InvokeAsync(() =>
+                {
+                    var container = NotesBulletList.ItemContainerGenerator.ContainerFromItem(parentBullet);
+                    if (container is ContentPresenter cp)
+                    {
+                        var bodyTb = FindVisualChild<TextBox>(cp, "NoteBulletContentBox");
+                        if (bodyTb != null)
+                        {
+                            bodyTb.Focus();
+                            Keyboard.Focus(bodyTb);
+                            bodyTb.CaretIndex = bodyTb.Text.Length;
+                        }
+                    }
+                }, System.Windows.Threading.DispatcherPriority.Background);
+            }
+            else if (e.Key == Key.Enter)
+            {
+                // Enter → create next sub-bullet below
+                e.Handled = true;
+                AddSubBulletAndFocus(parentBullet);
+            }
+            else if (e.Key == Key.Back && string.IsNullOrEmpty(tb.Text))
+            {
+                e.Handled = true;
+                int idx = parentBullet.SubBullets.IndexOf(sub);
+                parentBullet.SubBullets.RemoveAt(idx);
+                parentBullet.OnSubBulletsChanged();
+                NoteManager.MarkDirty();
+
+                // Focus the previous sub-bullet or the parent content box
+                Dispatcher.InvokeAsync(() =>
+                {
+                    var container = NotesBulletList.ItemContainerGenerator.ContainerFromItem(parentBullet);
+                    if (container is ContentPresenter cp)
+                    {
+                        if (idx > 0)
+                        {
+                            var ic = FindVisualChild<ItemsControl>(cp, "SubBulletsItemsControl");
+                            if (ic != null)
+                            {
+                                var prevSub = parentBullet.SubBullets[idx - 1];
+                                var subContainer = ic.ItemContainerGenerator.ContainerFromItem(prevSub);
+                                if (subContainer is ContentPresenter subCp)
+                                {
+                                    var prevTb = FindVisualChild<TextBox>(subCp, "SubBulletTextBox");
+                                    prevTb?.Focus();
+                                    if (prevTb != null) Keyboard.Focus(prevTb);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // No more sub-bullets — focus parent content box
+                            var parentTb = FindVisualChild<TextBox>(cp, "NoteBulletContentBox");
+                            parentTb?.Focus();
+                            if (parentTb != null) Keyboard.Focus(parentTb);
+                        }
+                    }
+                }, System.Windows.Threading.DispatcherPriority.Background);
+            }
+        }
+
+        /// <summary>
+        /// Focuses the last sub-bullet TextBox of a parent bullet card.
+        /// </summary>
+        private void FocusLastSubBullet(NoteBullet parentBullet)
+        {
+            if (parentBullet.SubBullets.Count == 0) return;
+            var lastSub = parentBullet.SubBullets[^1];
+
+            Dispatcher.InvokeAsync(() =>
+            {
+                var container = NotesBulletList.ItemContainerGenerator.ContainerFromItem(parentBullet);
+                if (container is ContentPresenter cp)
+                {
+                    var ic = FindVisualChild<ItemsControl>(cp, "SubBulletsItemsControl");
+                    if (ic != null)
+                    {
+                        ic.UpdateLayout();
+                        var subContainer = ic.ItemContainerGenerator.ContainerFromItem(lastSub);
+                        if (subContainer is ContentPresenter subCp)
+                        {
+                            var tb = FindVisualChild<TextBox>(subCp, "SubBulletTextBox");
+                            tb?.Focus();
+                            if (tb != null) Keyboard.Focus(tb);
+                        }
+                    }
+                }
+            }, System.Windows.Threading.DispatcherPriority.Background);
+        }
+
         private void NotesAddBullet_Click(object sender, MouseButtonEventArgs e)
         {
-            if (GetTargetDayForAdd() == null) return;
+            var targetDay = GetTargetDayForAdd();
+            if (targetDay == null) return;
+
+            // If currently in freeform mode, add a new freeform section card
+            if (_selectedNoteDay != null && _selectedNoteDay.IsFreeformMode)
+            {
+                AddNewFreeformSection();
+                return;
+            }
+
             AddNewBulletAndFocus();
+        }
+
+        /// <summary>
+        /// Add a new freeform section card and focus it.
+        /// </summary>
+        private void AddNewFreeformSection()
+        {
+            if (_selectedNoteDay == null) return;
+
+            var section = new FreeformSection();
+            _selectedNoteDay.FreeformSections.Add(section);
+            NoteManager.MarkDirty();
+
+            // Focus the new section after layout update
+            Dispatcher.InvokeAsync(() =>
+            {
+                NotesFreeformSectionsList.UpdateLayout();
+                var container = NotesFreeformSectionsList.ItemContainerGenerator.ContainerFromItem(section);
+                if (container is ContentPresenter cp)
+                {
+                    var tb = FindVisualChild<TextBox>(cp, "FreeformSectionTextBox");
+                    if (tb != null)
+                    {
+                        tb.Focus();
+                        Keyboard.Focus(tb);
+                    }
+                }
+            }, System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        /// <summary>
+        /// Remove a freeform section card. Prevents removing the last section.
+        /// </summary>
+        private void FreeformSectionRemove_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (_selectedNoteDay == null) return;
+            e.Handled = true;
+
+            if (sender is FrameworkElement fe && fe.DataContext is FreeformSection section)
+            {
+                // Don't allow removing the last section
+                if (_selectedNoteDay.FreeformSections.Count <= 1)
+                {
+                    Windows.ToastWindow.ShowToast("Cannot remove the only section");
+                    return;
+                }
+
+                _selectedNoteDay.FreeformSections.Remove(section);
+                NoteManager.MarkDirty();
+            }
+        }
+
+        /// <summary>
+        /// Focus the last freeform section's TextBox.
+        /// </summary>
+        private void FocusFreeformLastSection()
+        {
+            if (_selectedNoteDay == null || _selectedNoteDay.FreeformSections.Count == 0) return;
+
+            NotesFreeformSectionsList.UpdateLayout();
+            var lastSection = _selectedNoteDay.FreeformSections.Last();
+            var container = NotesFreeformSectionsList.ItemContainerGenerator.ContainerFromItem(lastSection);
+            if (container is ContentPresenter cp)
+            {
+                var tb = FindVisualChild<TextBox>(cp, "FreeformSectionTextBox");
+                if (tb != null)
+                {
+                    tb.Focus();
+                    Keyboard.Focus(tb);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Get the currently focused freeform section TextBox, or the last one if none focused.
+        /// </summary>
+        private TextBox? GetActiveFreeformTextBox()
+        {
+            // Check if any section TextBox currently has focus
+            if (_selectedNoteDay == null) return null;
+            foreach (var section in _selectedNoteDay.FreeformSections)
+            {
+                var container = NotesFreeformSectionsList.ItemContainerGenerator.ContainerFromItem(section);
+                if (container is ContentPresenter cp)
+                {
+                    var tb = FindVisualChild<TextBox>(cp, "FreeformSectionTextBox");
+                    if (tb != null && tb.IsFocused) return tb;
+                }
+            }
+            // Fallback: return the last section's TextBox
+            if (_selectedNoteDay.FreeformSections.Count > 0)
+            {
+                var lastSection = _selectedNoteDay.FreeformSections.Last();
+                var container = NotesFreeformSectionsList.ItemContainerGenerator.ContainerFromItem(lastSection);
+                if (container is ContentPresenter cp)
+                {
+                    return FindVisualChild<TextBox>(cp, "FreeformSectionTextBox");
+                }
+            }
+            return null;
         }
 
         private void NoteBulletHeader_TextChanged(object sender, TextChangedEventArgs e)
@@ -699,9 +1018,27 @@ namespace FlyShelf
 
         private void NoteBulletText_TextChanged(object sender, TextChangedEventArgs e)
         {
-            if (sender is TextBox tb && tb.IsFocused && tb.DataContext is NoteBullet bullet)
+            if (sender is TextBox tb)
             {
-                bullet.LastEdited = DateTime.Now;
+                // Hard cap: truncate beyond 10K characters
+                if (tb.Text.Length > NOTES_HARD_LIMIT)
+                {
+                    int caretPos = tb.CaretIndex;
+                    tb.Text = tb.Text.Substring(0, NOTES_HARD_LIMIT);
+                    tb.CaretIndex = Math.Min(caretPos, NOTES_HARD_LIMIT);
+                    Windows.ToastWindow.ShowToast("⚠️ Note limit reached (10,000 chars max)");
+                }
+                // Soft warning at 5K characters
+                else if (tb.Text.Length > NOTES_SOFT_LIMIT && !_notesCharLimitWarned)
+                {
+                    _notesCharLimitWarned = true;
+                    Windows.ToastWindow.ShowToast("📝 Note is getting long (5,000+ chars) — limit is 10,000");
+                }
+
+                if (tb.IsFocused && tb.DataContext is NoteBullet bullet)
+                {
+                    bullet.LastEdited = DateTime.Now;
+                }
             }
             NoteManager.MarkDirty();
         }
@@ -710,7 +1047,7 @@ namespace FlyShelf
         {
             if (sender is TextBox tb && tb.DataContext is NoteBullet bullet)
             {
-                // Intercept Ctrl+V to handle image/file paste manually
+                // Ctrl+V → image/file paste
                 if (e.Key == Key.V && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
                 {
                     if (HandleImagePasteForBullet(bullet))
@@ -720,12 +1057,14 @@ namespace FlyShelf
                     }
                 }
 
-                // Shift+Enter → insert newline (AcceptsReturn handles this when true)
-                // Enter without Shift → add new bullet below
-                if (e.Key == Key.Enter && !Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+                // Shift+Enter → always add a new sub-bullet below (predictable, no toggle surprises)
+                // Plain Enter  → AcceptsReturn=True inserts a newline (native WPF)
+                if (e.Key == Key.Enter && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
                 {
                     e.Handled = true;
-                    AddNewBulletAndFocus();
+                    bullet.IsCollapsed = false; // ensure sub-bullets area is visible
+                    NoteManager.MarkDirty();
+                    AddSubBulletAndFocus(bullet);
                 }
             }
         }
@@ -792,7 +1131,7 @@ namespace FlyShelf
                             if (f != null && IsImageFile(f))
                             {
                                 string destDir = NoteManager.GetImagesDirectory();
-                                string destFile = Path.Combine(destDir, $"note_{DateTime.Now:yyyyMMdd_HHmmss}_{Path.GetFileName(f)}");
+                                string destFile = Path.Combine(destDir, $"note_img_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N").Substring(0, 6)}_{Path.GetFileName(f)}");
                                 File.Copy(f, destFile, overwrite: true);
                                 return AssignImageToBullet(bullet, destFile, 140);
                             }
@@ -809,13 +1148,68 @@ namespace FlyShelf
 
         private void NotesFreeformBox_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            // Intercept Ctrl+V to handle image/file paste manually
+            // Ctrl+V → image/file paste
             if (e.Key == Key.V && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
             {
                 if (HandleImagePasteForFreeform())
                 {
                     e.Handled = true;
                     return;
+                }
+            }
+
+            // ── Inline bullet list mode (Shift+Enter to start/stop) ─────────────────────────
+            if (e.Key == Key.Enter && Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))
+            {
+                e.Handled = true;
+                if (!_freeformBulletMode)
+                {
+                    // ─ Enable inline bullet mode ─
+                    _freeformBulletMode = true;
+                    if (sender is TextBox tb)
+                    {
+                        // If not at start of an empty line, break to a new line first
+                        int caret = tb.CaretIndex;
+                        string prefix = (caret > 0 && tb.Text.Length > 0 && tb.Text[caret - 1] != '\n')
+                                        ? "\n\u2022 " : "\u2022 ";
+                        tb.SelectedText = prefix;
+                        tb.CaretIndex = caret + prefix.Length;
+                    }
+                }
+                else
+                {
+                    // ─ Disable inline bullet mode: remove • from current line, cursor stays ─
+                    _freeformBulletMode = false;
+                    if (sender is TextBox tb)
+                    {
+                        int caret = tb.CaretIndex;
+                        string text = tb.Text;
+
+                        // Find the start of the current line
+                        int lineStart = text.LastIndexOf('\n', Math.Max(0, caret - 1));
+                        lineStart = (lineStart < 0) ? 0 : lineStart + 1;
+
+                        // Check if this line starts with "• " and remove it
+                        if (lineStart + 2 <= text.Length && text.Substring(lineStart, 2) == "\u2022 ")
+                        {
+                            tb.Text = text.Remove(lineStart, 2);
+                            tb.CaretIndex = Math.Max(lineStart, caret - 2);
+                        }
+                    }
+                }
+                return;
+            }
+
+            // While in bullet mode, Enter continues the list with a new bullet
+            if (e.Key == Key.Enter && _freeformBulletMode)
+            {
+                e.Handled = true;
+                if (sender is TextBox tb)
+                {
+                    int caret = tb.CaretIndex;
+                    const string bullet = "\n\u2022 ";
+                    tb.SelectedText = bullet;
+                    tb.CaretIndex = caret + bullet.Length;
                 }
             }
         }
@@ -863,7 +1257,7 @@ namespace FlyShelf
                             if (f != null && IsImageFile(f))
                             {
                                 string destDir = NoteManager.GetImagesDirectory();
-                                string destFile = Path.Combine(destDir, $"note_{DateTime.Now:yyyyMMdd_HHmmss}_{Path.GetFileName(f)}");
+                                string destFile = Path.Combine(destDir, $"note_img_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N").Substring(0, 6)}_{Path.GetFileName(f)}");
                                 File.Copy(f, destFile, overwrite: true);
                                 var freeformImg = new FreeformImage
                                 {
@@ -919,7 +1313,7 @@ namespace FlyShelf
             {
                 if (dep is FrameworkElement fe)
                 {
-                    if (fe.Name == "BulletDeleteBtn" || fe.Name == "BulletReminderBtn" || fe.Name == "BulletCollapseBtn")
+                    if (fe.Name == "BulletDeleteBtn" || fe.Name == "BulletReminderBtn" || fe.Name == "BulletMoreBtn" || fe.Name == "BulletCollapseBtn")
                     {
                         // Let the specific button handler deal with it
                         return;
@@ -932,6 +1326,16 @@ namespace FlyShelf
             {
                 bullet.IsCollapsed = false;
                 NoteManager.MarkDirty();
+            }
+        }
+
+        private void NoteBulletPin_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement fe && fe.DataContext is Classes.NoteBullet bullet)
+            {
+                bullet.IsPinned = !bullet.IsPinned;
+                Classes.NoteManager.MarkDirty();
             }
         }
 
@@ -971,14 +1375,15 @@ namespace FlyShelf
 
             // Prefer selected text if the user highlighted a specific line/phrase; otherwise use entire content
             string noteText = "";
-            if (NotesFreeformBox != null && !string.IsNullOrWhiteSpace(NotesFreeformBox.SelectedText))
+            var activeFreeformTb = GetActiveFreeformTextBox();
+            if (activeFreeformTb != null && !string.IsNullOrWhiteSpace(activeFreeformTb.SelectedText))
             {
-                noteText = NotesFreeformBox.SelectedText.Trim();
+                noteText = activeFreeformTb.SelectedText.Trim();
             }
-            else if (NotesFreeformBox != null && !string.IsNullOrWhiteSpace(NotesFreeformBox.Text))
+            else if (activeFreeformTb != null && !string.IsNullOrWhiteSpace(activeFreeformTb.Text))
             {
                 // Use the full freeform text, capped at a reasonable length for parsing
-                noteText = NotesFreeformBox.Text.Trim();
+                noteText = activeFreeformTb.Text.Trim();
                 if (noteText.Length > 200) noteText = noteText[..200];
             }
 
@@ -1010,20 +1415,42 @@ namespace FlyShelf
             _activeReminderCreateWindow = window;
         }
 
+        private void NotesFreeformExpand_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (_selectedNoteDay == null) return;
+            try
+            {
+                // Get the FreeformSection from the clicked button's DataContext
+                if (sender is FrameworkElement fe && fe.DataContext is FreeformSection section)
+                {
+                    string dayLabel = $"📝 {_selectedNoteDay.DisplayDate}";
+                    var expandWindow = new FlyShelf.Windows.NoteExpandWindow(section, dayLabel);
+                    expandWindow.Show();
+                    expandWindow.Activate();
+                }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("NOTES", $"Failed to open expand window: {ex.Message}");
+            }
+        }
+
         private void NoteBulletDelete_Click(object sender, MouseButtonEventArgs e)
         {
             if (_selectedNoteDay == null) return;
             if (sender is FrameworkElement fe && fe.DataContext is NoteBullet bullet)
             {
-                var result = MessageBox.Show(
-                    "Are you sure you want to delete this note?",
-                    "Confirm Delete",
-                    MessageBoxButton.YesNo,
-                    MessageBoxImage.Question);
+                // The very first bullet card is permanent — it cannot be deleted.
+                if (_selectedNoteDay.Bullets.Count > 0 && _selectedNoteDay.Bullets[0] == bullet)
+                    return;
 
+                var result = MessageBox.Show("Are you sure you want to delete this bullet?", "Delete Bullet",
+                    MessageBoxButton.YesNo, MessageBoxImage.Warning);
                 if (result == MessageBoxResult.Yes)
                 {
-                    NoteManager.RemoveBullet(_selectedNoteDay, bullet);
+                    NoteManager.DeleteBullet(_selectedNoteDay, bullet);
+                    UpdateNoteBulletCount();
                 }
             }
         }
@@ -1173,7 +1600,7 @@ namespace FlyShelf
 
         private void NotesModeToggle_Click(object sender, MouseButtonEventArgs e)
         {
-            // If in Month View (no specific day selected), navigate to the most recent day in that month
+            // If in Month View (no specific day selected), navigate to the most recent day
             if (_selectedNoteDay == null)
             {
                 if (_selectedMonth != -1 && _selectedYear != -1)
@@ -1182,13 +1609,21 @@ namespace FlyShelf
                         .Where(d => d.Date.Month == _selectedMonth && d.Date.Year == _selectedYear)
                         .OrderByDescending(d => d.Date)
                         .FirstOrDefault();
-                    if (newestDay != null)
-                    {
-                        SelectNoteDay(newestDay);
-                    }
+                    if (newestDay != null) SelectNoteDay(newestDay);
                 }
                 return;
             }
+            ToggleNotesMode();
+        }
+
+        /// <summary>
+        /// Flips the current note day between Bullet mode and Freeform mode.
+        /// Called by the mode-toggle button AND by Shift+Enter from any notes TextBox.
+        /// </summary>
+        private void ToggleNotesMode()
+        {
+            if (_selectedNoteDay == null) return;
+            _freeformBulletMode = false; // Reset inline-bullet mode on any mode switch
 
             _selectedNoteDay.IsFreeformMode = !_selectedNoteDay.IsFreeformMode;
             NoteManager.MarkDirty();
@@ -1199,13 +1634,10 @@ namespace FlyShelf
                 NotesFreeformArea.Visibility = Visibility.Visible;
                 NotesModeToggleText.Text = "● Bullets";
 
-                // ─── FOCUS FIX: Activate window, then focus freeform box ───
                 ActivateNotesWindow();
                 Dispatcher.InvokeAsync(() =>
                 {
-                    NotesFreeformBox.Focus();
-                    Keyboard.Focus(NotesFreeformBox);
-                    NotesFreeformBox.CaretIndex = NotesFreeformBox.Text.Length;
+                    FocusFreeformLastSection();
                 }, System.Windows.Threading.DispatcherPriority.Input);
             }
             else
@@ -1214,7 +1646,6 @@ namespace FlyShelf
                 NotesFreeformArea.Visibility = Visibility.Collapsed;
                 NotesModeToggleText.Text = "📄 Freeform";
 
-                // ─── FOCUS FIX: Activate window, then auto-create or focus bullet ───
                 ActivateNotesWindow();
                 if (_selectedNoteDay.Bullets.Count == 0)
                 {
@@ -1226,13 +1657,30 @@ namespace FlyShelf
                     FocusNotesActiveTextBox();
                 }
             }
+
+            UpdateNoteBulletCount();
         }
 
         private void NotesFreeformBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             if (_selectedNoteDay != null && sender is TextBox tb)
             {
-                _selectedNoteDay.FreeformContent = tb.Text;
+                // Hard cap: truncate beyond 10K characters per section
+                if (tb.Text.Length > NOTES_HARD_LIMIT)
+                {
+                    int caretPos = tb.CaretIndex;
+                    tb.Text = tb.Text.Substring(0, NOTES_HARD_LIMIT);
+                    tb.CaretIndex = Math.Min(caretPos, NOTES_HARD_LIMIT);
+                    Windows.ToastWindow.ShowToast("⚠️ Section limit reached (10,000 chars max)");
+                }
+                // Soft warning at 5K characters (once per session per note)
+                else if (tb.Text.Length > NOTES_SOFT_LIMIT && !_notesCharLimitWarned)
+                {
+                    _notesCharLimitWarned = true;
+                    Windows.ToastWindow.ShowToast("📝 Section is getting long (5,000+ chars) — limit is 10,000");
+                }
+
+                // Content is synced via TwoWay binding to FreeformSection.Content
                 NoteManager.MarkDirty();
             }
         }
@@ -1557,8 +2005,9 @@ namespace FlyShelf
                         sb.AppendLine($"  {content}");
                     sb.AppendLine();
                 }
-                NotesFreeformBox.Text += sb.ToString();
-                targetDay.FreeformContent = NotesFreeformBox.Text;
+                // Append to last freeform section
+                var lastSec = targetDay.FreeformSections.LastOrDefault();
+                if (lastSec != null) lastSec.Content += sb.ToString();
                 NoteManager.MarkDirty();
             }
             else
@@ -1592,8 +2041,9 @@ namespace FlyShelf
             if (targetDay.IsFreeformMode)
             {
                 string templateText = string.Join(Environment.NewLine, lines.Select(l => "• " + l)) + Environment.NewLine;
-                NotesFreeformBox.Text += templateText;
-                targetDay.FreeformContent = NotesFreeformBox.Text;
+                // Append to last freeform section
+                var lastSection = targetDay.FreeformSections.LastOrDefault();
+                if (lastSection != null) lastSection.Content += templateText;
                 NoteManager.MarkDirty();
             }
             else
@@ -1615,6 +2065,601 @@ namespace FlyShelf
                     NotesBulletList.ItemsSource = targetDay.Bullets;
                 }
             }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // MORE MENU (consolidated dropdown for bullet cards)
+        // ═══════════════════════════════════════════════════════════
+
+        private void NoteBulletMore_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement fe && fe.DataContext is NoteBullet bullet)
+            {
+                // Toggle: if menu is already open for this button, close it
+                if (_activeNoteDropdownMenu != null && _activeNoteDropdownMenu.IsOpen && _activeNoteDropdownMenu.PlacementTarget == fe)
+                {
+                    _activeNoteDropdownMenu.IsOpen = false;
+                    _activeNoteDropdownMenu = null;
+                    return;
+                }
+
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    var menu = new ContextMenu();
+
+                    // ── Helper: make a colored TextBlock icon ──────────
+                    TextBlock MakeIcon(string glyph, string hexColor) => new TextBlock
+                    {
+                        Text = glyph, FontFamily = new FontFamily("Segoe UI Emoji"),
+                        FontSize = 13, VerticalAlignment = VerticalAlignment.Center,
+                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hexColor))
+                    };
+
+                    // Pin / Unpin  ── amber pin icon
+                    var pin = new MenuItem { Header = bullet.IsPinned ? "Unpin" : "Pin to Top" };
+                    pin.Icon = MakeIcon(bullet.IsPinned ? "📌" : "📍", "#F59E0B");
+                    pin.Click += (s, ev) => { bullet.IsPinned = !bullet.IsPinned; NoteManager.MarkDirty(); };
+                    menu.Items.Add(pin);
+
+                    // Color submenu  ── palette icon
+                    var colorMenu = new MenuItem { Header = "Color" };
+                    colorMenu.Icon = MakeIcon("🎨", "#EC4899");
+                    var noteColors = new (string Hex, string Name)[]
+                    {
+                        ("#FF4444", "Red"), ("#F59E0B", "Amber"), ("#22C55E", "Green"),
+                        ("#3B82F6", "Blue"), ("#8B5CF6", "Purple"), ("#EC4899", "Pink")
+                    };
+                    foreach (var (hex, name) in noteColors)
+                    {
+                        var mi = new MenuItem { Header = name };
+                        mi.Icon = new Border
+                        {
+                            Width = 14, Height = 14, CornerRadius = new CornerRadius(7),
+                            Background = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex))
+                        };
+                        string ch = hex;
+                        mi.Click += (s, ev) => { bullet.Color = ch; NoteManager.MarkDirty(); };
+                        colorMenu.Items.Add(mi);
+                    }
+                    colorMenu.Items.Add(new Separator());
+                    var clearColor = new MenuItem { Header = "Clear Color" };
+                    clearColor.Icon = MakeIcon("✕", "#6B7280");
+                    clearColor.Click += (s, ev) => { bullet.Color = ""; NoteManager.MarkDirty(); };
+                    colorMenu.Items.Add(clearColor);
+                    menu.Items.Add(colorMenu);
+
+                    // Tags submenu  ── cyan tag icon
+                    var tagMenu = new MenuItem { Header = "Tags" };
+                    tagMenu.Icon = MakeIcon("🏷", "#00D2FF");
+                    string[] presetTags = { "Work", "Personal", "Ideas", "Important", "Reference", "Project" };
+                    foreach (var tag in presetTags)
+                    {
+                        bool hasTag = bullet.Tags.Contains(tag);
+                        var mi = new MenuItem { Header = tag, IsChecked = hasTag };
+                        mi.Icon = hasTag
+                            ? MakeIcon("✓", "#22C55E")
+                            : MakeIcon("○", "#6B7280");
+                        string ct = tag;
+                        mi.Click += (s, ev) =>
+                        {
+                            if (bullet.Tags.Contains(ct)) bullet.Tags.Remove(ct);
+                            else bullet.Tags.Add(ct);
+                            bullet.Tags = new List<string>(bullet.Tags);
+                            NoteManager.MarkDirty();
+                        };
+                        tagMenu.Items.Add(mi);
+                    }
+                    tagMenu.Items.Add(new Separator());
+                    var customTag = new MenuItem { Header = "Custom Tag..." };
+                    customTag.Icon = MakeIcon("✏", "#8B5CF6");
+                    customTag.Click += (s, ev) =>
+                    {
+                        var popup = new System.Windows.Controls.Primitives.Popup
+                        {
+                            PlacementTarget = fe,
+                            Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom,
+                            StaysOpen = false, AllowsTransparency = true
+                        };
+                        var textBox = new TextBox
+                        {
+                            Width = 160, FontSize = 13, Padding = new Thickness(6, 4, 6, 4),
+                            Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x2E)),
+                            Foreground = new SolidColorBrush(Colors.White),
+                            BorderBrush = new SolidColorBrush(Color.FromArgb(0x60, 0x8B, 0x5C, 0xF6)),
+                            CaretBrush = new SolidColorBrush(Colors.White)
+                        };
+                        textBox.KeyDown += (ts, te) =>
+                        {
+                            if (te.Key == Key.Enter && !string.IsNullOrWhiteSpace(textBox.Text))
+                            {
+                                te.Handled = true;
+                                string newTag = textBox.Text.Trim();
+                                if (bullet.Tags.Contains(newTag)) bullet.Tags.Remove(newTag);
+                                else bullet.Tags.Add(newTag);
+                                bullet.Tags = new List<string>(bullet.Tags);
+                                NoteManager.MarkDirty();
+                                popup.IsOpen = false;
+                            }
+                            else if (te.Key == Key.Escape) { te.Handled = true; popup.IsOpen = false; }
+                        };
+                        popup.Child = new Border
+                        {
+                            Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x2E)),
+                            CornerRadius = new CornerRadius(6), Padding = new Thickness(4),
+                            BorderBrush = new SolidColorBrush(Color.FromArgb(0x40, 0x8B, 0x5C, 0xF6)),
+                            BorderThickness = new Thickness(1), Child = textBox
+                        };
+                        popup.IsOpen = true;
+                        Dispatcher.InvokeAsync(() => { textBox.Focus(); Keyboard.Focus(textBox); },
+                            System.Windows.Threading.DispatcherPriority.Input);
+                    };
+                    tagMenu.Items.Add(customTag);
+                    menu.Items.Add(tagMenu);
+
+                    menu.Items.Add(new Separator());
+
+                    // Copy as Text  ── blue clipboard icon
+                    var copyText = new MenuItem { Header = "Copy as Text" };
+                    copyText.Icon = MakeIcon("📋", "#3B82F6");
+                    copyText.Click += (s, ev) =>
+                    {
+                        string text = "";
+                        if (!string.IsNullOrEmpty(bullet.Header)) text += bullet.Header + "\n";
+                        if (!string.IsNullOrEmpty(bullet.Content)) text += bullet.Content;
+                        if (!string.IsNullOrWhiteSpace(text)) Classes.ClipboardHelper.SafeSetText(text.Trim());
+                    };
+                    menu.Items.Add(copyText);
+
+                    // Copy as Markdown  ── indigo markdown icon
+                    var copyMd = new MenuItem { Header = "Copy as Markdown" };
+                    copyMd.Icon = MakeIcon("📝", "#6366F1");
+                    copyMd.Click += (s, ev) =>
+                    {
+                        string md = "";
+                        if (!string.IsNullOrEmpty(bullet.Header)) md += $"## {bullet.Header}\n\n";
+                        if (!string.IsNullOrEmpty(bullet.Content)) md += bullet.Content;
+                        if (!string.IsNullOrWhiteSpace(md)) Classes.ClipboardHelper.SafeSetText(md.Trim());
+                    };
+                    menu.Items.Add(copyMd);
+
+                    menu.Items.Add(new Separator());
+
+                    // Set Reminder  ── amber bell icon
+                    var reminderItem = new MenuItem { Header = "Set Reminder" };
+                    reminderItem.Icon = MakeIcon("⏰", "#F59E0B");
+                    reminderItem.Click += (s, ev) =>
+                    {
+                        string noteText = !string.IsNullOrEmpty(bullet.Header) ? bullet.Header :
+                                           (!string.IsNullOrEmpty(bullet.Content) ? (bullet.Content.Length > 120 ? bullet.Content[..120] : bullet.Content) : "");
+
+                        var (parsedTitle, calculatedDue) = Classes.NaturalLanguageReminderParser.Parse(noteText, DateTime.Now);
+
+                        if (_selectedNoteDay != null && _selectedNoteDay.Date.Date > DateTime.Today && calculatedDue < _selectedNoteDay.Date.Date.AddHours(9))
+                        {
+                            calculatedDue = _selectedNoteDay.Date.Date.AddHours(9);
+                        }
+
+                        try { _activeReminderCreateWindow?.Close(); } catch { }
+                        var reminderWindow = new FlyShelf.Windows.ReminderCreateWindow(parsedTitle, calculatedDue);
+                        reminderWindow.Show();
+                        reminderWindow.Activate();
+                        _activeReminderCreateWindow = reminderWindow;
+                    };
+                    menu.Items.Add(reminderItem);
+
+                    // Delete  ── red trash icon
+                    var deleteItem = new MenuItem { Header = "Delete" };
+                    deleteItem.Icon = MakeIcon("🗑", "#EF4444");
+                    deleteItem.Foreground = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
+                    deleteItem.Click += (s, ev) =>
+                    {
+                        if (_selectedNoteDay != null)
+                        {
+                            var result = MessageBox.Show("Are you sure you want to delete this bullet?", "Delete Bullet",
+                                MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                            if (result == MessageBoxResult.Yes)
+                            {
+                                NoteManager.DeleteBullet(_selectedNoteDay, bullet);
+                                UpdateNoteBulletCount();
+                            }
+                        }
+                    };
+                    menu.Items.Add(deleteItem);
+
+                    menu.PlacementTarget = fe;
+                    menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                    menu.Closed += (s, ev) => { if (_activeNoteDropdownMenu == menu) _activeNoteDropdownMenu = null; };
+                    _activeNoteDropdownMenu = menu;
+                    menu.IsOpen = true;
+                }));
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // NOTES AI ASSISTANT (Summarize / Rewrite / Organize)
+        // ═══════════════════════════════════════════════════════════
+
+        private void NoteBulletAI_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement fe && fe.DataContext is NoteBullet bullet)
+            {
+                string textToProcess = !string.IsNullOrEmpty(bullet.Content) ? bullet.Content : bullet.Header;
+                OpenNotesAIDropdown(fe, textToProcess, (newText) =>
+                {
+                    if (!string.IsNullOrEmpty(bullet.Content))
+                    {
+                        bullet.Content = newText;
+                    }
+                    else
+                    {
+                        bullet.Header = newText;
+                    }
+                    NoteManager.MarkDirty();
+                });
+            }
+        }
+
+        private void NotesFreeformAI_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement fe && fe.DataContext is FreeformSection section)
+            {
+                // Snapshot for undo before AI modifies the text
+                _notesUndoText = section.Content;
+                _notesUndoSection = section;
+
+                OpenNotesAIDropdown(fe, section.Content, (newText) =>
+                {
+                    section.Content = newText;
+                    NoteManager.MarkDirty();
+
+                    // Show the undo button now that AI has modified text
+                    NotesUndoBtn.Visibility = Visibility.Visible;
+                });
+            }
+        }
+
+        private void NotesUndo_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (_notesUndoSection != null && _notesUndoText != null)
+            {
+                _notesUndoSection.Content = _notesUndoText;
+                NoteManager.MarkDirty();
+                _notesUndoText = null;
+                _notesUndoSection = null;
+                NotesUndoBtn.Visibility = Visibility.Collapsed;
+                Windows.ToastWindow.ShowToast("↩️ Undo applied");
+            }
+        }
+
+        private void OpenNotesAIDropdown(FrameworkElement target, string originalText, Action<string> onApplyText)
+        {
+            if (string.IsNullOrWhiteSpace(originalText))
+            {
+                Windows.ToastWindow.ShowToast("⚠️ Note is empty. Type something first!");
+                return;
+            }
+
+            var menu = new ContextMenu();
+
+            var summarize = new MenuItem { Header = "✨ Summarize" };
+            summarize.Click += (s, ev) => RunNotesAIAction("Summarize", originalText, onApplyText);
+            menu.Items.Add(summarize);
+
+            var rewrite = new MenuItem { Header = "✍️ Rewrite" };
+            rewrite.Click += (s, ev) => RunNotesAIAction("Rewrite", originalText, onApplyText);
+            menu.Items.Add(rewrite);
+
+            var organize = new MenuItem { Header = "🪄 Organize" };
+            organize.Click += (s, ev) => RunNotesAIAction("Organize", originalText, onApplyText);
+            menu.Items.Add(organize);
+
+            menu.PlacementTarget = target;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            menu.IsOpen = true;
+        }
+
+        private void RunNotesAIAction(string actionType, string originalText, Action<string> onApplyText)
+        {
+            if (!LicenseManager.IsPro)
+            {
+                UpgradePrompt.ShowNotesAILimit(this);
+                return;
+            }
+
+            bool useWindowsAI = WindowsAIService.Instance.IsAvailable;
+
+            var aiWindow = new FlyShelf.Windows.NotesAIWindow(originalText, actionType, useWindowsAI);
+            aiWindow.Owner = this;
+            if (aiWindow.ShowDialog() == true && aiWindow.IsApplied)
+            {
+                onApplyText(aiWindow.ResultText);
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // NOTES HEADER DROPDOWN MENU (Sort / Export)
+        // ═══════════════════════════════════════════════════════════
+
+        private void NotesHeaderMenu_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement fe)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    var menu = new ContextMenu();
+
+                    // Helper: colored emoji icon
+                    TextBlock MI(string g, string c) => new TextBlock
+                    {
+                        Text = g, FontFamily = new FontFamily("Segoe UI Emoji"),
+                        FontSize = 13, VerticalAlignment = VerticalAlignment.Center,
+                        Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(c))
+                    };
+
+                    // ── Sort submenu ── cyan chart icon
+                    if (_selectedNoteDay != null)
+                    {
+                        var sortMenu = new MenuItem { Header = "Sort Bullets" };
+                        sortMenu.Icon = MI("📊", "#00D2FF");
+
+                        var sortPinned = new MenuItem { Header = "Pinned First" };
+                        sortPinned.Icon = MI("📌", "#F59E0B");
+                        sortPinned.Click += (s, ev) =>
+                        {
+                            var sorted = _selectedNoteDay.Bullets.OrderByDescending(b => b.IsPinned).ThenBy(b => b.SortOrder).ToList();
+                            _selectedNoteDay.Bullets.Clear();
+                            foreach (var b in sorted) _selectedNoteDay.Bullets.Add(b);
+                            NoteManager.MarkDirty();
+                        };
+                        sortMenu.Items.Add(sortPinned);
+
+                        var sortAZ = new MenuItem { Header = "Header A-Z" };
+                        sortAZ.Icon = MI("🔤", "#3B82F6");
+                        sortAZ.Click += (s, ev) =>
+                        {
+                            var sorted = _selectedNoteDay.Bullets.OrderBy(b => b.Header ?? "").ToList();
+                            _selectedNoteDay.Bullets.Clear();
+                            foreach (var b in sorted) _selectedNoteDay.Bullets.Add(b);
+                            NoteManager.MarkDirty();
+                        };
+                        sortMenu.Items.Add(sortAZ);
+
+                        var sortEdited = new MenuItem { Header = "Last Edited" };
+                        sortEdited.Icon = MI("🕐", "#8B5CF6");
+                        sortEdited.Click += (s, ev) =>
+                        {
+                            var sorted = _selectedNoteDay.Bullets.OrderByDescending(b => b.LastEdited).ToList();
+                            _selectedNoteDay.Bullets.Clear();
+                            foreach (var b in sorted) _selectedNoteDay.Bullets.Add(b);
+                            NoteManager.MarkDirty();
+                        };
+                        sortMenu.Items.Add(sortEdited);
+
+                        var sortCreated = new MenuItem { Header = "Created" };
+                        sortCreated.Icon = MI("📅", "#22C55E");
+                        sortCreated.Click += (s, ev) =>
+                        {
+                            var sorted = _selectedNoteDay.Bullets.OrderByDescending(b => b.CreatedAt).ToList();
+                            _selectedNoteDay.Bullets.Clear();
+                            foreach (var b in sorted) _selectedNoteDay.Bullets.Add(b);
+                            NoteManager.MarkDirty();
+                        };
+                        sortMenu.Items.Add(sortCreated);
+
+                        menu.Items.Add(sortMenu);
+                    }
+
+                    // ── Export submenu ── blue clipboard icon
+                    if (_selectedNoteDay != null)
+                    {
+                        var exportMenu = new MenuItem { Header = "Export" };
+                        exportMenu.Icon = MI("📋", "#3B82F6");
+
+                        var copyMd = new MenuItem { Header = "Copy as Markdown" };
+                        copyMd.Icon = MI("📝", "#6366F1");
+                        copyMd.Click += (s, ev) =>
+                        {
+                            string md = NoteManager.ExportToMarkdown(_selectedNoteDay);
+                            if (!string.IsNullOrWhiteSpace(md)) Classes.ClipboardHelper.SafeSetText(md);
+                        };
+                        exportMenu.Items.Add(copyMd);
+
+                        var copyTxt = new MenuItem { Header = "Copy as Text" };
+                        copyTxt.Icon = MI("📋", "#3B82F6");
+                        copyTxt.Click += (s, ev) =>
+                        {
+                            string txt = NoteManager.ExportToText(_selectedNoteDay);
+                            if (!string.IsNullOrWhiteSpace(txt)) Classes.ClipboardHelper.SafeSetText(txt);
+                        };
+                        exportMenu.Items.Add(copyTxt);
+
+                        menu.Items.Add(exportMenu);
+                    }
+
+                    menu.Items.Add(new Separator());
+
+                    // ── Templates submenu ── amber document icon
+                    var templatesMenu = new MenuItem { Header = "Templates" };
+                    templatesMenu.Icon = MI("📄", "#F59E0B");
+
+                    var tGrocery = new MenuItem { Header = "Grocery List" };
+                    tGrocery.Icon = MI("🛒", "#22C55E");
+                    tGrocery.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
+                        ("Dairy", "Milk, Eggs, Cheese, Yogurt"),
+                        ("Produce", "Veggies, Fruits, Herbs"),
+                        ("Pantry", "Bread, Rice, Pasta, Cereal"),
+                        ("Frozen & Snacks", "")
+                    });
+                    templatesMenu.Items.Add(tGrocery);
+
+                    var tStandup = new MenuItem { Header = "Daily Standup" };
+                    tStandup.Icon = MI("💼", "#3B82F6");
+                    tStandup.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
+                        ("Yesterday", ""),
+                        ("Today", ""),
+                        ("Blockers", ""),
+                        ("Notes", "")
+                    });
+                    templatesMenu.Items.Add(tStandup);
+
+                    var tMeeting = new MenuItem { Header = "Meeting Notes" };
+                    tMeeting.Icon = MI("📝", "#6366F1");
+                    tMeeting.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
+                        ("Attendees", ""),
+                        ("Agenda", ""),
+                        ("Discussion", ""),
+                        ("Action Items", ""),
+                        ("Follow-up", "")
+                    });
+                    templatesMenu.Items.Add(tMeeting);
+
+                    var tWorkout = new MenuItem { Header = "Workout Planner" };
+                    tWorkout.Icon = MI("🏋", "#EF4444");
+                    tWorkout.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
+                        ("Warmup", "5 min cardio"),
+                        ("Main Set", ""),
+                        ("Cooldown", "Stretching & foam roll")
+                    });
+                    templatesMenu.Items.Add(tWorkout);
+
+                    var tProject = new MenuItem { Header = "Project Planning" };
+                    tProject.Icon = MI("📋", "#00D2FF");
+                    tProject.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
+                        ("Goals", ""),
+                        ("Tasks", ""),
+                        ("Timeline", ""),
+                        ("Resources", "")
+                    });
+                    templatesMenu.Items.Add(tProject);
+
+                    var tBrainDump = new MenuItem { Header = "Brain Dump" };
+                    tBrainDump.Icon = MI("🧠", "#EC4899");
+                    tBrainDump.Click += (s, ev) => ApplyNotesTemplateWithHeaders(new[] {
+                        ("Ideas", ""),
+                        ("To Process", ""),
+                        ("Follow Up", "")
+                    });
+                    templatesMenu.Items.Add(tBrainDump);
+
+                    menu.Items.Add(templatesMenu);
+
+                    menu.PlacementTarget = fe;
+                    menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                    menu.IsOpen = true;
+                }));
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // NOTE SORT (legacy — now integrated into header dropdown)
+        // ═══════════════════════════════════════════════════════════
+
+        private void NoteSort_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement fe && _selectedNoteDay != null)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    var menu = new ContextMenu();
+
+                    var sortPinned = new MenuItem { Header = "📌 Pinned First" };
+                    sortPinned.Click += (s, ev) =>
+                    {
+                        var sorted = _selectedNoteDay.Bullets.OrderByDescending(b => b.IsPinned).ThenBy(b => b.SortOrder).ToList();
+                        _selectedNoteDay.Bullets.Clear();
+                        foreach (var b in sorted) _selectedNoteDay.Bullets.Add(b);
+                        NoteManager.MarkDirty();
+                    };
+                    menu.Items.Add(sortPinned);
+
+                    var sortAZ = new MenuItem { Header = "🔤 Header A-Z" };
+                    sortAZ.Click += (s, ev) =>
+                    {
+                        var sorted = _selectedNoteDay.Bullets.OrderBy(b => b.Header ?? "").ToList();
+                        _selectedNoteDay.Bullets.Clear();
+                        foreach (var b in sorted) _selectedNoteDay.Bullets.Add(b);
+                        NoteManager.MarkDirty();
+                    };
+                    menu.Items.Add(sortAZ);
+
+                    var sortEdited = new MenuItem { Header = "🕐 Last Edited" };
+                    sortEdited.Click += (s, ev) =>
+                    {
+                        var sorted = _selectedNoteDay.Bullets.OrderByDescending(b => b.LastEdited).ToList();
+                        _selectedNoteDay.Bullets.Clear();
+                        foreach (var b in sorted) _selectedNoteDay.Bullets.Add(b);
+                        NoteManager.MarkDirty();
+                    };
+                    menu.Items.Add(sortEdited);
+
+                    var sortCreated = new MenuItem { Header = "📅 Created" };
+                    sortCreated.Click += (s, ev) =>
+                    {
+                        var sorted = _selectedNoteDay.Bullets.OrderByDescending(b => b.CreatedAt).ToList();
+                        _selectedNoteDay.Bullets.Clear();
+                        foreach (var b in sorted) _selectedNoteDay.Bullets.Add(b);
+                        NoteManager.MarkDirty();
+                    };
+                    menu.Items.Add(sortCreated);
+
+                    menu.PlacementTarget = fe;
+                    menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                    menu.IsOpen = true;
+                }));
+            }
+        }
+
+
+
+        // ═══════════════════════════════════════════════════════════
+        // NOTE EXPORT
+        // ═══════════════════════════════════════════════════════════
+
+        private void NoteExport_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement fe && _selectedNoteDay != null)
+            {
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    var menu = new ContextMenu();
+
+                    var copyMd = new MenuItem { Header = "📋 Copy as Markdown" };
+                    copyMd.Click += (s, ev) =>
+                    {
+                        string md = NoteManager.ExportToMarkdown(_selectedNoteDay);
+                        if (!string.IsNullOrWhiteSpace(md)) Classes.ClipboardHelper.SafeSetText(md);
+                    };
+                    menu.Items.Add(copyMd);
+
+                    var copyTxt = new MenuItem { Header = "📋 Copy as Text" };
+                    copyTxt.Click += (s, ev) =>
+                    {
+                        string txt = NoteManager.ExportToText(_selectedNoteDay);
+                        if (!string.IsNullOrWhiteSpace(txt)) Classes.ClipboardHelper.SafeSetText(txt);
+                    };
+                    menu.Items.Add(copyTxt);
+
+                    menu.PlacementTarget = fe;
+                    menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                    menu.IsOpen = true;
+                }));
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // BULLET COUNT DISPLAY
+        // ═══════════════════════════════════════════════════════════
+
+        private void UpdateNoteBulletCount()
+        {
+            // Bullet count badge was removed from UI — method kept as no-op for callers
         }
 
     }

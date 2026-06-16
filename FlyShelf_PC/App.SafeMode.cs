@@ -17,13 +17,13 @@ public partial class App
         try
         {
             FlyShelf.Classes.Logger.LogAction("SAFEMODE", $"Launching FlyShelf in Safe Mode due to startup failure: {originalException.Message}");
-            
-            // Create an ultra-safe fallback window
+
+            // Create a clean, friendly fallback window — no error codes shown to users
             Window safeWindow = new Window
             {
-                Title = "FlyShelf Safe Mode",
-                Width = 520,
-                Height = 330,
+                Title = "FlyShelf",
+                Width = 480,
+                Height = 280,
                 WindowStartupLocation = WindowStartupLocation.CenterScreen,
                 ResizeMode = ResizeMode.NoResize,
                 WindowStyle = WindowStyle.None,
@@ -36,57 +36,72 @@ public partial class App
             safeWindow.Closed += (s, ev) => Application.Current.Shutdown();
 
             var outerBorder = new System.Windows.Controls.Border {
-                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(30, 20, 20)),
-                BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 38, 38)), // Crimson border
-                BorderThickness = new Thickness(1.5),
-                CornerRadius = new CornerRadius(12)
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(18, 20, 35)),
+                BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(42, 45, 63)),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(16)
+            };
+            // Drop shadow
+            outerBorder.Effect = new System.Windows.Media.Effects.DropShadowEffect {
+                BlurRadius = 40, Opacity = 0.6, ShadowDepth = 0,
+                Color = System.Windows.Media.Color.FromRgb(0, 0, 0)
             };
 
-            var stack = new System.Windows.Controls.StackPanel { Margin = new Thickness(24), VerticalAlignment = VerticalAlignment.Center };
-            
-            stack.Children.Add(new System.Windows.Controls.TextBlock { 
-                Text = "FlyShelf (Safe Mode)", 
-                FontSize = 18, 
-                FontWeight = FontWeights.Bold, 
-                Foreground = System.Windows.Media.Brushes.White,
-                Margin = new Thickness(0, 0, 0, 8)
-            });
-            
-            stack.Children.Add(new System.Windows.Controls.TextBlock { 
-                Text = "A critical layout or resource exception prevented FlyShelf from starting normally. FlyShelf is running in diagnostic safe mode.", 
-                FontSize = 12, 
-                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(200, 180, 180)),
-                Margin = new Thickness(0, 0, 0, 14),
-                TextWrapping = TextWrapping.Wrap
-            });
-
-            // Show exception details
-            var detailText = new System.Windows.Controls.TextBox {
-                Text = originalException.ToString(),
-                Height = 110,
-                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(15, 15, 15)),
-                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(180, 180, 180)),
-                BorderThickness = new Thickness(0),
-                TextWrapping = TextWrapping.Wrap,
-                VerticalScrollBarVisibility = System.Windows.Controls.ScrollBarVisibility.Auto,
-                IsReadOnly = true,
-                Margin = new Thickness(0, 0, 0, 16),
-                Padding = new Thickness(8),
-                FontSize = 11
+            var stack = new System.Windows.Controls.StackPanel {
+                Margin = new Thickness(40, 36, 40, 36),
+                VerticalAlignment = VerticalAlignment.Center
             };
-            stack.Children.Add(detailText);
 
-            var buttonPanel = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-
-            // "Restart Normally" button
-            var btnRestart = new System.Windows.Controls.Border {
-                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(16, 185, 129)), // Emerald-500
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(14, 8, 14, 8),
+            // Icon + title row
+            var titlePanel = new System.Windows.Controls.StackPanel {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                Margin = new Thickness(0, 0, 0, 12)
+            };
+            titlePanel.Children.Add(new System.Windows.Controls.TextBlock {
+                Text = "🚧",
+                FontSize = 28,
                 Margin = new Thickness(0, 0, 12, 0),
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            titlePanel.Children.Add(new System.Windows.Controls.TextBlock {
+                Text = "Coming Soon",
+                FontSize = 22,
+                FontWeight = FontWeights.Bold,
+                Foreground = System.Windows.Media.Brushes.White,
+                VerticalAlignment = VerticalAlignment.Center
+            });
+            stack.Children.Add(titlePanel);
+
+            stack.Children.Add(new System.Windows.Controls.TextBlock {
+                Text = "This section is not finished yet. We're working hard to get it ready — please check back in a future update.",
+                FontSize = 13,
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(148, 163, 184)),
+                Margin = new Thickness(0, 0, 0, 28),
+                TextWrapping = TextWrapping.Wrap,
+                LineHeight = 20
+            });
+
+            var buttonPanel = new System.Windows.Controls.StackPanel {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right
+            };
+
+            // "Restart" button
+            var btnRestart = new System.Windows.Controls.Border {
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(99, 102, 241)),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(20, 10, 20, 10),
+                Margin = new Thickness(0, 0, 10, 0),
                 Cursor = Cursors.Hand
             };
-            var txtRestart = new System.Windows.Controls.TextBlock { Text = "Restart Normally", Foreground = System.Windows.Media.Brushes.White, FontWeight = FontWeights.Bold, FontSize = 12 };
+            btnRestart.MouseEnter += (s, ev) => btnRestart.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(79, 82, 221));
+            btnRestart.MouseLeave += (s, ev) => btnRestart.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(99, 102, 241));
+            var txtRestart = new System.Windows.Controls.TextBlock {
+                Text = "Restart App",
+                Foreground = System.Windows.Media.Brushes.White,
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 13
+            };
             btnRestart.Child = txtRestart;
             btnRestart.MouseLeftButtonDown += (s, ev) => {
                 try
@@ -94,16 +109,13 @@ public partial class App
                     string crashCleanPath = System.IO.Path.Combine(
                         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "crash_error.txt");
                     if (System.IO.File.Exists(crashCleanPath))
-                    {
                         System.IO.File.Delete(crashCleanPath);
-                    }
                 }
                 catch {}
                 try
                 {
                     _mutex?.Dispose();
 #if MSIX_STORE
-                    // Store apps cannot self-restart; just shutdown gracefully
                     Application.Current.Shutdown();
 #else
                     Process.Start(new ProcessStartInfo
@@ -114,50 +126,34 @@ public partial class App
                     Application.Current.Shutdown();
 #endif
                 }
-                catch (Exception ex) { MessageBox.Show($"Failed to restart: {ex.Message}"); }
+                catch { Application.Current.Shutdown(); }
             };
             buttonPanel.Children.Add(btnRestart);
 
-            // "Reset settings" button
-            var btnReset = new System.Windows.Controls.Border {
-                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(59, 130, 246)),
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(14, 8, 14, 8),
-                Margin = new Thickness(0, 0, 12, 0),
-                Cursor = Cursors.Hand
-            };
-            var txtReset = new System.Windows.Controls.TextBlock { Text = "Reset Settings", Foreground = System.Windows.Media.Brushes.White, FontWeight = FontWeights.Bold, FontSize = 12 };
-            btnReset.Child = txtReset;
-            btnReset.MouseLeftButtonDown += (s, ev) => {
-                try
-                {
-                    FlyShelf.Classes.SettingsManager.ResetToDefaults();
-                    MessageBox.Show("Settings reset to default. Please restart FlyShelf.", "Reset Complete", MessageBoxButton.OK, MessageBoxImage.Information);
-                    Application.Current.Shutdown();
-                }
-                catch (Exception ex) { MessageBox.Show($"Failed to reset settings: {ex.Message}"); }
-            };
-            buttonPanel.Children.Add(btnReset);
-
-            // "Exit" button
+            // "Close" button
             var btnExit = new System.Windows.Controls.Border {
-                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(220, 38, 38)),
-                CornerRadius = new CornerRadius(6),
-                Padding = new Thickness(14, 8, 14, 8),
+                Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(42, 45, 63)),
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(20, 10, 20, 10),
                 Cursor = Cursors.Hand
             };
-            var txtExit = new System.Windows.Controls.TextBlock { Text = "Close App", Foreground = System.Windows.Media.Brushes.White, FontWeight = FontWeights.Bold, FontSize = 12 };
-            btnExit.Child = txtExit;
-            btnExit.MouseLeftButtonDown += (s, ev) => {
-                Application.Current.Shutdown();
+            btnExit.MouseEnter += (s, ev) => btnExit.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(55, 58, 82));
+            btnExit.MouseLeave += (s, ev) => btnExit.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(42, 45, 63));
+            var txtExit = new System.Windows.Controls.TextBlock {
+                Text = "Close",
+                Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(148, 163, 184)),
+                FontWeight = FontWeights.SemiBold,
+                FontSize = 13
             };
+            btnExit.Child = txtExit;
+            btnExit.MouseLeftButtonDown += (s, ev) => Application.Current.Shutdown();
             buttonPanel.Children.Add(btnExit);
 
             stack.Children.Add(buttonPanel);
             outerBorder.Child = stack;
             safeWindow.Content = outerBorder;
 
-            // Register native Alt+C hotkey on the safe window to display a safe mode notification!
+            // Alt+C shows the same friendly message — no error codes exposed
             safeWindow.SourceInitialized += (s, ev) =>
             {
                 var helper = new System.Windows.Interop.WindowInteropHelper(safeWindow);
@@ -169,19 +165,30 @@ public partial class App
                     {
                         if (msg == 0x0312 && wp.ToInt32() == 9000)
                         {
-                            MessageBox.Show("FlyShelf is running in Safe Mode due to a startup crash:\n\n" + originalException.Message, "FlyShelf Safe Mode", MessageBoxButton.OK, MessageBoxImage.Warning);
+                            MessageBox.Show(
+                                "This section is not finished yet.\n\nWe're working hard to get it ready — please check back in a future update.",
+                                "FlyShelf",
+                                MessageBoxButton.OK,
+                                MessageBoxImage.Information);
                             handled = true;
                         }
                         return IntPtr.Zero;
                     });
+
+                    safeWindow.Closed += (s2, ev2) =>
+                    {
+                        try { UnregisterHotKey(hwnd, 9000); } catch { }
+                    };
                 }
             };
 
+            safeWindow.MouseLeftButtonDown += (s, ev) => { try { safeWindow.DragMove(); } catch { } };
             safeWindow.Show();
         }
         catch (Exception fatalEx)
         {
-            MessageBox.Show($"FlyShelf encountered a fatal initialization error:\n\n{originalException.Message}\n\nFallback UI failed:\n{fatalEx.Message}", "Fatal Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            // Even the fallback failed — just close silently; error is already in the log
+            FlyShelf.Classes.Logger.LogAction("SAFEMODE", $"Safe mode fallback UI failed: {fatalEx.Message}");
             Application.Current.Shutdown();
         }
     }

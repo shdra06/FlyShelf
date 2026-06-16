@@ -6,7 +6,7 @@
 
 *Copy on one device. Paste anywhere. Instantly. Secure peer-to-peer pipelines for Windows & Android.*
 
-[![Windows Desktop App](https://img.shields.io/badge/Windows_PC-v2.5.0-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v2.5.0/FlyShelf.exe)
+[![Windows Desktop App](https://img.shields.io/badge/Windows_PC-v3.0.0-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v3.0.0/FlyShelf.exe)
 [![Android Mobile Companion](https://img.shields.io/badge/Android_Mobile-v7.1.0-3DDC84?style=for-the-badge&logo=android&logoColor=white)](https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk)
 [![Ecosystem License](https://img.shields.io/badge/License-Proprietary-FF007F?style=for-the-badge&logo=shield&logoColor=white)](LICENSE)
 
@@ -35,10 +35,12 @@ Unlike generic clipboard managers, FlyShelf works entirely **peer-to-peer (P2P)*
 - 🖼️ **Custom Wallpapers** — Set any image as your clipboard backdrop with frosted glass header
 - 📝 **Quick Notes** — Per-day bullet notes with image embeds and freeform mode
 - ✅ **To-Do Lists** — Daily task lists with done/undone toggle
-- 🔤 **Text Shortcuts** — Type `/trigger` abbreviations that auto-expand to full text snippets
+- 🔤 **Text Shortcuts** — Type `/trigger` abbreviations that auto-expand to full text snippets (50 max for Pro)
 - 📦 **PDF Merger** — Merge multiple PDFs with drag-to-reorder and page selection
 - 📊 **Table Extraction** — Extract tables from screenshots using local AI (Bradley-Roth + Projection-Profile) or Gemini API
-- 🔍 **OCR Text Extraction** — Extract text from images using Windows OCR engine (handles up to 4000px)
+- 🔍 **AI OCR Text Extraction** — NPU-accelerated text extraction from images using Windows AI TextRecognizer (Win11 24H2+)
+- ⏰ **Natural Language Reminders** — Type naturally to create alerts ("remind me in 30 mins to check build")
+- 🎓 **First-Run Onboarding** — Interactive tutorial experience to get started seamlessly
 - 📷 **QR Code Scanner** — Decode QR codes from clipboard images
 - ⏱️ **Timer & Stopwatch** — Type `/5`, `timer 30 min`, or `2:30` into search to launch a countdown
 - 😊 **Emoji Picker** — Searchable floating panel with 800+ color emojis
@@ -142,8 +144,9 @@ FlyShelf classified badges adapt to **all file extensions** to sort and optimize
 Right-click any card to trigger contextual actions:
 - **🔎 Search on Google**: Query highlighted clips instantly.
 - **🔗 UTM URL Cleaner**: Strips marketing tracking parameters (`utm_*`, `fbclid`) from links.
-- **🧮 Math Solver**: Auto-evaluates math equations like `(12 * 8) - 15` using a Shunting-yard algorithm.
-- **🔍 OCR Text Extraction**: Extract text from images using Windows OCR engine (up to 4000px).
+- 🧮 **Math Solver**: Auto-evaluates math equations like `(12 * 8) - 15` using a Shunting-yard algorithm.
+- 🔍 **AI OCR Text Extraction**: NPU-accelerated text extraction from images using Windows AI TextRecognizer.
+- ⏰ **Natural Language Reminders**: Type naturally in the search bar to set quick reminders.
 - **📊 Table Data Extraction**: Extract structured tables from screenshots.
 - **📷 QR Code Scanner**: Decode QR codes from clipboard images.
 - **🖥️ QuickLook Preview**: Tap Spacebar on any item to open a clean instant preview window.
@@ -185,7 +188,8 @@ Right-click any card to trigger contextual actions:
 
 FlyShelf is distributed as fully self-contained, ready-to-run standalone binaries. No installer or runtime setup is required.
 
-- **Desktop (Windows 10/11)**: [Download FlyShelf.exe](https://github.com/shdra06/FlyShelf/releases/download/v2.5.0/FlyShelf.exe) (Single-file, self-contained release, no .NET install required).
+- **Desktop (Windows 10/11)**: [Download FlyShelf.exe](https://github.com/shdra06/FlyShelf/releases/download/v3.0.0/FlyShelf.exe) (Single-file, self-contained release, no .NET install required).
+- **Microsoft Store**: Available soon! (Note: Global Transfer is disabled in the Microsoft Store version to comply with Store policies. Pro features are unlocked via an in-app add-on rather than a license key).
 - **Mobile (Android 8.0+)**: [Download FlyShelf_Mobile.apk](https://github.com/shdra06/FlyShelf/releases/download/v7.1.0/FlyShelf_Mobile.apk) (Lightweight, single-architecture arm64 release).
 
 ---
@@ -202,8 +206,9 @@ FlyShelf is distributed as fully self-contained, ready-to-run standalone binarie
 | Pins | 20 max | Unlimited |
 | Color Themes | Default only | All 7 themes |
 | Custom Wallpaper | — | ✅ |
+| Text Shortcuts | 20 max | 50 max |
 | Clipboard Size | Fixed | Adjustable |
-| Cloudflare Tunnel | — | ✅ |
+| Cloudflare Tunnel | — | ✅ (Standalone only) |
 | Glass UI Theme | — | ✅ |
 
 ---

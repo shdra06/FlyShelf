@@ -170,6 +170,12 @@ namespace FlyShelf.Classes
                 CompositionTarget.Rendering -= OnRendering;
                 _renderingAttached = false;
             }
+
+            // Restore system timer resolution when all scroll states are detached
+            if (_states.Count == 0)
+            {
+                try { TimeEndPeriod(1); } catch { }
+            }
         }
 
         /// <summary>

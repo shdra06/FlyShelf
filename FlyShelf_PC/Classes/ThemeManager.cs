@@ -35,6 +35,16 @@ namespace FlyShelf.Classes
         /// <summary>Fires when a new theme is discovered or removed.</summary>
         public event Action? ThemeListChanged;
 
+        /// <summary>
+        /// Unconditionally fires ActiveThemeChanged with the current active theme.
+        /// Use this to force the MainWindow theme handler to re-apply wallpaper/backdrop
+        /// when SettingsManager.SetProperty wouldn't fire (value didn't actually change).
+        /// </summary>
+        public void ForceThemeRefresh()
+        {
+            ActiveThemeChanged?.Invoke(_activeTheme);
+        }
+
         private ThemeManager()
         {
             _themesDir = Path.Combine(

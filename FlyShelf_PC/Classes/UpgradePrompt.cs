@@ -80,6 +80,17 @@ namespace FlyShelf.Classes
                 owner);
         }
 
+        public static void ShowNotesAILimit(Window? owner = null)
+        {
+            ShowLimitDialog(
+                "AI Notes Assistant",
+                "AI features (Summarize, Rewrite, Organize) are exclusive to FlyShelf Pro.",
+                "Upgrade to FlyShelf Pro to unlock local AI notes enhancements!",
+                "✨",
+                owner);
+        }
+
+
         public static void ShowTableExtractLimit(Window? owner = null)
         {
             ShowLimitDialog(

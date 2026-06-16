@@ -15,9 +15,9 @@
     <ApplicationIcon>Resources\FlyShelfLogo.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <NoWarn>CS4014;CS0168;CS0162;CS0414;CS8632;CS0169</NoWarn>
-    <Version>2.5.0</Version>
-    <AssemblyVersion>2.5.0</AssemblyVersion>
-    <FileVersion>2.5.0</FileVersion>
+    <Version>3.0.0</Version>
+    <AssemblyVersion>3.0.0</AssemblyVersion>
+    <FileVersion>3.0.0</FileVersion>
     <AssemblyTitle>FlyShelf</AssemblyTitle>
     <Product>FlyShelf — Seamless Cross-Device Clipboard</Product>
     <Company>Shivendra</Company>
@@ -39,9 +39,9 @@
     <AppxPackageDir>..\MicrosoftBuild\Output\</AppxPackageDir>
   </PropertyGroup>
 
-  <!-- MSIX assets — only included for Store builds -->
-  <ItemGroup Condition="'$(StorePublish)' == 'true'">
-    <Content Include="..\MicrosoftBuild\Assets\**" Link="Assets\%(RecursiveDir)%(FileName)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  <!-- MSIX assets — included for all builds (required for sparse package registration in standalone EXE) -->
+  <ItemGroup>
+    <Content Include="..\MicrosoftBuild\Assets\**\*" Link="Assets\%(RecursiveDir)%(FileName)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- Bundled cloudflared secure agent — only included for Store builds to keep standalone EXE under 90MB -->
@@ -61,7 +61,11 @@
     <PackageReference Include="MicaWPF" Version="6.3.2" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
-    <PackageReference Include="Microsoft.Recognizers.Text.DateTime" Version="1.8.8" />
+    <PackageReference Include="Microsoft.Recognizers.Text.DateTime" Version="1.8.13" />
+    <!-- Pin NuGet.CommandLine to a non-vulnerable version and exclude all its assets.
+         It is a build-time tool incorrectly declared as a transitive runtime dependency
+         by Microsoft.Recognizers.Text; this suppresses NU1901/NU1904 warnings. -->
+    <PackageReference Include="NuGet.CommandLine" Version="6.12.5" ExcludeAssets="all" PrivateAssets="all" />
     <PackageReference Include="PDFsharp" Version="6.2.0" />
 
     <PackageReference Include="WPF-UI" Version="4.2.0" />
@@ -96,8 +100,18 @@
     <ZipDirectory SourceDirectory="Resources\WebClient" DestinationFile="WebClient.zip" Overwrite="true" />
   </Target>
 
+  <Target Name="BuildSparseResource" BeforeTargets="BeforeBuild" Condition="'$(StorePublish)' != 'true'">
+    <Message Text="Compiling and signing Sparse Package resources..." Importance="high" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\MicrosoftBuild\Build_Sparse_Resource.ps1&quot;" IgnoreExitCode="true" />
+  </Target>
+
   <ItemGroup>
     <EmbeddedResource Include="WebClient.zip" LogicalName="FlyShelf.WebClient.zip" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(StorePublish)' != 'true'">
+    <EmbeddedResource Include="Resources\FlyShelfSparse.msix" LogicalName="FlyShelf.Resources.FlyShelfSparse.msix" Condition="Exists('Resources\FlyShelfSparse.msix')" />
+    <EmbeddedResource Include="Resources\FlyShelfSparse.cer" LogicalName="FlyShelf.Resources.FlyShelfSparse.cer" Condition="Exists('Resources\FlyShelfSparse.cer')" />
   </ItemGroup>
 
   <!-- ═══ OBFUSCATION: Run Obfuscar after compile, before single-file bundle ═══ -->

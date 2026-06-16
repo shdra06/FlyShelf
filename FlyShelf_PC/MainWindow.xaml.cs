@@ -60,6 +60,8 @@ namespace FlyShelf
         private EventHandler<Classes.AnimationRequestEventArgs>? _mascotAnimationRequestedHandler;
         private Action<Classes.ThemePackage?>? _themeChangedHandler;
         private System.ComponentModel.PropertyChangedEventHandler? _settingsChangedHandler;
+        private Action<bool>? _updateStatusChangedHandler;
+        private Action? _coastPrefetchHandler;
         private bool _isSuppressingSizeSync = false;
         private Guid _summonedDesktopId = Guid.Empty;
         private Guid _currentDesktopId = Guid.Empty; // Updated on every foreground change from the fg window's desktop GUID
@@ -90,7 +92,7 @@ namespace FlyShelf
         }
 
         [DllImport("user32.dll", SetLastError = true)]
-        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
+        private static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);
         private const int KEYEVENTF_KEYUP = 0x0002;
         private const int VK_CONTROL = 0x11;
         private const int VK_V = 0x56;
@@ -135,9 +137,27 @@ namespace FlyShelf
         [DllImport("user32.dll")]
         public static extern IntPtr SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+        private static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+        private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
 
         [DllImport("user32.dll")]
         public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+        private static int GetWindowLongSafe(IntPtr hWnd, int nIndex)
+        {
+            if (IntPtr.Size == 8)
+                return (int)GetWindowLongPtr(hWnd, nIndex);
+            return GetWindowLong(hWnd, nIndex);
+        }
+        private static IntPtr SetWindowLongSafe(IntPtr hWnd, int nIndex, int dwNewLong)
+        {
+            if (IntPtr.Size == 8)
+                return SetWindowLongPtr(hWnd, nIndex, (IntPtr)dwNewLong);
+            return SetWindowLong(hWnd, nIndex, dwNewLong);
+        }
 
         [DllImport("user32.dll")]
         public static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -164,8 +184,8 @@ namespace FlyShelf
             var helper = new WindowInteropHelper(this);
             if (helper.Handle != IntPtr.Zero)
             {
-                int exStyle = GetWindowLong(helper.Handle, GWL_EXSTYLE);
-                SetWindowLong(helper.Handle, GWL_EXSTYLE, exStyle | WS_EX_NOACTIVATE | WS_EX_LAYERED);
+                int exStyle = GetWindowLongSafe(helper.Handle, GWL_EXSTYLE);
+                SetWindowLongSafe(helper.Handle, GWL_EXSTYLE, exStyle | WS_EX_NOACTIVATE | WS_EX_LAYERED);
 
                 // Force rounded corners on all devices (VMs, Win10-style DWM, etc.)
                 int cornerPref = 2; // DWMWCP_ROUND
@@ -269,7 +289,7 @@ namespace FlyShelf
                     (DateTime.UtcNow - _showAnimEndTime).TotalMilliseconds < 500)
                     return;
 
-                if (_isEdgeLocked && this.ActualWidth > 0 && this.ActualHeight > 0)
+                if (_isEdgeLocked && _lockedBottomEdge > 0 && this.ActualWidth > 0 && this.ActualHeight > 0)
                 {
                     var workArea = SystemParameters.WorkArea;
 
@@ -381,8 +401,9 @@ namespace FlyShelf
                 {
                     string newTheme = Classes.SettingsManager.Current.ColorThemeName;
                     if (string.IsNullOrEmpty(newTheme) || newTheme.Equals("Default", System.StringComparison.OrdinalIgnoreCase))
-                        return; // Default is handled by RemoveColorTheme, not ApplyColorTheme
-                    Dispatcher.InvokeAsync(() => Classes.ThemeManager.Instance.ApplyColorTheme(newTheme));
+                        Dispatcher.InvokeAsync(() => Classes.ThemeManager.Instance.RemoveColorTheme());
+                    else
+                        Dispatcher.InvokeAsync(() => Classes.ThemeManager.Instance.ApplyColorTheme(newTheme));
                 }
                 else if (e.PropertyName == nameof(Classes.AdvanceSettings.EnableBlurBehind) ||
                          e.PropertyName == nameof(Classes.AdvanceSettings.ThemeDisplayMode))
@@ -424,6 +445,9 @@ namespace FlyShelf
 
                         // Safety net: reapply filters deferred as well
                         ReapplyActiveFilters();
+
+                        // Hide Alt+C watermark once clipboard has enough items to fill the view
+                        UpdateAltCWatermarkVisibility();
                     }, System.Windows.Threading.DispatcherPriority.Background);
                 }
                 else if (e.Action == NotifyCollectionChangedAction.Remove)
@@ -447,6 +471,7 @@ namespace FlyShelf
                         {
                             DismissMergeState();
                         }
+                        UpdateAltCWatermarkVisibility();
                     }, System.Windows.Threading.DispatcherPriority.Background);
                 }
             };
@@ -459,7 +484,7 @@ namespace FlyShelf
 
             // ═══ Update Available Badge ═══
             // Subscribe to the static cross-window event from UpdateManager
-            Classes.UpdateManager.GlobalUpdateStatusChanged += (hasUpdate) =>
+            _updateStatusChangedHandler = (hasUpdate) =>
             {
                 Dispatcher.InvokeAsync(() =>
                 {
@@ -473,6 +498,7 @@ namespace FlyShelf
                     }
                 });
             };
+            Classes.UpdateManager.GlobalUpdateStatusChanged += _updateStatusChangedHandler;
 
             // Check if an update was already detected before this window loaded
             if (Classes.UpdateManager.GlobalUpdateAvailable && UpdateBadge != null)
@@ -610,16 +636,28 @@ namespace FlyShelf
                 Classes.Logger.LogAction("WIDGET_FAIL", $"Failed to create taskbar widget: {ex.Message}");
             }
 
-            // ═══ FIRST-LAUNCH: Auto-summon clipboard after onboarding ═══
-            // If the user just completed onboarding, show the clipboard briefly after a delay
-            // so they see it appear naturally (reinforcing the Alt+C lesson)
+            // ═══ FIRST-LAUNCH: Auto-summon clipboard AND open Hub (Settings tab) after onboarding ═══
             if (_isFirstLaunchAfterOnboarding)
             {
                 _isFirstLaunchAfterOnboarding = false;
                 Dispatcher.InvokeAsync(async () =>
                 {
                     await System.Threading.Tasks.Task.Delay(2500);
+                    // Summon the clipboard popup so user sees it
                     try { ToggleMainClipboard(); } catch { }
+
+                    // Also open the Hub window directed to the Settings tab
+                    await System.Threading.Tasks.Task.Delay(800);
+                    try
+                    {
+                        OpenApp_Click_Internal();
+                        // Navigate to Settings tab after Hub opens
+                        if (_hubWindowInstance != null)
+                        {
+                            _hubWindowInstance.NavigateToTab("Settings");
+                        }
+                    }
+                    catch { }
                 }, System.Windows.Threading.DispatcherPriority.Background);
             }
 
@@ -636,11 +674,12 @@ namespace FlyShelf
             // Hook coast-phase prefetch: during touchpad deceleration, SmoothScroll fires
             // this event every ~200ms so we can preload images in the ±800px prefetch zone
             // before they enter the viewport — premium "images always loaded" experience.
-            Classes.SmoothScroll.CoastPrefetchNeeded += () =>
+            _coastPrefetchHandler = () =>
             {
                 Dispatcher.InvokeAsync(() => RenderVisibleThumbnails(onlyFirstTen: false),
                     System.Windows.Threading.DispatcherPriority.Background);
             };
+            Classes.SmoothScroll.CoastPrefetchNeeded += _coastPrefetchHandler;
 
             // Apply wallpaper is now handled by the deferred theme block at ApplicationIdle
             // (no more redundant early load that gets overwritten by theme init)
@@ -1108,24 +1147,12 @@ namespace FlyShelf
                 }
             }, System.Windows.Threading.DispatcherPriority.Loaded);
 
-            // Pre-load ONNX models in the background after the app is fully idle
+            // ONNX model pre-loading removed. Models will be lazy-loaded on-demand and auto-unloaded.
+
+            // Trim memory footprint immediately after the app is fully loaded and idle on startup
             Dispatcher.InvokeAsync(() =>
             {
-                Task.Run(() =>
-                {
-                    try
-                    {
-                        var tempDetector = new Classes.OnnxTableDetector();
-                        var tempRecognizer = new Classes.OnnxTextRecognizer();
-                        tempDetector.Initialize();
-                        tempRecognizer.Initialize();
-                        Classes.Logger.LogAction("ONNX_INIT", "ONNX Models pre-loaded successfully in background thread.");
-                    }
-                    catch (Exception ex)
-                    {
-                        Classes.Logger.LogAction("ONNX_INIT_FAIL", $"Lazy loading failed: {ex.Message}");
-                    }
-                });
+                OptimizeMemoryUsage();
             }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
 
@@ -1192,6 +1219,18 @@ namespace FlyShelf
 
                 // Detach smooth scroll window hooks
                 Classes.SmoothScroll.DetachFromWindow(this);
+
+                // Unsubscribe static event handlers to prevent memory leaks
+                if (_updateStatusChangedHandler != null)
+                    Classes.UpdateManager.GlobalUpdateStatusChanged -= _updateStatusChangedHandler;
+                if (_coastPrefetchHandler != null)
+                    Classes.SmoothScroll.CoastPrefetchNeeded -= _coastPrefetchHandler;
+
+                // Detach ScrollChanged handler
+                ShelfListView.RemoveHandler(ScrollViewer.ScrollChangedEvent, new ScrollChangedEventHandler(ShelfListView_ScrollChanged));
+
+                // Safety net: release keyboard hook if app exits while clipboard is visible
+                try { UninstallKeyboardHook(); } catch { }
 
                 _evictionBackgroundTimer?.Stop();
                 _evictionBackgroundTimer = null;

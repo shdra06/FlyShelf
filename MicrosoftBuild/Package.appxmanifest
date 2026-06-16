@@ -9,9 +9,9 @@
   IgnorableNamespaces="uap mp rescap desktop uap5">
 
   <Identity
-    Name="Shivendra.FlyShelf"
-    Publisher="CN=Shivendra"
-    Version="2.5.0.0"
+    Name="Flyshelf.FlyShelfClipboard"
+    Publisher="CN=C2F3380D-0EB4-4864-94C5-F83F2F17646C"
+    Version="3.0.0.0"
     ProcessorArchitecture="x64" />
 
   <mp:PhoneIdentity PhoneProductId="c1ba92ce-7355-4ff8-89e1-6c830457ecdf" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
@@ -38,7 +38,7 @@
       <uap:VisualElements
         DisplayName="FlyShelf"
         Description="Seamless Cross-Device Clipboard — sync text, images, files, and screenshots across all your devices in real-time."
-        BackgroundColor="transparent"
+        BackgroundColor="#1A1A2E"
         Square150x150Logo="Assets\Square150x150Logo.png"
         Square44x44Logo="Assets\Square44x44Logo.png">
         <uap:DefaultTile
@@ -51,7 +51,7 @@
 
       <Extensions>
         <!-- Auto-start with Windows (matches StartupHelper.StartupTaskId) -->
-        <desktop:Extension Category="windows.startupTask" Executable="FlyShelf.exe" EntryPoint="Windows.FullTrustApplication">
+        <desktop:Extension Category="windows.startupTask">
           <desktop:StartupTask TaskId="FlyShelfStartupTask" Enabled="false" DisplayName="FlyShelf Clipboard Sync"/>
         </desktop:Extension>
       </Extensions>
@@ -66,6 +66,8 @@
     <Capability Name="privateNetworkClientServer" />
     <!-- Full trust required for: P/Invoke (DWM, user32), HttpListener, system tray, clipboard monitoring -->
     <rescap:Capability Name="runFullTrust" />
+    <!-- System AI Models capability for local Copilot Runtime access -->
+    <rescap:Capability Name="systemAIModels" />
   </Capabilities>
 
 </Package>

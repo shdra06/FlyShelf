@@ -58,3 +58,25 @@ To satisfy both conditions, FlyShelf uses a **conditional MSBuild compilation st
 2. Turn on Global Web Sync in the settings tab and verify that the tunnel starts instantly (you will see the secure Cloudflare `*.trycloudflare.com` URL appear). Check the logs to ensure **no** downloads were performed.
 3. Sign in to the [Microsoft Partner Center](https://partner.microsoft.com).
 4. Upload the generated `.msix` file to your app submission page and submit for certification.
+
+---
+
+## 🌐 Standalone Website EXE: Local AI Support (Sparse Package Integration)
+
+For the standalone portable `.exe` build distributed via the website, FlyShelf utilizes an automated **Sparse Package** registration workaround to support the Windows Copilot Runtime (Phi Silica) natively. This is entirely separate from the native Microsoft Store package deployment.
+
+### How it works:
+1. **Build-Time Compilation (EXE only)**:
+   * When building the project in standalone mode (`StorePublish != true`), the MSBuild pipeline automatically runs the [Build_Sparse_Resource.ps1](file:///e:/exeapps/FlyShelf/MicrosoftBuild/Build_Sparse_Resource.ps1) script.
+   * This script packages a sparse manifest into `FlyShelfSparse.msix` and exports its signature certificate `FlyShelfSparse.cer`. These are embedded directly inside the compiled `FlyShelf.exe` as resources.
+   * **Store Separation**: This packaging and resource embedding are completely skipped for native Store builds (`StorePublish = true`) to prevent duplication and respect Microsoft Store ingestion guidelines.
+2. **First-Run Silent Registration**:
+   * On the user's first launch of the standalone `.exe`, the application detects it is running unpackaged and extracts the embedded sparse package resources.
+   * It registers the certificate into the **Current User's Trusted People Store** (`CurrentUser\TrustedPeople`) silently—**requiring no Administrator / UAC prompt**.
+   * It registers the sparse package pointing to the application's current directory as its external content location, and silently relaunches the process with package identity.
+3. **Store Build Exclusion**:
+   * The actual Store build (compiled with `MSIX_STORE`) skips this registration entirely via preprocessor directives (`#if !MSIX_STORE`) because it already runs with native package identity.
+
+### Code Signing:
+* For website distribution, when you sign `FlyShelf.exe` using your production code-signing certificate, you should also sign the generated sparse package (`FlyShelfSparse.msix`) with the same certificate so Windows trusts it natively out-of-the-box.
+

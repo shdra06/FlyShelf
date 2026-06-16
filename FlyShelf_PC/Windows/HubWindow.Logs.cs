@@ -23,6 +23,7 @@ namespace FlyShelf.Windows
 {
     public partial class HubWindow : MicaWindow
     {
+#if !MSIX_STORE
         private void RefreshLogs_Click(object? sender, RoutedEventArgs? e)
         {
             // Unified log viewer was removed — logs are accessed via Send All Logs / Copy Logs buttons.
@@ -34,10 +35,7 @@ namespace FlyShelf.Windows
                     ServerDiagnosticsLog.Text = GetServerDiagnostics();
                 }
             }
-            catch (Exception ex)
-            {
-                Logger.LogAction("LOGS", $"Refresh failed: {ex.Message}");
-            }
+            catch { }
         }
 
         private void SendAllLogs_Click(object sender, RoutedEventArgs e)
@@ -263,6 +261,7 @@ namespace FlyShelf.Windows
                 SendLogsToDashboardBtn.IsEnabled = true;
             }
         }
+#endif // !MSIX_STORE
 
         private void Window_Drop(object sender, DragEventArgs e)
         {
@@ -271,10 +270,7 @@ namespace FlyShelf.Windows
                 _viewModel.HandleDrop(e.Data, true);
                 e.Handled = true;
             }
-            catch (Exception ex)
-            {
-                Logger.LogAction("HUB_DROP_FAIL", $"Failed to process drop on HubWindow: {ex.Message}");
-            }
+            catch { }
         }
 
         private void Window_DragEnter(object sender, DragEventArgs e)

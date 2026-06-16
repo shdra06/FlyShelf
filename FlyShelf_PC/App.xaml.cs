@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 
@@ -11,6 +12,7 @@ public partial class App : Application
     private const int VK_LBUTTON = 0x01;
     private static App _instance;
     private static MainWindow _mainWinInstance;
+    private static volatile bool _isCreatingMainWindow = false;
     private static System.Threading.Timer? _shakeTimer;
 
     /// <summary>Reference to open PDF merge window; shake suppressed only when it's focused.</summary>
@@ -53,6 +55,14 @@ public partial class App : Application
     [DllImport("user32.dll", SetLastError = true)]
     private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
+    [DllImport("kernel32.dll")]
+    private static extern bool AttachConsole(int dwProcessId);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GetConsoleWindow();
+
+    private const int ATTACH_PARENT_PROCESS = -1;
+
     private static System.Threading.Mutex _mutex;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -65,6 +75,88 @@ public partial class App : Application
             Environment.Exit(0);
             return;
         }
+
+        // ═══ LOCAL AI TEST HANDLER ═══
+        bool isTestAi = false;
+        int consolePid = -1;
+        if (e.Args != null)
+        {
+            for (int i = 0; i < e.Args.Length; i++)
+            {
+                if (e.Args[i].Equals("--test-ai", StringComparison.OrdinalIgnoreCase))
+                {
+                    isTestAi = true;
+                }
+                else if (e.Args[i].Equals("--console-pid", StringComparison.OrdinalIgnoreCase) && i + 1 < e.Args.Length)
+                {
+                    int.TryParse(e.Args[i + 1], out consolePid);
+                }
+            }
+        }
+
+        if (isTestAi)
+        {
+            if (consolePid != -1)
+            {
+                AttachConsole(consolePid);
+            }
+            else
+            {
+                AttachConsole(ATTACH_PARENT_PROCESS);
+            }
+
+            try
+            {
+                var standardOutput = new System.IO.StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
+                Console.SetOut(standardOutput);
+                var standardError = new System.IO.StreamWriter(Console.OpenStandardError()) { AutoFlush = true };
+                Console.SetError(standardError);
+            }
+            catch { }
+
+            // Retrieve console PID to pass to relaunch if needed
+            int activeConsolePid = -1;
+            try
+            {
+                IntPtr hwnd = GetConsoleWindow();
+                if (hwnd != IntPtr.Zero)
+                {
+                    uint pid;
+                    GetWindowThreadProcessId(hwnd, out pid);
+                    activeConsolePid = (int)pid;
+                }
+            }
+            catch { }
+
+            if (!FlyShelf.Classes.StartupHelper.IsPackaged())
+            {
+#if DEBUG
+                Console.WriteLine("\n[FlyShelf] Diagnostic test starting...");
+                Console.WriteLine("[FlyShelf] App is not packaged. Starting sparse package registration...");
+#endif
+                
+                var argsList = new System.Collections.Generic.List<string>(e.Args);
+                if (activeConsolePid != -1 && !argsList.Contains("--console-pid"))
+                {
+                    argsList.Add("--console-pid");
+                    argsList.Add(activeConsolePid.ToString());
+                }
+
+                FlyShelf.Classes.SparsePackageRegistrar.EnsureRegistered(argsList.ToArray());
+                Environment.Exit(0);
+                return;
+            }
+
+            Task.Run(async () =>
+            {
+                await RunAITestAsync();
+                Dispatcher.Invoke(() => Shutdown());
+            });
+            return;
+        }
+
+        // ═══ SPARSE PACKAGE AUTO-REGISTRATION ═══
+        // Handled on-demand when the user clicks the AI features to avoid UAC prompts on launch.
 
         // 1. Check command line arguments for Safe Mode
         bool startInSafeMode = false;
@@ -90,6 +182,22 @@ public partial class App : Application
         }
 
         base.OnStartup(e);
+
+        // ═══ GLOBAL WINDOW ICON — Ensures all windows (Window + MicaWindow) show FlyShelf icon ═══
+        try
+        {
+            var iconUri = new Uri("pack://application:,,,/Resources/FlyShelfLogo.ico", UriKind.Absolute);
+            var iconSource = System.Windows.Media.Imaging.BitmapFrame.Create(iconUri);
+            EventManager.RegisterClassHandler(typeof(Window),
+                Window.LoadedEvent, new RoutedEventHandler((sender, args) =>
+                {
+                    if (sender is Window w && w.Icon == null)
+                    {
+                        try { w.Icon = iconSource; } catch { }
+                    }
+                }));
+        }
+        catch { }
 
         if (startInSafeMode)
         {
@@ -316,9 +424,6 @@ public partial class App : Application
                 }
             }
 
-            // Provide immediate feedback that the service captured the network without waiting for graphics
-            FlyShelf.Windows.ToastWindow.ShowToast("Service online");
-
             // ═══ SLEEP/RESUME RECOVERY ═══
             // When PC wakes from sleep, all sockets die and Cloudflare tunnel breaks.
             // Force-restart the tunnel (old URL is dead) and push fresh LAN heartbeat.
@@ -369,6 +474,7 @@ public partial class App : Application
             {
                 try
                 {
+                    _isCreatingMainWindow = true;
                     _mainWinInstance = new MainWindow();
                     MainWindow = _mainWinInstance;
 
@@ -380,7 +486,15 @@ public partial class App : Application
                     }
                     
                     // Load persisted clipboard history asynchronously (text + images survive restarts)
-                    _ = (_mainWinInstance.DataContext as ViewModels.FlyShelfViewModel)?.LoadPersistedHistoryAsync();
+                    var vm = _mainWinInstance.DataContext as ViewModels.FlyShelfViewModel;
+                    if (vm != null)
+                    {
+                        _ = vm.LoadPersistedHistoryAsync().ContinueWith(t =>
+                        {
+                            if (t.IsFaulted && t.Exception != null)
+                                FlyShelf.Classes.Logger.LogAction("STARTUP", $"LoadPersistedHistory failed: {t.Exception.InnerException?.Message}");
+                        }, System.Threading.Tasks.TaskContinuationOptions.OnlyOnFaulted);
+                    }
                     
                     _mainWinInstance.WindowStartupLocation = WindowStartupLocation.Manual;
                     _mainWinInstance.Left = -20000;
@@ -408,19 +522,35 @@ public partial class App : Application
                     // CRITICAL: Give the NotifyIcon (system tray) and TaskbarWindow (widget)
                     // enough time to register before hiding. The WPF-UI tray:NotifyIcon
                     // registers in the Loaded event — hiding immediately kills the registration.
+                    _isCreatingMainWindow = false;
                     await System.Threading.Tasks.Task.Delay(500);
                     _mainWinInstance.HideWindowInternal();
                 }
                 catch (Exception ex)
                 {
-                    try { System.IO.File.AppendAllText("startup_error.txt", $"[MainWindow Startup Failed] {ex}\n"); } catch { }
+                    _isCreatingMainWindow = false;
+                    try
+                    {
+#if DEBUG
+                        string errorDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf");
+                        if (!System.IO.Directory.Exists(errorDir)) System.IO.Directory.CreateDirectory(errorDir);
+                        System.IO.File.AppendAllText(System.IO.Path.Combine(errorDir, "startup_error.txt"), $"[MainWindow Startup Failed] {ex}\n");
+#endif
+                    } catch { }
                     LaunchSafeMode(ex);
                 }
             }, System.Windows.Threading.DispatcherPriority.Background);
         }
         catch (Exception ex)
         {
-            System.IO.File.WriteAllText("startup_error.txt", ex.ToString());
+            try
+            {
+#if DEBUG
+                string errorDir = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf");
+                if (!System.IO.Directory.Exists(errorDir)) System.IO.Directory.CreateDirectory(errorDir);
+                System.IO.File.WriteAllText(System.IO.Path.Combine(errorDir, "startup_error.txt"), ex.ToString());
+#endif
+            } catch { }
             TriggerSafeModeAndRestart($"[Startup Fatal Exception]\n{ex}");
         }
     }
@@ -648,8 +778,17 @@ public partial class App : Application
     {
         if (_mainWinInstance == null)
         {
-            _mainWinInstance = new MainWindow();
-            MainWindow = _mainWinInstance;
+            if (_isCreatingMainWindow) return; // another creation in progress (H9 race guard)
+            _isCreatingMainWindow = true;
+            try
+            {
+                _mainWinInstance = new MainWindow();
+                MainWindow = _mainWinInstance;
+            }
+            finally
+            {
+                _isCreatingMainWindow = false;
+            }
         }
 
         // Convert physical x and y to logical coordinates
@@ -668,7 +807,7 @@ public partial class App : Application
         }
         catch { }
 
-        // Spawn offset: position window completely to the right side of the cursor and lower it
+        // Spawn position: anchor to bottom-left of the work area
         double safeWidth = 260;
         if (_mainWinInstance?.DataContext is ViewModels.FlyShelfViewModel vm)
         {
@@ -676,8 +815,28 @@ public partial class App : Application
         }
         if (safeWidth <= 0) safeWidth = 260;
 
-        logicalX = logicalX + (safeWidth / 2) + 120; // Entirely to the right of the cursor (increased offset from 50 to 120)
-        logicalY += 100; // Lowered by 100 logical pixels
+         // Get the work area of the monitor the cursor is on
+        var cursorMonitor = Classes.Utils.MonitorUtil.GetMonitorWithCursor();
+        double monScaleX = cursorMonitor.dpiX / 96.0;
+        double monScaleY = cursorMonitor.dpiY / 96.0;
+        if (monScaleX <= 0) monScaleX = 1;
+        if (monScaleY <= 0) monScaleY = 1;
+        var monWorkArea = cursorMonitor.workArea;
+        double logicalWorkLeft = monWorkArea.Left / monScaleX;
+        double logicalWorkBottom = monWorkArea.Bottom / monScaleY;
+
+        // Position at the cursor's X location, offset to the right so it doesn't cover content
+        // The clipboard's center is placed (safeWidth/2 + 20px gap) to the right of the cursor
+        logicalX = logicalX + (safeWidth / 2) + 20;
+
+        // Clamp: ensure the window stays within the work area horizontally
+        double logicalWorkRight = monWorkArea.Right / monScaleX;
+        if (logicalX + (safeWidth / 2) > logicalWorkRight - 16)
+            logicalX = logicalWorkRight - (safeWidth / 2) - 16;
+        if (logicalX - (safeWidth / 2) < logicalWorkLeft + 16)
+            logicalX = logicalWorkLeft + (safeWidth / 2) + 16;
+
+        // Use the actual cursor Y position — ShowNearPositionInternal handles vertical clamping
 
         _mainWinInstance.ShowNearPosition(logicalX, logicalY, mode, isPersistent, stealFocus);
     }
@@ -690,6 +849,83 @@ public partial class App : Application
 
     [DllImport("user32.dll")]
     private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+    private static void LogAndPrint(string msg)
+    {
+#if DEBUG
+        Console.WriteLine(msg);
+        try
+        {
+            Classes.Logger.LogAction("AI_TEST_DIAG", msg);
+        }
+        catch { }
+#endif
+    }
+
+    private async Task RunAITestAsync()
+    {
+        try
+        {
+            LogAndPrint("Testing Windows Copilot Runtime Phi Silica capability...");
+            
+            // Check if AI is supported
+            bool hasText = global::Windows.Foundation.Metadata.ApiInformation.IsTypePresent("Microsoft.Windows.AI.Text.LanguageModel");
+            bool hasGen = global::Windows.Foundation.Metadata.ApiInformation.IsTypePresent("Microsoft.Windows.AI.Generative.LanguageModel");
+            
+            LogAndPrint($"- Text API present: {hasText}");
+            LogAndPrint($"- Generative API present: {hasGen}");
+            
+            if (!hasText && !hasGen)
+            {
+                LogAndPrint("");
+                LogAndPrint("ERROR: Local AI capability (Microsoft.Windows.AI.Text or Generative namespace) is not supported on this OS build.");
+                LogAndPrint("Make sure you are on Windows 11 Build 26100+ (24H2) and MicrosoftWindows.Client.CoreAI is installed.");
+                LogAndPrint("");
+                LogAndPrint("RESULT: NO, NOT COMPATIBLE");
+                return;
+            }
+
+            LogAndPrint("- Initializing WindowsAIService...");
+            var service = FlyShelf.Classes.WindowsAIService.Instance;
+            
+            bool isAvailable = service.IsAvailable;
+            LogAndPrint($"- Model available state: {isAvailable}");
+            
+            if (!isAvailable)
+            {
+                LogAndPrint("");
+                LogAndPrint("ERROR: Windows AI API is present, but the local model (Phi Silica) is not ready.");
+                LogAndPrint("Windows might still be downloading the model components via Windows Update or the hardware is incompatible.");
+                LogAndPrint("");
+                LogAndPrint("RESULT: NO, NOT COMPATIBLE");
+                return;
+            }
+
+            string testPrompt = "Translate 'Hello, how are you?' into French in 3 words.";
+            LogAndPrint($"- Sending test prompt to GPU: \"{testPrompt}\"");
+            
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            string response = await service.SummarizeAsync(testPrompt);
+            stopwatch.Stop();
+            
+            LogAndPrint($"- Inference completed in {stopwatch.ElapsedMilliseconds} ms.");
+            LogAndPrint($"- Model Response: \"{response.Trim()}\"");
+            LogAndPrint("");
+            LogAndPrint("RESULT: YES, COMPATIBLE");
+        }
+        catch (Exception ex)
+        {
+            LogAndPrint("");
+            LogAndPrint("ERROR: Local AI Inference Failed!");
+            LogAndPrint($"Details: {ex.Message}");
+            if (ex.InnerException != null)
+            {
+                LogAndPrint($"Inner Details: {ex.InnerException.Message}");
+            }
+            LogAndPrint("");
+            LogAndPrint("RESULT: NO, NOT COMPATIBLE");
+        }
+    }
 
     // ═══ Safe Mode UI + Crash Recovery moved to App.SafeMode.cs ═══
 }

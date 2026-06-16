@@ -455,9 +455,12 @@ namespace FlyShelf.Windows
 
                 ThemeCombo.Items.Clear();
 
+                // "None" option to disable mascot themes and revert to default FlyShelf wallpaper
+                ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "None (Default)", Tag = "" });
+
                 // Only mascot theme packs — display modes (Mica/Acrylic/FlyShelf) are now in Background Style cards
                 var themes = ThemeManager.Instance.GetInstalledThemes();
-                int selectedIdx = -1;
+                int selectedIdx = 0; // Default to "None (Default)"
                 string savedMode = SettingsManager.Current.ThemeDisplayMode ?? "mica";
                 string activeTheme = SettingsManager.Current.ActiveThemeName ?? "";
 
@@ -482,12 +485,7 @@ namespace FlyShelf.Windows
                         selectedIdx = idx;
                 }
 
-                if (ThemeCombo.Items.Count == 0)
-                {
-                    ThemeCombo.Items.Add(new System.Windows.Controls.ComboBoxItem { Content = "No themes installed", Tag = "__none__", IsEnabled = false });
-                }
-
-                ThemeCombo.SelectedIndex = Math.Max(0, selectedIdx);
+                ThemeCombo.SelectedIndex = selectedIdx;
 
                 // Re-hook the event handler now that population is done
                 ThemeCombo.SelectionChanged += ThemeCombo_SelectionChanged;
@@ -539,6 +537,29 @@ namespace FlyShelf.Windows
 
                 // Skip placeholder "No themes installed"
                 if (tag == "__none__") return;
+
+                // "None (Default)" — disable mascot theme, revert to desktop wallpaper
+                if (string.IsNullOrEmpty(tag))
+                {
+                    // Clean up Glass theme if currently active
+                    if (SettingsManager.Current.ThemeDisplayMode == "glass")
+                        ThemeManager.Instance.RemoveGlassTheme();
+
+                    ThemeManager.Instance.SetActiveTheme(null);
+                    SettingsManager.Current.ThemeDisplayMode = "desktop";
+                    SettingsManager.Save();
+                    HighlightActiveDisplayMode();
+                    ToastWindow.ShowToast("🖼️ Default FlyShelf wallpaper");
+
+                    Dispatcher.InvokeAsync(async () =>
+                    {
+                        await System.Threading.Tasks.Task.Delay(500);
+                        RefreshWallpaperPreview();
+                    });
+
+                    RespawnClipboardPreview();
+                    return;
+                }
 
                 // Check Pro permissions for Mascot Themes
                 if (!Classes.LicenseManager.CanUseTheme(tag))
@@ -857,6 +878,12 @@ namespace FlyShelf.Windows
                     HighlightActiveColorTheme();
                     HighlightActiveDisplayMode();
                     ApplyTheme(); // Re-apply HubWindow backdrop for the new display mode
+
+                    // CRITICAL FIX: Explicitly force the MainWindow theme handler to re-apply the
+                    // desktop wallpaper now. SetProperty is a no-op when ThemeDisplayMode was already
+                    // "desktop", so PropertyChanged never fires and the wallpaper never updates.
+                    // Raising ActiveThemeChanged with null triggers the handler unconditionally.
+                    ThemeManager.Instance.ForceThemeRefresh();
                     ToastWindow.ShowToast("🎨 Default + FlyShelf");
 
                     // Refresh wallpaper preview after the MainWindow theme handler has applied the desktop wallpaper

@@ -9,16 +9,16 @@ namespace FlyShelf.Windows
     public partial class OnboardingWindow : Window
     {
         private int _currentStep = 0;
-        private const int TOTAL_STEPS = 5;
+        private const int TOTAL_STEPS = 6;
+        private string _selectedThemeMode = "desktop";
         private readonly StackPanel[] _stepPanels;
         private readonly System.Windows.Shapes.Ellipse[] _dots;
-        private string _selectedTheme = "";
 
         public OnboardingWindow()
         {
             InitializeComponent();
-            _stepPanels = new[] { Step1, Step2, Step3, Step4, Step5 };
-            _dots = new[] { Dot1, Dot2, Dot3, Dot4, Dot5 };
+            _stepPanels = new[] { Step1, Step2, Step3, Step4, Step5, Step6 };
+            _dots = new[] { Dot1, Dot2, Dot3, Dot4, Dot5, Dot6 };
             ShowStep(0);
         }
 
@@ -71,45 +71,39 @@ namespace FlyShelf.Windows
             CompleteOnboarding();
         }
 
+        private void ThemeCard_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (sender is Border border && border.Tag is string mode)
+            {
+                _selectedThemeMode = mode;
+
+                // Update visual selection
+                var selectedGlow = new LinearGradientBrush(
+                    mode == "mica"
+                        ? Color.FromRgb(37, 99, 235)   // blue
+                        : Color.FromRgb(217, 119, 6),  // amber
+                    mode == "mica"
+                        ? Color.FromRgb(124, 58, 237)  // purple
+                        : Color.FromRgb(245, 158, 11), // amber-light
+                    new Point(0, 0), new Point(1, 1));
+                var inactiveBrush = new SolidColorBrush(Color.FromRgb(42, 45, 63)); // #2A2D3E
+
+                ThemeCard_Mica.BorderBrush = mode == "mica" ? selectedGlow : inactiveBrush;
+                ThemeCard_Desktop.BorderBrush = mode == "desktop" ? selectedGlow : inactiveBrush;
+            }
+        }
+
         private void CompleteOnboarding()
         {
-            // Apply selected theme if any
-            if (!string.IsNullOrEmpty(_selectedTheme))
-            {
-                try { Classes.ThemeManager.Instance.ApplyColorTheme(_selectedTheme); } catch { }
-            }
-
             Classes.SettingsManager.Current.HasCompletedOnboarding = true;
             Classes.SettingsManager.Current.EnableTaskbarWidget = true;
+
+            // Apply selected theme mode
+            Classes.SettingsManager.Current.ThemeDisplayMode = _selectedThemeMode;
+
             Classes.SettingsManager.Save();
             this.DialogResult = true;
             this.Close();
-        }
-
-        private void ThemeBtn_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
-        {
-            if (sender is Border border && border.Tag is string themeName)
-            {
-                _selectedTheme = themeName;
-
-                // Reset all theme borders
-                var defaultBrush = new SolidColorBrush(Color.FromArgb(0x50, 0xFF, 0xFF, 0xFF));
-                var defaultThickness = new Thickness(2);
-                MidnightBorder.BorderBrush = defaultBrush;
-                MidnightBorder.BorderThickness = defaultThickness;
-                OceanBorder.BorderBrush = defaultBrush;
-                OceanBorder.BorderThickness = defaultThickness;
-                SunsetBorder.BorderBrush = defaultBrush;
-                SunsetBorder.BorderThickness = defaultThickness;
-                EmeraldBorder.BorderBrush = defaultBrush;
-                EmeraldBorder.BorderThickness = defaultThickness;
-                LavenderBorder.BorderBrush = defaultBrush;
-                LavenderBorder.BorderThickness = defaultThickness;
-
-                // Highlight selected
-                border.BorderBrush = new SolidColorBrush(Colors.White);
-                border.BorderThickness = new Thickness(3);
-            }
         }
 
         // Allow dragging the window

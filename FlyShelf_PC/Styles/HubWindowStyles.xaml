@@ -6,11 +6,6 @@
 
     <!-- Premium Theme-Aware Setting Card Style -->
     <Style x:Key="PremiumSettingStyle" TargetType="Border">
-        <Setter Property="CacheMode">
-            <Setter.Value>
-                <BitmapCache EnableClearType="True" RenderAtScale="1"/>
-            </Setter.Value>
-        </Setter>
         <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
         <Setter Property="RenderTransform">
             <Setter.Value>

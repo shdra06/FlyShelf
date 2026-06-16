@@ -22,25 +22,32 @@ namespace FlyShelf.ViewModels
 
         public async void ExtractText()
         {
-            if (!IsImagePreview || string.IsNullOrEmpty(FilePath)) return;
-
-            if (!FlyShelf.Classes.LicenseManager.CanExtractOcr())
+            try
             {
-                FlyShelf.Classes.UpgradePrompt.ShowOcrLimit();
-                return;
-            }
+                if (!IsImagePreview || string.IsNullOrEmpty(FilePath)) return;
 
-            // Open QuickLook and auto-trigger its OCR (the T button).
-            // This ensures bounding boxes are perfectly aligned with the displayed image,
-            // unlike running a separate OCR pipeline with different upscaling/coordinates.
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-            {
-                var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
-                if (mainWin != null)
+                if (!FlyShelf.Classes.LicenseManager.CanExtractOcr())
                 {
-                    mainWin.ShowQuickLookForItem(this, preLoadedOcr: null, autoTriggerOcr: true);
+                    FlyShelf.Classes.UpgradePrompt.ShowOcrLimit();
+                    return;
                 }
-            });
+
+                // Open QuickLook and auto-trigger its OCR (the T button).
+                // This ensures bounding boxes are perfectly aligned with the displayed image,
+                // unlike running a separate OCR pipeline with different upscaling/coordinates.
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                {
+                    var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
+                    if (mainWin != null)
+                    {
+                        mainWin.ShowQuickLookForItem(this, preLoadedOcr: null, autoTriggerOcr: true);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[OCR] ExtractText error: {ex.Message}");
+            }
         }
 
 

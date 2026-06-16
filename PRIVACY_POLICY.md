@@ -18,6 +18,9 @@ FlyShelf ("the App") is a high-performance, cross-device clipboard synchronizati
 > - **Zero Tracking:** We do not collect analytics, track application usage, monitor browser habits, or log telemetry. 
 > - **Absolute Encryption:** All sensitive data is encrypted at rest using OS-level protection (Windows DPAPI) and encrypted in transit using industry-standard authenticated encryption (AES-256-GCM).
 
+> [!NOTE]
+> **Microsoft Store Edition:** To comply with Microsoft Store Policy 10.2.1 (which restricts dynamically downloading external executables), the **Global Transfer** feature is completely disabled in the Microsoft Store version of FlyShelf. The Store version relies entirely on your local machine and local network, and does not use any remote tunneling services.
+
 ---
 
 ## 2. Information Accessed & Stored Locally

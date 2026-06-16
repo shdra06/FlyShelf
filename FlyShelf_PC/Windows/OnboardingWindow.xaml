@@ -43,7 +43,7 @@
                     <!-- STEP 1: Welcome                       -->
                     <!-- ══════════════════════════════════════ -->
                     <StackPanel x:Name="Step1" VerticalAlignment="Center" HorizontalAlignment="Center">
-                        <Image Source="pack://application:,,,/Resources/FlyShelfMascot.png"
+                        <Image Source="pack://application:,,,/Resources/FlyShelfIcon.png"
                                Width="120" Height="120" Margin="0,0,0,24"
                                HorizontalAlignment="Center" RenderOptions.BitmapScalingMode="HighQuality"/>
                         <TextBlock Text="Welcome to FlyShelf" FontSize="32" FontWeight="Bold"
@@ -178,114 +178,157 @@
                     </StackPanel>
 
                     <!-- ══════════════════════════════════════ -->
-                    <!-- STEP 5: Choose Your Vibe              -->
+                    <!-- STEP 5: Choose Your Style             -->
                     <!-- ══════════════════════════════════════ -->
                     <StackPanel x:Name="Step5" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
-                        <TextBlock Text="Choose Your Vibe" FontSize="24" FontWeight="Bold"
-                                   Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,12"/>
-                        <TextBlock Text="Pick a color theme — you can always change it later" FontSize="14"
-                                   Foreground="#94A3B8" HorizontalAlignment="Center" Margin="0,0,0,36"/>
+                        <TextBlock Text="Choose Your Style" FontSize="24" FontWeight="Bold"
+                                   Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <TextBlock Text="Pick a look that suits you — you can always change this later in Settings"
+                                   FontSize="14" Foreground="#94A3B8" HorizontalAlignment="Center"
+                                   TextAlignment="Center" TextWrapping="Wrap" MaxWidth="480" Margin="0,0,0,32"/>
 
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <!-- Midnight -->
-                            <StackPanel Margin="10,0">
-                                <Border x:Name="MidnightBorder" Width="64" Height="64" CornerRadius="16"
-                                        Background="#312E81" Cursor="Hand" BorderThickness="2"
-                                        BorderBrush="#50FFFFFF" Tag="Midnight"
-                                        MouseLeftButtonDown="ThemeBtn_Click">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Style.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Opacity" Value="0.85"/>
-                                                </Trigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                </Border>
-                                <TextBlock Text="Midnight" FontSize="10" Foreground="#94A3B8"
-                                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
-                            </StackPanel>
+                            <!-- Acrylic Blur Card -->
+                            <Border x:Name="ThemeCard_Mica" CornerRadius="16" Width="220" Height="180" Margin="0,0,16,0"
+                                    Cursor="Hand" MouseLeftButtonDown="ThemeCard_Click" Tag="mica"
+                                    BorderThickness="2" BorderBrush="#2A2D3E">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#1E2035" Offset="0"/>
+                                        <GradientStop Color="#252840" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <Border Width="48" Height="48" CornerRadius="24" Margin="0,0,0,16"
+                                            HorizontalAlignment="Center">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                <GradientStop Color="#2563EB" Offset="0"/>
+                                                <GradientStop Color="#7C3AED" Offset="1"/>
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                        <TextBlock Text="✦" FontSize="22" Foreground="White"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Text="Acrylic Blur" FontSize="15" FontWeight="Bold"
+                                               Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Clean system glass" FontSize="11"
+                                               Foreground="#94A3B8" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
 
-                            <!-- Ocean -->
-                            <StackPanel Margin="10,0">
-                                <Border x:Name="OceanBorder" Width="64" Height="64" CornerRadius="16"
-                                        Background="#0E7490" Cursor="Hand" BorderThickness="2"
-                                        BorderBrush="#50FFFFFF" Tag="Ocean"
-                                        MouseLeftButtonDown="ThemeBtn_Click">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Style.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Opacity" Value="0.85"/>
-                                                </Trigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                </Border>
-                                <TextBlock Text="Ocean" FontSize="10" Foreground="#94A3B8"
-                                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
-                            </StackPanel>
+                            <!-- FlyShelf Style Card -->
+                            <Border x:Name="ThemeCard_Desktop" CornerRadius="16" Width="220" Height="180"
+                                    Cursor="Hand" MouseLeftButtonDown="ThemeCard_Click" Tag="desktop"
+                                    BorderThickness="2">
+                                <Border.BorderBrush>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#D97706" Offset="0"/>
+                                        <GradientStop Color="#F59E0B" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.BorderBrush>
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#1E2035" Offset="0"/>
+                                        <GradientStop Color="#252840" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <Border Width="48" Height="48" CornerRadius="24" Margin="0,0,0,16"
+                                            HorizontalAlignment="Center">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                <GradientStop Color="#D97706" Offset="0"/>
+                                                <GradientStop Color="#F59E0B" Offset="1"/>
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                        <TextBlock Text="🖼" FontSize="22"
+                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                    </Border>
+                                    <TextBlock Text="FlyShelf Style" FontSize="15" FontWeight="Bold"
+                                               Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                                    <TextBlock Text="Desktop wallpaper look" FontSize="11"
+                                               Foreground="#94A3B8" HorizontalAlignment="Center"/>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
 
-                            <!-- Sunset -->
-                            <StackPanel Margin="10,0">
-                                <Border x:Name="SunsetBorder" Width="64" Height="64" CornerRadius="16"
-                                        Background="#C2410C" Cursor="Hand" BorderThickness="2"
-                                        BorderBrush="#50FFFFFF" Tag="Sunset"
-                                        MouseLeftButtonDown="ThemeBtn_Click">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Style.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Opacity" Value="0.85"/>
-                                                </Trigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                </Border>
-                                <TextBlock Text="Sunset" FontSize="10" Foreground="#94A3B8"
-                                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
-                            </StackPanel>
+                    <!-- ══════════════════════════════════════ -->
+                    <!-- STEP 6: Shortcuts & Tips              -->
+                    <!-- ══════════════════════════════════════ -->
+                    <StackPanel x:Name="Step6" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
+                        <ui:SymbolIcon Symbol="Lightbulb24" FontSize="36" Foreground="#FBBF24"
+                                       HorizontalAlignment="Center" Margin="0,0,0,16"/>
+                        <TextBlock Text="Shortcuts &amp; Tips" FontSize="24" FontWeight="Bold"
+                                   Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                        <TextBlock Text="Type these anywhere in FlyShelf to save time" FontSize="14"
+                                   Foreground="#94A3B8" HorizontalAlignment="Center" Margin="0,0,0,28"/>
 
-                            <!-- Emerald -->
-                            <StackPanel Margin="10,0">
-                                <Border x:Name="EmeraldBorder" Width="64" Height="64" CornerRadius="16"
-                                        Background="#047857" Cursor="Hand" BorderThickness="2"
-                                        BorderBrush="#50FFFFFF" Tag="Emerald"
-                                        MouseLeftButtonDown="ThemeBtn_Click">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Style.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Opacity" Value="0.85"/>
-                                                </Trigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                </Border>
-                                <TextBlock Text="Emerald" FontSize="10" Foreground="#94A3B8"
-                                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
-                            </StackPanel>
+                        <!-- Shortcut cards -->
+                        <StackPanel HorizontalAlignment="Center" Width="500">
+                            <!-- /10 Timer -->
+                            <Border CornerRadius="12" Padding="14,12" Margin="0,0,0,8"
+                                    Background="#1E2035" BorderBrush="#2A2D3E" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" CornerRadius="8" Padding="10,6" Background="#312E81"
+                                            VerticalAlignment="Center" Margin="0,0,14,0">
+                                        <TextBlock Text="/10" FontSize="15" FontWeight="Bold" Foreground="#A78BFA"
+                                                   FontFamily="Consolas" HorizontalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Quick Timer" FontSize="13" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,2"/>
+                                        <TextBlock Text="Type /10 to start a 10-minute countdown timer. Works with any number — /5, /30, /60..." FontSize="11"
+                                                   Foreground="#94A3B8" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
 
-                            <!-- Lavender -->
-                            <StackPanel Margin="10,0">
-                                <Border x:Name="LavenderBorder" Width="64" Height="64" CornerRadius="16"
-                                        Background="#7C3AED" Cursor="Hand" BorderThickness="2"
-                                        BorderBrush="#50FFFFFF" Tag="Lavender"
-                                        MouseLeftButtonDown="ThemeBtn_Click">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Style.Triggers>
-                                                <Trigger Property="IsMouseOver" Value="True">
-                                                    <Setter Property="Opacity" Value="0.85"/>
-                                                </Trigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                </Border>
-                                <TextBlock Text="Lavender" FontSize="10" Foreground="#94A3B8"
-                                           HorizontalAlignment="Center" Margin="0,8,0,0"/>
-                            </StackPanel>
+                            <!-- /name= -->
+                            <Border CornerRadius="12" Padding="14,12" Margin="0,0,0,8"
+                                    Background="#1E2035" BorderBrush="#2A2D3E" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" CornerRadius="8" Padding="10,6" Background="#0C4A6E"
+                                            VerticalAlignment="Center" Margin="0,0,14,0">
+                                        <TextBlock Text="/name=" FontSize="15" FontWeight="Bold" Foreground="#22D3EE"
+                                                   FontFamily="Consolas" HorizontalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Set Your Name" FontSize="13" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,2"/>
+                                        <TextBlock Text="Type /name=John to save your name. Paste it instantly anytime with a single click." FontSize="11"
+                                                   Foreground="#94A3B8" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- /email= -->
+                            <Border CornerRadius="12" Padding="14,12"
+                                    Background="#1E2035" BorderBrush="#2A2D3E" BorderThickness="1">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" CornerRadius="8" Padding="10,6" Background="#1C3829"
+                                            VerticalAlignment="Center" Margin="0,0,14,0">
+                                        <TextBlock Text="/email=" FontSize="15" FontWeight="Bold" Foreground="#34D399"
+                                                   FontFamily="Consolas" HorizontalAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="Set Your Email" FontSize="13" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,2"/>
+                                        <TextBlock Text="Type /email=you@mail.com to save your email. Always one paste away." FontSize="11"
+                                                   Foreground="#94A3B8" TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
                         </StackPanel>
                     </StackPanel>
                 </Grid>
@@ -303,6 +346,8 @@
                         <Ellipse x:Name="Dot4" Width="6" Height="6" Margin="4,0"
                                  Fill="#374151"/>
                         <Ellipse x:Name="Dot5" Width="6" Height="6" Margin="4,0"
+                                 Fill="#374151"/>
+                        <Ellipse x:Name="Dot6" Width="6" Height="6" Margin="4,0"
                                  Fill="#374151"/>
                     </StackPanel>
 

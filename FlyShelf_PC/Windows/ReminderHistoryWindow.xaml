@@ -6,7 +6,8 @@
         xmlns:classes="clr-namespace:FlyShelf.Classes"
         Title="Reminders" Height="620" Width="500"
         WindowStartupLocation="CenterScreen"
-        SystemBackdropType="Mica" Background="Transparent">
+        SystemBackdropType="Mica" Background="Transparent"
+        Icon="/Resources/FlyShelfLogo.ico">
 
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="32" ResizeBorderThickness="6" CornerRadius="12" GlassFrameThickness="-1"/>

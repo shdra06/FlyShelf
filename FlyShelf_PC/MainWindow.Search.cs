@@ -92,6 +92,12 @@ namespace FlyShelf
                 return;
             }
 
+            if (_isTodoActive)
+            {
+                ApplyTodoSearch(query);
+                return;
+            }
+
             if (_searchDebounceTimer == null)
             {
                 _searchDebounceTimer = new System.Windows.Threading.DispatcherTimer
@@ -275,41 +281,40 @@ namespace FlyShelf
             }
             else
             {
-                string q = queryClean.ToLowerInvariant();
+                string q = queryClean;
                 _viewModel.IsSearchActive = true;
                 
-                // Filter logic: Match name, content, extension, or type name
+                // Filter logic: Fuzzy match name, content, extension, or type name
                 view.Filter = obj =>
                 {
                     if (obj is FlyShelf.ViewModels.ClipboardItem item)
                     {
-                        // 1. Check substring match in text content or name
-                        if (!string.IsNullOrEmpty(item.RawContent) && item.RawContent.ToLowerInvariant().Contains(q))
-                            return true;
-                        if (!string.IsNullOrEmpty(item.FileName) && item.FileName.ToLowerInvariant().Contains(q))
+                        // 1. Fuzzy match in text content or name (handles typos + word-order)
+                        if (Classes.FuzzyMatcher.IsMatchAny(q, item.RawContent, item.FileName))
                             return true;
 
                         // 2. Check exact extension match (direct property or via FilePath)
-                        if (!string.IsNullOrEmpty(item.Extension) && item.Extension.Replace(".", "").Trim().ToLowerInvariant() == q)
+                        string qLower = q.ToLowerInvariant();
+                        if (!string.IsNullOrEmpty(item.Extension) && item.Extension.Replace(".", "").Trim().ToLowerInvariant() == qLower)
                             return true;
                         if (!string.IsNullOrEmpty(item.FilePath))
                         {
                             try
                             {
                                 string ext = System.IO.Path.GetExtension(item.FilePath).Replace(".", "").Trim().ToLowerInvariant();
-                                if (ext == q) return true;
+                                if (ext == qLower) return true;
                             }
                             catch { }
                         }
 
                         // 3. Check exact match with the item type string
-                        if (item.ItemType.ToString().ToLowerInvariant() == q)
+                        if (item.ItemType.ToString().Equals(q, StringComparison.OrdinalIgnoreCase))
                             return true;
                     }
                     return false;
                 };
 
-                // Apply custom priority sorter
+                // Apply custom priority sorter with fuzzy scoring
                 view.CustomSort = new SearchResultComparer(q);
             }
 
@@ -408,16 +413,20 @@ namespace FlyShelf
                 "Pinned" => System.Windows.Media.Color.FromRgb(0xFB, 0xBF, 0x24), // #FBBF24 amber
                 "PDF"    => System.Windows.Media.Color.FromRgb(0xEF, 0x44, 0x44), // #EF4444 red
                 "Docs"   => System.Windows.Media.Color.FromRgb(0x60, 0xA5, 0xFA), // #60A5FA blue
-                _        => (System.Windows.Media.Color)FindResource("SystemAccentColor")
+                _        => TryFindResource("SystemAccentColor") is System.Windows.Media.Color c ? c : System.Windows.Media.Colors.DodgerBlue
             };
 
             if (isActive)
             {
                 // Strong tinted background + prominent border for the active chip
-                btn.Background = new System.Windows.Media.SolidColorBrush(
+                var bgBrush = new System.Windows.Media.SolidColorBrush(
                     System.Windows.Media.Color.FromArgb(0x40, categoryColor.R, categoryColor.G, categoryColor.B));
-                btn.BorderBrush = new System.Windows.Media.SolidColorBrush(
+                bgBrush.Freeze();
+                btn.Background = bgBrush;
+                var borderBrush = new System.Windows.Media.SolidColorBrush(
                     System.Windows.Media.Color.FromArgb(0x60, categoryColor.R, categoryColor.G, categoryColor.B));
+                borderBrush.Freeze();
+                btn.BorderBrush = borderBrush;
                 btn.BorderThickness = new Thickness(1.5);
             }
             else
@@ -441,10 +450,10 @@ namespace FlyShelf
                 };
 
                 btn.Background = bgKey != null
-                    ? (System.Windows.Media.Brush)FindResource(bgKey)
+                    ? (TryFindResource(bgKey) as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.Transparent)
                     : System.Windows.Media.Brushes.Transparent;
                 btn.BorderBrush = borderKey != null
-                    ? (System.Windows.Media.Brush)FindResource(borderKey)
+                    ? (TryFindResource(borderKey) as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.Transparent)
                     : System.Windows.Media.Brushes.Transparent;
                 btn.BorderThickness = new Thickness(1);
             }
@@ -494,7 +503,7 @@ namespace FlyShelf
                     ShelfListView.Padding = new Thickness(0, 0, 0, 80);
 
                 // Highlight the filter button to indicate active filter (use theme accent)
-                SortFilterBtn.Foreground = (System.Windows.Media.Brush)FindResource("SystemAccentColorLight1Brush");
+                SortFilterBtn.Foreground = TryFindResource("SystemAccentColorLight1Brush") as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.DodgerBlue;
 
                 // Update active state highlight on each button
                 UpdateFilterButtonHighlight(FilterBtn_Images, "Images");
@@ -534,7 +543,7 @@ namespace FlyShelf
                 ShelfListView.Padding = new Thickness(0, 0, 0, 250);
 
             // Reset button color
-            SortFilterBtn.Foreground = (System.Windows.Media.Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary");
+            SortFilterBtn.Foreground = TryFindResource("MicaWPF.Brushes.TextFillColorSecondary") as System.Windows.Media.Brush ?? System.Windows.Media.Brushes.Gray;
 
             // Update active state highlight on each button (clearing active colors)
             UpdateFilterButtonHighlight(FilterBtn_Images, "Images");
@@ -576,15 +585,12 @@ namespace FlyShelf
                 }
                 else if (_isSearchActive && !string.IsNullOrWhiteSpace(SearchTextBox.Text))
                 {
-                    string q = SearchTextBox.Text.Trim().ToLowerInvariant();
+                    string q = SearchTextBox.Text.Trim();
                     filterPredicate = obj =>
                     {
                         if (obj is FlyShelf.ViewModels.ClipboardItem item)
                         {
-                            if (!string.IsNullOrEmpty(item.RawContent) && item.RawContent.ToLowerInvariant().Contains(q))
-                                return true;
-                            if (!string.IsNullOrEmpty(item.FileName) && item.FileName.ToLowerInvariant().Contains(q))
-                                return true;
+                            return Classes.FuzzyMatcher.IsMatchAny(q, item.RawContent, item.FileName);
                         }
                         return false;
                     };
@@ -674,7 +680,11 @@ namespace FlyShelf
             }
 
             var win = new Windows.ShortcutsWindow();
+            win.Topmost = true;
             win.Show();
+            win.Activate();
+            win.Focus();
+            win.Topmost = false;
         }
 
         private void ClearAllToolbar_Click(object sender, RoutedEventArgs e)

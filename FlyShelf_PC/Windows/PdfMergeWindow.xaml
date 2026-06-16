@@ -5,7 +5,8 @@
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
         Title="PDF Merge" Height="580" Width="720"
         WindowStartupLocation="CenterScreen"
-        SystemBackdropType="Mica" Background="Transparent">
+        SystemBackdropType="Mica" Background="Transparent"
+        Icon="/Resources/FlyShelfLogo.ico">
     
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="32" ResizeBorderThickness="6" CornerRadius="12" GlassFrameThickness="-1" />

@@ -180,7 +180,7 @@ namespace FlyShelf
             bool isTodo = _isTodoActive;
             Guid summonedId = _summonedDesktopId;
             IntPtr lastActiveExt = _lastActiveExternalWindow;
-            bool lastActiveExtWasOnCurrent = _lastActiveExternalWindowWasOnCurrentAtSummon;
+            bool lastActiveExtWasOnCurrent = System.Threading.Volatile.Read(ref _lastActiveExternalWindowWasOnCurrentAtSummon);
             double msSinceSpawn = (DateTime.Now - _spawnTime).TotalMilliseconds;
 
             // Run the check asynchronously on a background thread so we NEVER block the UI thread on focus changes
@@ -467,10 +467,10 @@ namespace FlyShelf
             }
             catch { }
 
-            // FIX 5: Disable UseLayoutRounding during animation to prevent integer-snap
-            // oscillation. Fractional SlideY values (e.g., 4.78, 2.14) fight with rounding,
-            // causing content to snap between pixels each frame = 1px jitter.
-            RootContent.UseLayoutRounding = false;
+            // UseLayoutRounding stays true — the slide animation uses RenderTransform
+            // (TranslateTransform) which bypasses layout rounding entirely. Previously,
+            // disabling it caused icons/buttons to render at fractional sizes during
+            // the 150ms animation, appearing visibly larger then snapping back.
 
             // ═══ AERO UI: Suspend decorative overlays during animation ═══
             // The AltClipboardPanel has 3 layered gradient borders (themed gradient,
@@ -548,8 +548,7 @@ namespace FlyShelf
                     RootContent.Opacity = 1;
                     this.BeginAnimation(OpacityProperty, null);
                     this.Opacity = 1;
-                    // Re-enable UseLayoutRounding now that everything is at integer positions
-                    RootContent.UseLayoutRounding = true;
+                    // UseLayoutRounding stays true throughout — no toggle needed
 
                     // ═══ MICA BACKDROP RESTORE ═══
                     // Re-enable Mica glass now that animation is done and all values are settled.
@@ -714,6 +713,8 @@ namespace FlyShelf
         private DateTime _spawnTime = DateTime.MinValue;
         private IntPtr _previousForegroundWindow = IntPtr.Zero;
         private static int _clipboardWriteRefCount = 0;
+        /// <summary>When true, clipboard monitoring is paused because Notes or Todo panel is open.</summary>
+        internal static bool _clipboardPanelSuppressed = false;
         internal static bool _isWritingClipboard
         {
             get => System.Threading.Volatile.Read(ref _clipboardWriteRefCount) > 0;
@@ -811,10 +812,9 @@ namespace FlyShelf
             }
             catch { }
 
-            // 2. GC + working set trim — keep 60MB minimum to avoid cold-start animation jitter.
-            //    By checking if process memory is already under 65MB, we avoid unnecessary collections,
-            //    allowing WPF styles, visual templates, and asset caches to remain fully resident.
-            //    If we exceed 65MB, we trim down to a 60MB floor.
+            // 2. GC + working set trim — aggressive memory reclaiming when unsummoned.
+            //    Run a forced Gen 2 Garbage Collection to reclaim all WPF controls, resources, and image caches,
+            //    then set working set limits to -1 to empty the working set and page out inactive memory.
             System.Threading.Tasks.Task.Run(() =>
             {
                 try
@@ -824,16 +824,17 @@ namespace FlyShelf
                         currentProcess.Refresh();
                         long workingSet = currentProcess.WorkingSet64;
 
-                        // Only trim if working set is higher than 65MB
-                        if (workingSet > 65 * 1024 * 1024)
+                        // Only trim if working set is higher than 45MB
+                        if (workingSet > 45 * 1024 * 1024)
                         {
-                            // Gen 1 optimized collection — reclaims short-lived objects without freezing UI
-                            System.GC.Collect(1, System.GCCollectionMode.Optimized, false);
+                            // Forced Gen 2 collection — reclaims all templates, styles, and unmanaged bitmaps
+                            System.GC.Collect(2, System.GCCollectionMode.Forced, true, true);
                             System.GC.WaitForPendingFinalizers();
+                            System.GC.Collect(2, System.GCCollectionMode.Forced, true, true);
 
-                            // Set working set floor to 60MB to ensure WPF pages and templates are kept resident
-                            const nint MIN_WS = 60 * 1024 * 1024;   // 60 MB
-                            const nint MAX_WS = 120 * 1024 * 1024;  // 120 MB
+                            // Set working set floor to 40MB to keep core styles resident, avoiding summon lag
+                            const nint MIN_WS = 40 * 1024 * 1024;   // 40 MB
+                            const nint MAX_WS = 80 * 1024 * 1024;   // 80 MB
                             SetProcessWorkingSetSize(currentProcess.Handle, MIN_WS, MAX_WS);
                         }
                     }
@@ -846,9 +847,10 @@ namespace FlyShelf
         {
             IntPtr ptr = GetForegroundWindow();
             
-            var sb = new System.Text.StringBuilder(256);
-            GetClassName(ptr, sb, 256);
-            string className = sb.ToString();
+            var sbClass = new System.Text.StringBuilder(256);
+            var sbTitle = new System.Text.StringBuilder(256);
+            GetClassName(ptr, sbClass, 256);
+            string className = sbClass.ToString();
 
             if (className == "Shell_TrayWnd" || className == "Shell_SecondaryTrayWnd" || className == "WorkerW" || className == "Progman")
             {
@@ -868,12 +870,14 @@ namespace FlyShelf
                         GetWindowThreadProcessId(wnd, out processId);
                         if (processId != currentProcessId)
                         {
-                            GetClassName(wnd, sb, 256);
-                            string cName = sb.ToString();
+                            sbClass.Clear();
+                            GetClassName(wnd, sbClass, 256);
+                            string cName = sbClass.ToString();
                             if (cName != "Shell_TrayWnd" && cName != "Shell_SecondaryTrayWnd" && cName != "WorkerW" && cName != "Progman")
                             {
-                                GetWindowText(wnd, sb, 256);
-                                if (sb.Length > 0 && sb.ToString() != "FlyShelf" && sb.ToString() != "Program Manager")
+                                sbTitle.Clear();
+                                GetWindowText(wnd, sbTitle, 256);
+                                if (sbTitle.Length > 0 && sbTitle.ToString() != "FlyShelf" && sbTitle.ToString() != "Program Manager")
                                 {
                                     target = wnd;
                                     return false; 

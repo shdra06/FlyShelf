@@ -3,6 +3,9 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
 using System.IO;
+using System.Windows.Controls;
+using System.Windows.Ink;
+using System.Windows.Media;
 using FlyShelf.Classes;
 
 namespace FlyShelf.Windows
@@ -24,6 +27,15 @@ namespace FlyShelf.Windows
         private double _ocrBitmapWidth = 0;
         private double _ocrBitmapHeight = 0;
         private bool _autoTriggerOcr = false;
+
+        // ═══════════════════════════════════════════════════════════
+        // DOODLE STATE
+        // ═══════════════════════════════════════════════════════════
+        private bool _isDoodleMode = false;
+        private readonly System.Collections.Generic.Stack<Stroke> _doodleUndoStack = new();
+        private readonly System.Collections.Generic.Stack<Stroke> _doodleRedoStack = new();
+        private bool _hasUnsavedDoodle = false;
+        private Border _activeDoodleColorBorder = null;
 
         public QuickLookWindow(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null, bool autoTriggerOcr = false)
         {
@@ -185,6 +197,7 @@ namespace FlyShelf.Windows
                         
                         _isImageLoaded = true;
                         RotateBtn.Visibility = Visibility.Visible;
+                        if (DoodleBtn != null) DoodleBtn.Visibility = Visibility.Visible;
                         if (OcrBtn != null) OcrBtn.Visibility = Visibility.Visible;
 
                         if (_ocrResult != null)
@@ -412,6 +425,9 @@ namespace FlyShelf.Windows
             // Don't initiate window drag when user is interacting with OCR text overlays
             if (IsOcrTextBoxSource(e.OriginalSource as DependencyObject)) return;
 
+            // Don't initiate window drag when doodle mode is active (user is drawing)
+            if (_isDoodleMode) return;
+
             if (e.OriginalSource is DependencyObject && !(e.OriginalSource is System.Windows.Controls.Primitives.ButtonBase))
             {
                 _startPoint = e.GetPosition(null);
@@ -437,7 +453,7 @@ namespace FlyShelf.Windows
             // "Dispatcher processing has been suspended, but messages are still being processed."
             if (IsOcrTextBoxSource(e.OriginalSource as DependencyObject)) return;
 
-            if (e.LeftButton == MouseButtonState.Pressed && _isImageLoaded)
+            if (e.LeftButton == MouseButtonState.Pressed && _isImageLoaded && !_isDoodleMode)
             {
                 Point mousePos = e.GetPosition(null);
                 Vector diff = _startPoint - mousePos;
@@ -528,8 +544,34 @@ namespace FlyShelf.Windows
             }
             else if (e.Key == Key.Escape)
             {
+                // If doodle mode is active, exit doodle mode first
+                if (_isDoodleMode)
+                {
+                    ExitDoodleMode();
+                    e.Handled = true;
+                    return;
+                }
                 this.Close();
                 e.Handled = true;
+            }
+            // Doodle keyboard shortcuts
+            else if (_isDoodleMode)
+            {
+                if (e.Key == Key.Z && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+                {
+                    DoodleUndo_Click(null, null);
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.Y && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+                {
+                    DoodleRedo_Click(null, null);
+                    e.Handled = true;
+                }
+                else if (e.Key == Key.S && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+                {
+                    DoodleSave_Click(null, null);
+                    e.Handled = true;
+                }
             }
         }
 
@@ -1162,6 +1204,374 @@ namespace FlyShelf.Windows
             {
                 FlyShelf.Windows.ToastWindow.ShowToast($"Selected all {_selectedWordBorders.Count} words • Ctrl+C to copy");
             }
+        }
+
+        // ═════════════════════════════════════════════════════════════
+        // DOODLE / DRAWING MODE
+        // ═════════════════════════════════════════════════════════════
+
+        private void DoodleButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isDoodleMode)
+            {
+                ExitDoodleMode();
+            }
+            else
+            {
+                EnterDoodleMode();
+            }
+        }
+
+        private void EnterDoodleMode()
+        {
+            _isDoodleMode = true;
+
+            // Size InkCanvas to match image container
+            if (ImageContainerGrid != null)
+            {
+                DoodleCanvas.Width = ImageContainerGrid.Width;
+                DoodleCanvas.Height = ImageContainerGrid.Height;
+            }
+
+            // Set default drawing attributes
+            var da = new System.Windows.Ink.DrawingAttributes
+            {
+                Color = Colors.White,
+                Width = 3,
+                Height = 3,
+                FitToCurve = true,
+                StylusTip = System.Windows.Ink.StylusTip.Ellipse,
+                IsHighlighter = false
+            };
+            DoodleCanvas.DefaultDrawingAttributes = da;
+
+            // Show doodle UI
+            DoodleCanvas.Visibility = Visibility.Visible;
+            DoodleCanvas.EditingMode = InkCanvasEditingMode.Ink;
+            DoodleToolbar.Visibility = Visibility.Visible;
+            DoodleUndoBtn.Visibility = Visibility.Visible;
+            DoodleRedoBtn.Visibility = Visibility.Visible;
+
+            // Update doodle button appearance to show it's active
+            DoodleBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x34, 0xD3, 0x99)); // green when active
+            DoodleBtn.ToolTip = "Exit Doodle Mode";
+
+            // Hide OCR overlay to prevent interaction conflicts
+            if (OcrOverlayCanvas.Visibility == Visibility.Visible)
+            {
+                OcrOverlayCanvas.Visibility = Visibility.Collapsed;
+            }
+
+            // Set default color highlight
+            _activeDoodleColorBorder = DoodleColorWhite;
+            UpdateDoodleColorHighlight();
+
+            // Sync slider
+            DoodleSizeSlider.Value = da.Width;
+            DoodleSizeLabel.Text = ((int)da.Width).ToString();
+
+            UpdateDoodleButtonStates();
+
+            FlyShelf.Classes.Logger.LogAction("DOODLE", "Entered doodle mode");
+        }
+
+        private void ExitDoodleMode()
+        {
+            _isDoodleMode = false;
+
+            // Hide doodle UI
+            DoodleCanvas.Visibility = Visibility.Collapsed;
+            DoodleToolbar.Visibility = Visibility.Collapsed;
+            DoodleUndoBtn.Visibility = Visibility.Collapsed;
+            DoodleRedoBtn.Visibility = Visibility.Collapsed;
+            DoodleSaveBtn.Visibility = Visibility.Collapsed;
+
+            // Reset doodle button appearance
+            DoodleBtn.Foreground = new SolidColorBrush(Color.FromRgb(0xA7, 0x8B, 0xFA)); // original purple
+            DoodleBtn.ToolTip = "Draw / Annotate";
+
+            // Restore OCR overlay if we had results
+            if (_mergedOcrWords != null || _ocrResult != null)
+            {
+                OcrOverlayCanvas.Visibility = Visibility.Visible;
+            }
+
+            FlyShelf.Classes.Logger.LogAction("DOODLE", "Exited doodle mode");
+        }
+
+        private void DoodleCanvas_StrokeCollected(object sender, InkCanvasStrokeCollectedEventArgs e)
+        {
+            // Push to undo stack and clear redo (new stroke breaks redo chain)
+            _doodleUndoStack.Push(e.Stroke);
+            _doodleRedoStack.Clear();
+            _hasUnsavedDoodle = true;
+            UpdateDoodleButtonStates();
+        }
+
+        private void DoodleCanvas_StrokeErased(object sender, RoutedEventArgs e)
+        {
+            // When strokes are erased, we can't easily push them to undo,
+            // but we mark as unsaved and clear redo
+            _doodleRedoStack.Clear();
+            _hasUnsavedDoodle = true;
+            UpdateDoodleButtonStates();
+        }
+
+        private void DoodleUndo_Click(object sender, RoutedEventArgs e)
+        {
+            if (_doodleUndoStack.Count == 0) return;
+
+            var stroke = _doodleUndoStack.Pop();
+            if (DoodleCanvas.Strokes.Contains(stroke))
+            {
+                DoodleCanvas.Strokes.Remove(stroke);
+                _doodleRedoStack.Push(stroke);
+            }
+            _hasUnsavedDoodle = DoodleCanvas.Strokes.Count > 0;
+            UpdateDoodleButtonStates();
+        }
+
+        private void DoodleRedo_Click(object sender, RoutedEventArgs e)
+        {
+            if (_doodleRedoStack.Count == 0) return;
+
+            var stroke = _doodleRedoStack.Pop();
+            DoodleCanvas.Strokes.Add(stroke);
+            _doodleUndoStack.Push(stroke);
+            _hasUnsavedDoodle = true;
+            UpdateDoodleButtonStates();
+        }
+
+        private void UpdateDoodleButtonStates()
+        {
+            DoodleUndoBtn.IsEnabled = _doodleUndoStack.Count > 0;
+            DoodleRedoBtn.IsEnabled = _doodleRedoStack.Count > 0;
+            DoodleSaveBtn.Visibility = _hasUnsavedDoodle ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private async void DoodleSave_Click(object sender, RoutedEventArgs e)
+        {
+            if (!_hasUnsavedDoodle || _item == null || string.IsNullOrEmpty(_item.FilePath)) return;
+            if (DoodleCanvas.Strokes.Count == 0)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast("No strokes to save");
+                return;
+            }
+
+            try
+            {
+                LoadingProgress.Visibility = Visibility.Visible;
+                DoodleSaveBtn.IsEnabled = false;
+
+                string filePath = _item.FilePath;
+                string ext = Path.GetExtension(filePath).ToLower();
+
+                // Capture strokes on UI thread before going to background
+                var strokesCopy = new StrokeCollection(DoodleCanvas.Strokes);
+                double canvasW = DoodleCanvas.Width;
+                double canvasH = DoodleCanvas.Height;
+
+                // Get the source bitmap for compositing
+                var sourceImage = PreviewImage.Source as BitmapSource;
+                if (sourceImage == null)
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("Cannot save: no image loaded");
+                    return;
+                }
+
+                // Render strokes onto the image at full resolution
+                int pixelW = sourceImage.PixelWidth;
+                int pixelH = sourceImage.PixelHeight;
+
+                // Create a DrawingVisual that composites the original image + strokes
+                var dv = new DrawingVisual();
+                using (var dc = dv.RenderOpen())
+                {
+                    // Draw the original image
+                    dc.DrawImage(sourceImage, new Rect(0, 0, pixelW, pixelH));
+
+                    // Scale factor from canvas DIPs to image pixels
+                    double scaleX = pixelW / canvasW;
+                    double scaleY = pixelH / canvasH;
+
+                    // Draw each stroke scaled to pixel coordinates
+                    foreach (var stroke in strokesCopy)
+                    {
+                        // Create a scaled copy of the stroke
+                        var points = stroke.StylusPoints;
+                        var scaledPoints = new StylusPointCollection();
+                        foreach (var pt in points)
+                        {
+                            scaledPoints.Add(new StylusPoint(pt.X * scaleX, pt.Y * scaleY, pt.PressureFactor));
+                        }
+
+                        var scaledAttrs = stroke.DrawingAttributes.Clone();
+                        scaledAttrs.Width *= scaleX;
+                        scaledAttrs.Height *= scaleY;
+
+                        var scaledStroke = new Stroke(scaledPoints, scaledAttrs);
+                        scaledStroke.Draw(dc);
+                    }
+                }
+
+                var rtb = new RenderTargetBitmap(pixelW, pixelH, 96, 96, PixelFormats.Pbgra32);
+                rtb.Render(dv);
+                rtb.Freeze();
+
+                // Encode and save on background thread
+                await System.Threading.Tasks.Task.Run(() =>
+                {
+                    BitmapEncoder encoder;
+                    if (ext == ".png") encoder = new PngBitmapEncoder();
+                    else if (ext == ".bmp") encoder = new BmpBitmapEncoder();
+                    else encoder = new JpegBitmapEncoder { QualityLevel = 95 };
+
+                    encoder.Frames.Add(BitmapFrame.Create(rtb));
+
+                    using (var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write))
+                    {
+                        encoder.Save(fs);
+                    }
+                });
+
+                // Reload the saved image to show the baked result
+                var freshBmp = await System.Threading.Tasks.Task.Run(() =>
+                {
+                    try
+                    {
+                        byte[] bytes = File.ReadAllBytes(filePath);
+                        var bmp = new BitmapImage();
+                        using (var ms = new MemoryStream(bytes))
+                        {
+                            bmp.BeginInit();
+                            bmp.CacheOption = BitmapCacheOption.OnLoad;
+                            bmp.StreamSource = ms;
+                            bmp.EndInit();
+                        }
+                        bmp.Freeze();
+                        return bmp;
+                    }
+                    catch { return null; }
+                });
+
+                if (freshBmp != null)
+                {
+                    PreviewImage.Source = freshBmp;
+                }
+
+                // Clear strokes (they're now baked into the image)
+                DoodleCanvas.Strokes.Clear();
+                _doodleUndoStack.Clear();
+                _doodleRedoStack.Clear();
+                _hasUnsavedDoodle = false;
+                UpdateDoodleButtonStates();
+
+                FlyShelf.Windows.ToastWindow.ShowToast("🎨 Annotated image saved!");
+                FlyShelf.Classes.Logger.LogAction("DOODLE", $"Saved annotated image: {Path.GetFileName(filePath)}");
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Classes.Logger.LogAction("DOODLE", $"Save failed: {ex.Message}");
+                FlyShelf.Windows.ToastWindow.ShowToast("Save failed: " + ex.Message);
+            }
+            finally
+            {
+                LoadingProgress.Visibility = Visibility.Collapsed;
+                DoodleSaveBtn.IsEnabled = true;
+            }
+        }
+
+        private void DoodleColorPick_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (sender is Border colorBorder && colorBorder.Tag is string hexColor)
+            {
+                try
+                {
+                    var color = (Color)ColorConverter.ConvertFromString(hexColor);
+                    DoodleCanvas.DefaultDrawingAttributes.Color = color;
+
+                    // Update highlight
+                    _activeDoodleColorBorder = colorBorder;
+                    UpdateDoodleColorHighlight();
+
+                    // Switch back to ink mode if in eraser mode
+                    if (DoodleCanvas.EditingMode == InkCanvasEditingMode.EraseByStroke)
+                    {
+                        DoodleCanvas.EditingMode = InkCanvasEditingMode.Ink;
+                        DoodleEraserBtn.Background = Brushes.Transparent;
+                        DoodleEraserLabel.Text = "Eraser";
+                    }
+                }
+                catch { }
+            }
+            e.Handled = true;
+        }
+
+        private void UpdateDoodleColorHighlight()
+        {
+            var accentBrush = new SolidColorBrush(Color.FromArgb(0x60, 0xA7, 0x8B, 0xFA));
+            accentBrush.Freeze();
+            var transparentBrush = Brushes.Transparent;
+
+            // Reset all color borders
+            foreach (var cb in new[] { DoodleColorWhite, DoodleColorRed, DoodleColorYellow, DoodleColorGreen, DoodleColorBlue })
+            {
+                cb.BorderThickness = new Thickness(1);
+                cb.BorderBrush = transparentBrush;
+            }
+
+            // Highlight active
+            if (_activeDoodleColorBorder != null)
+            {
+                _activeDoodleColorBorder.BorderThickness = new Thickness(2);
+                _activeDoodleColorBorder.BorderBrush = accentBrush;
+            }
+        }
+
+        private void DoodleSizeChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+        {
+            if (DoodleCanvas == null) return;
+            int size = (int)e.NewValue;
+            DoodleCanvas.DefaultDrawingAttributes.Width = size;
+            DoodleCanvas.DefaultDrawingAttributes.Height = size;
+            if (DoodleSizeLabel != null) DoodleSizeLabel.Text = size.ToString();
+        }
+
+        private void DoodleEraser_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (DoodleCanvas.EditingMode == InkCanvasEditingMode.EraseByStroke)
+            {
+                // Switch back to ink
+                DoodleCanvas.EditingMode = InkCanvasEditingMode.Ink;
+                DoodleEraserBtn.Background = Brushes.Transparent;
+                DoodleEraserLabel.Text = "Eraser";
+            }
+            else
+            {
+                // Switch to eraser
+                DoodleCanvas.EditingMode = InkCanvasEditingMode.EraseByStroke;
+                DoodleEraserBtn.Background = new SolidColorBrush(Color.FromArgb(0x30, 0xEF, 0x44, 0x44));
+                DoodleEraserLabel.Text = "Drawing";
+            }
+            e.Handled = true;
+        }
+
+        private void DoodleClearAll_Click(object sender, MouseButtonEventArgs e)
+        {
+            if (DoodleCanvas.Strokes.Count == 0) return;
+
+            // Push all current strokes to undo before clearing
+            foreach (var stroke in DoodleCanvas.Strokes)
+            {
+                _doodleUndoStack.Push(stroke);
+            }
+            DoodleCanvas.Strokes.Clear();
+            _doodleRedoStack.Clear();
+            _hasUnsavedDoodle = false;
+            UpdateDoodleButtonStates();
+
+            FlyShelf.Windows.ToastWindow.ShowToast("All strokes cleared");
+            e.Handled = true;
         }
     }
 }

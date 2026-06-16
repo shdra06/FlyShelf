@@ -14,7 +14,10 @@
         WindowStartupLocation="CenterScreen"
         SystemBackdropType="Mica"
         Background="Transparent"
-        AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver">
+        TextOptions.TextFormattingMode="Display"
+        TextOptions.TextRenderingMode="ClearType"
+        AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver"
+        Icon="/Resources/FlyShelfLogo.ico">
     
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="44" ResizeBorderThickness="6" CornerRadius="8" GlassFrameThickness="-1" />
@@ -442,12 +445,12 @@
                                 <Border.Style>
                                     <Style TargetType="Border">
                                         <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
-                                        <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
+                                        <Setter Property="BorderBrush" Value="{DynamicResource ThemeOverlayBorderStrong}"/>
                                         <Setter Property="BorderThickness" Value="1"/>
                                         <Style.Triggers>
                                             <Trigger Property="IsKeyboardFocusWithin" Value="True">
                                                 <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
-                                                <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.SystemAccentColor}"/>
+                                                <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccent}"/>
                                             </Trigger>
                                         </Style.Triggers>
                                     </Style>
@@ -460,7 +463,7 @@
                                     </StackPanel>
                                     <TextBox x:Name="SearchBox" Background="Transparent" BorderThickness="0" 
                                              Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
-                                             FontSize="12.5" Padding="14,10" CaretBrush="#6366F1"
+                                             FontSize="12.5" Padding="14,10" CaretBrush="{DynamicResource ThemeAccent}"
                                              TextChanged="SearchBox_TextChanged"/>
                                 </Grid>
                             </Border>
@@ -2884,7 +2887,7 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Card 6: Smart Paste -->
+                                <!-- Card 6: Quick Paste -->
                                 <Border CornerRadius="16" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="8,0,0,16" Cursor="Hand">
                                     <StackPanel>
                                         <Border Width="48" Height="48" CornerRadius="12" Margin="0,0,0,14" HorizontalAlignment="Left">
@@ -2896,8 +2899,53 @@
                                             </Border.Background>
                                             <ui:SymbolIcon Symbol="Clipboard24" FontSize="20" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                         </Border>
-                                        <TextBlock Text="Smart Paste" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}" Margin="0,0,0,6"/>
-                                        <TextBlock Text="Press Alt+1 through Alt+0 to instantly paste your 10 most recent items." FontSize="12" Foreground="#94A3B8" TextWrapping="Wrap" LineHeight="18"/>
+                                        <TextBlock Text="Quick Paste" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}" Margin="0,0,0,6"/>
+                                        <TextBlock FontSize="12" Foreground="#94A3B8" TextWrapping="Wrap" LineHeight="18">
+                                            <Run FontWeight="Bold" Foreground="#A78BFA">Alt+1</Run><Run Text=" → Paste 1st item" /><LineBreak/>
+                                            <Run FontWeight="Bold" Foreground="#A78BFA">Alt+2</Run><Run Text=" → Paste 2nd item" /><LineBreak/>
+                                            <Run FontWeight="Bold" Foreground="#A78BFA">Alt+3</Run><Run Text=" → Paste 3rd item" />
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Card 7: Timer Shortcut -->
+                                <Border CornerRadius="16" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="0,0,8,16" Cursor="Hand">
+                                    <StackPanel>
+                                        <Border Width="48" Height="48" CornerRadius="12" Margin="0,0,0,14" HorizontalAlignment="Left">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#F97316" Offset="0"/>
+                                                    <GradientStop Color="#EA580C" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <ui:SymbolIcon Symbol="Timer24" FontSize="20" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock Text="Quick Timer" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}" Margin="0,0,0,6"/>
+                                        <TextBlock FontSize="12" Foreground="#94A3B8" TextWrapping="Wrap" LineHeight="18">
+                                            <Run Text="Type " /><Run FontWeight="Bold" FontFamily="Consolas" Foreground="#F97316">/10</Run><Run Text=" to start a 10-min timer." /><LineBreak/>
+                                            <Run Text="Works with any number — " /><Run FontFamily="Consolas" Foreground="#F97316">/5</Run><Run Text=", " /><Run FontFamily="Consolas" Foreground="#F97316">/30</Run><Run Text=", " /><Run FontFamily="Consolas" Foreground="#F97316">/60</Run><Run Text="..." />
+                                        </TextBlock>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Card 8: Text Shortcuts -->
+                                <Border CornerRadius="16" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="20" Margin="8,0,0,16" Cursor="Hand">
+                                    <StackPanel>
+                                        <Border Width="48" Height="48" CornerRadius="12" Margin="0,0,0,14" HorizontalAlignment="Left">
+                                            <Border.Background>
+                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                    <GradientStop Color="#34D399" Offset="0"/>
+                                                    <GradientStop Color="#059669" Offset="1"/>
+                                                </LinearGradientBrush>
+                                            </Border.Background>
+                                            <ui:SymbolIcon Symbol="PersonTag24" FontSize="20" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                        <TextBlock Text="Text Shortcuts" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}" Margin="0,0,0,6"/>
+                                        <TextBlock FontSize="12" Foreground="#94A3B8" TextWrapping="Wrap" LineHeight="18">
+                                            <Run FontWeight="Bold" FontFamily="Consolas" Foreground="#34D399">/name=John</Run><Run Text=" → Save your name" /><LineBreak/>
+                                            <Run FontWeight="Bold" FontFamily="Consolas" Foreground="#34D399">/email=you@mail.com</Run><LineBreak/>
+                                            <Run Text="Paste them anytime with one click." />
+                                        </TextBlock>
                                     </StackPanel>
                                 </Border>
 
@@ -2948,13 +2996,45 @@
                                         <TextBlock Grid.Column="0" Text="Drag In" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}"/>
                                         <TextBlock Grid.Column="1" Text="Add items to shelf" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
                                     </Grid>
-                                    <Grid Margin="0,0,0,0">
+                                    <Grid Margin="0,0,0,10">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="180"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
                                         <TextBlock Grid.Column="0" Text="Drag Out" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}"/>
                                         <TextBlock Grid.Column="1" Text="Paste items anywhere" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="Alt+1 / Alt+2 / Alt+3" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}"/>
+                                        <TextBlock Grid.Column="1" Text="Quick paste 1st, 2nd, 3rd item" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="/10" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}"/>
+                                        <TextBlock Grid.Column="1" Text="Start a 10-minute countdown timer" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,10">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="/name=YourName" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}"/>
+                                        <TextBlock Grid.Column="1" Text="Save your name for instant paste" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                    </Grid>
+                                    <Grid Margin="0,0,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="180"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0" Text="/email=you@mail.com" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}"/>
+                                        <TextBlock Grid.Column="1" Text="Save your email for instant paste" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
                                     </Grid>
                                 </StackPanel>
                             </Border>

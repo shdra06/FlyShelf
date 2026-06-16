@@ -6,7 +6,8 @@
         Title="Table Extractor" Height="700" Width="1200" MinWidth="600" MinHeight="500"
         WindowStartupLocation="CenterScreen"
         SystemBackdropType="Mica" Background="Transparent"
-        KeyDown="Window_KeyDown">
+        KeyDown="Window_KeyDown"
+        Icon="/Resources/FlyShelfLogo.ico">
     <Grid TextElement.Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}">
         <!-- Main layout: Header + Content + Footer -->
         <Grid.RowDefinitions>

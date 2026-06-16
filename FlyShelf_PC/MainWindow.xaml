@@ -15,7 +15,7 @@
         WindowStyle="None" ResizeMode="NoResize" Background="Transparent" SystemBackdropType="Mica"
         ShowInTaskbar="False" Margin="0" Topmost="True" ShowActivated="False"
         AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver"
-        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Display" TextOptions.TextHintingMode="Fixed" UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True"
         Loaded="MicaWindow_Loaded" Deactivated="MicaWindow_Deactivated">
 
     <controls:MicaWindow.Resources>
@@ -234,7 +234,8 @@
             TooltipText="FlyShelf">
             <tray:NotifyIcon.Menu>
                 <ContextMenu>
-                    <MenuItem Header="Open FlyShelf Hub" Click="OpenApp_Click" />
+                    <MenuItem Header="Open Clipboard  (Alt+C)" Click="TrayOpenClipboard_Click" />
+                    <MenuItem Header="Open FlyShelf Hub" Click="TrayOpenHub_Click" />
                     <Separator />
                     <MenuItem Header="Quit FlyShelf" Click="NotifyIconQuit_Click" />
                 </ContextMenu>
@@ -247,14 +248,25 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
+
                 
                 <!-- Inline Search Bar (covers the left area up to the search icon) -->
                 <Border x:Name="SearchBarContainer" Grid.Column="0" Visibility="Collapsed" VerticalAlignment="Center"
                         Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="8"
-                        BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1"
+                        BorderThickness="1"
                         Padding="4,0,4,0" Margin="0,0,6,0" Height="32" MinWidth="200" HorizontalAlignment="Stretch"
                         Panel.ZIndex="10" PreviewMouseLeftButtonDown="SearchBar_PreviewMouseDown"
                         RenderTransformOrigin="1,0.5">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="BorderBrush" Value="{DynamicResource ThemeOverlayBorderStrong}"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsKeyboardFocusWithin" Value="True">
+                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeAccent}"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
                     <Border.RenderTransform>
                         <ScaleTransform ScaleX="1" ScaleY="1"/>
                     </Border.RenderTransform>
@@ -266,7 +278,7 @@
                         <!-- Search input with integrated placeholder -->
                         <TextBox x:Name="SearchTextBox" Grid.Column="0" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
                                  FontSize="13" VerticalAlignment="Center" VerticalContentAlignment="Center" 
-                                 CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Padding="0" Margin="0"
+                                 CaretBrush="{DynamicResource ThemeAccent}" Padding="0" Margin="0"
                                  HorizontalContentAlignment="Left" MinWidth="120"
                                  TextChanged="SearchTextBox_TextChanged" PreviewKeyDown="SearchTextBox_PreviewKeyDown">
                             <TextBox.Style>
@@ -705,9 +717,9 @@
         <ListView Name="ShelfListView" Grid.Row="1" ItemsSource="{Binding DroppedItems}" Background="#01000000" BorderThickness="0" Margin="12,0,2,12" Padding="0,0,0,250"
                   Focusable="True" KeyboardNavigation.DirectionalNavigation="Contained" FocusVisualStyle="{x:Null}"
                   UseLayoutRounding="True" SnapsToDevicePixels="True"
-                  TextOptions.TextFormattingMode="Display"
+                  TextOptions.TextFormattingMode="Ideal"
                   TextOptions.TextRenderingMode="ClearType"
-                  TextOptions.TextHintingMode="Fixed"
+                  TextOptions.TextHintingMode="Auto"
                   RenderOptions.ClearTypeHint="Enabled"
                   ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                   ScrollViewer.CanContentScroll="True"
@@ -742,7 +754,7 @@
                         <Setter.Value>
                             <ControlTemplate TargetType="{x:Type ListViewItem}">
                                 <Border x:Name="ItemBorder" Background="{TemplateBinding Background}" 
-                                        BorderThickness="0" CornerRadius="14" Margin="4,1,14,2" ClipToBounds="True">
+                                        BorderThickness="0" CornerRadius="14" Margin="4,1,14,2">
                                     <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
                                 </Border>
                                 <ControlTemplate.Triggers>
@@ -756,7 +768,8 @@
             </ListView.ItemContainerStyle>
             <ListView.ItemTemplate>
                 <DataTemplate>
-                    <Border Name="CardBorder" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1,0.5,1,1" CornerRadius="14" Margin="0" Padding="0" RenderTransformOrigin="0.5,0.5" ClipToBounds="True">
+                    <Grid>
+                        <Border Name="CardBorder" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Margin="0" Padding="0" RenderTransformOrigin="0.5,0.5" ClipToBounds="True">
                         <Border.Background>
                             <SolidColorBrush Color="{DynamicResource MicaWPF.Colors.SubtleFillColorSecondary}" Opacity="0.38" />
                         </Border.Background>
@@ -1052,10 +1065,19 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource DangerColor}" 
-                                               Command="{Binding DataContext.ConvertImageToPdfCommand, ElementName=ShelfListView}" CommandParameter="{Binding}" ToolTip="Convert Image to PDF">
-                                        <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" Filled="True" FontSize="14"/></ui:Button.Icon>
-                                    </ui:Button>
+                                    <Border CornerRadius="5" Cursor="Hand" Padding="4,3" Background="Transparent"
+                                            PreviewMouseLeftButtonDown="ConvertImageToPdfSpecific_Click" ToolTip="Convert Image to PDF">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Style.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter Property="Background" Value="#18FF6666"/>
+                                                    </Trigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <ui:SymbolIcon Symbol="DocumentPdf24" Filled="True" FontSize="14" Foreground="{DynamicResource DangerColor}"/>
+                                    </Border>
                                 </Border>
 
                                 <!-- ═══ Quick Look ═══ -->
@@ -1742,7 +1764,11 @@
                         </Grid>
                         </Border>
                         </Grid>
-                    </Border>
+                        </Border>
+                        <!-- Selection / focus ring — sits OUTSIDE ClipToBounds so border pixels are never clipped -->
+                        <Border Name="SelectionRing" BorderThickness="2" CornerRadius="14"
+                                IsHitTestVisible="False" BorderBrush="Transparent"/>
+                    </Grid>
                     <DataTemplate.Triggers>
                         <!-- Dynamic sizing for Large Images vs Standard Files -->
                         <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
@@ -1796,12 +1822,12 @@
 
                         <!-- Focused State Trigger for Highlight Border -->
                         <DataTrigger Binding="{Binding IsKeyboardFocused, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True">
-                            <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource ShelfCardFocusBorder}"/>
+                            <Setter TargetName="SelectionRing" Property="BorderBrush" Value="{DynamicResource ShelfCardFocusBorder}"/>
                         </DataTrigger>
 
                         <!-- Selected State Trigger for Highlight Border -->
                         <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType={x:Type ListViewItem}}}" Value="True">
-                            <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource ShelfCardSelectionBorder}"/>
+                            <Setter TargetName="SelectionRing" Property="BorderBrush" Value="{DynamicResource ShelfCardSelectionBorder}"/>
                         </DataTrigger>
 
 
@@ -1835,9 +1861,6 @@
             </Border.BorderBrush>
             <Border.BorderThickness>1</Border.BorderThickness>
             <!-- PERF: DropShadowEffect removed — was software-rendered every frame -->
-            <Border.CacheMode>
-                <BitmapCache EnableClearType="True" RenderAtScale="1"/>
-            </Border.CacheMode>
             <StackPanel Orientation="Horizontal">
                 <!-- Merge PDF action (primary — always left, theme-aware accent pill) -->
                 <Button x:Name="MergeSelectedPdfsBtn" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" Cursor="Hand"
@@ -1969,6 +1992,20 @@
                 <Run Text="🔍 "/><Run Text="Ctrl+F" FontWeight="SemiBold"/><Run Text=" to search your clips"/>
             </TextBlock>
         </StackPanel>
+
+        <!-- Alt+C Watermark Hint — visible until clipboard view is filled (controlled from code-behind) -->
+        <Border x:Name="AltCWatermarkHint" Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Center" 
+                Margin="0,0,0,16" Opacity="0.35" IsHitTestVisible="False"
+                Background="Transparent" Visibility="Visible">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" 
+                        CornerRadius="8" Padding="12,6,12,6">
+                    <TextBlock FontSize="11.5" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextAlignment="Center">
+                        <Run Text="⌨️" FontSize="10"/><Run Text=" Press "/><Run Text="Alt+C" FontWeight="SemiBold"/><Run Text=" anywhere to summon clipboard"/>
+                    </TextBlock>
+                </Border>
+            </StackPanel>
+        </Border>
 
         <!-- ═══════════════════════════════════════════════════════════════════════ -->
         <!-- AERO ALTERNATE CLIPBOARD UI — clean minimal design with accent bars   -->
@@ -2140,7 +2177,7 @@
                     <ListView x:Name="AltShelfListView" Grid.Column="1" ItemsSource="{Binding DroppedItems}"
                               Background="Transparent" BorderThickness="0" Margin="4,4,4,12" Padding="0,0,0,50"
                               Focusable="True" FocusVisualStyle="{x:Null}" UseLayoutRounding="True" SnapsToDevicePixels="True"
-                              TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
+                              TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType"
                               ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                               ScrollViewer.CanContentScroll="True" VirtualizingStackPanel.IsVirtualizing="True"
                               VirtualizingStackPanel.VirtualizationMode="Recycling" VirtualizingPanel.ScrollUnit="Pixel"
@@ -2323,7 +2360,6 @@
 
                 <!-- BOTTOM BAR -->
                 <Border Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Margin="8,0,8,8" Padding="10,6" CornerRadius="12" Background="{DynamicResource AltBottomBarBg}" BorderBrush="{DynamicResource AltBottomBarBorder}" BorderThickness="1">
-                    <Border.CacheMode><BitmapCache EnableClearType="True" RenderAtScale="1"/></Border.CacheMode>
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <Border Grid.Column="0" Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" ToolTip="More Options" MouseLeftButtonDown="AltMoreOptions_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="MoreHorizontal24" FontSize="14" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
@@ -2343,7 +2379,7 @@
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <Grid x:Name="NotesPanel" Grid.Row="1" Visibility="Collapsed" Opacity="0" Margin="0"
               RenderTransformOrigin="0.5,0" PreviewMouseDown="NotesPanel_PreviewMouseDown"
-              TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
+              TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType"
               RenderOptions.ClearTypeHint="Enabled" UseLayoutRounding="True" SnapsToDevicePixels="True"
               Validation.ErrorTemplate="{x:Null}"
               Background="#1A1A2E">
@@ -2364,9 +2400,11 @@
                         <ColumnDefinition Width="Auto"/> <!-- Back -->
                         <ColumnDefinition Width="Auto"/> <!-- Day label -->
                         <ColumnDefinition Width="*"/>    <!-- Spacer -->
-                        <ColumnDefinition Width="Auto"/> <!-- Templates -->
                         <ColumnDefinition Width="Auto"/> <!-- Mode toggle -->
                         <ColumnDefinition Width="Auto"/> <!-- Add -->
+                        <ColumnDefinition Width="Auto"/> <!-- Undo -->
+                        <ColumnDefinition Width="Auto"/> <!-- Templates -->
+                        <ColumnDefinition Width="Auto"/> <!-- Dropdown menu -->
                     </Grid.ColumnDefinitions>
 
                     <!-- Back to clipboard -->
@@ -2383,23 +2421,65 @@
                                    Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
                     </StackPanel>
 
-                    <!-- Templates -->
-                    <Border x:Name="NotesTemplatesBtn" Grid.Column="3" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesTemplates_Click" Padding="6,3" Margin="0,0,4,0"
-                            Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1" ToolTip="Note Templates">
-                        <ui:SymbolIcon Symbol="DocumentCopy24" Foreground="#8B5CF6" FontSize="13"/>
-                    </Border>
+
 
                     <!-- Mode toggle: Bullets ↔ Freeform -->
-                    <Border Grid.Column="4" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesModeToggle_Click" Padding="8,3" Margin="0,0,4,0"
+                    <Border Grid.Column="3" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesModeToggle_Click" Padding="8,3" Margin="0,0,4,0"
                             Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1" ToolTip="Toggle Bullets / Freeform">
                         <TextBlock x:Name="NotesModeToggleText" Text="📄 Freeform" FontSize="10" FontWeight="SemiBold" 
                                    Foreground="#C4B5FD" VerticalAlignment="Center"/>
                     </Border>
 
-                    <!-- Add bullet -->
-                    <Border Grid.Column="5" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesAddBullet_Click" Padding="6,3"
-                            Background="#208B5CF6" BorderBrush="#408B5CF6" BorderThickness="1" ToolTip="Add Bullet">
+                    <!-- Add card (bullet or freeform depending on mode) -->
+                    <Border Grid.Column="4" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesAddBullet_Click" Padding="6,3" Margin="0,0,4,0"
+                            Background="#208B5CF6" BorderBrush="#408B5CF6" BorderThickness="1" ToolTip="Add Card">
                         <ui:SymbolIcon Symbol="Add24" Foreground="#8B5CF6" FontSize="13"/>
+                    </Border>
+
+                    <!-- Undo -->
+                    <Border x:Name="NotesUndoBtn" Grid.Column="5" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesUndo_Click" Padding="6,3" Margin="0,0,4,0"
+                            ToolTip="Undo last change" Visibility="Collapsed">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="#18F59E0B"/>
+                                <Setter Property="BorderBrush" Value="#30F59E0B"/>
+                                <Setter Property="BorderThickness" Value="1"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#30F59E0B"/>
+                                        <Setter Property="BorderBrush" Value="#60F59E0B"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <ui:SymbolIcon Symbol="ArrowUndo24" Foreground="#F59E0B" FontSize="13"/>
+                    </Border>
+
+                    <!-- Templates -->
+                    <Border x:Name="NotesTemplatesBtn" Grid.Column="6" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesTemplates_Click" Padding="6,3" Margin="0,0,4,0"
+                            Background="{DynamicResource MicaWPF.Brushes.ControlFillColorSecondary}" 
+                            BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="1" 
+                            ToolTip="Note Templates">
+                        <ui:SymbolIcon Symbol="DocumentCopy24" Foreground="{DynamicResource ThemeAccent}" FontSize="13"/>
+                    </Border>
+
+                    <!-- Dropdown menu (Sort, Trash, Export, Templates) -->
+                    <Border Grid.Column="7" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="NotesHeaderMenu_Click" Padding="6,3"
+                            ToolTip="More options">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="Background" Value="#0C8B5CF6"/>
+                                <Setter Property="BorderBrush" Value="#188B5CF6"/>
+                                <Setter Property="BorderThickness" Value="1"/>
+                                <Style.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True">
+                                        <Setter Property="Background" Value="#208B5CF6"/>
+                                        <Setter Property="BorderBrush" Value="#408B5CF6"/>
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
+                        <ui:SymbolIcon Symbol="ChevronDown24" Foreground="#A78BFA" FontSize="12"/>
                     </Border>
 
                 </Grid>
@@ -2408,7 +2488,7 @@
             <!-- ═══ MAIN CONTENT: SIDEBAR + NOTEPAD ═══ -->
             <Grid Grid.Row="1">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition x:Name="NotesSidebarColumn" Width="54"/>  <!-- Day Sidebar (collapses to 0) -->
+                    <ColumnDefinition x:Name="NotesSidebarColumn" Width="42"/>  <!-- Day Sidebar (collapses to 0) -->
                     <ColumnDefinition Width="*"/>    <!-- Content -->
                 </Grid.ColumnDefinitions>
 
@@ -2416,10 +2496,10 @@
                 <Border x:Name="NotesSidebarBorder" Grid.Column="0" BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="0,0,1,0" Background="{DynamicResource MicaWPF.Brushes.ControlAltFillColorTertiary}">
                     <DockPanel>
                         <!-- Toggle button at top -->
-                        <Border DockPanel.Dock="Top" Cursor="Hand" Height="28"
+                        <Border DockPanel.Dock="Top" Cursor="Hand" Height="22"
                                 Background="Transparent"
                                 MouseLeftButtonDown="NotesSidebarToggle_Click" ToolTip="Collapse Sidebar">
-                            <TextBlock x:Name="NotesSidebarCollapseIcon" Text="◂" FontSize="16" FontWeight="Bold"
+                            <TextBlock x:Name="NotesSidebarCollapseIcon" Text="◂" FontSize="13" FontWeight="Bold"
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
                                        VerticalAlignment="Center" HorizontalAlignment="Center"/>
                         </Border>
@@ -2429,7 +2509,7 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <!-- Day badge container -->
-                                        <Border x:Name="NotesDayBorder" CornerRadius="8" Width="40" Height="40" Margin="0,0,0,6"
+                                        <Border x:Name="NotesDayBorder" CornerRadius="8" Width="30" Height="30" Margin="0,0,0,4"
                                                 Cursor="Hand" MouseLeftButtonDown="NotesDayItem_Click"
                                                 BorderThickness="1" SnapsToDevicePixels="True"
                                                 Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}"
@@ -2437,10 +2517,10 @@
                                                 ToolTip="{Binding FullLabel}">
                                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                                 <!-- Day number -->
-                                                <TextBlock Text="{Binding DayNumber}" FontSize="15" FontWeight="Bold" 
+                                                <TextBlock Text="{Binding DayNumber}" FontSize="12" FontWeight="Bold" 
                                                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextAlignment="Center" Margin="0,-2,0,0"/>
                                                 <!-- Abbreviated Month -->
-                                                <TextBlock Text="{Binding MonthName}" FontSize="8" FontWeight="SemiBold" 
+                                                <TextBlock Text="{Binding MonthName}" FontSize="7" FontWeight="SemiBold" 
                                                            Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextAlignment="Center" Margin="0,-2,0,0" Opacity="0.8"/>
                                             </StackPanel>
                                         </Border>
@@ -2516,11 +2596,35 @@
                                             <SolidColorBrush Color="#222240"/>
                                         </Border.Background>
                                         <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/> <!-- Color strip -->
+                                                <ColumnDefinition Width="*"/>    <!-- Main content -->
+                                            </Grid.ColumnDefinitions>
+
+                                            <!-- Color accent strip (left edge) -->
+                                            <Border x:Name="BulletColorStrip" Grid.Column="0" Width="3" CornerRadius="8,0,0,8"
+                                                    Background="{Binding Color}">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasColor}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                            </Border>
+
+                                            <Grid Grid.Column="1">
                                             <Grid.RowDefinitions>
-                                                <RowDefinition Height="Auto"/> <!-- Header row: bullet dot + collapse toggle -->
+                                                <RowDefinition Height="Auto"/> <!-- Header row -->
                                                 <RowDefinition Height="Auto"/> <!-- Content row (collapsible) -->
+                                                <RowDefinition Height="Auto"/> <!-- Sub-bullets row (collapsible) -->
+                                                <RowDefinition Height="Auto"/> <!-- Tags row -->
                                                 <RowDefinition Height="Auto"/> <!-- Image row (optional) -->
                                             </Grid.RowDefinitions>
+
 
                                             <!-- Bullet header: dot + collapse toggle + delete -->
                                             <Grid Grid.Row="0" Margin="8,5,6,2">
@@ -2528,9 +2632,8 @@
                                                     <ColumnDefinition Width="Auto"/> <!-- Bullet dot -->
                                                     <ColumnDefinition Width="*"/>    <!-- Header Box + Spacer -->
                                                     <ColumnDefinition Width="Auto"/> <!-- Last Edited Time -->
-                                                    <ColumnDefinition Width="Auto"/> <!-- Reminder -->
-                                                    <ColumnDefinition Width="Auto"/> <!-- Delete -->
-                                                    <ColumnDefinition Width="Auto"/> <!-- Collapse -->
+                                                    <ColumnDefinition Width="Auto"/> <!-- More menu -->
+                                                    <ColumnDefinition Width="Auto"/> <!-- Right panel: Collapse + Pin + Reminder -->
                                                 </Grid.ColumnDefinitions>
                                                 <!-- Bullet dot -->
                                                 <Ellipse Grid.Column="0" Width="7" Height="7" Fill="#8B5CF6" Margin="2,0,6,0" VerticalAlignment="Center"/>
@@ -2576,28 +2679,60 @@
                                                         </TextBlock.Style>
                                                     </TextBlock>
                                                 </Grid>
-                                                
+
                                                 <!-- Last Edited Timestamp (always visible) -->
                                                 <TextBlock Grid.Column="2" Text="{Binding LastEditedDisplay}" FontSize="10.5" 
                                                            Foreground="#8B8BA8" VerticalAlignment="Center" Margin="0,0,6,0"
                                                            IsHitTestVisible="False" Opacity="0.8"/>
                                                 
-                                                <!-- Reminder button (visible on hover) -->
-                                                <Border x:Name="BulletReminderBtn" Grid.Column="3" CornerRadius="4" Cursor="Hand" 
-                                                        Padding="3,1" Margin="0,0,3,0" Visibility="Collapsed"
-                                                        Background="#18F59E0B" MouseLeftButtonDown="NoteBulletReminder_Click" ToolTip="Set Reminder">
-                                                    <ui:SymbolIcon Symbol="Alert24" FontSize="11" Foreground="#F59E0B" VerticalAlignment="Center"/>
-                                                </Border>
-                                                
-                                                <!-- Delete button (visible on hover) -->
-                                                <Border x:Name="BulletDeleteBtn" Grid.Column="4" CornerRadius="4" Cursor="Hand" 
-                                                        Padding="3,1" Margin="0,0,3,0" Visibility="Collapsed"
-                                                        Background="#20EF4444" MouseLeftButtonDown="NoteBulletDelete_Click" ToolTip="Delete">
-                                                    <ui:SymbolIcon Symbol="Delete16" Foreground="#EF4444" FontSize="10"/>
-                                                </Border>
-                                                <!-- Collapse toggle -->
-                                                <Border x:Name="BulletCollapseBtn" Grid.Column="5" CornerRadius="4" Cursor="Hand" Padding="4,1"
-                                                        MouseLeftButtonDown="NoteBulletCollapse_Click" Background="Transparent">
+                                                <!-- Right panel: AI + More in a compact horizontal row -->
+                                                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,2,0">
+                                                    <!-- AI button -->
+                                                    <Border x:Name="BulletAIBtn" CornerRadius="4" Cursor="Hand" 
+                                                            Padding="6,2" Margin="0,0,2,0" Opacity="0" IsHitTestVisible="False"
+                                                            MouseLeftButtonDown="NoteBulletAI_Click" ToolTip="AI Assistant">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Background" Value="#188B5CF6"/>
+                                                                <Setter Property="BorderBrush" Value="#308B5CF6"/>
+                                                                <Setter Property="BorderThickness" Value="1"/>
+                                                                <Style.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter Property="Background" Value="#308B5CF6"/>
+                                                                        <Setter Property="BorderBrush" Value="#608B5CF6"/>
+                                                                    </Trigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <ui:SymbolIcon Symbol="Sparkle24" FontSize="11" Foreground="#A78BFA" VerticalAlignment="Center" Margin="0,0,2,0"/>
+                                                            <TextBlock Text="AI" FontSize="9.5" FontWeight="SemiBold" Foreground="#A78BFA" VerticalAlignment="Center"/>
+                                                        </StackPanel>
+                                                    </Border>
+                                                    <!-- More options dropdown button -->
+                                                    <Border x:Name="BulletMoreBtn" CornerRadius="4" Cursor="Hand" 
+                                                            Padding="3,2" Margin="0,0,1,0" Opacity="0" IsHitTestVisible="False"
+                                                            MouseLeftButtonDown="NoteBulletMore_Click" ToolTip="More options">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Background" Value="#0CFFFFFF"/>
+                                                                <Setter Property="BorderBrush" Value="#18808080"/>
+                                                                <Setter Property="BorderThickness" Value="1"/>
+                                                                <Style.Triggers>
+                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                        <Setter Property="Background" Value="#20FFFFFF"/>
+                                                                        <Setter Property="BorderBrush" Value="#40808080"/>
+                                                                    </Trigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <ui:SymbolIcon Symbol="MoreHorizontal24" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="11"/>
+                                                    </Border>
+                                                </StackPanel>
+                                                <!-- Collapse toggle (always visible, separate column) -->
+                                                <Border x:Name="BulletCollapseBtn" Grid.Column="4" CornerRadius="4" Cursor="Hand" Padding="4,1"
+                                                        MouseLeftButtonDown="NoteBulletCollapse_Click" Background="Transparent"
+                                                        VerticalAlignment="Center">
                                                     <TextBlock Text="{Binding CollapseIcon}" FontSize="11" FontWeight="Bold" 
                                                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
                                                 </Border>
@@ -2618,6 +2753,7 @@
                                                 <TextBox x:Name="NoteBulletContentBox"
                                                          Text="{Binding Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" 
                                                          TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="False"
+
                                                          FontSize="12" Background="Transparent" BorderThickness="0" Padding="0,2"
                                                          Foreground="#E8E8F0"
                                                          CaretBrush="#E8E8F0"
@@ -2642,8 +2778,76 @@
                                                 </TextBox>
                                             </Border>
 
+                                            <!-- ── Sub-bullets (nested items, Shift+Enter) ── -->
+                                            <Border Grid.Row="2" Margin="26,0,8,4">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasSubBullets}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsCollapsed}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="2"/>  <!-- accent bar -->
+                                                        <ColumnDefinition Width="*"/>  <!-- sub-bullet list -->
+                                                    </Grid.ColumnDefinitions>
+                                                    <!-- left accent bar -->
+                                                    <Border Grid.Column="0" Background="#40A78BFA" CornerRadius="1" Margin="0,2,6,2"/>
+                                                    <!-- sub-bullet rows -->
+                                                    <ItemsControl Grid.Column="1" ItemsSource="{Binding SubBullets}" Margin="4,0,0,0"
+                                                                  x:Name="SubBulletsItemsControl">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Grid Margin="0,1,0,1">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="Auto"/>
+                                                                        <ColumnDefinition Width="*"/>
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <!-- sub-bullet dot -->
+                                                                    <TextBlock Grid.Column="0" Text="◦" FontSize="11"
+                                                                               Foreground="#80A78BFA" VerticalAlignment="Top"
+                                                                               Margin="0,3,5,0"/>
+                                                                    <!-- sub-bullet text -->
+                                                                    <TextBox Grid.Column="1"
+                                                                             x:Name="SubBulletTextBox"
+                                                                             Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                             TextWrapping="Wrap" AcceptsReturn="False" AcceptsTab="False"
+                                                                             FontSize="11.5" Background="Transparent" BorderThickness="0"
+                                                                             Padding="0,1" Foreground="#C8C8E0"
+                                                                             CaretBrush="#C8C8E0" SelectionBrush="#608B5CF6"
+                                                                             PreviewKeyDown="SubBulletText_PreviewKeyDown"
+                                                                             Tag="{Binding}">
+                                                                        <TextBox.Style>
+                                                                            <Style TargetType="TextBox">
+                                                                                <Setter Property="Template">
+                                                                                    <Setter.Value>
+                                                                                        <ControlTemplate TargetType="TextBox">
+                                                                                            <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                                                                                                <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
+                                                                                            </Border>
+                                                                                        </ControlTemplate>
+                                                                                    </Setter.Value>
+                                                                                </Setter>
+                                                                            </Style>
+                                                                        </TextBox.Style>
+                                                                    </TextBox>
+                                                                </Grid>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </Grid>
+                                            </Border>
+
                                             <!-- Embedded image (optional, resizable via mouse wheel, up to 2 images) -->
-                                            <Border x:Name="BulletImageArea" Grid.Row="2" Margin="22,0,8,6">
+                                            <Border x:Name="BulletImageArea" Grid.Row="4" Margin="22,0,8,6">
+
                                                 <Border.Style>
                                                     <Style TargetType="Border">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
@@ -2720,13 +2924,47 @@
                                                     </Grid>
                                                 </StackPanel>
                                             </Border>
-                                        </Grid>
+
+                                            <!-- ═══ Tags chips row (visible when tags exist) ═══ -->
+                                            <ItemsControl x:Name="NoteTagsRow" Grid.Row="3" ItemsSource="{Binding Tags}" Margin="22,0,8,4">
+                                                <ItemsControl.Style>
+                                                    <Style TargetType="ItemsControl">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasTags}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsCollapsed}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ItemsControl.Style>
+                                                <ItemsControl.ItemsPanel>
+                                                    <ItemsPanelTemplate>
+                                                        <WrapPanel/>
+                                                    </ItemsPanelTemplate>
+                                                </ItemsControl.ItemsPanel>
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border CornerRadius="4" Padding="5,1,5,1" Margin="0,0,3,2"
+                                                                Background="#208B5CF6" BorderBrush="#308B5CF6" BorderThickness="1">
+                                                            <TextBlock Text="{Binding}" FontSize="10" Foreground="#C4B5FD"/>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+
+                                            </Grid> <!-- close inner Grid -->
+                                        </Grid> <!-- close outer Grid with color strip -->
                                     </Border>
                                     <DataTemplate.Triggers>
-                                        <!-- Show delete button on card hover -->
+                                        <!-- Show action buttons on card hover (Opacity-based to prevent layout shift) -->
                                         <Trigger SourceName="BulletCard" Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="BulletReminderBtn" Property="Visibility" Value="Visible"/>
-                                            <Setter TargetName="BulletDeleteBtn" Property="Visibility" Value="Visible"/>
+                                            <Setter TargetName="BulletAIBtn" Property="Opacity" Value="1"/>
+                                            <Setter TargetName="BulletAIBtn" Property="IsHitTestVisible" Value="True"/>
+                                            <Setter TargetName="BulletMoreBtn" Property="Opacity" Value="1"/>
+                                            <Setter TargetName="BulletMoreBtn" Property="IsHitTestVisible" Value="True"/>
                                         </Trigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
@@ -2737,41 +2975,91 @@
                     <!-- FREEFORM MODE: Text area + images strip -->
                     <ScrollViewer x:Name="NotesFreeformArea" Visibility="Collapsed" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel>
-                            <Grid>
-                            <TextBox x:Name="NotesFreeformBox" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True"
-                                     FontSize="12.5" Background="Transparent" BorderThickness="0" Padding="10,8,36,8" MinHeight="120"
-                                     Foreground="#E8E8F0"
-                                     CaretBrush="#E8E8F0"
-                                     SelectionBrush="#608B5CF6"
-                                     TextChanged="NotesFreeformBox_TextChanged"
-                                     GotFocus="NotesFreeformBox_GotFocus"
-                                     PreviewKeyDown="NotesFreeformBox_PreviewKeyDown"
-                                     DataObject.Pasting="NotesFreeformBox_Paste">
-                                <TextBox.Style>
-                                    <Style TargetType="TextBox">
-                                        <Setter Property="Template">
-                                            <Setter.Value>
-                                                <ControlTemplate TargetType="TextBox">
-                                                    <Border Background="#222240" CornerRadius="8" Padding="{TemplateBinding Padding}"
-                                                            BorderBrush="#2A2A45" BorderThickness="1">
-                                                        <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
-                                                    </Border>
-                                                </ControlTemplate>
-                                            </Setter.Value>
-                                        </Setter>
-                                    </Style>
-                                </TextBox.Style>
-                            </TextBox>
-                            
-                            <!-- Freeform Reminder Button (top-right floating) -->
-                            <Border x:Name="FreeformReminderBtn" CornerRadius="6" Cursor="Hand" 
-                                    HorizontalAlignment="Right" VerticalAlignment="Top"
-                                    Padding="5,4" Margin="0,6,6,0"
-                                    Background="#18F59E0B" BorderBrush="#30F59E0B" BorderThickness="1"
-                                    MouseLeftButtonDown="NotesFreeformReminder_Click" ToolTip="Set Reminder from Notes">
-                                <ui:SymbolIcon Symbol="Alert24" FontSize="12" Foreground="#F59E0B" VerticalAlignment="Center"/>
-                            </Border>
-                            </Grid>
+                            <!-- FREEFORM SECTIONS: Multiple text cards -->
+                            <ItemsControl x:Name="NotesFreeformSectionsList" AlternationCount="2">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border x:Name="FreeformSectionCard" CornerRadius="8" Margin="4,2,4,3" Padding="0" ClipToBounds="True"
+                                                BorderThickness="1" BorderBrush="#2A2A45">
+                                            <Grid>
+                                                <TextBox x:Name="FreeformSectionTextBox" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True"
+                                                         FontSize="12.5" Background="Transparent" BorderThickness="0" Padding="10,6,10,8" MinHeight="80"
+                                                         Foreground="#E8E8F0"
+                                                         CaretBrush="#E8E8F0"
+                                                         SelectionBrush="#608B5CF6"
+                                                         Text="{Binding Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         TextChanged="NotesFreeformBox_TextChanged"
+                                                         GotFocus="NotesFreeformBox_GotFocus"
+                                                         PreviewKeyDown="NotesFreeformBox_PreviewKeyDown"
+                                                         DataObject.Pasting="NotesFreeformBox_Paste">
+                                                    <TextBox.Style>
+                                                        <Style TargetType="TextBox">
+                                                            <Setter Property="Template">
+                                                                <Setter.Value>
+                                                                    <ControlTemplate TargetType="TextBox">
+                                                                        <Border Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                                                            <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
+                                                                        </Border>
+                                                                    </ControlTemplate>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                        </Style>
+                                                    </TextBox.Style>
+                                                </TextBox>
+
+                                                <!-- Remove section button (top-right, always visible) -->
+                                                <Border x:Name="FreeformSectionRemoveBtn" CornerRadius="6" Cursor="Hand"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                        Padding="5,4" Margin="0,4,30,0" Panel.ZIndex="10"
+                                                        Background="#18FF4444" BorderBrush="#30FF4444" BorderThickness="1"
+                                                        Opacity="1" IsHitTestVisible="True"
+                                                        MouseLeftButtonDown="FreeformSectionRemove_Click" ToolTip="Remove this section">
+                                                    <ui:SymbolIcon Symbol="Delete24" Foreground="#FF6666" FontSize="12" VerticalAlignment="Center"/>
+                                                </Border>
+
+                                                <!-- AI Button (top-right, always visible) -->
+                                                <Border x:Name="FreeformSectionAIBtn" CornerRadius="6" Cursor="Hand"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                        Padding="5,4" Margin="0,4,56,0" Panel.ZIndex="10"
+                                                        Background="#188B5CF6" BorderBrush="#308B5CF6" BorderThickness="1"
+                                                        Opacity="1" IsHitTestVisible="True"
+                                                        MouseLeftButtonDown="NotesFreeformAI_Click" ToolTip="AI Assistant">
+                                                    <ui:SymbolIcon Symbol="Sparkle24" FontSize="12" Foreground="#A78BFA" VerticalAlignment="Center"/>
+                                                </Border>
+
+                                                <!-- Reminder Button (top-right floating, always visible) -->
+                                                <Border x:Name="FreeformSectionReminderBtn" CornerRadius="6" Cursor="Hand"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                        Padding="5,4" Margin="0,4,4,0" Panel.ZIndex="10"
+                                                        Background="#18F59E0B" BorderBrush="#30F59E0B" BorderThickness="1"
+                                                        Opacity="1" IsHitTestVisible="True"
+                                                        MouseLeftButtonDown="NotesFreeformReminder_Click" ToolTip="Set Reminder from Notes">
+                                                    <ui:SymbolIcon Symbol="Alert24" FontSize="12" Foreground="#F59E0B" VerticalAlignment="Center"/>
+                                                </Border>
+
+                                                <!-- Expand Button (top-right floating, opens NoteExpandWindow) -->
+                                                <Border x:Name="FreeformSectionExpandBtn" CornerRadius="6" Cursor="Hand"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                        Padding="5,4" Margin="0,4,82,0" Panel.ZIndex="10"
+                                                        Background="#1822D3EE" BorderBrush="#3022D3EE" BorderThickness="1"
+                                                        Opacity="1" IsHitTestVisible="True"
+                                                        MouseLeftButtonDown="NotesFreeformExpand_Click" ToolTip="Expand Note">
+                                                    <ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="12" Foreground="#22D3EE" VerticalAlignment="Center"/>
+                                                </Border>
+                                            </Grid>
+                                        </Border>
+                                        <DataTemplate.Triggers>
+                                            <!-- Alternating backgrounds: even = darker, odd = subtly lighter -->
+                                            <Trigger Property="ItemsControl.AlternationIndex" Value="0">
+                                                <Setter TargetName="FreeformSectionCard" Property="Background" Value="#222240"/>
+                                            </Trigger>
+                                            <Trigger Property="ItemsControl.AlternationIndex" Value="1">
+                                                <Setter TargetName="FreeformSectionCard" Property="Background" Value="#282850"/>
+                                            </Trigger>
+                                        </DataTemplate.Triggers>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
 
 
                             <!-- Freeform images strip (pasted images shown below text) -->
@@ -2790,7 +3078,7 @@
                                                 </Border>
                                                 <!-- Remove button -->
                                                 <Border x:Name="FreeformImgRemoveBtn" CornerRadius="4" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                        Margin="4,4,0,0" Padding="3,1" Cursor="Hand" Background="#80000000" Visibility="Collapsed"
+                                                        Margin="4,4,0,0" Padding="3,1" Cursor="Hand" Background="#80000000" Opacity="0" IsHitTestVisible="False"
                                                         MouseLeftButtonDown="FreeformImageRemove_Click" ToolTip="Remove image">
                                                     <ui:SymbolIcon Symbol="Dismiss12" Foreground="#CCFFFFFF" FontSize="9"/>
                                                 </Border>
@@ -2798,7 +3086,8 @@
                                         </Border>
                                         <DataTemplate.Triggers>
                                             <Trigger SourceName="FreeformImgCard" Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="FreeformImgRemoveBtn" Property="Visibility" Value="Visible"/>
+                                                <Setter TargetName="FreeformImgRemoveBtn" Property="Opacity" Value="1"/>
+                                                <Setter TargetName="FreeformImgRemoveBtn" Property="IsHitTestVisible" Value="True"/>
                                             </Trigger>
                                         </DataTemplate.Triggers>
                                     </DataTemplate>
@@ -2859,7 +3148,7 @@
         <!-- ═══════════════════════════════════════════════════════════════ -->
         <Grid x:Name="TodoPanel" Grid.Row="1" Visibility="Collapsed" Opacity="0" Margin="0"
               RenderTransformOrigin="0.5,0" PreviewMouseDown="TodoPanel_PreviewMouseDown"
-              TextOptions.TextFormattingMode="Display" TextOptions.TextRenderingMode="ClearType"
+              TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType"
               RenderOptions.ClearTypeHint="Enabled" UseLayoutRounding="True" SnapsToDevicePixels="True"
               Validation.ErrorTemplate="{x:Null}"
               Background="Transparent">
@@ -2881,16 +3170,23 @@
                         <ColumnDefinition Width="Auto"/> <!-- Day label -->
                         <ColumnDefinition Width="*"/>    <!-- Spacer -->
                         <ColumnDefinition Width="Auto"/> <!-- Progress pill -->
+                        <ColumnDefinition Width="Auto"/> <!-- Sort -->
+                        <ColumnDefinition Width="Auto"/> <!-- Migrate -->
                         <ColumnDefinition Width="Auto"/> <!-- Templates -->
                         <ColumnDefinition Width="Auto"/> <!-- Add -->
                     </Grid.ColumnDefinitions>
 
-                    <!-- Back to clipboard -->
-                    <Border Grid.Column="0" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="TodoBack_Click" Padding="6,3" Margin="0,0,4,0"
-                            Background="{DynamicResource MicaWPF.Brushes.ControlFillColorSecondary}" 
-                            BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="1" ToolTip="Back to Clipboard">
-                        <ui:SymbolIcon Symbol="ArrowLeft24" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="14"/>
-                    </Border>
+                    <StackPanel Grid.Column="0" Orientation="Horizontal">
+                        <!-- Back to clipboard -->
+                        <Border CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="TodoBack_Click" Padding="6,3" Margin="0,0,4,0"
+                                Background="{DynamicResource MicaWPF.Brushes.ControlFillColorSecondary}" 
+                                BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="1" ToolTip="Back to Clipboard">
+                            <ui:SymbolIcon Symbol="ArrowLeft24" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="14"/>
+                        </Border>
+
+                        <!-- Sidebar Toggle (Calendar) — REMOVED per user request -->
+                    </StackPanel>
+
 
                     <!-- Title and Current day label -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,0,0">
@@ -2902,20 +3198,34 @@
                                    Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
                     </StackPanel>
 
-                    <!-- Progress pill -->
-                    <Border Grid.Column="3" CornerRadius="8" Background="{DynamicResource ThemeAccentBg}" Padding="6,2" Margin="0,0,6,0" VerticalAlignment="Center">
-                        <TextBlock x:Name="TodoProgressText" Text="0 done" FontSize="9.5" FontWeight="SemiBold" Foreground="{DynamicResource ThemeAccentLight}" FontFamily="Segoe UI Emoji"/>
+                    <!-- Progress pill removed (UI bloat) -->
+
+
+                    <!-- Sort -->
+                    <Border Grid.Column="4" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="TodoSort_Click" Padding="5,3" Margin="0,0,2,0"
+                            Background="{DynamicResource MicaWPF.Brushes.ControlFillColorSecondary}" 
+                            BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="1" ToolTip="Sort Tasks">
+                        <ui:SymbolIcon Symbol="ArrowSort16" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="12"/>
                     </Border>
 
+                    <!-- Migrate incomplete tasks from yesterday -->
+                    <Border Grid.Column="5" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="TodoMigrate_Click" Padding="5,3" Margin="0,0,2,0"
+                            Background="{DynamicResource MicaWPF.Brushes.ControlFillColorSecondary}" 
+                            BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="1" ToolTip="Carry forward yesterday's incomplete tasks">
+                        <ui:SymbolIcon Symbol="ArrowForward16" Foreground="#F59E0B" FontSize="12"/>
+                    </Border>
+
+
+
                     <!-- Templates -->
-                    <Border x:Name="TodoTemplatesBtn" Grid.Column="4" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="TodoTemplates_Click" Padding="6,3" Margin="0,0,6,0"
+                    <Border x:Name="TodoTemplatesBtn" Grid.Column="6" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="TodoTemplates_Click" Padding="6,3" Margin="0,0,6,0"
                             Background="{DynamicResource MicaWPF.Brushes.ControlFillColorSecondary}" 
                             BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="1" ToolTip="To-Do Templates">
                         <ui:SymbolIcon Symbol="DocumentCopy24" Foreground="{DynamicResource ThemeAccent}" FontSize="13"/>
                     </Border>
 
                     <!-- Add new to-do item -->
-                    <Border Grid.Column="5" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="TodoAddBtn_Click" Padding="7,3"
+                    <Border Grid.Column="7" CornerRadius="7" Cursor="Hand" MouseLeftButtonDown="TodoAddBtn_Click" Padding="7,3"
                             Background="{DynamicResource ThemeAccentBg}" BorderBrush="{DynamicResource ThemeAccentBorder}" BorderThickness="1" ToolTip="Add To-Do Item">
                         <StackPanel Orientation="Horizontal">
                             <ui:SymbolIcon Symbol="Add12" Foreground="{DynamicResource ThemeAccentLight}" FontSize="10" Margin="0,0,3,0" VerticalAlignment="Center"/>
@@ -2928,7 +3238,7 @@
             <!-- ═══ CONTENT AREA (Sidebar + List) ═══ -->
             <Grid Grid.Row="1" Background="{DynamicResource MicaWPF.Brushes.SolidBackgroundFillColorBase}">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition x:Name="TodoSidebarColumn" Width="54"/>  <!-- Day Sidebar (collapses to 0) -->
+                    <ColumnDefinition x:Name="TodoSidebarColumn" Width="42"/>  <!-- Day Sidebar (collapses to 0) -->
                     <ColumnDefinition Width="*"/>   <!-- To-Do List Area -->
                 </Grid.ColumnDefinitions>
 
@@ -2936,10 +3246,10 @@
                 <Border x:Name="TodoSidebarBorder" Grid.Column="0" BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}" BorderThickness="0,0,1,0" Background="{DynamicResource MicaWPF.Brushes.ControlAltFillColorTertiary}">
                     <DockPanel>
                         <!-- Toggle button at top -->
-                        <Border DockPanel.Dock="Top" Cursor="Hand" Height="28"
+                        <Border DockPanel.Dock="Top" Cursor="Hand" Height="22"
                                 Background="Transparent"
                                 MouseLeftButtonDown="TodoSidebarToggle_Click" ToolTip="Collapse Sidebar">
-                            <TextBlock x:Name="TodoSidebarCollapseIcon" Text="◂" FontSize="16" FontWeight="Bold"
+                            <TextBlock x:Name="TodoSidebarCollapseIcon" Text="◂" FontSize="13" FontWeight="Bold"
                                        Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
                                        VerticalAlignment="Center" HorizontalAlignment="Center"/>
                         </Border>
@@ -2949,19 +3259,54 @@
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                         <!-- Day badge container -->
-                                        <Border x:Name="TodoDayBorder" CornerRadius="8" Width="40" Height="40" Margin="0,0,0,6"
+                                        <Border x:Name="TodoDayBorder" CornerRadius="8" Width="30" Height="30" Margin="0,0,0,4"
                                                 Cursor="Hand" MouseLeftButtonDown="TodoDayItem_Click"
-                                                BorderThickness="1" SnapsToDevicePixels="True"
-                                                Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}"
-                                                BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}"
+                                                BorderThickness="2" SnapsToDevicePixels="True"
                                                 ToolTip="{Binding FullLabel}">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}"/>
+                                                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsToday}" Value="True">
+                                                            <Setter Property="BorderBrush" Value="#4010B981"/>
+                                                        </DataTrigger>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="Background" Value="#30808080"/>
+                                                            <Setter Property="BorderBrush" Value="#60808080"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
                                             <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                                 <!-- Day number -->
-                                                <TextBlock Text="{Binding DayNumber}" FontSize="15" FontWeight="Bold" 
-                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextAlignment="Center" Margin="0,-2,0,0"/>
+                                                <TextBlock Text="{Binding DayNumber}" FontSize="12" FontWeight="Bold" 
+                                                           TextAlignment="Center" Margin="0,-2,0,0">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
                                                 <!-- Abbreviated Month -->
-                                                <TextBlock Text="{Binding MonthName}" FontSize="8" FontWeight="SemiBold" 
-                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" TextAlignment="Center" Margin="0,-2,0,0" Opacity="0.8"/>
+                                                <TextBlock Text="{Binding MonthName}" FontSize="7" FontWeight="SemiBold"
+                                                           TextAlignment="Center" Margin="0,-2,0,0" Opacity="0.8">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                    <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
                                             </StackPanel>
                                         </Border>
                                     </DataTemplate>
@@ -2976,7 +3321,7 @@
                         Cursor="Hand" Visibility="Collapsed"
                         Background="Transparent" BorderThickness="0"
                         MouseLeftButtonDown="TodoSidebarToggle_Click" ToolTip="Show Sidebar" Panel.ZIndex="5">
-                    <TextBlock Text="▸" FontSize="16" FontWeight="Bold"
+                    <TextBlock Text="▸" FontSize="13" FontWeight="Bold"
                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
                                VerticalAlignment="Center" HorizontalAlignment="Center"/>
                 </Border>
@@ -2986,14 +3331,56 @@
                     <ScrollViewer x:Name="TodoScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <ItemsControl x:Name="TodoListItemsControl">
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <!-- Todo Card (expanded and roomier by default) -->
-                                    <Border x:Name="TodoCard" CornerRadius="8" Margin="6,0,6,5" Padding="0" ClipToBounds="True" MinHeight="52"
-                                            BorderThickness="1" BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}"
-                                            Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}">
+                                    <DataTemplate>
+                                    <DataTemplate.Resources>
+                                        <!-- Named style so hover triggers can show action buttons -->
+                                        <Style x:Key="TodoCardStyle" TargetType="Border">
+                                            <Setter Property="CornerRadius" Value="8"/>
+                                            <Setter Property="Margin" Value="6,0,6,5"/>
+                                            <Setter Property="Padding" Value="0"/>
+                                            <Setter Property="ClipToBounds" Value="True"/>
+                                            <Setter Property="MinHeight" Value="32"/>
+
+                                            <Setter Property="BorderThickness" Value="1"/>
+                                            <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}"/>
+                                            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}"/>
+                                            <Style.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#40808080"/>
+                                                    <Setter Property="Background" Value="#0CFFFFFF"/>
+                                                </Trigger>
+                                                <DataTrigger Binding="{Binding IsExpanded}" Value="True">
+                                                    <Setter Property="BorderBrush" Value="#50808080"/>
+                                                    <Setter Property="Background" Value="#10FFFFFF"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                    <Setter Property="Opacity" Value="0.55"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </DataTemplate.Resources>
+                                    <!-- Todo Card — Enhanced with priority, due date, tags, subtasks, description -->
+                                    <Border x:Name="TodoCard" Style="{StaticResource TodoCardStyle}"
+                                            AllowDrop="True" 
+                                            PreviewMouseLeftButtonDown="TodoItem_PreviewMouseLeftButtonDown"
+                                            PreviewMouseMove="TodoItem_PreviewMouseMove"
+                                            DragOver="TodoItem_DragOver" Drop="TodoItem_Drop">
                                         <Border.ContextMenu>
                                             <ContextMenu>
-                                                <MenuItem Header="Delete" Click="TodoItemDeleteMenu_Click" Icon="{ui:SymbolIcon Symbol=Delete16}">
+                                                <MenuItem Header="Set Priority" Icon="{ui:SymbolIcon Symbol=Flag16}">
+                                                    <MenuItem Header="🔴 High" Click="TodoItemPriorityHigh_Click"/>
+                                                    <MenuItem Header="🟡 Medium" Click="TodoItemPriorityMedium_Click"/>
+                                                    <MenuItem Header="🟢 Low" Click="TodoItemPriorityLow_Click"/>
+                                                    <MenuItem Header="Clear Priority" Click="TodoItemPriorityNone_Click"/>
+                                                </MenuItem>
+                                                <MenuItem Header="Due Date" Icon="{ui:SymbolIcon Symbol=CalendarLtr16}" Click="TodoItemDueDate_Click"/>
+                                                <MenuItem Header="Tags" Icon="{ui:SymbolIcon Symbol=Edit24}" Click="TodoItemTag_Click"/>
+                                                <MenuItem Header="Color" Icon="{ui:SymbolIcon Symbol=Color24}" Click="TodoItemColor_Click"/>
+                                                <MenuItem Header="Add Subtask" Icon="{ui:SymbolIcon Symbol=Add12}" Click="TodoItemAddSubtask_Click"/>
+                                                <MenuItem Header="Description" Icon="{ui:SymbolIcon Symbol=Document24}" Click="TodoItemDescription_Click"/>
+                                                <MenuItem Header="Recurrence" Icon="{ui:SymbolIcon Symbol=ArrowRotateClockwise24}" Click="TodoItemRecurrence_Click"/>
+                                                <Separator/>
+                                                <MenuItem Header="Delete" Click="TodoItemTrash_Click" Icon="{ui:SymbolIcon Symbol=Delete16}">
                                                     <MenuItem.Style>
                                                         <Style TargetType="MenuItem">
                                                             <Setter Property="Foreground" Value="{DynamicResource DangerColor}"/>
@@ -3002,175 +3389,579 @@
                                                 </MenuItem>
                                             </ContextMenu>
                                         </Border.ContextMenu>
-                                        <Grid Margin="10,8,8,8">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="Auto"/>
-                                                <ColumnDefinition Width="*"/>
-                                                <ColumnDefinition Width="Auto"/>
-                                            </Grid.ColumnDefinitions>
 
-                                            <!-- Custom Circle Checkbox -->
-                                            <Border Grid.Column="0" Width="18" Height="18" CornerRadius="9" Margin="2,0,8,0" 
-                                                    Cursor="Hand" MouseLeftButtonDown="TodoItemCheck_Click" VerticalAlignment="Center">
+                                        <Grid>
+                                            <Border x:Name="TodoColorStrip" Width="4" HorizontalAlignment="Left" CornerRadius="8,0,0,8">
                                                 <Border.Style>
                                                     <Style TargetType="Border">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
                                                         <Setter Property="Background" Value="Transparent"/>
-                                                        <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
-                                                        <Setter Property="BorderThickness" Value="1.5"/>
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsDone}" Value="True">
-                                                                <Setter Property="Background" Value="{DynamicResource SuccessColor}"/>
-                                                                <Setter Property="BorderBrush" Value="{DynamicResource SuccessColor}"/>
+                                                            <DataTrigger Binding="{Binding Color}" Value="#FF4444">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                <Setter Property="Background" Value="#FF4444"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Color}" Value="#F59E0B">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                <Setter Property="Background" Value="#F59E0B"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Color}" Value="#22C55E">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                <Setter Property="Background" Value="#22C55E"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Color}" Value="#3B82F6">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                <Setter Property="Background" Value="#3B82F6"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Color}" Value="#8B5CF6">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                <Setter Property="Background" Value="#8B5CF6"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding Color}" Value="#EC4899">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                <Setter Property="Background" Value="#EC4899"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </Border.Style>
-                                                <ui:SymbolIcon Symbol="Checkmark12" Foreground="White" FontSize="9" HorizontalAlignment="Center" VerticalAlignment="Center">
-                                                    <ui:SymbolIcon.Style>
-                                                        <Style TargetType="ui:SymbolIcon">
+                                            </Border>
+
+                                            <StackPanel Margin="10,2,10,2">
+                                                <!-- ═══ ROW 1: Checkbox + Text + Badges + Actions ═══ -->
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/> <!-- Priority dot -->
+                                                        <ColumnDefinition Width="Auto"/> <!-- Checkbox -->
+                                                        <ColumnDefinition Width="Auto"/> <!-- Timer+Reminder -->
+                                                        <ColumnDefinition Width="*"/>    <!-- Text -->
+                                                        <ColumnDefinition Width="Auto"/> <!-- Badges -->
+                                                    </Grid.ColumnDefinitions>
+
+                                                    <!-- Priority indicator dot (click to cycle) -->
+                                                    <Border x:Name="TodoPriorityBorder" Grid.Column="0" Width="8" Height="8" CornerRadius="4" Margin="0,0,8,0" 
+                                                            Cursor="Hand" MouseLeftButtonDown="TodoItemPriority_Click" VerticalAlignment="Center"
+                                                            ToolTip="{Binding PriorityDisplay}">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Visibility" Value="Hidden"/>
+                                                                <Setter Property="Background" Value="#666680"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding HasPriority}" Value="True">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Priority}" Value="High">
+                                                                        <Setter Property="Background" Value="#FF4444"/>
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Priority}" Value="Medium">
+                                                                        <Setter Property="Background" Value="#F59E0B"/>
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Priority}" Value="Low">
+                                                                        <Setter Property="Background" Value="#22C55E"/>
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                    </Border>
+
+                                                    <!-- Custom Circle Checkbox -->
+                                                    <Border x:Name="TodoCheckboxBorder" Grid.Column="1" Width="18" Height="18" CornerRadius="9" Margin="2,0,10,0" 
+                                                            Cursor="Hand" MouseLeftButtonDown="TodoItemCheck_Click" VerticalAlignment="Center">
+                                                        <Border.Style>
+                                                            <Style TargetType="Border">
+                                                                <Setter Property="Background" Value="Transparent"/>
+                                                                <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                                <Setter Property="BorderThickness" Value="1.5"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                        <Setter Property="Background" Value="{DynamicResource SuccessColor}"/>
+                                                                        <Setter Property="BorderBrush" Value="{DynamicResource SuccessColor}"/>
+                                                                    </DataTrigger>
+                                                                    <!-- Priority-colored checkbox ring (only when not done) -->
+                                                                    <MultiDataTrigger>
+                                                                        <MultiDataTrigger.Conditions>
+                                                                            <Condition Binding="{Binding Priority}" Value="High"/>
+                                                                            <Condition Binding="{Binding IsDone}" Value="False"/>
+                                                                        </MultiDataTrigger.Conditions>
+                                                                        <Setter Property="BorderBrush" Value="#FF4444"/>
+                                                                        <Setter Property="BorderThickness" Value="2"/>
+                                                                    </MultiDataTrigger>
+                                                                    <MultiDataTrigger>
+                                                                        <MultiDataTrigger.Conditions>
+                                                                            <Condition Binding="{Binding Priority}" Value="Medium"/>
+                                                                            <Condition Binding="{Binding IsDone}" Value="False"/>
+                                                                        </MultiDataTrigger.Conditions>
+                                                                        <Setter Property="BorderBrush" Value="#F59E0B"/>
+                                                                        <Setter Property="BorderThickness" Value="2"/>
+                                                                    </MultiDataTrigger>
+                                                                    <MultiDataTrigger>
+                                                                        <MultiDataTrigger.Conditions>
+                                                                            <Condition Binding="{Binding Priority}" Value="Low"/>
+                                                                            <Condition Binding="{Binding IsDone}" Value="False"/>
+                                                                        </MultiDataTrigger.Conditions>
+                                                                        <Setter Property="BorderBrush" Value="#22C55E"/>
+                                                                    </MultiDataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </Border.Style>
+                                                        <ui:SymbolIcon Symbol="Checkmark12" Foreground="White" FontSize="9" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                            <ui:SymbolIcon.Style>
+                                                                <Style TargetType="ui:SymbolIcon">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </ui:SymbolIcon.Style>
+                                                        </ui:SymbolIcon>
+                                                    </Border>
+
+                                                    <!-- Timer & Reminder icons (always visible when set) -->
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0">
+                                                        <!-- Timer icon -->
+                                                        <Border CornerRadius="3" Cursor="Hand" Padding="2,1" Margin="0,0,2,0"
+                                                                Background="#1810B981"
+                                                                MouseLeftButtonDown="TodoItemTimer_Click" ToolTip="Start Timer">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding HasTimer}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                            <ui:SymbolIcon Symbol="Timer16" Foreground="#10B981" FontSize="9"/>
+                                                        </Border>
+                                                        <!-- Reminder icon -->
+                                                        <Border CornerRadius="3" Cursor="Hand" Padding="2,1"
+                                                                Background="#18F59E0B"
+                                                                MouseLeftButtonDown="TodoItemReminder_Click" ToolTip="Set Reminder">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding HasReminder}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                            <ui:SymbolIcon Symbol="Alert16" Foreground="#F59E0B" FontSize="9"/>
+                                                        </Border>
+                                                    </StackPanel>
+
+                                                    <!-- Todo Text -->
+                                                    <TextBox Grid.Column="3" x:Name="TodoItemTextBox"
+                                                             Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                             FontSize="13" Background="Transparent" BorderThickness="0" Padding="0"
+                                                             CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
+                                                             SelectionBrush="#608B5CF6" VerticalAlignment="Center"
+                                                             AcceptsReturn="True" TextWrapping="Wrap"
+                                                             TextChanged="TodoItemText_TextChanged"
+                                                             GotFocus="TodoItemText_GotFocus"
+                                                             PreviewKeyDown="TodoItemText_PreviewKeyDown">
+                                                        <TextBox.Style>
+                                                            <Style TargetType="TextBox">
+                                                                <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                                <Setter Property="Template">
+                                                                    <Setter.Value>
+                                                                        <ControlTemplate TargetType="TextBox">
+                                                                            <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                                                                                <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
+                                                                            </Border>
+                                                                        </ControlTemplate>
+                                                                    </Setter.Value>
+                                                                </Setter>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                        <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBox.Style>
+                                                    </TextBox>
+                                                    <!-- Placeholder text -->
+                                                    <TextBlock Grid.Column="3" Text="What needs to be done?" FontSize="13"
+                                                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
+                                                               IsHitTestVisible="False" VerticalAlignment="Center" Margin="0" Opacity="0.5">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding Text}" Value="">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding Text}" Value="{x:Null}">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+
+                                                    <!-- Right-side badges & actions -->
+                                                    <StackPanel Grid.Column="4" VerticalAlignment="Center" Margin="10,0,4,0" HorizontalAlignment="Right" MinWidth="56">
+                                                        <!-- Created time -->
+                                                        <TextBlock Text="{Binding CreatedAtDisplay}" FontSize="9" 
+                                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
+                                                                   HorizontalAlignment="Center" IsHitTestVisible="False" Opacity="0.7"/>
+
+                                                        <!-- More button + Collapse chevron side-by-side -->
+                                                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,2,0,0">
+                                                            <!-- Dropdown menu button (always visible) -->
+                                                            <Border x:Name="TodoDropdownButton" CornerRadius="6" Cursor="Hand" Padding="6,3" Margin="0,0,2,0"
+                                                                    MouseLeftButtonDown="TodoItemMore_Click" ToolTip="More options">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Background" Value="#0CFFFFFF"/>
+                                                                        <Setter Property="BorderBrush" Value="#18808080"/>
+                                                                        <Setter Property="BorderThickness" Value="1"/>
+                                                                        <Style.Triggers>
+                                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                                <Setter Property="Background" Value="#20FFFFFF"/>
+                                                                                <Setter Property="BorderBrush" Value="#40808080"/>
+                                                                            </Trigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <ui:SymbolIcon Symbol="MoreHorizontal24" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="11"/>
+                                                            </Border>
+
+                                                            <!-- Collapse/expand chevron -->
+                                                            <Border x:Name="TodoCollapseBtn" CornerRadius="4" Cursor="Hand" Padding="4,3"
+                                                                    MouseLeftButtonDown="TodoItemCollapse_Click" Background="Transparent">
+                                                                <TextBlock Text="{Binding CollapseIcon}" FontSize="9" FontWeight="Bold" 
+                                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center"/>
+                                                            </Border>
+                                                        </StackPanel>
+
+                                                        <!-- Status badges row -->
+                                                        <WrapPanel HorizontalAlignment="Center" Margin="0,2,0,0">
+                                                            <!-- Due Date badge -->
+                                                            <Border x:Name="TodoDueDateBadge" CornerRadius="4" Padding="4,1" Margin="0,0,2,1"
+                                                                    Cursor="Hand" MouseLeftButtonDown="TodoItemDueDate_Click" ToolTip="Click to change due date">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Background" Value="#18F59E0B"/>
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding HasDueDate}" Value="True">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding IsOverdue}" Value="True">
+                                                                                <Setter Property="Background" Value="#18FF4444"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <TextBlock Text="{Binding DueDateDisplay}" FontSize="8" FontWeight="SemiBold">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Setter Property="Foreground" Value="#F59E0B"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsOverdue}" Value="True">
+                                                                                    <Setter Property="Foreground" Value="#FF4444"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                            </Border>
+
+                                                            <!-- Timer badge -->
+                                                            <Border x:Name="TodoTimerBadge" CornerRadius="4" Padding="4,1" Margin="0,0,2,1"
+                                                                    Background="#1810B981" Cursor="Hand"
+                                                                    MouseLeftButtonDown="TodoItemSetTimer_Click" ToolTip="Click to cycle timer preset">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding HasTimer}" Value="True">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <TextBlock Text="{Binding TimerDisplay}" FontSize="8" FontWeight="SemiBold" Foreground="#10B981"/>
+                                                            </Border>
+
+                                                            <!-- Reminder badge -->
+                                                            <Border x:Name="TodoReminderBadge" CornerRadius="4" Padding="4,1" Margin="0,0,2,1"
+                                                                    Background="#18F59E0B">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding HasReminder}" Value="True">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <TextBlock Text="{Binding ReminderDisplay}" FontSize="8" FontWeight="SemiBold" Foreground="#F59E0B"/>
+                                                            </Border>
+
+                                                            <!-- Recurrence badge -->
+                                                            <Border x:Name="TodoRecurrenceBadge" CornerRadius="4" Padding="4,1" Margin="0,0,2,1"
+                                                                    Background="#188B5CF6" Cursor="Hand" MouseLeftButtonDown="TodoItemRecurrence_Click">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding HasRecurrence}" Value="True">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <TextBlock Text="{Binding RecurrenceDisplay}" FontSize="7.5" FontWeight="SemiBold" Foreground="#8B5CF6"/>
+                                                            </Border>
+
+                                                            <!-- Subtask badge removed (use subtask list itself) -->
+
+
+                                                            <!-- Description indicator badge -->
+                                                            <Border x:Name="TodoDescBadge" CornerRadius="4" Padding="3,1" Margin="0,0,2,1"
+                                                                    Background="#1810B981" ToolTip="Has description">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding HasDescription}" Value="True">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <TextBlock Text="📝" FontSize="7.5"/>
+                                                            </Border>
+
+                                                            <!-- Priority label badge -->
+                                                            <Border x:Name="TodoPriorityBadge" CornerRadius="4" Padding="4,1" Margin="0,0,0,1">
+                                                                <Border.Style>
+                                                                    <Style TargetType="Border">
+                                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                                        <Setter Property="Background" Value="Transparent"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding Priority}" Value="High">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                                <Setter Property="Background" Value="#20FF4444"/>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding Priority}" Value="Medium">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                                <Setter Property="Background" Value="#20F59E0B"/>
+                                                                            </DataTrigger>
+                                                                            <DataTrigger Binding="{Binding Priority}" Value="Low">
+                                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                                                <Setter Property="Background" Value="#2022C55E"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </Border.Style>
+                                                                <TextBlock Text="{Binding PriorityDisplay}" FontSize="8" FontWeight="Bold">
+                                                                    <TextBlock.Style>
+                                                                        <Style TargetType="TextBlock">
+                                                                            <Setter Property="Foreground" Value="#666680"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding Priority}" Value="High">
+                                                                                    <Setter Property="Foreground" Value="#FF4444"/>
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding Priority}" Value="Medium">
+                                                                                    <Setter Property="Foreground" Value="#F59E0B"/>
+                                                                                </DataTrigger>
+                                                                                <DataTrigger Binding="{Binding Priority}" Value="Low">
+                                                                                    <Setter Property="Foreground" Value="#22C55E"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBlock.Style>
+                                                                </TextBlock>
+                                                            </Border>
+                                                        </WrapPanel>
+
+
+                                                    </StackPanel>
+                                                </Grid>
+
+                                                <!-- ═══ ROW 2: Tags chips (visible when tags exist) ═══ -->
+                                                <ItemsControl x:Name="TodoTagsRow" ItemsSource="{Binding Tags}" Margin="42,3,0,0">
+                                                    <ItemsControl.Style>
+                                                        <Style TargetType="ItemsControl">
                                                             <Setter Property="Visibility" Value="Collapsed"/>
                                                             <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                <DataTrigger Binding="{Binding HasTags}" Value="True">
                                                                     <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsExpanded}" Value="False">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
                                                                 </DataTrigger>
                                                             </Style.Triggers>
                                                         </Style>
-                                                    </ui:SymbolIcon.Style>
-                                                </ui:SymbolIcon>
-                                            </Border>
+                                                    </ItemsControl.Style>
+                                                    <ItemsControl.ItemsPanel>
+                                                        <ItemsPanelTemplate>
+                                                            <WrapPanel/>
+                                                        </ItemsPanelTemplate>
+                                                    </ItemsControl.ItemsPanel>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Border CornerRadius="4" Background="#188B5CF6" Padding="5,1,5,2" Margin="0,0,3,2">
+                                                                <TextBlock Text="{Binding}" FontSize="8.5" FontWeight="SemiBold" Foreground="#8B5CF6"/>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
 
-                                            <!-- Todo Text -->
-                                            <TextBox Grid.Column="1" x:Name="TodoItemTextBox"
-                                                     Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                     FontSize="12.5" Background="Transparent" BorderThickness="0" Padding="0"
-                                                     CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
-                                                     SelectionBrush="#608B5CF6" VerticalAlignment="Center"
-                                                     AcceptsReturn="True" TextWrapping="Wrap"
-                                                     TextChanged="TodoItemText_TextChanged"
-                                                     GotFocus="TodoItemText_GotFocus"
-                                                     PreviewKeyDown="TodoItemText_PreviewKeyDown">
-                                                <TextBox.Style>
-                                                    <Style TargetType="TextBox">
-                                                        <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                                                        <Setter Property="Template">
-                                                            <Setter.Value>
-                                                                <ControlTemplate TargetType="TextBox">
-                                                                    <Border Background="Transparent" Padding="{TemplateBinding Padding}">
-                                                                        <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
-                                                                    </Border>
-                                                                </ControlTemplate>
-                                                            </Setter.Value>
-                                                        </Setter>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsDone}" Value="True">
-                                                                <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
-                                                                <Setter Property="Opacity" Value="0.6"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBox.Style>
-                                            </TextBox>
-                                            <TextBlock Grid.Column="1" Text="What needs to be done?" FontSize="12.5"
-                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
-                                                       IsHitTestVisible="False" VerticalAlignment="Center" Margin="0" Opacity="0.5">
-                                                <TextBlock.Style>
-                                                    <Style TargetType="TextBlock">
-                                                        <Setter Property="Visibility" Value="Collapsed"/>
-                                                        <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding Text}" Value="">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                            <DataTrigger Binding="{Binding Text}" Value="{x:Null}">
-                                                                <Setter Property="Visibility" Value="Visible"/>
-                                                            </DataTrigger>
-                                                        </Style.Triggers>
-                                                    </Style>
-                                                </TextBlock.Style>
-                                            </TextBlock>
+                                                <!-- ═══ ROW 3: Description area (collapsed by default, toggle via click) ═══ -->
+                                                <TextBox x:Name="TodoDescriptionBox" Margin="42,4,4,0" Padding="6,4"
+                                                         Text="{Binding Description, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         FontSize="10.5" TextWrapping="Wrap" AcceptsReturn="True"
+                                                         Background="{DynamicResource MicaWPF.Brushes.ControlAltFillColorTertiary}"
+                                                         Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
+                                                         BorderThickness="1" BorderBrush="{DynamicResource MicaWPF.Brushes.CardStrokeColorDefault}"
+                                                         TextChanged="TodoDescriptionText_TextChanged">
+                                                    <TextBox.Style>
+                                                        <Style TargetType="TextBox">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsDescriptionVisible}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsExpanded}" Value="False">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBox.Style>
+                                                </TextBox>
 
-                                            <!-- Time & Action Buttons (vertically stacked) -->
-                                            <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="8,0,4,0" HorizontalAlignment="Right" MinWidth="54">
-                                                <!-- Time showing when the task was assigned/created -->
-                                                <TextBlock Text="{Binding CreatedAtDisplay}" FontSize="9.5" 
-                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
-                                                           HorizontalAlignment="Center" IsHitTestVisible="False" Opacity="0.8"/>
+                                                <!-- ═══ ROW 4: Subtasks list (visible when subtasks exist) ═══ -->
+                                                <ItemsControl x:Name="TodoSubtasksList" ItemsSource="{Binding SubTasks}" Margin="42,4,4,0">
+                                                    <ItemsControl.Style>
+                                                        <Style TargetType="ItemsControl">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding HasSubTasks}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </DataTrigger>
+                                                                <DataTrigger Binding="{Binding IsExpanded}" Value="False">
+                                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </ItemsControl.Style>
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate>
+                                                            <Grid Margin="0,1,0,1">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                </Grid.ColumnDefinitions>
+                                                                <!-- Subtask mini checkbox -->
+                                                                <Border Grid.Column="0" Width="13" Height="13" CornerRadius="3" Margin="0,0,5,0"
+                                                                        Cursor="Hand" MouseLeftButtonDown="TodoSubtaskCheck_Click" VerticalAlignment="Center">
+                                                                    <Border.Style>
+                                                                        <Style TargetType="Border">
+                                                                            <Setter Property="Background" Value="Transparent"/>
+                                                                            <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                                            <Setter Property="BorderThickness" Value="1"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                                    <Setter Property="Background" Value="{DynamicResource SuccessColor}"/>
+                                                                                    <Setter Property="BorderBrush" Value="{DynamicResource SuccessColor}"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </Border.Style>
+                                                                    <ui:SymbolIcon Symbol="Checkmark12" Foreground="White" FontSize="7" HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                                        <ui:SymbolIcon.Style>
+                                                                            <Style TargetType="ui:SymbolIcon">
+                                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </ui:SymbolIcon.Style>
+                                                                    </ui:SymbolIcon>
+                                                                </Border>
+                                                                <!-- Subtask text -->
+                                                                <TextBox Grid.Column="1" x:Name="TodoSubtaskTextBox"
+                                                                         Text="{Binding Text, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                         FontSize="13" Background="Transparent" BorderThickness="0" Padding="0,1"
+                                                                         CaretBrush="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
+                                                                         TextWrapping="Wrap" TextChanged="TodoSubtaskText_TextChanged" PreviewKeyDown="TodoSubtask_PreviewKeyDown">
 
-                                                <!-- Timer/Reminder status badges (always visible when set) -->
-                                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,2,0,0">
-                                                    <!-- Timer preset badge -->
-                                                    <Border x:Name="TodoTimerBadge" CornerRadius="4" Padding="4,1" Margin="0,0,2,0"
-                                                            Background="#1810B981" Cursor="Hand"
-                                                            MouseLeftButtonDown="TodoItemSetTimer_Click" ToolTip="Click to cycle timer preset">
-                                                        <Border.Style>
-                                                            <Style TargetType="Border">
-                                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding HasTimer}" Value="True">
-                                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Border.Style>
-                                                        <TextBlock Text="{Binding TimerDisplay}" FontSize="8.5" FontWeight="SemiBold" Foreground="#10B981"/>
-                                                    </Border>
-                                                    <!-- Reminder badge -->
-                                                    <Border x:Name="TodoReminderBadge" CornerRadius="4" Padding="4,1"
-                                                            Background="#18F59E0B">
-                                                        <Border.Style>
-                                                            <Style TargetType="Border">
-                                                                <Setter Property="Visibility" Value="Collapsed"/>
-                                                                <Style.Triggers>
-                                                                    <DataTrigger Binding="{Binding HasReminder}" Value="True">
-                                                                        <Setter Property="Visibility" Value="Visible"/>
-                                                                    </DataTrigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Border.Style>
-                                                        <TextBlock Text="{Binding ReminderDisplay}" FontSize="8.5" FontWeight="SemiBold" Foreground="#F59E0B"/>
-                                                    </Border>
-                                                </StackPanel>
-
-                                                <!-- Action buttons row (visible on hover) -->
-                                                <StackPanel x:Name="TodoActionBtns" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,3,0,0" Visibility="Collapsed">
-                                                    <!-- Timer button -->
-                                                    <Border CornerRadius="4" Cursor="Hand" Padding="4,2" Margin="0,0,2,0"
-                                                            Background="#1810B981" BorderBrush="#3010B981" BorderThickness="1"
-                                                            MouseLeftButtonDown="TodoItemTimer_Click" ToolTip="Start Timer">
-                                                        <ui:SymbolIcon Symbol="Timer16" Foreground="#10B981" FontSize="10"/>
-                                                    </Border>
-                                                    <!-- Reminder button -->
-                                                    <Border CornerRadius="4" Cursor="Hand" Padding="4,2" Margin="0,0,2,0"
-                                                            Background="#18F59E0B" BorderBrush="#30F59E0B" BorderThickness="1"
-                                                            MouseLeftButtonDown="TodoItemReminder_Click" ToolTip="Set Reminder">
-                                                        <ui:SymbolIcon Symbol="Alert16" Foreground="#F59E0B" FontSize="10"/>
-                                                    </Border>
-                                                    <!-- Delete button -->
-                                                    <Border CornerRadius="4" Cursor="Hand" Padding="4,2"
-                                                            MouseLeftButtonDown="TodoItemDelete_Click" ToolTip="Delete Task">
-                                                        <Border.Style>
-                                                            <Style TargetType="Border">
-                                                                <Setter Property="Background" Value="{DynamicResource DangerBgSubtle}"/>
-                                                                <Setter Property="BorderBrush" Value="{DynamicResource DangerBgHover}"/>
-                                                                <Setter Property="BorderThickness" Value="1"/>
-                                                                <Style.Triggers>
-                                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                                        <Setter Property="Background" Value="{DynamicResource DangerBgHover}"/>
-                                                                        <Setter Property="BorderBrush" Value="{DynamicResource DangerBorder}"/>
-                                                                    </Trigger>
-                                                                </Style.Triggers>
-                                                            </Style>
-                                                        </Border.Style>
-                                                        <ui:SymbolIcon Symbol="Delete16" Foreground="{DynamicResource DangerColor}" FontSize="10"/>
-                                                    </Border>
-                                                </StackPanel>
+                                                                    <TextBox.Style>
+                                                                        <Style TargetType="TextBox">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                                                            <Setter Property="Template">
+                                                                                <Setter.Value>
+                                                                                    <ControlTemplate TargetType="TextBox">
+                                                                                        <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+                                                                                            <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
+                                                                                        </Border>
+                                                                                    </ControlTemplate>
+                                                                                </Setter.Value>
+                                                                            </Setter>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                                                                    <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                                                    <Setter Property="Opacity" Value="0.5"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </TextBox.Style>
+                                                                </TextBox>
+                                                            </Grid>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
                                     <DataTemplate.Triggers>
-                                        <!-- Show action buttons on card hover -->
-                                        <Trigger SourceName="TodoCard" Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="TodoActionBtns" Property="Visibility" Value="Visible"/>
-                                        </Trigger>
+
+                                        <!-- Show color strip with correct color -->
+                                        <DataTrigger Binding="{Binding HasColor}" Value="True">
+                                            <Setter TargetName="TodoColorStrip" Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Color}" Value="#FF4444">
+                                            <Setter TargetName="TodoColorStrip" Property="Background" Value="#FF4444"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Color}" Value="#F59E0B">
+                                            <Setter TargetName="TodoColorStrip" Property="Background" Value="#F59E0B"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Color}" Value="#22C55E">
+                                            <Setter TargetName="TodoColorStrip" Property="Background" Value="#22C55E"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Color}" Value="#3B82F6">
+                                            <Setter TargetName="TodoColorStrip" Property="Background" Value="#3B82F6"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Color}" Value="#8B5CF6">
+                                            <Setter TargetName="TodoColorStrip" Property="Background" Value="#8B5CF6"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Color}" Value="#EC4899">
+                                            <Setter TargetName="TodoColorStrip" Property="Background" Value="#EC4899"/>
+                                        </DataTrigger>
+                                        <!-- Priority-based card left border tinting -->
+                                        <DataTrigger Binding="{Binding Priority}" Value="High">
+                                            <Setter TargetName="TodoCard" Property="BorderBrush" Value="#40FF4444"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Priority}" Value="Medium">
+                                            <Setter TargetName="TodoCard" Property="BorderBrush" Value="#30F59E0B"/>
+                                        </DataTrigger>
+                                        <!-- Completed card visual dim -->
+                                        <DataTrigger Binding="{Binding IsDone}" Value="True">
+                                            <Setter TargetName="TodoCard" Property="Opacity" Value="0.55"/>
+                                        </DataTrigger>
                                     </DataTemplate.Triggers>
                                 </DataTemplate>
                             </ItemsControl.ItemTemplate>

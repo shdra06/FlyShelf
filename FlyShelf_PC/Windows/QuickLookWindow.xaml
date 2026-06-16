@@ -9,7 +9,8 @@
         MouseLeftButtonDown="Window_MouseLeftButtonDown"
         MouseDoubleClick="Window_MouseDoubleClick"
         MouseMove="Window_MouseMove" Deactivated="Window_Deactivated"
-        Loaded="Window_Loaded">
+        Loaded="Window_Loaded"
+        Icon="/Resources/FlyShelfLogo.ico">
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="0" ResizeBorderThickness="6" CornerRadius="12" GlassFrameThickness="-1" />
     </WindowChrome.WindowChrome>
@@ -33,6 +34,30 @@
                                    Foreground="{DynamicResource InfoColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Rotate 90° clockwise"
                                    Visibility="Collapsed">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowRotateClockwise24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
+                        <!-- Doodle Button (image only) -->
+                        <ui:Button x:Name="DoodleBtn" Click="DoodleButton_Click" Appearance="Secondary" 
+                                   Foreground="#A78BFA" Padding="5,3" Margin="0,0,4,0" ToolTip="Draw / Annotate"
+                                   Visibility="Collapsed">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Edit24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
+                        <!-- Doodle Undo -->
+                        <ui:Button x:Name="DoodleUndoBtn" Click="DoodleUndo_Click" Appearance="Secondary" 
+                                   Foreground="#94A3B8" Padding="5,3" Margin="0,0,2,0" ToolTip="Undo (Ctrl+Z)"
+                                   Visibility="Collapsed">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowUndo24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
+                        <!-- Doodle Redo -->
+                        <ui:Button x:Name="DoodleRedoBtn" Click="DoodleRedo_Click" Appearance="Secondary" 
+                                   Foreground="#94A3B8" Padding="5,3" Margin="0,0,2,0" ToolTip="Redo (Ctrl+Y)"
+                                   Visibility="Collapsed">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowRedo24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
+                        <!-- Doodle Save -->
+                        <ui:Button x:Name="DoodleSaveBtn" Click="DoodleSave_Click" Appearance="Secondary" 
+                                   Foreground="#34D399" Padding="5,3" Margin="0,0,4,0" ToolTip="Save annotated image (Ctrl+S)"
+                                   Visibility="Collapsed">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Save24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                         <!-- OCR Button (image only) -->
                         <ui:Button x:Name="OcrBtn" Click="OcrButton_Click" Appearance="Secondary" 
@@ -66,8 +91,62 @@
                             <Grid x:Name="ImageContainerGrid">
                                 <Image x:Name="PreviewImage" Stretch="Fill" RenderOptions.BitmapScalingMode="HighQuality"/>
                                 <Canvas x:Name="OcrOverlayCanvas" Background="Transparent" ClipToBounds="True"/>
+                                <!-- Doodle InkCanvas overlay (same size as image, hidden by default) -->
+                                <InkCanvas x:Name="DoodleCanvas" Background="Transparent" Visibility="Collapsed"
+                                           ClipToBounds="True" EditingMode="Ink"
+                                           StrokeCollected="DoodleCanvas_StrokeCollected"
+                                           StrokeErased="DoodleCanvas_StrokeErased"/>
                             </Grid>
                         </Viewbox>
+
+                        <!-- Doodle Toolbar (floating at bottom, visible only in doodle mode) -->
+                        <Border x:Name="DoodleToolbar" Visibility="Collapsed" VerticalAlignment="Bottom" HorizontalAlignment="Center"
+                                Margin="0,0,0,10" Padding="8,5" CornerRadius="10"
+                                Background="#E0181825" BorderBrush="#40A78BFA" BorderThickness="1">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <!-- Color presets -->
+                                <TextBlock Text="Color" Foreground="#8894A3B8" FontSize="9" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                                <Border x:Name="DoodleColorWhite" Width="18" Height="18" CornerRadius="9" Background="#FFFFFF" Margin="0,0,3,0" Cursor="Hand"
+                                        BorderThickness="2" BorderBrush="#60A78BFA" MouseLeftButtonDown="DoodleColorPick_Click" Tag="#FFFFFF"/>
+                                <Border x:Name="DoodleColorRed" Width="18" Height="18" CornerRadius="9" Background="#EF4444" Margin="0,0,3,0" Cursor="Hand"
+                                        BorderThickness="1" BorderBrush="Transparent" MouseLeftButtonDown="DoodleColorPick_Click" Tag="#EF4444"/>
+                                <Border x:Name="DoodleColorYellow" Width="18" Height="18" CornerRadius="9" Background="#F59E0B" Margin="0,0,3,0" Cursor="Hand"
+                                        BorderThickness="1" BorderBrush="Transparent" MouseLeftButtonDown="DoodleColorPick_Click" Tag="#F59E0B"/>
+                                <Border x:Name="DoodleColorGreen" Width="18" Height="18" CornerRadius="9" Background="#10B981" Margin="0,0,3,0" Cursor="Hand"
+                                        BorderThickness="1" BorderBrush="Transparent" MouseLeftButtonDown="DoodleColorPick_Click" Tag="#10B981"/>
+                                <Border x:Name="DoodleColorBlue" Width="18" Height="18" CornerRadius="9" Background="#3B82F6" Margin="0,0,8,0" Cursor="Hand"
+                                        BorderThickness="1" BorderBrush="Transparent" MouseLeftButtonDown="DoodleColorPick_Click" Tag="#3B82F6"/>
+
+                                <!-- Separator -->
+                                <Border Width="1" Height="18" Background="#30FFFFFF" Margin="0,0,8,0"/>
+
+                                <!-- Brush size -->
+                                <TextBlock Text="Size" Foreground="#8894A3B8" FontSize="9" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                <Slider x:Name="DoodleSizeSlider" Width="70" Minimum="2" Maximum="16" Value="3" VerticalAlignment="Center"
+                                        ValueChanged="DoodleSizeChanged" IsSnapToTickEnabled="True" TickFrequency="1"/>
+                                <TextBlock x:Name="DoodleSizeLabel" Text="3" Foreground="#94A3B8" FontSize="9" VerticalAlignment="Center" Margin="4,0,8,0" MinWidth="12"/>
+
+                                <!-- Separator -->
+                                <Border Width="1" Height="18" Background="#30FFFFFF" Margin="0,0,8,0"/>
+
+                                <!-- Eraser toggle -->
+                                <Border x:Name="DoodleEraserBtn" CornerRadius="6" Padding="6,3" Cursor="Hand"
+                                        Background="Transparent" BorderBrush="#30FFFFFF" BorderThickness="1"
+                                        MouseLeftButtonDown="DoodleEraser_Click" ToolTip="Eraser (click strokes to erase)">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="EraserTool24" Foreground="#94A3B8" FontSize="12" VerticalAlignment="Center"/>
+                                        <TextBlock x:Name="DoodleEraserLabel" Text="Eraser" Foreground="#94A3B8" FontSize="9" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Clear all -->
+                                <Border CornerRadius="6" Padding="6,3" Margin="4,0,0,0" Cursor="Hand"
+                                        Background="#18EF4444" BorderBrush="#30EF4444" BorderThickness="1"
+                                        MouseLeftButtonDown="DoodleClearAll_Click" ToolTip="Clear all strokes">
+                                    <ui:SymbolIcon Symbol="Delete24" Foreground="#EF4444" FontSize="12" VerticalAlignment="Center"/>
+                                </Border>
+                            </StackPanel>
+                        </Border>
                     </Grid>
                     
                     <!-- Dynamic Document Mode (PDF/HTML) -->

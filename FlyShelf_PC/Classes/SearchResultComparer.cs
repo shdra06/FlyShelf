@@ -6,11 +6,16 @@ using FlyShelf.ViewModels;
 namespace FlyShelf.Classes
 {
     /// <summary>
-    /// Compares two ClipboardItem objects based on search query matching priority.
-    /// Priority 1 (Highest): Item's FileName or RawContent contains the search query as a substring.
-    /// Priority 2 (Medium): Item's Extension, FilePath extension, or ItemType name matches the search query exactly.
-    /// Priority 3 (Lowest): General/fallback matches.
-    /// If priorities are identical, preserves chronological order (newest DateCopied first).
+    /// Compares two ClipboardItem objects based on fuzzy search relevance scoring.
+    /// Uses FuzzyMatcher.Score() to rank results by match quality.
+    /// 
+    /// Priority tiers (highest first):
+    ///   1. Exact substring match in FileName or RawContent (score 0.8+)
+    ///   2. Word-level or fuzzy match in FileName or RawContent (score 0.2-0.8)
+    ///   3. Extension or ItemType exact match
+    ///   4. Fallback — lowest relevance
+    /// 
+    /// Within the same priority, items are sorted by DateCopied (newest first).
     /// </summary>
     public class SearchResultComparer : IComparer
     {
@@ -18,60 +23,53 @@ namespace FlyShelf.Classes
 
         public SearchResultComparer(string query)
         {
-            _query = (query ?? "").ToLowerInvariant().Trim();
+            _query = (query ?? "").Trim();
         }
 
         public int Compare(object? x, object? y)
         {
             if (x is ClipboardItem a && y is ClipboardItem b)
             {
-                int pA = GetMatchPriority(a);
-                int pB = GetMatchPriority(b);
+                double scoreA = GetRelevanceScore(a);
+                double scoreB = GetRelevanceScore(b);
 
-                if (pA != pB)
-                {
-                    return pA.CompareTo(pB); // Lower value is sorted first
-                }
+                // Higher score = more relevant = should come first
+                int cmp = scoreB.CompareTo(scoreA);
+                if (cmp != 0) return cmp;
 
-                // Default fallback: newest copies first
+                // Tie-breaker: newest copies first
                 return b.DateCopied.CompareTo(a.DateCopied);
             }
             return 0;
         }
 
-        private int GetMatchPriority(ClipboardItem item)
+        private double GetRelevanceScore(ClipboardItem item)
         {
-            if (string.IsNullOrEmpty(_query)) return 3;
+            if (string.IsNullOrEmpty(_query)) return 0;
 
-            // 1st Priority: Actual substring match in name or text content
-            bool nameMatch = !string.IsNullOrEmpty(item.FileName) && item.FileName.IndexOf(_query, StringComparison.OrdinalIgnoreCase) >= 0;
-            bool contentMatch = !string.IsNullOrEmpty(item.RawContent) && item.RawContent.IndexOf(_query, StringComparison.OrdinalIgnoreCase) >= 0;
+            // Primary: fuzzy score across text content and name
+            double contentScore = FuzzyMatcher.ScoreBest(_query, item.RawContent, item.FileName);
+            if (contentScore > 0) return contentScore;
 
-            if (nameMatch || contentMatch)
-            {
-                return 1;
-            }
-
-            // 2nd Priority: Exact type/extension match (e.g. searching "pdf" brings up all files with .pdf extension)
-            bool extMatch = !string.IsNullOrEmpty(item.Extension) && item.Extension.Replace(".", "").Trim().Equals(_query, StringComparison.OrdinalIgnoreCase);
+            // Secondary: exact extension/type match (lower priority)
+            string qLower = _query.ToLowerInvariant();
+            bool extMatch = !string.IsNullOrEmpty(item.Extension) && item.Extension.Replace(".", "").Trim().Equals(qLower, StringComparison.OrdinalIgnoreCase);
             bool pathExtMatch = false;
             if (!string.IsNullOrEmpty(item.FilePath))
             {
                 try
                 {
                     string ext = Path.GetExtension(item.FilePath).Replace(".", "").Trim();
-                    pathExtMatch = ext.Equals(_query, StringComparison.OrdinalIgnoreCase);
+                    pathExtMatch = ext.Equals(qLower, StringComparison.OrdinalIgnoreCase);
                 }
                 catch { }
             }
             bool typeMatch = item.ItemType.ToString().Equals(_query, StringComparison.OrdinalIgnoreCase);
 
             if (extMatch || pathExtMatch || typeMatch)
-            {
-                return 2;
-            }
+                return 0.15; // Below fuzzy matches but above unmatched
 
-            return 3;
+            return 0;
         }
     }
 }

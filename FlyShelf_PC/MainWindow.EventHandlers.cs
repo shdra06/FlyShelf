@@ -50,7 +50,7 @@ namespace FlyShelf
                 return;
             }
 
-            _viewModel.HandleDrop(e.Data, true);
+            // Drop processing is handled exclusively in Window_PreviewDrop to avoid duplicate handling
             e.Handled = true;
         }
 
@@ -59,7 +59,8 @@ namespace FlyShelf
         private void Window_DragEnter(object sender, DragEventArgs e)
         {
             _isDragHovering = true;
-            IsDragHovering = true;
+            // Only show the green drop arrow indicator in clipboard mode, not in notes/todo
+            IsDragHovering = !_isNotesActive && !_isTodoActive;
             if (e.Data.GetDataPresent(DataFormats.FileDrop) || 
                 e.Data.GetDataPresent("FileNameW") ||
                 e.Data.GetDataPresent("FileName") ||
@@ -350,9 +351,10 @@ namespace FlyShelf
                 }
                 else
                 {
-                    var mutedColor = ((System.Windows.Media.SolidColorBrush)FindResource("ThemeTextMuted")).Color;
+                    var mutedBrush = TryFindResource("ThemeTextMuted") as System.Windows.Media.SolidColorBrush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Gray);
+                    var mutedColor = mutedBrush.Color;
                     dot.Fill = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x50, mutedColor.R, mutedColor.G, mutedColor.B));
-                    dot.Stroke = (System.Windows.Media.Brush)FindResource("ThemeOverlayBorder");
+                    dot.Stroke = TryFindResource("ThemeOverlayBorder") as System.Windows.Media.Brush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.DarkGray);
                 }
             }
         }
@@ -425,8 +427,11 @@ namespace FlyShelf
         {
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
             var historyWin = new FlyShelf.Windows.ReminderHistoryWindow();
+            historyWin.Topmost = true;
             historyWin.Show();
             historyWin.Activate();
+            historyWin.Focus();
+            historyWin.Topmost = false;
         }
 
         private FlyShelf.Windows.EmojiPickerWindow? _emojiPickerInstance;
@@ -806,7 +811,7 @@ namespace FlyShelf
             }
         }
 
-        private FlyShelf.Windows.QuickLookWindow _activeQuickLook;
+        private FlyShelf.Windows.QuickLookWindow? _activeQuickLook;
 
         internal void ShowQuickLookForItem(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null, bool autoTriggerOcr = false)
         {
@@ -836,6 +841,14 @@ namespace FlyShelf
             }
         }
 
+        private void ConvertImageToPdfSpecific_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                item.ConvertImageToPdf();
+            }
+        }
         private async void RotateImageSpecific_Click(object sender, MouseButtonEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.DataContext is FlyShelf.ViewModels.ClipboardItem item)
@@ -843,13 +856,14 @@ namespace FlyShelf
                 e.Handled = true;
                 if (string.IsNullOrEmpty(item.FilePath) || !System.IO.File.Exists(item.FilePath)) return;
 
+
+                Image targetImage = null;
                 try
                 {
                     string filePath = item.FilePath;
 
                     // Find the Image element in the visual tree for animation
                     var listViewItem = ShelfListView.ItemContainerGenerator.ContainerFromItem(item) as FrameworkElement;
-                    Image targetImage = null;
                     if (listViewItem != null)
                     {
                         targetImage = FindVisualChild<Image>(listViewItem, "ItemIcon");
@@ -931,6 +945,9 @@ namespace FlyShelf
                 }
                 catch (Exception ex)
                 {
+                    // Reset the visual rotation transform on failure so the image doesn't appear rotated
+                    if (targetImage != null)
+                        targetImage.RenderTransform = null;
                     FlyShelf.Classes.Logger.LogAction("ROTATE", "Failed: " + ex.Message);
                 }
             }
@@ -974,7 +991,11 @@ namespace FlyShelf
                 else if (item.SmartActionType == "SetTimer")
                 {
                     var tw = new FlyShelf.Windows.TimerWindow(item.RawContent);
+                    tw.Topmost = true;
                     tw.Show();
+                    tw.Activate();
+                    tw.Focus();
+                    tw.Topmost = false;
                 }
                 else if (item.SmartActionType == "CopyQRText")
                 {
@@ -1187,14 +1208,38 @@ namespace FlyShelf
 
         private void nIcon_LeftClick(Wpf.Ui.Tray.Controls.NotifyIcon sender, RoutedEventArgs e)
         {
-            if (_isCurrentlySummoned && _viewModel.IsFullMode)
+            // Left-click tray icon: summon clipboard + open Hub
+            TrayOpenClipboard_Click(sender, e);
+        }
+
+        /// <summary>
+        /// Tray menu: summon the clipboard popup AND open the Hub window.
+        /// </summary>
+        private void TrayOpenClipboard_Click(object sender, RoutedEventArgs e)
+        {
+            // Summon the clipboard popup if not already visible
+            if (!_isCurrentlySummoned || !_viewModel.IsFullMode)
             {
-                AnimateAndHide();
+                try { ToggleMainClipboard(); } catch { }
             }
-            else
+
+            // Also open the Hub window
+            OpenApp_Click_Internal();
+        }
+
+        /// <summary>
+        /// Tray menu: open the Hub window (and summon clipboard too).
+        /// </summary>
+        private void TrayOpenHub_Click(object sender, RoutedEventArgs e)
+        {
+            // Summon the clipboard popup if not already visible
+            if (!_isCurrentlySummoned || !_viewModel.IsFullMode)
             {
-                OpenApp_Click(sender, e);
+                try { ToggleMainClipboard(); } catch { }
             }
+
+            // Also open the Hub window
+            OpenApp_Click_Internal();
         }
 
         private static T? FindVisualParent<T>(DependencyObject child) where T : DependencyObject

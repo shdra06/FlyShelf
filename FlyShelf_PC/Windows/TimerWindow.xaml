@@ -8,7 +8,8 @@
         WindowStyle="None" 
         Topmost="True"
         Background="Transparent" ResizeMode="NoResize"
-        AllowsTransparency="True">
+        AllowsTransparency="True"
+        Icon="/Resources/FlyShelfLogo.ico">
 
     <Grid>
         <!-- The Floating Table Timer Container (Dome Shape) -->

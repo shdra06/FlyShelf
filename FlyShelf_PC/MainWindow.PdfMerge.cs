@@ -286,7 +286,15 @@ $word.Quit()
                             CreateNoWindow = true,
                             UseShellExecute = false
                         };
-                        System.Diagnostics.Process.Start(psi)?.WaitForExit(60000);
+                        var proc = System.Diagnostics.Process.Start(psi);
+                        if (proc != null)
+                        {
+                            if (!proc.WaitForExit(60000))
+                            {
+                                try { proc.Kill(); } catch { }
+                            }
+                            proc.Dispose();
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -571,7 +579,7 @@ $word.Quit()
             if (item == null) return;
             item.IsPassword = false;
             item.Extension = "TEXT";
-            item.FileName = item.RawContent.Length > 800 ? item.RawContent.Substring(0, 800) + "..." : item.RawContent;
+            item.FileName = (item.RawContent?.Length ?? 0) > 800 ? item.RawContent.Substring(0, 800) + "..." : item.RawContent;
             item.Icon = null; // Reverts back to standard text template
             FlyShelf.Windows.ToastWindow.ShowToast("Reverted to normal text card! 📋");
         }
@@ -614,14 +622,17 @@ $word.Quit()
             _ = System.Threading.Tasks.Task.Run(async () =>
             {
                 await System.Threading.Tasks.Task.Delay(5000);
-                Dispatcher.Invoke(() =>
+                if (Application.Current != null && !Application.Current.Dispatcher.HasShutdownStarted)
                 {
-                    // Only revert if still showing the raw password (user didn't change it)
-                    if (item.FileName == raw && item.IsPassword)
+                    Dispatcher.Invoke(() =>
                     {
-                        item.FileName = savedLabel;
-                    }
-                });
+                        // Only revert if still showing the raw password (user didn't change it)
+                        if (item.FileName == raw && item.IsPassword)
+                        {
+                            item.FileName = savedLabel;
+                        }
+                    });
+                }
             });
         }
     }

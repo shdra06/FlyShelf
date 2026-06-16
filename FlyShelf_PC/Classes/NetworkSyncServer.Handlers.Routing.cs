@@ -458,6 +458,7 @@ namespace FlyShelf.Classes
                                 else if (envelopeType == "SyncFileStart")
                                 {
                                     string fileName = root.TryGetProperty("fileName", out var fnProp) ? fnProp.GetString() : "file.dat";
+                                    fileName = System.IO.Path.GetFileName(fileName) ?? "file.dat"; // Sanitize: strip directory traversal
                                     long fileSize = root.TryGetProperty("fileSize", out var fsProp) ? fsProp.GetInt64() : 0;
                                     string itemType = root.TryGetProperty("itemType", out var itProp) ? itProp.GetString() : "File";
                                     string title = root.TryGetProperty("title", out var titleProp) ? titleProp.GetString() : "";

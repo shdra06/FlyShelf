@@ -15,6 +15,20 @@ namespace FlyShelf
     /// </summary>
     public partial class MainWindow
     {
+        private static System.Windows.Rect GetWorkAreaForPoint(double x, double y)
+        {
+            // Use Win32 MonitorFromPoint + GetMonitorInfo for correct multi-monitor work area
+            var pt = new Classes.NativeMethods.POINT { X = (int)x, Y = (int)y };
+            IntPtr hMonitor = Classes.NativeMethods.MonitorFromPoint(pt, Classes.NativeMethods.MonitorFromWindowFlags.DEFAULTTONEAREST);
+            var mi = new Classes.NativeMethods.MONITORINFOEX();
+            mi.cbSize = Marshal.SizeOf<Classes.NativeMethods.MONITORINFOEX>();
+            if (Classes.NativeMethods.GetMonitorInfo(hMonitor, ref mi))
+            {
+                var rc = mi.rcWork;
+                return new System.Windows.Rect(rc.Left, rc.Top, rc.Right - rc.Left, rc.Bottom - rc.Top);
+            }
+            return SystemParameters.WorkArea; // fallback
+        }
         private DateTime _lastSortContextTime = DateTime.MinValue;
 
         private bool _borderColorSet = false;
@@ -233,7 +247,7 @@ namespace FlyShelf
             // NEVER reset to Guid.Empty — that breaks all desktop switch detection.
             // The async Task.Run below will refine this if possible.
             _summonedDesktopId = _currentDesktopId;
-            _lastActiveExternalWindowWasOnCurrentAtSummon = false;
+            System.Threading.Volatile.Write(ref _lastActiveExternalWindowWasOnCurrentAtSummon, false);
             IntPtr capturedFg = GetForegroundWindow();
             IntPtr capturedLastExternal = _lastActiveExternalWindow;
             IntPtr hwndCopyForDesktop = new System.Windows.Interop.WindowInteropHelper(this).Handle;
@@ -250,7 +264,7 @@ namespace FlyShelf
                         int hrCheck = bgVdm.IsWindowOnCurrentVirtualDesktop(capturedLastExternal, out int onCurrent);
                         if (hrCheck == 0 && onCurrent != 0)
                         {
-                            _lastActiveExternalWindowWasOnCurrentAtSummon = true;
+                            System.Threading.Volatile.Write(ref _lastActiveExternalWindowWasOnCurrentAtSummon, true);
                             // Only update _summonedDesktopId if it's still Empty (wasn't set by MoveWindowToDesktop)
                             if (_summonedDesktopId == Guid.Empty)
                             {
@@ -291,7 +305,7 @@ namespace FlyShelf
                         });
                     }
 
-                    Classes.Logger.LogAction("DESKTOP", $"Summoned on virtual desktop: {_summonedDesktopId}, prevWindowWasOnCurrent: {_lastActiveExternalWindowWasOnCurrentAtSummon}");
+                    Classes.Logger.LogAction("DESKTOP", $"Summoned on virtual desktop: {_summonedDesktopId}, prevWindowWasOnCurrent: {System.Threading.Volatile.Read(ref _lastActiveExternalWindowWasOnCurrentAtSummon)}");
                 }
                 catch (Exception ex)
                 {
@@ -341,11 +355,11 @@ namespace FlyShelf
                 _isSuppressingSizeSync = false;
             }
 
-            var workArea = SystemParameters.WorkArea;
+            var workArea = GetWorkAreaForPoint(targetX, targetY);
             double safeWidth = double.IsNaN(this.Width) ? 360 : this.Width;
             if (safeWidth <= 0) safeWidth = 320;
 
-            // SAFETY FALLBACK: If coordinates are uninitialized or invalid (e.g. -1 or NaN), default to bottom-left corner of the primary monitor
+            // SAFETY FALLBACK: If coordinates are uninitialized or invalid (e.g. -1 or NaN), default to bottom-left corner
             if (targetX == -1 || targetY == -1 || double.IsNaN(targetX) || double.IsNaN(targetY))
             {
                 targetX = workArea.Left + 16 + (safeWidth / 2);
@@ -729,7 +743,7 @@ namespace FlyShelf
                 // The anti-black-box spawn sequence handles visibility correctly without cloaking.
             }, System.Windows.Threading.DispatcherPriority.Background);
 
-            int currentToken = ++_spawnToken;
+            int currentToken = _spawnToken;
 
             // Give keyboard focus to the ListView so arrow keys + Enter work immediately
             // PERF: Defer focus to Background priority so it runs after layout + animation
@@ -929,7 +943,7 @@ namespace FlyShelf
             _viewModel.AllowHover = true;
         }
 
-        private void RenderVisibleThumbnails(bool onlyFirstTen = false)
+        private void RenderVisibleThumbnails(bool onlyFirstTen = false, bool isEvictionPass = false)
         {
             Dispatcher.InvokeAsync(() =>
             {
@@ -963,7 +977,7 @@ namespace FlyShelf
                             // The full RenderVisibleThumbnails pipeline (TransformToAncestor
                             // per item, PropertyChanged notifications) blocks the scroll engine.
                             if (_viewModel.IsScrolling) return;
-                            RenderVisibleThumbnails(onlyFirstTen: false);
+                            RenderVisibleThumbnails(onlyFirstTen: false, isEvictionPass: true);
                         };
                         _evictionBackgroundTimer.Start();
                     }
@@ -975,10 +989,10 @@ namespace FlyShelf
                     double viewportHeight = sv.ViewportHeight;
                     if (viewportHeight <= 0 || viewportWidth <= 0) return;
 
-                    // Prefetch overdraw: expand viewport by 800px above and below to proactively
+                    // Prefetch overdraw: expand viewport by 300px above and below to proactively
                     // load adjacent images well before they scroll into view. Combined with
                     // coast-phase prefetching, this ensures images appear "instantly" loaded.
-                    Rect viewportRect = new Rect(0, -800, viewportWidth, viewportHeight + 1600);
+                    Rect viewportRect = new Rect(0, -300, viewportWidth, viewportHeight + 600);
                     int count = ShelfListView.Items.Count;
 
                     int imageCount = 0;
@@ -1001,6 +1015,12 @@ namespace FlyShelf
                         if (isFirst5Images)
                         {
                             isVisible = true; // Sane default: top 5 images are always considered visible!
+                        }
+                        else if (item.IsLoadedHighQuality && !isEvictionPass)
+                        {
+                            // Optimization: if it's already loaded and we are not doing an eviction pass,
+                            // we can skip the expensive TransformToAncestor coordinates query!
+                            continue;
                         }
                         else if (container != null && container.IsLoaded)
                         {
@@ -1102,9 +1122,9 @@ namespace FlyShelf
                                     // Record the timestamp when the item first left the viewport
                                     item.LeftViewportTime = DateTime.Now;
                                 }
-                                else if ((DateTime.Now - item.LeftViewportTime.Value).TotalSeconds >= 10)
+                                else if ((DateTime.Now - item.LeftViewportTime.Value).TotalSeconds >= 5)
                                 {
-                                    // 10 seconds have elapsed offscreen — actively evict to free RAM
+                                    // 5 seconds have elapsed offscreen — actively evict to free RAM
                                     item.Icon = null;
                                     item.IsLoadedHighQuality = false;
                                     item.IsLoadingHighQuality = false;
@@ -1210,6 +1230,10 @@ namespace FlyShelf
         {
             if (nCode >= 0 && wParam == (IntPtr)Classes.NativeMethods.WM_KEYDOWN && _isCurrentlySummoned && !_isAnimatingHide)
             {
+                // When Notes or Todo panel is open, don't intercept any keys —
+                // let them pass through to the text boxes for normal editing.
+                if (_isNotesActive || _isTodoActive)
+                    return Classes.NativeMethods.CallNextHookEx(_keyboardHookId, nCode, wParam, lParam);
                 int vkCode = Marshal.ReadInt32(lParam);
 
                 // Only intercept navigation keys if the cursor is over the clipboard window.
@@ -1293,7 +1317,7 @@ namespace FlyShelf
         {
             if (this.ActualHeight > 0)
             {
-                var workArea = SystemParameters.WorkArea;
+                var workArea = GetWorkAreaForPoint(this.Left + this.ActualWidth / 2, this.Top + this.ActualHeight / 2);
                 double newTop = _lockedBottomEdge - this.ActualHeight - 20;
                 if (newTop < workArea.Top + 16)
                     newTop = workArea.Top + 16;

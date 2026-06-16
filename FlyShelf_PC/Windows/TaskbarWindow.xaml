@@ -13,7 +13,7 @@
         ShowInTaskbar="False"
         AllowsTransparency="True"
         Background="Transparent"
-        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Display" UseLayoutRounding="True" SnapsToDevicePixels="True"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" UseLayoutRounding="True" SnapsToDevicePixels="True"
         Loaded="Window_Loaded" Visibility="Hidden">
     <Grid Name="WidgetGrid" Background="Transparent">
         <controls:FlyShelfWidgetControl x:Name="Widget" />

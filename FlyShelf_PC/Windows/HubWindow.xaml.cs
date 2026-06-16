@@ -197,6 +197,12 @@ namespace FlyShelf.Windows
 
             Loaded += (s, ev) =>
             {
+#if MSIX_STORE
+                // Production Store build: hide all log/diagnostics UI — not relevant for end users
+                if (LogsNavItem != null)        LogsNavItem.Visibility        = Visibility.Collapsed;
+                if (LogsGrid != null)           LogsGrid.Visibility           = Visibility.Collapsed;
+                if (NetworkLiveLogsBtn != null) NetworkLiveLogsBtn.Visibility = Visibility.Collapsed;
+#endif
                 // Defer wiring and refreshing to background dispatcher frames so that
                 // the main window shell and layout appear instantly without any initial blocking ticks.
                 Dispatcher.InvokeAsync(() =>
@@ -420,12 +426,52 @@ namespace FlyShelf.Windows
         }
 
 
+        /// <summary>
+        /// Programmatically navigates to the specified tab by tag name.
+        /// Valid tags: Dashboard, History, Network, Settings, Logs, About, Tutorial
+        /// </summary>
+        public void NavigateToTab(string tag)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                foreach (var item in RootNavigation.MenuItems)
+                {
+                    if (item is Wpf.Ui.Controls.NavigationViewItem navItem)
+                    {
+                        navItem.IsActive = ((navItem.Tag as string) == tag);
+                    }
+                }
+
+                if (DashboardGrid != null) DashboardGrid.Visibility = tag == "Dashboard" ? Visibility.Visible : Visibility.Collapsed;
+                if (HistoryGrid != null) HistoryGrid.Visibility = tag == "History" ? Visibility.Visible : Visibility.Collapsed;
+                if (NetworkGrid != null) NetworkGrid.Visibility = tag == "Network" ? Visibility.Visible : Visibility.Collapsed;
+                if (SettingsGrid != null) SettingsGrid.Visibility = tag == "Settings" ? Visibility.Visible : Visibility.Collapsed;
+                if (LogsGrid != null) LogsGrid.Visibility = tag == "Logs" ? Visibility.Visible : Visibility.Collapsed;
+                if (AboutGrid != null) AboutGrid.Visibility = tag == "About" ? Visibility.Visible : Visibility.Collapsed;
+                if (TutorialGrid != null) TutorialGrid.Visibility = tag == "Tutorial" ? Visibility.Visible : Visibility.Collapsed;
+
+                if (tag == "Settings")
+                {
+                    PopulateThemeCombo();
+                    HighlightActiveColorTheme();
+                    UpdateAlignButtonsVisualState();
+                    if (WidgetPositioningSection != null)
+                    {
+                        WidgetPositioningSection.Visibility = SettingsManager.Current.EnableTaskbarWidget
+                            ? Visibility.Visible
+                            : Visibility.Collapsed;
+                    }
+                }
+            });
+        }
+
         private void Nav_Click(object sender, MouseButtonEventArgs e)
         {
+            if (e != null) e.Handled = true;
             if (sender is FrameworkElement fe)
             {
                 string tag = fe.Tag as string;
-                
+                if (string.IsNullOrEmpty(tag)) return;
                 foreach (var item in RootNavigation.MenuItems)
                 {
                     if (item is Wpf.Ui.Controls.NavigationViewItem navItem)
@@ -438,11 +484,15 @@ namespace FlyShelf.Windows
                 if (HistoryGrid != null) HistoryGrid.Visibility = tag == "History" ? Visibility.Visible : Visibility.Collapsed;
                 if (NetworkGrid != null) NetworkGrid.Visibility = tag == "Network" ? Visibility.Visible : Visibility.Collapsed;
                 if (SettingsGrid != null) SettingsGrid.Visibility = tag == "Settings" ? Visibility.Visible : Visibility.Collapsed;
+#if MSIX_STORE
+                if (LogsGrid != null) LogsGrid.Visibility = Visibility.Collapsed;
+#else
                 if (LogsGrid != null) LogsGrid.Visibility = tag == "Logs" ? Visibility.Visible : Visibility.Collapsed;
+                if (tag == "Logs") RefreshLogs_Click(null, null);
+#endif
                 if (AboutGrid != null) AboutGrid.Visibility = tag == "About" ? Visibility.Visible : Visibility.Collapsed;
                 if (TutorialGrid != null) TutorialGrid.Visibility = tag == "Tutorial" ? Visibility.Visible : Visibility.Collapsed;
                 
-                if (tag == "Logs") RefreshLogs_Click(null, null);
                 if (tag == "Settings")
                 {
                     PopulateThemeCombo();
@@ -462,10 +512,12 @@ namespace FlyShelf.Windows
                     RefreshQRCode();
                     RefreshPairedDevicesList();
                     // Auto-populate server diagnostics
+#if !MSIX_STORE
                     if (ServerDiagnosticsLog != null)
                     {
                         ServerDiagnosticsLog.Text = GetServerDiagnostics();
                     }
+#endif
 
                     _pairingHandshakeTimer?.Start();
                 }
@@ -646,10 +698,19 @@ namespace FlyShelf.Windows
         // Live Preview buttons
         private void PreviewClipboardSize_Click(object sender, RoutedEventArgs e)
         {
-            // The HubWindow itself IS the clipboard preview — just flash to show effect
-            this.Width = SettingsManager.Current.MediumFormWidth;
-            this.Height = SettingsManager.Current.MediumFormHeight;
-            this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            try
+            {
+                var mainWin = Application.Current.MainWindow as MainWindow;
+                if (mainWin != null)
+                {
+                    // Apply the new size to the clipboard popup (mode=1), not the mini FlyShelf
+                    mainWin.Width = SettingsManager.Current.MediumFormWidth;
+                    mainWin.Height = SettingsManager.Current.MediumFormHeight;
+                    var screen = SystemParameters.WorkArea;
+                    mainWin.ShowNearPosition(screen.Width / 2, screen.Height / 2, 1, false, false);
+                }
+            }
+            catch { }
         }
 
         private void PreviewFlyShelfSize_Click(object sender, RoutedEventArgs e)
@@ -659,6 +720,9 @@ namespace FlyShelf.Windows
                 var mainWin = Application.Current.MainWindow as MainWindow;
                 if (mainWin != null)
                 {
+                    // Apply the new size to the mini FlyShelf (mode=0, Mouse Shake mini)
+                    mainWin.Width = SettingsManager.Current.MiniFormWidth;
+                    mainWin.Height = SettingsManager.Current.MiniFormHeight;
                     var screen = SystemParameters.WorkArea;
                     mainWin.ShowNearPosition(screen.Width / 2, screen.Height / 2, 0, false, false);
                 }
@@ -924,6 +988,7 @@ namespace FlyShelf.Windows
         private ScrollViewer? GetHubScrollViewer()
         {
             if (HubListView == null) return null;
+            if (VisualTreeHelper.GetChildrenCount(HubListView) == 0) return null;
             var border = VisualTreeHelper.GetChild(HubListView, 0) as System.Windows.Controls.Decorator;
             return border?.Child as ScrollViewer;
         }

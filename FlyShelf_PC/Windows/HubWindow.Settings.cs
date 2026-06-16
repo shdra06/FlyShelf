@@ -59,6 +59,7 @@ namespace FlyShelf.Windows
             catch { }
         }
 
+#if !MSIX_STORE
         private static NetworkLogsWindow? _networkLogsWindow;
         private void OpenNetworkLogs_Click(object sender, RoutedEventArgs e)
         {
@@ -73,11 +74,9 @@ namespace FlyShelf.Windows
                 _networkLogsWindow = new NetworkLogsWindow();
                 _networkLogsWindow.Show();
             }
-            catch (Exception ex)
-            {
-                FlyShelf.Classes.Logger.LogAction("UI", $"Failed to open Network Logs: {ex.Message}");
-            }
+            catch { }
         }
+#endif // !MSIX_STORE
 
         private async void CopyDeviceLogs_Click(object sender, RoutedEventArgs e)
         {
@@ -247,8 +246,7 @@ namespace FlyShelf.Windows
                                 else if (logEl.ValueKind == System.Text.Json.JsonValueKind.String)
                                     line = logEl.GetString() ?? "";
                                 if (string.IsNullOrWhiteSpace(line)) continue;
-                                if (line.Contains("[HTTP]") && line.Contains("GET /api/health")) continue;
-                                if (line.Contains("[HTTP]") && line.Contains("GET /health")) continue;
+                                if (line.Contains("[HTTP]") && (line.Contains("GET /api/health") || line.Contains("GET /health"))) continue;
                                 sb.AppendLine(line);
                                 count++;
                             }
@@ -303,12 +301,19 @@ namespace FlyShelf.Windows
                     await Task.Delay(1000);
                     Dispatcher.Invoke(() =>
                     {
-                        vm.LocalServer.Start();
-                        vm.RefreshLocalServerData();
-                        string diagnostics = GetServerDiagnostics();
-                        ServerDiagnosticsLog.Text = diagnostics;
-                        ServerDiagnosticsLog.Foreground = TryFindResource("SuccessColor") as Brush ?? new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81));
-                        ToastWindow.ShowToast("ðŸ”„ Server restarted â€” check diagnostics below");
+                        try
+                        {
+                            vm.LocalServer.Start();
+                            vm.RefreshLocalServerData();
+                            string diagnostics = GetServerDiagnostics();
+                            if (ServerDiagnosticsLog != null)
+                            {
+                                ServerDiagnosticsLog.Text = diagnostics;
+                                ServerDiagnosticsLog.Foreground = TryFindResource("SuccessColor") as Brush ?? new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81));
+                            }
+                            ToastWindow.ShowToast("ðŸ”„ Server restarted â€” check diagnostics below");
+                        }
+                        catch (Exception ex) { System.Diagnostics.Debug.WriteLine($"Server restart error: {ex.Message}"); }
                     });
                 });
             }
@@ -351,7 +356,7 @@ namespace FlyShelf.Windows
                     string line = allLines[i];
                     if (line.Contains("[BIND]") || line.Contains("[NETWORK") || line.Contains("[TCP PROXY]") ||
                         line.Contains("[CLOUDFLARE]") || line.Contains("[CF_STDERR]") || line.Contains("[HEARTBEAT]") ||
-                        line.Contains("[FIREBASE SYNC]") || line.Contains("[DIAGNOSTICS]") || line.Contains("[HTTP]") && line.Contains("health"))
+                        line.Contains("[FIREBASE SYNC]") || line.Contains("[DIAGNOSTICS]") || (line.Contains("[HTTP]") && line.Contains("health")))
                     {
                         relevantLines.Add(line);
                     }
@@ -393,6 +398,7 @@ namespace FlyShelf.Windows
 
         private void ApplyFilters()
         {
+            if (HubListView == null) return;
             if (HubListView.ItemsSource == null) return;
             var view = System.Windows.Data.CollectionViewSource.GetDefaultView(HubListView.ItemsSource) as ListCollectionView;
             if (view == null) return;
@@ -703,6 +709,7 @@ namespace FlyShelf.Windows
 
         private async void ActivateLicense_Click(object sender, RoutedEventArgs e)
         {
+            var btn = sender as System.Windows.Controls.Button;
             try
             {
                 string key = LicenseKeyInput?.Text?.Trim() ?? "";
@@ -718,7 +725,7 @@ namespace FlyShelf.Windows
                 }
 
                 // Disable button and show progress
-                if (sender is System.Windows.Controls.Button btn) btn.IsEnabled = false;
+                btn?.SetValue(IsEnabledProperty, false);
                 if (LicenseErrorText != null) { LicenseErrorText.Text = "Activating..."; LicenseErrorText.Foreground = TryFindResource("WarningColor") as System.Windows.Media.Brush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(245, 158, 11)); LicenseErrorText.Visibility = Visibility.Visible; }
 
                 bool success = await FlyShelf.Classes.LicenseManager.ActivateLicenseAsync(key);
@@ -740,7 +747,7 @@ namespace FlyShelf.Windows
                     }
                 }
 
-                if (sender is System.Windows.Controls.Button btn2) btn2.IsEnabled = true;
+                btn?.SetValue(IsEnabledProperty, true);
             }
             catch (Exception ex)
             {
@@ -751,7 +758,7 @@ namespace FlyShelf.Windows
                     LicenseErrorText.Foreground = TryFindResource("DangerColor") as System.Windows.Media.Brush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(239, 68, 68));
                     LicenseErrorText.Visibility = Visibility.Visible;
                 }
-                if (sender is System.Windows.Controls.Button btn3) btn3.IsEnabled = true;
+                btn?.SetValue(IsEnabledProperty, true);
             }
         }
 

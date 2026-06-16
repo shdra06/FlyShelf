@@ -22,11 +22,11 @@ $outputDir = Join-Path $scriptDir "Output"
 $reportDir = Join-Path $outputDir "WackReport"
 
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "  FlyShelf — WACK Testing Pipeline" -ForegroundColor Cyan  
+Write-Host "  FlyShelf ? WACK Testing Pipeline" -ForegroundColor Cyan  
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
-# ─── Step 1: Find MSIX package ───
+# ??? Step 1: Find MSIX package ???
 Write-Host "[1/4] Locating MSIX package..." -ForegroundColor Yellow
 
 $msixFiles = Get-ChildItem -Path $outputDir -Filter "*.msix" -Recurse -ErrorAction SilentlyContinue
@@ -43,7 +43,7 @@ $msixPath = ($msixFiles | Sort-Object LastWriteTime -Descending | Select-Object 
 Write-Host "  Found: $msixPath" -ForegroundColor Green
 Write-Host ""
 
-# ─── Step 2: Locate WACK ───
+# ??? Step 2: Locate WACK ???
 Write-Host "[2/4] Locating Windows App Certification Kit..." -ForegroundColor Yellow
 
 $wackExe = "C:\Program Files (x86)\Windows Kits\10\App Certification Kit\appcert.exe"
@@ -55,7 +55,7 @@ if (-not (Test-Path $wackExe)) {
 Write-Host "  WACK found: $wackExe" -ForegroundColor Green
 Write-Host ""
 
-# ─── Step 3: Run WACK ───
+# ??? Step 3: Run WACK ???
 Write-Host "[3/4] Running WACK validation (this may take several minutes)..." -ForegroundColor Yellow
 Write-Host "  The app will be installed, launched, and tested automatically." -ForegroundColor DarkGray
 Write-Host "  DO NOT interact with the app during testing." -ForegroundColor DarkGray
@@ -73,7 +73,7 @@ $wackExit = $LASTEXITCODE
 
 Write-Host ""
 
-# ─── Step 4: Report results ───
+# ??? Step 4: Report results ???
 Write-Host "[4/4] Test results:" -ForegroundColor Yellow
 
 if (Test-Path $reportXml) {
@@ -83,21 +83,21 @@ if (Test-Path $reportXml) {
     
     if ($overall -eq "PASS") {
         Write-Host ""
-        Write-Host "  ╔══════════════════════════════════════╗" -ForegroundColor Green
-        Write-Host "  ║  ✅ WACK PASSED — Store Ready!       ║" -ForegroundColor Green
-        Write-Host "  ╚══════════════════════════════════════╝" -ForegroundColor Green
+        Write-Host "  ======================================" -ForegroundColor Green
+        Write-Host "    [PASS] WACK PASSED - Store Ready!   " -ForegroundColor Green
+        Write-Host "  ======================================" -ForegroundColor Green
     } else {
         Write-Host ""
-        Write-Host "  ╔══════════════════════════════════════╗" -ForegroundColor Red
-        Write-Host "  ║  ❌ WACK FAILED — Issues Found       ║" -ForegroundColor Red
-        Write-Host "  ╚══════════════════════════════════════╝" -ForegroundColor Red
+        Write-Host "  ======================================" -ForegroundColor Red
+        Write-Host "    [FAIL] WACK FAILED - Issues Found   " -ForegroundColor Red
+        Write-Host "  ======================================" -ForegroundColor Red
         
         # List failed tests
         Write-Host ""
         Write-Host "  Failed tests:" -ForegroundColor Red
         $tests = $report.REPORT.REQUIREMENTS.REQUIREMENT | Where-Object { $_.RESULT -eq "FAIL" }
         foreach ($test in $tests) {
-            Write-Host "    ✗ $($test.TEST_NAME): $($test.DESCRIPTION)" -ForegroundColor Red
+            Write-Host "    - $($test.TEST_NAME): $($test.DESCRIPTION)" -ForegroundColor Red
         }
     }
     

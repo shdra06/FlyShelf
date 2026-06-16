@@ -331,30 +331,39 @@ namespace FlyShelf.Classes
             // Run serialization and file IO on a background thread so it doesn't block the UI thread
             System.Threading.Tasks.Task.Run(() =>
             {
+                string json;
                 lock (_lock)
                 {
                     try
                     {
-                        if (!Directory.Exists(_appDataDir))
-                            Directory.CreateDirectory(_appDataDir);
-
-                        // Create backup before saving
-                        try { if (File.Exists(_remindersPath)) File.Copy(_remindersPath, _remindersPath + ".bak", overwrite: true); } catch { }
-
-                        string json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+                        json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
                         {
                             WriteIndented = false,
                             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
                         });
-
-                        string tmpPath = _remindersPath + ".tmp";
-                        File.WriteAllText(tmpPath, json);
-                        File.Move(tmpPath, _remindersPath, overwrite: true);
                     }
                     catch (Exception ex)
                     {
-                        Logger.LogAction("REMINDERS", $"Failed to save reminders: {ex.Message}");
+                        Logger.LogAction("REMINDERS", $"Failed to serialize reminders: {ex.Message}");
+                        return;
                     }
+                }
+
+                try
+                {
+                    if (!Directory.Exists(_appDataDir))
+                        Directory.CreateDirectory(_appDataDir);
+
+                    // Create backup before saving
+                    try { if (File.Exists(_remindersPath)) File.Copy(_remindersPath, _remindersPath + ".bak", overwrite: true); } catch { }
+
+                    string tmpPath = _remindersPath + ".tmp";
+                    File.WriteAllText(tmpPath, json);
+                    File.Move(tmpPath, _remindersPath, overwrite: true);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("REMINDERS", $"Failed to write reminders to disk: {ex.Message}");
                 }
             });
         }

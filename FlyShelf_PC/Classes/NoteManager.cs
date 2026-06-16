@@ -121,9 +121,88 @@ namespace FlyShelf.Classes
         [JsonIgnore]
         public string LastEditedDisplay => LastEdited.ToString("h:mm tt");
 
+        // ── Tags ────────────────────────────────────────────────
+        private List<string> _tags = new();
+        public List<string> Tags
+        {
+            get => _tags;
+            set { _tags = value ?? new(); OnPropertyChanged(nameof(Tags)); OnPropertyChanged(nameof(HasTags)); OnPropertyChanged(nameof(TagsDisplay)); }
+        }
+
+        [JsonIgnore] public bool HasTags => _tags.Count > 0;
+        [JsonIgnore] public string TagsDisplay => string.Join(", ", _tags);
+
+        // ── Color Accent ────────────────────────────────────────
+        private string _color = "";
+        public string Color
+        {
+            get => _color;
+            set { if (_color != value) { _color = value ?? ""; OnPropertyChanged(nameof(Color)); OnPropertyChanged(nameof(HasColor)); } }
+        }
+
+        [JsonIgnore] public bool HasColor => !string.IsNullOrEmpty(_color);
+
+        // ── Pin / Favorite ──────────────────────────────────────
+        private bool _isPinned;
+        public bool IsPinned
+        {
+            get => _isPinned;
+            set { if (_isPinned != value) { _isPinned = value; OnPropertyChanged(nameof(IsPinned)); OnPropertyChanged(nameof(PinIcon)); } }
+        }
+
+        [JsonIgnore] public string PinIcon => _isPinned ? "📌" : "";
+
+        // ── Sort Order (for drag-reorder) ───────────────────────
+        private int _sortOrder;
+        public int SortOrder
+        {
+            get => _sortOrder;
+            set { if (_sortOrder != value) { _sortOrder = value; OnPropertyChanged(nameof(SortOrder)); } }
+        }
+
+        // ── Sub-bullets (nested items inside this bullet card) ──
+        private ObservableCollection<SubBulletItem> _subBullets = new();
+        public ObservableCollection<SubBulletItem> SubBullets
+        {
+            get => _subBullets;
+            set { _subBullets = value ?? new(); OnPropertyChanged(nameof(SubBullets)); OnPropertyChanged(nameof(HasSubBullets)); }
+        }
+
+        [JsonIgnore]
+        public bool HasSubBullets => _subBullets.Count > 0;
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+
+        /// <summary>Called after mutating SubBullets directly to refresh HasSubBullets binding.</summary>
+        public void OnSubBulletsChanged() => OnPropertyChanged(nameof(HasSubBullets));
+    }
+
+    /// <summary>
+    /// A single sub-bullet item nested inside a NoteBullet card.
+    /// </summary>
+    public class SubBulletItem : INotifyPropertyChanged
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+
+        private string _text = "";
+        public string Text
+        {
+            get => _text;
+            set { if (_text != value) { _text = value; OnPropertyChanged(nameof(Text)); } }
+        }
+
+        private bool _isDone;
+        public bool IsDone
+        {
+            get => _isDone;
+            set { if (_isDone != value) { _isDone = value; OnPropertyChanged(nameof(IsDone)); } }
+        }
+
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
+
 
     public class FreeformImage : INotifyPropertyChanged
     {
@@ -160,6 +239,25 @@ namespace FlyShelf.Classes
         private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 
+    /// <summary>A single freeform text card within a NoteDay. Multiple sections let users
+    /// visually separate different notes under one day.</summary>
+    public class FreeformSection : INotifyPropertyChanged
+    {
+        public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
+
+        private string _content = "";
+        public string Content
+        {
+            get => _content;
+            set { if (_content != value) { _content = value; OnPropertyChanged(nameof(Content)); } }
+        }
+
+        public DateTime CreatedAt { get; set; } = DateTime.Now;
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+    }
+
     public class NoteDay : INotifyPropertyChanged
     {
         /// <summary>Date-only key (time zeroed). Used for identification and sorting.</summary>
@@ -188,11 +286,47 @@ namespace FlyShelf.Classes
             set { _bullets = value; OnPropertyChanged(nameof(Bullets)); }
         }
 
+        /// <summary>Multiple freeform text sections. Each renders as a separate card.</summary>
+        private ObservableCollection<FreeformSection> _freeformSections = new();
+        public ObservableCollection<FreeformSection> FreeformSections
+        {
+            get => _freeformSections;
+            set { _freeformSections = value; OnPropertyChanged(nameof(FreeformSections)); }
+        }
+
+        /// <summary>Legacy single-string property. On deserialization, if non-empty and
+        /// FreeformSections is empty, it migrates into FreeformSections[0].
+        /// Getter joins all sections for search/export compatibility.</summary>
         private string _freeformContent = "";
         public string FreeformContent
         {
-            get => _freeformContent;
-            set { if (_freeformContent != value) { _freeformContent = value; OnPropertyChanged(nameof(FreeformContent)); } }
+            get
+            {
+                // Return joined content from all sections for search/export
+                if (_freeformSections.Count > 0)
+                    return string.Join("\n\n---\n\n", _freeformSections.Select(s => s.Content));
+                return _freeformContent;
+            }
+            set
+            {
+                _freeformContent = value ?? "";
+                OnPropertyChanged(nameof(FreeformContent));
+            }
+        }
+
+        /// <summary>Call after deserialization to migrate legacy FreeformContent into sections.</summary>
+        public void MigrateFreeformIfNeeded()
+        {
+            if (_freeformSections.Count == 0 && !string.IsNullOrEmpty(_freeformContent))
+            {
+                _freeformSections.Add(new FreeformSection { Content = _freeformContent });
+                _freeformContent = ""; // Clear legacy field now that we've migrated
+            }
+            // Ensure there's always at least one section for freeform mode
+            if (_freeformSections.Count == 0)
+            {
+                _freeformSections.Add(new FreeformSection());
+            }
         }
 
         /// <summary>Images embedded in freeform mode. Shown in a strip below the text area.</summary>
@@ -235,7 +369,7 @@ namespace FlyShelf.Classes
         private static List<NoteDay> _allDays = new();
         private static Timer? _saveTimer;
         private static readonly object _lock = new();
-        private static volatile bool _isDirty;
+        private static int _isDirty = 0;
         private static bool _isLoaded;
 
         /// <summary>All note days, sorted newest-first.</summary>
@@ -278,6 +412,7 @@ namespace FlyShelf.Classes
                         foreach (var d in loaded)
                         {
                             d.Date = d.Date.Kind == DateTimeKind.Utc ? d.Date.ToLocalTime().Date : d.Date.Date;
+                            d.MigrateFreeformIfNeeded(); // Migrate legacy FreeformContent → FreeformSections
                         }
 
                         // Sort newest first
@@ -313,6 +448,7 @@ namespace FlyShelf.Classes
                                 foreach (var d in loadedBackup)
                                 {
                                     d.Date = d.Date.Kind == DateTimeKind.Utc ? d.Date.ToLocalTime().Date : d.Date.Date;
+                                    d.MigrateFreeformIfNeeded();
                                 }
                                 _allDays = loadedBackup.OrderByDescending(d => d.Date).ToList();
                                 FilterVisibleDays();
@@ -362,6 +498,7 @@ namespace FlyShelf.Classes
                 if (existing == null)
                 {
                     existing = new NoteDay { Date = dateOnly };
+                    existing.MigrateFreeformIfNeeded(); // Ensure at least one freeform section
                     _allDays.Add(existing);
                     _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
                     
@@ -402,6 +539,28 @@ namespace FlyShelf.Classes
             return bullet;
         }
 
+        public static NoteBullet InsertBullet(NoteDay day, int index, string content = "")
+        {
+            var bullet = new NoteBullet { Content = content };
+            if (index < 0 || index >= day.Bullets.Count)
+            {
+                day.Bullets.Add(bullet);
+            }
+            else
+            {
+                day.Bullets.Insert(index, bullet);
+            }
+            
+            for (int i = 0; i < day.Bullets.Count; i++)
+            {
+                day.Bullets[i].SortOrder = i;
+            }
+            
+            ScheduleSave();
+            return bullet;
+        }
+
+
         /// <summary>Remove a bullet from a day.</summary>
         public static void RemoveBullet(NoteDay day, NoteBullet bullet)
         {
@@ -433,21 +592,24 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>Mark data as dirty — will persist on next debounce cycle.</summary>
-        public static void MarkDirty() => ScheduleSave();
+        public static void MarkDirty()
+        {
+            Interlocked.Exchange(ref _isDirty, 1);
+            ScheduleSave();
+        }
 
         /// <summary>
         /// Schedule a debounced save (2-second cooldown).
         /// </summary>
         private static void ScheduleSave()
         {
-            _isDirty = true;
+            Interlocked.Exchange(ref _isDirty, 1);
             lock (_lock)
             {
                 _saveTimer?.Dispose();
                 _saveTimer = new Timer(_ =>
                 {
-                    if (!_isDirty) return;
-                    _isDirty = false;
+                    if (Interlocked.CompareExchange(ref _isDirty, 0, 1) == 0) return; // was already clean
                     SaveNow();
                 }, null, 2000, Timeout.Infinite);
             }
@@ -467,7 +629,13 @@ namespace FlyShelf.Classes
                 // Must read ObservableCollection on UI thread if it was created there
                 if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == false)
                 {
-                    snapshot = System.Windows.Application.Current.Dispatcher.Invoke(() => _days.ToList());
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        List<NoteDay> snap;
+                        try { snap = _days.ToList(); } catch { return; }
+                        Task.Run(() => SaveSnapshot(snap));
+                    });
+                    return;
                 }
                 else
                 {
@@ -479,6 +647,12 @@ namespace FlyShelf.Classes
                 try { snapshot = _days.ToList(); } catch { return; }
             }
 
+            // Run merge + serialization on a background thread so it doesn't block the UI thread
+            Task.Run(() => SaveSnapshot(snapshot));
+        }
+
+        private static void SaveSnapshot(List<NoteDay> snapshot)
+        {
             List<NoteDay> finalSerializeList;
             lock (_lock)
             {
@@ -514,46 +688,51 @@ namespace FlyShelf.Classes
                 finalSerializeList = _allDays.ToList();
             }
 
-            // Run serialization and file IO on a background thread so it doesn't block the UI thread
-            System.Threading.Tasks.Task.Run(() =>
+            string json;
+            lock (_lock)
             {
-                lock (_lock)
+                try
+                {
+                    json = JsonSerializer.Serialize(finalSerializeList, new JsonSerializerOptions
+                    {
+                        WriteIndented = false,
+                        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("NOTES", $"Failed to serialize notes: {ex.Message}");
+                    return;
+                }
+            }
+
+            try
+            {
+                if (!Directory.Exists(_appDataDir))
+                    Directory.CreateDirectory(_appDataDir);
+
+                // Create backup copy first
+                if (File.Exists(_notesPath))
                 {
                     try
                     {
-                        if (!Directory.Exists(_appDataDir))
-                            Directory.CreateDirectory(_appDataDir);
-
-                        string json = JsonSerializer.Serialize(finalSerializeList, new JsonSerializerOptions
-                        {
-                            WriteIndented = false,
-                            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
-                        });
-
-                        // Create backup copy first
-                        if (File.Exists(_notesPath))
-                        {
-                            try
-                            {
-                                File.Copy(_notesPath, _notesPath + ".bak", overwrite: true);
-                            }
-                            catch (Exception ex)
-                            {
-                                Logger.LogAction("NOTES", $"Failed to create notes backup: {ex.Message}");
-                            }
-                        }
-
-                        // Atomic write: tmp → rename
-                        string tmpPath = _notesPath + ".tmp";
-                        File.WriteAllText(tmpPath, json);
-                        File.Move(tmpPath, _notesPath, overwrite: true);
+                        File.Copy(_notesPath, _notesPath + ".bak", overwrite: true);
                     }
                     catch (Exception ex)
                     {
-                        Logger.LogAction("NOTES", $"Failed to save notes: {ex.Message}");
+                        Logger.LogAction("NOTES", $"Failed to create notes backup: {ex.Message}");
                     }
                 }
-            });
+
+                // Atomic write: tmp → rename
+                string tmpPath = _notesPath + ".tmp";
+                File.WriteAllText(tmpPath, json);
+                File.Move(tmpPath, _notesPath, overwrite: true);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NOTES", $"Failed to save notes: {ex.Message}");
+            }
         }
 
         /// <summary>
@@ -562,22 +741,23 @@ namespace FlyShelf.Classes
         public static List<(NoteDay Day, NoteBullet Bullet)> Search(string query)
         {
             if (string.IsNullOrWhiteSpace(query)) return new();
-            string q = query.Trim().ToLowerInvariant();
+            string q = query.Trim();
 
             var results = new List<(NoteDay, NoteBullet)>();
             foreach (var day in _days)
             {
                 foreach (var bullet in day.Bullets)
                 {
-                    bool matchContent = !string.IsNullOrEmpty(bullet.Content) && bullet.Content.ToLowerInvariant().Contains(q);
-                    bool matchHeader = !string.IsNullOrEmpty(bullet.Header) && bullet.Header.ToLowerInvariant().Contains(q);
-                    if (matchContent || matchHeader)
+                    bool matchContent = FuzzyMatcher.IsMatch(q, bullet.Content ?? "");
+                    bool matchHeader = FuzzyMatcher.IsMatch(q, bullet.Header ?? "");
+                    bool matchTags = bullet.Tags.Any(t => FuzzyMatcher.IsMatch(q, t));
+                    if (matchContent || matchHeader || matchTags)
                     {
                         results.Add((day, bullet));
                     }
                 }
                 // Also search freeform content — create a virtual bullet for display
-                if (!string.IsNullOrEmpty(day.FreeformContent) && day.FreeformContent.ToLowerInvariant().Contains(q))
+                if (!string.IsNullOrEmpty(day.FreeformContent) && FuzzyMatcher.IsMatch(q, day.FreeformContent))
                 {
                     var virtualBullet = new NoteBullet
                     {
@@ -589,6 +769,86 @@ namespace FlyShelf.Classes
                 }
             }
             return results;
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // EXPORT
+        // ═══════════════════════════════════════════════════════════
+
+        /// <summary>Export a day's notes as Markdown text.</summary>
+        public static string ExportToMarkdown(NoteDay day)
+        {
+            if (day == null) return "";
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"# Notes — {day.Date:MMMM d, yyyy}");
+            sb.AppendLine();
+
+            if (day.IsFreeformMode || day.FreeformSections.Any(s => !string.IsNullOrEmpty(s.Content)))
+            {
+                foreach (var section in day.FreeformSections)
+                {
+                    if (!string.IsNullOrEmpty(section.Content))
+                    {
+                        sb.AppendLine(section.Content);
+                        sb.AppendLine();
+                        sb.AppendLine("---");
+                        sb.AppendLine();
+                    }
+                }
+            }
+
+            foreach (var bullet in day.Bullets)
+            {
+                if (!string.IsNullOrEmpty(bullet.Header))
+                    sb.AppendLine($"## {bullet.Header}");
+                if (!string.IsNullOrEmpty(bullet.Content))
+                    sb.AppendLine(bullet.Content);
+                if (bullet.HasTags)
+                    sb.AppendLine($"*Tags: {bullet.TagsDisplay}*");
+                sb.AppendLine();
+            }
+
+            return sb.ToString();
+        }
+
+        /// <summary>Export a day's notes as plain text.</summary>
+        public static string ExportToText(NoteDay day)
+        {
+            if (day == null) return "";
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine($"Notes — {day.Date:MMMM d, yyyy}");
+            sb.AppendLine(new string('─', 40));
+            sb.AppendLine();
+
+            if (day.IsFreeformMode || day.FreeformSections.Any(s => !string.IsNullOrEmpty(s.Content)))
+            {
+                foreach (var section in day.FreeformSections)
+                {
+                    if (!string.IsNullOrEmpty(section.Content))
+                    {
+                        sb.AppendLine(section.Content);
+                        sb.AppendLine();
+                    }
+                }
+            }
+
+            foreach (var bullet in day.Bullets)
+            {
+                if (!string.IsNullOrEmpty(bullet.Header))
+                    sb.AppendLine($"• {bullet.Header}");
+                if (!string.IsNullOrEmpty(bullet.Content))
+                    sb.AppendLine($"  {bullet.Content}");
+                sb.AppendLine();
+            }
+
+            return sb.ToString();
+        }
+
+        /// <summary>Permanently deletes a bullet from the given day.</summary>
+        public static void DeleteBullet(NoteDay day, NoteBullet bullet)
+        {
+            day.Bullets.Remove(bullet);
+            ScheduleSave();
         }
     }
 }

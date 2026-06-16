@@ -15,6 +15,22 @@ namespace FlyShelf.ViewModels
     public partial class ClipboardItem
     {
 
+        // ── Cached LibreOffice path (null = not found, "" = not yet checked) ──
+        private static string? _cachedLibreOfficePath = "";
+        private static string? GetLibreOfficePath()
+        {
+            if (_cachedLibreOfficePath != "")
+                return _cachedLibreOfficePath; // null means "not installed"
+            string[] paths =
+            {
+                @"C:\Program Files\LibreOffice\program\soffice.exe",
+                @"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "LibreOffice", "program", "soffice.exe")
+            };
+            _cachedLibreOfficePath = paths.FirstOrDefault(File.Exists); // null if none found
+            return _cachedLibreOfficePath;
+        }
+
         public void ConvertDocumentTask()
         {
 #if MSIX_STORE
@@ -33,7 +49,12 @@ namespace FlyShelf.ViewModels
             {
                 try
                 {
-                    if (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath)) return;
+                    if (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath))
+                    {
+                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            FlyShelf.Windows.ToastWindow.ShowToast("⚠️ File not found — cannot convert"));
+                        return;
+                    }
 
                     string ext = Path.GetExtension(FilePath).ToUpperInvariant();
 
@@ -55,20 +76,22 @@ namespace FlyShelf.ViewModels
                         converted = ConvertTextToPdfNative(FilePath, targetPdf);
                     }
 
-                    // ═══════════════════════════════════════════════════════
-                    // STRATEGY 2: LibreOffice headless (silent, no popups)
-                    // ═══════════════════════════════════════════════════════
                     if (!converted)
                     {
-                        converted = TryLibreOfficeConvert(FilePath, targetPdf);
-                    }
+                        // ═══════════════════════════════════════════════════════
+                        // STRATEGY 2: Word COM — tried first (Windows app, everyone has Word)
+                        // ═══════════════════════════════════════════════════════
+                        if (ext == ".DOCX" || ext == ".DOC" || ext == ".RTF")
+                        {
+                            if (Type.GetTypeFromProgID("Word.Application") != null)
+                                converted = TryWordComConvert(FilePath, targetPdf);
+                        }
 
-                    // ═══════════════════════════════════════════════════════
-                    // STRATEGY 3: Word COM with full dialog suppression + timeout
-                    // ═══════════════════════════════════════════════════════
-                    if (!converted && (ext == ".DOCX" || ext == ".DOC" || ext == ".RTF"))
-                    {
-                        converted = TryWordComConvert(FilePath, targetPdf);
+                        // ═══════════════════════════════════════════════════════
+                        // STRATEGY 3: LibreOffice — fallback if Word not installed or failed
+                        // ═══════════════════════════════════════════════════════
+                        if (!converted)
+                            converted = TryLibreOfficeConvert(FilePath, targetPdf);
                     }
 
                     // ═══════════════════════════════════════════════════════
@@ -240,18 +263,12 @@ namespace FlyShelf.ViewModels
         // ═══════════════════════════════════════════════════════════════
         // LIBREOFFICE HEADLESS — Fully silent, no GUI, no popups
         // ═══════════════════════════════════════════════════════════════
-        private static bool TryLibreOfficeConvert(string inputPath, string outputPdf)
+        private static bool TryLibreOfficeConvert(string inputPath, string outputPdf,
+            System.Threading.CancellationToken ct = default)
         {
             try
             {
-                string[] libreOfficePaths = new[]
-                {
-                    @"C:\Program Files\LibreOffice\program\soffice.exe",
-                    @"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "LibreOffice", "program", "soffice.exe")
-                };
-
-                string sofficePath = libreOfficePaths.FirstOrDefault(p => File.Exists(p));
+                string? sofficePath = GetLibreOfficePath();
                 if (sofficePath == null) return false;
 
                 string outDir = Path.GetDirectoryName(outputPdf) ?? Path.GetTempPath();
@@ -272,8 +289,12 @@ namespace FlyShelf.ViewModels
                 using (var proc = Process.Start(psi))
                 {
                     if (proc == null) return false;
-                    bool exited = proc.WaitForExit(60000); // 60s timeout
-                    if (!exited)
+
+                    // Register cancellation to kill LibreOffice if the other converter wins
+                    ct.Register(() => { try { if (!proc.HasExited) proc.Kill(); } catch { } });
+
+                    bool exited = proc.WaitForExit(30000); // 30s — enough for LO cold start
+                    if (!exited || ct.IsCancellationRequested)
                     {
                         try { proc.Kill(); } catch { }
                         return false;
@@ -281,7 +302,6 @@ namespace FlyShelf.ViewModels
 
                     if (proc.ExitCode == 0 && File.Exists(expectedPath))
                     {
-                        // LibreOffice names the output after the input, rename to our target
                         if (expectedPath != outputPdf)
                         {
                             try { File.Move(expectedPath, outputPdf, true); } catch { }
@@ -299,9 +319,10 @@ namespace FlyShelf.ViewModels
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // WORD COM — Full dialog suppression + 60s timeout with kill
+        // WORD COM — Full dialog suppression + cancellation support
         // ═══════════════════════════════════════════════════════════════
-        private static bool TryWordComConvert(string inputPath, string outputPdf)
+        private static bool TryWordComConvert(string inputPath, string outputPdf,
+            System.Threading.CancellationToken ct = default)
         {
             dynamic? wordApp = null;
             dynamic? doc = null;
@@ -368,10 +389,11 @@ namespace FlyShelf.ViewModels
                         true,                   // NoEncodingDialog — suppress encoding dialog
                         Type.Missing            // XMLTransform
                     );
-                });
+                }, ct);
 
                 // Wait with timeout — if Word shows a dialog, it blocks
-                if (!openTask.Wait(TimeSpan.FromSeconds(30)))
+                if (ct.IsCancellationRequested) return false;
+                if (!openTask.Wait(TimeSpan.FromSeconds(20)))
                 {
                     FlyShelf.Classes.Logger.LogAction("CONVERT", "Word open timed out (likely dialog)");
                     ForceKillWord(wordProcess);
@@ -401,7 +423,8 @@ namespace FlyShelf.ViewModels
                     );
                 });
 
-                if (!exportTask.Wait(TimeSpan.FromSeconds(45)))
+                if (ct.IsCancellationRequested) return false;
+                if (!exportTask.Wait(TimeSpan.FromSeconds(30)))
                 {
                     FlyShelf.Classes.Logger.LogAction("CONVERT", "Word export timed out (likely dialog)");
                     ForceKillWord(wordProcess);
@@ -445,7 +468,12 @@ namespace FlyShelf.ViewModels
         /// </summary>
         public void ConvertImageToPdf()
         {
-            if (!IsImagePreview || string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath)) return;
+            if (!IsImagePreview || string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath))
+            {
+                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Image file not found — cannot convert"));
+                return;
+            }
 
             if (!FlyShelf.Classes.LicenseManager.CanConvertImageToPdf())
             {
@@ -466,20 +494,26 @@ namespace FlyShelf.ViewModels
                         Path.GetDirectoryName(FilePath) ?? Path.GetTempPath(),
                         Path.GetFileNameWithoutExtension(FilePath) + $"_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
 
-                    // Load image to get dimensions
+                    // Load image using WPF's decoder (thread-safe on background threads)
                     byte[] jpegBytes;
                     int imgWidth, imgHeight;
-                    using (var bmp = new System.Drawing.Bitmap(FilePath))
-                    {
-                        imgWidth = bmp.Width;
-                        imgHeight = bmp.Height;
 
-                        // Convert to JPEG for PDF embedding
-                        using (var ms = new MemoryStream())
-                        {
-                            bmp.Save(ms, System.Drawing.Imaging.ImageFormat.Jpeg);
-                            jpegBytes = ms.ToArray();
-                        }
+                    var dec = System.Windows.Media.Imaging.BitmapDecoder.Create(
+                        new Uri(FilePath, UriKind.Absolute),
+                        System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat,
+                        System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+
+                    var frame = dec.Frames[0];
+                    imgWidth = frame.PixelWidth;
+                    imgHeight = frame.PixelHeight;
+
+                    // Convert to JPEG bytes for PDF embedding
+                    using (var ms = new MemoryStream())
+                    {
+                        var enc = new System.Windows.Media.Imaging.JpegBitmapEncoder { QualityLevel = 90 };
+                        enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(frame));
+                        enc.Save(ms);
+                        jpegBytes = ms.ToArray();
                     }
 
                     // A4 page size in points (72 dpi): 595.28 x 841.89

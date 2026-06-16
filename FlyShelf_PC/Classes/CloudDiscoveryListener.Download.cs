@@ -53,7 +53,7 @@ namespace FlyShelf.Classes
                     else if (typeLower == "audio" || typeLower == "mp3") incomingType = ClipboardItemType.Audio;
                     else if (typeLower == "document" || typeLower == "text") incomingType = ClipboardItemType.Document;
                     else if (typeLower == "presentation") incomingType = ClipboardItemType.Presentation;
-                    else if (typeLower == "image" || typeLower == "png" || typeLower == "jpg" || typeLower == "jpeg") incomingType = ClipboardItemType.Image;
+                    else if (typeLower == "image" || typeLower == "imagelink" || typeLower == "png" || typeLower == "jpg" || typeLower == "jpeg" || typeLower == "gif" || typeLower == "bmp" || typeLower == "webp") incomingType = ClipboardItemType.Image;
 
                     progressClip = new ClipboardItem
                     {

@@ -94,7 +94,7 @@ namespace FlyShelf
                 var clipboardObj = itemContainer2.DataContext as ClipboardItem;
                 if (clipboardObj != null)
                 {
-                    _ = CopyItemAndPaste(clipboardObj, hideWindow: true);
+                    await CopyItemAndPaste(clipboardObj, hideWindow: true);
                     e.Handled = true;
                 }
             }
@@ -113,6 +113,7 @@ namespace FlyShelf
             }
             catch { }
 
+            bool clipboardDataSet = false;
             try
             {
                 if (!string.IsNullOrEmpty(clipboardObj.FilePath))
@@ -160,10 +161,12 @@ namespace FlyShelf
                     }
 
                     Classes.ClipboardHelper.SafeSetDataObject(dataObj, true, suppressEcho: true, echoDelayMs: 2000);
+                    clipboardDataSet = true;
                 }
                 else if (!string.IsNullOrEmpty(clipboardObj.RawContent))
                 {
                     Classes.ClipboardHelper.SafeSetText(clipboardObj.RawContent, suppressEcho: true, echoDelayMs: 2000);
+                    clipboardDataSet = true;
                 }
             }
             catch { }
@@ -227,10 +230,13 @@ namespace FlyShelf
                 }
             }
 
-            keybd_event(VK_CONTROL, 0, 0, 0);
-            keybd_event(VK_V, 0, 0, 0);
-            keybd_event(VK_V, 0, KEYEVENTF_KEYUP, 0);
-            keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
+            if (clipboardDataSet)
+            {
+                keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
+                keybd_event(VK_V, 0, 0, UIntPtr.Zero);
+                keybd_event(VK_V, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+                keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+            }
         }
 
         private void ShelfListView_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -409,8 +415,11 @@ namespace FlyShelf
                         
                         _isInternalDragSource = true;
                         _didDragOut = true;
+                        System.IO.MemoryStream? dragDropEffect = null;
                         try
                         {
+                            // Retrieve the MemoryStream so we can dispose it after DoDragDrop returns
+                            dragDropEffect = dataObj.GetData("Preferred DropEffect") as System.IO.MemoryStream;
                             DragDropEffects result = DragDrop.DoDragDrop(listView, dataObj, DragDropEffects.Copy | DragDropEffects.Move);
                             
                             // Items remain persistent on the shelf after drag-out
@@ -422,6 +431,7 @@ namespace FlyShelf
                         finally
                         {
                             _isInternalDragSource = false;
+                            dragDropEffect?.Dispose();
                         }
                     }
                 }
@@ -551,7 +561,7 @@ namespace FlyShelf
                 _lastPanelBeforeDismiss = null;
             }
 
-            if (!zombieRecovered && _isCurrentlySummoned && _viewModel.CurrentMode == 1 && !_isAnimatingHide)
+            if (!zombieRecovered && _isCurrentlySummoned && (_viewModel.CurrentMode == 1 || _viewModel.CurrentMode == 0) && !_isAnimatingHide)
             {
                 Classes.Logger.LogAction("VD_TOGGLE", $"TOGGLE_OFF: Already visible (Opacity={this.Opacity:F2}) → AnimateAndHide");
                 AnimateAndHide();
@@ -689,17 +699,19 @@ namespace FlyShelf
                 {
                     _hubWindowInstance = new Windows.HubWindow(_viewModel);
                     _hubWindowInstance.Closed += (s, args) => _hubWindowInstance = null;
+                    _hubWindowInstance.Topmost = true;
                     _hubWindowInstance.Show();
                 }
                 else
                 {
                     if (_hubWindowInstance.WindowState == WindowState.Minimized)
                         _hubWindowInstance.WindowState = WindowState.Normal;
+                    _hubWindowInstance.Topmost = true;
                     _hubWindowInstance.Show();
                 }
                 _hubWindowInstance.Activate();
                 _hubWindowInstance.Focus();
-                AnimateAndHide();
+                _hubWindowInstance.Topmost = false;
             }
             catch (Exception ex)
             {
@@ -709,6 +721,61 @@ namespace FlyShelf
                 while (inner != null) { fullMsg += "\n--- INNER: " + inner.Message; inner = inner.InnerException; }
                 FlyShelf.Classes.Logger.LogAction("HUBWINDOW_FAIL", fullMsg);
                 FlyShelf.Windows.ToastWindow.ShowToast($"Hub Error: {(ex.InnerException?.Message ?? ex.Message)}");
+            }
+        }
+
+        /// <summary>
+        /// Internal hub window opener — doesn't hide clipboard.
+        /// Called from tray menu handlers.
+        /// </summary>
+        private void OpenApp_Click_Internal()
+        {
+            try
+            {
+                CloseEmojiPicker();
+                if (_hubWindowInstance != null && _hubWindowInstance.IsLoaded)
+                {
+                    bool needsRecreate = false;
+                    try
+                    {
+                        var hwnd = new System.Windows.Interop.WindowInteropHelper(_hubWindowInstance).Handle;
+                        if (hwnd != IntPtr.Zero)
+                        {
+                            if (!IsWindowOnCurrentVirtualDesktop(hwnd))
+                                needsRecreate = true;
+                        }
+                    }
+                    catch { }
+
+                    if (needsRecreate)
+                    {
+                        _hubWindowInstance.ForceShutdownRelease();
+                        _hubWindowInstance = null;
+                    }
+                }
+
+                if (_hubWindowInstance == null)
+                {
+                    _hubWindowInstance = new Windows.HubWindow(_viewModel);
+                    _hubWindowInstance.Closed += (s, args) => _hubWindowInstance = null;
+                    _hubWindowInstance.Topmost = true;
+                    _hubWindowInstance.Show();
+                }
+                else
+                {
+                    if (_hubWindowInstance.WindowState == WindowState.Minimized)
+                        _hubWindowInstance.WindowState = WindowState.Normal;
+                    _hubWindowInstance.Topmost = true;
+                    _hubWindowInstance.Show();
+                }
+                _hubWindowInstance.Activate();
+                _hubWindowInstance.Focus();
+                _hubWindowInstance.Topmost = false;
+            }
+            catch (Exception ex)
+            {
+                _hubWindowInstance = null;
+                FlyShelf.Classes.Logger.LogAction("HUBWINDOW_FAIL", ex.ToString());
             }
         }
 
@@ -797,39 +864,44 @@ namespace FlyShelf
             if (_viewModel == null) return;
             bool isMini = _viewModel.CurrentMode == 0;
 
+            // ── When search is active, these buttons must stay collapsed so the
+            //    search bar gets full width.  SearchToggle_Click already hides them;
+            //    honour that state here to prevent a deferred call from restoring them.
             if (SearchToggleBtn != null)
             {
-                SearchToggleBtn.Visibility = Visibility.Visible;
+                SearchToggleBtn.Visibility = _isSearchActive ? Visibility.Collapsed : Visibility.Visible;
             }
 
             if (OpenSettingsBtn != null)
             {
-                OpenSettingsBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
+                OpenSettingsBtn.Visibility = (isMini || _isSearchActive) ? Visibility.Collapsed : Visibility.Visible;
             }
 
             if (NotesToggleBtn != null)
             {
-                NotesToggleBtn.Visibility = (_isTodoActive || !isMini) ? Visibility.Visible : Visibility.Collapsed;
+                NotesToggleBtn.Visibility = _isSearchActive ? Visibility.Collapsed
+                    : ((_isTodoActive || !isMini) ? Visibility.Visible : Visibility.Collapsed);
             }
 
             if (TodoToggleBtn != null)
             {
-                TodoToggleBtn.Visibility = (_isTodoActive || !isMini) ? Visibility.Visible : Visibility.Collapsed;
+                TodoToggleBtn.Visibility = _isSearchActive ? Visibility.Collapsed
+                    : ((_isTodoActive || !isMini) ? Visibility.Visible : Visibility.Collapsed);
             }
 
             if (TodoStopwatchBtn != null)
             {
-                TodoStopwatchBtn.Visibility = _isTodoActive ? Visibility.Visible : Visibility.Collapsed;
+                TodoStopwatchBtn.Visibility = (_isTodoActive && !_isSearchActive) ? Visibility.Visible : Visibility.Collapsed;
             }
 
             if (SortFilterBtn != null)
             {
-                SortFilterBtn.Visibility = _isTodoActive ? Visibility.Collapsed : Visibility.Visible;
+                SortFilterBtn.Visibility = (_isTodoActive || _isSearchActive) ? Visibility.Collapsed : Visibility.Visible;
             }
 
             if (MoreBtn != null)
             {
-                MoreBtn.Visibility = isMini ? Visibility.Collapsed : Visibility.Visible;
+                MoreBtn.Visibility = (isMini || _isSearchActive) ? Visibility.Collapsed : Visibility.Visible;
             }
 
             if (ShelfListView != null)
@@ -854,6 +926,17 @@ namespace FlyShelf
             {
                 UnpinToolbarBtn.Visibility = hasUnpinTarget ? Visibility.Visible : Visibility.Collapsed;
             }
+        }
+
+        /// <summary>
+        /// Shows/hides the Alt+C watermark hint at the bottom of the clipboard.
+        /// Visible until the view has enough items to be considered "filled" (≥5 items).
+        /// </summary>
+        private void UpdateAltCWatermarkVisibility()
+        {
+            if (AltCWatermarkHint == null) return;
+            bool showHint = _viewModel.DroppedItems.Count < 5;
+            AltCWatermarkHint.Visibility = showHint ? Visibility.Visible : Visibility.Collapsed;
         }
     }
 }

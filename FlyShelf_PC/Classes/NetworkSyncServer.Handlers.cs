@@ -878,7 +878,7 @@ namespace FlyShelf.Classes
                         ".mp3" or ".wav" or ".flac" or ".aac" or ".ogg" => "Audio",
                         ".pdf" => "Pdf",
                         ".zip" or ".rar" or ".7z" or ".tar" or ".gz" => "Archive",
-                        ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp" => "ImageLink",
+                        ".jpg" or ".jpeg" or ".png" or ".gif" or ".webp" or ".bmp" => "Image",
                         ".doc" or ".docx" or ".txt" or ".rtf" => "Document",
                         ".ppt" or ".pptx" => "Presentation",
                         ".apk" => "Archive",
