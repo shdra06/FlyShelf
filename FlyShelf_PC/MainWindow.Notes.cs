@@ -40,6 +40,9 @@ namespace FlyShelf
         private const int NOTES_SOFT_LIMIT = 5000;  // Show warning at 5K chars
         private const int NOTES_HARD_LIMIT = 10000; // Hard cap at 10K chars
         private ContextMenu? _activeNoteDropdownMenu = null; // Track open menu for toggle behavior
+        private DateTime _lastNoteDropdownCloseTime = DateTime.MinValue; // Guard against rapid re-open
+        private ContextMenu? _activeNotesHeaderMenu = null;
+        private DateTime _lastNotesHeaderMenuCloseTime = DateTime.MinValue;
         private string? _notesUndoText = null;  // Stores pre-AI text for undo
         private FreeformSection? _notesUndoSection = null; // Which section the undo applies to
         private bool _freeformBulletMode = false; // True while typing inline bullets in freeform
@@ -2076,15 +2079,22 @@ namespace FlyShelf
             e.Handled = true;
             if (sender is FrameworkElement fe && fe.DataContext is NoteBullet bullet)
             {
-                // Toggle: if menu is already open for this button, close it
-                if (_activeNoteDropdownMenu != null && _activeNoteDropdownMenu.IsOpen && _activeNoteDropdownMenu.PlacementTarget == fe)
+                // Close any existing menu first
+                if (_activeNoteDropdownMenu != null)
                 {
+                    var wasForSameTarget = _activeNoteDropdownMenu.IsOpen && _activeNoteDropdownMenu.PlacementTarget == fe;
                     _activeNoteDropdownMenu.IsOpen = false;
                     _activeNoteDropdownMenu = null;
-                    return;
+                    if (wasForSameTarget) return; // toggle OFF
                 }
 
-                Dispatcher.BeginInvoke(new Action(() =>
+                // Guard against rapid re-open: StaysOpen=False closes the menu async
+                // BEFORE this click handler fires, so the toggle above never triggers.
+                // This timestamp guard catches that case.
+                if ((DateTime.Now - _lastNoteDropdownCloseTime).TotalMilliseconds < 300)
+                    return;
+
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
                 {
                     var menu = new ContextMenu();
 
@@ -2269,7 +2279,7 @@ namespace FlyShelf
 
                     menu.PlacementTarget = fe;
                     menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
-                    menu.Closed += (s, ev) => { if (_activeNoteDropdownMenu == menu) _activeNoteDropdownMenu = null; };
+                    menu.Closed += (s, ev) => { _lastNoteDropdownCloseTime = DateTime.Now; if (_activeNoteDropdownMenu == menu) _activeNoteDropdownMenu = null; };
                     _activeNoteDropdownMenu = menu;
                     menu.IsOpen = true;
                 }));
@@ -2389,7 +2399,20 @@ namespace FlyShelf
             e.Handled = true;
             if (sender is FrameworkElement fe)
             {
-                Dispatcher.BeginInvoke(new Action(() =>
+                // Close existing header menu (toggle OFF)
+                if (_activeNotesHeaderMenu != null)
+                {
+                    var wasForSameTarget = _activeNotesHeaderMenu.IsOpen && _activeNotesHeaderMenu.PlacementTarget == fe;
+                    _activeNotesHeaderMenu.IsOpen = false;
+                    _activeNotesHeaderMenu = null;
+                    if (wasForSameTarget) return;
+                }
+
+                // Guard against rapid re-open
+                if ((DateTime.Now - _lastNotesHeaderMenuCloseTime).TotalMilliseconds < 300)
+                    return;
+
+                Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, new Action(() =>
                 {
                     var menu = new ContextMenu();
 
@@ -2550,6 +2573,8 @@ namespace FlyShelf
 
                     menu.PlacementTarget = fe;
                     menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                    menu.Closed += (s, ev) => { _lastNotesHeaderMenuCloseTime = DateTime.Now; if (_activeNotesHeaderMenu == menu) _activeNotesHeaderMenu = null; };
+                    _activeNotesHeaderMenu = menu;
                     menu.IsOpen = true;
                 }));
             }

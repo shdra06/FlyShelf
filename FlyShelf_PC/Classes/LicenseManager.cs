@@ -880,7 +880,7 @@ namespace FlyShelf.Classes
                     deviceId,
                     activatedAt = activationTime,
                     uid = firebaseUid,
-                    appVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "unknown"
+                    appVersion = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "unknown"
                 });
 
                 var content = new StringContent(activationPayload, Encoding.UTF8, "application/json");

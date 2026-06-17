@@ -47,21 +47,32 @@ echo    Hash: %NEWHASH%
 echo %NEWHASH%  FlyShelf.exe> "FINAL\FlyShelf.exe.sha256"
 echo    Saved: FINAL\FlyShelf.exe.sha256
 
-echo.
-echo [4/4] Updating version.json with new hash...
+:: Read version from .csproj so version.json is always in sync with the compiled binary
+for /f "delims=" %%V in ('powershell -NoProfile -Command "([xml](Get-Content 'FlyShelf.csproj')).Project.PropertyGroup[0].Version"') do set "APPVER=%%V"
 
-powershell -NoProfile -Command "$json = Get-Content '..\version.json' -Raw | ConvertFrom-Json; $json.pc_sha256 = '%NEWHASH%'; $json | ConvertTo-Json -Depth 10 | Set-Content '..\version.json' -Encoding UTF8; Write-Host '    Updated version.json pc_sha256 to %NEWHASH%'"
+if "%APPVER%"=="" (
+    echo [WARNING] Could not read version from .csproj! Skipping version.json update.
+    goto :launch
+)
+
+echo    Version: %APPVER%
+
+echo.
+echo [4/4] Updating version.json with new version, download URL, and hash...
+
+powershell -NoProfile -Command "$json = Get-Content '..\version.json' -Raw | ConvertFrom-Json; $json.pc_version = '%APPVER%'; $json.pc_download = 'https://github.com/shdra06/FlyShelf/releases/download/v%APPVER%/FlyShelf.exe'; $json.pc_sha256 = '%NEWHASH%'; $json | ConvertTo-Json -Depth 10 | Set-Content '..\version.json' -Encoding UTF8; Write-Host '    Updated version.json:'; Write-Host '      pc_version  = %APPVER%'; Write-Host '      pc_download = https://github.com/shdra06/FlyShelf/releases/download/v%APPVER%/FlyShelf.exe'; Write-Host '      pc_sha256   = %NEWHASH%'"
 
 echo.
 echo ==============================================
 echo [SUCCESS] PC Compilation Complete!
 echo.
-echo   EXE:    FINAL\FlyShelf.exe
-echo   HASH:   %NEWHASH%
-echo   SHA256: FINAL\FlyShelf.exe.sha256
+echo   EXE:     FINAL\FlyShelf.exe
+echo   VERSION: %APPVER%
+echo   HASH:    %NEWHASH%
+echo   SHA256:  FINAL\FlyShelf.exe.sha256
 echo.
 echo RELEASE CHECKLIST:
-echo   1. Upload FINAL\FlyShelf.exe to GitHub Release
+echo   1. Upload FINAL\FlyShelf.exe to GitHub Release (tag: v%APPVER%)
 echo   2. Upload FINAL\FlyShelf.exe.sha256 to GitHub Release
 echo   3. Commit and push updated version.json
 echo ==============================================
@@ -70,3 +81,4 @@ echo ==============================================
 echo.
 echo Launching the freshly compiled FlyShelf.exe...
 start "" "FINAL\FlyShelf.exe"
+

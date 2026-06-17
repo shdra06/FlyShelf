@@ -228,32 +228,55 @@ namespace FlyShelf.Classes
                 }
             }
 
-            // Sort by Y (top→bottom) then X (left→right)
+            // Sort by center-Y (top→bottom) then X (left→right) for stable line detection
             merged.Sort((a, b) =>
             {
-                int yCompare = a.BoundingRect.Y.CompareTo(b.BoundingRect.Y);
+                double aCenterY = a.BoundingRect.Y + a.BoundingRect.Height / 2.0;
+                double bCenterY = b.BoundingRect.Y + b.BoundingRect.Height / 2.0;
+                int yCompare = aCenterY.CompareTo(bCenterY);
                 return yCompare != 0 ? yCompare : a.BoundingRect.X.CompareTo(b.BoundingRect.X);
             });
 
-            // Reconstruct lines by grouping words with similar Y positions
+            // Reconstruct lines by grouping words with similar center-Y positions
+            // Use median height × 0.6 as the line-break threshold for robustness
+            double lineThreshold;
+            if (merged.Count > 0)
+            {
+                var heights = merged.Select(w => w.BoundingRect.Height).OrderBy(h => h).ToList();
+                double medianH = heights[heights.Count / 2];
+                lineThreshold = medianH * 0.6;
+            }
+            else
+            {
+                lineThreshold = 20;
+            }
+
             var lines = new List<string>();
-            var currentLineWords = new List<string>();
-            double currentLineY = -1000;
-            double lineThreshold = merged.Count > 0 ? merged.Average(w => w.BoundingRect.Height) * 0.5 : 20;
+            var currentLineWords = new List<MergedOcrWord>();
+            double currentLineCenterY = -1000;
 
             foreach (var word in merged)
             {
-                if (Math.Abs(word.BoundingRect.Y - currentLineY) > lineThreshold)
+                double wordCenterY = word.BoundingRect.Y + word.BoundingRect.Height / 2.0;
+
+                if (Math.Abs(wordCenterY - currentLineCenterY) > lineThreshold)
                 {
+                    // Flush the current line — sort words left-to-right by X before joining
                     if (currentLineWords.Count > 0)
-                        lines.Add(string.Join(" ", currentLineWords));
+                    {
+                        currentLineWords.Sort((a, b) => a.BoundingRect.X.CompareTo(b.BoundingRect.X));
+                        lines.Add(string.Join(" ", currentLineWords.Select(w => w.Text)));
+                    }
                     currentLineWords.Clear();
-                    currentLineY = word.BoundingRect.Y;
+                    currentLineCenterY = wordCenterY;
                 }
-                currentLineWords.Add(word.Text);
+                currentLineWords.Add(word);
             }
             if (currentLineWords.Count > 0)
-                lines.Add(string.Join(" ", currentLineWords));
+            {
+                currentLineWords.Sort((a, b) => a.BoundingRect.X.CompareTo(b.BoundingRect.X));
+                lines.Add(string.Join(" ", currentLineWords.Select(w => w.Text)));
+            }
 
             string mergedText = string.Join("\n", lines);
             Logger.LogAction("OCR_MERGE", $"Merged {merged.Count} words into {lines.Count} lines from {allResults.Count} variants");

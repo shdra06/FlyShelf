@@ -19,6 +19,8 @@ namespace FlyShelf
     {
         private async void MergeSelectedPdfsBtn_Click(object sender, RoutedEventArgs e)
         {
+            try
+            {
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
             var checkedPdfs = _viewModel.DroppedItems
                 .Where(i => i.IsCheckedForMerge && i.IsPdfPreview && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath))
@@ -133,6 +135,12 @@ namespace FlyShelf
             else
             {
                 FlyShelf.Windows.ToastWindow.ShowToast("Select 2+ files to merge, or 1 image/doc to convert.");
+            }
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Classes.Logger.LogAction("PDF_MERGE_ERROR", ex.Message);
+                FlyShelf.Windows.ToastWindow.ShowToast($"Merge failed: {ex.Message}");
             }
         }
 
@@ -624,7 +632,7 @@ $word.Quit()
                 await System.Threading.Tasks.Task.Delay(5000);
                 if (Application.Current != null && !Application.Current.Dispatcher.HasShutdownStarted)
                 {
-                    Dispatcher.Invoke(() =>
+                    Dispatcher.InvokeAsync(() =>
                     {
                         // Only revert if still showing the raw password (user didn't change it)
                         if (item.FileName == raw && item.IsPassword)

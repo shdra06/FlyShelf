@@ -16,7 +16,7 @@
         Background="Transparent"
         TextOptions.TextFormattingMode="Display"
         TextOptions.TextRenderingMode="ClearType"
-        AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver"
+        AllowDrop="True" PreviewDrop="Window_PreviewDrop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver"
         Icon="/Resources/FlyShelfLogo.ico">
     
     <WindowChrome.WindowChrome>
@@ -114,7 +114,7 @@
                     </Ellipse>
                     <Border Background="#0AFFFFFF" CornerRadius="6" Padding="10,4,10,4" 
                             BorderBrush="#10FFFFFF" BorderThickness="1">
-                        <TextBlock x:Name="VersionBadgeText" Text="v1.0.0" FontSize="11" 
+                        <TextBlock x:Name="VersionBadgeText" Text="v—" FontSize="11" 
                                    Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
                                    Opacity="0.6"/>
                     </Border>
@@ -135,6 +135,67 @@
                     </Border.Background>
                 </Border>
             </Grid>
+
+            <!-- ═══ UPDATE NOTIFICATION BANNER ═══ -->
+            <Border x:Name="HubUpdateBanner" Grid.Row="1" Visibility="Collapsed" 
+                    Margin="20,10,20,0" CornerRadius="8" Padding="12,7,8,7"
+                    Cursor="Hand" MouseLeftButtonDown="HubUpdateBanner_Click">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#1A6366F1" Offset="0"/>
+                        <GradientStop Color="#1A8B5CF6" Offset="0.5"/>
+                        <GradientStop Color="#1AA78BFA" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Border.BorderBrush>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#336366F1" Offset="0"/>
+                        <GradientStop Color="#338B5CF6" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.BorderBrush>
+                <Border.BorderThickness>1</Border.BorderThickness>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ui:SymbolIcon Grid.Column="0" Symbol="ArrowCircleUp24" FontSize="15" Foreground="#8B5CF6" 
+                                   VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <TextBlock Grid.Column="1" x:Name="HubUpdateBannerText" 
+                               Text="🚀 A new version of FlyShelf is available — update now!" 
+                               FontSize="12" FontWeight="SemiBold" 
+                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                    <Button Grid.Column="2" Click="HubUpdateBannerDismiss_Click"
+                            Focusable="False" Cursor="Hand" VerticalAlignment="Center" Margin="6,0,0,0"
+                            ToolTip="Dismiss">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="OverridesDefaultStyle" Value="True"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="DismissBg" Width="22" Height="22" CornerRadius="11" 
+                                                    Background="Transparent">
+                                                <ui:SymbolIcon Symbol="Dismiss12" FontSize="10" 
+                                                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="DismissBg" Property="Background" Value="#18FFFFFF"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </Grid>
+            </Border>
 
             <!-- ROW 2: Navigation Tabs -->
             <ui:NavigationView x:Name="RootNavigation" Grid.Row="2" PaneDisplayMode="Top" 
@@ -464,7 +525,14 @@
                                     <TextBox x:Name="SearchBox" Background="Transparent" BorderThickness="0" 
                                              Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
                                              FontSize="12.5" Padding="14,10" CaretBrush="{DynamicResource ThemeAccent}"
-                                             TextChanged="SearchBox_TextChanged"/>
+                                             TextChanged="SearchBox_TextChanged">
+                                        <TextBox.Template>
+                                            <ControlTemplate TargetType="TextBox">
+                                                <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False"
+                                                              Margin="0" Padding="{TemplateBinding Padding}" VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
+                                            </ControlTemplate>
+                                        </TextBox.Template>
+                                    </TextBox>
                                 </Grid>
                             </Border>
                             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0,0,0">
@@ -2632,7 +2700,7 @@
                                             <StackPanel VerticalAlignment="Center">
                                                 <TextBlock Text="Application Updates" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
                                                 <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
-                                                    <TextBlock x:Name="CurrentVersionText" Text="v1.0.0" FontSize="11" Foreground="#A78BFA" FontWeight="SemiBold"/>
+                                                    <TextBlock x:Name="CurrentVersionText" Text="v—" FontSize="11" Foreground="#A78BFA" FontWeight="SemiBold"/>
                                                     <TextBlock x:Name="LatestVersionText" Text="" FontSize="11" Foreground="#34D399" FontWeight="SemiBold" Margin="8,0,0,0"/>
                                                 </StackPanel>
                                             </StackPanel>

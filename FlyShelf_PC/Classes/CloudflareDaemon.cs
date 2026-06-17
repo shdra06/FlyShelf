@@ -8,7 +8,6 @@ using System.Threading.Tasks;
 
 namespace FlyShelf.Classes
 {
-#if !MSIX_STORE
     public class CloudflareDaemon
     {
         private Process _cfProcess;
@@ -678,18 +677,4 @@ namespace FlyShelf.Classes
             catch { }
         }
     }
-#else
-    /// <summary>No-op stub for Microsoft Store builds — cloudflared is excluded.</summary>
-    public class CloudflareDaemon
-    {
-        public string GlobalUrl { get; private set; } = "Offline";
-        public string PreviousGlobalUrl { get; private set; } = "";
-        public bool IsTunnelVerified { get; private set; } = false;
-        public event Action<string> GlobalUrlUpdated;
-        public Task StartAsync(int localPort) => Task.CompletedTask;
-        public void Stop() { }
-        public void ForceCheckTunnelHealth() { }
-        public static string GetCloudflaredExePath() => "";
-    }
-#endif
 }

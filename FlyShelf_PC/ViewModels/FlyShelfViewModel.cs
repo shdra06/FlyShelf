@@ -116,7 +116,7 @@ namespace FlyShelf.ViewModels
                             continue;
 
                         if (string.IsNullOrWhiteSpace(item.FileName) && !string.IsNullOrWhiteSpace(item.RawContent))
-                            item.FileName = item.RawContent.Length > 800 ? item.RawContent.Substring(0, 800) + "..." : item.RawContent;
+                            item.FileName = item.RawContent.Length > 5000 ? item.RawContent.Substring(0, 5000) + "..." : item.RawContent;
 
                         item.EvaluateSmartActions();
 

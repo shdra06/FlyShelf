@@ -85,18 +85,25 @@ namespace FlyShelf
                 }
             }
 
-            var listView = sender as System.Windows.Controls.ListView;
-            if (listView == null) return;
-            var itemContainer2 = System.Windows.Controls.ItemsControl.ContainerFromElement(listView, e.OriginalSource as DependencyObject) as System.Windows.Controls.ListViewItem;
-            
-            if (itemContainer2 != null)
+            try
             {
-                var clipboardObj = itemContainer2.DataContext as ClipboardItem;
-                if (clipboardObj != null)
+                var listView = sender as System.Windows.Controls.ListView;
+                if (listView == null) return;
+                var itemContainer2 = System.Windows.Controls.ItemsControl.ContainerFromElement(listView, e.OriginalSource as DependencyObject) as System.Windows.Controls.ListViewItem;
+            
+                if (itemContainer2 != null)
                 {
-                    await CopyItemAndPaste(clipboardObj, hideWindow: true);
-                    e.Handled = true;
+                    var clipboardObj = itemContainer2.DataContext as ClipboardItem;
+                    if (clipboardObj != null)
+                    {
+                        await CopyItemAndPaste(clipboardObj, hideWindow: true);
+                        e.Handled = true;
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("PASTE_ERROR", ex.Message);
             }
         }
 

@@ -606,6 +606,8 @@ namespace FlyShelf
                     // DWM transitions are disabled, window is already positioned,
                     // and the visual tree is warm. Waiting a frame here creates
                     // a visible 30ms gap (the jitter the user sees).
+                    // ForceFirstSpawnRepaint() is now called inside PlayShowAnimation() itself
+                    // to ensure the compositor flush happens on EVERY spawn, not just the first.
                     PlayShowAnimation();
                     Classes.SpawnProfiler.Instance.Mark("PLAY_SHOW_ANIMATION");
                 }
@@ -622,8 +624,7 @@ namespace FlyShelf
                         if (_spawnGeneration != capturedSpawnGen || !_isCurrentlySummoned) return; // stale or dismissed
  
                         _hasCompletedFirstSpawn = true;
-                        PlayShowAnimation();
-                        ForceFirstSpawnRepaint();
+                        PlayShowAnimation(); // ForceFirstSpawnRepaint() is called inside
                         Classes.SpawnProfiler.Instance.Mark("PLAY_SHOW_ANIMATION");
                     };
                     System.Windows.Media.CompositionTarget.Rendering += renderHandler;

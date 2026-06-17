@@ -73,18 +73,17 @@ namespace FlyShelf.Windows
             {
                 UpdateSectionCard.Visibility = Visibility.Collapsed;
             }
-            // Cloudflare UI — show as locked with download message in Store builds
-            if (CloudflareToggleSwitch != null) { CloudflareToggleSwitch.IsEnabled = false; CloudflareToggleSwitch.Opacity = 0.4; }
-            if (CloudflareStoreLockBanner != null) CloudflareStoreLockBanner.Visibility = Visibility.Visible;
-            if (CloudflareStatusGrid != null) CloudflareStatusGrid.Visibility = Visibility.Collapsed;
 #endif
-            if (StartupHelper.IsPackaged())
+
+            // ═══ HUB UPDATE BANNER ═══
+            // Show the update notification banner if an update was already detected
+            if (UpdateManager.GlobalUpdateAvailable)
             {
-                if (UpdateSectionCard != null)
-                {
-                    UpdateSectionCard.Visibility = Visibility.Collapsed;
-                }
+                HubUpdateBannerText.Text = $"🚀 FlyShelf v{UpdateManager.GlobalLatestVersion} is available — update now!";
+                HubUpdateBanner.Visibility = Visibility.Visible;
             }
+            // Subscribe to future update detections
+            UpdateManager.GlobalUpdateStatusChanged += OnHubGlobalUpdateStatusChanged;
 
 #if !DEBUG
             // Release builds: hide developer-only UI (System Logs tab, Network live logs button)
@@ -378,6 +377,9 @@ namespace FlyShelf.Windows
                 // Stop fast-polling when window is hidden
                 _pairingHandshakeTimer?.Stop();
 
+                // Cancel any in-progress update download
+                _updateManager.CancelDownload();
+
                 // Actively optimize and release memory whenever the HubWindow is closed/hidden
                 var mainWin = Application.Current.MainWindow as MainWindow;
                 mainWin?.OptimizeMemoryUsage();
@@ -463,6 +465,52 @@ namespace FlyShelf.Windows
                     }
                 }
             });
+        }
+
+        // ═══ HUB UPDATE BANNER HANDLERS ═══
+        private bool _hubUpdateBannerDismissed = false;
+
+        private void OnHubGlobalUpdateStatusChanged(bool updateAvailable)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (updateAvailable && !_hubUpdateBannerDismissed)
+                {
+                    HubUpdateBannerText.Text = $"🚀 FlyShelf v{UpdateManager.GlobalLatestVersion} is available — update now!";
+                    HubUpdateBanner.Visibility = Visibility.Visible;
+                }
+            });
+        }
+
+        private void HubUpdateBanner_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            try
+            {
+                if (StartupHelper.IsPackaged())
+                {
+                    // MSIX/Store install — open the Store app directly
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "ms-windows-store://pdp/?ProductId=9PM37CMM3T72",
+                        UseShellExecute = true
+                    });
+                }
+                else
+                {
+                    // Non-packaged (sideload) — navigate to Settings tab which has the updater
+                    NavigateToTab("Settings");
+                }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("UPDATE_BANNER", $"Hub: Failed to open store/settings: {ex.Message}");
+            }
+        }
+
+        private void HubUpdateBannerDismiss_Click(object sender, RoutedEventArgs e)
+        {
+            _hubUpdateBannerDismissed = true;
+            HubUpdateBanner.Visibility = Visibility.Collapsed;
         }
 
         private void Nav_Click(object sender, MouseButtonEventArgs e)

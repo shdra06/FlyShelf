@@ -14,7 +14,7 @@
         MaxHeight="300" SizeToContent="Manual" MinHeight="100" BorderThickness="0"
         WindowStyle="None" ResizeMode="NoResize" Background="Transparent" SystemBackdropType="Mica"
         ShowInTaskbar="False" Margin="0" Topmost="True" ShowActivated="False"
-        AllowDrop="True" Drop="Window_Drop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver"
+        AllowDrop="True" PreviewDrop="Window_PreviewDrop" DragEnter="Window_DragEnter" DragLeave="Window_DragLeave" PreviewDragOver="Window_PreviewDragOver"
         TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True"
         Loaded="MicaWindow_Loaded" Deactivated="MicaWindow_Deactivated">
 
@@ -55,7 +55,7 @@
 
 
             <!-- Shared ContextMenu cached at Window level to prevent duplicate MenuItem element allocations -->
-            <ContextMenu x:Key="CardContextMenu" StaysOpen="True">
+            <ContextMenu x:Key="CardContextMenu" x:Shared="False" StaysOpen="True">
                 <ContextMenu.Resources>
                     <Style TargetType="Separator">
                         <Setter Property="Margin" Value="8,4"/>
@@ -243,6 +243,66 @@
         </tray:NotifyIcon>
         
         <StackPanel Grid.Row="0" x:Name="HeaderAndFiltersStack">
+            <!-- ═══ UPDATE NOTIFICATION BANNER ═══ -->
+            <Border x:Name="UpdateNotificationBanner" Visibility="Collapsed" 
+                    Margin="10,8,10,0" CornerRadius="8" Padding="10,6,6,6"
+                    Cursor="Hand" MouseLeftButtonDown="UpdateBanner_Click">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#1A6366F1" Offset="0"/>
+                        <GradientStop Color="#1A8B5CF6" Offset="0.5"/>
+                        <GradientStop Color="#1AA78BFA" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Border.BorderBrush>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#336366F1" Offset="0"/>
+                        <GradientStop Color="#338B5CF6" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.BorderBrush>
+                <Border.BorderThickness>1</Border.BorderThickness>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <ui:SymbolIcon Grid.Column="0" Symbol="ArrowCircleUp24" FontSize="14" Foreground="#8B5CF6" 
+                                   VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock Grid.Column="1" x:Name="UpdateBannerText" Text="🚀 New version available — tap to update" 
+                               FontSize="11" FontWeight="SemiBold" 
+                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
+                               VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                    <Button Grid.Column="2" x:Name="UpdateBannerDismissBtn" Click="UpdateBannerDismiss_Click"
+                            Focusable="False" Cursor="Hand" VerticalAlignment="Center" Margin="4,0,0,0"
+                            ToolTip="Dismiss">
+                        <Button.Style>
+                            <Style TargetType="Button">
+                                <Setter Property="OverridesDefaultStyle" Value="True"/>
+                                <Setter Property="Background" Value="Transparent"/>
+                                <Setter Property="Template">
+                                    <Setter.Value>
+                                        <ControlTemplate TargetType="Button">
+                                            <Border x:Name="DismissBg" Width="20" Height="20" CornerRadius="10" 
+                                                    Background="Transparent">
+                                                <ui:SymbolIcon Symbol="Dismiss12" FontSize="10" 
+                                                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <ControlTemplate.Triggers>
+                                                <Trigger Property="IsMouseOver" Value="True">
+                                                    <Setter TargetName="DismissBg" Property="Background" Value="#18FFFFFF"/>
+                                                </Trigger>
+                                            </ControlTemplate.Triggers>
+                                        </ControlTemplate>
+                                    </Setter.Value>
+                                </Setter>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                </Grid>
+            </Border>
+
             <Grid x:Name="TopHeaderGrid" Margin="14,14,14,8" Background="#01000000" MouseLeftButtonDown="Header_MouseLeftButtonDown">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -252,9 +312,9 @@
                 
                 <!-- Inline Search Bar (covers the left area up to the search icon) -->
                 <Border x:Name="SearchBarContainer" Grid.Column="0" Visibility="Collapsed" VerticalAlignment="Center"
-                        Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="8"
+                        Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" CornerRadius="6"
                         BorderThickness="1"
-                        Padding="4,0,4,0" Margin="0,0,6,0" Height="32" MinWidth="200" HorizontalAlignment="Stretch"
+                        Padding="4,0,4,0" Margin="0,0,6,0" Height="28" MinWidth="160" HorizontalAlignment="Stretch"
                         Panel.ZIndex="10" PreviewMouseLeftButtonDown="SearchBar_PreviewMouseDown"
                         RenderTransformOrigin="1,0.5">
                     <Border.Style>
@@ -277,9 +337,9 @@
                         </Grid.ColumnDefinitions>
                         <!-- Search input with integrated placeholder -->
                         <TextBox x:Name="SearchTextBox" Grid.Column="0" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
-                                 FontSize="13" VerticalAlignment="Center" VerticalContentAlignment="Center" 
+                                 FontSize="12" VerticalAlignment="Center" VerticalContentAlignment="Center" 
                                  CaretBrush="{DynamicResource ThemeAccent}" Padding="0" Margin="0"
-                                 HorizontalContentAlignment="Left" MinWidth="120"
+                                 HorizontalContentAlignment="Left" MinWidth="100"
                                  TextChanged="SearchTextBox_TextChanged" PreviewKeyDown="SearchTextBox_PreviewKeyDown">
                             <TextBox.Style>
                                 <Style TargetType="TextBox">
@@ -291,9 +351,9 @@
                                             <ControlTemplate TargetType="TextBox">
                                                 <Grid Background="Transparent">
                                                     <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="-2,0,0,0" Padding="0" VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
-                                                    <TextBlock x:Name="PlaceholderText" Text="Search clipboard..." 
+                                                    <TextBlock x:Name="PlaceholderText" Text="Search..." 
                                                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
-                                                               VerticalAlignment="Center" FontSize="13" IsHitTestVisible="False" Margin="0"
+                                                               VerticalAlignment="Center" FontSize="12" IsHitTestVisible="False" Margin="0"
                                                                Visibility="Collapsed"/>
                                                 </Grid>
                                                 <ControlTemplate.Triggers>
@@ -309,9 +369,9 @@
                         </TextBox>
                         <!-- Clear search button -->
                         <ui:Button Grid.Column="1" Focusable="False" Appearance="Transparent" Foreground="{DynamicResource SubtleTextColor}" Click="ClearSearch_Click" ToolTip="Clear Search" 
-                                   Margin="2,0,0,0" Padding="4,4" CornerRadius="6" Width="24" Height="24" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                                   Margin="2,0,0,0" Padding="3,3" CornerRadius="5" Width="20" Height="20" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                                    Background="Transparent" BorderThickness="0">
-                            <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss12" FontSize="10"/></ui:Button.Icon>
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss12" FontSize="9"/></ui:Button.Icon>
                         </ui:Button>
                     </Grid>
                 </Border>
@@ -769,7 +829,8 @@
             <ListView.ItemTemplate>
                 <DataTemplate>
                     <Grid>
-                        <Border Name="CardBorder" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Margin="0" Padding="0" RenderTransformOrigin="0.5,0.5" ClipToBounds="True">
+                        <Border Name="CardBorder" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="14" Margin="0" Padding="0" RenderTransformOrigin="0.5,0.5" ClipToBounds="True"
+                                UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display" RenderOptions.ClearTypeHint="Enabled">
                         <Border.Background>
                             <SolidColorBrush Color="{DynamicResource MicaWPF.Colors.SubtleFillColorSecondary}" Opacity="0.38" />
                         </Border.Background>

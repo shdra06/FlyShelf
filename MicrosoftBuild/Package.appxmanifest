@@ -17,8 +17,8 @@
   <mp:PhoneIdentity PhoneProductId="c1ba92ce-7355-4ff8-89e1-6c830457ecdf" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 
   <Properties>
-    <DisplayName>FlyShelf</DisplayName>
-    <PublisherDisplayName>Shivendra</PublisherDisplayName>
+    <DisplayName>FlyShelf Clipboard</DisplayName>
+    <PublisherDisplayName>Flyshelf</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
@@ -36,7 +36,7 @@
       EntryPoint="Windows.FullTrustApplication">
 
       <uap:VisualElements
-        DisplayName="FlyShelf"
+        DisplayName="FlyShelf Clipboard"
         Description="Seamless Cross-Device Clipboard — sync text, images, files, and screenshots across all your devices in real-time."
         BackgroundColor="#1A1A2E"
         Square150x150Logo="Assets\Square150x150Logo.png"

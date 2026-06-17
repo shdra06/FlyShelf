@@ -32,9 +32,9 @@ namespace FlyShelf.Windows
         private int _cachedFreeZoneWidth = -1;
         private DateTime _lastFreeZoneScan = DateTime.MinValue;
         private bool _isClosed = false;
-        private bool _isFloatingMode = true; // Always true â€” widget always floats as a standalone TOPMOST window
+        private bool _isFloatingMode = true; // Always true — widget always floats as a standalone TOPMOST window
 
-        // Position stability â€” avoid redundant SetWindowPos calls that cause flicker
+        // Position stability — avoid redundant SetWindowPos calls that cause flicker
         private int _lastWidgetLeft = -1;
         private int _lastWidgetTop = -1;
         private int _lastWidgetW = -1;
@@ -57,7 +57,7 @@ namespace FlyShelf.Windows
             InitializeComponent();
 
             _timer = new DispatcherTimer();
-            _timer.Interval = TimeSpan.FromMilliseconds(500); // 2fps is plenty â€” taskbar rarely moves
+            _timer.Interval = TimeSpan.FromMilliseconds(500); // 2fps is plenty — taskbar rarely moves
             _timer.Tick += (s, e) => UpdatePosition();
 
             // Listen for system preference changes (like taskbar auto-hide toggling)
@@ -90,7 +90,7 @@ namespace FlyShelf.Windows
                             Show();
                             _timer.Start();
 
-                            // Retry SetupWindow with delays â€” taskbar HWND may not be ready immediately
+                            // Retry SetupWindow with delays — taskbar HWND may not be ready immediately
                             for (int attempt = 1; attempt <= 3; attempt++)
                             {
                                 if (_isClosed || !SettingsManager.Current.EnableTaskbarWidget) return;
@@ -148,7 +148,7 @@ namespace FlyShelf.Windows
                         Show();
                         _timer.Start();
 
-                        // Retry SetupWindow up to 3 times â€” taskbar HWND may not be ready on first try
+                        // Retry SetupWindow up to 3 times — taskbar HWND may not be ready on first try
                         for (int attempt = 1; attempt <= 3; attempt++)
                         {
                             if (_isClosed || !SettingsManager.Current.EnableTaskbarWidget) return;
@@ -218,7 +218,7 @@ namespace FlyShelf.Windows
         {
             switch (msg)
             {
-                case 0x003D: // WM_GETOBJECT â€” suppress accessibility queries
+                case 0x003D: // WM_GETOBJECT — suppress accessibility queries
                 case 0x0281: // WM_IME_SETCONTEXT
                 case 0x0282: // WM_IME_NOTIFY
                     handled = true;
@@ -321,7 +321,7 @@ namespace FlyShelf.Windows
             return mainHwnd;
         }
 
-        // â•â•â• Auto-hide detection via Shell AppBar API â•â•â•
+        // ═══ Auto-hide detection via Shell AppBar API ═══
         [DllImport("shell32.dll")]
         private static extern IntPtr SHAppBarMessage(uint dwMessage, ref APPBARDATA pData);
 
@@ -381,7 +381,7 @@ namespace FlyShelf.Windows
             Classes.Logger.LogAction("WIDGET", "Refreshed floating styles and invalidated caches");
         }
 
-        // SwitchToEmbeddedMode removed â€” widget always floats as a standalone TOPMOST window.
+        // SwitchToEmbeddedMode removed — widget always floats as a standalone TOPMOST window.
 
         private void SetupWindow()
         {
@@ -401,16 +401,16 @@ namespace FlyShelf.Windows
 
                 if (taskbarHandle == IntPtr.Zero)
                 {
-                    Classes.Logger.LogAction("WIDGET", "ERROR: Could not find taskbar window handle â€” widget will not dock");
+                    Classes.Logger.LogAction("WIDGET", "ERROR: Could not find taskbar window handle — widget will not dock");
                     return;
                 }
 
                 bool autoHide = IsTaskbarAutoHideEnabled();
                 if (autoHide)
                 {
-                    // Taskbar auto-hide is ON â€” hide the widget entirely
+                    // Taskbar auto-hide is ON — hide the widget entirely
                     Visibility = Visibility.Hidden;
-                    Classes.Logger.LogAction("WIDGET", "SetupWindow: taskbar auto-hide ON â€” widget hidden");
+                    Classes.Logger.LogAction("WIDGET", "SetupWindow: taskbar auto-hide ON — widget hidden");
                 }
                 else
                 {
@@ -424,7 +424,7 @@ namespace FlyShelf.Windows
                     SetWindowLong(taskbarWindowHandle, GWL_EXSTYLE, exStyle);
 
                     CalculateFloatingPosition(taskbarWindowHandle, taskbarHandle);
-                    Classes.Logger.LogAction("WIDGET", "SetupWindow complete â€” widget in floating docked mode");
+                    Classes.Logger.LogAction("WIDGET", "SetupWindow complete — widget in floating docked mode");
                 }
             }
             catch (Exception ex)
@@ -478,7 +478,7 @@ namespace FlyShelf.Windows
                 {
                     if (autoHide || IsForegroundFullScreen())
                     {
-                        // Auto-hide or full-screen is on â€” hide the widget
+                        // Auto-hide or full-screen is on — hide the widget
                         if (Visibility != Visibility.Hidden)
                             Visibility = Visibility.Hidden;
                         return;
@@ -587,7 +587,7 @@ namespace FlyShelf.Windows
                 e.Category == Microsoft.Win32.UserPreferenceCategory.Policy ||
                 e.Category == Microsoft.Win32.UserPreferenceCategory.Window)
             {
-                Classes.Logger.LogAction("WIDGET", $"UserPreferenceChanged ({e.Category}) detected â€” forcing immediate reposition");
+                Classes.Logger.LogAction("WIDGET", $"UserPreferenceChanged ({e.Category}) detected — forcing immediate reposition");
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
                     ForceReposition();
@@ -653,7 +653,7 @@ namespace FlyShelf.Windows
                 Rect monitorArea = monitor.monitorArea;
                 Rect workArea = monitor.workArea;
 
-                // â•â•â• Y POSITION â€” identical to embedded CalculateAndSetPosition â•â•â•
+                // ═══ Y POSITION — identical to embedded CalculateAndSetPosition ═══
                 // Detect the solid taskbar region from the gap between monitorArea and workArea
                 double solidTop = monitorArea.Top;
                 double solidHeight = monitorArea.Height;
@@ -678,7 +678,7 @@ namespace FlyShelf.Windows
                 // Center the widget vertically inside the solid taskbar region
                 int screenY = (int)(solidTop + (solidHeight - physicalHeight) / 2.0);
 
-                // â•â•â• X POSITION â€” default lower-left, respect user alignment â•â•â•
+                // ═══ X POSITION — default lower-left, respect user alignment ═══
                 int screenX;
                 int alignment = SettingsManager.Current.WidgetTaskbarAlignment;
 
@@ -698,9 +698,9 @@ namespace FlyShelf.Windows
                 }
                 catch { }
 
-                if (alignment == -1) // Auto â€” default to lower-left
+                if (alignment == -1) // Auto — default to lower-left
                 {
-                    // Always left for floating mode â€” consistent with the clipboard popup fallback
+                    // Always left for floating mode — consistent with the clipboard popup fallback
                     screenX = (int)monitorArea.Left + 8;
                 }
                 else if (alignment == 0) // Far Left
@@ -745,7 +745,7 @@ namespace FlyShelf.Windows
                 if (Math.Abs(this.Height - targetLogicalHeight) > 0.01)
                     this.Height = targetLogicalHeight;
 
-                // â•â•â• Z-ORDER â€” TOPMOST to float above the taskbar surface â•â•â•
+                // ═══ Z-ORDER — TOPMOST to float above the taskbar surface ═══
                 // The embedded widget sits on top of taskbar siblings via SetWindowPos(0),
                 // for floating mode we use TOPMOST to achieve the same visibility.
                 const int HWND_TOPMOST = -1;

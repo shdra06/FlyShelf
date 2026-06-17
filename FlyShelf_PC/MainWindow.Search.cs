@@ -10,6 +10,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Data;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using FlyShelf.Classes;
 
 namespace FlyShelf
@@ -53,18 +54,26 @@ namespace FlyShelf
                 SortFilterBtn.Visibility = Visibility.Collapsed;
 
                 // ── Clear any stale animations and force-reset transform + opacity ──
-                var scaleTransform = SearchBarContainer.RenderTransform as System.Windows.Media.ScaleTransform;
+                var scaleTransform = SearchBarContainer.RenderTransform as ScaleTransform;
                 if (scaleTransform != null)
                 {
-                    scaleTransform.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
-                    scaleTransform.ScaleX = 1.0;
+                    scaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+                    scaleTransform.ScaleX = 0.0;
                 }
                 SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, null);
-                SearchBarContainer.Opacity = 1.0;
+                SearchBarContainer.Opacity = 0.0;
 
-                // Instant show — no animation to prevent half-collapsed state
+                // Show container then animate in smoothly
                 SearchBarContainer.Visibility = Visibility.Visible;
-                
+
+                var easeIn = new CubicEase { EasingMode = EasingMode.EaseOut };
+                var scaleAnim = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(200)) { EasingFunction = easeIn };
+                var opacityAnim = new DoubleAnimation(0.0, 1.0, TimeSpan.FromMilliseconds(200)) { EasingFunction = easeIn };
+
+                if (scaleTransform != null)
+                    scaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, scaleAnim);
+                SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, opacityAnim);
+
                 // Delay focus — the TextBox needs to be visible and rendered first
                 Dispatcher.InvokeAsync(() =>
                 {
@@ -187,16 +196,29 @@ namespace FlyShelf
                 // ── Restore toolbar buttons respecting current mode ──
                 UpdateToolbarButtonsVisibility();
 
-                // Instant collapse — no animation to prevent half-visible state
-                SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, null);
-                SearchBarContainer.Opacity = 1.0;
-                var scaleTransform = SearchBarContainer.RenderTransform as System.Windows.Media.ScaleTransform;
-                if (scaleTransform != null)
+                // Smooth collapse animation
+                var easeOut = new CubicEase { EasingMode = EasingMode.EaseIn };
+                var scaleAnim = new DoubleAnimation(1.0, 0.0, TimeSpan.FromMilliseconds(150)) { EasingFunction = easeOut };
+                var opacityAnim = new DoubleAnimation(1.0, 0.0, TimeSpan.FromMilliseconds(150)) { EasingFunction = easeOut };
+
+                opacityAnim.Completed += (s, _) =>
                 {
-                    scaleTransform.BeginAnimation(System.Windows.Media.ScaleTransform.ScaleXProperty, null);
-                    scaleTransform.ScaleX = 1.0;
-                }
-                SearchBarContainer.Visibility = Visibility.Collapsed;
+                    // After animation completes, collapse and reset transforms
+                    SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, null);
+                    SearchBarContainer.Opacity = 1.0;
+                    var st = SearchBarContainer.RenderTransform as ScaleTransform;
+                    if (st != null)
+                    {
+                        st.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+                        st.ScaleX = 1.0;
+                    }
+                    SearchBarContainer.Visibility = Visibility.Collapsed;
+                };
+
+                var scaleTransform = SearchBarContainer.RenderTransform as ScaleTransform;
+                if (scaleTransform != null)
+                    scaleTransform.BeginAnimation(ScaleTransform.ScaleXProperty, scaleAnim);
+                SearchBarContainer.BeginAnimation(UIElement.OpacityProperty, opacityAnim);
 
                 // Stop mascot search animation
                 try { Classes.AnimationTriggerService.Instance.OnSearchToggle(false); } catch { }

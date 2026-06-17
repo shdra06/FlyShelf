@@ -4,6 +4,7 @@ using System.IO;
 using System.Net.Http;
 using System.Reflection;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace FlyShelf.Classes
@@ -32,11 +33,61 @@ namespace FlyShelf.Classes
         public string ExpectedHash { get; private set; } = ""; // SHA-256 hash for integrity verification
         public bool IsUpdateAvailable { get; private set; }
 
+        // ═══ Download cancellation ═══
+        private CancellationTokenSource? _downloadCts;
+
+        /// <summary>Cancels any in-progress download. Safe to call if nothing is downloading.</summary>
+        public void CancelDownload()
+        {
+            try { _downloadCts?.Cancel(); } catch { }
+        }
+
         // ═══ Static cross-window notification ═══
         // Allows MainWindow clipboard badge to react without a direct reference
         public static bool GlobalUpdateAvailable { get; private set; }
         public static string GlobalLatestVersion { get; private set; } = "";
         public static event Action<bool>? GlobalUpdateStatusChanged;
+
+        // ═══ Update health-check marker path ═══
+        private static string UpdateMarkerPath => Path.Combine(Path.GetTempPath(), "FlyShelf_Update", "update_pending.json");
+        private static string UpdateTempDir => Path.Combine(Path.GetTempPath(), "FlyShelf_Update");
+
+        /// <summary>
+        /// Lightweight version check that ONLY compares the current version against version.json.
+        /// Does NOT download anything — fully compliant with Microsoft Store policy.
+        /// Fires GlobalUpdateStatusChanged so the MainWindow can show a notification banner.
+        /// </summary>
+        public static async Task CheckForNewVersionNotificationAsync()
+        {
+            try
+            {
+                string url = $"{VERSION_URL}?t={DateTimeOffset.UtcNow.ToUnixTimeSeconds()}";
+                string json = await _client.GetStringAsync(url);
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+
+                string latestStr = root.TryGetProperty("pc_version", out var v) ? v.GetString() ?? "" : "";
+                if (string.IsNullOrEmpty(latestStr)) return;
+
+                var current = new Version(CurrentVersion);
+                var latest = new Version(latestStr);
+
+                bool available = latest > current;
+                GlobalUpdateAvailable = available;
+                GlobalLatestVersion = latestStr;
+
+                Logger.LogAction("UPDATE_CHECK", $"Version check: current={CurrentVersion}, latest={latestStr}, updateAvailable={available}");
+
+                if (available)
+                {
+                    GlobalUpdateStatusChanged?.Invoke(true);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("UPDATE_CHECK", $"Lightweight version check failed (non-fatal): {ex.Message}");
+            }
+        }
 
         // Events for UI binding
         public event Action<int> DownloadProgressChanged; // 0-100
@@ -54,13 +105,6 @@ namespace FlyShelf.Classes
             UpdateCheckCompleted?.Invoke(false);
             return false;
 #else
-            if (StartupHelper.IsPackaged())
-            {
-                StatusChanged?.Invoke("Updates are managed by the Microsoft Store.");
-                UpdateCheckCompleted?.Invoke(false);
-                return false;
-            }
-
             try
             {
                 StatusChanged?.Invoke("Checking for updates...");
@@ -226,11 +270,6 @@ namespace FlyShelf.Classes
             StatusChanged?.Invoke("Updates are managed by the Microsoft Store.");
             return false;
 #else
-            if (StartupHelper.IsPackaged())
-            {
-                StatusChanged?.Invoke("Updates are managed by the Microsoft Store.");
-                return false;
-            }
 
             if (string.IsNullOrEmpty(DownloadUrl))
             {
@@ -241,6 +280,11 @@ namespace FlyShelf.Classes
             string tempDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Update");
             Directory.CreateDirectory(tempDir);
             string tempExePath = Path.Combine(tempDir, "FlyShelf_new.exe");
+
+            // Create a new cancellation token for this download
+            _downloadCts?.Dispose();
+            _downloadCts = new CancellationTokenSource();
+            var ct = _downloadCts.Token;
 
             try
             {
@@ -254,7 +298,7 @@ namespace FlyShelf.Classes
                 try
                 {
                     var headRequest = new HttpRequestMessage(HttpMethod.Head, DownloadUrl);
-                    var headResponse = await _downloadClient.SendAsync(headRequest);
+                    var headResponse = await _downloadClient.SendAsync(headRequest, ct);
                     if (headResponse.StatusCode == System.Net.HttpStatusCode.NotFound)
                     {
                         StatusChanged?.Invoke("Release not published yet — check back soon.");
@@ -262,9 +306,10 @@ namespace FlyShelf.Classes
                         return false;
                     }
                 }
+                catch (OperationCanceledException) { throw; }
                 catch { /* HEAD not supported — proceed with GET */ }
 
-                var response = await _downloadClient.GetAsync(DownloadUrl, HttpCompletionOption.ResponseHeadersRead);
+                var response = await _downloadClient.GetAsync(DownloadUrl, HttpCompletionOption.ResponseHeadersRead, ct);
                 response.EnsureSuccessStatusCode();
 
                 long totalBytes = response.Content.Headers.ContentLength ?? -1;
@@ -277,7 +322,7 @@ namespace FlyShelf.Classes
                     long totalRead = 0;
                     int bytesRead;
 
-                    while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, ct)) > 0)
                     {
                         await fileStream.WriteAsync(buffer, 0, bytesRead);
                         totalRead += bytesRead;
@@ -350,6 +395,13 @@ namespace FlyShelf.Classes
 
                 StatusChanged?.Invoke("Download complete! Verified and ready to install.");
                 return true;
+            }
+            catch (OperationCanceledException)
+            {
+                Logger.LogAction("UPDATE", "Download cancelled by user.");
+                StatusChanged?.Invoke("Download cancelled.");
+                try { if (File.Exists(tempExePath)) File.Delete(tempExePath); } catch { }
+                return false;
             }
             catch (Exception ex)
             {
@@ -535,11 +587,7 @@ namespace FlyShelf.Classes
             StatusChanged?.Invoke("Updates are managed by the Microsoft Store.");
             return;
 #else
-            if (StartupHelper.IsPackaged())
-            {
-                StatusChanged?.Invoke("Updates are managed by the Microsoft Store.");
-                return;
-            }
+
 
             string tempDir = Path.Combine(Path.GetTempPath(), "FlyShelf_Update");
             string tempExePath = Path.Combine(tempDir, "FlyShelf_new.exe");
@@ -726,7 +774,11 @@ namespace FlyShelf.Classes
                     return true;
                 }
 
-                // Step 4: Launch the updated EXE from the target path
+                // Step 4: Write health-check marker so the new app can verify itself and rollback if needed
+                WriteUpdatePendingMarker(backupPath);
+                Log($"Health-check marker written: {UpdateMarkerPath}");
+
+                // Step 5: Launch the updated EXE from the target path
                 Log($"Launching updated app: {targetPath}");
                 Process.Start(new ProcessStartInfo
                 {
@@ -734,10 +786,9 @@ namespace FlyShelf.Classes
                     UseShellExecute = true
                 });
 
-                // Step 5: Clean up temp files (best-effort)
-                System.Threading.Thread.Sleep(2000);
-                try { File.Delete(selfPath); } catch { }
-                Log("Update complete. Self-updater exiting.");
+                // NOTE: Temp files are cleaned up by the newly launched app on its next startup,
+                // not here — self-deleting a running EXE is unreliable on Windows.
+                Log("Update complete. Self-updater exiting (temp cleanup deferred to new app).");
             }
             catch (Exception ex)
             {
@@ -750,6 +801,185 @@ namespace FlyShelf.Classes
             }
 
             return true; // Signal caller to exit without UI
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // POST-UPDATE HEALTH CHECK + ROLLBACK
+        // ═══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Writes a marker file after copying the new EXE so the next launch can verify health.
+        /// </summary>
+        private static void WriteUpdatePendingMarker(string backupPath)
+        {
+            try
+            {
+                Directory.CreateDirectory(UpdateTempDir);
+                string json = JsonSerializer.Serialize(new
+                {
+                    backup_path = backupPath,
+                    timestamp = DateTimeOffset.UtcNow.ToString("o"),
+                    verified = false
+                });
+                File.WriteAllText(UpdateMarkerPath, json);
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Called early in App.OnStartup. Checks if a previous update crashed before verification.
+        /// If so, restores the backup and restarts. Returns true if the caller should exit.
+        /// 
+        /// Flow:
+        ///   Launch 1 (right after update): marker is fresh → proceed, will verify later.
+        ///   MainWindow.Loaded fires → MarkUpdateVerified() sets verified=true.
+        ///   If app crashes before Loaded → verified stays false.
+        ///   Launch 2: marker is stale + unverified → ROLLBACK from .bak and restart.
+        /// </summary>
+        public static bool CheckAndHandleFailedUpdate()
+        {
+            try
+            {
+                if (!File.Exists(UpdateMarkerPath)) return false;
+
+                string raw = File.ReadAllText(UpdateMarkerPath);
+                using var doc = JsonDocument.Parse(raw);
+                var root = doc.RootElement;
+
+                bool verified = root.TryGetProperty("verified", out var vProp) && vProp.GetBoolean();
+
+                if (verified)
+                {
+                    // Update confirmed healthy — clean up everything
+                    Logger.LogAction("UPDATE", "Post-update health check PASSED — cleaning up.");
+                    try { File.Delete(UpdateMarkerPath); } catch { }
+                    CleanupTempDir();
+                    return false;
+                }
+
+                // Not yet verified — check age
+                string tsStr = root.TryGetProperty("timestamp", out var tsProp) ? tsProp.GetString() ?? "" : "";
+                if (!DateTimeOffset.TryParse(tsStr, out var timestamp))
+                    return false;
+
+                double ageSeconds = (DateTimeOffset.UtcNow - timestamp).TotalSeconds;
+
+                if (ageSeconds < 60)
+                {
+                    // First launch after update — marker is fresh, proceed normally.
+                    // MarkUpdateVerified() will be called once MainWindow.Loaded fires.
+                    Logger.LogAction("UPDATE", $"Post-update first launch detected (age={ageSeconds:F0}s). Waiting for health verification...");
+                    return false;
+                }
+
+                // Marker is stale and unverified — the previous launch crashed!
+                string backupPath = root.TryGetProperty("backup_path", out var bpProp) ? bpProp.GetString() ?? "" : "";
+                if (string.IsNullOrEmpty(backupPath) || !File.Exists(backupPath))
+                {
+                    Logger.LogAction("UPDATE", $"⚠️ Rollback requested but backup not found at: {backupPath}");
+                    try { File.Delete(UpdateMarkerPath); } catch { }
+                    return false;
+                }
+
+                // ROLLBACK: Restore the previous stable version
+                string targetPath = backupPath.EndsWith(".bak") ? backupPath[..^4] : "";
+                if (string.IsNullOrEmpty(targetPath))
+                {
+                    Logger.LogAction("UPDATE", "⚠️ Cannot determine target path from backup — skipping rollback.");
+                    try { File.Delete(UpdateMarkerPath); } catch { }
+                    return false;
+                }
+
+                Logger.LogAction("UPDATE", $"❌ Post-update health check FAILED (age={ageSeconds:F0}s). Rolling back from {backupPath}");
+
+                try
+                {
+                    File.Copy(backupPath, targetPath, overwrite: true);
+                    Logger.LogAction("UPDATE", $"✅ Rollback complete: restored {backupPath} → {targetPath}");
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("UPDATE", $"❌ Rollback copy failed: {ex.Message}");
+                    try { File.Delete(UpdateMarkerPath); } catch { }
+                    return false;
+                }
+
+                // Clean up marker and restart with the restored version
+                try { File.Delete(UpdateMarkerPath); } catch { }
+
+                try
+                {
+                    Process.Start(new ProcessStartInfo
+                    {
+                        FileName = targetPath,
+                        UseShellExecute = true
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("UPDATE", $"❌ Could not relaunch after rollback: {ex.Message}");
+                }
+
+                return true; // Caller should exit
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("UPDATE", $"Health check error (non-fatal): {ex.Message}");
+                try { File.Delete(UpdateMarkerPath); } catch { }
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Called from MainWindow once the UI is fully loaded and functional.
+        /// Marks the current update as healthy so future startups won't rollback.
+        /// </summary>
+        public static void MarkUpdateVerified()
+        {
+            try
+            {
+                if (!File.Exists(UpdateMarkerPath)) return;
+
+                string raw = File.ReadAllText(UpdateMarkerPath);
+                using var doc = JsonDocument.Parse(raw);
+                var root = doc.RootElement;
+
+                // Rewrite with verified = true
+                string json = JsonSerializer.Serialize(new
+                {
+                    backup_path = root.TryGetProperty("backup_path", out var bp) ? bp.GetString() ?? "" : "",
+                    timestamp = root.TryGetProperty("timestamp", out var ts) ? ts.GetString() ?? "" : "",
+                    verified = true
+                });
+                File.WriteAllText(UpdateMarkerPath, json);
+                Logger.LogAction("UPDATE", "✅ Post-update health check verified — app is stable.");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("UPDATE", $"Could not write health marker (non-fatal): {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Cleans up the temp update directory (%TEMP%\FlyShelf_Update).
+        /// Called on normal startup when no update is pending, and after a verified update.
+        /// </summary>
+        public static void CleanupTempDir()
+        {
+            try
+            {
+                if (!Directory.Exists(UpdateTempDir)) return;
+
+                // Don't delete if a marker is still present (update in progress)
+                if (File.Exists(UpdateMarkerPath)) return;
+
+                Directory.Delete(UpdateTempDir, recursive: true);
+                Logger.LogAction("UPDATE", "Cleaned up temp update directory.");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("UPDATE", $"Temp cleanup failed (non-fatal): {ex.Message}");
+            }
         }
     }
 }

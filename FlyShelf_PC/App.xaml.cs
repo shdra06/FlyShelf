@@ -29,6 +29,14 @@ public partial class App : Application
     private static int _shakeStartY = 0;
     private static long _lastClipboardLaunchTime = 0;
 
+    // Adaptive shake timer throttling — saves CPU when mouse is idle
+    private static int _lastIdleMouseX = -1;
+    private static int _lastIdleMouseY = -1;
+    private static long _lastMouseMoveTime = 0;
+    private const int SHAKE_FAST_MS = 40;   // 25fps when mouse is active
+    private const int SHAKE_SLOW_MS = 150;  // 6.7fps when mouse idle >30s
+    private const long SHAKE_IDLE_THRESHOLD_MS = 30_000; // 30 seconds
+
     [StructLayout(LayoutKind.Sequential)]
     private struct POINT
     {
@@ -75,6 +83,17 @@ public partial class App : Application
             Environment.Exit(0);
             return;
         }
+
+        // ═══ POST-UPDATE HEALTH CHECK ═══
+        // If a previous update crashed before the UI loaded, auto-rollback from .bak and restart.
+        if (FlyShelf.Classes.UpdateManager.CheckAndHandleFailedUpdate())
+        {
+            Environment.Exit(0);
+            return;
+        }
+
+        // Clean up leftover temp update files from successful previous updates
+        FlyShelf.Classes.UpdateManager.CleanupTempDir();
 
         // ═══ LOCAL AI TEST HANDLER ═══
         bool isTestAi = false;
@@ -227,7 +246,29 @@ public partial class App : Application
             _ = typeof(MicaWPF.Controls.MicaWindow).FullName;
         }
         catch { }
-        
+
+        // ═══ GLOBAL CRASH HANDLERS ═══
+        // Register FIRST — before any init code that could throw.
+        // Without these, RuntimeHost/SettingsManager failures show raw OS crash dialog.
+        DispatcherUnhandledException += (s, args) =>
+        {
+            args.Handled = true; // Prevents the default Windows crash dialog
+            TriggerSafeModeAndRestart($"[UI Thread Exception]\n{args.Exception}");
+        };
+
+        AppDomain.CurrentDomain.UnhandledException += (s, args) =>
+        {
+            TriggerSafeModeAndRestart($"[AppDomain Unhandled Exception]\n{args.ExceptionObject}");
+        };
+
+        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (s, args) =>
+        {
+            args.SetObserved();
+            try { System.IO.File.AppendAllText(
+                System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs", "flyshelf_debugger.log"),
+                $"[{DateTime.Now}] ASYNC SWALLOWED: {args.Exception.Message}\n"); } catch { }
+        };
+
         // ------------------------------------------------------------------
         // Single File Deployment: Synthesize the physical scripts locally FIRST!
         FlyShelf.Classes.RuntimeHost.Initialize();
@@ -260,9 +301,16 @@ public partial class App : Application
         // Listen for setting changes during the app session to update instantly
         FlyShelf.Classes.SettingsManager.Current.PropertyChanged += async (s, ev) =>
         {
-            if (ev.PropertyName == nameof(FlyShelf.Classes.AdvanceSettings.AutoStartEnabled))
+            try
             {
-                await FlyShelf.Classes.StartupHelper.SetRunAtStartupAsync(FlyShelf.Classes.SettingsManager.Current.AutoStartEnabled);
+                if (ev.PropertyName == nameof(FlyShelf.Classes.AdvanceSettings.AutoStartEnabled))
+                {
+                    await FlyShelf.Classes.StartupHelper.SetRunAtStartupAsync(FlyShelf.Classes.SettingsManager.Current.AutoStartEnabled);
+                }
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Classes.Logger.LogAction("STARTUP_SETTING_ERROR", ex.Message);
             }
         };
         
@@ -271,27 +319,6 @@ public partial class App : Application
 
         try
         {
-            // Catch UI thread exceptions and restart in Safe Mode
-            DispatcherUnhandledException += (s, args) =>
-            {
-                args.Handled = true; // Prevents the default Windows crash dialog
-                TriggerSafeModeAndRestart($"[UI Thread Exception]\n{args.Exception}");
-            };
-
-            // Catch background thread crashes and restart in Safe Mode
-            AppDomain.CurrentDomain.UnhandledException += (s, args) =>
-            {
-                TriggerSafeModeAndRestart($"[AppDomain Unhandled Exception]\n{args.ExceptionObject}");
-            };
-
-            // Catch async Task thread exceptions — log them, but don't force restart unless they are fatal
-            System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (s, args) =>
-            {
-                args.SetObserved();
-                try { System.IO.File.AppendAllText(
-                    System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs", "flyshelf_debugger.log"),
-                    $"[{DateTime.Now}] ASYNC SWALLOWED: {args.Exception.Message}\n"); } catch { }
-            };
 
             if (string.IsNullOrWhiteSpace(FlyShelf.Classes.SettingsManager.Current.DeviceName))
             {
@@ -610,6 +637,29 @@ public partial class App : Application
         {
             try
             {
+                // ═══ ADAPTIVE THROTTLING ═══
+                // Track mouse position to detect idle state. When the mouse hasn't moved for
+                // 30 seconds, slow polling from 40ms to 150ms to save CPU. Restore on movement.
+                POINT idlePt;
+                if (GetCursorPos(out idlePt))
+                {
+                    long now = Environment.TickCount64;
+                    bool mouseMoved = (idlePt.x != _lastIdleMouseX || idlePt.y != _lastIdleMouseY);
+                    if (mouseMoved)
+                    {
+                        _lastIdleMouseX = idlePt.x;
+                        _lastIdleMouseY = idlePt.y;
+                        _lastMouseMoveTime = now;
+                        // Mouse just moved — ensure we're at fast rate
+                        _shakeTimer?.Change(0, SHAKE_FAST_MS);
+                    }
+                    else if (_lastMouseMoveTime > 0 && (now - _lastMouseMoveTime) > SHAKE_IDLE_THRESHOLD_MS)
+                    {
+                        // Mouse idle for >30s — switch to slow polling to save CPU
+                        _shakeTimer?.Change(SHAKE_SLOW_MS, SHAKE_SLOW_MS);
+                    }
+                }
+
                 // Note: Shake-to-spawn works even when the Hub (settings) window is open.
 
                 if (!FlyShelf.Classes.SettingsManager.Current.EnableShakeToOpen)
@@ -749,9 +799,6 @@ public partial class App : Application
                                                 return;
                                             }
                                             _instance.LaunchClipboardManager(triggerX, triggerY, false, 0, false);
-                                            // Force a synchronous layout pass so the visual tree is fully rendered
-                                            // before the window becomes visible — prevents the half-rendered state
-                                            App._mainWinInstance?.UpdateLayout();
                                         }, System.Windows.Threading.DispatcherPriority.Normal);
                                     }
                                 }
@@ -771,7 +818,7 @@ public partial class App : Application
                 }
             }
             catch { }
-        }, null, 0, 40); // Poll every 40ms (highly responsive 25fps poll rate!)
+        }, null, 0, SHAKE_FAST_MS); // Start at fast rate; auto-throttles to slow after 30s idle
     }
 
     private void LaunchClipboardManager(double x, double y, bool isPersistent, int mode, bool stealFocus = true)

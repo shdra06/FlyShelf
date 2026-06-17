@@ -263,7 +263,7 @@ namespace FlyShelf.Windows
         }
 #endif // !MSIX_STORE
 
-        private void Window_Drop(object sender, DragEventArgs e)
+        private void Window_PreviewDrop(object sender, DragEventArgs e)
         {
             try
             {

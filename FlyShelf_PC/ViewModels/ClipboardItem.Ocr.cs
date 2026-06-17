@@ -177,14 +177,20 @@ namespace FlyShelf.ViewModels
                         {
                             var result = await ocrEngine.RecognizeAsync(softwareBitmap);
 
-                            if (result != null && !string.IsNullOrWhiteSpace(result.Text))
+                            if (result != null && result.Lines.Count > 0)
                             {
+                                // Build text line-by-line to preserve paragraph structure
+                                var lineTexts = new System.Collections.Generic.List<string>();
+                                foreach (var line in result.Lines)
+                                    lineTexts.Add(line.Text);
+                                string ocrText = string.Join("\n", lineTexts);
+
                                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                                 {
                                     if (this.ItemType != ClipboardItemType.QRCode)
                                     {
-                                        this.RawContent = result.Text;
-                                        FlyShelf.Classes.Logger.LogAction("AUTO_OCR", $"Successfully extracted {result.Text.Length} chars of text.");
+                                        this.RawContent = ocrText;
+                                        FlyShelf.Classes.Logger.LogAction("AUTO_OCR", $"Successfully extracted {ocrText.Length} chars, {lineTexts.Count} lines.");
                                     }
                                 });
                             }

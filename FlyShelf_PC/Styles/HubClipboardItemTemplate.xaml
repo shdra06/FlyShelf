@@ -7,7 +7,7 @@
 
     <!-- Hub Clipboard Item Template — extracted from HubWindow.xaml for modularity -->
     <DataTemplate x:Key="HubClipboardItemTemplate">
-                                <Border Margin="0,0,18,6" Padding="0" ClipToBounds="True" CornerRadius="12" Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}">
+                                <Border Margin="0,0,18,6" Padding="0" ClipToBounds="True" CornerRadius="12" Tag="{Binding DataContext, RelativeSource={RelativeSource AncestorType=Window}}" UseLayoutRounding="True" SnapsToDevicePixels="True" TextOptions.TextFormattingMode="Display" RenderOptions.ClearTypeHint="Enabled">
                                     <Border.Style>
                                         <Style TargetType="Border">
                                             <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" />
@@ -30,7 +30,7 @@
                                                     <Trigger.EnterActions>
                                                         <BeginStoryboard>
                                                             <Storyboard>
-                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="-1.5" Duration="0:0:0.15">
+                                                                <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="-2" Duration="0:0:0.15">
                                                                     <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
                                                                 </DoubleAnimation>
                                                             </Storyboard>

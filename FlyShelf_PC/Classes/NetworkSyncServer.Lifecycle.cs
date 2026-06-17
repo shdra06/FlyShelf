@@ -182,7 +182,6 @@ namespace FlyShelf.Classes
                 // Natively trigger Cloudflare alongside HTTP Socket conditionally
                 // If we used a TCP proxy, Cloudflare tunnels to publicPort which the TcpProxy handles.
                 // If we bound directly, Cloudflare tunnels to publicPort which HttpListener handles.
-#if !MSIX_STORE
                 if (SettingsManager.Current.EnableGlobalCloudflare)
                 {
                     if (LicenseManager.CanUseCloudflare())
@@ -195,7 +194,6 @@ namespace FlyShelf.Classes
                         SettingsManager.Save();
                     }
                 }
-#endif
                 // Don't push "Offline" to Firebase — wait for the daemon to provide a real URL
                 if (GlobalUrl != null && GlobalUrl != "Offline")
                 {

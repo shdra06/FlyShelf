@@ -601,9 +601,13 @@ namespace FlyShelf.Classes
             string q = query.Trim().ToLowerInvariant();
 
             var results = new List<(TodoDay, TodoItem)>();
-            foreach (var day in _days)
+            List<TodoDay> snapshot;
+            lock (_lock) { snapshot = _days.ToList(); }
+            foreach (var day in snapshot)
             {
-                foreach (var item in day.Items)
+                // Snapshot items too — they could be modified concurrently
+                var items = day.Items.ToList();
+                foreach (var item in items)
                 {
                     bool matchText = !string.IsNullOrEmpty(item.Text) && item.Text.ToLowerInvariant().Contains(q);
                     bool matchDesc = !string.IsNullOrEmpty(item.Description) && item.Description.ToLowerInvariant().Contains(q);
@@ -613,7 +617,7 @@ namespace FlyShelf.Classes
                         results.Add((day, item));
                     }
                     // Also search subtasks
-                    foreach (var sub in item.SubTasks)
+                    foreach (var sub in item.SubTasks.ToList())
                     {
                         if (!string.IsNullOrEmpty(sub.Text) && sub.Text.ToLowerInvariant().Contains(q))
                         {

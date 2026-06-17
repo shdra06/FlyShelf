@@ -15,7 +15,7 @@ namespace FlyShelf.Classes
             string basePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "FlyShelf", "RuntimeCore");
             ExecutionDir = basePath;
 
-            string currentVer = Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "1.0.0";
+            string currentVer = Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "1.0.0";
 
             string verFile = Path.Combine(ExecutionDir, "version.txt");
             if (File.Exists(verFile) && File.ReadAllText(verFile).Trim() == currentVer)

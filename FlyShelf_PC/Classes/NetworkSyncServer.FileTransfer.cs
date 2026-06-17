@@ -410,7 +410,7 @@ namespace FlyShelf.Classes
                         clip = new ClipboardItem
                         {
                             RawContent = capturedText,
-                            FileName = capturedText.Length > 800 ? capturedText.Substring(0, 800) + "..." : capturedText,
+                            FileName = capturedText.Length > 5000 ? capturedText.Substring(0, 5000) + "..." : capturedText,
                             Extension = capturedTransport == "WebSocket" ? "WS" : "SYNC",
                             ItemType = clipType,
                             SourceDeviceName = capturedSource,

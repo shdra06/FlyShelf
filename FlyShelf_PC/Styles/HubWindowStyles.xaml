@@ -12,6 +12,10 @@
                 <TranslateTransform Y="0" />
             </Setter.Value>
         </Setter>
+        <Setter Property="UseLayoutRounding" Value="True" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="TextOptions.TextFormattingMode" Value="Display" />
+        <Setter Property="RenderOptions.ClearTypeHint" Value="Enabled" />
         <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" />
         <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" />
         <Setter Property="BorderThickness" Value="1" />

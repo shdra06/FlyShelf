@@ -11,6 +11,17 @@ Set-Location $projectDir
 dotnet clean
 dotnet publish FlyShelf.csproj -c Release -r win-x64 -p:StorePublish=true -p:SelfContained=true -p:Platform=x64
 
+# Ensure cloudflared.exe is bundled in the MSIX
+$cfSource = "$buildDir\agent\cloudflared.exe"
+if (Test-Path $cfSource) {
+    $cfDest = "$publishDir\agent"
+    New-Item -ItemType Directory -Force -Path $cfDest | Out-Null
+    Copy-Item $cfSource "$cfDest\cloudflared.exe" -Force
+    Write-Host "  Bundled cloudflared.exe ($([math]::Round((Get-Item $cfSource).Length/1MB, 1)) MB)"
+} else {
+    Write-Host "  WARNING: cloudflared.exe not found at $cfSource - MSIX will not include it"
+}
+
 Write-Host "2. Copying AppxManifest.xml..."
 Copy-Item -Path "$buildDir\Package.appxmanifest" -Destination "$publishDir\AppxManifest.xml" -Force
 

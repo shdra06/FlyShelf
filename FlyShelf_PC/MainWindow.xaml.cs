@@ -507,6 +507,15 @@ namespace FlyShelf
                 if (UpdateBadgeText != null)
                     UpdateBadgeText.Text = $"v{Classes.UpdateManager.GlobalLatestVersion}";
             }
+
+            // ═══ POST-UPDATE HEALTH VERIFICATION ═══
+            // If this is the first launch after an update, mark it as healthy
+            // once the UI is fully rendered. If the app crashes before this fires,
+            // the next startup will auto-rollback from the .bak backup.
+            Dispatcher.InvokeAsync(() =>
+            {
+                Classes.UpdateManager.MarkUpdateVerified();
+            }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
 
         private void DeleteContextMenu_Click(object sender, RoutedEventArgs e)
@@ -694,23 +703,9 @@ namespace FlyShelf
                 ApplyPopupBackground();
             }
 
-            // Pre-initialize the heavy Hub Window in the background when the system is truly idle
-            // Priority: SystemIdle (lowest) — runs AFTER theme init to avoid competing for UI thread
-            Dispatcher.InvokeAsync(() =>
-            {
-                try
-                {
-                    if (_hubWindowInstance == null)
-                    {
-                        _hubWindowInstance = new Windows.HubWindow(_viewModel);
-                        _hubWindowInstance.Closed += (s, args) => _hubWindowInstance = null;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Classes.Logger.LogAction("PRE_INIT_HUB_FAIL", ex.ToString());
-                }
-            }, System.Windows.Threading.DispatcherPriority.SystemIdle);
+
+            // HubWindow is created on-demand in OpenApp_Click_Internal() to save ~15-30MB idle RAM.
+            // The 286KB XAML visual tree is only materialized when the user actually opens settings.
 
             // ═══ SCROLL-TO-HERE: Click anywhere on scrollbar track → jump to that position ═══
             // Default WPF behavior fires PageUp/PageDown RepeatButtons which oscillate and glitch.
@@ -1154,9 +1149,78 @@ namespace FlyShelf
             {
                 OptimizeMemoryUsage();
             }, System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+
+            // ═══ STARTUP VERSION CHECK ═══
+            // Check for new version in the background (Store-compliant — read-only version.json check).
+            // Show a subtle notification banner at the top of the clipboard if an update is available.
+            Classes.UpdateManager.GlobalUpdateStatusChanged += OnGlobalUpdateStatusChanged;
+            // Also check if a previous session already detected an update
+            if (Classes.UpdateManager.GlobalUpdateAvailable)
+            {
+                UpdateNotificationBanner.Visibility = Visibility.Visible;
+                UpdateBannerText.Text = $"🚀 New version v{Classes.UpdateManager.GlobalLatestVersion} available — tap to update";
+            }
+            // Fire the check at lowest priority so it doesn't compete with startup
+            Dispatcher.InvokeAsync(async () =>
+            {
+                // Delay 10s to let the app fully warm up before making a network request
+                await System.Threading.Tasks.Task.Delay(10000);
+                await Classes.UpdateManager.CheckForNewVersionNotificationAsync();
+            }, System.Windows.Threading.DispatcherPriority.SystemIdle);
         }
 
         // ═══ Theme/Wallpaper/Backdrop methods moved to MainWindow.Theme.cs ═══
+
+        // ═══ UPDATE NOTIFICATION BANNER HANDLERS ═══
+        private void OnGlobalUpdateStatusChanged(bool updateAvailable)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (updateAvailable && !_updateBannerDismissed)
+                {
+                    string ver = Classes.UpdateManager.GlobalLatestVersion;
+                    UpdateBannerText.Text = $"🚀 New version v{ver} available — tap to update";
+                    UpdateNotificationBanner.Visibility = Visibility.Visible;
+                }
+            });
+        }
+        private bool _updateBannerDismissed = false;
+
+        private void UpdateBanner_Click(object sender, MouseButtonEventArgs e)
+        {
+            // Open the Microsoft Store page for FlyShelf (Store-compliant — just redirects to Store)
+            try
+            {
+                if (Classes.StartupHelper.IsPackaged())
+                {
+                    // MSIX/Store install — open the Store app directly
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                    {
+                        FileName = "ms-windows-store://pdp/?ProductId=9PM37CMM3T72",
+                        UseShellExecute = true
+                    });
+                }
+                else
+                {
+                    // Non-packaged (sideload) — open the Hub with update section
+                    OpenApp_Click_Internal();
+                    if (_hubWindowInstance != null)
+                    {
+                        _hubWindowInstance.NavigateToTab("Settings");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("UPDATE_BANNER", $"Failed to open store/hub: {ex.Message}");
+            }
+        }
+
+        private void UpdateBannerDismiss_Click(object sender, RoutedEventArgs e)
+        {
+            _updateBannerDismissed = true;
+            UpdateNotificationBanner.Visibility = Visibility.Collapsed;
+        }
 
         /// <summary>
         /// Intercepts close requests (e.g., user clicking "Close window" on the taskbar thumbnail

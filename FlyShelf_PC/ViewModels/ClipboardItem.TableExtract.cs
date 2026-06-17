@@ -349,6 +349,10 @@ namespace FlyShelf.ViewModels
                             FlyShelf.Classes.LicenseManager.RecordTableExtraction();
                             var editor = new FlyShelf.Windows.TableEditorWindow(finalJsonPayload, imgPath, method);
                             editor.Show();
+                            editor.Activate();
+                            // Briefly set topmost to punch through a topmost parent, then release
+                            editor.Topmost = true;
+                            editor.Topmost = false;
                         }
                         catch (Exception uiEx)
                         {

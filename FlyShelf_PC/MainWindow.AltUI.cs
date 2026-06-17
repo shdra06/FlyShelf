@@ -280,6 +280,22 @@ namespace FlyShelf
             OverflowPopup.HorizontalOffset = 0;
             OverflowPopup.VerticalOffset = -4;
             OverflowPopup.IsOpen = true;
+
+            // Force popup HWND topmost — without this, popup can render behind
+            // a topmost parent window and immediately close due to focus loss.
+            Dispatcher.InvokeAsync(() =>
+            {
+                try
+                {
+                    var source = (System.Windows.Interop.HwndSource)System.Windows.PresentationSource.FromVisual(OverflowPopup.Child);
+                    if (source != null)
+                    {
+                        var hwnd = source.Handle;
+                        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
+                    }
+                }
+                catch { }
+            }, System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         // ═══════════════════════════════════════════════════════════════

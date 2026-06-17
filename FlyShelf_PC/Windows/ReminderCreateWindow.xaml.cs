@@ -75,7 +75,7 @@ namespace FlyShelf.Windows
                 {
                     Text = label,
                     FontSize = 13,
-                    Foreground = (Brush)FindResource("ThemeTextPrimary")
+                    Foreground = TryFindResource("ThemeTextPrimary") as Brush ?? System.Windows.Media.Brushes.White
                 };
 
                 border.Child = text;
@@ -264,7 +264,7 @@ namespace FlyShelf.Windows
                         b.Background = Brushes.Transparent;
                         if (b.Child is TextBlock tb)
                         {
-                            tb.Foreground = (Brush)FindResource("ThemeTextPrimary");
+                            tb.Foreground = TryFindResource("ThemeTextPrimary") as Brush ?? System.Windows.Media.Brushes.White;
                             tb.FontWeight = FontWeights.Normal;
                         }
                     }

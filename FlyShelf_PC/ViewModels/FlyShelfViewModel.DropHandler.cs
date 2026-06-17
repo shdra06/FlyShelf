@@ -665,7 +665,7 @@ namespace FlyShelf.ViewModels
                                         item.Extension = "CODE";
                                     }
                                     string shortText = capturedText.Trim();
-                                    item.FileName = shortText.Length > 800 ? shortText.Substring(0, 800) + "..." : shortText;
+                                    item.FileName = shortText.Length > 5000 ? shortText.Substring(0, 5000) + "..." : shortText;
                                 }
                                 else
                                 {
@@ -689,7 +689,7 @@ namespace FlyShelf.ViewModels
                                     else
                                     {
                                         item.Extension = "TEXT";
-                                        item.FileName = displayText.Length > 800 ? displayText.Substring(0, 800) + "..." : displayText;
+                                        item.FileName = displayText.Length > 5000 ? displayText.Substring(0, 5000) + "..." : displayText;
                                     }
                                 }
                             }

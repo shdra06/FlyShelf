@@ -508,6 +508,15 @@ namespace FlyShelf
             this.BeginAnimation(OpacityProperty, _cachedOpacityAnim);
             _cachedSlideTransform.BeginAnimation(TranslateTransform.YProperty, _cachedSlideInAnim);
 
+            // ═══ COMPOSITOR FLUSH: Force a repaint on every spawn ═══
+            // Without this, the DWM uncloak above races against WPF's compositor, causing
+            // a half-rendered frame to be presented before the visual tree is fully flushed.
+            // This shows as a "half grey box" that only resolves when the user interacts.
+            // The scroll-nudge (+1/-1px) forces WPF's SurfacePresenter to fully re-compose
+            // the render target, eliminating the stale cached frame. Runs at Background priority
+            // so it does not block the animation's first frame.
+            ForceFirstSpawnRepaint();
+
             int capturedGen = _spawnGeneration;
             var animTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render);
             animTimer.Interval = TimeSpan.FromMilliseconds(150);
@@ -832,9 +841,11 @@ namespace FlyShelf
                             System.GC.WaitForPendingFinalizers();
                             System.GC.Collect(2, System.GCCollectionMode.Forced, true, true);
 
-                            // Set working set floor to 40MB to keep core styles resident, avoiding summon lag
-                            const nint MIN_WS = 40 * 1024 * 1024;   // 40 MB
-                            const nint MAX_WS = 80 * 1024 * 1024;   // 80 MB
+                            // Set working set floor to 20MB, ceiling to 50MB for aggressive idle trimming.
+                            // 20MB keeps .NET runtime + core WPF resources resident, avoiding cold-start lag.
+                            // 50MB ceiling (down from 80MB) lets OS reclaim more inactive pages at idle.
+                            const nint MIN_WS = 20 * 1024 * 1024;   // 20 MB
+                            const nint MAX_WS = 50 * 1024 * 1024;   // 50 MB
                             SetProcessWorkingSetSize(currentProcess.Handle, MIN_WS, MAX_WS);
                         }
                     }

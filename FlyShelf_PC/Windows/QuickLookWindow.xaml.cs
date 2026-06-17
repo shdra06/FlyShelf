@@ -616,10 +616,12 @@ namespace FlyShelf.Windows
                             if (softwareBitmap.BitmapPixelFormat != global::Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8 ||
                                 softwareBitmap.BitmapAlphaMode != global::Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied)
                             {
+                                var originalBitmap = softwareBitmap;
                                 softwareBitmap = global::Windows.Graphics.Imaging.SoftwareBitmap.Convert(
                                     softwareBitmap,
                                     global::Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
                                     global::Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
+                                originalBitmap.Dispose();
                             }
 
                             // Store the actual OCR bitmap pixel dimensions for coordinate mapping.
@@ -630,6 +632,7 @@ namespace FlyShelf.Windows
                             // The OCR engine struggles with text smaller than ~12px.
                             if (Math.Max(ocrW, ocrH) < 2800)
                             {
+                                global::Windows.Storage.Streams.InMemoryRandomAccessStream? inMemStream = null;
                                 try
                                 {
                                     uint newW = ocrW * 3;
@@ -639,7 +642,7 @@ namespace FlyShelf.Windows
                                     if (newH > 4000) { newH = 4000; newW = (uint)(ocrW * (4000.0 / ocrH)); }
 
                                     // Encode original → InMemoryStream with BitmapTransform scaling → Decode back
-                                    var inMemStream = new global::Windows.Storage.Streams.InMemoryRandomAccessStream();
+                                    inMemStream = new global::Windows.Storage.Streams.InMemoryRandomAccessStream();
                                     var encoder = await global::Windows.Graphics.Imaging.BitmapEncoder.CreateAsync(
                                         global::Windows.Graphics.Imaging.BitmapEncoder.PngEncoderId, inMemStream);
                                     encoder.SetSoftwareBitmap(softwareBitmap);
@@ -654,7 +657,9 @@ namespace FlyShelf.Windows
                                         global::Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
                                         global::Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
 
+                                    var priorBitmap = softwareBitmap;
                                     softwareBitmap = scaledBitmap;
+                                    priorBitmap.Dispose();
                                     ocrW = (uint)softwareBitmap.PixelWidth;
                                     ocrH = (uint)softwareBitmap.PixelHeight;
                                 }
@@ -662,6 +667,10 @@ namespace FlyShelf.Windows
                                 {
                                     FlyShelf.Classes.Logger.LogAction("OCR_UPSCALE", $"Upscale failed (using original): {upscaleEx.Message}");
                                     // Continue with original bitmap — upscale is best-effort
+                                }
+                                finally
+                                {
+                                    inMemStream?.Dispose();
                                 }
                             }
 

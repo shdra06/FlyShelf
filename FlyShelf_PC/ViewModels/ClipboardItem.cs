@@ -105,7 +105,7 @@ namespace FlyShelf.ViewModels
                     _ => ""
                 };
                 if (SourceDeviceName == "Local") return $"{emoji} Local";
-                return $"{deviceEmoji} {SourceDeviceName} Â· {emoji} {TransferMethod}";
+                return $"{deviceEmoji} {SourceDeviceName} · {emoji} {TransferMethod}";
             }
         }
         public bool HasTransferBadge => SourceDeviceName != "Local";
@@ -285,7 +285,7 @@ namespace FlyShelf.ViewModels
         public double CollapsedMaxHeight => IsLongText ? (IsExpanded ? double.PositiveInfinity : 100.0) : 57.0;
 
         [JsonIgnore]
-        public string ExpandToggleText => IsExpanded ? "â–´" : "â–¾";
+        public string ExpandToggleText => IsExpanded ? "▴" : "▾";
 
         private System.Windows.Input.ICommand? _toggleExpandCommand;
         [JsonIgnore]
