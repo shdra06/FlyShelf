@@ -60,8 +60,8 @@
   <link rel="stylesheet" href="style.css?v=8.5.2">
   
   <!-- Ionicons -->
-  <script type="module" src="https://cdn.jsdelivr.net/npm/ionicons@7.1.0/dist/ionicons/ionicons.esm.js"></script>
-  <script nomodule src="https://cdn.jsdelivr.net/npm/ionicons@7.1.0/dist/ionicons/ionicons.js"></script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/ionicons@7.1.0/dist/ionicons/ionicons.esm.js" integrity="sha384-xyQ/Vpt1cq1pdPYlRaT/QkcSj2vrYyWI3WOhxGBzqnP1vgvsS2yrhWXe3/wIoCr5" crossorigin="anonymous"></script>
+  <script nomodule src="https://cdn.jsdelivr.net/npm/ionicons@7.1.0/dist/ionicons/ionicons.js" integrity="sha384-KAUcUASKfGZ0sxENVFRiH12jtpvd9SsVpgzvYdvv8ZMLqB99G3gX3DAts418wzIC" crossorigin="anonymous"></script>
   
   <!-- Razorpay Checkout SDK -->
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
@@ -946,9 +946,9 @@
                 if (verifyData.success) {
                   generatedKey = verifyData.licenseKey;
                   
-                  // Cache key in localStorage for 15 minutes
+                  // Cache key in sessionStorage for 15 minutes
                   try {
-                    localStorage.setItem('flyshelf_recent_purchase', JSON.stringify({
+                    sessionStorage.setItem('flyshelf_recent_purchase', JSON.stringify({
                       key: generatedKey,
                       email: email,
                       timestamp: Date.now()
@@ -1117,7 +1117,7 @@
       // ═══════════════════════════════════════════
 
       // ═══════════════════════════════════════════
-      // RECENTLY ORDERED — localStorage cache (15 min)
+      // RECENTLY ORDERED — sessionStorage cache (15 min)
       // ═══════════════════════════════════════════
       const recentOrderSection = document.getElementById('recent-order-section');
       const recentOrderKey = document.getElementById('recent-order-key');
@@ -1132,7 +1132,7 @@
       const EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 
       function clearRecentOrder() {
-        localStorage.removeItem('flyshelf_recent_purchase');
+        sessionStorage.removeItem('flyshelf_recent_purchase');
         if (recentTimerInterval) clearInterval(recentTimerInterval);
         // Fade out smoothly
         recentOrderSection.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
@@ -1143,7 +1143,7 @@
 
       function showRecentOrder() {
         try {
-          const cached = JSON.parse(localStorage.getItem('flyshelf_recent_purchase'));
+          const cached = JSON.parse(sessionStorage.getItem('flyshelf_recent_purchase'));
           if (!cached || !cached.key) return;
           
           const elapsed = Date.now() - cached.timestamp;

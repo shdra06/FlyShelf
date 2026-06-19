@@ -89,7 +89,8 @@ module.exports = async (req, res) => {
     }
 
     const key = payload.key;
-    if (!key) {
+    // [SECURITY FIX v2.4.0]: Validate key format from JWT to prevent path injection
+    if (!key || !/^FS-PRO-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key)) {
       return res.status(400).json({ valid: false, error: 'invalid_token' });
     }
 
@@ -113,7 +114,9 @@ module.exports = async (req, res) => {
         }
       }
     } catch (err) {
-      console.warn('[revalidate] Revocation check failed (proceeding):', err.message);
+      // [SECURITY FIX v2.4.0]: Fail closed — reject if revocation status unknown
+      console.error('[revalidate] Revocation check failed — blocking revalidation:', err.message);
+      return res.status(503).json({ valid: false, error: 'License verification temporarily unavailable. Please try again.' });
     }
 
     // ═══ Step 3: Verify device is still within limit ═══
@@ -130,7 +133,9 @@ module.exports = async (req, res) => {
         }
       }
     } catch (err) {
-      console.warn('[revalidate] Device count check failed (proceeding):', err.message);
+      // [SECURITY FIX v2.4.0]: Fail closed — reject if device count unknown
+      console.error('[revalidate] Device count check failed — blocking revalidation:', err.message);
+      return res.status(503).json({ valid: false, error: 'Device verification temporarily unavailable. Please try again.' });
     }
 
     // ═══ Step 4: Issue fresh JWT with new expiry ═══

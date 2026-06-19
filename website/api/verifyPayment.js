@@ -105,6 +105,16 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: 'Missing payment details.' });
     }
 
+    // [SECURITY FIX v2.4.0]: Validate Razorpay ID formats to prevent Firebase path injection
+    const paymentIdRegex = /^pay_[a-zA-Z0-9]{14,}$/;
+    const orderIdRegex = /^order_[a-zA-Z0-9]{14,}$/;
+    if (!paymentIdRegex.test(razorpay_payment_id)) {
+      return res.status(400).json({ error: 'Invalid payment ID format.' });
+    }
+    if (!orderIdRegex.test(razorpay_order_id)) {
+      return res.status(400).json({ error: 'Invalid order ID format.' });
+    }
+
     const key_secret = process.env.RAZORPAY_KEY_SECRET;
     if (!key_secret) {
       return res.status(500).json({ error: 'Razorpay secret not configured.' });
@@ -147,11 +157,12 @@ module.exports = async (req, res) => {
           return res.status(400).json({ error: 'Invalid payment amount.' });
         }
       } else {
-        console.warn(`[verifyPayment] Razorpay API fetch failed: ${paymentFetchRes.status} — proceeding with signature-only verification`);
-        // Don't block if Razorpay API is temporarily down — signature is already verified
+        console.error(`[verifyPayment] Razorpay API fetch failed: ${paymentFetchRes.status} — blocking verification`);
+        return res.status(502).json({ error: 'Payment amount verification unavailable. Please try again.' });
       }
     } catch (amountCheckErr) {
-      console.warn('[verifyPayment] Amount re-verification failed (proceeding):', amountCheckErr.message);
+      console.error('[verifyPayment] Amount re-verification failed — blocking:', amountCheckErr.message);
+      return res.status(502).json({ error: 'Payment amount verification unavailable. Please try again.' });
     }
 
     // ═══════════════════════════════════════════════════════════════

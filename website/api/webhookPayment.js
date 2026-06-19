@@ -46,10 +46,15 @@ module.exports = async (req, res) => {
       return res.status(500).json({ error: 'Webhook secret not configured.' });
     }
 
-    const webhookBody = JSON.stringify(req.body);
+    // [SECURITY FIX v2.4.0]: Read raw body for accurate signature verification
+    const rawChunks = [];
+    for await (const chunk of req) { rawChunks.push(chunk); }
+    const rawBody = Buffer.concat(rawChunks);
+    const webhookBody = rawBody.toString('utf8');
+    
     const expectedSignature = crypto
       .createHmac('sha256', WEBHOOK_SECRET)
-      .update(webhookBody)
+      .update(rawBody)
       .digest('hex');
 
     const receivedSignature = req.headers['x-razorpay-signature'];
@@ -65,20 +70,27 @@ module.exports = async (req, res) => {
     }
 
     // ─── Step 2: Parse the event ───
-    const event = req.body.event;
+    // Parse body from raw string (since bodyParser is disabled)
+    const parsedBody = JSON.parse(webhookBody);
+    const event = parsedBody.event;
     if (event !== 'payment.captured') {
       // Acknowledge but ignore non-capture events
       console.log(`[webhook] Ignoring event: ${event}`);
       return res.status(200).json({ status: 'ignored', event });
     }
 
-    const payment = req.body.payload?.payment?.entity;
+    const payment = parsedBody.payload?.payment?.entity;
     if (!payment) {
       console.warn('[webhook] No payment entity in payload');
       return res.status(400).json({ error: 'Missing payment entity.' });
     }
 
     const paymentId = payment.id;
+    // [SECURITY FIX v2.4.0]: Validate payment ID format to prevent path injection
+    if (!paymentId || !/^pay_[a-zA-Z0-9]{14,}$/.test(paymentId)) {
+      console.warn(`[webhook] Invalid payment ID format: ${String(paymentId).substring(0, 20)}`);
+      return res.status(400).json({ error: 'Invalid payment ID format.' });
+    }
     const email = payment.notes?.email || payment.email || '';
     const deviceId = payment.notes?.deviceId || '';
     const amount = payment.amount; // in paise
@@ -133,11 +145,34 @@ module.exports = async (req, res) => {
       timestamp: new Date().toISOString()
     };
 
+    // [SECURITY FIX v2.4.0]: Atomic conditional write to prevent race conditions
+    const etagRes = await firebaseFetch(`${dbUrl}/payments/${paymentId}.json`, {
+      headers: { 'X-Firebase-ETag': 'true' }
+    });
+    const currentETag = etagRes.headers.get('etag');
+    const currentData = await etagRes.json();
+
+    // Race condition: another request already wrote
+    if (currentData && currentData.licenseKey && currentData.status === 'completed') {
+      console.log(`[webhook] Race condition caught — payment already processed: ${paymentId}`);
+      return res.status(200).json({ status: 'already_processed', paymentId });
+    }
+
     const writeRes = await firebaseFetch(`${dbUrl}/payments/${paymentId}.json`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'if-match': currentETag || 'null_etag'
+      },
       body: JSON.stringify(record)
     });
+
+    if (writeRes.status === 412) {
+      // Another request won the race
+      console.log(`[webhook] Atomic write failed (race lost) for ${paymentId}`);
+      return res.status(200).json({ status: 'already_processed', paymentId });
+    }
+
     if (!writeRes.ok) {
       console.error('[webhook] Critical: payment record write failed');
       return res.status(500).json({ error: 'Failed to store payment record.' });
@@ -159,8 +194,11 @@ module.exports = async (req, res) => {
 
   } catch (err) {
     console.error('[webhook] Error:', err);
-    // Return 200 anyway to prevent Razorpay from retrying endlessly
-    // (we log the error for manual investigation)
-    return res.status(200).json({ status: 'error_logged' });
+    // [SECURITY FIX v2.4.0]: Return 500 for transient errors so Razorpay retries
+    // Only return 200 if we've confirmed the payment was already handled
+    return res.status(500).json({ status: 'error', message: 'Webhook processing failed — will be retried.' });
   }
 };
+
+// [SECURITY FIX v2.4.0]: Disable Vercel body parser to get raw body for signature verification
+module.exports.config = { api: { bodyParser: false } };

@@ -79,7 +79,9 @@ module.exports = async (req, res) => {
         }
       }
     } catch (rlErr) {
-      console.warn('[recoverKey] Rate limit check failed:', rlErr.message);
+      // [SECURITY FIX v2.4.0]: Fail closed — if rate limit check fails, block request
+      console.error('[recoverKey] Rate limit check failed — blocking request:', rlErr.message);
+      return res.status(503).json({ error: 'Service temporarily unavailable. Please try again.' });
     }
 
     // Record this attempt

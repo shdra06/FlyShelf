@@ -101,3 +101,14 @@ FlyShelf_Payment/functions/node_modules/
 MicrosoftBuild/Output/
 FlyShelf_Mobile_All.apk
 .vercel
+
+# ─── Security: Database Exports (contain PII — NEVER push) ────
+*-rtdb-export*.json
+*-firestore-export*.json
+
+# ─── Security: Weak/Legacy Firebase Rules (keep only firebase_rules.json) ─
+database_rules.json
+firebase-database-rules.json
+
+# ─── Security: Android Environment Secrets ────────────────────
+FlyShelf_Android/.env

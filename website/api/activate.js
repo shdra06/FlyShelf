@@ -179,7 +179,9 @@ module.exports = async (req, res) => {
         }
       }
     } catch (err) {
-      console.warn('[activate] Revocation check failed (proceeding):', err.message);
+      // [SECURITY FIX v2.4.0]: Fail closed — if we can't verify revocation status, reject
+      console.error('[activate] Revocation check failed — blocking activation:', err.message);
+      return res.status(503).json({ success: false, error: 'License verification temporarily unavailable. Please try again.' });
     }
 
     // ═══ Step 3: Check device limit ═══
@@ -196,7 +198,9 @@ module.exports = async (req, res) => {
         }
       }
     } catch (err) {
-      console.warn('[activate] Device count check failed (proceeding):', err.message);
+      // [SECURITY FIX v2.4.0]: Fail closed — if we can't verify device count, reject
+      console.error('[activate] Device count check failed — blocking activation:', err.message);
+      return res.status(503).json({ success: false, error: 'Device verification temporarily unavailable. Please try again.' });
     }
 
     // Allow if: device already activated, OR under the limit

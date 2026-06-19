@@ -19,6 +19,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   })();
 
+  // [SECURITY FIX v2.4.0]: HTML escape helper to prevent XSS
+  function escapeHTML(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
   /* ==========================================
      NAVBAR AUTO-SLIM ON SCROLL
      Adds .scrolled class when past 80px
@@ -344,11 +351,11 @@ document.addEventListener('DOMContentLoaded', () => {
     
     card.innerHTML = `
       <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
-        <span class="badge ${typeClass}" style="font-size:0.6rem;">${badge}</span>
+        <span class="badge ${typeClass}" style="font-size:0.6rem;">${escapeHTML(badge)}</span>
         <span style="font-size:0.6rem; color:var(--text-muted);">Just Now</span>
       </div>
-      <div style="font-weight:700; color:#fff; word-break:break-all;">${content}</div>
-      <div style="font-size:0.62rem; color:var(--text-secondary); margin-top:2px;">Received via ${activePathway.toUpperCase()}</div>
+      <div style="font-weight:700; color:#fff; word-break:break-all;">${escapeHTML(content)}</div>
+      <div style="font-size:0.62rem; color:var(--text-secondary); margin-top:2px;">Received via ${escapeHTML(activePathway.toUpperCase())}</div>
     `;
     
     mobileFeed.insertBefore(card, mobileFeed.firstChild);

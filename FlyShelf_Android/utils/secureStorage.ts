@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-const PBKDF2_ITERATIONS = 10000;
+const PBKDF2_ITERATIONS = 600000;
 const KEY_SIZE = 32; // 256 bits for AES-256
 const IV_SIZE = 12; // 96 bits for AES-GCM standard
 const ALGORITHM = 'aes-256-gcm';
@@ -66,7 +66,8 @@ export function encrypt(plaintext: string): string {
   const crypto = getCryptoInstance();
   const key = getEncryptionKey();
   if (!crypto || !key) {
-    return plaintext; // Fallback to plaintext if crypto is unavailable (e.g. web)
+    console.error('[SecureStorage] Crypto unavailable — cannot encrypt. Data will not be stored.');
+    throw new Error('Encryption unavailable on this platform.');
   }
 
   try {
@@ -81,7 +82,7 @@ export function encrypt(plaintext: string): string {
     return `${iv.toString('base64')}:${encrypted}:${tag.toString('base64')}`;
   } catch (e) {
     console.error('[SecureStorage] Encryption failed', e);
-    return plaintext;
+    throw new Error('Encryption failed — data will not be stored insecurely.');
   }
 }
 

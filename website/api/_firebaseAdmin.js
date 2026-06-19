@@ -32,7 +32,8 @@ async function firebaseFetch(url, options = {}) {
     const separator = url.includes('?') ? '&' : '?';
     url = `${url}${separator}auth=${DB_SECRET}`;
   } else {
-    console.warn('[_firebaseAdmin] FIREBASE_DB_SECRET not set — request will be unauthenticated');
+    // [SECURITY FIX v2.4.0]: Fail closed — never allow unauthenticated Firebase access
+    throw new Error('[_firebaseAdmin] FIREBASE_DB_SECRET not set — refusing unauthenticated request. Set the environment variable.');
   }
 
   return fetch(url, options);
