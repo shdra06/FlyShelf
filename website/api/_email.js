@@ -13,6 +13,17 @@
 
 const nodemailer = require('nodemailer');
 
+// [SECURITY FIX v2.5.0]: HTML-escape user-controlled values in email templates
+function escapeHTML(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 let transporter = null;
 
 function getTransporter() {
@@ -144,8 +155,8 @@ function activateButton(licenseKey) {
 function detailRow(label, value) {
   return `
     <tr>
-      <td style="padding:6px 0;font-size:12px;color:#888;font-weight:600;">${label}</td>
-      <td style="padding:6px 0;font-size:12px;color:#333;text-align:right;">${value}</td>
+      <td style="padding:6px 0;font-size:12px;color:#888;font-weight:600;">${escapeHTML(label)}</td>
+      <td style="padding:6px 0;font-size:12px;color:#333;text-align:right;">${escapeHTML(value)}</td>
     </tr>`;
 }
 

@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { firebaseFetch } = require('./_firebaseAdmin');
 
@@ -12,6 +13,27 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const DB_URL = process.env.FIREBASE_RTDB_URL;
 const MAX_DEVICES = 3;
 const TOKEN_EXPIRY_DAYS = 7;
+
+// [SECURITY FIX v2.5.0]: Decrypt/encrypt license key from/for JWT
+function decryptKeyFromJwt(encryptedKey) {
+  const derivedKey = crypto.createHash('sha256').update(JWT_SECRET).digest();
+  const [ivHex, encHex] = encryptedKey.split(':');
+  if (!ivHex || !encHex) return encryptedKey; // legacy plaintext token (v1)
+  const iv = Buffer.from(ivHex, 'hex');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', derivedKey, iv);
+  let decrypted = decipher.update(encHex, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
+
+function encryptKeyForJwt(licenseKey) {
+  const derivedKey = crypto.createHash('sha256').update(JWT_SECRET).digest();
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', derivedKey, iv);
+  let encrypted = cipher.update(licenseKey, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
+}
 
 // ═══ CORS ═══
 const ALLOWED_ORIGINS = [
@@ -88,7 +110,9 @@ module.exports = async (req, res) => {
       }
     }
 
-    const key = payload.key;
+    const rawKey = payload.key;
+    // [SECURITY FIX v2.5.0]: Decrypt key if it's an encrypted v2 token
+    const key = payload.keyVersion === 2 ? decryptKeyFromJwt(rawKey) : rawKey;
     // [SECURITY FIX v2.4.0]: Validate key format from JWT to prevent path injection
     if (!key || !/^FS-PRO-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(key)) {
       return res.status(400).json({ valid: false, error: 'invalid_token' });
@@ -143,10 +167,11 @@ module.exports = async (req, res) => {
     const tokenDeviceId = payload.deviceId || deviceId;
     const freshToken = jwt.sign(
       {
-        key,
+        key: encryptKeyForJwt(key),
+        keyVersion: 2,
         deviceId: tokenDeviceId,
         tier: payload.tier || 'pro',
-        v: 1
+        v: 2
       },
       JWT_SECRET,
       {

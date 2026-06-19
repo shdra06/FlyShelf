@@ -19,18 +19,21 @@ const DB_SECRET = process.env.FIREBASE_DB_SECRET;
 
 /**
  * Authenticated fetch wrapper for Firebase RTDB REST API.
- * Appends ?auth=<secret> (or &auth=<secret>) to authenticate the request.
- * Falls back to unauthenticated if FIREBASE_DB_SECRET is not set (for dev).
+ * Authenticates via Authorization header with the database secret.
+ * Throws if FIREBASE_DB_SECRET is not set (fail-closed).
  * 
  * @param {string} url - Full Firebase REST URL (e.g. `${DB_URL}/payments/xyz.json`)
  * @param {object} [options] - Standard fetch options (method, headers, body)
  * @returns {Promise<Response>} - The fetch Response object
  */
 async function firebaseFetch(url, options = {}) {
-  // Append auth token to URL
   if (DB_SECRET) {
-    const separator = url.includes('?') ? '&' : '?';
-    url = `${url}${separator}auth=${DB_SECRET}`;
+    // [SECURITY FIX v2.5.0]: Use Authorization header instead of URL query param
+    // Prevents the DB secret from appearing in server logs, Firebase audit logs, and proxy logs
+    options.headers = {
+      ...options.headers,
+      'Authorization': `Bearer ${DB_SECRET}`
+    };
   } else {
     // [SECURITY FIX v2.4.0]: Fail closed — never allow unauthenticated Firebase access
     throw new Error('[_firebaseAdmin] FIREBASE_DB_SECRET not set — refusing unauthenticated request. Set the environment variable.');

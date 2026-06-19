@@ -1,27 +1,10 @@
 const Razorpay = require('razorpay');
+const crypto = require('crypto');
+const { firebaseFetch } = require('./_firebaseAdmin');
 
-// [SECURITY FIX v2.2.0]: In-memory rate limiter to prevent order spam
+// Rate limit constants
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const RATE_LIMIT_MAX = 10; // max orders per IP per window
-const _rateLimitMap = new Map();
-
-function checkRateLimit(ip) {
-  const now = Date.now();
-  const entry = _rateLimitMap.get(ip);
-  if (!entry || (now - entry.windowStart) > RATE_LIMIT_WINDOW_MS) {
-    _rateLimitMap.set(ip, { windowStart: now, count: 1 });
-    return true;
-  }
-  entry.count++;
-  if (entry.count > RATE_LIMIT_MAX) return false;
-  return true;
-}
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, entry] of _rateLimitMap) {
-    if ((now - entry.windowStart) > RATE_LIMIT_WINDOW_MS) _rateLimitMap.delete(ip);
-  }
-}, 30 * 60 * 1000);
+const RATE_LIMIT_MAX = 10;
 
 // ═══════════════════════════════════════════════════════════════════
 // CORS — Restricted to trusted origins only (security audit v2.0.0)
@@ -56,11 +39,31 @@ module.exports = async (req, res) => {
       return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    // [SECURITY FIX v2.2.0]: Rate limit order creation
+    // [SECURITY FIX v2.5.0]: Firebase-based rate limiting (persistent across serverless cold starts)
+    const dbUrl = process.env.FIREBASE_RTDB_URL;
     const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-    if (!checkRateLimit(clientIp)) {
-      return res.status(429).json({ error: 'Too many requests. Please try again in 15 minutes.' });
+    const ipHash = crypto.createHash('sha256').update(clientIp).digest('hex').substring(0, 16);
+    try {
+      const rlRes = await firebaseFetch(`${dbUrl}/rate_limits/createOrder/${ipHash}.json`);
+      if (rlRes.ok) {
+        const rlData = await rlRes.json();
+        if (rlData) {
+          const recentAttempts = Object.values(rlData).filter(
+            ts => (Date.now() - new Date(ts).getTime()) < RATE_LIMIT_WINDOW_MS
+          );
+          if (recentAttempts.length >= RATE_LIMIT_MAX) {
+            return res.status(429).json({ error: 'Too many requests. Please try again in 15 minutes.' });
+          }
+        }
+      }
+    } catch (rlErr) {
+      console.error('[createOrder] Rate limit check failed — blocking:', rlErr.message);
+      return res.status(503).json({ error: 'Service temporarily unavailable.' });
     }
+    firebaseFetch(`${dbUrl}/rate_limits/createOrder/${ipHash}/${Date.now()}.json`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(new Date().toISOString())
+    }).catch(() => {});
 
     const { email, deviceId, region } = req.body;
     if (!email || !deviceId) {

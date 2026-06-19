@@ -14,29 +14,20 @@ const DB_URL = process.env.FIREBASE_RTDB_URL;
 const MAX_DEVICES = 3;
 const TOKEN_EXPIRY_DAYS = 7;
 
-// [SECURITY FIX v2.2.0]: In-memory rate limiter to prevent brute-force key guessing
+// Rate limit constants
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
-const RATE_LIMIT_MAX = 10; // max attempts per IP per window
-const _rateLimitMap = new Map();
+const RATE_LIMIT_MAX = 10;
 
-function checkRateLimit(ip) {
-  const now = Date.now();
-  const entry = _rateLimitMap.get(ip);
-  if (!entry || (now - entry.windowStart) > RATE_LIMIT_WINDOW_MS) {
-    _rateLimitMap.set(ip, { windowStart: now, count: 1 });
-    return true;
-  }
-  entry.count++;
-  if (entry.count > RATE_LIMIT_MAX) return false;
-  return true;
+// [SECURITY FIX v2.5.0]: Encrypt license key before embedding in JWT
+// JWTs are base64 (not encrypted) — without this, the key is trivially readable
+function encryptKeyForJwt(licenseKey) {
+  const derivedKey = crypto.createHash('sha256').update(JWT_SECRET).digest();
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv('aes-256-cbc', derivedKey, iv);
+  let encrypted = cipher.update(licenseKey, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
 }
-// Cleanup stale entries every 30 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, entry] of _rateLimitMap) {
-    if ((now - entry.windowStart) > RATE_LIMIT_WINDOW_MS) _rateLimitMap.delete(ip);
-  }
-}, 30 * 60 * 1000);
 
 // ═══ CORS — Allow browser + desktop requests ═══
 const ALLOWED_ORIGINS = [
@@ -89,12 +80,32 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // [SECURITY FIX v2.2.0]: Rate limit activation attempts
+    // [SECURITY FIX v2.5.0]: Firebase-based rate limiting (persistent across serverless cold starts)
     const clientIp = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.socket?.remoteAddress || 'unknown';
-    if (!checkRateLimit(clientIp)) {
-      console.log(`[activate] Rate limit exceeded for IP: ${clientIp.substring(0, 12)}...`);
-      return res.status(429).json({ success: false, error: 'Too many activation attempts. Please try again in 15 minutes.' });
+    const ipHash = crypto.createHash('sha256').update(clientIp).digest('hex').substring(0, 16);
+    try {
+      const rlRes = await firebaseFetch(`${DB_URL}/rate_limits/activate/${ipHash}.json`);
+      if (rlRes.ok) {
+        const rlData = await rlRes.json();
+        if (rlData) {
+          const recentAttempts = Object.values(rlData).filter(
+            ts => (Date.now() - new Date(ts).getTime()) < RATE_LIMIT_WINDOW_MS
+          );
+          if (recentAttempts.length >= RATE_LIMIT_MAX) {
+            console.log(`[activate] Rate limit exceeded for IP: ${clientIp.substring(0, 12)}...`);
+            return res.status(429).json({ success: false, error: 'Too many activation attempts. Please try again in 15 minutes.' });
+          }
+        }
+      }
+    } catch (rlErr) {
+      console.error('[activate] Rate limit check failed — blocking:', rlErr.message);
+      return res.status(503).json({ success: false, error: 'Service temporarily unavailable.' });
     }
+    // Record this attempt (fire-and-forget)
+    firebaseFetch(`${DB_URL}/rate_limits/activate/${ipHash}/${Date.now()}.json`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(new Date().toISOString())
+    }).catch(() => {});
 
     // ═══ Validate environment ═══
     if (!HMAC_SECRET || !JWT_SECRET) {
@@ -229,10 +240,11 @@ module.exports = async (req, res) => {
     // ═══ Step 5: Generate signed JWT activation token ═══
     const token = jwt.sign(
       {
-        key: normalizedKey,
+        key: encryptKeyForJwt(normalizedKey),
+        keyVersion: 2, // marks this as encrypted format
         deviceId,
         tier: 'pro',
-        v: 1 // token version for future migrations
+        v: 2 // token version for future migrations
       },
       JWT_SECRET,
       {
