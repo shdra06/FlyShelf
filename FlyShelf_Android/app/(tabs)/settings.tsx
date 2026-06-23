@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import * as Haptics from 'expo-haptics';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, Alert, Switch, NativeModules, ScrollView, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSettings } from '../../context/SettingsContext';
@@ -9,6 +10,7 @@ import * as IntentLauncher from 'expo-intent-launcher';
 import Constants from 'expo-constants';
 import { colors, font, radius, shadows, space } from '../../styles/theme';
 import AnimatedPressable from '../../components/AnimatedPressable';
+import DeviceHub from '../../components/DeviceHub';
 import { getDebugLogs, clearDebugLogs, getNetworkLogs, getNetworkLogsText, clearNetworkLogs, onNetworkLogChange, getNetworkLogCount } from '../../utils/debugLog';
 import * as Clipboard from 'expo-clipboard';
 
@@ -41,6 +43,7 @@ export default function SettingsScreen() {
   const [globalSyncInput, setGlobalSyncInput] = useState(isGlobalSyncEnabled);
   const [deviceNameInput, setDeviceNameInput] = useState(deviceName);
   const [floatingBallInput, setFloatingBallInput] = useState(isFloatingBallEnabled);
+  const [showDeviceHub, setShowDeviceHub] = useState(false);
 
   // ═══ Update System State ═══
   const [updateStatus, setUpdateStatus] = useState<'idle' | 'checking' | 'available' | 'error'>('idle');
@@ -108,7 +111,7 @@ export default function SettingsScreen() {
   const checkForUpdate = useCallback(async () => {
     try {
       setUpdateStatus('checking');
-      const res = await fetch(`${VERSION_URL}?t=${Date.now()}`);
+      const res = await fetch(`${VERSION_URL}?t=${Date.now()}`, { signal: AbortSignal.timeout(10000) });
       const data = await res.json();
       const latest = data.android_version || '1.0.0';
       const dl = data.android_download || '';
@@ -269,131 +272,71 @@ export default function SettingsScreen() {
             </View>
           </View>
 
-          {/* Paired Devices Card */}
+          {/* Devices Card — launches DeviceHub */}
           <View style={[styles.card, { marginTop: 16 }]}>
-            <Text style={styles.sectionHeader}>Paired Devices</Text>
+            <Text style={styles.sectionHeader}>Devices</Text>
 
-            {/* Pairing Key Display */}
-            <View style={styles.inputContainer}>
-              <View style={styles.inputHeaderRow}>
-                <IconSymbol name="key" size={20} color="#F59E0B" />
-                <Text style={styles.inputLabel}>Pairing Key</Text>
+            <TouchableOpacity
+              onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowDeviceHub(true); }}
+              activeOpacity={0.7}
+              style={{
+                backgroundColor: colors.bg.input,
+                borderRadius: radius.lg,
+                padding: space.lg,
+                borderWidth: 1,
+                borderColor: colors.border.subtle,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{
+                  width: 44, height: 44, borderRadius: 12,
+                  backgroundColor: colors.accent.primaryDim,
+                  justifyContent: 'center', alignItems: 'center', marginRight: space.md,
+                }}>
+                  <IconSymbol name="laptopcomputer.and.iphone" size={22} color={colors.accent.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.text.primary, fontSize: 15, fontFamily: font.semibold }}>
+                    {pairedDevices.length > 0 ? `${pairedDevices.length} Device${pairedDevices.length > 1 ? 's' : ''} Paired` : 'No Devices Paired'}
+                  </Text>
+                  <Text style={{ color: colors.text.secondary, fontSize: 12, fontFamily: font.regular, marginTop: 2 }}>
+                    {pairedDevices.length > 0 
+                      ? `Tap to manage • ${pairedDevices.filter(d => d.deviceType === 'PC').length} PC, ${pairedDevices.filter(d => d.deviceType === 'Mobile').length} Mobile`
+                      : 'Tap to pair your first device'
+                    }
+                  </Text>
+                </View>
+                <IconSymbol name="chevron.right" size={16} color={colors.text.tertiary} />
               </View>
-              {pairingKey ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <View style={{ flex: 1, backgroundColor: '#0F1115', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#2A2F3A' }}>
-                    <Text style={{ color: '#8A8F98', fontSize: 14, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', letterSpacing: 1 }}>
-                      {pairingKey.substring(0, 6)}••••••{pairingKey.substring(pairingKey.length - 4)}
-                    </Text>
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => {
-                      Alert.alert(
-                        'Regenerate Key?',
-                        'This will disconnect ALL paired devices. They will need to re-pair using a new QR code or pairing code.',
-                        [
-                          { text: 'Cancel', style: 'cancel' },
-                          {
-                            text: 'Regenerate', style: 'destructive',
-                            onPress: async () => {
-                              await regeneratePairingKey();
-                              Alert.alert('Done', 'New pairing key generated. Re-pair your devices.');
-                            }
-                          }
-                        ]
-                      );
-                    }}
-                    style={{ backgroundColor: '#F59E0B22', padding: 10, borderRadius: 10 }}
-                  >
-                    <IconSymbol name="arrow.clockwise" size={18} color="#F59E0B" />
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={{ backgroundColor: '#0F1115', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#EF444433', alignItems: 'center' }}>
-                  <Text style={{ color: '#EF4444', fontSize: 14, fontWeight: '600', marginBottom: 4 }}>Not Paired</Text>
-                  <Text style={{ color: '#8A8F98', fontSize: 12, textAlign: 'center' }}>Scan a QR code or enter a pairing code on the main screen to connect your devices.</Text>
-                </View>
-              )}
-              <Text style={styles.helperText}>This key scopes your clipboard feed. Only devices sharing this key can see each other's items.</Text>
-            </View>
 
-            {/* Device List */}
-            <View style={[styles.inputContainer, { marginTop: 20 }]}>
-              <View style={styles.inputHeaderRow}>
-                <IconSymbol name="laptopcomputer.and.iphone" size={20} color="#6366F1" />
-                <Text style={styles.inputLabel}>Connected Devices ({pairedDevices.length}/5)</Text>
-              </View>
-              {pairedDevices.length > 0 ? (
-                <View style={{ gap: 8 }}>
-                  {pairedDevices.map((device) => (
-                    <View
-                      key={device.deviceId}
-                      style={{
-                        flexDirection: 'row', alignItems: 'center',
-                        backgroundColor: '#0F1115', borderRadius: 14, padding: 14,
-                        borderWidth: 1, borderColor: '#2A2F3A',
-                      }}
-                    >
-                      <Text style={{ fontSize: 22, marginRight: 12 }}>
-                        {device.deviceType === 'PC' ? '💻' : device.deviceType === 'Mobile' ? '📱' : '🌐'}
-                      </Text>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={{ color: '#FFF', fontSize: 15, fontWeight: '600' }}>{device.deviceName}</Text>
-                          {device.deviceType === 'PC' && (
-                            <View style={{
-                              backgroundColor: device.isPro ? '#10B98122' : '#2A2F3A',
-                              borderRadius: 6,
-                              paddingHorizontal: 6,
-                              paddingVertical: 2,
-                              borderWidth: 1,
-                              borderColor: device.isPro ? '#10B98144' : '#3F4450'
-                            }}>
-                              <Text style={{
-                                color: device.isPro ? '#10B981' : '#8A8F98',
-                                fontSize: 9,
-                                fontWeight: '700',
-                                textTransform: 'uppercase'
-                              }}>
-                                {device.isPro ? 'Pro' : 'Free'}
-                              </Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text style={{ color: '#8A8F98', fontSize: 11, marginTop: 2 }}>
-                          {device.deviceType} • Paired {new Date(device.pairedAt).toLocaleDateString()}
-                          {device.isPro && device.licenseKey ? ` • Key: ${device.licenseKey}` : ''}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        onPress={() => {
-                          Alert.alert(
-                            'Remove Device?',
-                            `Remove "${device.deviceName}" from your paired devices?`,
-                            [
-                              { text: 'Cancel', style: 'cancel' },
-                              {
-                                text: 'Remove', style: 'destructive',
-                                onPress: () => removePairedDevice(device.deviceId),
-                              }
-                            ]
-                          );
-                        }}
-                        style={{ backgroundColor: '#EF444422', padding: 8, borderRadius: 8 }}
-                      >
-                        <IconSymbol name="xmark" size={16} color="#EF4444" />
-                      </TouchableOpacity>
+              {/* Mini device preview — show small avatars of paired devices */}
+              {pairedDevices.length > 0 && (
+                <View style={{ flexDirection: 'row', marginTop: space.md, gap: space.sm }}>
+                  {pairedDevices.slice(0, 5).map((device) => (
+                    <View key={device.deviceId} style={{
+                      width: 32, height: 32, borderRadius: 10,
+                      backgroundColor: device.deviceType === 'PC' ? colors.accent.infoDim 
+                        : device.deviceType === 'Mobile' ? colors.accent.successDim 
+                        : colors.accent.warningDim,
+                      justifyContent: 'center', alignItems: 'center',
+                      borderWidth: 1, borderColor: colors.border.subtle,
+                    }}>
+                      <IconSymbol 
+                        name={device.deviceType === 'PC' ? 'laptopcomputer' : device.deviceType === 'Mobile' ? 'iphone' : 'globe'}
+                        size={16}
+                        color={device.deviceType === 'PC' ? colors.accent.info 
+                          : device.deviceType === 'Mobile' ? colors.accent.success 
+                          : colors.accent.warning}
+                      />
                     </View>
                   ))}
                 </View>
-              ) : (
-                <View style={{ backgroundColor: '#0F1115', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#2A2F3A', alignItems: 'center' }}>
-                  <Text style={{ color: '#4C5361', fontSize: 13, fontStyle: 'italic' }}>No devices paired yet</Text>
-                </View>
               )}
-              <Text style={styles.helperText}>Devices in this list share a secure clipboard channel. Up to 5 devices can be paired simultaneously.</Text>
-            </View>
+            </TouchableOpacity>
           </View>
+
+          {/* DeviceHub Modal */}
+          <DeviceHub visible={showDeviceHub} onClose={() => setShowDeviceHub(false)} />
 
           {/* Floating Clipboard Card */}
           <View style={[styles.card, { marginTop: 16 }]}>

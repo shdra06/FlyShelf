@@ -12,22 +12,21 @@ namespace FlyShelf.Windows
         public bool IsApplied { get; private set; } = false;
 
         private readonly string _originalText;
-        private readonly string _actionType; // "Summarize", "Rewrite", "Organize"
-        private readonly bool _useWindowsAI;
+        private readonly string _actionType; // "Summarize", "Rewrite", "Organize", "Expand", "Explain", "Actions", "AutoTag", "Translate:XXX"
 
-        public NotesAIWindow(string originalText, string actionType, bool useWindowsAI = true)
+        public NotesAIWindow(string originalText, string actionType)
         {
             InitializeComponent();
             _originalText = originalText;
             _actionType = actionType;
-            _useWindowsAI = useWindowsAI;
 
             // Set titles
-            string engineLabel = _useWindowsAI ? "" : " (Offline)";
-            HeaderTitle.Text = $"{actionType} Note{engineLabel}";
-            LoadingText.Text = _useWindowsAI
-                ? $"AI is working on your {actionType.ToLower()}..."
-                : $"Processing your {actionType.ToLower()}...";
+            string displayAction = actionType.StartsWith("Translate:", StringComparison.OrdinalIgnoreCase)
+                ? $"Translate → {actionType.Substring(10)}"
+                : actionType;
+            HeaderTitle.Text = $"{displayAction} Note";
+            SubtitleText.Text = $"Powered by {AiProviderService.Instance.ActiveProviderName}";
+            LoadingText.Text = $"AI is working on your {displayAction.ToLower()}...";
 
             // Kick off generation
             Loaded += NotesAIWindow_Loaded;
@@ -39,44 +38,42 @@ namespace FlyShelf.Windows
             {
                 string result = string.Empty;
 
-                if (_useWindowsAI)
+                await Task.Run(async () =>
                 {
-                    // Run on thread pool to keep UI responsive
-                    await Task.Run(async () =>
+                    if (_actionType.StartsWith("Translate:", StringComparison.OrdinalIgnoreCase))
                     {
-                        if (_actionType.Equals("Summarize", StringComparison.OrdinalIgnoreCase))
-                        {
-                            result = await WindowsAIService.Instance.SummarizeAsync(_originalText);
-                        }
-                        else if (_actionType.Equals("Rewrite", StringComparison.OrdinalIgnoreCase))
-                        {
-                            result = await WindowsAIService.Instance.RewriteAsync(_originalText);
-                        }
-                        else if (_actionType.Equals("Organize", StringComparison.OrdinalIgnoreCase))
-                        {
-                            result = await WindowsAIService.Instance.OrganizeAsync(_originalText);
-                        }
-                    });
-                }
-                else
-                {
-                    // Offline extractive processing — instant, < 1 MB RAM
-                    await Task.Run(() =>
+                        var lang = _actionType.Substring(10);
+                        result = await AiProviderService.Instance.TranslateAsync(_originalText, lang);
+                    }
+                    else if (_actionType.Equals("Summarize", StringComparison.OrdinalIgnoreCase))
                     {
-                        if (_actionType.Equals("Summarize", StringComparison.OrdinalIgnoreCase))
-                        {
-                            result = OfflineTextProcessor.Summarize(_originalText);
-                        }
-                        else if (_actionType.Equals("Rewrite", StringComparison.OrdinalIgnoreCase))
-                        {
-                            result = OfflineTextProcessor.Rewrite(_originalText);
-                        }
-                        else if (_actionType.Equals("Organize", StringComparison.OrdinalIgnoreCase))
-                        {
-                            result = OfflineTextProcessor.Organize(_originalText);
-                        }
-                    });
-                }
+                        result = await AiProviderService.Instance.SummarizeAsync(_originalText);
+                    }
+                    else if (_actionType.Equals("Rewrite", StringComparison.OrdinalIgnoreCase))
+                    {
+                        result = await AiProviderService.Instance.RewriteAsync(_originalText);
+                    }
+                    else if (_actionType.Equals("Organize", StringComparison.OrdinalIgnoreCase))
+                    {
+                        result = await AiProviderService.Instance.OrganizeAsync(_originalText);
+                    }
+                    else if (_actionType.Equals("Expand", StringComparison.OrdinalIgnoreCase))
+                    {
+                        result = await AiProviderService.Instance.ExpandAsync(_originalText);
+                    }
+                    else if (_actionType.Equals("Explain", StringComparison.OrdinalIgnoreCase))
+                    {
+                        result = await AiProviderService.Instance.ExplainAsync(_originalText);
+                    }
+                    else if (_actionType.Equals("Actions", StringComparison.OrdinalIgnoreCase))
+                    {
+                        result = await AiProviderService.Instance.ExtractActionsAsync(_originalText);
+                    }
+                    else if (_actionType.Equals("AutoTag", StringComparison.OrdinalIgnoreCase))
+                    {
+                        result = await AiProviderService.Instance.AutoTagAsync(_originalText);
+                    }
+                });
 
                 // Show result in UI
                 LoadingView.Visibility = Visibility.Collapsed;
@@ -110,8 +107,10 @@ namespace FlyShelf.Windows
         {
             if (!string.IsNullOrWhiteSpace(ResultTextBox.Text))
             {
-                Clipboard.SetText(ResultTextBox.Text);
-                ToastWindow.ShowToast("📋 Suggestion copied to clipboard.");
+                if (ClipboardHelper.SafeSetText(ResultTextBox.Text))
+                    ToastWindow.ShowToast("📋 Suggestion copied to clipboard.");
+                else
+                    ToastWindow.ShowToast("⚠️ Clipboard busy — try again.");
             }
         }
 

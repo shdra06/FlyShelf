@@ -263,6 +263,14 @@ namespace FlyShelf.Windows
         }
 #endif // !MSIX_STORE
 
+#if MSIX_STORE
+        // ─── Store-build stubs: XAML still references these Click handlers ───
+        private void RefreshLogs_Click(object? sender, RoutedEventArgs? e) { }
+        private void SendAllLogs_Click(object sender, RoutedEventArgs e) { }
+        private void CopyNetworkLogs_Click(object sender, RoutedEventArgs e) { }
+        private async void SendLogsToDashboard_Click(object sender, RoutedEventArgs e) { await System.Threading.Tasks.Task.CompletedTask; }
+#endif
+
         private void Window_PreviewDrop(object sender, DragEventArgs e)
         {
             try

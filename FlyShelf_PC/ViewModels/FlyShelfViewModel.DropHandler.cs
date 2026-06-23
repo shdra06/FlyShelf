@@ -333,7 +333,7 @@ namespace FlyShelf.ViewModels
                 FlyShelf.Classes.ClipboardHistoryManager.AppendToJournal(item);
 
                 // Write PNG to disk and do follow-up operations completely in background thread
-                System.Threading.Tasks.Task.Run(() =>
+                System.Threading.Tasks.Task.Run(async () =>
                 {
                     // Transparency (Ghost) check: backend process that happens after a few seconds
                     var capturedBmpToCheck = bitmap;
@@ -383,12 +383,50 @@ namespace FlyShelf.ViewModels
                     });
 
                     string tempFile = Classes.ClipboardHistoryManager.GetPersistentImagePath();
-                    
+
+                    // ═══ IMAGE SIZE ENFORCEMENT ═══
+                    // Max supported preview: 4K (3840×2160)
+                    // Images wider/taller than 4K: downscale to 4K for saving, but do NOT load thumbnail — show filename only.
+                    // Images with estimated raw size > 15MB (uncompressed BGRA32): reject entirely to prevent massive writes.
+                    const int MAX_SUPPORTED_WIDTH  = 3840; // 4K
+                    const int MAX_SUPPORTED_HEIGHT = 2160;
+                    const long MAX_RAW_BYTES = 15L * 1024 * 1024; // 15 MB uncompressed cap
+
+                    int srcW = bitmap.PixelWidth;
+                    int srcH = bitmap.PixelHeight;
+                    long rawBytes = (long)srcW * srcH * 4; // 4 bytes per pixel (BGRA32)
+
+                    bool isOversized   = srcW > MAX_SUPPORTED_WIDTH || srcH > MAX_SUPPORTED_HEIGHT;
+                    bool isTooBig      = rawBytes > MAX_RAW_BYTES;
+
+                    if (isTooBig)
+                    {
+                        // Completely refuse to save — too large even downscaled
+                        Classes.Logger.LogAction("CLIPBOARD", $"⛔ Image rejected: {srcW}×{srcH} raw={rawBytes / 1024 / 1024}MB exceeds {MAX_RAW_BYTES / 1024 / 1024}MB limit. Not saving.");
+                        await Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            item.FileName = $"Image too large to save ({srcW}×{srcH})";
+                            item.RawContent = $"Image ({srcW}×{srcH}) — too large to store";
+                        });
+                        return; // Skip disk write entirely
+                    }
+
+                    // For oversized (>4K but within raw limit): downscale for storage, but skip thumbnail
+                    BitmapSource saveSource = bitmap;
+                    if (isOversized)
+                    {
+                        double scaleDown = Math.Min((double)MAX_SUPPORTED_WIDTH / srcW, (double)MAX_SUPPORTED_HEIGHT / srcH);
+                        var downscaled = new TransformedBitmap(bitmap, new ScaleTransform(scaleDown, scaleDown));
+                        downscaled.Freeze();
+                        saveSource = downscaled;
+                        Classes.Logger.LogAction("CLIPBOARD", $"⚠️ Image >4K ({srcW}×{srcH}): downscaling to {saveSource.PixelWidth}×{saveSource.PixelHeight} for storage. No thumbnail.");
+                    }
+
                     FormatConvertedBitmap? convertedBmp = null;
                     try
                     {
                         // Safe on background thread: source bitmap is Frozen, FormatConvertedBitmap on frozen source is thread-safe
-                        convertedBmp = new FormatConvertedBitmap(bitmap, System.Windows.Media.PixelFormats.Bgra32, null, 0);
+                        convertedBmp = new FormatConvertedBitmap(saveSource, System.Windows.Media.PixelFormats.Bgra32, null, 0);
                         convertedBmp.Freeze();
                     }
                     catch (Exception convEx)
@@ -407,17 +445,21 @@ namespace FlyShelf.ViewModels
                                 encoder.Save(fs);
                             }
 
-                        // Load thumbnail image
+                        // Load thumbnail image — only for images within the 4K limit
                         BitmapImage? bitmapImage = null;
-                        try
+                        if (!isOversized)
                         {
-                            int decodeWidth = IsScrolling ? 48 : 300;
-                            bitmapImage = LoadImageThumbnail(tempFile, decodeWidth);
+                            try
+                            {
+                                int decodeWidth = IsScrolling ? 48 : 300;
+                                bitmapImage = LoadImageThumbnail(tempFile, decodeWidth);
+                            }
+                            catch (Exception iconEx)
+                            {
+                                Classes.Logger.LogAction("ICON FILE", $"Failed to load saved thumbnail: {iconEx.Message}");
+                            }
                         }
-                        catch (Exception iconEx)
-                        {
-                            Classes.Logger.LogAction("ICON FILE", $"Failed to load saved thumbnail: {iconEx.Message}");
-                        }
+
 
                         Application.Current.Dispatcher.InvokeAsync(() =>
                         {
@@ -862,7 +904,8 @@ namespace FlyShelf.ViewModels
             }
 
             // FALLBACK: File missing or first call failed — use extension-based lookup.
-            // SHGFI_USEFILEATTRIBUTES returns a generic icon for the file type.
+            // SHGFI_USEFILEATTRIBUTES returns a generic icon for the file type based
+            // on whichever app is registered as the default handler for this extension.
             try
             {
                 SHFILEINFO shinfo = new SHFILEINFO();
@@ -887,6 +930,40 @@ namespace FlyShelf.ViewModels
                 }
             }
             catch { }
+
+            // LAST RESORT: If SHGetFileInfo failed even with SHGFI_USEFILEATTRIBUTES
+            // (e.g. malformed path, null bytes, very long path), retry with a clean
+            // dummy filename using just the extension. This guarantees the system's
+            // default app icon is returned for known extensions like .pdf, .docx, etc.
+            if (!string.IsNullOrEmpty(ext))
+            {
+                try
+                {
+                    string dummyPath = "file" + ext; // e.g. "file.pdf"
+                    SHFILEINFO shinfo = new SHFILEINFO();
+                    IntPtr res = SHGetFileInfo(dummyPath, FILE_ATTRIBUTE_NORMAL, ref shinfo, (uint)Marshal.SizeOf(shinfo), SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES);
+
+                    if (res != IntPtr.Zero && shinfo.hIcon != IntPtr.Zero)
+                    {
+                        try
+                        {
+                            var bitmapSource = Imaging.CreateBitmapSourceFromHIcon(
+                                shinfo.hIcon,
+                                Int32Rect.Empty,
+                                BitmapSizeOptions.FromEmptyOptions());
+
+                            bitmapSource.Freeze();
+                            return bitmapSource;
+                        }
+                        finally
+                        {
+                            DestroyIcon(shinfo.hIcon);
+                        }
+                    }
+                }
+                catch { }
+            }
+
             return null;
         }
 

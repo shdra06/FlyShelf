@@ -197,15 +197,11 @@ namespace FlyShelf.Classes
         /// </summary>
         public void ForceCheckTunnelHealth() => _cfDaemon.ForceCheckTunnelHealth();
 
+        // SECURITY (C-01): Restrict downloads to FlyShelf's own directories only.
+        // Previously included Downloads, Desktop, Documents, OneDrive — too broad.
         private static readonly string[] _allowedRoots = {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Downloads"),
-            Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
-            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            // OneDrive-redirected Desktop & Documents (common on Win10/11)
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "OneDrive", "Desktop"),
-            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "OneDrive", "Documents"),
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles"),
             Path.GetTempPath()
         };
 

@@ -117,6 +117,12 @@ namespace FlyShelf
                 int hotkeyId = wParam.ToInt32();
                 if (hotkeyId == HOTKEY_ID)
                 {
+                    if (!_isStartupReady)
+                    {
+                        Classes.Logger.LogAction("HOTKEY", "Summon hotkey ignored — app still initializing");
+                        handled = true;
+                        return IntPtr.Zero;
+                    }
                     Classes.Logger.LogAction("TELEMETRY", "Hotkey Alt+C received inside WndProc");
                     // Defer spawn out of WndProc — Background priority ensures WndProc fully
                     // returns before toggle runs (Input priority fires inside the message loop,
@@ -174,7 +180,7 @@ namespace FlyShelf
                                 keybd_event((byte)VK_V, 0, 0, 0);
                                 keybd_event((byte)VK_V, 0, KEYEVENTF_KEYUP, 0);
                                 keybd_event((byte)VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
-                            });
+                            }).ContinueWith(t => { if (t.IsFaulted) Classes.Logger.LogAction("ASYNC_ERR", $"WndProc task failed: {t.Exception?.InnerException?.Message}"); }, TaskContinuationOptions.OnlyOnFaulted);
                         }
                     });
                     handled = true;
@@ -191,39 +197,19 @@ namespace FlyShelf
                 }
                 catch { }
 
-                // Only re-apply desktop wallpaper if we're in FlyShelf mode AND no manual wallpaper is set
-                if ((Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica") == "desktop")
-                {
-                    string manualWp = Classes.SettingsManager.Current.ManualWallpaperPath ?? "";
-                    if (string.IsNullOrEmpty(manualWp) || !System.IO.File.Exists(manualWp))
-                    {
-                        Dispatcher.InvokeAsync(() =>
-                        {
-                            try
-                            {
-                                string desktopWp = GetDesktopWallpaperPath();
-                                if (!string.IsNullOrEmpty(desktopWp) && System.IO.File.Exists(desktopWp))
-                                {
-                                    Classes.SettingsManager.Current.ClipboardWallpaperPath = desktopWp;
-                                    _currentLoadedWallpaperPath = ""; // Force reload
-                                    ApplyWallpaper();
-                                }
-                            }
-                            catch { }
-                        });
-                    }
-                }
+                // Auto-refresh desktop wallpaper if it changed (uses unified refresh method)
+                Dispatcher.InvokeAsync(() => RefreshDesktopWallpaperIfChanged());
             }
             else if (msg == WM_CLIPBOARDUPDATE)
             {
                 // GUARD: Skip clipboard events triggered by our own writes
-                if (_isWritingClipboard || _clipboardPanelSuppressed)
+                if (_isWritingClipboard || _clipboardPanelSuppressed || Classes.IncognitoManager.IsIncognito)
                 {
                     handled = true;
                     return IntPtr.Zero;
                 }
 
-                int currentToken = ++_clipboardUpdateToken;
+                int currentToken = System.Threading.Interlocked.Increment(ref _clipboardUpdateToken);
                 
                 // Defer clipboard update handling entirely to the thread pool,
                 // freeing the WndProc message pump immediately and avoiding dispatcher suspension crash
@@ -231,12 +217,12 @@ namespace FlyShelf
                 {
                     await Task.Delay(100); // Debounce — 100ms to coalesce Windows double-fire
                     
-                    if (currentToken != _clipboardUpdateToken)
+                    if (currentToken != System.Threading.Volatile.Read(ref _clipboardUpdateToken))
                         return; // A newer update has arrived, cancel this one
 
                     await Application.Current.Dispatcher.InvokeAsync(() =>
                     {
-                        if (currentToken == _clipboardUpdateToken)
+                        if (currentToken == System.Threading.Volatile.Read(ref _clipboardUpdateToken))
                         {
                             HandleClipboardUpdateDeferred();
                         }
@@ -349,7 +335,7 @@ namespace FlyShelf
                                 keybd_event((byte)VK_V, 0, 0, 0);
                                 keybd_event((byte)VK_V, 0, KEYEVENTF_KEYUP, 0);
                                 keybd_event((byte)VK_CONTROL, 0, KEYEVENTF_KEYUP, 0);
-                            });
+                            }).ContinueWith(t => { if (t.IsFaulted) Classes.Logger.LogAction("ASYNC_ERR", $"WndProc task failed: {t.Exception?.InnerException?.Message}"); }, TaskContinuationOptions.OnlyOnFaulted);
 
                             Application.Current.Dispatcher.InvokeAsync(() =>
                             {
@@ -420,7 +406,7 @@ namespace FlyShelf
                     if (text.Trim().StartsWith(ACTIVATION_PREFIX, StringComparison.OrdinalIgnoreCase))
                     {
                         string keyCandidate = text.Trim().Substring(ACTIVATION_PREFIX.Length).Trim();
-                        Classes.Logger.LogAction("LICENSE", $"Clipboard activation trigger detected: {keyCandidate.Substring(0, Math.Min(12, keyCandidate.Length))}...");
+                        Classes.Logger.LogAction("LICENSE", $"Clipboard activation trigger detected: ****-{keyCandidate.Substring(Math.Max(0, keyCandidate.Length - 4))}");
                         
                         // Clear the trigger from clipboard so it doesn't re-fire
                         _lastClipboardCaptureTime = DateTime.UtcNow;
@@ -468,7 +454,7 @@ namespace FlyShelf
                                     Application.Current?.Dispatcher?.InvokeAsync(() =>
                                         Windows.ToastWindow.ShowToast("❌ Activation error — please try again."));
                                 }
-                            });
+                            }).ContinueWith(t => { if (t.IsFaulted) Classes.Logger.LogAction("ASYNC_ERR", $"WndProc task failed: {t.Exception?.InnerException?.Message}"); }, TaskContinuationOptions.OnlyOnFaulted);
                         }
                         return; // Don't create a clipboard card for the activation trigger
                     }

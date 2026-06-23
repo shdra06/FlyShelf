@@ -158,7 +158,7 @@ namespace FlyShelf.Classes
             }
             catch (Exception ex)
             {
-                Logger.LogAction("CRYPTO_ERR", $"Decryption failed using key '{pairingKey?.Substring(0, Math.Min(5, pairingKey?.Length ?? 0))}...': {ex.Message}");
+                Logger.LogAction("CRYPTO_ERR", $"Decryption failed (key length={pairingKey?.Length ?? 0}): {ex.Message}");
                 return null;
             }
         }

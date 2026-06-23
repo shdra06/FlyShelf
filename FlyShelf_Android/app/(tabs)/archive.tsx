@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, Dimensions, Modal, Alert, ScrollView, Image, Platform, FlatList, ToastAndroid, Linking, TextInput, NativeModules } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, useWindowDimensions, Modal, Alert, ScrollView, Image, Platform, FlatList, ToastAndroid, Linking, TextInput, NativeModules } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import * as Sharing from 'expo-sharing';
@@ -19,13 +19,14 @@ import { decryptDeviceList, isValidPairingKey } from '../../utils/networkHelpers
 
 type DeviceGroup = { id: string; name: string; deviceNames: string[] };
 
-const { width } = Dimensions.get('window');
-const THUMB_SIZE = (width - 50) / 4;
+const getThumbSize = (w: number) => (w - 50) / 4;
 
 type SourceFilter = 'Camera' | 'WhatsApp' | 'Downloads' | 'All';
 
 export default function ConnectScreen() {
   const { pcLocalIp, deviceName, defaultTargetDeviceName, pairingKey } = useSettings();
+  const { width: screenWidth } = useWindowDimensions();
+  const THUMB_SIZE = getThumbSize(screenWidth);
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   
   // Transfer state

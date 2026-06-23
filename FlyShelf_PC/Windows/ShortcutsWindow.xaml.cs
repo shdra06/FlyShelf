@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Specialized;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
@@ -9,6 +10,8 @@ namespace FlyShelf.Windows
 {
     public partial class ShortcutsWindow : MicaWindow
     {
+        private NotifyCollectionChangedEventHandler _shortcutsChangedHandler;
+
         public ShortcutsWindow()
         {
             InitializeComponent();
@@ -16,7 +19,8 @@ namespace FlyShelf.Windows
 
             // Bind the observable collection
             ShortcutsList.ItemsSource = ShortcutManager.Shortcuts;
-            ShortcutManager.Shortcuts.CollectionChanged += (s, e) => UpdateUI();
+            _shortcutsChangedHandler = (s, e) => UpdateUI();
+            ShortcutManager.Shortcuts.CollectionChanged += _shortcutsChangedHandler;
             UpdateUI();
 
             // Esc to close
@@ -207,6 +211,12 @@ namespace FlyShelf.Windows
                 ToggleAddMenuBtn.ToolTip = "Close Add Panel";
                 TriggerInput.Focus();
             }
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            ShortcutManager.Shortcuts.CollectionChanged -= _shortcutsChangedHandler;
+            base.OnClosed(e);
         }
 
         // ═══════════════════════════════════════════════════════

@@ -59,9 +59,10 @@ namespace FlyShelf.Classes
         {
             PooledConnectionLifetime = TimeSpan.FromMinutes(10),
             PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
-            MaxConnectionsPerServer = 8,
+            MaxConnectionsPerServer = 20,  // Increased for concurrent multi-peer transfers
             EnableMultipleHttp2Connections = true,
-            AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate
+            AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
+            ConnectTimeout = TimeSpan.FromSeconds(10)  // Fast failure for dead endpoints
         };
         private static readonly HttpClient _sharedClient = new(_sharedHandler, disposeHandler: false)
         {
@@ -214,6 +215,42 @@ namespace FlyShelf.Classes
                 try { peer.LiveSocket = null; } catch { }
                 // Remove from URL cache
                 SaveUrlCache();
+            }
+        }
+
+        /// <summary>
+        /// Add a peer by manual IP or nearby discovery and attempt handshake.
+        /// Used by Nearby Discovery and manual IP entry in the Network tab.
+        /// </summary>
+        public async Task<bool> AddManualPeer(string deviceId, string deviceName, string lanUrl, int transferPort = 8998)
+        {
+            try
+            {
+                var peer = _peers.GetOrAdd(deviceId, _ => new PeerConnection
+                {
+                    DeviceId = deviceId,
+                    DeviceName = deviceName,
+                    LanUrl = lanUrl,
+                    Transport = "LAN",
+                    TransferPort = transferPort,
+                    IsAlive = false
+                });
+
+                // Update URL if peer already exists
+                peer.LanUrl = lanUrl;
+                peer.DeviceName = deviceName;
+                peer.TransferPort = transferPort;
+
+                Logger.LogAction("PEER", $"📡 Manual peer added: {deviceName} @ {lanUrl}");
+
+                // Attempt handshake
+                await Handshake(peer);
+                return peer.IsAlive;
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("PEER", $"Manual peer error: {ex.Message}");
+                return false;
             }
         }
 

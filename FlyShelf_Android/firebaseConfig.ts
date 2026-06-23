@@ -7,7 +7,7 @@ import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage';
 // ═══ XOR Obfuscation Key (matching PC) ═══
 const XOR_KEY = "FlyShelf_2026_Desktop";
 
-// "AIzaSyA52ZXmxx1auJshsv-uuayQRHD22D7zdwk" XOR'd with key
+// API key XOR'd with key (deobfuscated at runtime)
 const API_KEY_BYTES = [
   0x07, 0x25, 0x03, 0x32, 0x3B, 0x1C, 0x2D, 0x53, 0x6D, 0x68,
   0x68, 0x5F, 0x4E, 0x27, 0x75, 0x04, 0x06, 0x21, 0x07, 0x07,
@@ -95,11 +95,25 @@ export async function ensureFirebaseAuth(): Promise<void> {
  */
 export async function getFirebaseIdToken(): Promise<string> {
   const user = auth.currentUser;
-  if (!user) return "";
+  if (!user) {
+    // Try to re-authenticate if no current user
+    try {
+      await ensureFirebaseAuth();
+      const refreshedUser = auth.currentUser;
+      if (refreshedUser) return await refreshedUser.getIdToken();
+    } catch {}
+    return "";
+  }
   try {
     return await user.getIdToken();
-  } catch {
-    return "";
+  } catch (e) {
+    console.warn('[FirebaseAuth] Token refresh failed:', e);
+    // One retry: force refresh
+    try {
+      return await user.getIdToken(true);
+    } catch {
+      return "";
+    }
   }
 }
 

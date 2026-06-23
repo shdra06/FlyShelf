@@ -160,7 +160,8 @@ public partial class App
                 var hwnd = helper.Handle;
                 if (hwnd != IntPtr.Zero)
                 {
-                    RegisterHotKey(hwnd, 9000, 0x0001 | 0x4000, 0x43); // Alt+C
+                    var settings = Classes.SettingsManager.Current;
+                    RegisterHotKey(hwnd, 9000, settings.HotkeyModifier | 0x4000, settings.HotkeyKey);
                     System.Windows.Interop.HwndSource.FromHwnd(hwnd)?.AddHook((IntPtr h, int msg, IntPtr wp, IntPtr lp, ref bool handled) =>
                     {
                         if (msg == 0x0312 && wp.ToInt32() == 9000)
@@ -204,6 +205,7 @@ public partial class App
         {
             string crashPath = System.IO.Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "crash_error.txt");
+            System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(crashPath));
             System.IO.File.WriteAllText(crashPath, errorDetails);
         }
         catch { }

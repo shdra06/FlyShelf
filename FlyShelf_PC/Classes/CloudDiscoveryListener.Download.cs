@@ -21,18 +21,54 @@ namespace FlyShelf.Classes
     {
         private static readonly HttpClient _downloadClient = new HttpClient() { Timeout = TimeSpan.FromMinutes(10) };
 
+        // ═══ PATH-SAFETY: Sanitize ALL network-sourced path components ═══
+        // Replace space with underscore, then strip every NTFS-illegal character.
+        // Also reject Windows reserved device names (CON, NUL, COM1–9, LPT1–9).
+        static string SanitizeFileName(string name, string fallback)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return fallback;
+            // Replace separators first so they become underscores, not traversal vectors
+            name = name.Replace('/', '_').Replace('\\', '_').Replace(':', '_');
+            // Strip every character that NTFS disallows in filenames
+            var invalid = Path.GetInvalidFileNameChars();
+            var cleaned = new System.Text.StringBuilder(name.Length);
+            foreach (char c in name)
+                cleaned.Append(Array.IndexOf(invalid, c) >= 0 ? '_' : c);
+            string result = cleaned.ToString().Trim('.', ' ', '_');
+            if (string.IsNullOrWhiteSpace(result)) return fallback;
+            // Reject Windows reserved names (CON, NUL, COM1-9, LPT1-9, etc.)
+            string upper = result.ToUpperInvariant();
+            if (upper == "CON" || upper == "NUL" || upper == "PRN" || upper == "AUX"
+                || System.Text.RegularExpressions.Regex.IsMatch(upper, @"^(COM|LPT)[1-9]$"))
+                return fallback;
+            return result;
+        }
+
         private async Task FetchAndInjectCloudFile(CloudItem cloudItem)
         {
             ClipboardItem? progressClip = null;
-            string filePath = "";
+            string filePath = ""; // Declared here so catch block can reference it for cleanup
             try
             {
-                string senderName = string.IsNullOrWhiteSpace(cloudItem.SourceDeviceName) ? "CloudSync" : cloudItem.SourceDeviceName.Replace(" ", "_");
-                string extractPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "SyncedFiles", senderName);
+                string senderName = SanitizeFileName(cloudItem.SourceDeviceName, "CloudSync");
+
+                // Build and verify the extraction path is inside the expected base directory
+                string expectedBase = Path.GetFullPath(Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "FlyShelf", "SyncedFiles"));
+                string extractPath = Path.GetFullPath(Path.Combine(expectedBase, senderName));
+
+                // Guard: reject if path somehow escaped the sandbox (e.g. via ../ after sanitisation)
+                if (!extractPath.StartsWith(expectedBase, StringComparison.OrdinalIgnoreCase))
+                {
+                    Logger.LogAction("SECURITY", $"⛔ Path traversal blocked: senderName='{cloudItem.SourceDeviceName}' resolved to '{extractPath}'");
+                    return;
+                }
+
                 Directory.CreateDirectory(extractPath);
 
                 string fallbackExt = cloudItem.Type == "Pdf" ? ".pdf" : cloudItem.Type == "Archive" ? ".zip" : cloudItem.Type == "Video" ? ".mp4" : cloudItem.Type == "Audio" ? ".mp3" : cloudItem.Type == "Document" ? ".docx" : cloudItem.Type == "Presentation" ? ".pptx" : ".jpg";
-                string safeTitle = (cloudItem.Title ?? "file").Replace("/", "_").Replace("\\", "_");
+                string safeTitle = SanitizeFileName(cloudItem.Title ?? "file", "file");
                 filePath = Path.Combine(extractPath, safeTitle);
                 if (!Path.HasExtension(safeTitle)) filePath += fallbackExt;
 

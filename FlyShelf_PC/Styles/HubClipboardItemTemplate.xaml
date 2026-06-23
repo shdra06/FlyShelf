@@ -112,6 +112,66 @@
                                             <ColumnDefinition Width="Auto" />
                                         </Grid.ColumnDefinitions>
 
+                                        <!-- Sender Badge — Top-right corner overlay -->
+                                        <StackPanel Name="SenderBadge" Grid.Column="4" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-2,-2,0" Panel.ZIndex="4">
+                                            <StackPanel.Style>
+                                                <Style TargetType="StackPanel">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding SourceDeviceName}" Value="Local">
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </StackPanel.Style>
+                                            <Border CornerRadius="6" Padding="5,2" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <ui:SymbolIcon FontSize="10" Margin="0,0,3,0">
+                                                        <ui:SymbolIcon.Style>
+                                                            <Style TargetType="ui:SymbolIcon">
+                                                                <Setter Property="Symbol" Value="Laptop24" />
+                                                                <Setter Property="Foreground" Value="#60A5FA" />
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding SourceDeviceType}" Value="Mobile">
+                                                                        <Setter Property="Symbol" Value="Phone24"/>
+                                                                        <Setter Property="Foreground" Value="#A78BFA"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </ui:SymbolIcon.Style>
+                                                    </ui:SymbolIcon>
+                                                    <TextBlock Text="{Binding SourceDeviceName}" Foreground="{DynamicResource SubtleTextColor}" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                                    <TextBlock Text="·" Foreground="{DynamicResource SeparatorDotColor}" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center" />
+                                                    <TextBlock FontSize="8" FontWeight="SemiBold" VerticalAlignment="Center">
+                                                        <TextBlock.Style>
+                                                            <Style TargetType="TextBlock">
+                                                                <Setter Property="Text" Value="☁️ Cloud"/>
+                                                                <Setter Property="Foreground" Value="#F59E0B"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding TransferMethod}" Value="Cloudflare">
+                                                                        <Setter Property="Text" Value="🌐 Cloudflare"/>
+                                                                        <Setter Property="Foreground" Value="#10B981"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding TransferMethod}" Value="LAN">
+                                                                        <Setter Property="Text" Value="📡 LAN"/>
+                                                                        <Setter Property="Foreground" Value="#6366F1"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding TransferMethod}" Value="ForceSend">
+                                                                        <Setter Property="Text" Value="🎯 Direct"/>
+                                                                        <Setter Property="Foreground" Value="#EF4444"/>
+                                                                    </DataTrigger>
+                                                                    <DataTrigger Binding="{Binding TransferMethod}" Value="Local">
+                                                                        <Setter Property="Text" Value="📋 Local"/>
+                                                                        <Setter Property="Foreground" Value="#9CA3AF"/>
+                                                                    </DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </TextBlock.Style>
+                                                    </TextBlock>
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
+
                                         <!-- Left accent bar (outermost) -->
                                         <Border Grid.Column="0" CornerRadius="2">
                                             <Border.Style>
@@ -170,6 +230,30 @@
                                                 <Image Source="{Binding Icon}" Stretch="UniformToFill" Width="44" Height="44" RenderOptions.BitmapScalingMode="Fant" CacheMode="BitmapCache" Visibility="{Binding IsStaticImagePreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
                                                 <!-- Animated GIF thumbnail -->
                                                 <Image gif:AnimationBehavior.SourceUri="{Binding GifFilePath}" gif:AnimationBehavior.RepeatBehavior="Forever" Stretch="UniformToFill" RenderOptions.BitmapScalingMode="Fant" CacheMode="BitmapCache" Visibility="{Binding IsGifPreview, Converter={StaticResource BooleanToVisibilityConverter}}" />
+
+                                                <!-- Image Placeholder — shown when Icon hasn't loaded yet for image items -->
+                                                <Border Name="ImagePlaceholderBorder">
+                                                    <Border.Style>
+                                                        <Style TargetType="Border">
+                                                            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
+                                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                                            <Style.Triggers>
+                                                                <MultiDataTrigger>
+                                                                    <MultiDataTrigger.Conditions>
+                                                                        <Condition Binding="{Binding Icon}" Value="{x:Null}"/>
+                                                                        <Condition Binding="{Binding IsImagePreview}" Value="True"/>
+                                                                    </MultiDataTrigger.Conditions>
+                                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                                </MultiDataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </Border.Style>
+                                                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.5">
+                                                        <TextBlock Text="🖼" FontSize="22" HorizontalAlignment="Center"/>
+                                                        <TextBlock Text="Image" FontSize="9" FontWeight="Medium" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
+                                                                   HorizontalAlignment="Center" Margin="0,2,0,0"/>
+                                                    </StackPanel>
+                                                </Border>
 
                                                 <!-- System file-association icon (e.g. PDF reader, Word, etc.) — shown when Icon is available for file types -->
                                                 <Image Source="{Binding Icon}" Stretch="Uniform" RenderOptions.BitmapScalingMode="Fant" CacheMode="BitmapCache"
@@ -299,8 +383,8 @@
                                                 </Border>
 
                                                 <!-- Color Swatch Premium Preview — shown when a HEX, RGB, or HSL color is detected -->
-                                                <Border CornerRadius="10" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1.5"
-                                                        Background="{Binding DetectedColorBrush}">
+                                                <Border Name="ColorSwatchBorder" Background="{Binding DetectedColorBrush}" CornerRadius="10" 
+                                                        BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1.5">
                                                     <Border.Style>
                                                         <Style TargetType="Border">
                                                             <Setter Property="Visibility" Value="Collapsed"/>
@@ -311,7 +395,7 @@
                                                             </Style.Triggers>
                                                         </Style>
                                                     </Border.Style>
-                                                    <ui:SymbolIcon Symbol="Color24" FontSize="18" Foreground="{DynamicResource ThemeTextOnAccent}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    <ui:SymbolIcon Symbol="Color24" FontSize="18" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
 
                                                 <!-- PDF icon FALLBACK (only when no system Icon available) -->
@@ -466,6 +550,45 @@
                                             </Grid>
                                         </Border>
 
+                                        <!-- ═══ Rotate Image — round floating button, bottom-right of icon ═══ -->
+                                        <Button Grid.Column="3" VerticalAlignment="Bottom" HorizontalAlignment="Right"
+                                                Margin="0,0,4,4" Panel.ZIndex="8" Focusable="False"
+                                                Tag="RotateImage" PreviewMouseLeftButtonDown="RotateImageSpecific_Click">
+                                            <Button.Style>
+                                                <Style TargetType="Button">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Setter Property="Cursor" Value="Hand"/>
+                                                    <Setter Property="OverridesDefaultStyle" Value="True"/>
+                                                    <Setter Property="Background" Value="Transparent"/>
+                                                    <Setter Property="Opacity" Value="0"/>
+                                                    <Setter Property="Template">
+                                                        <Setter.Value>
+                                                            <ControlTemplate TargetType="Button">
+                                                                <Border Width="22" Height="22" CornerRadius="11"
+                                                                        Background="{DynamicResource ThemeOverlayButtonBg}" BorderBrush="{DynamicResource ThemeOverlayBorderStrong}" BorderThickness="1"
+                                                                        ToolTip="Rotate 90°">
+                                                                    <ui:SymbolIcon Symbol="ArrowRotateClockwise24" FontSize="11" Foreground="{DynamicResource TypeGroupColor}"
+                                                                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                </Border>
+                                                            </ControlTemplate>
+                                                        </Setter.Value>
+                                                    </Setter>
+                                                    <Style.Triggers>
+                                                        <MultiDataTrigger>
+                                                            <MultiDataTrigger.Conditions>
+                                                                <Condition Binding="{Binding IsImagePreview}" Value="True"/>
+                                                                <Condition Binding="{Binding IsRelativeMouseOver, RelativeSource={RelativeSource AncestorType=Border}}" Value="True"/>
+                                                            </MultiDataTrigger.Conditions>
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </MultiDataTrigger>
+                                                        <Trigger Property="IsMouseOver" Value="True">
+                                                            <Setter Property="Opacity" Value="1"/>
+                                                        </Trigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Button.Style>
+                                        </Button>
+
                                         <!-- Content Block -->
                                         <StackPanel Grid.Column="4" VerticalAlignment="Center" Margin="0,12,0,12">
                                             <StackPanel Orientation="Horizontal">
@@ -597,16 +720,108 @@
                                                 </Button.Style>
                                             </Button>
                                             
-                                            <!-- P2P Transfer Progress Bar -->
+                                            <!-- File Transfer / Download Progress Panel -->
                                             <StackPanel Margin="0,4,0,0" Visibility="{Binding IsTransferring, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                                <ProgressBar Value="{Binding TransferProgress}" Minimum="0" Maximum="100" Height="3" Foreground="{DynamicResource ThemeTransferProgress}" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}"/>
-                                                <TextBlock Text="{Binding TransferStatusText}" FontSize="10" Foreground="{DynamicResource ThemeTransferText}" Margin="0,2,0,0" Opacity="0.9"/>
+                                                <ProgressBar Value="{Binding TransferProgress}" Minimum="0" Maximum="100" Height="4" Foreground="{DynamicResource SyncIncomingColor}" Background="#15FFFFFF" BorderThickness="0">
+                                                    <ProgressBar.Style>
+                                                        <Style TargetType="ProgressBar">
+                                                            <Setter Property="Template">
+                                                                <Setter.Value>
+                                                                    <ControlTemplate TargetType="ProgressBar">
+                                                                        <Grid x:Name="TemplateRoot" SnapsToDevicePixels="true">
+                                                                            <Border Background="{TemplateBinding Background}" CornerRadius="2"/>
+                                                                            <Border x:Name="PART_Indicator" Background="{TemplateBinding Foreground}" CornerRadius="2" HorizontalAlignment="Left"/>
+                                                                        </Grid>
+                                                                    </ControlTemplate>
+                                                                </Setter.Value>
+                                                            </Setter>
+                                                        </Style>
+                                                    </ProgressBar.Style>
+                                                </ProgressBar>
+                                                <TextBlock Text="{Binding TransferStatusText}" FontSize="10.5" Foreground="{DynamicResource SyncIncomingColor}" Margin="0,3,0,0" FontWeight="Medium" Opacity="0.9"/>
                                             </StackPanel>
+
+                                            <!-- Inline Audio Player Panel -->
+                                            <Grid Margin="0,6,0,2" Visibility="{Binding IsAudioPreview, Converter={StaticResource BooleanToVisibilityConverter}}" HorizontalAlignment="Stretch">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                
+                                                <!-- Play/Pause Button -->
+                                                <ui:Button Grid.Column="0" Focusable="False" Padding="6" CornerRadius="18" Width="36" Height="36" VerticalAlignment="Center" Margin="0,0,8,0"
+                                                           Command="{Binding PlayPauseAudioCommand}" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}">
+                                                    <ui:Button.Icon>
+                                                        <ui:SymbolIcon FontSize="18">
+                                                            <ui:SymbolIcon.Style>
+                                                                <Style TargetType="ui:SymbolIcon">
+                                                                    <Setter Property="Symbol" Value="Play24"/>
+                                                                    <Setter Property="Filled" Value="True"/>
+                                                                    <Setter Property="Foreground" Value="#EC4899"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsAudioPlaying}" Value="True">
+                                                                            <Setter Property="Symbol" Value="Pause24"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </ui:SymbolIcon.Style>
+                                                        </ui:SymbolIcon>
+                                                    </ui:Button.Icon>
+                                                </ui:Button>
+
+                                                <!-- Progress Slider -->
+                                                <Slider Grid.Column="1" Value="{Binding AudioPosition, Mode=TwoWay}" Maximum="{Binding AudioDuration}" Minimum="0"
+                                                        VerticalAlignment="Center" Height="22" Focusable="False" Foreground="#EC4899"/>
+
+                                                <!-- Time indicator text -->
+                                                <TextBlock Grid.Column="2" Text="{Binding AudioPlaybackText}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
+                                                           FontSize="11.5" FontWeight="Medium" VerticalAlignment="Center" Margin="8,0,4,0"/>
+                                            </Grid>
 
                                         </StackPanel>
 
                                         <!-- Actions -->
                                         <StackPanel Grid.Column="5" Orientation="Horizontal" VerticalAlignment="Center" Margin="4,0,10,0">
+
+                                            <!-- Smart Action -->
+                                            <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorLight1}" PreviewMouseLeftButtonDown="SmartActionSpecific_Click">
+                                                <ui:Button.ToolTip><ToolTip Content="{Binding SmartActionName}" /></ui:Button.ToolTip>
+                                                <ui:Button.Icon>
+                                                    <ui:SymbolIcon FontSize="14">
+                                                        <ui:SymbolIcon.Style>
+                                                            <Style TargetType="ui:SymbolIcon">
+                                                                <Setter Property="Symbol" Value="Flash24"/><Setter Property="Filled" Value="True"/>
+                                                                <Style.Triggers>
+                                                                    <DataTrigger Binding="{Binding SmartActionType}" Value="CompileAndRun"><Setter Property="Symbol" Value="Play24"/></DataTrigger>
+                                                                    <DataTrigger Binding="{Binding SmartActionType}" Value="OpenPDF"><Setter Property="Symbol" Value="Document24"/></DataTrigger>
+                                                                    <DataTrigger Binding="{Binding SmartActionType}" Value="ConvertToPdf"><Setter Property="Symbol" Value="DocumentPdf24"/></DataTrigger>
+                                                                    <DataTrigger Binding="{Binding SmartActionType}" Value="JoinMeeting"><Setter Property="Symbol" Value="Video24"/></DataTrigger>
+                                                                    <DataTrigger Binding="{Binding SmartActionType}" Value="OpenBrowser"><Setter Property="Symbol" Value="Globe24"/></DataTrigger>
+                                                                    <DataTrigger Binding="{Binding SmartActionType}" Value="SetTimer"><Setter Property="Symbol" Value="Clock24"/></DataTrigger>
+                                                                    <DataTrigger Binding="{Binding SmartActionType}" Value="OpenMap"><Setter Property="Symbol" Value="Map24"/></DataTrigger>
+                                                                    <DataTrigger Binding="{Binding SmartActionType}" Value="CopyQRText"><Setter Property="Symbol" Value="Copy24"/></DataTrigger>
+                                                                </Style.Triggers>
+                                                            </Style>
+                                                        </ui:SymbolIcon.Style>
+                                                    </ui:SymbolIcon>
+                                                </ui:Button.Icon>
+                                                <ui:Button.Style>
+                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasSmartAction}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding SmartActionType}" Value="OpenPDF">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ui:Button.Style>
+                                            </ui:Button>
+
+                                            <!-- Open in Browser -->
                                             <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Open in Browser" Command="{Binding DataContext.OpenInBrowserCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
                                                 <ui:Button.Icon><ui:SymbolIcon Symbol="Globe24" FontSize="14" /></ui:Button.Icon>
                                                 <ui:Button.Style>
@@ -620,13 +835,143 @@
                                                     </Style>
                                                 </ui:Button.Style>
                                             </ui:Button>
-                                            <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Run Script" Command="{Binding DataContext.LaunchTerminalCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
-                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Play24" Filled="True" FontSize="14" Foreground="{DynamicResource MenuCodeActionColor}" /></ui:Button.Icon>
+
+                                            <!-- Run Script -->
+                                            <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource SyncIncomingColor}" ToolTip="Run Script" PreviewMouseLeftButtonDown="RunTerminalSpecific_Click">
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Play24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                                 <ui:Button.Style>
                                                     <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                         <Style.Triggers>
-                                                            <DataTrigger Binding="{Binding IsCodePreview}" Value="True">
+                                                            <DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ui:Button.Style>
+                                            </ui:Button>
+
+                                            <!-- Show in Explorer -->
+                                            <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource PinActiveColor}" ToolTip="Show in Explorer" PreviewMouseLeftButtonDown="OpenExplorer_Click">
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                                <ui:Button.Style>
+                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ItemType}" Value="Document"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding ItemType}" Value="Pdf"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding ItemType}" Value="Archive"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding ItemType}" Value="Video"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding ItemType}" Value="Audio"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding ItemType}" Value="Presentation"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding ItemType}" Value="File"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                            <DataTrigger Binding="{Binding ItemType}" Value="Group"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ui:Button.Style>
+                                            </ui:Button>
+
+                                            <!-- Open Folder -->
+                                            <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource PinActiveColor}" ToolTip="Open Folder" PreviewMouseLeftButtonDown="OpenExplorer_Click">
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                                <ui:Button.Style>
+                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ItemType}" Value="Folder"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ui:Button.Style>
+                                            </ui:Button>
+
+                                            <!-- Convert to .zip -->
+                                            <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource CyanAccentColor}" ToolTip="Convert to .zip" PreviewMouseLeftButtonDown="ConvertToZip_Click">
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="FolderZip24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                                <ui:Button.Style>
+                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <MultiDataTrigger>
+                                                                <MultiDataTrigger.Conditions>
+                                                                    <Condition Binding="{Binding ItemType}" Value="Group"/>
+                                                                    <Condition Binding="{Binding HasZipArchive}" Value="False"/>
+                                                                </MultiDataTrigger.Conditions>
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </MultiDataTrigger>
+                                                            <MultiDataTrigger>
+                                                                <MultiDataTrigger.Conditions>
+                                                                    <Condition Binding="{Binding ItemType}" Value="Folder"/>
+                                                                    <Condition Binding="{Binding HasZipArchive}" Value="False"/>
+                                                                </MultiDataTrigger.Conditions>
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </MultiDataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ui:Button.Style>
+                                            </ui:Button>
+
+                                            <!-- Sync via LAN -->
+                                            <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource SuccessColor}" ToolTip="Sync via LAN" PreviewMouseLeftButtonDown="SyncZipLan_Click">
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Send24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                                <ui:Button.Style>
+                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <MultiDataTrigger>
+                                                                <MultiDataTrigger.Conditions>
+                                                                    <Condition Binding="{Binding ItemType}" Value="Group"/>
+                                                                    <Condition Binding="{Binding HasZipArchive}" Value="True"/>
+                                                                </MultiDataTrigger.Conditions>
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </MultiDataTrigger>
+                                                            <MultiDataTrigger>
+                                                                <MultiDataTrigger.Conditions>
+                                                                    <Condition Binding="{Binding ItemType}" Value="Folder"/>
+                                                                    <Condition Binding="{Binding HasZipArchive}" Value="True"/>
+                                                                </MultiDataTrigger.Conditions>
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </MultiDataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ui:Button.Style>
+                                            </ui:Button>
+
+                                            <!-- Sanitize URL -->
+                                            <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource SanitizeColor}" ToolTip="Sanitize URL (Remove trackers)" PreviewMouseLeftButtonDown="SanitizeUrlSpecific_Click">
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Shield24" FontSize="14"/></ui:Button.Icon>
+                                                <ui:Button.Style>
+                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding ItemType}" Value="Url">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ui:Button.Style>
+                                            </ui:Button>
+
+                                            <!-- Protect as Password -->
+                                            <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource WarningColor}" ToolTip="Protect as Password" PreviewMouseLeftButtonDown="MakePasswordSpecific_Click">
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Key24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                                <ui:Button.Style>
+                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding CanConvertToPassword}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </ui:Button.Style>
+                                            </ui:Button>
+
+                                            <!-- Rename Password Label -->
+                                            <ui:Button Focusable="False" Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" Foreground="{DynamicResource WarningColor}" ToolTip="Rename Password Label" PreviewMouseLeftButtonDown="RenamePasswordSpecific_Click">
+                                                <ui:Button.Icon><ui:SymbolIcon Symbol="Edit24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                                <ui:Button.Style>
+                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsPassword}" Value="True">
                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                             </DataTrigger>
                                                         </Style.Triggers>

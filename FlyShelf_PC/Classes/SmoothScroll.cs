@@ -30,7 +30,7 @@ namespace FlyShelf.Classes
         private const double ScrollFriction      = 0.94;   // Per-frame decay (smooth luxurious glide for mouse wheel sweeps)
         private const double MaxVelocity         = 45.0;   // Maximum speed cap in pixels/frame (reduced from 90.0 to force more drawing steps, stable scrolling, and prevent high-speed stroboscopic jumps)
         private const double TouchpadMul         = 0.09;   // Touchpad micro-step scale multiplier (precise, slightly controlled)
-        private const double MouseMul            = 0.06;   // Mouse wheel step scale multiplier (reduced from 0.45 to target ~120px scroll distance per notch)
+        private const double MouseMul            = 0.18;   // Mouse wheel step scale multiplier (increased from 0.06 to target ~360px scroll distance per notch for faster mouse scrolling)
         private const double MinImpulse          = 0.3;    // Minimum impulse threshold for micro-scrolls
         private const double MinVelocity         = 0.20;   // Velocity below this → complete stop (raised from 0.05 to cut the imperceptible braking tail faster)
         private const double DeltaCapTouchpad    = 120.0;  // Clamps raw trackpad delta packets to absorb speed spikes (raised from 80 to allow faster swipes)

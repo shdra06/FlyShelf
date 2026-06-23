@@ -1,0 +1,1226 @@
+// ---------------------------------------------------------------
+// MainWindow — Networking Panel
+// Connected devices & file sending overlay panel.
+// Replaces the former Research Mode panel.
+// ---------------------------------------------------------------
+using FlyShelf.Classes;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Text;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
+using FlyShelf.Windows;
+
+namespace FlyShelf
+{
+    public partial class MainWindow
+    {
+        // ═══════════════════════════════════════════════════════════
+        // FIELDS
+        // ═══════════════════════════════════════════════════════════
+
+        private bool _isResearchActive;
+        public bool IsResearchActive => _isResearchActive;
+        private Brush? _originalResearchHeaderBg;
+
+        /// <summary>
+        /// Guard flag: when true, clipboard changes from networking copy/export
+        /// won't be re-captured.
+        /// </summary>
+        internal static bool _suppressResearchCapture;
+
+        private static readonly SolidColorBrush _researchHeaderBrush =
+            new(Color.FromRgb(0x0D, 0x11, 0x17)); // Dark theme for networking panel
+
+        // ═══════════════════════════════════════════════════════════
+        // TOGGLE RESEARCH PANEL
+        // ═══════════════════════════════════════════════════════════
+
+        private void ResearchToggle_Click(object sender, RoutedEventArgs e)
+        {
+#if MSIX_STORE
+            return; // Networking hidden in Store build
+#else
+            if (_isResearchActive)
+                CloseResearchPanel();
+            else
+                OpenResearchPanel();
+#endif
+        }
+
+        // Aero bottom bar uses MouseLeftButtonDown (MouseButtonEventArgs), not Click (RoutedEventArgs)
+        private void AltResearch_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            ResearchToggle_Click(sender, new RoutedEventArgs());
+        }
+
+        private void OpenResearchPanel()
+        {
+            // Close other modes
+            if (_isNotesActive) CloseNotesPanel(immediate: true);
+            if (_isTodoActive) CloseTodoPanel(immediate: true);
+            if (_isSearchActive) CloseSearch(switchingPanel: true);
+            if (_isFilterBarActive) ToggleFilterBar(false);
+            if (OverflowPopup != null) OverflowPopup.IsOpen = false;
+
+            _isResearchActive = true;
+
+            // Update taskbar/alt-tab title
+            Title = "Networking";
+
+            // Update window activation style so clicking it works
+            UpdateWindowActivationStyle();
+
+            // Force-activate and topmost-cycle to grab OS focus
+            ActivateResearchWindow();
+
+            // Hide clipboard, show networking panel
+            ShelfListView.Visibility = Visibility.Collapsed;
+            EmptyStatePanel.Visibility = Visibility.Collapsed;
+            ResearchPanel.Visibility = Visibility.Visible;
+
+            // Clear residual animation so opacity is clean
+            ResearchPanel.BeginAnimation(OpacityProperty, null);
+            ResearchPanel.Opacity = 1;
+
+            // HEADER: Match the opaque dark theme
+            if (_originalResearchHeaderBg == null)
+                _originalResearchHeaderBg = HeaderAndFiltersStack.Background;
+            HeaderAndFiltersStack.Background = _researchHeaderBrush;
+            TextOptions.SetTextFormattingMode(HeaderAndFiltersStack, TextFormattingMode.Ideal);
+            TextOptions.SetTextRenderingMode(HeaderAndFiltersStack, TextRenderingMode.ClearType);
+            RenderOptions.SetClearTypeHint(HeaderAndFiltersStack, ClearTypeHint.Enabled);
+
+            // Swap button to clipboard icon (acts as "go back" button)
+            ResearchToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon
+            {
+                Symbol = Wpf.Ui.Controls.SymbolRegular.Clipboard24
+            };
+            ResearchToggleBtn.ToolTip = "Back to Clipboard";
+
+            // Animate in
+            var slideAnim = AnimationHelper.SlideIn(fromY: -12, durationMs: 200);
+            var fadeAnim = AnimationHelper.FadeIn(durationMs: 200);
+            if (ResearchPanel.RenderTransform is TranslateTransform tt)
+                tt.BeginAnimation(TranslateTransform.YProperty, slideAnim);
+            ResearchPanel.BeginAnimation(OpacityProperty, fadeAnim);
+
+            // Populate device list, file queue, and active transfers
+            RefreshNetworkPanelDevices();
+            RefreshNetworkPanelQueue();
+            RefreshNetworkPanelTransfers();
+
+            // Fix 3: Auto-refresh on peer connect/disconnect
+            if (PeerManager.Instance != null)
+            {
+                PeerManager.Instance.PeerConnected -= OnNetPanel_PeerChanged;
+                PeerManager.Instance.PeerDisconnected -= OnNetPanel_PeerDisconnected;
+                PeerManager.Instance.PeerConnected += OnNetPanel_PeerChanged;
+                PeerManager.Instance.PeerDisconnected += OnNetPanel_PeerDisconnected;
+            }
+
+            // Trigger nearby scan so Nearby Devices populate immediately
+            _ = Task.Run(async () =>
+            {
+                try { await (NearbyDiscovery.Instance?.BroadcastProbe() ?? Task.CompletedTask); } catch { }
+            });
+
+            Logger.LogAction("NETWORK", "Networking panel opened");
+        }
+
+        /// <summary>
+        /// Force the MainWindow to become the active foreground window.
+        /// </summary>
+        private void ActivateResearchWindow()
+        {
+            SuppressDwmBorder();
+            this.Activate();
+            if (!this.Topmost)
+            {
+                this.Topmost = true;
+                this.Topmost = false;
+            }
+            this.Focus();
+        }
+
+        private void CloseResearchPanel(bool immediate = false)
+        {
+            if (!_isResearchActive) return;
+
+            _isResearchActive = false;
+
+            // Unsubscribe auto-refresh events
+            if (PeerManager.Instance != null)
+            {
+                PeerManager.Instance.PeerConnected -= OnNetPanel_PeerChanged;
+                PeerManager.Instance.PeerDisconnected -= OnNetPanel_PeerDisconnected;
+            }
+
+            // Restore taskbar/alt-tab title
+            Title = "FlyShelf";
+
+            // Restore non-activating window style
+            UpdateWindowActivationStyle();
+
+            // Restore button icon and tooltip
+            ResearchToggleBtn.Icon = new Wpf.Ui.Controls.SymbolIcon
+            {
+                Symbol = Wpf.Ui.Controls.SymbolRegular.Wifi124
+            };
+            ResearchToggleBtn.ToolTip = "Networking — Send files to connected devices";
+            ResearchToggleBtn.ClearValue(ForegroundProperty);
+
+            // HEADER: Restore original transparent/Mica background
+            HeaderAndFiltersStack.Background = _originalResearchHeaderBg ?? Brushes.Transparent;
+            TextOptions.SetTextFormattingMode(HeaderAndFiltersStack, TextFormattingMode.Ideal);
+            TextOptions.SetTextRenderingMode(HeaderAndFiltersStack, TextRenderingMode.Auto);
+            RenderOptions.SetClearTypeHint(HeaderAndFiltersStack, ClearTypeHint.Auto);
+
+            if (immediate)
+            {
+                // Instant close — no animation
+                ResearchPanel.BeginAnimation(OpacityProperty, null);
+                ResearchPanel.Opacity = 0;
+                ResearchPanel.Visibility = Visibility.Collapsed;
+                ShelfListView.Visibility = Visibility.Visible;
+                EmptyStatePanel.ClearValue(VisibilityProperty);
+
+                Logger.LogAction("NETWORK", "Networking panel closed (immediate)");
+                return;
+            }
+
+            // Animate out
+            var slideAnim = AnimationHelper.SlideOut(toY: -12, durationMs: 180);
+            var fadeAnim = AnimationHelper.FadeOut(durationMs: 180);
+
+            if (ResearchPanel.RenderTransform is TranslateTransform tt)
+                tt.BeginAnimation(TranslateTransform.YProperty, slideAnim);
+
+            fadeAnim.Completed += (s, ev) =>
+            {
+                if (!_isResearchActive)
+                {
+                    ResearchPanel.Visibility = Visibility.Collapsed;
+                    ShelfListView.Visibility = Visibility.Visible;
+                    EmptyStatePanel.ClearValue(VisibilityProperty);
+                }
+            };
+            ResearchPanel.BeginAnimation(OpacityProperty, fadeAnim);
+
+            Logger.LogAction("NETWORK", "Networking panel closed");
+        }
+
+        private void ResearchBack_Click(object sender, MouseButtonEventArgs e)
+        {
+            CloseResearchPanel();
+        }
+
+        /// PreviewMouseDown on the entire panel grid.
+        /// Ensures the window captures OS focus when user clicks inside.
+        private void ResearchPanel_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (!this.IsActive)
+            {
+                SuppressDwmBorder();
+                this.Activate();
+                if (!this.Topmost)
+                {
+                    this.Topmost = true;
+                    this.Topmost = false;
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // NETWORKING PANEL — DEVICE LIST
+        // ═══════════════════════════════════════════════════════════
+
+        private void RefreshNetworkPanelDevices()
+        {
+            try
+            {
+                if (NetPanelDeviceList == null) return;
+                NetPanelDeviceList.Children.Clear();
+
+                var peers = PeerManager.Instance?.ConnectedPeers?.Values
+                    .Where(p => p.IsAlive)
+                    .ToList();
+
+                if (peers == null || peers.Count == 0)
+                {
+                    NetPanelPeerCount.Text = "0 devices";
+                    var emptyChip = new Border
+                    {
+                        CornerRadius = new CornerRadius(8),
+                        Padding = new Thickness(12, 6, 12, 6),
+                        Background = new SolidColorBrush(Color.FromRgb(0x0E, 0x13, 0x26)),
+                        BorderBrush = new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B)),
+                        BorderThickness = new Thickness(1),
+                        Child = new TextBlock
+                        {
+                            Text = "No devices — pair in Settings → Network",
+                            FontSize = 11,
+                            Foreground = new SolidColorBrush(Color.FromRgb(0x47, 0x55, 0x69))
+                        }
+                    };
+                    NetPanelDeviceList.Children.Add(emptyChip);
+                    return;
+                }
+
+                NetPanelPeerCount.Text = $"{peers.Count} device{(peers.Count != 1 ? "s" : "")}";
+
+                foreach (var peer in peers)
+                {
+                    var deviceCard = CreateNetPanelDeviceCard(peer);
+                    NetPanelDeviceList.Children.Add(deviceCard);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NETWORK", $"Device refresh error: {ex.Message}");
+            }
+        }
+
+        /// <summary>Creates a compact horizontal chip for the devices strip.</summary>
+        private Border CreateNetPanelDeviceCard(PeerConnection peer)
+        {
+            var aliveDot = new Border
+            {
+                Width = 6, Height = 6, CornerRadius = new CornerRadius(3),
+                Background = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81)),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 6, 0)
+            };
+
+            var nameText = new TextBlock
+            {
+                Text = peer.DeviceName ?? peer.DeviceId,
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xCB, 0xD5, 0xE1)),
+                VerticalAlignment = VerticalAlignment.Center,
+                MaxWidth = 120,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+
+            var transportLabel = new TextBlock
+            {
+                Text = peer.Transport == "LAN" ? "LAN" : "CF",
+                FontSize = 9,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x81, 0x8C, 0xF8)),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(6, 0, 0, 0),
+                FontWeight = FontWeights.Bold
+            };
+
+            var chipContent = new StackPanel { Orientation = Orientation.Horizontal };
+            chipContent.Children.Add(aliveDot);
+            chipContent.Children.Add(nameText);
+            chipContent.Children.Add(transportLabel);
+
+            var chip = new Border
+            {
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(10, 5, 10, 5),
+                Margin = new Thickness(0, 0, 6, 0),
+                Background = new SolidColorBrush(Color.FromRgb(0x0E, 0x13, 0x26)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B)),
+                BorderThickness = new Thickness(1),
+                Cursor = Cursors.Hand,
+                Child = chipContent,
+                Tag = peer
+            };
+
+            chip.MouseEnter += (s, e) =>
+            {
+                chip.Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1F, 0x3D));
+                chip.BorderBrush = new SolidColorBrush(Color.FromRgb(0x31, 0x2E, 0x81));
+            };
+            chip.MouseLeave += (s, e) =>
+            {
+                chip.Background = new SolidColorBrush(Color.FromRgb(0x0E, 0x13, 0x26));
+                chip.BorderBrush = new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B));
+            };
+
+            return chip;
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // NETWORKING PANEL — FILE QUEUE
+        // ═══════════════════════════════════════════════════════════
+
+        private void RefreshNetworkPanelQueue()
+        {
+            try
+            {
+                if (NetPanelFileList == null) return;
+                NetPanelFileList.Children.Clear();
+
+                var queue = NetworkFileQueue.Instance?.StagedFiles;
+                if (queue == null || queue.Count == 0)
+                {
+                    NetPanelQueueStatus.Text = "No files staged";
+                    if (NetPanelEmptyState != null) NetPanelEmptyState.Visibility = Visibility.Visible;
+                    return;
+                }
+
+                if (NetPanelEmptyState != null) NetPanelEmptyState.Visibility = Visibility.Collapsed;
+                NetPanelQueueStatus.Text = $"{queue.Count} file{(queue.Count != 1 ? "s" : "")} staged";
+
+                foreach (var file in queue)
+                {
+                    var fileCard = CreateNetPanelFileCard(file);
+                    NetPanelFileList.Children.Add(fileCard);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NETWORK", $"Queue refresh error: {ex.Message}");
+            }
+        }
+
+        /// <summary>Refreshes the active + recent transfer session cards in the networking panel.</summary>
+        private void RefreshNetworkPanelTransfers()
+        {
+            try
+            {
+                if (NetPanelActiveTransfers == null || NetPanelRecentTransfers == null) return;
+                NetPanelActiveTransfers.Children.Clear();
+                NetPanelRecentTransfers.Children.Clear();
+
+                var mgr = LanTransferManager.Instance;
+                if (mgr == null) return;
+
+                // Active transfers
+                foreach (var session in mgr.ActiveTransfers.ToList())
+                {
+                    var card = CreateTransferSessionCard(session, isActive: true);
+                    NetPanelActiveTransfers.Children.Add(card);
+                }
+
+                // Recent/completed transfers (show last 10, with retry on failed)
+                foreach (var session in mgr.CompletedTransfers.Take(10).ToList())
+                {
+                    var card = CreateTransferSessionCard(session, isActive: false);
+                    NetPanelRecentTransfers.Children.Add(card);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NETWORK", $"Transfer refresh error: {ex.Message}");
+            }
+        }
+
+        private Border CreateTransferSessionCard(LanTransferSession session, bool isActive)
+        {
+            // Direction icon + file name
+            var directionIcon = new TextBlock
+            {
+                Text = session.StateIcon,
+                FontSize = 14,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+
+            var nameText = new TextBlock
+            {
+                Text = session.FileName,
+                FontSize = 12,
+                FontWeight = FontWeights.Medium,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xE2, 0xE8, 0xF0)),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+
+            // Status line: progress + speed or error
+            string statusStr;
+            if (isActive && session.IsActive)
+                statusStr = $"{session.ProgressText}  •  {session.SpeedText}  •  {session.EtaText}";
+            else if (session.IsPaused)
+                statusStr = $"⏸ Paused at {LanTransferSession.FormatBytes(session.BytesTransferred)} / {LanTransferSession.FormatBytes(session.FileSize)}";
+            else if (session.IsFailed)
+                statusStr = $"❌ {session.ErrorMessage ?? "Failed"} — {LanTransferSession.FormatBytes(session.BytesTransferred)} saved";
+            else if (session.IsCompleted)
+                statusStr = $"✅ {LanTransferSession.FormatBytes(session.FileSize)} — {session.PeakSpeedText} peak";
+            else
+                statusStr = session.StateDisplayText;
+
+            var statusText = new TextBlock
+            {
+                Text = statusStr,
+                FontSize = 10,
+                Foreground = new SolidColorBrush(session.IsFailed
+                    ? Color.FromRgb(0xF8, 0x71, 0x71)
+                    : Color.FromRgb(0x64, 0x74, 0x8B)),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+
+            var peerText = new TextBlock
+            {
+                Text = $"{session.DirectionText} {session.PeerDeviceName}",
+                FontSize = 10,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x47, 0x55, 0x69))
+            };
+
+            var infoStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            infoStack.Children.Add(nameText);
+            infoStack.Children.Add(peerText);
+            infoStack.Children.Add(statusText);
+
+            // Action buttons
+            var buttonStack = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                VerticalAlignment = VerticalAlignment.Center
+            };
+
+            if (session.CanPause)
+            {
+                var pauseBtn = CreateTransferActionButton("⏸", "Pause", Color.FromRgb(0xF5, 0x9E, 0x0B));
+                pauseBtn.MouseLeftButtonDown += async (s, e) =>
+                {
+                    e.Handled = true;
+                    await LanTransferManager.Instance!.PauseTransfer(session.TransferId);
+                    RefreshNetworkPanelTransfers();
+                };
+                buttonStack.Children.Add(pauseBtn);
+            }
+
+            if (session.CanResume)
+            {
+                var resumeBtn = CreateTransferActionButton("▶", "Resume", Color.FromRgb(0x10, 0xB9, 0x81));
+                resumeBtn.MouseLeftButtonDown += async (s, e) =>
+                {
+                    e.Handled = true;
+                    await LanTransferManager.Instance!.ResumeTransfer(session.TransferId);
+                    RefreshNetworkPanelTransfers();
+                };
+                buttonStack.Children.Add(resumeBtn);
+            }
+
+            if (session.CanRetry)
+            {
+                var retryBtn = CreateTransferActionButton("↺", "Retry", Color.FromRgb(0x81, 0x8C, 0xF8));
+                retryBtn.MouseLeftButtonDown += async (s, e) =>
+                {
+                    e.Handled = true;
+                    await LanTransferManager.Instance!.RetryTransfer(session.TransferId);
+                    RefreshNetworkPanelTransfers();
+                };
+                buttonStack.Children.Add(retryBtn);
+            }
+
+            if (session.CanCancel)
+            {
+                var cancelBtn = CreateTransferActionButton("✕", "Cancel", Color.FromRgb(0xEF, 0x44, 0x44));
+                cancelBtn.MouseLeftButtonDown += async (s, e) =>
+                {
+                    e.Handled = true;
+                    await LanTransferManager.Instance!.CancelTransfer(session.TransferId);
+                    RefreshNetworkPanelTransfers();
+                };
+                buttonStack.Children.Add(cancelBtn);
+            }
+
+            // Layout
+            var contentGrid = new Grid();
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(directionIcon, 0);
+            Grid.SetColumn(infoStack, 1);
+            Grid.SetColumn(buttonStack, 2);
+            contentGrid.Children.Add(directionIcon);
+            contentGrid.Children.Add(infoStack);
+            contentGrid.Children.Add(buttonStack);
+
+            // Progress bar for active transfers
+            var outerStack = new StackPanel();
+            outerStack.Children.Add(contentGrid);
+
+            if (isActive && (session.IsActive || session.IsPaused))
+            {
+                var progressBar = new ProgressBar
+                {
+                    Value = session.ProgressPercent,
+                    Minimum = 0,
+                    Maximum = 100,
+                    Height = 3,
+                    Margin = new Thickness(0, 4, 0, 0),
+                    Foreground = new SolidColorBrush(session.IsPaused
+                        ? Color.FromRgb(0xF5, 0x9E, 0x0B)
+                        : Color.FromRgb(0x63, 0x66, 0xF1)),
+                    Background = new SolidColorBrush(Color.FromArgb(0x20, 0xFF, 0xFF, 0xFF)),
+                    BorderThickness = new Thickness(0)
+                };
+                outerStack.Children.Add(progressBar);
+            }
+
+            // Card border color based on state
+            Color borderColor = session.IsFailed
+                ? Color.FromRgb(0x7F, 0x1D, 0x1D) // Red border for failed
+                : session.IsPaused
+                    ? Color.FromRgb(0x78, 0x35, 0x0F) // Amber border for paused
+                    : Color.FromRgb(0x1E, 0x29, 0x3B); // Default
+
+            Color bgColor = session.IsFailed
+                ? Color.FromRgb(0x1A, 0x0A, 0x0A) // Dark red bg for failed
+                : Color.FromRgb(0x0E, 0x13, 0x26); // Default
+
+            var card = new Border
+            {
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(12, 8, 12, 8),
+                Margin = new Thickness(0, 0, 0, 4),
+                Background = new SolidColorBrush(bgColor),
+                BorderBrush = new SolidColorBrush(borderColor),
+                BorderThickness = new Thickness(1),
+                Child = outerStack
+            };
+
+            card.MouseEnter += (s, e) =>
+            {
+                card.Background = new SolidColorBrush(Color.FromRgb(0x14, 0x1A, 0x33));
+                card.BorderBrush = new SolidColorBrush(Color.FromRgb(0x31, 0x2E, 0x81));
+            };
+            card.MouseLeave += (s, e) =>
+            {
+                card.Background = new SolidColorBrush(bgColor);
+                card.BorderBrush = new SolidColorBrush(borderColor);
+            };
+
+            return card;
+        }
+
+        private Border CreateTransferActionButton(string icon, string tooltip, Color color)
+        {
+            var btn = new Border
+            {
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(6, 3, 6, 3),
+                Margin = new Thickness(3, 0, 0, 0),
+                Background = new SolidColorBrush(Color.FromArgb(0x20, color.R, color.G, color.B)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x40, color.R, color.G, color.B)),
+                BorderThickness = new Thickness(1),
+                Cursor = Cursors.Hand,
+                ToolTip = tooltip,
+                Child = new TextBlock
+                {
+                    Text = icon,
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush(color),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Center
+                }
+            };
+
+            btn.MouseEnter += (s, e) =>
+                btn.Background = new SolidColorBrush(Color.FromArgb(0x40, color.R, color.G, color.B));
+            btn.MouseLeave += (s, e) =>
+                btn.Background = new SolidColorBrush(Color.FromArgb(0x20, color.R, color.G, color.B));
+
+            return btn;
+        }
+
+        private Border CreateNetPanelFileCard(StagedFile file)
+        {
+            var nameText = new TextBlock
+            {
+                Text = file.FileName ?? Path.GetFileName(file.FilePath),
+                FontSize = 12,
+                FontWeight = FontWeights.Medium,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xE2, 0xE8, 0xF0)),
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+
+            var sizeText = new TextBlock
+            {
+                Text = file.FileSizeText ?? $"{file.FileSize / 1024.0 / 1024.0:F1} MB",
+                FontSize = 10,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B))
+            };
+
+            var statusText = new TextBlock
+            {
+                Text = file.StatusIcon ?? "⏳",
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 8, 0)
+            };
+
+            var removeBtn = new TextBlock
+            {
+                Text = "✕",
+                FontSize = 11,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B)),
+                VerticalAlignment = VerticalAlignment.Center,
+                Cursor = Cursors.Hand
+            };
+            removeBtn.MouseLeftButtonDown += (s, e) =>
+            {
+                NetworkFileQueue.Instance?.Remove(file);
+                RefreshNetworkPanelQueue();
+            };
+
+            var infoStack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            infoStack.Children.Add(nameText);
+            infoStack.Children.Add(sizeText);
+
+            var contentGrid = new Grid();
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            contentGrid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            Grid.SetColumn(statusText, 0);
+            Grid.SetColumn(infoStack, 1);
+            Grid.SetColumn(removeBtn, 2);
+            contentGrid.Children.Add(statusText);
+            contentGrid.Children.Add(infoStack);
+            contentGrid.Children.Add(removeBtn);
+
+            var card = new Border
+            {
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(12, 8, 12, 8),
+                Margin = new Thickness(0, 0, 0, 4),
+                Background = new SolidColorBrush(Color.FromRgb(0x0E, 0x13, 0x26)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B)),
+                BorderThickness = new Thickness(1),
+                Child = contentGrid
+            };
+
+            card.MouseEnter += (s, e) =>
+            {
+                card.Background = new SolidColorBrush(Color.FromRgb(0x14, 0x1A, 0x33));
+                card.BorderBrush = new SolidColorBrush(Color.FromRgb(0x31, 0x2E, 0x81));
+            };
+            card.MouseLeave += (s, e) =>
+            {
+                card.Background = new SolidColorBrush(Color.FromRgb(0x0E, 0x13, 0x26));
+                card.BorderBrush = new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B));
+            };
+
+            return card;
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // NETWORKING PANEL — EVENT HANDLERS
+        // ═══════════════════════════════════════════════════════════
+
+        private void NetPanel_RefreshDevices_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            RefreshNetworkPanelDevices();
+            ToastWindow.ShowToast("📡 Devices refreshed");
+        }
+
+        private void NetPanel_AddFiles_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            try
+            {
+                var dialog = new Microsoft.Win32.OpenFileDialog
+                {
+                    Multiselect = true,
+                    Title = "Select files to send"
+                };
+                if (dialog.ShowDialog() == true)
+                {
+                    NetworkFileQueue.Instance?.StageFiles(dialog.FileNames);
+                    RefreshNetworkPanelQueue();
+                    ToastWindow.ShowToast($"📂 {dialog.FileNames.Length} file(s) added to queue");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NETWORK", $"Add files error: {ex.Message}");
+            }
+        }
+
+        private async void NetPanel_SendAll_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            try
+            {
+                if (NetworkFileQueue.Instance == null || NetworkFileQueue.Instance.StagedFiles.Count == 0)
+                {
+                    ToastWindow.ShowToast("⚠️ No files in queue to send");
+                    return;
+                }
+
+                int peerCount = PeerManager.Instance?.AliveCount ?? 0;
+                if (peerCount == 0)
+                {
+                    ToastWindow.ShowToast("⚠️ No connected devices to send to");
+                    return;
+                }
+
+                ToastWindow.ShowToast($"📤 Sending {NetworkFileQueue.Instance.StagedFiles.Count} file(s) to {peerCount} device(s)...");
+                await NetworkFileQueue.Instance.SendAllToAll();
+                RefreshNetworkPanelQueue();
+                ToastWindow.ShowToast("✅ All files sent!");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NETWORK", $"Send all error: {ex.Message}");
+                ToastWindow.ShowToast($"❌ Send failed: {ex.Message}");
+            }
+        }
+
+        private void NetPanel_ClearQueue_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            NetworkFileQueue.Instance?.ClearAll();
+            RefreshNetworkPanelQueue();
+            ToastWindow.ShowToast("🗑️ Queue cleared");
+        }
+
+        private void NetPanel_OpenTransferMgr_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            try
+            {
+                // Close the networking panel first, then open Hub Window
+                CloseResearchPanel(immediate: true);
+                OpenHubWindow();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NETWORK", $"Open hub error: {ex.Message}");
+            }
+        }
+
+        private void NetPanel_DragOver(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                e.Effects = DragDropEffects.Copy;
+                e.Handled = true;
+            }
+        }
+
+        private void NetPanel_Drop(object sender, DragEventArgs e)
+        {
+            if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                var files = (string[])e.Data.GetData(DataFormats.FileDrop);
+                if (files != null && files.Length > 0)
+                {
+                    NetworkFileQueue.Instance?.StageFiles(files);
+                    RefreshNetworkPanelQueue();
+                    ToastWindow.ShowToast($"📂 {files.Length} file(s) added to queue");
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // CONTEXT MENU HANDLERS (MenuItem Click uses RoutedEventArgs)
+        // ═══════════════════════════════════════════════════════════
+
+        private void NetPanel_RefreshDevices_MenuClick(object sender, RoutedEventArgs e)
+        {
+            RefreshNetworkPanelDevices();
+            ToastWindow.ShowToast("📡 Devices refreshed");
+        }
+
+        private void NetPanel_OpenTransferMgr_MenuClick(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                CloseResearchPanel(immediate: true);
+                OpenHubWindow();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NETWORK", $"Open hub error: {ex.Message}");
+            }
+        }
+
+        private void NetPanel_ClearQueue_MenuClick(object sender, RoutedEventArgs e)
+        {
+            NetworkFileQueue.Instance?.ClearAll();
+            RefreshNetworkPanelQueue();
+            ToastWindow.ShowToast("🗑️ Queue cleared");
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // FIX 1: ⋯ MENU LEFT-CLICK HANDLER
+        // ═══════════════════════════════════════════════════════════
+
+        private void NetPanel_MoreMenu_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement fe && fe.ContextMenu != null)
+            {
+                fe.ContextMenu.PlacementTarget = fe;
+                fe.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+                fe.ContextMenu.IsOpen = true;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // FIX 3: AUTO-REFRESH EVENT HANDLERS
+        // ═══════════════════════════════════════════════════════════
+
+        private void OnNetPanel_PeerChanged(string deviceId, string transport)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (_isResearchActive)
+                    RefreshNetworkPanelDevices();
+            });
+        }
+
+        private void OnNetPanel_PeerDisconnected(string deviceId)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (_isResearchActive)
+                    RefreshNetworkPanelDevices();
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // FIX 4: NEARBY DEVICES + SCAN
+        // ═══════════════════════════════════════════════════════════
+
+        private void RefreshNearbyDevices()
+        {
+            try
+            {
+                if (NetPanelNearbyList == null) return;
+                NetPanelNearbyList.Children.Clear();
+
+                var nearby = NearbyDiscovery.Instance?.DiscoveredDevices?.ToList();
+                if (nearby == null || nearby.Count == 0)
+                {
+                    var emptyChip = new Border
+                    {
+                        CornerRadius = new CornerRadius(8),
+                        Padding = new Thickness(12, 6, 12, 6),
+                        Background = new SolidColorBrush(Color.FromRgb(0x0E, 0x13, 0x26)),
+                        BorderBrush = new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B)),
+                        BorderThickness = new Thickness(1),
+                        Child = new TextBlock
+                        {
+                            Text = "No nearby devices found — click Scan",
+                            FontSize = 11,
+                            Foreground = new SolidColorBrush(Color.FromRgb(0x47, 0x55, 0x69))
+                        }
+                    };
+                    NetPanelNearbyList.Children.Add(emptyChip);
+                    return;
+                }
+
+                foreach (var dev in nearby)
+                {
+                    var chip = CreateNearbyDeviceChip(dev);
+                    NetPanelNearbyList.Children.Add(chip);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NETWORK", $"Nearby refresh error: {ex.Message}");
+            }
+        }
+
+        private Border CreateNearbyDeviceChip(NearbyDeviceInfo device)
+        {
+            var statusDot = new Border
+            {
+                Width = 6, Height = 6, CornerRadius = new CornerRadius(3),
+                Background = new SolidColorBrush(device.IsConnected
+                    ? Color.FromRgb(0x10, 0xB9, 0x81)
+                    : Color.FromRgb(0xF5, 0x9E, 0x0B)),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 6, 0)
+            };
+
+            var nameText = new TextBlock
+            {
+                Text = device.DeviceName,
+                FontSize = 11,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xCB, 0xD5, 0xE1)),
+                VerticalAlignment = VerticalAlignment.Center,
+                MaxWidth = 100,
+                TextTrimming = TextTrimming.CharacterEllipsis
+            };
+
+            var latencyText = new TextBlock
+            {
+                Text = device.LatencyMs > 0 ? $"{device.LatencyMs}ms" : "?",
+                FontSize = 9,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B)),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(6, 0, 0, 0)
+            };
+
+            var connectBtn = new TextBlock
+            {
+                Text = device.IsConnected ? "✓" : "＋",
+                FontSize = 12,
+                FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(device.IsConnected
+                    ? Color.FromRgb(0x10, 0xB9, 0x81)
+                    : Color.FromRgb(0x81, 0x8C, 0xF8)),
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0),
+                Cursor = Cursors.Hand
+            };
+
+            if (!device.IsConnected)
+            {
+                connectBtn.MouseLeftButtonDown += async (s, e) =>
+                {
+                    e.Handled = true;
+                    connectBtn.Text = "⏳";
+                    try
+                    {
+                        await (NearbyDiscovery.Instance?.ConnectToDevice(device) ?? Task.CompletedTask);
+                        if (device.IsConnected)
+                        {
+                            connectBtn.Text = "✓";
+                            connectBtn.Foreground = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81));
+                            statusDot.Background = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81));
+                            ToastWindow.ShowToast($"✅ Connected to {device.DeviceName}");
+                            RefreshNetworkPanelDevices();
+                        }
+                        else
+                        {
+                            connectBtn.Text = "✕";
+                            connectBtn.Foreground = new SolidColorBrush(Color.FromRgb(0xEF, 0x44, 0x44));
+                            ToastWindow.ShowToast($"❌ Could not reach {device.DeviceName}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        connectBtn.Text = "✕";
+                        Logger.LogAction("NETWORK", $"Connect nearby error: {ex.Message}");
+                    }
+                };
+            }
+
+            var chipContent = new StackPanel { Orientation = Orientation.Horizontal };
+            chipContent.Children.Add(statusDot);
+            chipContent.Children.Add(nameText);
+            chipContent.Children.Add(latencyText);
+            chipContent.Children.Add(connectBtn);
+
+            var chip = new Border
+            {
+                CornerRadius = new CornerRadius(8),
+                Padding = new Thickness(10, 5, 10, 5),
+                Margin = new Thickness(0, 0, 6, 0),
+                Background = new SolidColorBrush(Color.FromRgb(0x0E, 0x13, 0x26)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B)),
+                BorderThickness = new Thickness(1),
+                Cursor = Cursors.Hand,
+                Child = chipContent,
+                Tag = device
+            };
+
+            chip.MouseEnter += (s, e) =>
+            {
+                chip.Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1F, 0x3D));
+                chip.BorderBrush = new SolidColorBrush(Color.FromRgb(0x31, 0x2E, 0x81));
+            };
+            chip.MouseLeave += (s, e) =>
+            {
+                chip.Background = new SolidColorBrush(Color.FromRgb(0x0E, 0x13, 0x26));
+                chip.BorderBrush = new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B));
+            };
+
+            return chip;
+        }
+
+        private async void NetPanel_Scan_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            ToastWindow.ShowToast("📡 Scanning for nearby devices...");
+            try
+            {
+                NearbyDiscovery.Instance?.PruneStale();
+                await (NearbyDiscovery.Instance?.BroadcastProbe() ?? Task.CompletedTask);
+                // Wait a moment for responses to arrive
+                await Task.Delay(1500);
+                RefreshNearbyDevices();
+                var count = NearbyDiscovery.Instance?.DiscoveredDevices?.Count ?? 0;
+                ToastWindow.ShowToast($"📡 Found {count} nearby device(s)");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NETWORK", $"Scan error: {ex.Message}");
+                ToastWindow.ShowToast($"❌ Scan failed: {ex.Message}");
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // FIX 5: PAIRING UI HANDLERS
+        // ═══════════════════════════════════════════════════════════
+
+        private async void NetPanel_Pair_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            try
+            {
+                // Generate pairing code if needed
+                string code = DevicePairingManager.CurrentPairingCode;
+                if (string.IsNullOrEmpty(code))
+                {
+                    ToastWindow.ShowToast("🔄 Generating pairing code...");
+                    await DevicePairingManager.PublishPairingCode();
+                    code = DevicePairingManager.CurrentPairingCode;
+                }
+
+                if (string.IsNullOrEmpty(code))
+                {
+                    ToastWindow.ShowToast("❌ Could not generate pairing code");
+                    return;
+                }
+
+                // Build a WPF pairing dialog
+                string? enteredCode = ShowPairingDialog(code);
+
+                if (!string.IsNullOrEmpty(enteredCode) && enteredCode != code)
+                {
+                    ToastWindow.ShowToast($"🔗 Connecting with code {enteredCode}...");
+                    var (success, deviceName) = await DevicePairingManager.ConnectByCode(enteredCode);
+                    if (success)
+                    {
+                        ToastWindow.ShowToast($"✅ Paired with {deviceName}!");
+                        await Task.Delay(2000);
+                        RefreshNetworkPanelDevices();
+                    }
+                    else
+                    {
+                        ToastWindow.ShowToast("❌ Invalid code or device unreachable");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NETWORK", $"Pair error: {ex.Message}");
+                ToastWindow.ShowToast($"❌ Pairing failed: {ex.Message}");
+            }
+        }
+
+        private string? ShowPairingDialog(string myCode)
+        {
+            var dlg = new Window
+            {
+                Title = "Device Pairing",
+                Width = 380, Height = 300,
+                WindowStartupLocation = WindowStartupLocation.CenterScreen,
+                WindowStyle = WindowStyle.ToolWindow,
+                ResizeMode = ResizeMode.NoResize,
+                Background = new SolidColorBrush(Color.FromRgb(0x0C, 0x0F, 0x1A)),
+                Foreground = Brushes.White
+            };
+
+            var stack = new StackPanel { Margin = new Thickness(24, 20, 24, 20) };
+
+            // My Code label
+            stack.Children.Add(new TextBlock
+            {
+                Text = "YOUR PAIRING CODE",
+                FontSize = 10, FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x81, 0x8C, 0xF8)),
+                Margin = new Thickness(0, 0, 0, 6)
+            });
+
+            // Big code display
+            var codeBorder = new Border
+            {
+                CornerRadius = new CornerRadius(10),
+                Padding = new Thickness(16, 12, 16, 12),
+                Background = new SolidColorBrush(Color.FromRgb(0x1A, 0x1F, 0x3D)),
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x31, 0x2E, 0x81)),
+                BorderThickness = new Thickness(1),
+                Margin = new Thickness(0, 0, 0, 16),
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            codeBorder.Child = new TextBlock
+            {
+                Text = myCode,
+                FontSize = 28, FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0xA5, 0xB4, 0xFC)),
+                HorizontalAlignment = HorizontalAlignment.Center
+            };
+            stack.Children.Add(codeBorder);
+
+            // Share instruction
+            stack.Children.Add(new TextBlock
+            {
+                Text = "Share this code with the other device",
+                FontSize = 11, TextAlignment = TextAlignment.Center,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B)),
+                Margin = new Thickness(0, 0, 0, 12)
+            });
+
+            // Divider
+            stack.Children.Add(new Border
+            {
+                Height = 1,
+                Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x29, 0x3B)),
+                Margin = new Thickness(0, 0, 0, 12)
+            });
+
+            // Enter other code
+            stack.Children.Add(new TextBlock
+            {
+                Text = "OR ENTER THE OTHER DEVICE'S CODE",
+                FontSize = 10, FontWeight = FontWeights.Bold,
+                Foreground = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81)),
+                Margin = new Thickness(0, 0, 0, 6)
+            });
+
+            var inputBox = new TextBox
+            {
+                FontSize = 18, FontWeight = FontWeights.Bold,
+                Background = new SolidColorBrush(Color.FromRgb(0x0E, 0x13, 0x26)),
+                Foreground = Brushes.White,
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x31, 0x2E, 0x81)),
+                BorderThickness = new Thickness(1),
+                Padding = new Thickness(10, 6, 10, 6),
+                HorizontalContentAlignment = HorizontalAlignment.Center,
+                MaxLength = 10,
+                Margin = new Thickness(0, 0, 0, 14)
+            };
+            stack.Children.Add(inputBox);
+
+            // Connect button
+            var connectBtn = new Button
+            {
+                Content = "Connect",
+                FontSize = 13, FontWeight = FontWeights.Bold,
+                Padding = new Thickness(20, 8, 20, 8),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Background = new SolidColorBrush(Color.FromRgb(0x31, 0x2E, 0x81)),
+                Foreground = Brushes.White,
+                BorderThickness = new Thickness(0),
+                Cursor = Cursors.Hand
+            };
+
+            string? result = null;
+            connectBtn.Click += (s, ev) =>
+            {
+                result = inputBox.Text?.Trim();
+                dlg.DialogResult = true;
+                dlg.Close();
+            };
+            stack.Children.Add(connectBtn);
+
+            dlg.Content = stack;
+            dlg.ShowDialog();
+            return result;
+        }
+    }
+}

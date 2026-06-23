@@ -53,7 +53,7 @@
                 </Border>
                 <StackPanel VerticalAlignment="Center">
                     <TextBlock x:Name="HeaderTitle" Text="AI Suggestion" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                    <TextBlock Text="Powered locally by Windows Copilot Runtime (Phi Silica)" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Opacity="0.7"/>
+                    <TextBlock x:Name="SubtitleText" Text="Powered by AI" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Opacity="0.7"/>
                 </StackPanel>
             </StackPanel>
 

@@ -784,509 +784,993 @@
 
                 <!-- 3. NETWORK SYNC TAB -->
                 <Grid x:Name="NetworkGrid" Visibility="Collapsed">
-                    <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
-                        <StackPanel>
-                            <StackPanel Margin="0,0,0,6">
-                                <TextBlock Text="Wi-Fi Sync Server" FontSize="28" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
-                                <TextBlock Text="Seamlessly connect your phone to your PC's clipboard." FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,4,0,0" TextWrapping="Wrap" />
-                            </StackPanel>
-                            <Border Height="2" CornerRadius="1" HorizontalAlignment="Left" Width="60" Margin="0,8,0,28">
-                                <Border.Background>
-                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                        <GradientStop Color="#6366F1" Offset="0"/>
-                                        <GradientStop Color="#8B5CF6" Offset="1"/>
-                                    </LinearGradientBrush>
-                                </Border.Background>
-                            </Border>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
 
-                            <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
-                                <ui:SymbolIcon Symbol="Wifi124" FontSize="18" Foreground="#10B981" Margin="0,0,8,0"/>
-                                <TextBlock Text="Local Network Broadcasting" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" />
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <!-- TOP SECTION: Network Status Dashboard (always visible)              -->
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <Border Grid.Row="0" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                            BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" 
+                            CornerRadius="12" Padding="12,8" Margin="0,0,0,8">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- Status indicators row -->
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                <!-- LAN status -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,18,0">
+                                    <Border x:Name="NetStatusLanDot" Width="8" Height="8" CornerRadius="4" Background="#10B981" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="LAN" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="NetStatusLanIp" Text="—" FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center"/>
+                                </StackPanel>
+
+                                <!-- Separator -->
+                                <Border Width="1" Height="16" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,0,18,0"/>
+
+                                <!-- Cloudflare status -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,18,0">
+                                    <Border x:Name="NetStatusCfDot" Width="8" Height="8" CornerRadius="4" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Cloudflare" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="NetStatusCfUrl" Text="Off" FontSize="11" FontFamily="Consolas" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" VerticalAlignment="Center" MaxWidth="180" TextTrimming="CharacterEllipsis"/>
+                                </StackPanel>
+
+                                <!-- Separator -->
+                                <Border Width="1" Height="16" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,0,18,0"/>
+
+                                <!-- Transfer engine -->
+                                <StackPanel Orientation="Horizontal" Margin="0,0,18,0">
+                                    <Border x:Name="NetStatusEngineDot" Width="8" Height="8" CornerRadius="4" Background="#10B981" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="Port 8998" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
+                                </StackPanel>
+
+                                <!-- Separator -->
+                                <Border Width="1" Height="16" Background="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,0,18,0"/>
+
+                                <!-- Peer count -->
+                                <StackPanel Orientation="Horizontal">
+                                    <Border Background="#1510B981" CornerRadius="4" Padding="8,3">
+                                        <TextBlock x:Name="NetStatusPeerCount" Text="0 peers" FontSize="11" FontWeight="Bold" Foreground="#10B981"/>
+                                    </Border>
+                                </StackPanel>
                             </StackPanel>
-                            <Border Style="{StaticResource PremiumSettingStyle}">
+
+                            <!-- Action buttons row -->
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,6,0,0">
+                                <ui:Button x:Name="NetActionForceSync" Content="📡 Force Sync" Padding="10,5" FontSize="11" 
+                                           Click="ForcePeerSync_Click" Margin="0,0,8,0"
+                                           ToolTip="Re-fetch all peer URLs from Firebase and reconnect"/>
+                                <ui:Button x:Name="NetActionTransferMgr" Content="📂 Transfer Manager" Padding="10,5" FontSize="11" 
+                                           Margin="0,0,8,0" ToolTip="Open file transfer manager" Click="NetworkOpenTransferManager_Click"/>
+                                <ui:Button x:Name="NetActionLiveLogs" Content="📋 Live Logs" Padding="10,5" FontSize="11" 
+                                           Click="OpenNetworkLogs_Click" ToolTip="View live network logs"/>
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <!-- INNER TAB NAVIGATION (pill-style RadioButtons)                     -->
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <Border Grid.Row="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                            BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" 
+                            CornerRadius="10" Padding="4" Margin="0,0,0,6" HorizontalAlignment="Left">
+                        <StackPanel Orientation="Horizontal">
+                            <StackPanel.Resources>
+                                <Style x:Key="NetworkInnerTabStyle" TargetType="RadioButton">
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="RadioButton">
+                                                <Border x:Name="TabBorder" CornerRadius="8" Padding="14,7" Cursor="Hand" Background="Transparent">
+                                                    <ContentPresenter x:Name="TabContent" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="TabBorder" Property="Background">
+                                                            <Setter.Value>
+                                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                                    <GradientStop Color="#6366F1" Offset="0"/>
+                                                                    <GradientStop Color="#8B5CF6" Offset="1"/>
+                                                                </LinearGradientBrush>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                        <Setter Property="Foreground" Value="White"/>
+                                                    </Trigger>
+                                                    <Trigger Property="IsChecked" Value="False">
+                                                        <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
+                                                    </Trigger>
+                                                    <MultiTrigger>
+                                                        <MultiTrigger.Conditions>
+                                                            <Condition Property="IsMouseOver" Value="True"/>
+                                                            <Condition Property="IsChecked" Value="False"/>
+                                                        </MultiTrigger.Conditions>
+                                                        <Setter TargetName="TabBorder" Property="Background" Value="#186366F1"/>
+                                                    </MultiTrigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                    <Setter Property="FontSize" Value="12"/>
+                                    <Setter Property="FontWeight" Value="SemiBold"/>
+                                    <Setter Property="GroupName" Value="NetworkInnerTabs"/>
+                                </Style>
+                            </StackPanel.Resources>
+
+                            <RadioButton x:Name="NetworkTabDevices" Style="{StaticResource NetworkInnerTabStyle}" Content="📡 Devices" IsChecked="True" Checked="NetworkInnerTab_Checked"/>
+                            <RadioButton x:Name="NetworkTabFileQueue" Style="{StaticResource NetworkInnerTabStyle}" Content="📂 File Queue" Checked="NetworkInnerTab_Checked"/>
+                            <RadioButton x:Name="NetworkTabHistory" Style="{StaticResource NetworkInnerTabStyle}" Content="📜 History" Checked="NetworkInnerTab_Checked"/>
+                            <RadioButton x:Name="NetworkTabNearby" Style="{StaticResource NetworkInnerTabStyle}" Content="📶 Nearby" Checked="NetworkInnerTab_Checked"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <!-- INNER TAB CONTENT PANELS                                           -->
+                    <!-- ═══════════════════════════════════════════════════════════════════ -->
+                    <Grid Grid.Row="2">
+
+                        <!-- ═══════════════════════════════════════════════════════════════ -->
+                        <!-- TAB 1: DEVICES (default visible — all existing Network content) -->
+                        <!-- ═══════════════════════════════════════════════════════════════ -->
+                        <Grid x:Name="NetworkDevicesTab" Visibility="Visible">
+                            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
                                 <StackPanel>
-                                    <!-- LAN Toggle -->
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="Local Network" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                                                <Border Background="#220EA5E9" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
-                                                    <TextBlock Text="LAN" FontSize="10" FontWeight="Bold" Foreground="#0EA5E9" VerticalAlignment="Center"/>
-                                                </Border>
-                                            </StackPanel>
-                                            <TextBlock Text="Sync clipboard with devices on the same Wi-Fi network via direct IP connection." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,4,16,0" TextWrapping="Wrap" LineHeight="18"/>
+                                    <StackPanel Margin="0,0,0,10">
+                                        <TextBlock Text="Wi-Fi Sync Server" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
+                                        <TextBlock Text="Seamlessly connect your phone to your PC's clipboard." FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                        <ui:SymbolIcon Symbol="Wifi124" FontSize="18" Foreground="#10B981" Margin="0,0,8,0"/>
+                                        <TextBlock Text="Local Network Broadcasting" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <Border Style="{StaticResource PremiumSettingStyle}">
+                                        <StackPanel>
+                                            <!-- LAN Toggle -->
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="Local Network" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                        <Border Background="#220EA5E9" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
+                                                            <TextBlock Text="LAN" FontSize="10" FontWeight="Bold" Foreground="#0EA5E9" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                    </StackPanel>
+                                                    <TextBlock Text="Sync clipboard with devices on the same Wi-Fi network via direct IP connection." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,4,16,0" TextWrapping="Wrap" LineHeight="18"/>
+                                                </StackPanel>
+                                                <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableLocalLAN, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                            </Grid>
+                                            
+                                            <Border x:Name="CloudflareSeparator" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,16" />
+                                            
+                                            <!-- Cloudflare Toggle -->
+                                            <Grid x:Name="CloudflareToggleSection">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text="Global Internet Tunnel" FontWeight="SemiBold" FontSize="14" Foreground="#10B981"/>
+                                                        <Border Background="#2210B981" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
+                                                            <TextBlock Text="CLOUDFLARE" FontSize="10" FontWeight="Bold" Foreground="#10B981" VerticalAlignment="Center"/>
+                                                        </Border>
+                                                    </StackPanel>
+                                                    <TextBlock Text="Securely broadcast your clipboard worldwide via a TryCloudflare reverse proxy inside FlyShelf." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,4,16,0" TextWrapping="Wrap" LineHeight="18"/>
+                                                </StackPanel>
+                                                <!-- Regular toggle (visible in non-Store builds) -->
+                                                <ui:ToggleSwitch x:Name="CloudflareToggleSwitch" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalCloudflare, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
+                                            </Grid>
+                                            
+                                            <!-- Store-only: Locked overlay with download message (hidden by default, shown in Store builds via code-behind) -->
+                                            <Border x:Name="CloudflareStoreLockBanner" Visibility="Collapsed"
+                                                    Background="#18F59E0B" BorderBrush="#44F59E0B" BorderThickness="1" CornerRadius="8" 
+                                                    Padding="14,10" Margin="0,6,0,0">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Grid.Column="0" Text="🔒" FontSize="18" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                        <TextBlock Text="This feature is not available in the Microsoft Store version." 
+                                                                   FontSize="12" FontWeight="SemiBold" Foreground="#F59E0B" TextWrapping="Wrap"/>
+                                                        <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap" 
+                                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}">
+                                                            <Run Text="To unlock Cloudflare tunneling, download FlyShelf directly from "/>
+                                                            <Hyperlink x:Name="CloudflareWebsiteLink" Foreground="#10B981" 
+                                                                       NavigateUri="https://github.com/shdra06/FlyShelf" 
+                                                                       RequestNavigate="CloudflareWebsiteLink_Navigate">
+                                                                <Run Text="our website"/>
+                                                            </Hyperlink>
+                                                            <Run Text="."/>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
                                         </StackPanel>
-                                        <ui:ToggleSwitch Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableLocalLAN, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                    </Grid>
+                                    </Border>
                                     
-                                    <Border x:Name="CloudflareSeparator" BorderThickness="0,1,0,0" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,16" />
-                                    
-                                    <!-- Cloudflare Toggle -->
-                                    <Grid x:Name="CloudflareToggleSection">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="Global Internet Tunnel" FontWeight="SemiBold" FontSize="14" Foreground="#10B981"/>
-                                                <Border Background="#2210B981" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
-                                                    <TextBlock Text="CLOUDFLARE" FontSize="10" FontWeight="Bold" Foreground="#10B981" VerticalAlignment="Center"/>
+                                    <!-- AUTHENTICATION DETAILS -->
+                                    <Border Style="{StaticResource PremiumSettingStyle}" Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableLocalNetworkSync, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8" HorizontalAlignment="Center">
+                                                <Border Width="28" Height="28" CornerRadius="7" Background="#1AEAB308" Margin="0,0,10,0">
+                                                    <ui:SymbolIcon Symbol="Shield24" FontSize="14" Foreground="#EAB308" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                                 </Border>
+                                                <TextBlock Text="Security PIN Code" FontWeight="Bold" FontSize="18" Foreground="#EAB308" VerticalAlignment="Center"/>
                                             </StackPanel>
-                                            <TextBlock Text="Securely broadcast your clipboard worldwide via a TryCloudflare reverse proxy inside FlyShelf." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,4,16,0" TextWrapping="Wrap" LineHeight="18"/>
+                                            <TextBlock Text="Enter this PIN when accessing your clipboard from any browser or device." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,0,0,16" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" />
+                                            
+                                            <Border Background="#11EAB308" BorderBrush="#22EAB308" BorderThickness="1.5" CornerRadius="14" Padding="28,12" HorizontalAlignment="Center" Margin="0,0,0,20">
+                                                <TextBlock Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=WebClientPinToken}" FontSize="36" FontWeight="Bold" Foreground="#EAB308" FontFamily="Consolas" HorizontalAlignment="Center"/>
+                                            </Border>
+                                            
+                                            <TextBlock Text="Your Connection URLs" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,12" HorizontalAlignment="Center" />
+                                            
+                                            <Grid HorizontalAlignment="Center" Margin="0,0,0,8">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="80"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="Wi-Fi:" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="13" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding LocalServer.DisplayUrl}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                                                <Button Grid.Column="2" Content="Copy" Margin="12,0,0,0" Padding="8,2" FontSize="11" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Cursor="Hand" Click="CopyUrl_Click" Tag="{Binding LocalServer.DisplayUrl}" MinWidth="55" />
+                                            </Grid>
+                                            
+                                            <Grid x:Name="CloudflareStatusGrid" HorizontalAlignment="Center" Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalCloudflare, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="80"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="Global:" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="13" VerticalAlignment="Center"/>
+                                                <TextBlock Grid.Column="1" Text="{Binding LocalServer.GlobalUrl}" FontSize="15" FontWeight="Bold" Foreground="#10B981" VerticalAlignment="Center"/>
+                                                <Button Grid.Column="2" Content="Copy" Margin="12,0,0,0" Padding="8,2" FontSize="11" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Cursor="Hand" Click="CopyUrl_Click" Tag="{Binding LocalServer.GlobalUrl}" MinWidth="55"/>
+                                            </Grid>
                                         </StackPanel>
-                                        <!-- Regular toggle (visible in non-Store builds) -->
-                                        <ui:ToggleSwitch x:Name="CloudflareToggleSwitch" Grid.Column="1" VerticalAlignment="Center" IsChecked="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalCloudflare, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" />
-                                    </Grid>
-                                    
-                                    <!-- Store-only: Locked overlay with download message (hidden by default, shown in Store builds via code-behind) -->
-                                    <Border x:Name="CloudflareStoreLockBanner" Visibility="Collapsed"
-                                            Background="#18F59E0B" BorderBrush="#44F59E0B" BorderThickness="1" CornerRadius="8" 
-                                            Padding="14,10" Margin="0,6,0,0">
+                                    </Border>
+
+                                    <!-- QUICK PAIR QR CODE -->
+                                    <Border Style="{StaticResource PremiumSettingStyle}" Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableLocalNetworkSync, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8" HorizontalAlignment="Center">
+                                                <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                    <Border.Background>
+                                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                            <GradientStop Color="#6366F1" Offset="0"/>
+                                                            <GradientStop Color="#A78BFA" Offset="1"/>
+                                                        </LinearGradientBrush>
+                                                    </Border.Background>
+                                                    <ui:SymbolIcon Symbol="QrCode24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Text="Quick Pair" FontWeight="Bold" FontSize="18" Foreground="#A78BFA" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <TextBlock Text="Scan this QR code with FlyShelf Mobile or enter the pairing code below." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,0,0,12" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" />
+
+                                            <!-- QR Code Display -->
+                                            <Border Background="White" CornerRadius="14" Padding="10" HorizontalAlignment="Center" Margin="0,0,0,12">
+                                                <Image x:Name="PairingQRImage" Width="160" Height="160" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
+                                            </Border>
+
+                                            <!-- Action Buttons -->
+                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,12">
+                                                <ui:Button Content="🔄 Regenerate QR" Padding="14,8" Click="RegenerateQR_Click" Margin="0,0,8,0" FontSize="11"/>
+                                                <ui:Button Content="📋 Copy Pairing Info" Padding="14,8" Click="CopyPairingInfo_Click" FontSize="11"/>
+                                            </StackPanel>
+
+                                            <!-- PAIRING CODE DISPLAY -->
+                                            <Border Background="#08A78BFA" CornerRadius="10" Padding="14,10" Margin="0,0,0,10" HorizontalAlignment="Center" MinWidth="260">
+                                                <StackPanel>
+                                                    <TextBlock Text="Your Pairing Code" FontSize="11" FontWeight="SemiBold" Foreground="#A78BFA" HorizontalAlignment="Center" Margin="0,0,0,6"/>
+                                                    <TextBlock x:Name="PairingCodeDisplay" Text="------" FontSize="32" FontWeight="Black"
+                                                               FontFamily="Consolas" Foreground="#A78BFA" HorizontalAlignment="Center"/>
+                                                    <TextBlock Text="Share this code with any device to connect" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,6"/>
+                                                    <ui:Button Content="🔑 Generate New Code" Padding="12,6" 
+                                                               Click="GeneratePairingCode_Click" FontSize="11" HorizontalAlignment="Center"/>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- ENTER CODE FROM ANOTHER DEVICE -->
+                                            <Border Background="#1A10B981" CornerRadius="10" Padding="14,10" Margin="0,0,0,10" HorizontalAlignment="Center" MinWidth="260"
+                                                    BorderBrush="#4010B981" BorderThickness="1">
+                                                <StackPanel>
+                                                    <TextBlock Text="Connect to Another Device" FontSize="11" FontWeight="SemiBold" Foreground="#10B981" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                        <ui:TextBox x:Name="RemoteCodeInput" PlaceholderText="Enter 6-char code" Width="180" FontSize="16"
+                                                                    FontFamily="Consolas" HorizontalContentAlignment="Center" MaxLength="6"
+                                                                    VerticalAlignment="Center"/>
+                                                        <ui:Button Content="Connect" Margin="8,0,0,0" Padding="14,8"
+                                                                   Click="ConnectByCode_Click" FontSize="12" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                    <TextBlock Text="Enter the code shown on the other PC or phone" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- ═ ═ ═ LIVE P2P PEER STATUS ═ ═ ═ -->
+                                            <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,4,0,14" />
+
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                                <Border Width="8" Height="8" CornerRadius="4" Background="#10B981" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                <TextBlock Text="Paired Devices" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
+                                                <Border Background="#1510B981" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
+                                                    <TextBlock x:Name="PeerCountBadge" Text="0 online" FontSize="10" FontWeight="Bold" Foreground="#10B981"/>
+                                                </Border>
+                                                <ui:Button x:Name="NetworkLiveLogsBtn" Content="📡 Live Logs" Padding="8,3"
+                                                           Click="OpenNetworkLogs_Click" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center"
+                                                           ToolTip="View live logs from this device and all paired devices"/>
+                                            </StackPanel>
+
+                                            <!-- Live P2P status from PeerManager (5s heartbeat) -->
+                                            <ItemsControl x:Name="PeerStatusPanel">
+                                                <ItemsControl.ItemTemplate>
+                                                    <DataTemplate>
+                                                        <Border CornerRadius="10" Padding="12,10" Margin="0,0,0,5">
+                                                            <Border.Style>
+                                                                <Style TargetType="Border">
+                                                                    <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
+                                                                    <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
+                                                                    <Setter Property="BorderThickness" Value="1"/>
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsAlive}" Value="True">
+                                                                            <Setter Property="Background" Value="#0810B981"/>
+                                                                            <Setter Property="BorderBrush" Value="#2010B981"/>
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </Border.Style>
+                                                            <Border.ContextMenu>
+                                                                <ContextMenu>
+                                                                    <MenuItem Header="📤 Send File..." Tag="{Binding DeviceId}"/>
+                                                                    <MenuItem Header="📋 Copy IP" Tag="{Binding ActiveUrl}" Click="CopyUrl_Click"/>
+                                                                    <MenuItem Header="📊 Transfer History" Tag="{Binding DeviceId}"/>
+                                                                    <Separator/>
+                                                                    <MenuItem Header="❌ Disconnect" Tag="{Binding DeviceId}" Click="RemovePairedDevice_Click"/>
+                                                                </ContextMenu>
+                                                            </Border.ContextMenu>
+                                                            <Grid>
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="*"/>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                    <ColumnDefinition Width="Auto"/>
+                                                                </Grid.ColumnDefinitions>
+
+                                                                <!-- Device icon -->
+                                                                <ui:SymbolIcon Grid.Column="0" Symbol="Desktop24" FontSize="18" Margin="0,0,10,0" VerticalAlignment="Center">
+                                                                    <ui:SymbolIcon.Style>
+                                                                        <Style TargetType="ui:SymbolIcon">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                                            <Style.Triggers>
+                                                                                <DataTrigger Binding="{Binding IsAlive}" Value="True">
+                                                                                    <Setter Property="Foreground" Value="#A78BFA"/>
+                                                                                </DataTrigger>
+                                                                            </Style.Triggers>
+                                                                        </Style>
+                                                                    </ui:SymbolIcon.Style>
+                                                                </ui:SymbolIcon>
+
+                                                                <!-- Name + transport info -->
+                                                                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                                    <TextBlock Text="{Binding DeviceName}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                                    <TextBlock Text="{Binding StatusText}" FontSize="9" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,1,0,0"/>
+                                                                </StackPanel>
+
+                                                                <!-- Active transfer count badge -->
+                                                                <Border Grid.Column="2" Background="#226366F1" CornerRadius="4" Padding="6,2" Margin="4,0" VerticalAlignment="Center"
+                                                                        Visibility="{Binding HasActiveTransfers, FallbackValue=Collapsed}">
+                                                                    <TextBlock Text="{Binding ActiveTransferCount, FallbackValue=0}" FontSize="9" FontWeight="Bold" Foreground="#A5B4FC"/>
+                                                                </Border>
+
+                                                                <!-- LAN status dot -->
+                                                                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0">
+                                                                    <Border Width="7" Height="7" CornerRadius="4" Margin="0,0,4,0" VerticalAlignment="Center">
+                                                                        <Border.Style>
+                                                                            <Style TargetType="Border">
+                                                                                <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding IsLanActive}" Value="True">
+                                                                                        <Setter Property="Background" Value="#10B981"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </Border.Style>
+                                                                    </Border>
+                                                                    <TextBlock Text="LAN" FontSize="9" FontWeight="SemiBold" VerticalAlignment="Center">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock">
+                                                                                <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding IsLanActive}" Value="True">
+                                                                                        <Setter Property="Foreground" Value="#10B981"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                </StackPanel>
+
+                                                                <!-- Cloud status dot -->
+                                                                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0">
+                                                                    <Border Width="7" Height="7" CornerRadius="4" Margin="0,0,4,0" VerticalAlignment="Center">
+                                                                        <Border.Style>
+                                                                            <Style TargetType="Border">
+                                                                                <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding IsCloudActive}" Value="True">
+                                                                                        <Setter Property="Background" Value="#F59E0B"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </Border.Style>
+                                                                    </Border>
+                                                                    <TextBlock Text="Cloud" FontSize="9" FontWeight="SemiBold" VerticalAlignment="Center">
+                                                                        <TextBlock.Style>
+                                                                            <Style TargetType="TextBlock">
+                                                                                <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding IsCloudActive}" Value="True">
+                                                                                        <Setter Property="Foreground" Value="#F59E0B"/>
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </TextBlock.Style>
+                                                                    </TextBlock>
+                                                                </StackPanel>
+
+                                                                <!-- Copy Logs button -->
+                                                                <Button Grid.Column="5" Tag="{Binding ActiveUrl}" Click="CopyDeviceLogs_Click"
+                                                                        Padding="6,3" FontSize="9" FontWeight="SemiBold" Cursor="Hand"
+                                                                        Background="#206366F1" Foreground="#A5B4FC" BorderThickness="0"
+                                                                        ToolTip="Copy this device's logs to clipboard" VerticalAlignment="Center" Margin="6,0,0,0">
+                                                                    <StackPanel Orientation="Horizontal">
+                                                                        <TextBlock Text="📋" FontSize="10" Margin="0,0,3,0"/>
+                                                                        <TextBlock Text="Copy Logs" FontSize="9"/>
+                                                                    </StackPanel>
+                                                                </Button>
+
+                                                                <!-- Remove button -->
+                                                                <Button Grid.Column="6" Content="✕" Tag="{Binding DeviceId}" Click="RemovePairedDevice_Click" 
+                                                                        Padding="4,2" FontSize="10" Background="Transparent" BorderThickness="0" 
+                                                                        Foreground="#EF4444" Cursor="Hand" ToolTip="Remove device" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                                            </Grid>
+                                                        </Border>
+                                                    </DataTemplate>
+                                                </ItemsControl.ItemTemplate>
+                                            </ItemsControl>
+                                            <TextBlock x:Name="NoPairedDevicesText" Text="No devices paired yet — scan the QR code above" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+
+
+                                    <!-- ACTIVE DEVICES SECTION -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,16,0,10">
+                                        <ui:SymbolIcon Symbol="People24" FontSize="18" Foreground="#8B5CF6" Margin="0,0,8,0"/>
+                                        <TextBlock Text="Connected Devices" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <Border Style="{StaticResource PremiumSettingStyle}">
+                                        <StackPanel>
+                                            <Grid Margin="0,0,0,16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                                    <TextBlock Text="Live Mesh Topology" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                    <TextBlock Text="All devices registered in the Firebase active_devices node." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" LineHeight="18"/>
+                                                </StackPanel>
+                                                <ui:Button Grid.Column="1" Padding="12,8" Click="RefreshDevices_Click" VerticalAlignment="Center">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" Margin="0,0,6,0"/>
+                                                        <TextBlock Text="Refresh" FontWeight="SemiBold" FontSize="12"/>
+                                                    </StackPanel>
+                                                </ui:Button>
+                                            </Grid>
+
+                                            <!--  2-COLUMN DEVICE TOPOLOGY -->
+                                            <Grid Margin="0,0,0,4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="12"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+
+                                                <!-- LAN Column -->
+                                                <Border Grid.Column="0" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="10,10">
+                                                    <StackPanel>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                                            <Border Width="8" Height="8" CornerRadius="4" Background="#10B981" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="LAN" FontSize="12" FontWeight="Bold" Foreground="#10B981"/>
+                                                        </StackPanel>
+                                                        <TextBlock Text="Same network" FontSize="9" Foreground="#10B98188" Margin="0,-6,0,8"/>
+                                                        <ItemsControl x:Name="LanDevicesPanel">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Border Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="8" Padding="8,6" Margin="0,0,0,4" Cursor="Hand" MouseRightButtonDown="DeviceInfo_RightClick" ToolTip="Right-click for connection info">
+                                                                        <StackPanel>
+                                                                            <StackPanel Orientation="Horizontal">
+                                                                                <ui:SymbolIcon FontSize="14" Foreground="#10B981" Margin="0,0,8,0">
+                                                                                    <ui:SymbolIcon.Style>
+                                                                                        <Style TargetType="ui:SymbolIcon">
+                                                                                            <Setter Property="Symbol" Value="Phone24"/>
+                                                                                            <Style.Triggers>
+                                                                                                <DataTrigger Binding="{Binding DeviceType}" Value="PC">
+                                                                                                    <Setter Property="Symbol" Value="Desktop24"/>
+                                                                                                </DataTrigger>
+                                                                                            </Style.Triggers>
+                                                                                        </Style>
+                                                                                    </ui:SymbolIcon.Style>
+                                                                                </ui:SymbolIcon>
+                                                                                <TextBlock Text="{Binding DeviceName}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                                            </StackPanel>
+                                                                            <TextBlock Text="{Binding ConnectionInfo}" FontSize="9" Foreground="#10B98188" Margin="22,2,0,0" TextTrimming="CharacterEllipsis"/>
+                                                                        </StackPanel>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                        <TextBlock x:Name="LanEmptyText" Text="No other LAN peers" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,0" Visibility="Collapsed"/>
+                                                    </StackPanel>
+                                                </Border>
+
+                                                <!-- Cloud Column -->
+                                                <Border Grid.Column="2" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="10,10">
+                                                    <StackPanel>
+                                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                                            <Border Width="8" Height="8" CornerRadius="4" Background="#F59E0B" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="Cloud" FontSize="12" FontWeight="Bold" Foreground="#F59E0B"/>
+                                                        </StackPanel>
+                                                        <TextBlock Text="Global sync active" FontSize="9" Foreground="#F59E0B88" Margin="0,-6,0,8"/>
+                                                        <ItemsControl x:Name="CloudDevicesPanel">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate>
+                                                                    <Border Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="8" Padding="8,6" Margin="0,0,0,4" Cursor="Hand" MouseRightButtonDown="DeviceInfo_RightClick" ToolTip="Right-click for connection info">
+                                                                        <StackPanel>
+                                                                            <StackPanel Orientation="Horizontal">
+                                                                                <ui:SymbolIcon FontSize="14" Foreground="#F59E0B" Margin="0,0,8,0">
+                                                                                    <ui:SymbolIcon.Style>
+                                                                                        <Style TargetType="ui:SymbolIcon">
+                                                                                            <Setter Property="Symbol" Value="Phone24"/>
+                                                                                            <Style.Triggers>
+                                                                                                <DataTrigger Binding="{Binding DeviceType}" Value="PC">
+                                                                                                    <Setter Property="Symbol" Value="Desktop24"/>
+                                                                                                </DataTrigger>
+                                                                                            </Style.Triggers>
+                                                                                        </Style>
+                                                                                    </ui:SymbolIcon.Style>
+                                                                                </ui:SymbolIcon>
+                                                                                <TextBlock Text="{Binding DeviceName}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                                            </StackPanel>
+                                                                            <TextBlock Text="{Binding ConnectionInfo}" FontSize="9" Foreground="#F59E0B88" Margin="22,2,0,0" TextTrimming="CharacterEllipsis"/>
+                                                                        </StackPanel>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                        <TextBlock x:Name="CloudEmptyText" Text="No cloud devices" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,0" Visibility="Collapsed"/>
+                                                    </StackPanel>
+                                                </Border>
+                                            </Grid>
+
+
+                                            <!-- Empty State -->
+                                            <StackPanel x:Name="NoDevicesPanel" HorizontalAlignment="Center" Margin="0,12,0,12" Visibility="Collapsed">
+                                                <ui:SymbolIcon Symbol="PeopleSearch24" FontSize="32" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                                                <TextBlock Text="No devices found - hit Refresh" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" HorizontalAlignment="Center"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- DEVICE GROUPS -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,16,0,10">
+                                        <Border Width="10" Height="10" CornerRadius="5" Background="#F59E0B" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Device Groups" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" />
+                                        <Button x:Name="CreateGroupBtn" Content="+ New Group" Margin="12,0,0,0" Padding="10,4" FontSize="10" FontWeight="Bold" Click="CreateGroupBtn_Click"
+                                                Background="#F59E0B" Foreground="#000" BorderThickness="0" Cursor="Hand">
+                                            <Button.Template>
+                                                <ControlTemplate TargetType="Button">
+                                                    <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                    </Border>
+                                                </ControlTemplate>
+                                            </Button.Template>
+                                        </Button>
+                                    </StackPanel>
+                                    <ItemsControl x:Name="GroupsPanel">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#40F59E0B" BorderThickness="1" CornerRadius="12" Padding="14,10" Margin="0,0,0,6">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <StackPanel Grid.Column="0">
+                                                            <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
+                                                            <TextBlock Text="{Binding DeviceList}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+                                                        </StackPanel>
+                                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <Button Content="Edit" Tag="{Binding Id}" Click="EditGroupBtn_Click" Padding="6,4" Margin="0,0,4,0" Cursor="Hand" Background="Transparent" Foreground="#F59E0B" BorderThickness="0" FontSize="12"/>
+                                                            <Button Content="Del" Tag="{Binding Id}" Click="DeleteGroupBtn_Click" Padding="6,4" Cursor="Hand" Background="Transparent" Foreground="#EF4444" BorderThickness="0" FontSize="12"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <TextBlock x:Name="NoGroupsText" Text="No groups - create one to sync across devices" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+
+                        <!-- ═══════════════════════════════════════════════════════════════ -->
+                        <!-- TAB 2: FILE QUEUE                                              -->
+                        <!-- ═══════════════════════════════════════════════════════════════ -->
+                        <Grid x:Name="NetworkFileQueueTab" Visibility="Collapsed">
+                            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                                <StackPanel>
+                                    <StackPanel Margin="0,0,0,10">
+                                        <TextBlock Text="File Queue" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
+                                        <TextBlock Text="Stage files to send to connected peers." FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                    </StackPanel>
+
+                                    <!-- Drag-drop zone -->
+                                    <Border x:Name="FileQueueDropZone" CornerRadius="14" Padding="28,24" Margin="0,0,0,16" 
+                                            BorderThickness="2" HorizontalAlignment="Stretch" AllowDrop="True"
+                                            Background="#086366F1" BorderBrush="#406366F1">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <ui:SymbolIcon Symbol="ArrowUpload24" FontSize="32" Foreground="#6366F1" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                                            <TextBlock Text="Drop files here to stage for sending" FontSize="14" FontWeight="SemiBold" Foreground="#A5B4FC" HorizontalAlignment="Center"/>
+                                            <TextBlock Text="or use the Add Files button below" FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Toolbar -->
+                                    <Border Style="{StaticResource PremiumSettingStyle}" Padding="14,10">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <ui:Button x:Name="FileQueueAddBtn" Grid.Column="0" Padding="10,6" FontSize="11" Margin="0,0,8,0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="📁" FontSize="12" Margin="0,0,4,0"/>
+                                                    <TextBlock Text="Add Files" FontSize="11" FontWeight="SemiBold"/>
+                                                </StackPanel>
+                                            </ui:Button>
+                                            <ui:Button x:Name="FileQueueSendAllBtn" Grid.Column="1" Padding="10,6" FontSize="11" Margin="0,0,8,0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="📤" FontSize="12" Margin="0,0,4,0"/>
+                                                    <TextBlock Text="Send All to All Peers" FontSize="11" FontWeight="SemiBold"/>
+                                                </StackPanel>
+                                            </ui:Button>
+                                            <ui:Button x:Name="FileQueueClearBtn" Grid.Column="2" Padding="10,6" FontSize="11">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="🗑️" FontSize="12" Margin="0,0,4,0"/>
+                                                    <TextBlock Text="Clear Queue" FontSize="11" FontWeight="SemiBold"/>
+                                                </StackPanel>
+                                            </ui:Button>
+                                            <Border Grid.Column="4" Background="#226366F1" CornerRadius="6" Padding="10,4" VerticalAlignment="Center">
+                                                <TextBlock x:Name="FileQueueCountBadge" Text="0 files" FontSize="11" FontWeight="Bold" Foreground="#A5B4FC"/>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Staged files list -->
+                                    <ItemsControl x:Name="FileQueueItemsControl">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border CornerRadius="10" Padding="14,10" Margin="0,0,0,6"
+                                                        Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
+                                                        BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
+                                                    <Border.ContextMenu>
+                                                        <ContextMenu>
+                                                            <MenuItem Header="📤 Send to All Peers" Tag="{Binding FilePath}"/>
+                                                            <Separator/>
+                                                            <MenuItem Header="❌ Remove" Tag="{Binding FilePath}"/>
+                                                            <MenuItem Header="📂 Open File" Tag="{Binding FilePath}"/>
+                                                        </ContextMenu>
+                                                    </Border.ContextMenu>
+                                                    <Grid>
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                        </Grid.RowDefinitions>
+                                                        <Grid Grid.Row="0">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <ui:SymbolIcon Grid.Column="0" Symbol="Document24" FontSize="18" Foreground="#6366F1" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                                <TextBlock Text="{Binding FileName}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextTrimming="CharacterEllipsis"/>
+                                                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                                    <TextBlock Text="{Binding FileSizeDisplay}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                                    <TextBlock Text=" → " FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                                    <TextBlock Text="{Binding TargetDevice, FallbackValue='All Peers'}" FontSize="10" Foreground="#A5B4FC"/>
+                                                                </StackPanel>
+                                                            </StackPanel>
+                                                            <!-- Status badge -->
+                                                            <Border Grid.Column="2" CornerRadius="4" Padding="8,3" Margin="8,0" VerticalAlignment="Center"
+                                                                    Background="{Binding StatusBackground, FallbackValue='#226366F1'}">
+                                                                <TextBlock Text="{Binding StatusText, FallbackValue='Queued'}" FontSize="9" FontWeight="Bold" 
+                                                                           Foreground="{Binding StatusForeground, FallbackValue='#A5B4FC'}"/>
+                                                            </Border>
+                                                            <Button Grid.Column="3" Content="✕" Padding="4,2" FontSize="10" Background="Transparent" 
+                                                                    BorderThickness="0" Foreground="#EF4444" Cursor="Hand" ToolTip="Remove" 
+                                                                    VerticalAlignment="Center" Tag="{Binding FilePath}"/>
+                                                        </Grid>
+                                                        <!-- Progress bar (visible when sending) -->
+                                                        <ProgressBar Grid.Row="1" Value="{Binding Progress, FallbackValue=0}" Maximum="100" Height="3" 
+                                                                     Margin="0,6,0,0" Background="#106366F1" Foreground="#6366F1"
+                                                                     Visibility="{Binding IsTransferring, FallbackValue=Collapsed}"/>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+
+                                    <!-- Empty state -->
+                                    <StackPanel x:Name="FileQueueEmptyState" HorizontalAlignment="Center" Margin="0,30,0,30">
+                                        <ui:SymbolIcon Symbol="FolderOpen24" FontSize="40" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                                        <TextBlock Text="📂 No files staged — copy a file or drag files here" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
+                                    </StackPanel>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+
+                        <!-- ═══════════════════════════════════════════════════════════════ -->
+                        <!-- TAB 3: HISTORY                                                 -->
+                        <!-- ═══════════════════════════════════════════════════════════════ -->
+                        <Grid x:Name="NetworkHistoryTab" Visibility="Collapsed">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <ScrollViewer Grid.Row="0" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                                <StackPanel>
+                                    <StackPanel Margin="0,0,0,10">
+                                        <TextBlock Text="Transfer History" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
+                                        <TextBlock Text="View all file transfers between your devices." FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                    </StackPanel>
+
+                                    <!-- Filter bar -->
+                                    <Border Style="{StaticResource PremiumSettingStyle}" Padding="14,10">
                                         <Grid>
                                             <Grid.ColumnDefinitions>
                                                 <ColumnDefinition Width="Auto"/>
                                                 <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
-                                            <TextBlock Grid.Column="0" Text="🔒" FontSize="18" VerticalAlignment="Center" Margin="0,0,10,0"/>
-                                            <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                <TextBlock Text="This feature is not available in the Microsoft Store version." 
-                                                           FontSize="12" FontWeight="SemiBold" Foreground="#F59E0B" TextWrapping="Wrap"/>
-                                                <TextBlock Margin="0,4,0,0" FontSize="12" TextWrapping="Wrap" 
-                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}">
-                                                    <Run Text="To unlock Cloudflare tunneling, download FlyShelf directly from "/>
-                                                    <Hyperlink x:Name="CloudflareWebsiteLink" Foreground="#10B981" 
-                                                               NavigateUri="https://github.com/shdra06/FlyShelf" 
-                                                               RequestNavigate="CloudflareWebsiteLink_Navigate">
-                                                        <Run Text="our website"/>
-                                                    </Hyperlink>
-                                                    <Run Text="."/>
-                                                </TextBlock>
+
+                                            <!-- Filter RadioButtons -->
+                                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <StackPanel.Resources>
+                                                    <Style x:Key="HistoryFilterStyle" TargetType="RadioButton">
+                                                        <Setter Property="Template">
+                                                            <Setter.Value>
+                                                                <ControlTemplate TargetType="RadioButton">
+                                                                    <Border x:Name="FilterBorder" CornerRadius="6" Padding="10,5" Cursor="Hand" Background="Transparent" Margin="0,0,4,0">
+                                                                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                                    </Border>
+                                                                    <ControlTemplate.Triggers>
+                                                                        <Trigger Property="IsChecked" Value="True">
+                                                                            <Setter TargetName="FilterBorder" Property="Background" Value="#286366F1"/>
+                                                                            <Setter Property="Foreground" Value="#A5B4FC"/>
+                                                                        </Trigger>
+                                                                        <Trigger Property="IsChecked" Value="False">
+                                                                            <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                                        </Trigger>
+                                                                        <MultiTrigger>
+                                                                            <MultiTrigger.Conditions>
+                                                                                <Condition Property="IsMouseOver" Value="True"/>
+                                                                                <Condition Property="IsChecked" Value="False"/>
+                                                                            </MultiTrigger.Conditions>
+                                                                            <Setter TargetName="FilterBorder" Property="Background" Value="#106366F1"/>
+                                                                        </MultiTrigger>
+                                                                    </ControlTemplate.Triggers>
+                                                                </ControlTemplate>
+                                                            </Setter.Value>
+                                                        </Setter>
+                                                        <Setter Property="FontSize" Value="11"/>
+                                                        <Setter Property="FontWeight" Value="SemiBold"/>
+                                                        <Setter Property="GroupName" Value="HistoryFilter"/>
+                                                    </Style>
+                                                </StackPanel.Resources>
+                                                <RadioButton x:Name="HistoryFilterAll" Style="{StaticResource HistoryFilterStyle}" Content="All" IsChecked="True"/>
+                                                <RadioButton x:Name="HistoryFilterSent" Style="{StaticResource HistoryFilterStyle}" Content="📤 Sent"/>
+                                                <RadioButton x:Name="HistoryFilterReceived" Style="{StaticResource HistoryFilterStyle}" Content="📥 Received"/>
+                                                <RadioButton x:Name="HistoryFilterFailed" Style="{StaticResource HistoryFilterStyle}" Content="❌ Failed"/>
                                             </StackPanel>
+
+                                            <!-- Search -->
+                                            <ui:TextBox x:Name="HistorySearchBox" Grid.Column="1" PlaceholderText="Search transfers..." Margin="12,0,12,0" FontSize="12"/>
+
+                                            <!-- Export CSV -->
+                                            <ui:Button x:Name="HistoryExportCsvBtn" Grid.Column="2" Padding="10,6" FontSize="11" Margin="0,0,6,0">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="📊" FontSize="11" Margin="0,0,4,0"/>
+                                                    <TextBlock Text="Export CSV" FontSize="11" FontWeight="SemiBold"/>
+                                                </StackPanel>
+                                            </ui:Button>
+
+                                            <!-- Clear -->
+                                            <ui:Button x:Name="HistoryClearBtn" Grid.Column="3" Padding="10,6" FontSize="11">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="🗑️" FontSize="11" Margin="0,0,4,0"/>
+                                                    <TextBlock Text="Clear" FontSize="11" FontWeight="SemiBold"/>
+                                                </StackPanel>
+                                            </ui:Button>
                                         </Grid>
                                     </Border>
-                                </StackPanel>
-                            </Border>
-                            
-                            <!-- AUTHENTICATION DETAILS -->
-                            <Border Style="{StaticResource PremiumSettingStyle}" Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableLocalNetworkSync, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8" HorizontalAlignment="Center">
-                                        <Border Width="28" Height="28" CornerRadius="7" Background="#1AEAB308" Margin="0,0,10,0">
-                                            <ui:SymbolIcon Symbol="Shield24" FontSize="14" Foreground="#EAB308" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Border>
-                                        <TextBlock Text="Security PIN Code" FontWeight="Bold" FontSize="18" Foreground="#EAB308" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                    <TextBlock Text="Enter this PIN when accessing your clipboard from any browser or device." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,0,0,20" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" />
-                                    
-                                    <Border Background="#11EAB308" BorderBrush="#22EAB308" BorderThickness="1.5" CornerRadius="14" Padding="32,14" HorizontalAlignment="Center" Margin="0,0,0,24">
-                                        <Border.Effect>
-                                            <DropShadowEffect Color="#EAB308" BlurRadius="30" Opacity="0.15" Direction="0" ShadowDepth="0" />
-                                        </Border.Effect>
-                                        <TextBlock Text="{Binding Source={x:Static settings:SettingsManager.Current}, Path=WebClientPinToken}" FontSize="36" FontWeight="Bold" Foreground="#EAB308" FontFamily="Consolas" HorizontalAlignment="Center">
-                                            <TextBlock.Effect>
-                                                <DropShadowEffect Color="#EAB308" BlurRadius="15" Opacity="0.3" Direction="0" ShadowDepth="0" />
-                                            </TextBlock.Effect>
-                                        </TextBlock>
-                                    </Border>
-                                    
-                                    <TextBlock Text="Your Connection URLs" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Margin="0,0,0,12" HorizontalAlignment="Center" />
-                                    
-                                    <Grid HorizontalAlignment="Center" Margin="0,0,0,8">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="80"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Wi-Fi:" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="13" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding LocalServer.DisplayUrl}" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
-                                        <Button Grid.Column="2" Content="Copy" Margin="12,0,0,0" Padding="8,2" FontSize="11" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Cursor="Hand" Click="CopyUrl_Click" Tag="{Binding LocalServer.DisplayUrl}" MinWidth="55" />
-                                    </Grid>
-                                    
-                                    <Grid x:Name="CloudflareStatusGrid" HorizontalAlignment="Center" Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableGlobalCloudflare, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="80"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Global:" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="13" VerticalAlignment="Center"/>
-                                        <TextBlock Grid.Column="1" Text="{Binding LocalServer.GlobalUrl}" FontSize="15" FontWeight="Bold" Foreground="#10B981" VerticalAlignment="Center"/>
-                                        <Button Grid.Column="2" Content="Copy" Margin="12,0,0,0" Padding="8,2" FontSize="11" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDisabled}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Cursor="Hand" Click="CopyUrl_Click" Tag="{Binding LocalServer.GlobalUrl}" MinWidth="55"/>
-                                    </Grid>
-                                </StackPanel>
-                            </Border>
 
-                            <!-- QUICK PAIR QR CODE -->
-                            <Border Style="{StaticResource PremiumSettingStyle}" Visibility="{Binding Source={x:Static settings:SettingsManager.Current}, Path=EnableLocalNetworkSync, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                <StackPanel>
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8" HorizontalAlignment="Center">
-                                        <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
-                                            <Border.Background>
-                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                                    <GradientStop Color="#6366F1" Offset="0"/>
-                                                    <GradientStop Color="#A78BFA" Offset="1"/>
-                                                </LinearGradientBrush>
-                                            </Border.Background>
-                                            <ui:SymbolIcon Symbol="QrCode24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                        </Border>
-                                        <TextBlock Text="Quick Pair" FontWeight="Bold" FontSize="18" Foreground="#A78BFA" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                    <TextBlock Text="Scan this QR code with FlyShelf Mobile or enter the pairing code below." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,0,0,16" TextWrapping="Wrap" HorizontalAlignment="Center" TextAlignment="Center" />
-
-                                    <!-- QR Code Display -->
-                                    <Border Background="White" CornerRadius="16" Padding="12" HorizontalAlignment="Center" Margin="0,0,0,16">
-                                        <Border.Effect>
-                                            <DropShadowEffect Color="#6366F1" BlurRadius="30" Opacity="0.2" Direction="0" ShadowDepth="0" />
-                                        </Border.Effect>
-                                        <Image x:Name="PairingQRImage" Width="200" Height="200" RenderOptions.BitmapScalingMode="NearestNeighbor"/>
-                                    </Border>
-
-                                    <!-- Action Buttons -->
-                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,16">
-                                        <ui:Button Content="🔄 Regenerate QR" Padding="14,8" Click="RegenerateQR_Click" Margin="0,0,8,0" FontSize="11"/>
-                                        <ui:Button Content="📋 Copy Pairing Info" Padding="14,8" Click="CopyPairingInfo_Click" FontSize="11"/>
-                                    </StackPanel>
-
-                                    <!-- PAIRING CODE DISPLAY -->
-                                    <Border Background="#08A78BFA" CornerRadius="12" Padding="16,12" Margin="0,0,0,12" HorizontalAlignment="Center" MinWidth="280">
-                                        <StackPanel>
-                                            <TextBlock Text="Your Pairing Code" FontSize="11" FontWeight="SemiBold" Foreground="#A78BFA" HorizontalAlignment="Center" Margin="0,0,0,6"/>
-                                            <TextBlock x:Name="PairingCodeDisplay" Text="------" FontSize="32" FontWeight="Black"
-                                                       FontFamily="Consolas" Foreground="#A78BFA" HorizontalAlignment="Center"/>
-                                            <TextBlock Text="Share this code with any device to connect" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,6"/>
-                                            <ui:Button Content="🔑 Generate New Code" Padding="12,6" 
-                                                       Click="GeneratePairingCode_Click" FontSize="11" HorizontalAlignment="Center"/>
-                                        </StackPanel>
-                                    </Border>
-
-                                    <!-- ENTER CODE FROM ANOTHER DEVICE -->
-                                    <Border Background="#1A10B981" CornerRadius="12" Padding="16,12" Margin="0,0,0,12" HorizontalAlignment="Center" MinWidth="280"
-                                            BorderBrush="#4010B981" BorderThickness="1">
-                                        <StackPanel>
-                                            <TextBlock Text="Connect to Another Device" FontSize="11" FontWeight="SemiBold" Foreground="#10B981" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                                <ui:TextBox x:Name="RemoteCodeInput" PlaceholderText="Enter 6-char code" Width="180" FontSize="16"
-                                                            FontFamily="Consolas" HorizontalContentAlignment="Center" MaxLength="6"
-                                                            VerticalAlignment="Center"/>
-                                                <ui:Button Content="Connect" Margin="8,0,0,0" Padding="14,8"
-                                                           Click="ConnectByCode_Click" FontSize="12" VerticalAlignment="Center"/>
-                                            </StackPanel>
-                                            <TextBlock Text="Enter the code shown on the other PC or phone" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,6,0,0"/>
-                                        </StackPanel>
-                                    </Border>
-
-                                    <!-- ═ ═ ═ LIVE P2P PEER STATUS ═ ═ ═ -->
-                                    <Border BorderThickness="0,1,0,0" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" Margin="0,4,0,14" />
-
-                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                        <Border Width="8" Height="8" CornerRadius="4" Background="#10B981" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                        <TextBlock Text="Paired Devices" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" VerticalAlignment="Center"/>
-                                        <Border Background="#1510B981" CornerRadius="4" Padding="6,2" Margin="8,0,0,0">
-                                            <TextBlock x:Name="PeerCountBadge" Text="0 online" FontSize="10" FontWeight="Bold" Foreground="#10B981"/>
-                                        </Border>
-                                        <ui:Button Content="🔄 Force Sync" Padding="8,3" 
-                                                   Click="ForcePeerSync_Click" FontSize="10" Margin="8,0,0,0" VerticalAlignment="Center"
-                                                   ToolTip="Re-fetch all peer URLs from Firebase and reconnect"/>
-                                        <ui:Button x:Name="NetworkLiveLogsBtn" Content="📡 Live Logs" Padding="8,3"
-                                                   Click="OpenNetworkLogs_Click" FontSize="10" Margin="4,0,0,0" VerticalAlignment="Center"
-                                                   ToolTip="View live logs from this device and all paired devices"/>
-                                    </StackPanel>
-
-                                    <!-- Live P2P status from PeerManager (5s heartbeat) -->
-                                    <ItemsControl x:Name="PeerStatusPanel">
+                                    <!-- History entries list -->
+                                    <ItemsControl x:Name="HistoryItemsControl">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
-                                                <Border CornerRadius="10" Padding="12,10" Margin="0,0,0,5">
-                                                    <Border.Style>
-                                                        <Style TargetType="Border">
-                                                            <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"/>
-                                                            <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
-                                                            <Setter Property="BorderThickness" Value="1"/>
-                                                            <Style.Triggers>
-                                                                <DataTrigger Binding="{Binding IsAlive}" Value="True">
-                                                                    <Setter Property="Background" Value="#0810B981"/>
-                                                                    <Setter Property="BorderBrush" Value="#2010B981"/>
-                                                                </DataTrigger>
-                                                            </Style.Triggers>
-                                                        </Style>
-                                                    </Border.Style>
+                                                <Border CornerRadius="10" Padding="14,10" Margin="0,0,0,6"
+                                                        Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}"
+                                                        BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1">
                                                     <Grid>
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="Auto"/>
                                                             <ColumnDefinition Width="*"/>
                                                             <ColumnDefinition Width="Auto"/>
                                                             <ColumnDefinition Width="Auto"/>
-                                                            <ColumnDefinition Width="Auto"/>
-                                                            <ColumnDefinition Width="Auto"/>
                                                         </Grid.ColumnDefinitions>
 
-                                                        <!-- Device icon -->
-                                                        <ui:SymbolIcon Grid.Column="0" Symbol="Desktop24" FontSize="18" Margin="0,0,10,0" VerticalAlignment="Center">
-                                                            <ui:SymbolIcon.Style>
-                                                                <Style TargetType="ui:SymbolIcon">
-                                                                    <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
-                                                                    <Style.Triggers>
-                                                                        <DataTrigger Binding="{Binding IsAlive}" Value="True">
-                                                                            <Setter Property="Foreground" Value="#A78BFA"/>
-                                                                        </DataTrigger>
-                                                                    </Style.Triggers>
-                                                                </Style>
-                                                            </ui:SymbolIcon.Style>
-                                                        </ui:SymbolIcon>
+                                                        <!-- Direction icon -->
+                                                        <TextBlock Grid.Column="0" Text="{Binding DirectionIcon}" FontSize="20" VerticalAlignment="Center" Margin="0,0,10,0"/>
 
-                                                        <!-- Name + transport info -->
+                                                        <!-- File info + peer -->
                                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                                            <TextBlock Text="{Binding DeviceName}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                                                            <TextBlock Text="{Binding StatusText}" FontSize="9" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,1,0,0"/>
-                                                        </StackPanel>
-
-                                                        <!-- LAN status dot -->
-                                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0">
-                                                            <Border Width="7" Height="7" CornerRadius="4" Margin="0,0,4,0" VerticalAlignment="Center">
-                                                                <Border.Style>
-                                                                    <Style TargetType="Border">
-                                                                        <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding IsLanActive}" Value="True">
-                                                                                <Setter Property="Background" Value="#10B981"/>
-                                                                            </DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </Border.Style>
-                                                            </Border>
-                                                            <TextBlock Text="LAN" FontSize="9" FontWeight="SemiBold" VerticalAlignment="Center">
-                                                                <TextBlock.Style>
-                                                                    <Style TargetType="TextBlock">
-                                                                        <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding IsLanActive}" Value="True">
-                                                                                <Setter Property="Foreground" Value="#10B981"/>
-                                                                            </DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </TextBlock.Style>
-                                                            </TextBlock>
-                                                        </StackPanel>
-
-                                                        <!-- Cloud status dot -->
-                                                        <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="6,0">
-                                                            <Border Width="7" Height="7" CornerRadius="4" Margin="0,0,4,0" VerticalAlignment="Center">
-                                                                <Border.Style>
-                                                                    <Style TargetType="Border">
-                                                                        <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}"/>
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding IsCloudActive}" Value="True">
-                                                                                <Setter Property="Background" Value="#F59E0B"/>
-                                                                            </DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </Border.Style>
-                                                            </Border>
-                                                            <TextBlock Text="Cloud" FontSize="9" FontWeight="SemiBold" VerticalAlignment="Center">
-                                                                <TextBlock.Style>
-                                                                    <Style TargetType="TextBlock">
-                                                                        <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
-                                                                        <Style.Triggers>
-                                                                            <DataTrigger Binding="{Binding IsCloudActive}" Value="True">
-                                                                                <Setter Property="Foreground" Value="#F59E0B"/>
-                                                                            </DataTrigger>
-                                                                        </Style.Triggers>
-                                                                    </Style>
-                                                                </TextBlock.Style>
-                                                            </TextBlock>
-                                                        </StackPanel>
-
-                                                        <!-- Copy Logs button -->
-                                                        <Button Grid.Column="4" Tag="{Binding ActiveUrl}" Click="CopyDeviceLogs_Click"
-                                                                Padding="6,3" FontSize="9" FontWeight="SemiBold" Cursor="Hand"
-                                                                Background="#206366F1" Foreground="#A5B4FC" BorderThickness="0"
-                                                                ToolTip="Copy this device's logs to clipboard" VerticalAlignment="Center" Margin="6,0,0,0">
                                                             <StackPanel Orientation="Horizontal">
-                                                                <TextBlock Text="📋" FontSize="10" Margin="0,0,3,0"/>
-                                                                <TextBlock Text="Copy Logs" FontSize="9"/>
+                                                                <TextBlock Text="{Binding FileName}" FontSize="12" FontWeight="SemiBold" 
+                                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" TextTrimming="CharacterEllipsis" MaxWidth="260"/>
+                                                                <TextBlock Text="{Binding FileSizeDisplay}" FontSize="10" 
+                                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="8,0,0,0" VerticalAlignment="Center"/>
                                                             </StackPanel>
-                                                        </Button>
+                                                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                                <TextBlock Text="{Binding PeerName}" FontSize="10" Foreground="#A5B4FC"/>
+                                                                <TextBlock Text=" · " FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                                <TextBlock Text="{Binding Duration}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                                <TextBlock Text=" · " FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                                <TextBlock Text="{Binding AverageSpeed}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                            </StackPanel>
+                                                            <!-- Error message for failed transfers -->
+                                                            <TextBlock Text="{Binding ErrorMessage}" FontSize="10" Foreground="#EF4444" Margin="0,2,0,0" TextWrapping="Wrap"
+                                                                       Visibility="{Binding HasError, FallbackValue=Collapsed}"/>
+                                                        </StackPanel>
 
-                                                        <!-- Remove button -->
-                                                        <Button Grid.Column="5" Content="✕" Tag="{Binding DeviceId}" Click="RemovePairedDevice_Click" 
-                                                                Padding="4,2" FontSize="10" Background="Transparent" BorderThickness="0" 
-                                                                Foreground="#EF4444" Cursor="Hand" ToolTip="Remove device" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                                        <!-- Status badge -->
+                                                        <Border Grid.Column="2" CornerRadius="4" Padding="8,3" Margin="8,0" VerticalAlignment="Center"
+                                                                Background="{Binding StatusBackground, FallbackValue='#2210B981'}">
+                                                            <TextBlock Text="{Binding StatusDisplay, FallbackValue='✅ Completed'}" FontSize="9" FontWeight="Bold"
+                                                                       Foreground="{Binding StatusForeground, FallbackValue='#10B981'}"/>
+                                                        </Border>
+
+                                                        <!-- Timestamp + retry -->
+                                                        <StackPanel Grid.Column="3" VerticalAlignment="Center" Margin="6,0,0,0">
+                                                            <TextBlock Text="{Binding RelativeTime}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Right"/>
+                                                            <ui:Button Content="🔄 Retry" Padding="6,3" FontSize="9" Margin="0,4,0,0"
+                                                                       Visibility="{Binding HasError, FallbackValue=Collapsed}"
+                                                                       Tag="{Binding TransferId}" HorizontalAlignment="Right"/>
+                                                        </StackPanel>
                                                     </Grid>
                                                 </Border>
                                             </DataTemplate>
                                         </ItemsControl.ItemTemplate>
                                     </ItemsControl>
-                                    <TextBlock x:Name="NoPairedDevicesText" Text="No devices paired yet — scan the QR code above" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
-                                </StackPanel>
-                            </Border>
 
-
-                            <!-- ACTIVE DEVICES SECTION -->
-                            <StackPanel Orientation="Horizontal" Margin="0,10,0,14">
-                                <ui:SymbolIcon Symbol="People24" FontSize="18" Foreground="#8B5CF6" Margin="0,0,8,0"/>
-                                <TextBlock Text="Connected Devices" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" />
-                            </StackPanel>
-                            <Border Style="{StaticResource PremiumSettingStyle}">
-                                <StackPanel>
-                                    <Grid Margin="0,0,0,16">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*" />
-                                            <ColumnDefinition Width="Auto" />
-                                        </Grid.ColumnDefinitions>
-                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                            <TextBlock Text="Live Mesh Topology" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                                            <TextBlock Text="All devices registered in the Firebase active_devices node." Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap" LineHeight="18"/>
-                                        </StackPanel>
-                                        <ui:Button Grid.Column="1" Padding="12,8" Click="RefreshDevices_Click" VerticalAlignment="Center">
-                                            <StackPanel Orientation="Horizontal">
-                                                <ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" Margin="0,0,6,0"/>
-                                                <TextBlock Text="Refresh" FontWeight="SemiBold" FontSize="12"/>
-                                            </StackPanel>
-                                        </ui:Button>
-                                    </Grid>
-
-                                    <!--  2-COLUMN DEVICE TOPOLOGY -->
-                                    <Grid Margin="0,0,0,4">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="12"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-
-                                        <!-- LAN Column -->
-                                        <Border Grid.Column="0" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="10,10">
-                                            <StackPanel>
-                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                                    <Border Width="8" Height="8" CornerRadius="4" Background="#10B981" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="LAN" FontSize="12" FontWeight="Bold" Foreground="#10B981"/>
-                                                </StackPanel>
-                                                <TextBlock Text="Same network" FontSize="9" Foreground="#10B98188" Margin="0,-6,0,8"/>
-                                                <ItemsControl x:Name="LanDevicesPanel">
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <Border Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="8" Padding="8,6" Margin="0,0,0,4" Cursor="Hand" MouseRightButtonDown="DeviceInfo_RightClick" ToolTip="Right-click for connection info">
-                                                                <StackPanel>
-                                                                    <StackPanel Orientation="Horizontal">
-                                                                        <ui:SymbolIcon FontSize="14" Foreground="#10B981" Margin="0,0,8,0">
-                                                                            <ui:SymbolIcon.Style>
-                                                                                <Style TargetType="ui:SymbolIcon">
-                                                                                    <Setter Property="Symbol" Value="Phone24"/>
-                                                                                    <Style.Triggers>
-                                                                                        <DataTrigger Binding="{Binding DeviceType}" Value="PC">
-                                                                                            <Setter Property="Symbol" Value="Desktop24"/>
-                                                                                        </DataTrigger>
-                                                                                    </Style.Triggers>
-                                                                                </Style>
-                                                                            </ui:SymbolIcon.Style>
-                                                                        </ui:SymbolIcon>
-                                                                        <TextBlock Text="{Binding DeviceName}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                                                    </StackPanel>
-                                                                    <TextBlock Text="{Binding ConnectionInfo}" FontSize="9" Foreground="#10B98188" Margin="22,2,0,0" TextTrimming="CharacterEllipsis"/>
-                                                                </StackPanel>
-                                                            </Border>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                                <TextBlock x:Name="LanEmptyText" Text="No other LAN peers" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,0" Visibility="Collapsed"/>
-                                            </StackPanel>
-                                        </Border>
-
-                                        <!-- Cloud Column -->
-                                        <Border Grid.Column="2" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="12" Padding="10,10">
-                                            <StackPanel>
-                                                <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                                                    <Border Width="8" Height="8" CornerRadius="4" Background="#F59E0B" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                                    <TextBlock Text="Cloud" FontSize="12" FontWeight="Bold" Foreground="#F59E0B"/>
-                                                </StackPanel>
-                                                <TextBlock Text="Global sync active" FontSize="9" Foreground="#F59E0B88" Margin="0,-6,0,8"/>
-                                                <ItemsControl x:Name="CloudDevicesPanel">
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate>
-                                                            <Border Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="1" CornerRadius="8" Padding="8,6" Margin="0,0,0,4" Cursor="Hand" MouseRightButtonDown="DeviceInfo_RightClick" ToolTip="Right-click for connection info">
-                                                                <StackPanel>
-                                                                    <StackPanel Orientation="Horizontal">
-                                                                        <ui:SymbolIcon FontSize="14" Foreground="#F59E0B" Margin="0,0,8,0">
-                                                                            <ui:SymbolIcon.Style>
-                                                                                <Style TargetType="ui:SymbolIcon">
-                                                                                    <Setter Property="Symbol" Value="Phone24"/>
-                                                                                    <Style.Triggers>
-                                                                                        <DataTrigger Binding="{Binding DeviceType}" Value="PC">
-                                                                                            <Setter Property="Symbol" Value="Desktop24"/>
-                                                                                        </DataTrigger>
-                                                                                    </Style.Triggers>
-                                                                                </Style>
-                                                                            </ui:SymbolIcon.Style>
-                                                                        </ui:SymbolIcon>
-                                                                        <TextBlock Text="{Binding DeviceName}" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                                                    </StackPanel>
-                                                                    <TextBlock Text="{Binding ConnectionInfo}" FontSize="9" Foreground="#F59E0B88" Margin="22,2,0,0" TextTrimming="CharacterEllipsis"/>
-                                                                </StackPanel>
-                                                            </Border>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
-                                                <TextBlock x:Name="CloudEmptyText" Text="No cloud devices" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,0" Visibility="Collapsed"/>
-                                            </StackPanel>
-                                        </Border>
-                                    </Grid>
-
-
-                                    <!-- Empty State -->
-                                    <StackPanel x:Name="NoDevicesPanel" HorizontalAlignment="Center" Margin="0,12,0,12" Visibility="Collapsed">
-                                        <ui:SymbolIcon Symbol="PeopleSearch24" FontSize="32" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,0,0,8"/>
-                                        <TextBlock Text="No devices found - hit Refresh" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" HorizontalAlignment="Center"/>
+                                    <!-- Empty state -->
+                                    <StackPanel x:Name="HistoryEmptyState" HorizontalAlignment="Center" Margin="0,30,0,30">
+                                        <ui:SymbolIcon Symbol="History24" FontSize="40" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                                        <TextBlock Text="📜 No transfer history yet" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center"/>
                                     </StackPanel>
                                 </StackPanel>
+                            </ScrollViewer>
+
+                            <!-- Stats bar at bottom -->
+                            <Border Grid.Row="1" Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" 
+                                    BorderBrush="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" BorderThickness="0,1,0,0"
+                                    Padding="16,8">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <TextBlock Text="📤 Sent: " FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                    <TextBlock x:Name="HistoryStatsSent" Text="0 files (0 B)" FontSize="11" FontWeight="SemiBold" Foreground="#10B981"/>
+                                    <TextBlock Text="  |  " FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}"/>
+                                    <TextBlock Text="📥 Received: " FontSize="11" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                    <TextBlock x:Name="HistoryStatsReceived" Text="0 files (0 B)" FontSize="11" FontWeight="SemiBold" Foreground="#6366F1"/>
+                                </StackPanel>
                             </Border>
+                        </Grid>
 
-                            <!-- DEVICE GROUPS -->
-                            <StackPanel Orientation="Horizontal" Margin="0,24,0,14">
-                                <Border Width="10" Height="10" CornerRadius="5" Background="#F59E0B" Margin="0,0,8,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="Device Groups" FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center" />
-                                <Button x:Name="CreateGroupBtn" Content="+ New Group" Margin="12,0,0,0" Padding="10,4" FontSize="10" FontWeight="Bold" Click="CreateGroupBtn_Click"
-                                        Background="#F59E0B" Foreground="#000" BorderThickness="0" Cursor="Hand">
-                                    <Button.Template>
-                                        <ControlTemplate TargetType="Button">
-                                            <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}">
-                                                <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        <!-- ═══════════════════════════════════════════════════════════════ -->
+                        <!-- TAB 4: NEARBY                                                  -->
+                        <!-- ═══════════════════════════════════════════════════════════════ -->
+                        <Grid x:Name="NetworkNearbyTab" Visibility="Collapsed">
+                            <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto" Padding="0,0,16,0" CanContentScroll="False" PanningMode="None" UseLayoutRounding="True" SnapsToDevicePixels="True">
+                                <StackPanel>
+                                    <StackPanel Margin="0,0,0,10">
+                                        <TextBlock Text="Nearby Devices" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" />
+                                        <TextBlock Text="Discover FlyShelf instances on nearby networks." FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,2,0,0" TextWrapping="Wrap" />
+                                    </StackPanel>
+
+                                    <!-- Scanning animation area -->
+                                    <Border Style="{StaticResource PremiumSettingStyle}">
+                                        <StackPanel HorizontalAlignment="Center">
+                                            <!-- Pulsing radar icon -->
+                                            <Border Width="64" Height="64" CornerRadius="32" Margin="0,8,0,16" HorizontalAlignment="Center">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                        <GradientStop Color="#186366F1" Offset="0"/>
+                                                        <GradientStop Color="#188B5CF6" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <ui:SymbolIcon x:Name="NearbyRadarIcon" Symbol="Wifi124" FontSize="28" Foreground="#6366F1" 
+                                                               HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
-                                        </ControlTemplate>
-                                    </Button.Template>
-                                </Button>
-                            </StackPanel>
-                            <ItemsControl x:Name="GroupsPanel">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border Background="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" BorderBrush="#40F59E0B" BorderThickness="1" CornerRadius="12" Padding="14,10" Margin="0,0,0,6">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                <StackPanel Grid.Column="0">
-                                                    <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
-                                                    <TextBlock Text="{Binding DeviceList}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,2,0,0" TextTrimming="CharacterEllipsis"/>
+
+                                            <TextBlock Text="Discover FlyShelf instances on nearby networks" FontSize="13" FontWeight="SemiBold" 
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                                            <TextBlock Text="Scans for devices broadcasting on your local subnet" FontSize="11" 
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,0,0,16"/>
+
+                                            <ui:Button x:Name="NearbyScanBtn" Padding="16,8" FontSize="12" HorizontalAlignment="Center" Margin="0,0,0,12">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="🔍" FontSize="14" Margin="0,0,6,0"/>
+                                                    <TextBlock Text="Scan for Nearby Devices" FontSize="12" FontWeight="SemiBold"/>
                                                 </StackPanel>
-                                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                                    <Button Content="Edit" Tag="{Binding Id}" Click="EditGroupBtn_Click" Padding="6,4" Margin="0,0,4,0" Cursor="Hand" Background="Transparent" Foreground="#F59E0B" BorderThickness="0" FontSize="12"/>
-                                                    <Button Content="Del" Tag="{Binding Id}" Click="DeleteGroupBtn_Click" Padding="6,4" Cursor="Hand" Background="Transparent" Foreground="#EF4444" BorderThickness="0" FontSize="12"/>
-                                                </StackPanel>
-                                            </Grid>
-                                        </Border>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <TextBlock x:Name="NoGroupsText" Text="No groups - create one to sync across devices" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                                            </ui:Button>
 
+                                            <TextBlock x:Name="NearbyScanStatus" Text="" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
+                                                       HorizontalAlignment="Center" Margin="0,0,0,8"/>
+                                        </StackPanel>
+                                    </Border>
 
+                                    <!-- Discovered devices list (empty for now) -->
+                                    <ItemsControl x:Name="NearbyDevicesPanel"/>
 
-                        </StackPanel>
-                    </ScrollViewer>
+                                    <!-- Manual IP entry -->
+                                    <Border Style="{StaticResource PremiumSettingStyle}">
+                                        <StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
+                                                <ui:SymbolIcon Symbol="Globe24" FontSize="16" Foreground="#8B5CF6" Margin="0,0,8,0"/>
+                                                <TextBlock Text="Manual Connection" FontWeight="SemiBold" FontSize="14" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <TextBlock Text="Enter the IP address and port of a FlyShelf instance to connect directly." 
+                                                       FontSize="12" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" Margin="0,0,0,12" TextWrapping="Wrap"/>
+                                            <StackPanel Orientation="Horizontal">
+                                                <ui:TextBox x:Name="NearbyManualIpInput" PlaceholderText="e.g. 192.168.1.100:8998" Width="260" FontSize="13" 
+                                                            FontFamily="Consolas" VerticalAlignment="Center"/>
+                                                <ui:Button x:Name="NearbyManualConnectBtn" Content="Connect" Margin="10,0,0,0" Padding="16,8" 
+                                                           FontSize="12" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
+
+                    </Grid>
                 </Grid>
 
                 <!-- 4. CORE SETTINGS TAB -->
@@ -1398,6 +1882,49 @@
                                     </StackPanel>
                                 </Border>
                             </Grid>
+
+                            <!-- ═══ Summon Hotkey Customization ═══ -->
+                            <Border CornerRadius="16" Background="#18FFFFFF" BorderBrush="#20FFFFFF" BorderThickness="1" Padding="24" Margin="0,0,0,12">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                            <TextBlock Text="⌨️ Summon Hotkey" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" Margin="0,0,0,10"/>
+                                            <StackPanel x:Name="HotkeyDisplay" Orientation="Horizontal">
+                                                <!-- Keycaps built dynamically in code-behind -->
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                            <Border x:Name="HotkeyRecorderBorder" Visibility="Collapsed"
+                                                    Background="#20FFFFFF" CornerRadius="8" Padding="12,8" Margin="0,0,8,0"
+                                                    MinWidth="120">
+                                                <TextBlock x:Name="HotkeyRecorderText" Text="Press keys..."
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
+                                                           FontSize="13" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                            </Border>
+                                            <ui:Button x:Name="ChangeHotkeyBtn" Content="Change" Click="ChangeHotkey_Click"
+                                                       Appearance="Secondary" Padding="12,6" CornerRadius="8" Margin="0,0,6,0"
+                                                       FontSize="13" Cursor="Hand"/>
+                                            <ui:Button x:Name="ResetHotkeyBtn" Content="Reset" Click="ResetHotkey_Click"
+                                                       Appearance="Secondary" Padding="12,6" CornerRadius="8" Visibility="Collapsed"
+                                                       FontSize="13" Cursor="Hand"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Warning bar -->
+                                    <Border x:Name="HotkeyWarningBar" Visibility="Collapsed"
+                                            Background="#30EF4444" CornerRadius="8" Padding="12,8" Margin="0,12,0,0">
+                                        <TextBlock x:Name="HotkeyWarningText"
+                                                   Text="⚠️ This hotkey may conflict with another application"
+                                                   Foreground="#EF4444" FontSize="12"/>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
 
                             <!-- General Toggles (2-col grid) -->
                             <Grid Margin="0,0,0,12">
@@ -1578,6 +2105,42 @@
                                 </Border>
                             </Grid>
 
+                            <!-- ═══ INCOGNITO MODE ═══ -->
+                            <Border Margin="0,12,0,12" Style="{StaticResource PremiumSettingStyle}">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                        <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                            <Border Width="28" Height="28" CornerRadius="7" Margin="0,0,10,0">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                        <GradientStop Color="#F59E0B" Offset="0"/>
+                                                        <GradientStop Color="#FBBF24" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                                <ui:SymbolIcon Symbol="EyeOff24" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Border>
+                                            <TextBlock Text="Incognito Mode" FontWeight="Bold" FontSize="14" Foreground="#FBBF24" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <TextBlock Text="Temporarily pause clipboard monitoring. Nothing copied during this period will be captured or stored. Perfect for handling sensitive data." 
+                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" FontSize="12" Margin="38,0,16,0" TextWrapping="Wrap" LineHeight="17"/>
+                                        <TextBlock x:Name="IncognitoStatusText" Text="" FontSize="11" Foreground="#F59E0B" Margin="38,6,0,0" Visibility="Collapsed" FontWeight="SemiBold"/>
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Orientation="Horizontal">
+                                        <ComboBox x:Name="IncognitoDurationCombo" MinWidth="110" VerticalAlignment="Center" Margin="0,0,10,0">
+                                            <ComboBoxItem Content="1 hour" Tag="1"/>
+                                            <ComboBoxItem Content="3 hours" Tag="3"/>
+                                            <ComboBoxItem Content="6 hours ✦" Tag="6"/>
+                                            <ComboBoxItem Content="8 hours ✦" Tag="8"/>
+                                        </ComboBox>
+                                        <ui:Button x:Name="IncognitoToggleBtn" Appearance="Caution" Content="Enable" Padding="12,6" FontWeight="Bold" Click="IncognitoToggle_Click"/>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
 
                             <!-- ═══ SECTION 3: SIZE & LAYOUT ═══ -->
                             <StackPanel Margin="0,24,0,6">
@@ -1622,7 +2185,7 @@
                                                                 <TextBlock Text="PRO" Foreground="White" FontSize="9" FontWeight="Bold"/>
                                                             </Border>
                                                         </StackPanel>
-                                                        <TextBlock Text="Alt+C / Widget popup" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                        <TextBlock x:Name="SummonHotkeyLabel" Text="Alt+C / Widget popup" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
                                                     </StackPanel>
                                                 </StackPanel>
                                                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
@@ -2352,6 +2915,12 @@
                                     <TextBlock Text="Live Network Logs" FontWeight="SemiBold" FontSize="12"/>
                                 </StackPanel>
                             </ui:Button>
+                            <ui:Button Padding="14,7" Margin="8,0,0,0" Click="OpenTransferManager_Click" ToolTip="Open LAN Transfer Manager — dedicated TCP file transfer dashboard with pause/resume">
+                                <StackPanel Orientation="Horizontal">
+                                    <ui:SymbolIcon Symbol="ArrowUpload24" FontSize="14" Margin="0,0,6,0"/>
+                                    <TextBlock Text="Transfer Manager" FontWeight="SemiBold" FontSize="12"/>
+                                </StackPanel>
+                            </ui:Button>
                         </StackPanel>
 
                         <!-- 2-Column Diagnostics & Live Network Monitor Dashboard -->
@@ -3029,7 +3598,7 @@
                                             <ColumnDefinition Width="180"/>
                                             <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="Alt+C" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}"/>
+                                        <TextBlock x:Name="ShortcutsHotkeyLabel" Grid.Column="0" Text="Alt+C" FontFamily="Consolas" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorSecondary}"/>
                                         <TextBlock Grid.Column="1" Text="Summon / Dismiss Clipboard" FontSize="13" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
                                     </Grid>
                                     <Grid Margin="0,0,0,10">

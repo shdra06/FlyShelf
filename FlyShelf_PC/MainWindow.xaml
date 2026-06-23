@@ -84,6 +84,22 @@
                           Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Visibility="{Binding PlacementTarget.DataContext.IsTextPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
+                <!-- 🌐 Translate -->
+                <MenuItem Header="🌐 Translate"
+                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                          Visibility="{Binding PlacementTarget.DataContext.IsTextPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <MenuItem Header="🌐 English"    Click="TranslateContextMenu_Click" Tag="English"/>
+                    <MenuItem Header="🌐 Spanish"    Click="TranslateContextMenu_Click" Tag="Spanish"/>
+                    <MenuItem Header="🌐 French"     Click="TranslateContextMenu_Click" Tag="French"/>
+                    <MenuItem Header="🌐 German"     Click="TranslateContextMenu_Click" Tag="German"/>
+                    <MenuItem Header="🌐 Japanese"   Click="TranslateContextMenu_Click" Tag="Japanese"/>
+                    <MenuItem Header="🌐 Chinese"    Click="TranslateContextMenu_Click" Tag="Chinese"/>
+                    <MenuItem Header="🌐 Hindi"      Click="TranslateContextMenu_Click" Tag="Hindi"/>
+                    <MenuItem Header="🌐 Arabic"     Click="TranslateContextMenu_Click" Tag="Arabic"/>
+                    <MenuItem Header="🌐 Korean"     Click="TranslateContextMenu_Click" Tag="Korean"/>
+                    <MenuItem Header="🌐 Portuguese" Click="TranslateContextMenu_Click" Tag="Portuguese"/>
+                </MenuItem>
+
                 <!-- 🔒 Mark as Password -->
                 <MenuItem Header="🔒 Mark as Password" Click="MarkAsPassword_Click"
                           Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
@@ -144,6 +160,9 @@
                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                           Visibility="{Binding PlacementTarget.DataContext.IsPdfPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 <MenuItem Header="Convert PDF to Word" Click="ConvertPdfToWord_Click" 
+                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                          Visibility="{Binding PlacementTarget.DataContext.IsPdfPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                <MenuItem Header="Reorder PDF Pages" Click="ReorderPdfPages_Click" 
                           Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Visibility="{Binding PlacementTarget.DataContext.IsPdfPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
@@ -447,6 +466,16 @@
                              <ui:Button.Icon><ui:SymbolIcon Symbol="TaskListSquareLtr24" /></ui:Button.Icon>
                          </ui:Button>
 
+                         <!-- Networking Mode Toggle -->
+                         <ui:Button x:Name="ResearchToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ResearchToggle_Click" ToolTip="Networking — Send files to connected devices" Margin="0,0,6,0">
+                             <ui:Button.Resources>
+                                 <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#286366F1"/>
+                                 <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#606366F1"/>
+                                 <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#818CF8"/>
+                             </ui:Button.Resources>
+                             <ui:Button.Icon><ui:SymbolIcon Symbol="Wifi124" /></ui:Button.Icon>
+                         </ui:Button>
+
                          <!-- Sort/Filter by Category -->
                          <ui:Button x:Name="SortFilterBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="SortFilter_Click" ToolTip="Filter by Category" Margin="0,0,6,0">
                              <ui:Button.Icon><ui:FontIcon Glyph="&#xE71C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" /></ui:Button.Icon>
@@ -461,6 +490,30 @@
                              </ui:Button.Resources>
                              <ui:Button.Icon><ui:SymbolIcon Symbol="Timer24" /></ui:Button.Icon>
                          </ui:Button>
+
+                          <!-- ═══ Incognito Mode Badge ═══ -->
+                          <Border x:Name="IncognitoBadge" Visibility="Collapsed" Cursor="Hand"
+                                  CornerRadius="8" Margin="0,0,6,0" Padding="6,4" VerticalAlignment="Center"
+                                  MouseLeftButtonDown="IncognitoBadge_Click"
+                                  ToolTip="Incognito mode active — clipboard monitoring paused. Click to disable.">
+                              <Border.Background>
+                                  <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                      <GradientStop Color="#28F59E0B" Offset="0"/>
+                                      <GradientStop Color="#18FBBF24" Offset="1"/>
+                                  </LinearGradientBrush>
+                              </Border.Background>
+                              <Border.BorderBrush>
+                                  <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                      <GradientStop Color="#50F59E0B" Offset="0"/>
+                                      <GradientStop Color="#30FBBF24" Offset="1"/>
+                                  </LinearGradientBrush>
+                              </Border.BorderBrush>
+                              <Border.BorderThickness>1</Border.BorderThickness>
+                              <StackPanel Orientation="Horizontal">
+                                  <ui:SymbolIcon Symbol="EyeOff24" FontSize="13" Foreground="#F59E0B" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                  <TextBlock x:Name="IncognitoBadgeText" Text="Incognito" FontSize="10" FontWeight="SemiBold" Foreground="#FBBF24" VerticalAlignment="Center"/>
+                              </StackPanel>
+                          </Border>
 
                           <!-- More Options Button -->
                           <ui:Button x:Name="MoreBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="MoreBtn_Click" ToolTip="More Options" Margin="0,0,6,0" Visibility="Collapsed">
@@ -1126,19 +1179,10 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <Border CornerRadius="5" Cursor="Hand" Padding="4,3" Background="Transparent"
-                                            PreviewMouseLeftButtonDown="ConvertImageToPdfSpecific_Click" ToolTip="Convert Image to PDF">
-                                        <Border.Style>
-                                            <Style TargetType="Border">
-                                                <Style.Triggers>
-                                                    <Trigger Property="IsMouseOver" Value="True">
-                                                        <Setter Property="Background" Value="#18FF6666"/>
-                                                    </Trigger>
-                                                </Style.Triggers>
-                                            </Style>
-                                        </Border.Style>
-                                        <ui:SymbolIcon Symbol="DocumentPdf24" Filled="True" FontSize="14" Foreground="{DynamicResource DangerColor}"/>
-                                    </Border>
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource DangerColor}"
+                                               PreviewMouseLeftButtonDown="ConvertImageToPdfSpecific_Click" ToolTip="Convert Image to PDF">
+                                        <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" Filled="True" FontSize="14"/></ui:Button.Icon>
+                                    </ui:Button>
                                 </Border>
 
                                 <!-- ═══ Quick Look ═══ -->
@@ -2027,6 +2071,10 @@
                         <GradientStop Color="#08FFFFFF" Offset="1"/>
                     </LinearGradientBrush>
                 </Border.Background>
+                <!-- BUG-1 FIX: TranslateTransform must exist before animation can target it -->
+                <Border.RenderTransform>
+                    <TranslateTransform X="0" Y="0"/>
+                </Border.RenderTransform>
                 <Border.Triggers>
                     <EventTrigger RoutedEvent="Loaded">
                         <BeginStoryboard>
@@ -2425,6 +2473,27 @@
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <Border Grid.Column="0" Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" ToolTip="More Options" MouseLeftButtonDown="AltMoreOptions_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="MoreHorizontal24" FontSize="14" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                         <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Border x:Name="AltIncognitoBadge" Visibility="{Binding Visibility, ElementName=IncognitoBadge}" Width="28" Height="28" CornerRadius="7" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="IncognitoBadge_Click" ToolTip="{Binding Text, ElementName=IncognitoBadgeText}">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#28F59E0B" Offset="0"/><GradientStop Color="#18FBBF24" Offset="1"/></LinearGradientBrush>
+                                </Border.Background>
+                                <Border.BorderBrush>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#50F59E0B" Offset="0"/><GradientStop Color="#30FBBF24" Offset="1"/></LinearGradientBrush>
+                                </Border.BorderBrush>
+                                <Border.BorderThickness>1</Border.BorderThickness>
+                                <ui:SymbolIcon Symbol="EyeOff24" FontSize="14" Foreground="#F59E0B" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <Border x:Name="AltUpdateBadge" Visibility="{Binding Visibility, ElementName=UpdateBadge}" Width="28" Height="28" CornerRadius="7" Margin="0,0,2,0" Cursor="Hand" MouseLeftButtonDown="UpdateBadge_Click" ToolTip="Update available — click to open Hub">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#2810B981" Offset="0"/><GradientStop Color="#1834D399" Offset="1"/></LinearGradientBrush>
+                                </Border.Background>
+                                <Border.BorderBrush>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1"><GradientStop Color="#5010B981" Offset="0"/><GradientStop Color="#3034D399" Offset="1"/></LinearGradientBrush>
+                                </Border.BorderBrush>
+                                <Border.BorderThickness>1</Border.BorderThickness>
+                                <ui:SymbolIcon Symbol="ArrowDownload24" FontSize="14" Foreground="#10B981" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <Border x:Name="AltResearchBtn" Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Networking" MouseLeftButtonDown="AltResearch_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Wifi124" FontSize="14" Foreground="#818CF8" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                             <Border Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Keyboard Shortcuts" MouseLeftButtonDown="AltShortcuts_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Keyboard24" FontSize="14" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                             <Border Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Sync" MouseLeftButtonDown="AltSync_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
                             <Border Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" Margin="0,0,2,0" ToolTip="Clear Shelf" MouseLeftButtonDown="AltClear_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource DangerBgHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="Delete24" FontSize="13" Foreground="{DynamicResource DangerColor}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
@@ -2433,6 +2502,262 @@
                     </Grid>
                 </Border>
             </Grid>
+        </Grid>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- NETWORKING PANEL — fresh single-column layout               -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <Grid x:Name="ResearchPanel" Grid.Row="1" Visibility="Collapsed" Opacity="0" Margin="0"
+              RenderTransformOrigin="0.5,0" PreviewMouseDown="ResearchPanel_PreviewMouseDown"
+              TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType"
+              RenderOptions.ClearTypeHint="Enabled" UseLayoutRounding="True" SnapsToDevicePixels="True">
+            <Grid.RenderTransform><TranslateTransform Y="0"/></Grid.RenderTransform>
+            <Grid.Background>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                    <GradientStop Color="#0C0F1A" Offset="0"/>
+                    <GradientStop Color="#111827" Offset="1"/>
+                </LinearGradientBrush>
+            </Grid.Background>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>  <!-- Header toolbar -->
+                <RowDefinition Height="*"/>     <!-- Content -->
+            </Grid.RowDefinitions>
+            
+            <!-- ═══ HEADER TOOLBAR ═══ -->
+            <Border Grid.Row="0" Padding="10,7" BorderThickness="0,0,0,1">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#10152A" Offset="0"/>
+                        <GradientStop Color="#0F1629" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <Border.BorderBrush>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                        <GradientStop Color="#1E293B" Offset="0"/>
+                        <GradientStop Color="#312E81" Offset="0.5"/>
+                        <GradientStop Color="#1E293B" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.BorderBrush>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>  <!-- Back -->
+                        <ColumnDefinition Width="Auto"/>  <!-- Title -->
+                        <ColumnDefinition Width="Auto"/>  <!-- Status pill -->
+                        <ColumnDefinition Width="*"/>     <!-- Spacer -->
+                        <ColumnDefinition Width="Auto"/>  <!-- Pair -->
+                        <ColumnDefinition Width="Auto"/>  <!-- Scan -->
+                        <ColumnDefinition Width="Auto"/>  <!-- Add files -->
+                        <ColumnDefinition Width="Auto"/>  <!-- Send -->
+                        <ColumnDefinition Width="Auto"/>  <!-- More -->
+                    </Grid.ColumnDefinitions>
+                    
+                    <!-- Back -->
+                    <Border Grid.Column="0" CornerRadius="7" Cursor="Hand" Padding="6,3" Margin="0,0,6,0"
+                            Background="#14FFFFFF" BorderBrush="#18FFFFFF" BorderThickness="1" ToolTip="Back to Clipboard"
+                            MouseLeftButtonDown="ResearchBack_Click">
+                        <ui:SymbolIcon Symbol="ArrowLeft24" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="14"/>
+                    </Border>
+                    
+                    <!-- Network Title -->
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="2,0,0,0">
+                        <Border Width="7" Height="7" CornerRadius="4" Margin="0,0,7,0" VerticalAlignment="Center">
+                            <Border.Background>
+                                <RadialGradientBrush>
+                                    <GradientStop Color="#818CF8" Offset="0"/>
+                                    <GradientStop Color="#6366F1" Offset="1"/>
+                                </RadialGradientBrush>
+                            </Border.Background>
+                        </Border>
+                        <TextBlock Text="Network" FontSize="13" FontWeight="SemiBold" 
+                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                    
+                    <!-- Status pill -->
+                    <Border Grid.Column="2" CornerRadius="10" Padding="8,2" Margin="10,0,0,0" VerticalAlignment="Center"
+                            Background="#18818CF8" BorderBrush="#30818CF8" BorderThickness="1">
+                        <TextBlock x:Name="NetPanelPeerCount" Text="0 devices" FontSize="10" Foreground="#A5B4FC" FontWeight="SemiBold"/>
+                    </Border>
+                    
+                    <!-- Pair Device -->
+                    <Border Grid.Column="4" CornerRadius="7" Cursor="Hand" Padding="8,4" Margin="0,0,4,0"
+                            Background="#18F59E0B" BorderBrush="#30F59E0B" BorderThickness="1"
+                            PreviewMouseLeftButtonDown="NetPanel_Pair_Click" ToolTip="Pair a new device with a code">
+                        <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#30F59E0B"/></Trigger></Style.Triggers></Style></Border.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="People24" FontSize="12" Foreground="#F59E0B" Margin="0,0,4,0"/>
+                            <TextBlock Text="Pair" FontSize="11" Foreground="#FCD34D" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Scan Nearby -->
+                    <Border Grid.Column="5" CornerRadius="7" Cursor="Hand" Padding="8,4" Margin="0,0,4,0"
+                            Background="#18818CF8" BorderBrush="#30818CF8" BorderThickness="1"
+                            PreviewMouseLeftButtonDown="NetPanel_Scan_Click" ToolTip="Scan for nearby devices">
+                        <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#30818CF8"/></Trigger></Style.Triggers></Style></Border.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Wifi124" FontSize="12" Foreground="#818CF8" Margin="0,0,4,0"/>
+                            <TextBlock Text="Scan" FontSize="11" Foreground="#C4B5FD" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Add Files -->
+                    <Border Grid.Column="6" CornerRadius="7" Cursor="Hand" Padding="8,4" Margin="0,0,4,0"
+                            Background="#18818CF8" BorderBrush="#30818CF8" BorderThickness="1"
+                            PreviewMouseLeftButtonDown="NetPanel_AddFiles_Click" ToolTip="Add files to send">
+                        <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#30818CF8"/></Trigger></Style.Triggers></Style></Border.Style>
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Add24" FontSize="12" Foreground="#818CF8" Margin="0,0,4,0"/>
+                            <TextBlock Text="Add Files" FontSize="11" Foreground="#C4B5FD" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Send All -->
+                    <Border Grid.Column="7" CornerRadius="7" Cursor="Hand" Padding="8,4" Margin="0,0,4,0"
+                            PreviewMouseLeftButtonDown="NetPanel_SendAll_Click" ToolTip="Send all files to all devices">
+                        <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#3010B981"/></Trigger></Style.Triggers></Style></Border.Style>
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#1810B981" Offset="0"/>
+                                <GradientStop Color="#2010B981" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <StackPanel Orientation="Horizontal">
+                            <ui:SymbolIcon Symbol="Send24" FontSize="12" Foreground="#10B981" Margin="0,0,4,0"/>
+                            <TextBlock Text="Send" FontSize="11" Foreground="#34D399" FontWeight="Bold"/>
+                        </StackPanel>
+                    </Border>
+                    
+                    <!-- Menu (Clear / Transfer Mgr / Refresh) -->
+                    <Border Grid.Column="8" CornerRadius="7" Cursor="Hand" Padding="6,3"
+                            Background="#14FFFFFF" BorderBrush="#18FFFFFF" BorderThickness="1" ToolTip="More options"
+                            PreviewMouseLeftButtonDown="NetPanel_MoreMenu_Click">
+                        <Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#22FFFFFF"/></Trigger></Style.Triggers></Style></Border.Style>
+                        <ui:SymbolIcon Symbol="MoreHorizontal24" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" FontSize="14"/>
+                        <Border.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="🔄  Refresh Devices" Click="NetPanel_RefreshDevices_MenuClick"/>
+                                <MenuItem Header="📋  Transfer Manager" Click="NetPanel_OpenTransferMgr_MenuClick"/>
+                                <Separator/>
+                                <MenuItem Header="🗑️  Clear Queue" Click="NetPanel_ClearQueue_MenuClick"/>
+                            </ContextMenu>
+                        </Border.ContextMenu>
+                    </Border>
+                </Grid>
+            </Border>
+            
+            <!-- ═══ CONTENT: Devices strip + File list ═══ -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          AllowDrop="True" Drop="NetPanel_Drop" DragOver="NetPanel_DragOver">
+                <StackPanel Margin="10,8,10,10">
+                
+                    <!-- ─── CONNECTED DEVICES STRIP ─── -->
+                    <Border CornerRadius="10" Padding="10,8" Margin="0,0,0,8">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#0E1326" Offset="0"/>
+                                <GradientStop Color="#12182E" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <!-- Section label -->
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="2,0,0,6">
+                                <ui:SymbolIcon Symbol="PeopleTeam24" FontSize="12" Foreground="#64748B" Margin="0,0,6,0"/>
+                                <TextBlock Text="CONNECTED DEVICES" FontSize="10" Foreground="#475569" FontWeight="Bold" 
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                            
+                            <!-- Horizontal device chips -->
+                            <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                <StackPanel x:Name="NetPanelDeviceList" Orientation="Horizontal"/>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- ─── NEARBY DEVICES STRIP ─── -->
+                    <Border CornerRadius="10" Padding="10,8" Margin="0,0,0,8">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                <GradientStop Color="#0E1326" Offset="0"/>
+                                <GradientStop Color="#12182E" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            
+                            <!-- Section label -->
+                            <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="2,0,0,6">
+                                <ui:SymbolIcon Symbol="Wifi124" FontSize="12" Foreground="#F59E0B" Margin="0,0,6,0"/>
+                                <TextBlock Text="NEARBY DEVICES" FontSize="10" Foreground="#92400E" FontWeight="Bold" 
+                                           VerticalAlignment="Center"/>
+                            </StackPanel>
+                            
+                            <!-- Horizontal nearby chips -->
+                            <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                                <StackPanel x:Name="NetPanelNearbyList" Orientation="Horizontal"/>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                    
+                    <!-- ─── FILE QUEUE SECTION ─── -->
+                    <StackPanel Margin="2,4,0,6" Orientation="Horizontal">
+                        <ui:SymbolIcon Symbol="DocumentQueue24" FontSize="12" Foreground="#64748B" Margin="0,0,6,0"/>
+                        <TextBlock Text="FILE QUEUE" FontSize="10" Foreground="#475569" FontWeight="Bold" 
+                                   VerticalAlignment="Center"/>
+                        <TextBlock x:Name="NetPanelQueueStatus" Text="" FontSize="10" Foreground="#64748B" 
+                                   VerticalAlignment="Center" Margin="8,0,0,0"/>
+                    </StackPanel>
+                    
+                    <!-- File cards -->
+                    <StackPanel x:Name="NetPanelFileList"/>
+                    
+                    <!-- ─── ACTIVE TRANSFERS ─── -->
+                    <StackPanel x:Name="NetPanelActiveTransfers" Margin="0,4,0,0"/>
+                    
+                    <!-- ─── RECENT TRANSFERS (completed + failed with retry) ─── -->
+                    <StackPanel x:Name="NetPanelRecentTransfers" Margin="0,4,0,0"/>
+                    
+                    <!-- ─── EMPTY STATE (replaces file list when empty) ─── -->
+                    <Border x:Name="NetPanelEmptyState" CornerRadius="12" Padding="20,40" Margin="0,4,0,0">
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                <GradientStop Color="#0A0F1E" Offset="0"/>
+                                <GradientStop Color="#0D1225" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+                        <Border.BorderBrush>
+                            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                <GradientStop Color="#1E293B" Offset="0"/>
+                                <GradientStop Color="#1A1F3D" Offset="0.5"/>
+                                <GradientStop Color="#1E293B" Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.BorderBrush>
+                        <Border.BorderThickness>1</Border.BorderThickness>
+                        <StackPanel HorizontalAlignment="Center">
+                            <Border Width="48" Height="48" CornerRadius="24" HorizontalAlignment="Center" Margin="0,0,0,12">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                        <GradientStop Color="#1A1F3D" Offset="0"/>
+                                        <GradientStop Color="#1E2750" Offset="1"/>
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                                <ui:SymbolIcon Symbol="ArrowUpload24" FontSize="22" Foreground="#6366F1" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <TextBlock Text="Drop files here to send" FontSize="13" FontWeight="SemiBold" Foreground="#CBD5E1" TextAlignment="Center"/>
+                            <TextBlock Text="or copy a file — it auto-stages" FontSize="11" Foreground="#475569" TextAlignment="Center" Margin="0,4,0,0"/>
+                        </StackPanel>
+                    </Border>
+                    
+                </StackPanel>
+            </ScrollViewer>
+            
         </Grid>
 
         <!-- ═══════════════════════════════════════════════════════════════ -->
@@ -2646,7 +2971,13 @@
                 <Grid x:Name="NotesContentArea" Grid.Column="1">
                     <!-- BULLET MODE: Scrollable list of bullet cards -->
                     <ScrollViewer x:Name="NotesBulletScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <ItemsControl x:Name="NotesBulletList">
+                        <ItemsControl x:Name="NotesBulletList" VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling">
+                            <!-- BUG-2 FIX: VirtualizingStackPanel as items host so large lists don't instantiate all items at once -->
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
                                     <!-- Bullet Card -->
@@ -3043,30 +3374,69 @@
                                         <Border x:Name="FreeformSectionCard" CornerRadius="8" Margin="4,2,4,3" Padding="0" ClipToBounds="True"
                                                 BorderThickness="1" BorderBrush="#2A2A45">
                                             <Grid>
-                                                <TextBox x:Name="FreeformSectionTextBox" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True"
-                                                         FontSize="12.5" Background="Transparent" BorderThickness="0" Padding="10,6,10,8" MinHeight="80"
-                                                         Foreground="#E8E8F0"
-                                                         CaretBrush="#E8E8F0"
-                                                         SelectionBrush="#608B5CF6"
-                                                         Text="{Binding Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                                         TextChanged="NotesFreeformBox_TextChanged"
-                                                         GotFocus="NotesFreeformBox_GotFocus"
-                                                         PreviewKeyDown="NotesFreeformBox_PreviewKeyDown"
-                                                         DataObject.Pasting="NotesFreeformBox_Paste">
-                                                    <TextBox.Style>
-                                                        <Style TargetType="TextBox">
-                                                            <Setter Property="Template">
-                                                                <Setter.Value>
-                                                                    <ControlTemplate TargetType="TextBox">
-                                                                        <Border Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}">
-                                                                            <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
+                                                <StackPanel>
+                                                    <!-- Embedded images (up to 5 for Pro, 1 for Free) -->
+                                                    <ItemsControl ItemsSource="{Binding Images}" Margin="6,6,6,0">
+                                                        <ItemsControl.ItemsPanel>
+                                                            <ItemsPanelTemplate>
+                                                                <WrapPanel Orientation="Horizontal"/>
+                                                            </ItemsPanelTemplate>
+                                                        </ItemsControl.ItemsPanel>
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Border x:Name="SectionImgCard" CornerRadius="6" Margin="2" Padding="3" ClipToBounds="True"
+                                                                        Background="#18000000" BorderBrush="#308B5CF6" BorderThickness="1"
+                                                                        MouseWheel="FreeformImageResize_MouseWheel">
+                                                                    <Grid>
+                                                                        <Border CornerRadius="4" ClipToBounds="True" HorizontalAlignment="Left" Cursor="Hand"
+                                                                                MouseLeftButtonDown="FreeformImage_Click" ToolTip="Click to open">
+                                                                            <Image Source="{Binding ImagePath}" Width="{Binding DisplayWidth}"
+                                                                                   Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
                                                                         </Border>
-                                                                    </ControlTemplate>
-                                                                </Setter.Value>
-                                                            </Setter>
-                                                        </Style>
-                                                    </TextBox.Style>
-                                                </TextBox>
+                                                                        <!-- Remove button -->
+                                                                        <Border x:Name="SectionImgRemoveBtn" CornerRadius="4" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                                                                Margin="2,2,0,0" Padding="3,1" Cursor="Hand" Background="#80000000" Opacity="0" IsHitTestVisible="False"
+                                                                                MouseLeftButtonDown="FreeformImageRemove_Click" ToolTip="Remove image">
+                                                                            <ui:SymbolIcon Symbol="Dismiss12" Foreground="#CCFFFFFF" FontSize="9"/>
+                                                                        </Border>
+                                                                    </Grid>
+                                                                </Border>
+                                                                <DataTemplate.Triggers>
+                                                                    <Trigger SourceName="SectionImgCard" Property="IsMouseOver" Value="True">
+                                                                        <Setter TargetName="SectionImgRemoveBtn" Property="Opacity" Value="1"/>
+                                                                        <Setter TargetName="SectionImgRemoveBtn" Property="IsHitTestVisible" Value="True"/>
+                                                                    </Trigger>
+                                                                </DataTemplate.Triggers>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+
+                                                    <!-- Freeform text area -->
+                                                    <TextBox x:Name="FreeformSectionTextBox" TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True"
+                                                             FontSize="12.5" Background="Transparent" BorderThickness="0" Padding="10,6,10,8" MinHeight="80"
+                                                             Foreground="#E8E8F0"
+                                                             CaretBrush="#E8E8F0"
+                                                             SelectionBrush="#608B5CF6"
+                                                             Text="{Binding Content, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                             TextChanged="NotesFreeformBox_TextChanged"
+                                                             GotFocus="NotesFreeformBox_GotFocus"
+                                                             PreviewKeyDown="NotesFreeformBox_PreviewKeyDown"
+                                                             DataObject.Pasting="NotesFreeformBox_Paste">
+                                                        <TextBox.Style>
+                                                            <Style TargetType="TextBox">
+                                                                <Setter Property="Template">
+                                                                    <Setter.Value>
+                                                                        <ControlTemplate TargetType="TextBox">
+                                                                            <Border Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                                                                <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
+                                                                            </Border>
+                                                                        </ControlTemplate>
+                                                                    </Setter.Value>
+                                                                </Setter>
+                                                            </Style>
+                                                        </TextBox.Style>
+                                                    </TextBox>
+                                                </StackPanel>
 
                                                 <!-- Remove section button (top-right, always visible) -->
                                                 <Border x:Name="FreeformSectionRemoveBtn" CornerRadius="6" Cursor="Hand"
@@ -3122,38 +3492,6 @@
                                 </ItemsControl.ItemTemplate>
                             </ItemsControl>
 
-
-                            <!-- Freeform images strip (pasted images shown below text) -->
-                            <ItemsControl x:Name="NotesFreeformImageList" Margin="0,4,0,0">
-                                <ItemsControl.ItemTemplate>
-                                    <DataTemplate>
-                                        <Border x:Name="FreeformImgCard" CornerRadius="8" Margin="6,0,6,4" Padding="4" ClipToBounds="True"
-                                                BorderThickness="1" BorderBrush="#2A2A45" Background="#222240">
-                                            <Grid>
-                                                <Border CornerRadius="6" ClipToBounds="True" HorizontalAlignment="Left" Cursor="Hand"
-                                                        BorderBrush="#308B5CF6" BorderThickness="1"
-                                                        MouseLeftButtonDown="FreeformImage_Click"
-                                                        ToolTip="Click to open">
-                                                    <Image Source="{Binding ImagePath}" Width="{Binding DisplayWidth}"
-                                                           Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"/>
-                                                </Border>
-                                                <!-- Remove button -->
-                                                <Border x:Name="FreeformImgRemoveBtn" CornerRadius="4" HorizontalAlignment="Left" VerticalAlignment="Top"
-                                                        Margin="4,4,0,0" Padding="3,1" Cursor="Hand" Background="#80000000" Opacity="0" IsHitTestVisible="False"
-                                                        MouseLeftButtonDown="FreeformImageRemove_Click" ToolTip="Remove image">
-                                                    <ui:SymbolIcon Symbol="Dismiss12" Foreground="#CCFFFFFF" FontSize="9"/>
-                                                </Border>
-                                            </Grid>
-                                        </Border>
-                                        <DataTemplate.Triggers>
-                                            <Trigger SourceName="FreeformImgCard" Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="FreeformImgRemoveBtn" Property="Opacity" Value="1"/>
-                                                <Setter TargetName="FreeformImgRemoveBtn" Property="IsHitTestVisible" Value="True"/>
-                                            </Trigger>
-                                        </DataTemplate.Triggers>
-                                    </DataTemplate>
-                                </ItemsControl.ItemTemplate>
-                            </ItemsControl>
                         </StackPanel>
                     </ScrollViewer>
 
@@ -3315,7 +3653,7 @@
                                        VerticalAlignment="Center" HorizontalAlignment="Center"/>
                         </Border>
                         <!-- Date list -->
-                        <ScrollViewer VerticalScrollBarVisibility="Hidden" HorizontalScrollBarVisibility="Disabled">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <ItemsControl x:Name="TodoDaySidebar" Margin="0,4,0,0">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -3390,7 +3728,13 @@
                 <!-- ═══ TO-DO LIST CONTENT AREA ═══ -->
                 <Grid Grid.Column="1">
                     <ScrollViewer x:Name="TodoScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <ItemsControl x:Name="TodoListItemsControl">
+                        <ItemsControl x:Name="TodoListItemsControl" VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling">
+                            <!-- BUG-2 FIX: VirtualizingStackPanel as items host -->
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
                                     <DataTemplate>
                                     <DataTemplate.Resources>

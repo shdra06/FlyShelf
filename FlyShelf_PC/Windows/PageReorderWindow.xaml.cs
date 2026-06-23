@@ -16,6 +16,22 @@ using global::Windows.Storage;
 
 namespace FlyShelf.Windows
 {
+    /// <summary>
+    /// Represents a single page entry in the reorder grid.
+    /// Supports pages from the original PDF and pages imported from external PDFs.
+    /// </summary>
+    public class PageEntry
+    {
+        /// <summary>Original 1-indexed page number within its source file.</summary>
+        public int OriginalPage { get; set; }
+        /// <summary>Full path to the source PDF file.</summary>
+        public string SourceFile { get; set; }
+        /// <summary>Short display name for the source file (shown on external pages).</summary>
+        public string SourceLabel { get; set; }
+        /// <summary>True if this page was imported from an external PDF (not the original).</summary>
+        public bool IsExternal { get; set; }
+    }
+
     public partial class PageReorderWindow : MicaWindow
     {
         private readonly PdfMergeItem _item;
@@ -24,12 +40,12 @@ namespace FlyShelf.Windows
         private const double CELL_H = 155;
         private const double CELL_MARGIN = 5;
 
-        // Current page order: each entry is the original 1-indexed page number
-        private List<int> _pageOrder;
-        // Currently selected indices in _pageOrder
+        // Current page order — each entry tracks source file + page number
+        private List<PageEntry> _pageEntries;
+        // Currently selected indices in _pageEntries
         private HashSet<int> _selectedIndices = new();
-        // Thumbnails keyed by original 1-indexed page number
-        private Dictionary<int, BitmapImage> _thumbnails = new();
+        // Thumbnails keyed by "sourcePath:pageNum" for uniqueness
+        private Dictionary<string, BitmapImage> _thumbnails = new();
 
         // Drag state
         private int _dragStartIndex = -1;
@@ -48,6 +64,8 @@ namespace FlyShelf.Windows
         private int _currentDragOverIndex = -1;
 
         public bool WasConfirmed { get; private set; }
+        /// <summary>True if external pages were added (caller needs to use multi-source save).</summary>
+        public bool HasExternalPages => _pageEntries.Any(p => p.IsExternal);
 
         public PageReorderWindow(PdfMergeItem item)
         {
@@ -55,9 +73,18 @@ namespace FlyShelf.Windows
             FlyShelf.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
             _item = item;
 
-            _pageOrder = item.GetSelectedPageIndices().Select(i => i + 1).ToList();
-            if (_pageOrder.Count == 0)
-                _pageOrder = Enumerable.Range(1, item.TotalPages).ToList();
+            // Build initial page entries from the original PDF
+            var indices = item.GetSelectedPageIndices().Select(i => i + 1).ToList();
+            if (indices.Count == 0)
+                indices = Enumerable.Range(1, item.TotalPages).ToList();
+
+            _pageEntries = indices.Select(p => new PageEntry
+            {
+                OriginalPage = p,
+                SourceFile = item.FilePath,
+                SourceLabel = item.FileName,
+                IsExternal = false
+            }).ToList();
 
             HeaderText.Text = $"Reorder Pages — {item.FileName}";
 
@@ -66,10 +93,20 @@ namespace FlyShelf.Windows
             _scrollTimer.Tick += ScrollTimer_Tick;
 
             RebuildGrid(false);
-            LoadThumbnailsAsync();
+            LoadThumbnailsAsync(_item.FilePath, _item.TotalPages);
         }
 
-        public List<int> GetFinalPageOrder() => _pageOrder.Select(p => p - 1).ToList();
+        /// <summary>
+        /// Returns the final page order as a list of PageEntry objects.
+        /// The caller uses this to build the output PDF from potentially multiple source files.
+        /// </summary>
+        public List<PageEntry> GetFinalPageEntries() => _pageEntries.ToList();
+
+        /// <summary>
+        /// Legacy: Returns 0-indexed page order for the original file only (no external pages).
+        /// Used when HasExternalPages is false.
+        /// </summary>
+        public List<int> GetFinalPageOrder() => _pageEntries.Select(p => p.OriginalPage - 1).ToList();
 
         // ═══════════════════════════════════════════════════════════════
         // AUTO-SCROLL during drag
@@ -112,14 +149,16 @@ namespace FlyShelf.Windows
         // THUMBNAIL LOADING
         // ═══════════════════════════════════════════════════════════════
 
-        private async void LoadThumbnailsAsync()
+        private static string ThumbKey(string sourcePath, int pageNum) => $"{sourcePath}:{pageNum}";
+
+        private async void LoadThumbnailsAsync(string pdfPath, int totalPages)
         {
             try
             {
-                var file = await StorageFile.GetFileFromPathAsync(_item.FilePath);
+                var file = await StorageFile.GetFileFromPathAsync(pdfPath);
                 var pdfDoc = await WinPdf.PdfDocument.LoadFromFileAsync(file);
 
-                for (int i = 0; i < Math.Min(_item.TotalPages, (int)pdfDoc.PageCount); i++)
+                for (int i = 0; i < Math.Min(totalPages, (int)pdfDoc.PageCount); i++)
                 {
                     using (var page = pdfDoc.GetPage((uint)i))
                     {
@@ -138,12 +177,15 @@ namespace FlyShelf.Windows
                             bitmap.StreamSource = stream.AsStreamForRead();
                             bitmap.EndInit();
                             bitmap.Freeze();
-                            _thumbnails[i + 1] = bitmap;
+
+                            string key = ThumbKey(pdfPath, i + 1);
+                            _thumbnails[key] = bitmap;
                         }
                     }
 
                     int pageNum = i + 1;
-                    Dispatcher.Invoke(() => UpdateTileThumbnail(pageNum));
+                    string thumbPath = pdfPath;
+                    Dispatcher.Invoke(() => UpdateTileThumbnail(thumbPath, pageNum));
 
                     // Small yield every 5 pages to keep UI responsive on large PDFs
                     if (i % 5 == 4)
@@ -156,25 +198,29 @@ namespace FlyShelf.Windows
             }
         }
 
-        private void UpdateTileThumbnail(int originalPageNum)
+        private void UpdateTileThumbnail(string sourcePath, int originalPageNum)
         {
+            string key = ThumbKey(sourcePath, originalPageNum);
+            if (!_thumbnails.ContainsKey(key)) return;
+
             foreach (var child in PageItemsControl.Items)
             {
-                if (child is Border tile && tile.Tag is int[] meta && meta[1] == originalPageNum)
+                if (child is Border tile && tile.Tag is PageEntry entry
+                    && entry.SourceFile == sourcePath && entry.OriginalPage == originalPageNum)
                 {
                     if (tile.Child is Grid grid)
                     {
                         foreach (var c in grid.Children)
                         {
-                            if (c is Image img && _thumbnails.ContainsKey(originalPageNum))
+                            if (c is Image img)
                             {
-                                img.Source = _thumbnails[originalPageNum];
+                                img.Source = _thumbnails[key];
                                 img.Visibility = Visibility.Visible;
                                 break;
                             }
                         }
                     }
-                    break;
+                    // Don't break — there could be duplicate pages from the same source
                 }
             }
         }
@@ -186,16 +232,17 @@ namespace FlyShelf.Windows
         private void RebuildGrid(bool animate)
         {
             // Capture old positions for animation
-            var oldPositions = new Dictionary<int, Point>();
+            var oldPositions = new Dictionary<string, Point>();
             if (animate)
             {
                 for (int i = 0; i < PageItemsControl.Items.Count; i++)
                 {
-                    if (PageItemsControl.Items[i] is Border tile && tile.Tag is int[] meta)
+                    if (PageItemsControl.Items[i] is Border tile && tile.Tag is PageEntry entry)
                     {
                         int col = i % COLUMNS;
                         int row = i / COLUMNS;
-                        oldPositions[meta[1]] = new Point(
+                        string posKey = $"{entry.SourceFile}:{entry.OriginalPage}:{i}";
+                        oldPositions[posKey] = new Point(
                             col * (CELL_W + CELL_MARGIN * 2),
                             row * (CELL_H + CELL_MARGIN * 2));
                     }
@@ -204,9 +251,9 @@ namespace FlyShelf.Windows
 
             PageItemsControl.Items.Clear();
 
-            for (int i = 0; i < _pageOrder.Count; i++)
+            for (int i = 0; i < _pageEntries.Count; i++)
             {
-                var tile = CreatePageTile(i, _pageOrder[i]);
+                var tile = CreatePageTile(i, _pageEntries[i]);
                 PageItemsControl.Items.Add(tile);
             }
 
@@ -215,7 +262,7 @@ namespace FlyShelf.Windows
             {
                 for (int i = 0; i < PageItemsControl.Items.Count; i++)
                 {
-                    if (PageItemsControl.Items[i] is Border tile && tile.Tag is int[] meta)
+                    if (PageItemsControl.Items[i] is Border tile && tile.Tag is PageEntry entry)
                     {
                         int col = i % COLUMNS;
                         int row = i / COLUMNS;
@@ -223,7 +270,11 @@ namespace FlyShelf.Windows
                             col * (CELL_W + CELL_MARGIN * 2),
                             row * (CELL_H + CELL_MARGIN * 2));
 
-                        if (oldPositions.TryGetValue(meta[1], out var oldPos))
+                        // Try to find old position by matching the entry
+                        string posKey = oldPositions.Keys.FirstOrDefault(k =>
+                            k.StartsWith($"{entry.SourceFile}:{entry.OriginalPage}:"));
+
+                        if (posKey != null && oldPositions.TryGetValue(posKey, out var oldPos))
                         {
                             double dx = oldPos.X - newPos.X;
                             double dy = oldPos.Y - newPos.Y;
@@ -242,6 +293,9 @@ namespace FlyShelf.Windows
                                 transform.BeginAnimation(TranslateTransform.XProperty, animX);
                                 transform.BeginAnimation(TranslateTransform.YProperty, animY);
                             }
+
+                            // Remove used key so duplicates get matched to different old positions
+                            oldPositions.Remove(posKey);
                         }
                     }
                 }
@@ -250,7 +304,7 @@ namespace FlyShelf.Windows
             UpdateInfo();
         }
 
-        private Border CreatePageTile(int orderIndex, int originalPage)
+        private Border CreatePageTile(int orderIndex, PageEntry entry)
         {
             var cellGrid = new Grid();
 
@@ -264,12 +318,39 @@ namespace FlyShelf.Windows
                 Margin = new Thickness(0, 4, 0, 0)
             };
 
-            if (_thumbnails.ContainsKey(originalPage))
+            string key = ThumbKey(entry.SourceFile, entry.OriginalPage);
+            if (_thumbnails.ContainsKey(key))
             {
-                img.Source = _thumbnails[originalPage];
+                img.Source = _thumbnails[key];
                 img.Visibility = Visibility.Visible;
             }
             cellGrid.Children.Add(img);
+
+            // Source badge for external pages (top-left corner)
+            if (entry.IsExternal)
+            {
+                var srcBadge = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromArgb(200, 46, 134, 222)),
+                    CornerRadius = new CornerRadius(0, 0, 6, 0),
+                    Padding = new Thickness(4, 1, 4, 1),
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    VerticalAlignment = VerticalAlignment.Top
+                };
+                string shortName = entry.SourceLabel.Length > 12
+                    ? entry.SourceLabel.Substring(0, 10) + "…"
+                    : entry.SourceLabel;
+                srcBadge.Child = new TextBlock
+                {
+                    Text = shortName,
+                    FontSize = 8,
+                    Foreground = Brushes.White,
+                    TextTrimming = TextTrimming.CharacterEllipsis,
+                    MaxWidth = CELL_W - 20
+                };
+                srcBadge.ToolTip = entry.SourceLabel;
+                cellGrid.Children.Add(srcBadge);
+            }
 
             var labelStack = new StackPanel
             {
@@ -298,7 +379,7 @@ namespace FlyShelf.Windows
 
             var pageLabel = new TextBlock
             {
-                Text = $"pg {originalPage}",
+                Text = $"pg {entry.OriginalPage}",
                 FontSize = 9,
                 Opacity = 0.5,
                 HorizontalAlignment = HorizontalAlignment.Center,
@@ -314,12 +395,16 @@ namespace FlyShelf.Windows
                 Margin = new Thickness(CELL_MARGIN),
                 CornerRadius = new CornerRadius(6),
                 Background = new SolidColorBrush(Color.FromArgb(15, 255, 255, 255)),
-                BorderBrush = new SolidColorBrush(Color.FromArgb(25, 255, 255, 255)),
+                BorderBrush = entry.IsExternal
+                    ? new SolidColorBrush(Color.FromArgb(60, 46, 134, 222))
+                    : new SolidColorBrush(Color.FromArgb(25, 255, 255, 255)),
                 BorderThickness = new Thickness(1),
                 Cursor = Cursors.Hand,
-                Tag = new int[] { orderIndex, originalPage },
+                Tag = entry,
                 Child = cellGrid,
-                ToolTip = $"Position {orderIndex + 1} • Original page {originalPage}",
+                ToolTip = entry.IsExternal
+                    ? $"Position {orderIndex + 1} • Page {entry.OriginalPage} from {entry.SourceLabel}"
+                    : $"Position {orderIndex + 1} • Original page {entry.OriginalPage}",
                 AllowDrop = true,
                 RenderTransform = new TranslateTransform(),
                 SnapsToDevicePixels = true
@@ -347,6 +432,11 @@ namespace FlyShelf.Windows
         // ═══════════════════════════════════════════════════════════════
         // SELECTION
         // ═══════════════════════════════════════════════════════════════
+
+        private int GetTileIndex(Border tile)
+        {
+            return PageItemsControl.Items.IndexOf(tile);
+        }
 
         private void ToggleSelection(int index, bool ctrlHeld)
         {
@@ -377,21 +467,27 @@ namespace FlyShelf.Windows
                         : new SolidColorBrush(Color.FromArgb(15, 255, 255, 255));
                     tile.BorderBrush = sel
                         ? (TryFindResource("ThemeAccent") as Brush ?? new SolidColorBrush(Color.FromRgb(139, 92, 246)))
-                        : new SolidColorBrush(Color.FromArgb(25, 255, 255, 255));
+                        : (tile.Tag is PageEntry pe && pe.IsExternal
+                            ? new SolidColorBrush(Color.FromArgb(60, 46, 134, 222))
+                            : new SolidColorBrush(Color.FromArgb(25, 255, 255, 255)));
                     tile.BorderThickness = sel ? new Thickness(2) : new Thickness(1);
                 }
             }
             SelectedCountText.Text = _selectedIndices.Count > 0
                 ? $"{_selectedIndices.Count} selected"
-                : $"{_pageOrder.Count} pages";
+                : $"{_pageEntries.Count} pages";
         }
 
         private void UpdateInfo()
         {
-            PageCountInfo.Text = $"{_pageOrder.Count} pages from {_item.FileName}";
+            int externalCount = _pageEntries.Count(p => p.IsExternal);
+            string info = externalCount > 0
+                ? $"{_pageEntries.Count} pages ({externalCount} from other PDFs)"
+                : $"{_pageEntries.Count} pages from {_item.FileName}";
+            PageCountInfo.Text = info;
             SelectedCountText.Text = _selectedIndices.Count > 0
                 ? $"{_selectedIndices.Count} selected"
-                : $"{_pageOrder.Count} pages";
+                : $"{_pageEntries.Count} pages";
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -400,9 +496,10 @@ namespace FlyShelf.Windows
 
         private void Tile_MouseDown(object sender, MouseButtonEventArgs e)
         {
-            if (sender is Border tile && tile.Tag is int[] meta)
+            if (sender is Border tile)
             {
-                int idx = meta[0];
+                int idx = GetTileIndex(tile);
+                if (idx < 0) return;
                 _dragStartPoint = e.GetPosition(null);
                 _dragStartIndex = idx;
                 bool ctrl = Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl);
@@ -468,11 +565,12 @@ namespace FlyShelf.Windows
             // Auto-scroll
             UpdateAutoScroll(e);
 
-            // LIVE REORDER: move the dragged page(s) in _pageOrder as cursor hovers
-            if (sender is Border targetTile && targetTile.Tag is int[] targetMeta)
+            // LIVE REORDER: move the dragged page(s) as cursor hovers
+            if (sender is Border targetTile)
             {
-                int targetIndex = targetMeta[0];
-                LiveReorder(targetIndex);
+                int targetIndex = GetTileIndex(targetTile);
+                if (targetIndex >= 0)
+                    LiveReorder(targetIndex);
             }
         }
 
@@ -522,10 +620,10 @@ namespace FlyShelf.Windows
             _currentDragOverIndex = targetIndex;
 
             // Move in data
-            int page = _pageOrder[fromIndex];
-            _pageOrder.RemoveAt(fromIndex);
-            int insertAt = Math.Min(targetIndex, _pageOrder.Count);
-            _pageOrder.Insert(insertAt, page);
+            var entry = _pageEntries[fromIndex];
+            _pageEntries.RemoveAt(fromIndex);
+            int insertAt = Math.Min(targetIndex, _pageEntries.Count);
+            _pageEntries.Insert(insertAt, entry);
 
             // Move the existing tile in the Items collection (no recreation)
             var tile = PageItemsControl.Items[fromIndex];
@@ -543,10 +641,6 @@ namespace FlyShelf.Windows
             {
                 if (PageItemsControl.Items[i] is Border b)
                 {
-                    // Update Tag
-                    if (b.Tag is int[] meta)
-                        meta[0] = i;
-
                     // Update badge text
                     if (b.Child is Grid g)
                     {
@@ -603,7 +697,7 @@ namespace FlyShelf.Windows
 
         private void SelectAll_Click(object sender, RoutedEventArgs e)
         {
-            _selectedIndices = new HashSet<int>(Enumerable.Range(0, _pageOrder.Count));
+            _selectedIndices = new HashSet<int>(Enumerable.Range(0, _pageEntries.Count));
             UpdateVisuals();
         }
 
@@ -623,7 +717,7 @@ namespace FlyShelf.Windows
             foreach (int idx in sorted)
             {
                 int newIdx = idx - 1;
-                (_pageOrder[idx], _pageOrder[newIdx]) = (_pageOrder[newIdx], _pageOrder[idx]);
+                (_pageEntries[idx], _pageEntries[newIdx]) = (_pageEntries[newIdx], _pageEntries[idx]);
                 newSel.Add(newIdx);
             }
             _selectedIndices = newSel;
@@ -635,13 +729,13 @@ namespace FlyShelf.Windows
         {
             if (_selectedIndices.Count == 0) return;
             var sorted = _selectedIndices.OrderByDescending(i => i).ToList();
-            if (sorted[0] >= _pageOrder.Count - 1) return;
+            if (sorted[0] >= _pageEntries.Count - 1) return;
 
             var newSel = new HashSet<int>();
             foreach (int idx in sorted)
             {
                 int newIdx = idx + 1;
-                (_pageOrder[idx], _pageOrder[newIdx]) = (_pageOrder[newIdx], _pageOrder[idx]);
+                (_pageEntries[idx], _pageEntries[newIdx]) = (_pageEntries[newIdx], _pageEntries[idx]);
                 newSel.Add(newIdx);
             }
             _selectedIndices = newSel;
@@ -651,8 +745,104 @@ namespace FlyShelf.Windows
 
         private void Reverse_Click(object sender, RoutedEventArgs e)
         {
-            _pageOrder.Reverse();
+            _pageEntries.Reverse();
             RebuildGrid(true);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // ADD PAGES FROM EXTERNAL PDF
+        // ═══════════════════════════════════════════════════════════════
+
+        private void AddPages_Click(object sender, RoutedEventArgs e)
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = "PDF Files (*.pdf)|*.pdf",
+                Title = "Select PDF to add pages from",
+                Multiselect = true
+            };
+
+            if (dlg.ShowDialog() != true) return;
+
+            foreach (string filePath in dlg.FileNames)
+            {
+                try
+                {
+                    int pageCount;
+                    using (var doc = PdfSharp.Pdf.IO.PdfReader.Open(filePath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import))
+                    {
+                        pageCount = doc.PageCount;
+                    }
+
+                    if (pageCount == 0)
+                    {
+                        ToastWindow.ShowToast($"⚠️ {Path.GetFileName(filePath)} has no pages.");
+                        continue;
+                    }
+
+                    string fileName = Path.GetFileName(filePath);
+
+                    // Determine insert position: after last selected, or at the end
+                    int insertAt = _selectedIndices.Count > 0
+                        ? _selectedIndices.Max() + 1
+                        : _pageEntries.Count;
+
+                    // Add all pages from the external PDF
+                    for (int p = 1; p <= pageCount; p++)
+                    {
+                        _pageEntries.Insert(insertAt, new PageEntry
+                        {
+                            OriginalPage = p,
+                            SourceFile = filePath,
+                            SourceLabel = fileName,
+                            IsExternal = true
+                        });
+                        insertAt++;
+                    }
+
+                    // Load thumbnails for the new file
+                    LoadThumbnailsAsync(filePath, pageCount);
+
+                    ToastWindow.ShowToast($"✅ Added {pageCount} pages from {fileName}");
+                }
+                catch (Exception ex)
+                {
+                    ToastWindow.ShowToast($"❌ Failed to read {Path.GetFileName(filePath)}: {ex.Message}");
+                }
+            }
+
+            _selectedIndices.Clear();
+            RebuildGrid(false);
+            UpdateVisuals();
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // DELETE SELECTED PAGES
+        // ═══════════════════════════════════════════════════════════════
+
+        private void DeleteSelected_Click(object sender, RoutedEventArgs e)
+        {
+            if (_selectedIndices.Count == 0)
+            {
+                ToastWindow.ShowToast("⚠️ Select pages to delete first.");
+                return;
+            }
+
+            if (_selectedIndices.Count >= _pageEntries.Count)
+            {
+                ToastWindow.ShowToast("⚠️ Can't delete all pages — at least one page must remain.");
+                return;
+            }
+
+            // Remove in reverse order to preserve indices
+            foreach (int idx in _selectedIndices.OrderByDescending(i => i))
+            {
+                _pageEntries.RemoveAt(idx);
+            }
+
+            _selectedIndices.Clear();
+            RebuildGrid(true);
+            UpdateVisuals();
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -663,6 +853,11 @@ namespace FlyShelf.Windows
  
         private void Confirm_Click(object sender, RoutedEventArgs e)
         {
+            if (_pageEntries.Count == 0)
+            {
+                ToastWindow.ShowToast("⚠️ No pages remaining.");
+                return;
+            }
             WasConfirmed = true;
             Close();
         }

@@ -45,7 +45,7 @@ namespace FlyShelf.ViewModels
                 return;
             }
 
-            Task.Run(() =>
+            Task.Run(async () =>
             {
                 try
                 {
@@ -63,15 +63,19 @@ namespace FlyShelf.ViewModels
                     );
 
                     string targetPdf = Path.Combine(
-                        Path.GetDirectoryName(FilePath) ?? Path.GetTempPath(),
-                        Path.GetFileNameWithoutExtension(FilePath) + $"_Converted_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
+                         Path.GetDirectoryName(FilePath) ?? Path.GetTempPath(),
+                         Path.GetFileNameWithoutExtension(FilePath) + $"_Converted_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
 
                     bool converted = false;
 
                     // ═══════════════════════════════════════════════════════
                     // STRATEGY 1: TXT/MD — Native PDF generation (no Word needed)
                     // ═══════════════════════════════════════════════════════
-                    if (ext == ".TXT" || ext == ".MD" || ext == ".LOG" || ext == ".CSV")
+                    if (ext == ".MD")
+                    {
+                        converted = await FlyShelf.Classes.ConversionUtils.ConvertMarkdownToPdfAsync(FilePath, targetPdf);
+                    }
+                    else if (ext == ".TXT" || ext == ".LOG" || ext == ".CSV")
                     {
                         converted = ConvertTextToPdfNative(FilePath, targetPdf);
                     }
@@ -107,6 +111,9 @@ namespace FlyShelf.ViewModels
                             (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
                             FlyShelf.Windows.ToastWindow.ShowToast("PDF Converted Successfully ✅");
                             FlyShelf.Classes.LicenseManager.RecordDocConversion();
+
+                            // Scroll to top after a short delay so the new PDF item is visible
+                            mainWin?.ScrollClipboardToTop();
                         });
                     }
                     else
@@ -578,6 +585,9 @@ namespace FlyShelf.ViewModels
                         (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
                         FlyShelf.Windows.ToastWindow.ShowToast($"Image → PDF converted! ✅ {Path.GetFileName(outputPdf)}");
                         FlyShelf.Classes.LicenseManager.RecordImageToPdf();
+
+                        // Scroll to top after a short delay so the new PDF item is visible
+                        mainWin?.ScrollClipboardToTop();
                     });
                 }
                 catch (Exception ex)

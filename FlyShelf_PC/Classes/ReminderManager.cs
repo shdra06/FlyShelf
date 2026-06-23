@@ -113,7 +113,7 @@ namespace FlyShelf.Classes
         private static ObservableCollection<ReminderItem> _reminders = new();
         private static Timer? _saveTimer;
         private static readonly object _lock = new();
-        private static volatile bool _isDirty;
+        private static volatile int _isDirty = 0; // RM-1 FIX: int for Interlocked atomic ops (0=clean, 1=dirty)
 
         public static ObservableCollection<ReminderItem> Reminders
         {
@@ -180,6 +180,8 @@ namespace FlyShelf.Classes
             }
         }
 
+        private const int MAX_REMINDERS = 500;
+
         public static ReminderItem AddReminder(string title, string notes, DateTime dueAtUtc, string category, RepeatMode repeat)
         {
             var item = new ReminderItem
@@ -194,6 +196,32 @@ namespace FlyShelf.Classes
 
             lock (_lock)
             {
+                // Enforce hard cap — evict oldest completed reminders first
+                if (_reminders.Count >= MAX_REMINDERS)
+                {
+                    var completedOldest = _reminders
+                        .Where(r => r.IsDone)
+                        .OrderBy(r => r.CreatedAt)
+                        .ToList();
+
+                    if (completedOldest.Count > 0)
+                    {
+                        // Remove enough completed reminders to make room
+                        int toRemove = Math.Min(completedOldest.Count, _reminders.Count - MAX_REMINDERS + 1);
+                        for (int i = 0; i < toRemove; i++)
+                            _reminders.Remove(completedOldest[i]);
+
+                        Logger.LogAction("REMINDERS", $"Evicted {toRemove} oldest completed reminders to stay under {MAX_REMINDERS} cap.");
+                    }
+
+                    // If still at cap (all active), reject the add
+                    if (_reminders.Count >= MAX_REMINDERS)
+                    {
+                        Logger.LogAction("REMINDERS", $"Cannot add reminder — hard cap of {MAX_REMINDERS} reached with no completed reminders to evict.");
+                        return null!;
+                    }
+                }
+
                 _reminders.Add(item);
             }
 
@@ -307,14 +335,13 @@ namespace FlyShelf.Classes
 
         public static void ScheduleSave()
         {
-            _isDirty = true;
+            Interlocked.Exchange(ref _isDirty, 1); // RM-1 FIX: atomic set
             lock (_lock)
             {
                 _saveTimer?.Dispose();
                 _saveTimer = new Timer(_ =>
                 {
-                    if (!_isDirty) return;
-                    _isDirty = false;
+                    if (Interlocked.CompareExchange(ref _isDirty, 0, 1) == 0) return; // already clean
                     SaveNow();
                 }, null, 2000, Timeout.Infinite);
             }

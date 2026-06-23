@@ -52,6 +52,12 @@ public static partial class NativeMethods
     internal const int WM_KEYUP = 0x0101;
     internal const int WM_SETTINGCHANGE = 0x001A;
 
+    // Mouse Hook (for click-to-release arrow navigation)
+    internal const int WH_MOUSE_LL = 14;
+    internal const int WM_LBUTTONDOWN = 0x0201;
+    internal const int WM_RBUTTONDOWN = 0x0204;
+    internal const int WM_MBUTTONDOWN = 0x0207;
+
     // Shell Hook Messages
     internal const int HSHELL_APPCOMMAND = 12;
 
@@ -217,6 +223,7 @@ public static partial class NativeMethods
     internal delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
     internal delegate bool MonitorEnumProc(IntPtr hMonitor, IntPtr hdcMonitor, ref RECT lprcMonitor, IntPtr dwData);
     internal delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
+    internal delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
 
     #endregion
 
@@ -320,6 +327,9 @@ public static partial class NativeMethods
 
     [LibraryImport("user32.dll", EntryPoint = "SetWindowsHookExW", SetLastError = true)]
     internal static partial IntPtr SetWindowsHookEx(int idHook, LowLevelKeyboardProc lpfn, IntPtr hMod, uint dwThreadId);
+
+    [LibraryImport("user32.dll", EntryPoint = "SetWindowsHookExW", SetLastError = true)]
+    internal static partial IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
 
     [LibraryImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

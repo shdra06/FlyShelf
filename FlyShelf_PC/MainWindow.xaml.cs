@@ -67,6 +67,7 @@ namespace FlyShelf
         private Guid _currentDesktopId = Guid.Empty; // Updated on every foreground change from the fg window's desktop GUID
         private bool _lastActiveExternalWindowWasOnCurrentAtSummon = false;
         internal bool _isFirstLaunchAfterOnboarding = false; // Set by App.xaml.cs after onboarding completes
+        private volatile bool _isStartupReady = false; // Set true after theme init completes — guards hotkey spam during startup
 
         private FlyShelf.Classes.NativeMethods.IVirtualDesktopManager? _vdm = null;
         private FlyShelf.Classes.NativeMethods.IVirtualDesktopManager? GetVirtualDesktopManager()
@@ -89,6 +90,31 @@ namespace FlyShelf
                 _shelfScrollViewer = FindVisualChild<ScrollViewer>(ShelfListView);
             }
             return _shelfScrollViewer;
+        }
+
+        /// <summary>
+        /// Scrolls the clipboard list to the top after a short delay.
+        /// Used after async operations (e.g. PDF conversion) that insert new items at index 0
+        /// via HandleDrop, which runs its insertion on a background thread + dispatcher callback.
+        /// The delay ensures the item is already in the collection before we scroll.
+        /// </summary>
+        public void ScrollClipboardToTop()
+        {
+            Dispatcher.InvokeAsync(async () =>
+            {
+                await System.Threading.Tasks.Task.Delay(300);
+                try
+                {
+                    Classes.SmoothScroll.ResetScrollState(GetShelfScrollViewer());
+                    var sv = GetShelfScrollViewer();
+                    if (sv != null)
+                    {
+                        sv.ScrollToVerticalOffset(0);
+                        sv.ScrollToTop();
+                    }
+                }
+                catch { }
+            });
         }
 
         [DllImport("user32.dll", SetLastError = true)]
@@ -168,6 +194,9 @@ namespace FlyShelf
         private const int HOTKEY_ID = 9000;
         private const int HOTKEY_QUICKPASTE_BASE = 9001; // 9001-9009 for Alt+1 through Alt+9
         private const uint MOD_ALT = 0x0001;
+        private const uint MOD_CONTROL = 0x0002;
+        private const uint MOD_SHIFT = 0x0004;
+        private const uint MOD_WIN = 0x0008;
         private const uint MOD_NOREPEAT = 0x4000;
         private const int WM_HOTKEY = 0x0312;
 
@@ -243,6 +272,12 @@ namespace FlyShelf
             this.DataContext = vm;
             _viewModel = vm;
             InitializeComponent();
+
+#if MSIX_STORE
+            // Hide Research Mode in Store build — feature not ready for public release
+            ResearchToggleBtn.Visibility = Visibility.Collapsed;
+            AltResearchBtn.Visibility = Visibility.Collapsed;
+#endif
             this.Width = _viewModel.CurrentFlyShelfWidth;
 
             // Load shortcuts at startup
@@ -259,8 +294,11 @@ namespace FlyShelf
             {
                 HwndSource.FromHwnd(hwnd)?.AddHook(HwndHook);
                 AddClipboardFormatListener(hwnd);
-                RegisterHotKey(hwnd, HOTKEY_ID, MOD_ALT | MOD_NOREPEAT, 0x43); // Alt+C
-                Classes.Logger.LogAction("HOTKEY", $"Alt+C registered");
+                var settings = Classes.SettingsManager.Current;
+                bool hotkeyRegistered = RegisterHotKey(hwnd, HOTKEY_ID, settings.HotkeyModifier | MOD_NOREPEAT, settings.HotkeyKey);
+                if (!hotkeyRegistered)
+                    Windows.ToastWindow.ShowToast($"⚠️ Could not register {settings.HotkeyDisplayString} — another app may be using it. Change in Settings.");
+                Classes.Logger.LogAction("HOTKEY", $"{settings.HotkeyDisplayString} registered: {hotkeyRegistered}");
 
                 if (Classes.SettingsManager.Current.EnableQuickPasteHotkeys)
                 {
@@ -273,6 +311,16 @@ namespace FlyShelf
                     Classes.Logger.LogAction("HOTKEY", $"Alt+1 through Alt+0 registered");
                 }
             }
+
+            // Live-update the summon hotkey when user changes it in settings
+            Classes.SettingsManager.Current.PropertyChanged += (s, e) =>
+            {
+                if (e.PropertyName == nameof(Classes.SettingsManager.Current.HotkeyModifier) ||
+                    e.PropertyName == nameof(Classes.SettingsManager.Current.HotkeyKey))
+                {
+                    ReRegisterSummonHotkey();
+                }
+            };
 
             this.SizeChanged += (s, e) =>
             {
@@ -291,7 +339,7 @@ namespace FlyShelf
 
                 if (_isEdgeLocked && _lockedBottomEdge > 0 && this.ActualWidth > 0 && this.ActualHeight > 0)
                 {
-                    var workArea = SystemParameters.WorkArea;
+                    var workArea = GetWorkAreaForPoint(Left, Top);
 
                     if (e.WidthChanged && e.PreviousSize.Width > 0)
                     {
@@ -374,7 +422,7 @@ namespace FlyShelf
                     if (_isEdgeLocked && this.ActualHeight > 0)
                     {
                         double newTop = _lockedBottomEdge - this.ActualHeight - 20;
-                        var workArea = SystemParameters.WorkArea;
+                        var workArea = GetWorkAreaForPoint(Left, Top);
                         if (newTop < workArea.Top + 16)
                             newTop = workArea.Top + 16;
                         if (newTop + this.ActualHeight > workArea.Top + workArea.Height - 16)
@@ -589,6 +637,33 @@ namespace FlyShelf
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool SetForegroundWindow(IntPtr hWnd);
 
+        [DllImport("user32.dll")]
+        private static extern IntPtr WindowFromPhysicalPoint(Classes.NativeMethods.POINT Point);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetAncestor(IntPtr hwnd, uint gaFlags);
+
+        [DllImport("user32.dll")]
+        private static extern void mouse_event(uint dwFlags, int dx, int dy, uint dwData, UIntPtr dwExtraInfo);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetCursorPos(int X, int Y);
+
+        private const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+        private const uint MOUSEEVENTF_LEFTUP = 0x0004;
+
+        /// <summary>
+        /// Simulates a mouse click at the specified screen coordinates.
+        /// Used by drag-and-drop fallback to click into a text field before Ctrl+V.
+        /// </summary>
+        private static void SendClickAt(int screenX, int screenY)
+        {
+            SetCursorPos(screenX, screenY);
+            mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, UIntPtr.Zero);
+            mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, UIntPtr.Zero);
+        }
+
         [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
         private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder lpString, int nMaxCount);
 
@@ -644,6 +719,9 @@ namespace FlyShelf
             {
                 Classes.Logger.LogAction("WIDGET_FAIL", $"Failed to create taskbar widget: {ex.Message}");
             }
+
+            // Initialize Incognito Mode (loads persisted state, wires events)
+            try { InitializeIncognitoMode(); } catch { }
 
             // ═══ FIRST-LAUNCH: Auto-summon clipboard AND open Hub (Settings tab) after onboarding ═══
             if (_isFirstLaunchAfterOnboarding)
@@ -1125,6 +1203,17 @@ namespace FlyShelf
                     }
 
                     Classes.Logger.LogAction("THEME", $"Mascot overlays wired. Startup mode: {startupMode}");
+
+                    // ═══ START WALLPAPER FILE WATCHER ═══
+                    // Monitors %APPDATA%\Microsoft\Windows\Themes\TranscodedWallpaper for changes.
+                    // Catches Spotlight, slideshow, and Bing wallpaper changes that WM_SETTINGCHANGE misses.
+                    StartWallpaperFileWatcher();
+
+                    // ═══ STARTUP GUARD: Mark app as ready for hotkey summons ═══
+                    // Without this, spamming Alt+C before theme init completes
+                    // shows the clipboard with wrong/default colors (bluish tint on buttons).
+                    _isStartupReady = true;
+                    Classes.Logger.LogAction("STARTUP", "Theme init complete — hotkey summons now allowed");
                 }
                 catch (Exception ex)
                 {
@@ -1254,6 +1343,7 @@ namespace FlyShelf
                 }
             }
             catch { }
+            try { _taskbarWidget?.Close(); } catch { }
             try
             {
                 if (_foregroundHook != IntPtr.Zero)
@@ -1287,6 +1377,9 @@ namespace FlyShelf
                 // Unsubscribe static event handlers to prevent memory leaks
                 if (_updateStatusChangedHandler != null)
                     Classes.UpdateManager.GlobalUpdateStatusChanged -= _updateStatusChangedHandler;
+                Classes.UpdateManager.GlobalUpdateStatusChanged -= OnGlobalUpdateStatusChanged;
+                if (_incognitoStateChangedHandler != null)
+                    Classes.IncognitoManager.IncognitoStateChanged -= _incognitoStateChangedHandler;
                 if (_coastPrefetchHandler != null)
                     Classes.SmoothScroll.CoastPrefetchNeeded -= _coastPrefetchHandler;
 
@@ -1301,6 +1394,19 @@ namespace FlyShelf
             }
             catch { /* Window already destroyed — nothing to clean up */ }
             base.OnClosed(e);
+        }
+
+        public bool ReRegisterSummonHotkey()
+        {
+            var handle = new WindowInteropHelper(this).Handle;
+            if (handle == IntPtr.Zero) return false;
+            UnregisterHotKey(handle, HOTKEY_ID);
+            var s = Classes.SettingsManager.Current;
+            bool ok = RegisterHotKey(handle, HOTKEY_ID, s.HotkeyModifier | MOD_NOREPEAT, s.HotkeyKey);
+            if (!ok)
+                Windows.ToastWindow.ShowToast($"⚠️ Could not register {s.HotkeyDisplayString} — another app may be using it.");
+            Classes.Logger.LogAction("HOTKEY", $"ReRegister {s.HotkeyDisplayString}: {ok}");
+            return ok;
         }
 
         // ═══ HwndHook (Hotkeys, Clipboard, Settings) moved to MainWindow.WndProc.cs ═══
@@ -1357,6 +1463,8 @@ namespace FlyShelf
                 CloseNotesPanel(immediate: true);
             if (_isTodoActive)
                 CloseTodoPanel(immediate: true);
+            if (_isResearchActive)
+                CloseResearchPanel(immediate: true);
         }
 
         /// <summary>

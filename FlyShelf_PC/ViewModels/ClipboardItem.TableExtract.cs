@@ -89,7 +89,8 @@ namespace FlyShelf.ViewModels
 
                             {
                                 // Collect all words with their bounding boxes
-                                var allWords = new List<(string Text, double X, double Y, double W, double H, double Right, double Bottom, double CenterX, double CenterY)>();
+                                var allWords = new List<(string Text, double X, double Y, double W, double H, double Right, double Bottom, double CenterX, double CenterY, int LineIndex)>();
+                                int lineIdx = 0;
                                 foreach (var line in ocrResult.Lines)
                                 {
                                     foreach (var word in line.Words)
@@ -104,9 +105,11 @@ namespace FlyShelf.ViewModels
                                             rect.X + rect.Width,
                                             rect.Y + rect.Height,
                                             rect.X + rect.Width / 2.0,
-                                            rect.Y + rect.Height / 2.0
+                                            rect.Y + rect.Height / 2.0,
+                                            lineIdx
                                         ));
                                     }
+                                    lineIdx++;
                                 }
 
                                 Classes.Logger.LogAction("TABLE_OCR", $"Found {allWords.Count} words in {ocrResult.Lines.Count} lines");
@@ -178,8 +181,8 @@ namespace FlyShelf.ViewModels
                                 }
 
                                 // Cluster words into rows
-                                var rows = new List<List<(string Text, double X, double W, double Right, double CenterX)>>();
-                                var currentRow = new List<(string Text, double X, double W, double Right, double CenterX)>();
+                                var rows = new List<List<(string Text, double X, double W, double Right, double CenterX, int LineIndex)>>();
+                                var currentRow = new List<(string Text, double X, double W, double Right, double CenterX, int LineIndex)>();
                                 double lastY = sorted[0].Y;
 
                                 foreach (var word in sorted)
@@ -187,9 +190,9 @@ namespace FlyShelf.ViewModels
                                     if (Math.Abs(word.Y - lastY) > rowThreshold && currentRow.Count > 0)
                                     {
                                         rows.Add(currentRow.OrderBy(w => w.X).ToList());
-                                        currentRow = new List<(string Text, double X, double W, double Right, double CenterX)>();
+                                        currentRow = new List<(string Text, double X, double W, double Right, double CenterX, int LineIndex)>();
                                     }
-                                    currentRow.Add((word.Text, word.X, word.W, word.Right, word.CenterX));
+                                    currentRow.Add((word.Text, word.X, word.W, word.Right, word.CenterX, word.LineIndex));
                                     lastY = word.Y;
                                 }
                                 if (currentRow.Count > 0)
@@ -201,93 +204,157 @@ namespace FlyShelf.ViewModels
                                     return;
                                 }
 
-                                // -- STEP 3: Advanced Column Detection using X-Projection Profiles --
-                                // Detect columns by projecting words horizontally and locating empty vertical gutters.
-                                int widthInt = imagePixelWidth;
-                                int[] xProfile = new int[widthInt];
+                                // -- STEP 3: Smart Column Detection via Gap Analysis --
+                                // Instead of projection profiles that confuse inter-word spaces with
+                                // column gutters, we merge same-line words into text segments, then
+                                // statistically classify inter-segment gaps and use multi-row voting.
 
-                                // Exclude spanned/merged headers or text blocks (width > 30% of total image width)
-                                foreach (var word in allWords)
+                                // 3a: Build text segments per row by merging same-line consecutive words
+                                var allGaps = new List<(double Center, double Width, int RowIndex)>();
+
+                                for (int ri = 0; ri < rows.Count; ri++)
                                 {
-                                    if (word.W > widthInt * 0.3)
-                                        continue;
+                                    var row = rows[ri];
+                                    if (row.Count < 2) continue;
 
-                                    int left = Math.Clamp((int)word.X, 0, widthInt - 1);
-                                    int right = Math.Clamp((int)word.Right, 0, widthInt - 1);
+                                    // Merge consecutive words from same OCR line with small gaps
+                                    var segments = new List<(double Left, double Right)>();
+                                    double segLeft = row[0].X;
+                                    double segRight = row[0].Right;
+                                    int segLine = row[0].LineIndex;
 
-                                    for (int i = left; i <= right; i++)
+                                    for (int wi = 1; wi < row.Count; wi++)
                                     {
-                                        xProfile[i]++;
-                                    }
-                                }
+                                        double gapToNext = row[wi].X - segRight;
+                                        bool sameLine = row[wi].LineIndex == segLine;
 
-                                // Locate continuous empty vertical gutters (valleys where xProfile is 0)
-                                var gutters = new List<(int Start, int End)>();
-                                bool inGutter = false;
-                                int gutterStart = 0;
-
-                                for (int i = 0; i < widthInt; i++)
-                                {
-                                    bool isGutter = xProfile[i] == 0;
-                                    if (isGutter)
-                                    {
-                                        if (!inGutter)
+                                        // Merge if same OCR line and gap is small (< 1.5x median char height)
+                                        if (sameLine && gapToNext < medianHeight * 1.5 && gapToNext >= 0)
                                         {
-                                            gutterStart = i;
-                                            inGutter = true;
+                                            segRight = Math.Max(segRight, row[wi].Right);
+                                        }
+                                        else
+                                        {
+                                            segments.Add((segLeft, segRight));
+                                            segLeft = row[wi].X;
+                                            segRight = row[wi].Right;
+                                            segLine = row[wi].LineIndex;
                                         }
                                     }
-                                    else
+                                    segments.Add((segLeft, segRight));
+
+                                    // Compute inter-segment gaps
+                                    for (int si = 1; si < segments.Count; si++)
                                     {
-                                        if (inGutter)
+                                        double gapWidth = segments[si].Left - segments[si - 1].Right;
+                                        if (gapWidth > 0)
                                         {
-                                            gutters.Add((gutterStart, i - 1));
-                                            inGutter = false;
+                                            double gapCenter = (segments[si - 1].Right + segments[si].Left) / 2.0;
+                                            allGaps.Add((gapCenter, gapWidth, ri));
                                         }
                                     }
                                 }
-                                if (inGutter)
-                                {
-                                    gutters.Add((gutterStart, widthInt - 1));
-                                }
 
-                                // Filter and extract column separators
-                                double minTextX = allWords.Min(w => w.X);
-                                double maxTextX = allWords.Max(w => w.Right);
-
+                                // 3b: Statistical gap classification using Otsu's method on gap widths
                                 var separators = new List<double>();
-                                foreach (var gutter in gutters)
+
+                                if (allGaps.Count > 0)
                                 {
-                                    double center = (gutter.Start + gutter.End) / 2.0;
-                                    int gutterWidth = gutter.End - gutter.Start + 1;
+                                    var sortedGapWidths = allGaps.Select(g => g.Width).OrderBy(w => w).ToList();
+                                    double medianGap = sortedGapWidths[sortedGapWidths.Count / 2];
 
-                                    // Ignore gutters that are too narrow (less than 5 pixels)
-                                    if (gutterWidth < 5)
-                                        continue;
+                                    // Find bimodal threshold separating word-gaps from column-gaps
+                                    double bestGapThreshold = medianGap * 2.0;
+                                    double bestGapVariance = double.MinValue;
+                                    var distinctWidths = sortedGapWidths.Distinct().OrderBy(w => w).ToList();
 
-                                    // Separator must be strictly between active text boundaries
-                                    if (center > minTextX && center < maxTextX)
+                                    foreach (var t in distinctWidths)
                                     {
-                                        separators.Add(center);
+                                        var below = sortedGapWidths.Where(g => g <= t).ToList();
+                                        var above = sortedGapWidths.Where(g => g > t).ToList();
+                                        if (below.Count == 0 || above.Count == 0) continue;
+
+                                        double w0 = (double)below.Count / sortedGapWidths.Count;
+                                        double w1 = (double)above.Count / sortedGapWidths.Count;
+                                        double m0 = below.Average();
+                                        double m1 = above.Average();
+                                        double interClassVariance = w0 * w1 * (m0 - m1) * (m0 - m1);
+
+                                        if (interClassVariance > bestGapVariance)
+                                        {
+                                            bestGapVariance = interClassVariance;
+                                            bestGapThreshold = t;
+                                        }
                                     }
+
+                                    // Enforce minimum: column gaps must be notably wider than word spacing
+                                    double minThreshold = Math.Max(medianGap * 1.5, medianHeight * 0.5);
+                                    bestGapThreshold = Math.Max(bestGapThreshold, minThreshold);
+
+                                    Classes.Logger.LogAction("TABLE_OCR", $"Gap analysis: {allGaps.Count} gaps, median={medianGap:F1}, threshold={bestGapThreshold:F1}");
+
+                                    // 3c: Filter gaps above threshold and cluster by X position
+                                    var candidateGaps = allGaps.Where(g => g.Width > bestGapThreshold).ToList();
+
+                                    // Cluster candidate gaps by X position (tolerance = medianHeight)
+                                    double clusterTolerance = medianHeight;
+                                    var clusters = new List<List<(double Center, double Width, int RowIndex)>>();
+
+                                    foreach (var gap in candidateGaps.OrderBy(g => g.Center))
+                                    {
+                                        bool added = false;
+                                        foreach (var cluster in clusters)
+                                        {
+                                            double clusterCenter = cluster.Average(g => g.Center);
+                                            if (Math.Abs(gap.Center - clusterCenter) <= clusterTolerance)
+                                            {
+                                                cluster.Add(gap);
+                                                added = true;
+                                                break;
+                                            }
+                                        }
+                                        if (!added)
+                                        {
+                                            clusters.Add(new List<(double Center, double Width, int RowIndex)> { gap });
+                                        }
+                                    }
+
+                                    // 3d: Confirm separators via multi-row consistency voting
+                                    // A separator must appear in at least 40% of rows (allows for merged cells)
+                                    int minRowCount = Math.Max(2, (int)(rows.Count * 0.4));
+
+                                    foreach (var cluster in clusters)
+                                    {
+                                        int distinctRows = cluster.Select(g => g.RowIndex).Distinct().Count();
+                                        if (distinctRows >= minRowCount)
+                                        {
+                                            double separatorX = cluster.Average(g => g.Center);
+                                            separators.Add(separatorX);
+                                        }
+                                    }
+
+                                    separators = separators.OrderBy(s => s).ToList();
                                 }
-                                separators = separators.OrderBy(s => s).ToList();
 
                                 int numCols = separators.Count + 1;
 
-                                // Fallback: if projection profile found only 1 column, segment horizontally based on max words
+                                // Fallback: if only 1 column found, use header-row word positions as anchors
                                 if (numCols < 2 && rows.Count >= 2)
                                 {
-                                    int maxRowWords = rows.Max(r => r.Count);
-                                    if (maxRowWords >= 2)
+                                    var headerRow = rows[0];
+                                    if (headerRow.Count >= 2)
                                     {
-                                        double span = maxTextX - minTextX;
-                                        double colWidth = span / maxRowWords;
-                                        separators.Clear();
-                                        for (int i = 1; i < maxRowWords; i++)
+                                        // Headers are typically short words that align with column boundaries
+                                        for (int wi = 1; wi < headerRow.Count; wi++)
                                         {
-                                            separators.Add(minTextX + i * colWidth);
+                                            double gapWidth = headerRow[wi].X - headerRow[wi - 1].Right;
+                                            if (gapWidth > medianHeight * 0.5)
+                                            {
+                                                double sepX = (headerRow[wi - 1].Right + headerRow[wi].X) / 2.0;
+                                                separators.Add(sepX);
+                                            }
                                         }
+                                        separators = separators.OrderBy(s => s).ToList();
                                         numCols = separators.Count + 1;
                                     }
                                 }

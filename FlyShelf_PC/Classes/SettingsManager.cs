@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
@@ -156,6 +157,61 @@ namespace FlyShelf.Classes
         private bool _enableQuickPasteHotkeys = true;
         public bool EnableQuickPasteHotkeys { get => _enableQuickPasteHotkeys; set => SetProperty(ref _enableQuickPasteHotkeys, value); }
 
+        // ═══ Summon Hotkey Customization ═══
+        private uint _hotkeyModifier = 0x0001; // MOD_ALT
+        public uint HotkeyModifier { get => _hotkeyModifier; set => SetProperty(ref _hotkeyModifier, value); }
+
+        private uint _hotkeyKey = 0x43; // VK_C
+        public uint HotkeyKey { get => _hotkeyKey; set => SetProperty(ref _hotkeyKey, value); }
+
+        [JsonIgnore]
+        public string HotkeyDisplayString
+        {
+            get
+            {
+                var parts = new List<string>();
+                if ((_hotkeyModifier & 0x0002) != 0) parts.Add("Ctrl");
+                if ((_hotkeyModifier & 0x0001) != 0) parts.Add("Alt");
+                if ((_hotkeyModifier & 0x0004) != 0) parts.Add("Shift");
+                if ((_hotkeyModifier & 0x0008) != 0) parts.Add("Win");
+                parts.Add(GetKeyName(_hotkeyKey));
+                return string.Join(" + ", parts);
+            }
+        }
+
+        public static string GetKeyName(uint vk)
+        {
+            // Common VK codes to display names
+            return vk switch
+            {
+                >= 0x30 and <= 0x39 => ((char)vk).ToString(), // 0-9
+                >= 0x41 and <= 0x5A => ((char)vk).ToString(), // A-Z
+                >= 0x70 and <= 0x87 => $"F{vk - 0x6F}",      // F1-F24
+                0x20 => "Space",
+                0x0D => "Enter",
+                0x1B => "Esc",
+                0x09 => "Tab",
+                0x2E => "Delete",
+                0x24 => "Home",
+                0x23 => "End",
+                0x21 => "PgUp",
+                0x22 => "PgDn",
+                0x2D => "Insert",
+                0xBF => "/",
+                0xBE => ".",
+                0xBC => ",",
+                0xBB => "=",
+                0xBD => "-",
+                0xBA => ";",
+                0xDE => "'",
+                0xC0 => "`",
+                0xDB => "[",
+                0xDD => "]",
+                0xDC => "\\",
+                _ => $"Key(0x{vk:X2})"
+            };
+        }
+
         // Theme & Appearance
         private string _clipboardWallpaperPath = "";
         public string ClipboardWallpaperPath { get => _clipboardWallpaperPath; set => SetProperty(ref _clipboardWallpaperPath, value); }
@@ -176,7 +232,34 @@ namespace FlyShelf.Classes
 
         // QR Pairing
         private string _pairingKey = "";
+        /// <summary>Decrypted pairing key (in-memory only, never serialized directly).</summary>
+        [JsonIgnore]
         public string PairingKey { get => _pairingKey; set => SetProperty(ref _pairingKey, value); }
+
+        /// <summary>Serialized to JSON — holds the DPAPI-encrypted blob of PairingKey.</summary>
+        public string PairingKeyEncrypted
+        {
+            get => string.IsNullOrEmpty(_pairingKey) ? "" : SecureStorage.Encrypt(_pairingKey);
+            set => _pairingKey = string.IsNullOrEmpty(value) ? "" : SecureStorage.Decrypt(value);
+        }
+
+        /// <summary>
+        /// Backwards compatibility: Accepts old plaintext PairingKey from config.json
+        /// and migrates it to DPAPI-encrypted storage on next save.
+        /// </summary>
+        [JsonPropertyName("PairingKey")]
+        public string PairingKeyLegacy
+        {
+            get => null; // Never serialize this — only PairingKeyEncrypted is written
+            set
+            {
+                // Only accept legacy plaintext if encrypted field wasn't already loaded
+                if (!string.IsNullOrEmpty(value) && string.IsNullOrEmpty(_pairingKey))
+                {
+                    _pairingKey = value;
+                }
+            }
+        }
 
         // Shake to Open
         private bool _enableShakeToOpen = true;
@@ -237,6 +320,40 @@ namespace FlyShelf.Classes
         private bool _hasCompletedOnboarding = false;
         public bool HasCompletedOnboarding { get => _hasCompletedOnboarding; set => SetProperty(ref _hasCompletedOnboarding, value); }
 
+        // ═══ AI Provider Settings ═══
+
+        /// <summary>AI provider: "auto", "gemini", "openai", "claude", "windows", "offline"</summary>
+        private string _aiProvider = "auto";
+        public string AiProvider { get => _aiProvider; set => SetProperty(ref _aiProvider, value); }
+
+        /// <summary>Decrypted API key (in-memory only, never serialized directly).</summary>
+        private string _aiApiKey = "";
+        [JsonIgnore]
+        public string AiApiKey { get => _aiApiKey; set => SetProperty(ref _aiApiKey, value); }
+
+        /// <summary>Serialized to JSON — holds the DPAPI-encrypted blob of AiApiKey.</summary>
+        public string AiApiKeyEncrypted
+        {
+            get => string.IsNullOrEmpty(_aiApiKey) ? "" : SecureStorage.Encrypt(_aiApiKey);
+            set => _aiApiKey = string.IsNullOrEmpty(value) ? "" : SecureStorage.Decrypt(value);
+        }
+
+        /// <summary>Optional model name override (e.g. "gpt-4o", "gemini-1.5-pro").</summary>
+        private string _aiModelOverride = "";
+        public string AiModelOverride { get => _aiModelOverride; set => SetProperty(ref _aiModelOverride, value); }
+
+        /// <summary>Master AI toggle — when false, all AI features are disabled.</summary>
+        private bool _aiEnabled = true;
+        public bool AiEnabled { get => _aiEnabled; set => SetProperty(ref _aiEnabled, value); }
+
+        /// <summary>Default max response tokens for AI generation (256–4096).</summary>
+        private int _aiMaxTokens = 1024;
+        public int AiMaxTokens { get => _aiMaxTokens; set => SetProperty(ref _aiMaxTokens, value); }
+
+        /// <summary>Preferred language for AI translations (empty = auto-detect).</summary>
+        private string _aiPreferredLanguage = "";
+        public string AiPreferredLanguage { get => _aiPreferredLanguage; set => SetProperty(ref _aiPreferredLanguage, value); }
+
         /// <summary>
         /// Reflection-based property copying to keep the static Current reference stable.
         /// </summary>
@@ -286,6 +403,8 @@ namespace FlyShelf.Classes
         public static void Load()
         {
             string path = GetConfigPath();
+            // SM-2 FIX: Clean up any stale .tmp file left from a crash mid-write on the previous run
+            try { File.Delete(path + ".tmp"); } catch { }
             try
             {
                 if (File.Exists(path))
@@ -384,8 +503,8 @@ namespace FlyShelf.Classes
         /// </summary>
         private static void DebouncedSave()
         {
-            _saveDebounce?.Dispose();
-            _saveDebounce = new System.Threading.Timer(_ => Save(), null, 500, System.Threading.Timeout.Infinite);
+            var old = Interlocked.Exchange(ref _saveDebounce, new System.Threading.Timer(_ => Save(), null, 500, System.Threading.Timeout.Infinite));
+            old?.Dispose();
         }
 
         public static void ResetToDefaults()
@@ -400,7 +519,6 @@ namespace FlyShelf.Classes
         {
             try
             {
-                var json = JsonSerializer.Serialize(Current, new JsonSerializerOptions { WriteIndented = true });
                 string path = GetConfigPath();
                 System.Threading.Tasks.Task.Run(() =>
                 {
@@ -408,6 +526,10 @@ namespace FlyShelf.Classes
                     {
                         try
                         {
+                            // Serialize INSIDE the lock so we snapshot Current at write-time,
+                            // not at call-time. This prevents stale data if a property changes
+                            // between the Save() call and the background thread executing.
+                            var json = JsonSerializer.Serialize(Current, new JsonSerializerOptions { WriteIndented = true });
                             string tempPath = path + ".tmp";
                             RunWithRetry(() => File.WriteAllText(tempPath, json));
                             RunWithRetry(() => File.Move(tempPath, path, true));
@@ -421,7 +543,7 @@ namespace FlyShelf.Classes
             }
             catch (Exception ex)
             {
-                Logger.LogAction("SETTINGS_SAVE", $"Failed to serialize config: {ex.Message}");
+                Logger.LogAction("SETTINGS_SAVE", $"Failed to dispatch save task: {ex.Message}");
             }
         }
 

@@ -279,9 +279,40 @@ namespace FlyShelf.Classes
                     await Task.Delay(500);
                     try
                     {
+                        // ═══ LAN TRANSFER ENGINE: Start dedicated TCP listener for zero-copy file transfers ═══
+                        var transferManager = new LanTransferManager();
+                        transferManager.SetViewModel(_viewModel);
+                        var transferEngine = new LanTransferEngine();
+                        await transferEngine.StartAsync();
+                        transferManager.CleanupStaleCheckpoints();
+                        Logger.LogAction("TCP_ENGINE", $"LAN Transfer Engine initialized on port {LanTransferEngine.TRANSFER_PORT}");
+
                         var peerManager = new PeerManager();
                         await peerManager.StartAsync();
                         Logger.LogAction("PEER", $"v5 PeerManager initialized — {peerManager.AliveCount} peer(s) connected");
+
+                        // ═══ NEARBY DISCOVERY: Start UDP scanner for cross-network device detection ═══
+                        try
+                        {
+                            var nearbyDiscovery = new NearbyDiscovery();
+                            Logger.LogAction("NEARBY", "Nearby device discovery started");
+                        }
+                        catch (Exception ndEx)
+                        {
+                            Logger.LogAction("NEARBY", $"Nearby discovery init error: {ndEx.Message}");
+                        }
+
+                        // ═══ TRANSFER HISTORY: Initialize persistent history tracker ═══
+                        try
+                        {
+                            if (TransferHistory.Instance == null)
+                                _ = new TransferHistory();
+                            Logger.LogAction("HISTORY", $"Transfer history loaded — {TransferHistory.Instance?.Entries.Count ?? 0} entries");
+                        }
+                        catch (Exception thEx)
+                        {
+                            Logger.LogAction("HISTORY", $"History init error: {thEx.Message}");
+                        }
                     }
                     catch (Exception pmEx)
                     {
@@ -550,6 +581,13 @@ namespace FlyShelf.Classes
             try { System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged; } catch { }
             _cfDaemon.Stop();
             try { PeerManager.Instance?.Stop(); } catch { }
+            // Stop LAN Transfer Engine and persist checkpoints
+            try { LanTransferManager.Instance?.PersistCheckpoints(); } catch { }
+            try { LanTransferEngine.Instance?.Stop(); } catch { }
+            // Stop Nearby Discovery
+            try { NearbyDiscovery.Instance?.Stop(); } catch { }
+            // Persist transfer history
+            try { TransferHistory.Instance?.Save(); } catch { }
             _ = CloudDiscoveryManager.PushTunnelUrl("offline", false, "", forceWrite: true);
             try { _listener?.Stop(); } catch { }
             try { _proxyListener?.Stop(); } catch { }

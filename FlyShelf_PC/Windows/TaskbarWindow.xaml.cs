@@ -68,69 +68,7 @@ namespace FlyShelf.Windows
             catch { }
 
             // Listen for the toggle setting change
-            SettingsManager.Current.PropertyChanged += (s, e) =>
-            {
-                if (e.PropertyName == nameof(AdvanceSettings.EnableTaskbarWidget))
-                {
-                    Dispatcher.Invoke(async () =>
-                    {
-                        if (_isClosed) return;
-                        if (SettingsManager.Current.EnableTaskbarWidget)
-                        {
-                            // Ensure _mainWindow reference is set (may be null if widget was OFF at startup)
-                            if (_mainWindow == null)
-                            {
-                                _mainWindow = Application.Current.MainWindow as MainWindow;
-                                if (_mainWindow != null)
-                                {
-                                    Widget.SetMainWindow(_mainWindow);
-                                }
-                            }
-
-                            Show();
-                            _timer.Start();
-
-                            // Retry SetupWindow with delays — taskbar HWND may not be ready immediately
-                            for (int attempt = 1; attempt <= 3; attempt++)
-                            {
-                                if (_isClosed || !SettingsManager.Current.EnableTaskbarWidget) return;
-                                try
-                                {
-                                    SetupWindow();
-                                    if (_isFloatingMode)
-                                    {
-                                        Classes.Logger.LogAction("WIDGET", $"Toggle-ON setup succeeded on attempt {attempt}");
-                                        break;
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    Classes.Logger.LogAction("WIDGET", $"Toggle-ON setup attempt {attempt} failed: {ex.Message}");
-                                }
-                                await Task.Delay(600);
-                            }
-                        }
-                        else
-                        {
-                            _timer.Stop();
-                            Visibility = Visibility.Hidden;
-                        }
-                    });
-                }
-                else if (e.PropertyName == nameof(AdvanceSettings.WidgetTaskbarAlignment) ||
-                         e.PropertyName == nameof(AdvanceSettings.WidgetHorizontalOffset))
-                {
-                    Dispatcher.Invoke(() =>
-                    {
-                        if (_isClosed || !SettingsManager.Current.EnableTaskbarWidget) return;
-                        // Invalidate cache immediately to force repositioning
-                        _cachedFreeZoneLeft = -1;
-                        _lastFreeZoneScan = DateTime.MinValue;
-                        _lastWidgetLeft = -1; // Invalidate position cache
-                        UpdatePosition();
-                    });
-                }
-            };
+            SettingsManager.Current.PropertyChanged += OnSettingsPropertyChanged;
 
             // Defer startup activation to AFTER the constructor + Loaded events complete.
             // Calling Show()+SetupWindow() during the constructor (while MainWindow's Loaded
@@ -183,6 +121,7 @@ namespace FlyShelf.Windows
             _isClosed = true;
             try { _timer?.Stop(); } catch { }
             try { Microsoft.Win32.SystemEvents.UserPreferenceChanged -= SystemEvents_UserPreferenceChanged; } catch { }
+            try { SettingsManager.Current.PropertyChanged -= OnSettingsPropertyChanged; } catch { }
             base.OnClosed(e);
         }
 
@@ -592,6 +531,70 @@ namespace FlyShelf.Windows
                 {
                     ForceReposition();
                 }), DispatcherPriority.Background);
+            }
+        }
+
+        private void OnSettingsPropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(AdvanceSettings.EnableTaskbarWidget))
+            {
+                Dispatcher.Invoke(async () =>
+                {
+                    if (_isClosed) return;
+                    if (SettingsManager.Current.EnableTaskbarWidget)
+                    {
+                        // Ensure _mainWindow reference is set (may be null if widget was OFF at startup)
+                        if (_mainWindow == null)
+                        {
+                            _mainWindow = Application.Current.MainWindow as MainWindow;
+                            if (_mainWindow != null)
+                            {
+                                Widget.SetMainWindow(_mainWindow);
+                            }
+                        }
+
+                        Show();
+                        _timer.Start();
+
+                        // Retry SetupWindow with delays — taskbar HWND may not be ready immediately
+                        for (int attempt = 1; attempt <= 3; attempt++)
+                        {
+                            if (_isClosed || !SettingsManager.Current.EnableTaskbarWidget) return;
+                            try
+                            {
+                                SetupWindow();
+                                if (_isFloatingMode)
+                                {
+                                    Classes.Logger.LogAction("WIDGET", $"Toggle-ON setup succeeded on attempt {attempt}");
+                                    break;
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                Classes.Logger.LogAction("WIDGET", $"Toggle-ON setup attempt {attempt} failed: {ex.Message}");
+                            }
+                            await Task.Delay(600);
+                        }
+                    }
+                    else
+                    {
+                        _timer.Stop();
+                        Visibility = Visibility.Hidden;
+                    }
+                });
+            }
+            else if (e.PropertyName == nameof(AdvanceSettings.WidgetTaskbarAlignment) ||
+                     e.PropertyName == nameof(AdvanceSettings.WidgetHorizontalOffset))
+            {
+                Dispatcher.Invoke(() =>
+                {
+                    if (_isClosed || !SettingsManager.Current.EnableTaskbarWidget) return;
+                    // Invalidate cache immediately to force repositioning
+                    _cachedFreeZoneLeft = -1;
+                    _lastFreeZoneScan = DateTime.MinValue;
+                    _lastWidgetLeft = -1; // Invalidate position cache
+                    UpdatePosition();
+                });
             }
         }
 

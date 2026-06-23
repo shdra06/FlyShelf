@@ -40,6 +40,7 @@ namespace FlyShelf
 
             // Close other modes
             if (_isNotesActive) CloseNotesPanel(immediate: true);
+            if (_isResearchActive) CloseResearchPanel(immediate: true);
             if (_isSearchActive) CloseSearch(switchingPanel: true);
             if (_isFilterBarActive) ToggleFilterBar(false);
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
@@ -166,9 +167,8 @@ namespace FlyShelf
                 // Let the XAML DataTrigger on DroppedItems.Count control visibility
                 EmptyStatePanel.ClearValue(VisibilityProperty);
 
-                // PERF: Defer save to Background priority so it doesn't block the summon pipeline.
-                Dispatcher.InvokeAsync(() => TodoManager.SaveNow(),
-                    System.Windows.Threading.DispatcherPriority.Background);
+                // TM-3 FIX: Save synchronously — deferred async saves were being dropped
+                TodoManager.SaveNow();
                 return;
             }
 
@@ -179,8 +179,8 @@ namespace FlyShelf
             if (TodoPanel.RenderTransform is TranslateTransform tt)
                 tt.BeginAnimation(TranslateTransform.YProperty, slideAnim);
 
-            // Normal close path: defer save to background priority
-            Dispatcher.InvokeAsync(() => TodoManager.SaveNow(), System.Windows.Threading.DispatcherPriority.Background);
+            // TM-3 FIX: Save synchronously — deferred async saves were being dropped
+            TodoManager.SaveNow();
 
             fadeAnim.Completed += (s, ev) =>
             {
@@ -272,13 +272,21 @@ namespace FlyShelf
                         bool isSelected = item == _selectedTodoDay;
                         if (isSelected)
                         {
-                            mainBorder.Background = new SolidColorBrush(Color.FromArgb(0x2A, 0x8B, 0x5C, 0xF6));
-                            mainBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(0x60, 0x8B, 0x5C, 0xF6));
+                            var bg = new SolidColorBrush(Color.FromArgb(0x2A, 0x8B, 0x5C, 0xF6));
+                            bg.Freeze();
+                            mainBorder.Background = bg;
+                            var border = new SolidColorBrush(Color.FromArgb(0x60, 0x8B, 0x5C, 0xF6));
+                            border.Freeze();
+                            mainBorder.BorderBrush = border;
                         }
                         else
                         {
-                            mainBorder.Background = new SolidColorBrush(Color.FromArgb(0x06, 0xFF, 0xFF, 0xFF));
-                            mainBorder.BorderBrush = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF));
+                            var bg = new SolidColorBrush(Color.FromArgb(0x06, 0xFF, 0xFF, 0xFF));
+                            bg.Freeze();
+                            mainBorder.Background = bg;
+                            var border = new SolidColorBrush(Color.FromArgb(0x0E, 0xFF, 0xFF, 0xFF));
+                            border.Freeze();
+                            mainBorder.BorderBrush = border;
                         }
                     }
                 }
@@ -1957,11 +1965,14 @@ namespace FlyShelf
             }
 
             // Search across ALL days for matching items
+            const int MAX_SEARCH_RESULTS = 200;
             var results = new ObservableCollection<TodoItem>();
             foreach (var day in TodoManager.Days)
             {
+                if (results.Count >= MAX_SEARCH_RESULTS) break;
                 foreach (var item in day.Items)
                 {
+                    if (results.Count >= MAX_SEARCH_RESULTS) break;
                     if (IsTodoItemMatch(queryClean, item))
                     {
                         results.Add(item);
@@ -1969,6 +1980,7 @@ namespace FlyShelf
                     // Also search subtasks
                     foreach (var sub in item.SubTasks)
                     {
+                        if (results.Count >= MAX_SEARCH_RESULTS) break;
                         if (IsTodoItemMatch(queryClean, sub) && !results.Contains(sub))
                         {
                             results.Add(sub);

@@ -11,6 +11,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Media.Imaging;
+using FlyShelf.Classes;
 
 namespace FlyShelf.ViewModels
 {
@@ -684,6 +685,20 @@ namespace FlyShelf.ViewModels
             DeduplicateItem(newItem);
 
             DroppedItems.Insert(0, newItem);
+
+            // ═══ NETWORKING AUTO-STAGE HOOK ═══
+            // When a file is copied, auto-stage it for network sending
+            try
+            {
+                if (NetworkFileQueue.Instance != null 
+                    && (newItem.ItemType == ClipboardItemType.File || newItem.ItemType == ClipboardItemType.Folder)
+                    && !string.IsNullOrEmpty(newItem.FilePath))
+                {
+                    NetworkFileQueue.Instance.StageFromClipboard(newItem);
+                }
+            }
+            catch { /* Network staging is best-effort — never block clipboard */ }
+
             return true;
         }
 

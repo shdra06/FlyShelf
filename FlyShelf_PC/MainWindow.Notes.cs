@@ -64,6 +64,7 @@ namespace FlyShelf
 
             // Close other modes
             if (_isTodoActive) CloseTodoPanel(immediate: true);
+            if (_isResearchActive) CloseResearchPanel(immediate: true);
             if (_isSearchActive) CloseSearch(switchingPanel: true);
             if (_isFilterBarActive) ToggleFilterBar(false);
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
@@ -239,7 +240,7 @@ namespace FlyShelf
             if (helper.Handle != IntPtr.Zero)
             {
                 int exStyle = GetWindowLong(helper.Handle, GWL_EXSTYLE);
-                if (_isNotesActive || _isTodoActive || _isSearchActive)
+                if (_isNotesActive || _isTodoActive || _isSearchActive || _isResearchActive)
                 {
                     // Remove WS_EX_NOACTIVATE so the window can receive keyboard focus
                     // DO NOT add WS_EX_APPWINDOW — it unpins the window from all virtual
@@ -458,9 +459,6 @@ namespace FlyShelf
             NotesBulletList.ItemsSource = day.Bullets;
             day.MigrateFreeformIfNeeded(); // Ensure at least one section exists
             NotesFreeformSectionsList.ItemsSource = day.FreeformSections;
-
-            // Bind freeform images
-            NotesFreeformImageList.ItemsSource = day.FreeformImages;
 
             // Show correct mode
             if (day.IsFreeformMode)
@@ -997,6 +995,46 @@ namespace FlyShelf
             return null;
         }
 
+        /// <summary>
+        /// Get the FreeformSection whose TextBox currently has keyboard focus, or the last section as fallback.
+        /// </summary>
+        private FreeformSection? GetActiveFreeformSection()
+        {
+            if (_selectedNoteDay == null) return null;
+            foreach (var section in _selectedNoteDay.FreeformSections)
+            {
+                var container = NotesFreeformSectionsList.ItemContainerGenerator.ContainerFromItem(section);
+                if (container is ContentPresenter cp)
+                {
+                    var tb = FindVisualChild<TextBox>(cp, "FreeformSectionTextBox");
+                    if (tb != null && tb.IsFocused) return section;
+                }
+            }
+            // Fallback: return the last section
+            return _selectedNoteDay.FreeformSections.LastOrDefault();
+        }
+
+        /// <summary>
+        /// Check if the given section can accept another image (respects Free/Pro limits).
+        /// Shows a toast if the limit is reached.
+        /// </summary>
+        private bool CanAddImageToSection(FreeformSection section)
+        {
+            int maxImages = LicenseManager.IsPro
+                ? LicenseManager.PRO_NOTE_IMAGES_PER_CARD
+                : LicenseManager.FREE_NOTE_IMAGES_PER_CARD;
+
+            if (section.Images.Count >= maxImages)
+            {
+                if (!LicenseManager.IsPro)
+                    UpgradePrompt.ShowNoteImageLimit();
+                else
+                    Windows.ToastWindow.ShowToast($"Max {LicenseManager.PRO_NOTE_IMAGES_PER_CARD} images per card");
+                return false;
+            }
+            return true;
+        }
+
         private void NoteBulletHeader_TextChanged(object sender, TextChangedEventArgs e)
         {
             if (sender is TextBox tb && tb.IsFocused && tb.DataContext is NoteBullet bullet)
@@ -1220,6 +1258,8 @@ namespace FlyShelf
         private bool HandleImagePasteForFreeform()
         {
             if (_selectedNoteDay == null) return false;
+            var section = GetActiveFreeformSection();
+            if (section == null) return false;
             try
             {
                 IDataObject data = Clipboard.GetDataObject();
@@ -1239,13 +1279,14 @@ namespace FlyShelf
 
                     if (img != null)
                     {
+                        if (!CanAddImageToSection(section)) return true; // block paste
                         string path = NoteManager.SaveImage(img);
                         var freeformImg = new FreeformImage
                         {
                             ImagePath = path,
                             DisplayWidth = Math.Min(img.PixelWidth, 140)
                         };
-                        _selectedNoteDay.FreeformImages.Add(freeformImg);
+                        section.Images.Add(freeformImg);
                         NoteManager.MarkDirty();
                         return true;
                     }
@@ -1259,6 +1300,7 @@ namespace FlyShelf
                         {
                             if (f != null && IsImageFile(f))
                             {
+                                if (!CanAddImageToSection(section)) return true; // block paste
                                 string destDir = NoteManager.GetImagesDirectory();
                                 string destFile = Path.Combine(destDir, $"note_img_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N").Substring(0, 6)}_{Path.GetFileName(f)}");
                                 File.Copy(f, destFile, overwrite: true);
@@ -1267,7 +1309,7 @@ namespace FlyShelf
                                     ImagePath = destFile,
                                     DisplayWidth = 140
                                 };
-                                _selectedNoteDay.FreeformImages.Add(freeformImg);
+                                section.Images.Add(freeformImg);
                                 NoteManager.MarkDirty();
                                 return true;
                             }
@@ -1710,9 +1752,29 @@ namespace FlyShelf
             var dataObject = e.DataObject;
             if (dataObject == null) return;
 
+            // Find the FreeformSection that owns this TextBox
+            FreeformSection? section = null;
+            if (sender is TextBox tb)
+            {
+                DependencyObject? walk = VisualTreeHelper.GetParent(tb);
+                while (walk != null)
+                {
+                    if (walk is FrameworkElement fe && fe.DataContext is FreeformSection fs)
+                    {
+                        section = fs;
+                        break;
+                    }
+                    walk = VisualTreeHelper.GetParent(walk);
+                }
+            }
+            if (section == null) section = GetActiveFreeformSection();
+            if (section == null) return;
+
             if (dataObject.GetDataPresent(DataFormats.Bitmap))
             {
                 e.CancelCommand();
+
+                if (!CanAddImageToSection(section)) return;
 
                 var img = dataObject.GetData(DataFormats.Bitmap) as BitmapSource;
                 if (img != null)
@@ -1721,9 +1783,9 @@ namespace FlyShelf
                     var freeformImg = new FreeformImage
                     {
                         ImagePath = path,
-                        DisplayWidth = Math.Min(img.PixelWidth, 140) // Nice and small default size
+                        DisplayWidth = Math.Min(img.PixelWidth, 140)
                     };
-                    _selectedNoteDay.FreeformImages.Add(freeformImg);
+                    section.Images.Add(freeformImg);
                     NoteManager.MarkDirty();
                 }
             }
@@ -1737,6 +1799,7 @@ namespace FlyShelf
                         if (f != null && IsImageFile(f))
                         {
                             e.CancelCommand();
+                            if (!CanAddImageToSection(section)) break;
                             string destDir = NoteManager.GetImagesDirectory();
                             string destFile = Path.Combine(destDir, $"note_{DateTime.Now:yyyyMMdd_HHmmss}_{Path.GetFileName(f)}");
                             try
@@ -1745,9 +1808,9 @@ namespace FlyShelf
                                 var freeformImg = new FreeformImage
                                 {
                                     ImagePath = destFile,
-                                    DisplayWidth = 140 // Nice and small default size
+                                    DisplayWidth = 140
                                 };
-                                _selectedNoteDay.FreeformImages.Add(freeformImg);
+                                section.Images.Add(freeformImg);
                                 NoteManager.MarkDirty();
                             }
                             catch { }
@@ -1797,8 +1860,26 @@ namespace FlyShelf
             if (_selectedNoteDay == null) return;
             if (sender is FrameworkElement fe && fe.DataContext is FreeformImage fi)
             {
+                // Walk up the visual tree to find the parent FreeformSection
+                FreeformSection? section = null;
+                DependencyObject? walk = VisualTreeHelper.GetParent(fe);
+                while (walk != null)
+                {
+                    if (walk is FrameworkElement parent && parent.DataContext is FreeformSection fs)
+                    {
+                        section = fs;
+                        break;
+                    }
+                    walk = VisualTreeHelper.GetParent(walk);
+                }
+
                 if (fi.HasImage) { try { File.Delete(fi.ImagePath); } catch { } }
-                _selectedNoteDay.FreeformImages.Remove(fi);
+
+                if (section != null)
+                    section.Images.Remove(fi);
+                else
+                    _selectedNoteDay.FreeformImages.Remove(fi); // Fallback for legacy day-level images
+
                 NoteManager.MarkDirty();
             }
         }
@@ -2367,6 +2448,37 @@ namespace FlyShelf
             organize.Click += (s, ev) => RunNotesAIAction("Organize", originalText, onApplyText);
             menu.Items.Add(organize);
 
+            menu.Items.Add(new Separator());
+
+            // Translate submenu with language options
+            var translate = new MenuItem { Header = "🌐 Translate" };
+            var languages = new[] { "English", "Spanish", "French", "German", "Japanese", "Chinese", "Hindi", "Arabic", "Korean", "Portuguese" };
+            foreach (var lang in languages)
+            {
+                var langItem = new MenuItem { Header = lang, Tag = $"Translate:{lang}" };
+                langItem.Click += (s, ev) => RunNotesAIAction($"Translate:{lang}", originalText, onApplyText);
+                translate.Items.Add(langItem);
+            }
+            menu.Items.Add(translate);
+
+            var expand = new MenuItem { Header = "💡 Expand" };
+            expand.Click += (s, ev) => RunNotesAIAction("Expand", originalText, onApplyText);
+            menu.Items.Add(expand);
+
+            var explain = new MenuItem { Header = "🔍 Explain Simply" };
+            explain.Click += (s, ev) => RunNotesAIAction("Explain", originalText, onApplyText);
+            menu.Items.Add(explain);
+
+            menu.Items.Add(new Separator());
+
+            var actions = new MenuItem { Header = "✅ Extract Actions" };
+            actions.Click += (s, ev) => RunNotesAIAction("Actions", originalText, onApplyText);
+            menu.Items.Add(actions);
+
+            var autoTag = new MenuItem { Header = "🏷️ Auto-Tag" };
+            autoTag.Click += (s, ev) => RunNotesAIAction("AutoTag", originalText, onApplyText);
+            menu.Items.Add(autoTag);
+
             menu.PlacementTarget = target;
             menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
             menu.IsOpen = true;
@@ -2374,15 +2486,27 @@ namespace FlyShelf
 
         private void RunNotesAIAction(string actionType, string originalText, Action<string> onApplyText)
         {
-            if (!LicenseManager.IsPro)
+            bool hasCloudKey = AiProviderService.Instance.HasCloudApiKey;
+
+            // Allow if Pro OR if user has their own cloud API key
+            if (!LicenseManager.IsPro && !hasCloudKey)
             {
                 UpgradePrompt.ShowNotesAILimit(this);
                 return;
             }
 
-            bool useWindowsAI = WindowsAIService.Instance.IsAvailable;
+            // Cloud-only actions require an API key (no offline fallback)
+            bool isCloudOnly = actionType.StartsWith("Translate:", StringComparison.OrdinalIgnoreCase)
+                || actionType == "Expand" || actionType == "Explain"
+                || actionType == "Actions" || actionType == "AutoTag";
 
-            var aiWindow = new FlyShelf.Windows.NotesAIWindow(originalText, actionType, useWindowsAI);
+            if (isCloudOnly && !hasCloudKey && !WindowsAIService.Instance.IsAvailable)
+            {
+                Windows.ToastWindow.ShowToast("⚠️ This feature requires an AI API key. Click ⚡ in Settings to configure.");
+                return;
+            }
+
+            var aiWindow = new FlyShelf.Windows.NotesAIWindow(originalText, actionType);
             aiWindow.Owner = this;
             if (aiWindow.ShowDialog() == true && aiWindow.IsApplied)
             {

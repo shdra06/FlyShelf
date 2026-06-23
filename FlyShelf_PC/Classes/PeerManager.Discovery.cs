@@ -198,6 +198,16 @@ namespace FlyShelf.Classes
                         var result = await _udpListener.ReceiveAsync(ct);
                         if (result.Buffer == null || result.Buffer.Length == 0) continue;
 
+                        // DESER-2 FIX: Reject oversized packets before deserializing.
+                        // A valid discovery packet is ~300 bytes; 4KB is a generous ceiling.
+                        // Anything larger is malformed or a DoS probe — silently drop.
+                        const int MAX_DISCOVERY_BYTES = 4096;
+                        if (result.Buffer.Length > MAX_DISCOVERY_BYTES)
+                        {
+                            Logger.LogAction("PEER_UDP", $"⛔ Oversized UDP packet dropped: {result.Buffer.Length} bytes from {result.RemoteEndPoint}");
+                            continue;
+                        }
+
                         try
                         {
                             var packet = JsonSerializer.Deserialize<UdpDiscoveryPacket>(result.Buffer);

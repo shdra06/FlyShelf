@@ -252,6 +252,17 @@ namespace FlyShelf.Classes
             set { if (_content != value) { _content = value; OnPropertyChanged(nameof(Content)); } }
         }
 
+        /// <summary>Images embedded in this section card (up to 5 for Pro, 1 for Free).</summary>
+        private ObservableCollection<FreeformImage> _images = new();
+        public ObservableCollection<FreeformImage> Images
+        {
+            get => _images;
+            set { _images = value; OnPropertyChanged(nameof(Images)); }
+        }
+
+        /// <summary>Rich formatted content stored as XAML (used by expand window). Plain Content is kept in sync.</summary>
+        public string RichContent { get; set; } = "";
+
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -350,6 +361,8 @@ namespace FlyShelf.Classes
         [JsonIgnore]
         public bool IsToday => Date.Date == DateTime.Today;
 
+        public long? LastModified { get; set; }
+
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
@@ -371,6 +384,17 @@ namespace FlyShelf.Classes
         private static readonly object _lock = new();
         private static int _isDirty = 0;
         private static bool _isLoaded;
+
+        // NM-4 FIX: Retry wrapper for transient file-lock conflicts (mirrors TodoManager.RunWithRetry)
+        private static T RunWithRetry<T>(Func<T> action, int maxAttempts = 3, int delayMs = 100)
+        {
+            for (int i = 0; i < maxAttempts; i++)
+            {
+                try { return action(); }
+                catch when (i < maxAttempts - 1) { System.Threading.Thread.Sleep(delayMs); }
+            }
+            return action(); // Final attempt — let exception propagate
+        }
 
         /// <summary>All note days, sorted newest-first.</summary>
         public static ObservableCollection<NoteDay> Days => _days;
@@ -400,7 +424,8 @@ namespace FlyShelf.Classes
                         return;
                     }
 
-                    string json = File.ReadAllText(_notesPath);
+                    // NM-4 FIX: Use RunWithRetry so a brief file lock from concurrent .bak copy doesn't immediately fall to backup recovery
+                    string json = RunWithRetry(() => File.ReadAllText(_notesPath));
                     var loaded = JsonSerializer.Deserialize<List<NoteDay>>(json, new JsonSerializerOptions
                     {
                         PropertyNameCaseInsensitive = true
@@ -579,6 +604,18 @@ namespace FlyShelf.Classes
         /// </summary>
         public static string SaveImage(System.Windows.Media.Imaging.BitmapSource image)
         {
+            // NM-1 FIX: Cap image dimensions to 4096×4096 to prevent huge PNG writes
+            const int MAX_DIM = 4096;
+            if (image.PixelWidth > MAX_DIM || image.PixelHeight > MAX_DIM)
+            {
+                double scale = Math.Min((double)MAX_DIM / image.PixelWidth, (double)MAX_DIM / image.PixelHeight);
+                var scaled = new System.Windows.Media.Imaging.TransformedBitmap(
+                    image,
+                    new System.Windows.Media.ScaleTransform(scale, scale));
+                scaled.Freeze();
+                image = scaled;
+            }
+
             var dir = GetImagesDirectory();
             string filename = $"note_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..6]}.png";
             string path = Path.Combine(dir, filename);
@@ -623,6 +660,9 @@ namespace FlyShelf.Classes
             // causing AB-BA deadlock when the UI thread also needed _lock.
             if (!_isLoaded) return;
 
+            // NM-2a FIX: Serialize to JSON on the calling thread so the snapshot is
+            // truly atomic with respect to the ObservableCollection. Only the file
+            // I/O runs on a background thread.
             List<NoteDay> snapshot;
             try
             {
@@ -633,7 +673,18 @@ namespace FlyShelf.Classes
                     {
                         List<NoteDay> snap;
                         try { snap = _days.ToList(); } catch { return; }
-                        Task.Run(() => SaveSnapshot(snap));
+                        // NM-2a FIX: Serialize immediately on the UI thread
+                        string jsonStr;
+                        try
+                        {
+                            jsonStr = SerializeSnapshot(snap);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogAction("NOTES", $"Failed to serialize notes snapshot: {ex.Message}");
+                            return;
+                        }
+                        Task.Run(() => SaveSnapshotJson(snap, jsonStr));
                     });
                     return;
                 }
@@ -647,13 +698,38 @@ namespace FlyShelf.Classes
                 try { snapshot = _days.ToList(); } catch { return; }
             }
 
-            // Run merge + serialization on a background thread so it doesn't block the UI thread
-            Task.Run(() => SaveSnapshot(snapshot));
+            // NM-2a FIX: Serialize on this thread before handing off to background
+            string json;
+            try
+            {
+                json = SerializeSnapshot(snapshot);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NOTES", $"Failed to serialize notes snapshot: {ex.Message}");
+                return;
+            }
+
+            // Run merge + file I/O on a background thread so it doesn't block the UI thread
+            Task.Run(() => SaveSnapshotJson(snapshot, json));
         }
 
-        private static void SaveSnapshot(List<NoteDay> snapshot)
+        /// <summary>Serialize a snapshot list to JSON string (called on the thread that owns the data).</summary>
+        private static string SerializeSnapshot(List<NoteDay> snapshot)
         {
-            List<NoteDay> finalSerializeList;
+            return JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+            {
+                WriteIndented = false,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            });
+        }
+
+        /// <summary>Merge snapshot into _allDays, re-serialize under lock, and write to disk.</summary>
+        private static void SaveSnapshotJson(List<NoteDay> snapshot, string preSerializedJson)
+        {
+            string json;
+            // NM-2 FIX: Merge both lock acquisitions into one so _allDays cannot be mutated
+            // between the merge step and the serialization step.
             lock (_lock)
             {
                 // Merge snapshot back into _allDays
@@ -683,17 +759,11 @@ namespace FlyShelf.Classes
 
                 // Sort newest first
                 _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
-                
-                // Copy for thread-safe serialization
-                finalSerializeList = _allDays.ToList();
-            }
 
-            string json;
-            lock (_lock)
-            {
+                // Re-serialize _allDays (which now includes hidden history) inside the lock
                 try
                 {
-                    json = JsonSerializer.Serialize(finalSerializeList, new JsonSerializerOptions
+                    json = JsonSerializer.Serialize(_allDays, new JsonSerializerOptions
                     {
                         WriteIndented = false,
                         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
@@ -726,6 +796,11 @@ namespace FlyShelf.Classes
 
                 // Atomic write: tmp → rename
                 string tmpPath = _notesPath + ".tmp";
+                if (!DiskSpaceHelper.HasSufficientDiskSpace(_notesPath, json.Length * 2 + 1_000_000))
+                {
+                    Logger.LogAction("NOTES", "Insufficient disk space to save notes — skipping write");
+                    return;
+                }
                 File.WriteAllText(tmpPath, json);
                 File.Move(tmpPath, _notesPath, overwrite: true);
             }
@@ -738,6 +813,9 @@ namespace FlyShelf.Classes
         /// <summary>
         /// Search all notes for a query string. Returns matching bullets with their parent day.
         /// </summary>
+        // NM-15b FIX: Cap search results to prevent UI freezes on large note histories
+        private const int MAX_SEARCH_RESULTS = 200;
+
         public static List<(NoteDay Day, NoteBullet Bullet)> Search(string query)
         {
             if (string.IsNullOrWhiteSpace(query)) return new();
@@ -754,6 +832,7 @@ namespace FlyShelf.Classes
                     if (matchContent || matchHeader || matchTags)
                     {
                         results.Add((day, bullet));
+                        if (results.Count >= MAX_SEARCH_RESULTS) return results;
                     }
                 }
                 // Also search freeform content — create a virtual bullet for display
@@ -766,6 +845,7 @@ namespace FlyShelf.Classes
                         CreatedAt = day.Date
                     };
                     results.Add((day, virtualBullet));
+                    if (results.Count >= MAX_SEARCH_RESULTS) return results;
                 }
             }
             return results;
@@ -849,6 +929,124 @@ namespace FlyShelf.Classes
         {
             day.Bullets.Remove(bullet);
             ScheduleSave();
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // MOBILE SYNC
+        // ═══════════════════════════════════════════════════════════
+
+        public static string GetSyncPayload()
+        {
+            List<NoteDay> snapshot;
+            lock (_lock)
+            {
+                if (!_isLoaded) return "[]";
+                try { snapshot = _days.ToList(); } catch { return "[]"; }
+            }
+
+            // Build sync-safe payload
+            var payload = snapshot.Select(day => {
+                long lastMod = 0;
+                foreach (var b in day.Bullets)
+                {
+                    long bTs = new DateTimeOffset(b.LastEdited).ToUnixTimeMilliseconds();
+                    if (bTs > lastMod) lastMod = bTs;
+                }
+                foreach (var s in day.FreeformSections)
+                {
+                    long sTs = new DateTimeOffset(s.CreatedAt).ToUnixTimeMilliseconds();
+                    if (sTs > lastMod) lastMod = sTs;
+                }
+                if (lastMod == 0) lastMod = new DateTimeOffset(day.Date).ToUnixTimeMilliseconds();
+
+                return new {
+                    Date = day.Date.ToString("o"),
+                    IsFreeformMode = day.IsFreeformMode,
+                    Bullets = day.Bullets.Select(b => new {
+                        b.Id, b.Header, b.Content, b.IsCollapsed,
+                        b.ImageDisplayWidth, b.ImageDisplayWidth2,
+                        CreatedAt = b.CreatedAt.ToString("o"),
+                        LastEdited = b.LastEdited.ToString("o"),
+                        b.Tags, b.Color, b.IsPinned, b.SortOrder,
+                        SubBullets = b.SubBullets.Select(sb => new { sb.Id, sb.Text, sb.IsDone }).ToList()
+                    }).ToList(),
+                    FreeformSections = day.FreeformSections.Select(s => new {
+                        s.Id, s.Content, CreatedAt = s.CreatedAt.ToString("o")
+                    }).ToList(),
+                    LastModified = lastMod
+                };
+            }).ToList();
+
+            return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = false });
+        }
+
+        public static void MergeFromMobile(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return;
+            try
+            {
+                if (!_isLoaded) Load();
+
+                var remoteDays = JsonSerializer.Deserialize<List<NoteDay>>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                if (remoteDays == null || remoteDays.Count == 0) return;
+
+                bool changed = false;
+                lock (_lock)
+                {
+                    foreach (var remoteDay in remoteDays)
+                    {
+                        remoteDay.Date = remoteDay.Date.Kind == DateTimeKind.Utc ? remoteDay.Date.ToLocalTime().Date : remoteDay.Date.Date;
+                        remoteDay.MigrateFreeformIfNeeded();
+
+                        long remoteMod = remoteDay.LastModified ?? 0;
+
+                        var localDay = _allDays.FirstOrDefault(d => d.Date.Date == remoteDay.Date.Date);
+                        if (localDay == null)
+                        {
+                            // New day from mobile — add it
+                            _allDays.Add(remoteDay);
+                            changed = true;
+                        }
+                        else
+                        {
+                            // Compare LastModified — mobile wins if newer
+                            long localMod = 0;
+                            foreach (var b in localDay.Bullets)
+                            {
+                                long bTs = new DateTimeOffset(b.LastEdited).ToUnixTimeMilliseconds();
+                                if (bTs > localMod) localMod = bTs;
+                            }
+                            foreach (var s in localDay.FreeformSections)
+                            {
+                                long sTs = new DateTimeOffset(s.CreatedAt).ToUnixTimeMilliseconds();
+                                if (sTs > localMod) localMod = sTs;
+                            }
+
+                            if (remoteMod > localMod)
+                            {
+                                localDay.Bullets = new System.Collections.ObjectModel.ObservableCollection<NoteBullet>(remoteDay.Bullets);
+                                localDay.FreeformSections = new System.Collections.ObjectModel.ObservableCollection<FreeformSection>(remoteDay.FreeformSections);
+                                localDay.IsFreeformMode = remoteDay.IsFreeformMode;
+                                changed = true;
+                            }
+                        }
+                    }
+                    if (changed)
+                    {
+                        _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
+                        FilterVisibleDays();
+                    }
+                }
+                if (changed) ScheduleSave();
+                Logger.LogAction("NOTES_SYNC", $"Merged {remoteDays.Count} days from mobile (changed={changed})");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NOTES_SYNC", $"MergeFromMobile failed: {ex.Message}");
+            }
         }
     }
 }

@@ -135,6 +135,69 @@ namespace FlyShelf.Classes
             if (File.Exists(filePath))
             {
                 long fSize = new FileInfo(filePath).Length;
+
+                // ═══ LAN TCP ENGINE: Route large files on LAN through dedicated TCP for zero-copy transfer ═══
+                // NOTE: Only PC peers use the dedicated TCP engine (port 8998) — Android/Mobile devices
+                // can't open raw TCP sockets from React Native, so they always use HTTP path.
+                var aliveLanPcPeers = _peers.Values.Where(p => p.IsAlive && p.Transport == "LAN"
+                    && (string.IsNullOrEmpty(p.DeviceType) || p.DeviceType.Equals("PC", StringComparison.OrdinalIgnoreCase))).ToList();
+                var aliveLanMobilePeers = _peers.Values.Where(p => p.IsAlive && p.Transport == "LAN"
+                    && !string.IsNullOrEmpty(p.DeviceType) && !p.DeviceType.Equals("PC", StringComparison.OrdinalIgnoreCase)).ToList();
+
+                if (fSize > 5 * 1024 * 1024 && aliveLanPcPeers.Count > 0 && LanTransferManager.Instance != null)
+                {
+                    int tcpDelivered = 0;
+                    // Send via TCP engine to LAN PC peers
+                    await Task.WhenAll(aliveLanPcPeers.Select(async peer =>
+                    {
+                        try
+                        {
+                            var session = await LanTransferManager.Instance.OfferFile(peer, filePath);
+                            if (session != null) Interlocked.Increment(ref tcpDelivered);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogAction("PEER", $"TCP offer failed for {peer.DeviceName}: {ex.Message}");
+                        }
+                    }));
+
+                    // Send via HTTP to non-LAN peers (Cloudflare) + LAN Mobile peers (can't use TCP)
+                    var httpPeers = _peers.Values.Where(p => p.IsAlive && p.Transport != "LAN").ToList();
+                    httpPeers.AddRange(aliveLanMobilePeers); // Mobile LAN peers use HTTP, not TCP
+                    if (httpPeers.Count > 0)
+                    {
+                        // Cloudflare peers still use old path with size limit (LAN mobile peers skip this check)
+                        var cfPeers = httpPeers.Where(p => p.Transport != "LAN").ToList();
+                        var lanMobile = httpPeers.Where(p => p.Transport == "LAN").ToList();
+
+                        // LAN Mobile peers: no size limit (same network)
+                        await Task.WhenAll(lanMobile.Select(async peer =>
+                        {
+                            bool sent = await TrySendFile(peer, filePath, title, itemType);
+                            if (sent) Interlocked.Increment(ref tcpDelivered);
+                        }));
+
+                        // Cloudflare peers: enforce size limit
+                        if (cfPeers.Count > 0)
+                        {
+                            if (fSize > 50L * 1024 * 1024 && !LicenseManager.IsPro)
+                            {
+                                Logger.LogAction("PEER", "Cloudflare transfer limited to 50 MB on Free tier");
+                            }
+                            else
+                            {
+                                await Task.WhenAll(cfPeers.Select(async peer =>
+                                {
+                                    bool sent = await TrySendFile(peer, filePath, title, itemType);
+                                    if (sent) Interlocked.Increment(ref tcpDelivered);
+                                }));
+                            }
+                        }
+                    }
+                    return tcpDelivered;
+                }
+
+                // Non-LAN path: enforce size limit for Cloudflare
                 if (fSize > 50L * 1024 * 1024 && !LicenseManager.IsPro)
                 {
                     System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
@@ -263,7 +326,7 @@ namespace FlyShelf.Classes
                             // 2. Stream the file in binary chunks (zero-allocation renting)
                             using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
                             {
-                                byte[] rentBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(262144); // 256KB chunks
+                                byte[] rentBuffer = System.Buffers.ArrayPool<byte>.Shared.Rent(1_048_576); // 1MB chunks for high-throughput LAN
                                 try
                                 {
                                     int readBytes;

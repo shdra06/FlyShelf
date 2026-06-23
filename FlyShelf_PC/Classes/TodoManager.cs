@@ -340,6 +340,8 @@ namespace FlyShelf.Classes
             set { if (_isSelected != value) { _isSelected = value; OnPropertyChanged(nameof(IsSelected)); } }
         }
 
+        public long? LastModified { get; set; }
+
         public event PropertyChangedEventHandler? PropertyChanged;
         private void OnPropertyChanged(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
@@ -351,9 +353,23 @@ namespace FlyShelf.Classes
         private static readonly string _todosPath = Path.Combine(_appDataDir, "todos.json");
 
         private static ObservableCollection<TodoDay> _days = new();
+        private static List<TodoDay> _allDays = new(); // TM-3 FIX: Backing store preserves all data across _days swaps (mirrors NoteManager)
         private static Timer? _saveTimer;
         private static readonly object _lock = new();
+        private static readonly object _fileLock = new(); // TM-1 FIX: separate lock for file I/O
         private static int _isDirty = 0;
+        private static bool _isLoaded; // TM-3 FIX: Guard against saving before load completes
+
+        // TM-2 FIX: Retry wrapper for transient file-lock conflicts (mirrors ClipboardHistoryManager.RunWithRetry)
+        private static T RunWithRetry<T>(Func<T> action, int maxAttempts = 3, int delayMs = 50)
+        {
+            for (int i = 0; i < maxAttempts; i++)
+            {
+                try { return action(); }
+                catch when (i < maxAttempts - 1) { System.Threading.Thread.Sleep(delayMs); }
+            }
+            return action(); // Final attempt — let exception propagate
+        }
 
         public static ObservableCollection<TodoDay> Days
         {
@@ -369,10 +385,13 @@ namespace FlyShelf.Classes
                     if (!File.Exists(_todosPath))
                     {
                         _days = new ObservableCollection<TodoDay>();
+                        _allDays = new List<TodoDay>();
+                        _isLoaded = true;
                         return;
                     }
 
-                    string json = File.ReadAllText(_todosPath);
+                    // TM-2 FIX: Use RunWithRetry so a brief file lock from concurrent .bak copy doesn't immediately fall to backup recovery
+                    string json = RunWithRetry(() => File.ReadAllText(_todosPath));
                     var loaded = JsonSerializer.Deserialize<List<TodoDay>>(json, new JsonSerializerOptions
                     {
                         PropertyNameCaseInsensitive = true
@@ -380,13 +399,21 @@ namespace FlyShelf.Classes
 
                     if (loaded != null)
                     {
-                        var sorted = loaded.OrderByDescending(d => d.Date).ToList();
-                        _days = new ObservableCollection<TodoDay>(sorted);
+                        // TM-3 FIX: Normalize dates to local timezone (mirrors NoteManager)
+                        foreach (var d in loaded)
+                        {
+                            d.Date = d.Date.Kind == DateTimeKind.Utc ? d.Date.ToLocalTime().Date : d.Date.Date;
+                        }
+
+                        _allDays = loaded.OrderByDescending(d => d.Date).ToList();
+                        _days = new ObservableCollection<TodoDay>(_allDays);
                     }
                     else
                     {
                         _days = new ObservableCollection<TodoDay>();
+                        _allDays = new List<TodoDay>();
                     }
+                    _isLoaded = true;
                 }
                 catch (Exception ex)
                 {
@@ -398,15 +425,21 @@ namespace FlyShelf.Classes
                         if (File.Exists(bakPath))
                         {
                             Logger.LogAction("TODOS", "Attempting recovery from .bak file");
-                            string bakJson = File.ReadAllText(bakPath);
+                            string bakJson = RunWithRetry(() => File.ReadAllText(bakPath));
                             var bakLoaded = JsonSerializer.Deserialize<List<TodoDay>>(bakJson, new JsonSerializerOptions
                             {
                                 PropertyNameCaseInsensitive = true
                             });
                             if (bakLoaded != null)
                             {
-                                var sorted = bakLoaded.OrderByDescending(d => d.Date).ToList();
-                                _days = new ObservableCollection<TodoDay>(sorted);
+                                foreach (var d in bakLoaded)
+                                {
+                                    d.Date = d.Date.Kind == DateTimeKind.Utc ? d.Date.ToLocalTime().Date : d.Date.Date;
+                                }
+                                _allDays = bakLoaded.OrderByDescending(d => d.Date).ToList();
+                                _days = new ObservableCollection<TodoDay>(_allDays);
+                                _isLoaded = true;
+                                Logger.LogAction("TODOS", "Successfully recovered todos from backup file (.bak)!");
                                 return;
                             }
                         }
@@ -416,6 +449,7 @@ namespace FlyShelf.Classes
                         Logger.LogAction("TODOS", $"Backup recovery also failed: {bakEx.Message}");
                     }
                     _days = new ObservableCollection<TodoDay>();
+                    _allDays = new List<TodoDay>();
                 }
             }
         }
@@ -430,6 +464,9 @@ namespace FlyShelf.Classes
 
                 var newDay = new TodoDay { Date = today };
                 _days.Insert(0, newDay);
+                // TM-3 FIX: Also add to _allDays backing store
+                _allDays.Add(newDay);
+                _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
                 ScheduleSave();
                 return newDay;
             }
@@ -519,19 +556,34 @@ namespace FlyShelf.Classes
 
         public static void SaveNow()
         {
-            List<TodoDay> snapshot = null;
+            // TM-3 FIX: Guard against saving before load completes (mirrors NoteManager)
+            if (!_isLoaded) return;
+
+            List<TodoDay> snapshot;
             try
             {
                 // Must read ObservableCollection on UI thread if it was created there
                 var app = System.Windows.Application.Current;
                 if (app?.Dispatcher?.CheckAccess() == false)
                 {
-                    // Async snapshot — don't block the timer thread
+                    // Called from timer/background thread — dispatch to UI thread for snapshot
                     app.Dispatcher.InvokeAsync(() =>
                     {
                         List<TodoDay> snap;
                         try { snap = _days.ToList(); } catch { return; }
-                        Task.Run(() => SaveSnapshot(snap));
+                        // Serialize immediately on the UI thread so the snapshot is truly atomic
+                        string jsonStr;
+                        try
+                        {
+                            jsonStr = SerializeSnapshot(snap);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.LogAction("TODOS", $"Failed to serialize todos snapshot: {ex.Message}");
+                            return;
+                        }
+                        // TM-3 FIX: Run merge + file I/O on a background thread
+                        Task.Run(() => SaveSnapshotJson(snap, jsonStr));
                     });
                     return;
                 }
@@ -544,20 +596,69 @@ namespace FlyShelf.Classes
             {
                 try { snapshot = _days.ToList(); } catch { return; }
             }
-            if (snapshot == null) return;
 
-            // Run serialization and file IO on a background thread so it doesn't block the UI thread
-            Task.Run(() => SaveSnapshot(snapshot));
+            // Serialize on this thread before handing off to background
+            string json;
+            try
+            {
+                json = SerializeSnapshot(snapshot);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("TODOS", $"Failed to serialize todos snapshot: {ex.Message}");
+                return;
+            }
+
+            // TM-3 FIX: Run merge + file I/O on a background thread
+            Task.Run(() => SaveSnapshotJson(snapshot, json));
         }
 
-        private static void SaveSnapshot(List<TodoDay> snapshot)
+        /// <summary>Serialize a snapshot list to JSON string (called on the thread that owns the data).</summary>
+        private static string SerializeSnapshot(List<TodoDay> snapshot)
+        {
+            return JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+            {
+                WriteIndented = false,
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+            });
+        }
+
+        /// <summary>Merge snapshot into _allDays, re-serialize under lock, and write to disk.
+        /// Mirrors NoteManager.SaveSnapshotJson — ensures _allDays is always the complete truth.</summary>
+        private static void SaveSnapshotJson(List<TodoDay> snapshot, string preSerializedJson)
         {
             string json;
+            // TM-3 FIX: Merge both lock acquisitions into one so _allDays cannot be mutated
+            // between the merge step and the serialization step.
             lock (_lock)
             {
+                // Merge snapshot back into _allDays
+                var visibleDates = new HashSet<DateTime>(snapshot.Select(d => d.Date.Date));
+
+                // 1. Remove days from _allDays if they are no longer present in the snapshot (user deleted them)
+                _allDays.RemoveAll(d => !visibleDates.Contains(d.Date.Date));
+
+                // 2. Add or update days from snapshot
+                foreach (var snapDay in snapshot)
+                {
+                    int idx = _allDays.FindIndex(d => d.Date.Date == snapDay.Date.Date);
+                    if (idx >= 0)
+                    {
+                        _allDays[idx] = snapDay;
+                    }
+                    else
+                    {
+                        _allDays.Add(snapDay);
+                    }
+                }
+
+                // Sort newest first
+                _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
+
+                // Re-serialize _allDays (which is now the complete truth) inside the lock
                 try
                 {
-                    json = JsonSerializer.Serialize(snapshot, new JsonSerializerOptions
+                    json = JsonSerializer.Serialize(_allDays, new JsonSerializerOptions
                     {
                         WriteIndented = false,
                         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
@@ -570,21 +671,33 @@ namespace FlyShelf.Classes
                 }
             }
 
-            try
+            // TM-1 FIX: _fileLock ensures concurrent file writes don't race on .tmp/.bak files
+            lock (_fileLock)
             {
-                if (!Directory.Exists(_appDataDir))
-                    Directory.CreateDirectory(_appDataDir);
+                try
+                {
+                    if (!Directory.Exists(_appDataDir))
+                        Directory.CreateDirectory(_appDataDir);
 
-                // Create backup before saving
-                try { if (File.Exists(_todosPath)) File.Copy(_todosPath, _todosPath + ".bak", overwrite: true); } catch { }
+                    // Create backup before saving
+                    if (File.Exists(_todosPath))
+                    {
+                        try { File.Copy(_todosPath, _todosPath + ".bak", overwrite: true); } catch { }
+                    }
 
-                string tmpPath = _todosPath + ".tmp";
-                File.WriteAllText(tmpPath, json);
-                File.Move(tmpPath, _todosPath, overwrite: true);
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("TODOS", $"Failed to write todos to disk: {ex.Message}");
+                    string tmpPath = _todosPath + ".tmp";
+                    if (!DiskSpaceHelper.HasSufficientDiskSpace(_todosPath, json.Length * 2 + 1_000_000))
+                    {
+                        Logger.LogAction("TODOS", "Insufficient disk space to save todos — skipping write");
+                        return;
+                    }
+                    File.WriteAllText(tmpPath, json);
+                    File.Move(tmpPath, _todosPath, overwrite: true);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("TODOS", $"Failed to write todos to disk: {ex.Message}");
+                }
             }
         }
 
@@ -706,6 +819,113 @@ namespace FlyShelf.Classes
         {
             day.Items.Remove(item);
             ScheduleSave();
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // MOBILE SYNC
+        // ═══════════════════════════════════════════════════════════
+
+        public static string GetSyncPayload()
+        {
+            List<TodoDay> snapshot;
+            lock (_lock)
+            {
+                try { snapshot = _days.ToList(); } catch { return "[]"; }
+            }
+
+            var payload = snapshot.Select(day => {
+                long lastMod = 0;
+                foreach (var item in day.Items)
+                {
+                    long iTs = new DateTimeOffset(item.CreatedAt).ToUnixTimeMilliseconds();
+                    if (iTs > lastMod) lastMod = iTs;
+                }
+                if (lastMod == 0) lastMod = new DateTimeOffset(day.Date).ToUnixTimeMilliseconds();
+
+                return new {
+                    Date = day.Date.ToString("o"),
+                    Items = day.Items.Select(i => new {
+                        i.Id, i.Text, i.IsDone,
+                        CreatedAt = i.CreatedAt.ToString("o"),
+                        Priority = (int)i.Priority,
+                        DueDate = i.DueDate?.ToString("o"),
+                        i.Tags, i.Color, i.Description,
+                        SubTasks = i.SubTasks.Select(s => new {
+                            s.Id, s.Text, s.IsDone,
+                            CreatedAt = s.CreatedAt.ToString("o"),
+                            Priority = (int)s.Priority,
+                            DueDate = s.DueDate?.ToString("o"),
+                            s.Tags, s.Color, s.Description,
+                            SubTasks = new List<object>(),
+                            Recurrence = (int)s.Recurrence,
+                            s.SortOrder, s.TimerMinutes, s.ReminderAt
+                        }).ToList(),
+                        Recurrence = (int)i.Recurrence,
+                        i.SortOrder, i.TimerMinutes,
+                        ReminderAt = i.ReminderAt?.ToString("o")
+                    }).ToList(),
+                    LastModified = lastMod
+                };
+            }).ToList();
+
+            return JsonSerializer.Serialize(payload, new JsonSerializerOptions { WriteIndented = false });
+        }
+
+        public static void MergeFromMobile(string json)
+        {
+            if (string.IsNullOrWhiteSpace(json)) return;
+            try
+            {
+                var remoteDays = JsonSerializer.Deserialize<List<TodoDay>>(json, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+                if (remoteDays == null || remoteDays.Count == 0) return;
+
+                bool changed = false;
+                lock (_lock)
+                {
+                    foreach (var remoteDay in remoteDays)
+                    {
+                        remoteDay.Date = remoteDay.Date.Kind == DateTimeKind.Utc ? remoteDay.Date.ToLocalTime().Date : remoteDay.Date.Date;
+                        long remoteMod = remoteDay.LastModified ?? 0;
+
+                        var localDay = _days.FirstOrDefault(d => d.Date.Date == remoteDay.Date.Date);
+                        if (localDay == null)
+                        {
+                            _days.Insert(0, remoteDay);
+                            changed = true;
+                        }
+                        else
+                        {
+                            long localMod = 0;
+                            foreach (var item in localDay.Items)
+                            {
+                                long iTs = new DateTimeOffset(item.CreatedAt).ToUnixTimeMilliseconds();
+                                if (iTs > localMod) localMod = iTs;
+                            }
+
+                            if (remoteMod > localMod)
+                            {
+                                localDay.Items = new System.Collections.ObjectModel.ObservableCollection<TodoItem>(remoteDay.Items);
+                                changed = true;
+                            }
+                        }
+                    }
+                    if (changed)
+                    {
+                        var sorted = _days.OrderByDescending(d => d.Date).ToList();
+                        _days.Clear();
+                        foreach (var d in sorted) _days.Add(d);
+                    }
+                }
+                if (changed) ScheduleSave();
+                Logger.LogAction("TODOS_SYNC", $"Merged {remoteDays.Count} days from mobile (changed={changed})");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("TODOS_SYNC", $"MergeFromMobile failed: {ex.Message}");
+            }
         }
     }
 }

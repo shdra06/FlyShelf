@@ -19,6 +19,7 @@ namespace FlyShelf
     {
         internal static bool _isInternalDragSource = false;
         private System.Windows.Threading.DispatcherTimer? _searchDebounceTimer;
+        private Action<bool>? _incognitoStateChangedHandler; // TODO: Unsubscribe in OnClosed()
 
         private void Window_PreviewDrop(object sender, DragEventArgs e)
         {
@@ -332,13 +333,21 @@ namespace FlyShelf
             var accent = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(accentHex);
             if (isActive)
             {
-                btn.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x50, accent.R, accent.G, accent.B));
-                btn.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x80, accent.R, accent.G, accent.B));
+                var bgBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x50, accent.R, accent.G, accent.B));
+                bgBrush.Freeze();
+                btn.Background = bgBrush;
+                var borderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x80, accent.R, accent.G, accent.B));
+                borderBrush.Freeze();
+                btn.BorderBrush = borderBrush;
             }
             else
             {
-                btn.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x18, accent.R, accent.G, accent.B));
-                btn.BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x30, accent.R, accent.G, accent.B));
+                var bgBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x18, accent.R, accent.G, accent.B));
+                bgBrush.Freeze();
+                btn.Background = bgBrush;
+                var borderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x30, accent.R, accent.G, accent.B));
+                borderBrush.Freeze();
+                btn.BorderBrush = borderBrush;
             }
 
             // Toggle dot indicator: bright accent glow when ON, dim gray when OFF
@@ -346,15 +355,23 @@ namespace FlyShelf
             {
                 if (isActive)
                 {
-                    dot.Fill = new System.Windows.Media.SolidColorBrush(accent);
-                    dot.Stroke = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x60, accent.R, accent.G, accent.B));
+                    var fillBrush = new System.Windows.Media.SolidColorBrush(accent);
+                    fillBrush.Freeze();
+                    dot.Fill = fillBrush;
+                    var strokeBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x60, accent.R, accent.G, accent.B));
+                    strokeBrush.Freeze();
+                    dot.Stroke = strokeBrush;
                 }
                 else
                 {
                     var mutedBrush = TryFindResource("ThemeTextMuted") as System.Windows.Media.SolidColorBrush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.Gray);
                     var mutedColor = mutedBrush.Color;
-                    dot.Fill = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x50, mutedColor.R, mutedColor.G, mutedColor.B));
-                    dot.Stroke = TryFindResource("ThemeOverlayBorder") as System.Windows.Media.Brush ?? new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.DarkGray);
+                    var fillBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromArgb(0x50, mutedColor.R, mutedColor.G, mutedColor.B));
+                    fillBrush.Freeze();
+                    dot.Fill = fillBrush;
+                    var fallbackBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.DarkGray);
+                    fallbackBrush.Freeze();
+                    dot.Stroke = TryFindResource("ThemeOverlayBorder") as System.Windows.Media.Brush ?? fallbackBrush;
                 }
             }
         }
@@ -644,7 +661,22 @@ namespace FlyShelf
                 animationsRunning--;
                 if (animationsRunning <= 0)
                 {
-                    // Physically remove the items from the view model
+                    // CRITICAL: Reset container properties BEFORE removing items from the
+                    // collection. In Release/Store builds, VirtualizingStackPanel recycles
+                    // containers immediately on Remove — if we clear animation state AFTER
+                    // the Remove, the recycled container starts with Height=0/Opacity=0
+                    // from the stale animation, causing a visible flash/jump.
+                    foreach (var tuple in containersToAnimate)
+                    {
+                        var container = tuple.Item1;
+                        container.BeginAnimation(ListViewItem.HeightProperty, null);
+                        container.BeginAnimation(ListViewItem.OpacityProperty, null);
+                        container.Height = double.NaN;
+                        container.Opacity = 1.0;
+                        container.IsHitTestVisible = true;
+                    }
+
+                    // NOW physically remove the items from the view model
                     try
                     {
                         foreach (var it in items)
@@ -660,17 +692,6 @@ namespace FlyShelf
                         {
                             _lockedBottomEdge = this.Top + this.ActualHeight + 20;
                         }
-                    }
-
-                    // Reset container properties so they can be recycled safely
-                    foreach (var tuple in containersToAnimate)
-                    {
-                        var container = tuple.Item1;
-                        container.BeginAnimation(ListViewItem.HeightProperty, null);
-                        container.BeginAnimation(ListViewItem.OpacityProperty, null);
-                        container.Height = double.NaN;
-                        container.Opacity = 1.0;
-                        container.IsHitTestVisible = true;
                     }
 
                     // Reapply filters if needed
@@ -1317,6 +1338,71 @@ namespace FlyShelf
         {
             e.Handled = true;
             OpenApp_Click(null, null);
+        }
+
+        // ═══ Incognito Mode ═══
+
+        private System.Windows.Threading.DispatcherTimer _incognitoRefreshTimer;
+
+        /// <summary>Call during startup to initialize incognito state and wire up events.</summary>
+        internal void InitializeIncognitoMode()
+        {
+            Classes.IncognitoManager.Initialize();
+
+            // Subscribe to state changes (stored for unsubscription)
+            _incognitoStateChangedHandler = (isActive) =>
+            {
+                Dispatcher.InvokeAsync(() =>
+                {
+                    UpdateIncognitoBadge();
+                    // Start/stop refresh timer based on incognito state
+                    if (isActive)
+                        _incognitoRefreshTimer?.Start();
+                    else
+                        _incognitoRefreshTimer?.Stop();
+                });
+            };
+            Classes.IncognitoManager.IncognitoStateChanged += _incognitoStateChangedHandler;
+
+            // Refresh timer for countdown text
+            _incognitoRefreshTimer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(30)
+            };
+            _incognitoRefreshTimer.Tick += (s, e) =>
+            {
+                if (Classes.IncognitoManager.IsIncognito)
+                    UpdateIncognitoBadge();
+            };
+            // Only start if currently in incognito mode
+            if (Classes.IncognitoManager.IsIncognito)
+                _incognitoRefreshTimer.Start();
+
+            // Initial state
+            UpdateIncognitoBadge();
+        }
+
+        private void UpdateIncognitoBadge()
+        {
+            if (IncognitoBadge == null) return;
+
+            if (Classes.IncognitoManager.IsIncognito)
+            {
+                IncognitoBadge.Visibility = Visibility.Visible;
+                string remaining = Classes.IncognitoManager.RemainingTimeText;
+                IncognitoBadgeText.Text = string.IsNullOrEmpty(remaining) ? "Incognito" : remaining;
+            }
+            else
+            {
+                IncognitoBadge.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void IncognitoBadge_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            Classes.IncognitoManager.DisableIncognito();
+            Windows.ToastWindow.ShowToast("👁 Clipboard monitoring resumed");
         }
 
     }

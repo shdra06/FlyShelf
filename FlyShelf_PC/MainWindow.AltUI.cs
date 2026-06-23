@@ -47,9 +47,6 @@ namespace FlyShelf
                 Dispatcher.InvokeAsync(() => RenderAltVisibleThumbnails(),
                     System.Windows.Threading.DispatcherPriority.Loaded);
             }
-
-            // Hide floating multi-action bar in alt mode
-            // (Merge PDF and Unpin bar only works with original UI)
         }
 
         // ═══ Alt UI Search ═══

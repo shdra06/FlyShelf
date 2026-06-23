@@ -28,6 +28,8 @@ namespace FlyShelf.Classes
         private static readonly object _flushLock = new();
         private const int MAX_LOG_LINES = 500; // Keep last 500 lines per file
         private const int CLEANUP_INTERVAL_MS = 5 * 60_000; // 5 minutes
+        private const long MAX_LOG_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+        private const int MAX_ROTATED_FILES = 3;
 
         // Network log categories — any LogAction with these prefixes goes to network_diagnostics.txt
         private static readonly string[] NET_CATEGORIES = {
@@ -63,16 +65,23 @@ namespace FlyShelf.Classes
 
         private static void TruncateLogFile(string path)
         {
-            try
+            // LOG-2 FIX: Hold _flushLock so this cannot race with FlushBuffer writing to the same file.
+            // Write truncated content to a .tmp then rename atomically so a crash never corrupts the log.
+            lock (_flushLock)
             {
-                if (!File.Exists(path)) return;
-                var lines = File.ReadAllLines(path);
-                if (lines.Length > MAX_LOG_LINES)
+                try
                 {
-                    File.WriteAllLines(path, lines.Skip(lines.Length - MAX_LOG_LINES));
+                    if (!File.Exists(path)) return;
+                    var lines = File.ReadAllLines(path);
+                    if (lines.Length > MAX_LOG_LINES)
+                    {
+                        string tmp = path + ".tmp";
+                        File.WriteAllLines(tmp, lines.Skip(lines.Length - MAX_LOG_LINES));
+                        File.Move(tmp, path, overwrite: true);
+                    }
                 }
+                catch { }
             }
-            catch { }
         }
 
         public static void LogAction(string actionType, string details)
@@ -108,37 +117,80 @@ namespace FlyShelf.Classes
             }
         }
 
-        private static void FlushBuffer()
+        /// <summary>
+        /// Rotates a log file if it exceeds MAX_LOG_FILE_SIZE.
+        /// Shifts existing rotations: .1 → .2, .2 → .3, keeps max MAX_ROTATED_FILES.
+        /// Must be called under _flushLock.
+        /// </summary>
+        private static void RotateLogFileIfNeeded(string logPath)
         {
-            // Drain main log
-            if (!_buffer.IsEmpty)
+            try
             {
-                lock (_flushLock)
+                if (!File.Exists(logPath)) return;
+                var fi = new FileInfo(logPath);
+                if (fi.Length < MAX_LOG_FILE_SIZE) return;
+
+                // Shift existing rotations (oldest first to avoid overwrite)
+                for (int i = MAX_ROTATED_FILES; i >= 1; i--)
                 {
+                    string src = i == 1 ? logPath + ".1" : logPath + $".{i - 1}";
+                    string dst = logPath + $".{i}";
+                    if (i == 1) src = logPath + ".1";
                     try
                     {
-                        using var writer = new StreamWriter(LogFile, append: true);
-                        while (_buffer.TryDequeue(out string entry))
-                        {
-                            writer.WriteLine(entry);
-                        }
+                        if (i == MAX_ROTATED_FILES && File.Exists(logPath + $".{i}"))
+                            File.Delete(logPath + $".{i}");
                     }
                     catch { }
                 }
-            }
-
-            // Drain network diagnostics log
-            if (!_netBuffer.IsEmpty)
-            {
-                try
+                // Shift .2 → .3, .1 → .2
+                for (int i = MAX_ROTATED_FILES - 1; i >= 1; i--)
                 {
-                    using var writer = new StreamWriter(NetLogFile, append: true);
-                    while (_netBuffer.TryDequeue(out string entry))
+                    string src = logPath + $".{i}";
+                    string dst = logPath + $".{i + 1}";
+                    if (File.Exists(src))
                     {
-                        writer.WriteLine(entry);
+                        try { File.Move(src, dst, true); } catch { }
                     }
                 }
-                catch { }
+                // Rename current → .1
+                try { File.Move(logPath, logPath + ".1", true); } catch { }
+            }
+            catch { }
+        }
+
+        private static void FlushBuffer()
+        {
+            // LOG-1 FIX: Both main log and network log writes are inside _flushLock.
+            // This prevents two concurrent FlushBuffer calls (timer + GetRecentNetworkLogs)
+            // from interleaving writes and producing garbled lines.
+            lock (_flushLock)
+            {
+                // Drain main log
+                if (!_buffer.IsEmpty)
+                {
+                    try
+                    {
+                        RotateLogFileIfNeeded(LogFile);
+                        using var writer = new StreamWriter(LogFile, append: true);
+                        while (_buffer.TryDequeue(out string entry))
+                            writer.WriteLine(entry);
+                    }
+                    catch { }
+                }
+
+                // Drain network diagnostics log
+                if (!_netBuffer.IsEmpty)
+                {
+                    try
+                    {
+                        RotateLogFileIfNeeded(NetLogFile);
+                        using var writer = new StreamWriter(NetLogFile, append: true);
+                        while (_netBuffer.TryDequeue(out string entry))
+                            writer.WriteLine(entry);
+                    }
+                    catch { }
+                }
             }
         }
 
@@ -257,11 +309,16 @@ namespace FlyShelf.Classes
 
                 // Internet Connectivity
                 sb.AppendLine("── INTERNET CONNECTIVITY ──");
+                // BUG-4 FIX: Use Task.Run so the blocking HTTP calls run off any WPF
+                // SynchronizationContext, preventing a deadlock if this is ever called
+                // from the UI thread. Both requests are diagnostic-only and best-effort.
                 try
                 {
                     using var client = new System.Net.Http.HttpClient() { Timeout = TimeSpan.FromSeconds(5) };
-                    var authUrl = FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/.json?shallow=true").Result;
-                    var t = client.GetAsync(authUrl).Result;
+                    var authUrl = Task.Run(async () =>
+                        await FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/.json?shallow=true").ConfigureAwait(false)
+                    ).GetAwaiter().GetResult();
+                    var t = Task.Run(async () => await client.GetAsync(authUrl).ConfigureAwait(false)).GetAwaiter().GetResult();
                     sb.AppendLine($"  Firebase RTDB:     HTTP {(int)t.StatusCode} {(t.IsSuccessStatusCode ? "✓" : "✗")}");
                 }
                 catch (Exception ex) { sb.AppendLine($"  Firebase RTDB:     FAILED — {ex.InnerException?.Message ?? ex.Message}"); }
@@ -272,7 +329,7 @@ namespace FlyShelf.Classes
                     try
                     {
                         using var client = new System.Net.Http.HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
-                        var t = client.GetAsync($"{CloudDiscoveryManager.CachedGlobalUrl}/api/health").Result;
+                        var t = Task.Run(async () => await client.GetAsync($"{CloudDiscoveryManager.CachedGlobalUrl}/api/health").ConfigureAwait(false)).GetAwaiter().GetResult();
                         sb.AppendLine($"  Cloudflare Tunnel: HTTP {(int)t.StatusCode} {(t.IsSuccessStatusCode ? "✓" : "✗")}");
                     }
                     catch (Exception ex) { sb.AppendLine($"  Cloudflare Tunnel: FAILED — {ex.InnerException?.Message ?? ex.Message}"); }
@@ -348,6 +405,7 @@ namespace FlyShelf.Classes
         public static void Shutdown()
         {
             _flushTimer?.Dispose();
+            _cleanupTimer?.Dispose();
             FlushBuffer();
         }
     }

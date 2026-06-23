@@ -20,6 +20,12 @@ namespace FlyShelf
 {
     public partial class MainWindow
     {
+        /// <summary>
+        /// Floating drag preview card window — shown during drag-out.
+        /// Created once per drag, destroyed when drag ends.
+        /// </summary>
+        private Windows.DragPreviewWindow? _dragPreviewWindow;
+
         private async void ShelfListView_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
             if (_justDeletedAnItem)
@@ -118,7 +124,7 @@ namespace FlyShelf
             {
                 _viewModel.MoveItemToTop(clipboardObj);
             }
-            catch { }
+            catch (Exception ex) { Classes.Logger.LogAction("MOVE_TO_TOP_ERROR", ex.Message); }
 
             bool clipboardDataSet = false;
             try
@@ -142,7 +148,7 @@ namespace FlyShelf
                     }
                     dataObj.SetData("FileNameW", new string[] { clipboardObj.FilePath });
                     dataObj.SetData("FileName", new string[] { clipboardObj.FilePath });
-                    try { dataObj.SetData("text/uri-list", "file:///" + clipboardObj.FilePath.Replace("\\", "/")); } catch { }
+                    try { dataObj.SetData("text/uri-list", "file:///" + clipboardObj.FilePath.Replace("\\", "/")); } catch (Exception ex) { Classes.Logger.LogAction("URI_LIST_ERROR", ex.Message); }
                     
                     if (clipboardObj.ItemType == ClipboardItemType.Image)
                     {
@@ -157,7 +163,7 @@ namespace FlyShelf
                             bmp.Freeze();
                             dataObj.SetImage(bmp);
                         }
-                        catch { }
+                        catch (Exception ex) { Classes.Logger.LogAction("IMAGE_CLIPBOARD_ERROR", ex.Message); }
                     }
                     
                     byte[] moveEffect = new byte[] { 5, 0, 0, 0 };
@@ -176,7 +182,7 @@ namespace FlyShelf
                     clipboardDataSet = true;
                 }
             }
-            catch { }
+            catch (Exception ex) { Classes.Logger.LogAction("CLIPBOARD_SET_ERROR", ex.Message); }
 
             if (hideWindow)
             {
@@ -205,7 +211,7 @@ namespace FlyShelf
                         if (!string.IsNullOrWhiteSpace(contextTitle))
                             clipboardObj.AssociatedContextTitle = contextTitle;
                     }
-                    catch { }
+                    catch (Exception ex) { Classes.Logger.LogAction("CONTEXT_TITLE_ERROR", ex.Message); }
                 }
             }
             else
@@ -328,7 +334,7 @@ namespace FlyShelf
             }
         }
 
-        private void ShelfListView_MouseMove(object sender, MouseEventArgs e)
+        private async void ShelfListView_MouseMove(object sender, MouseEventArgs e)
         {
             // --- Physical mouse movement detection for scroll hover optimization ---
             Point currentPos = e.GetPosition(this);
@@ -377,13 +383,14 @@ namespace FlyShelf
                             {
                                 dataObj.SetData(DataFormats.UnicodeText, firstItem.RawContent);
                                 dataObj.SetData(DataFormats.Text, firstItem.RawContent);
+                                dataObj.SetData(DataFormats.StringFormat, firstItem.RawContent);
                             }
                             else
                             {
                                 dataObj.SetData(DataFormats.FileDrop, new string[] { firstItem.FilePath });
                                 dataObj.SetData("FileNameW", new string[] { firstItem.FilePath });
                                 dataObj.SetData("FileName", new string[] { firstItem.FilePath });
-                                try { dataObj.SetData("text/uri-list", "file:///" + firstItem.FilePath.Replace("\\", "/")); } catch { }
+                                try { dataObj.SetData("text/uri-list", "file:///" + firstItem.FilePath.Replace("\\", "/")); } catch (Exception ex) { Classes.Logger.LogAction("DRAG_URI_LIST_ERROR", ex.Message); }
 
                                 if (!string.IsNullOrEmpty(firstItem.RawContent))
                                 {
@@ -406,7 +413,7 @@ namespace FlyShelf
                                     bmp.Freeze();
                                     dataObj.SetImage(bmp);
                                 }
-                                catch { }
+                                catch (Exception ex) { Classes.Logger.LogAction("DRAG_IMAGE_ERROR", ex.Message); }
                             }
 
                             // Explicit Win32 Shell 'Copy' Effect override (Required for Windows Explorer Drag Drop)
@@ -417,19 +424,116 @@ namespace FlyShelf
                         }
                         else 
                         {
+                            // Text-only item (no file path) — set all text formats for
+                            // maximum compatibility with text fields, browsers, and editors.
                             dataObj.SetData(DataFormats.UnicodeText, firstItem.RawContent);
+                            dataObj.SetData(DataFormats.Text, firstItem.RawContent);
+                            dataObj.SetData(DataFormats.StringFormat, firstItem.RawContent);
                         }
                         
                         _isInternalDragSource = true;
                         _didDragOut = true;
                         System.IO.MemoryStream? dragDropEffect = null;
+
+                        // ═══ Drag Preview Card ═══
+                        // Show a floating mini card (icon + filename) that follows the cursor
+                        // during drag-out, similar to Windows File Explorer.
+                        ListViewItem? dragSourceContainer = null;
+                        try
+                        {
+                            // Close any stale preview that wasn't cleaned up
+                            if (_dragPreviewWindow != null)
+                            {
+                                try { _dragPreviewWindow.SafeClose(); } catch { }
+                                _dragPreviewWindow = null;
+                            }
+
+                            int selectedCount = listView.SelectedItems.Count;
+                            _dragPreviewWindow = new Windows.DragPreviewWindow(firstItem, selectedCount);
+                            _dragPreviewWindow.Show();
+                            _dragPreviewWindow.StartSafetyTimer(); // Auto-close after 8s if cleanup never fires
+
+                            // Position at current cursor
+                            if (Classes.NativeMethods.GetCursorPos(out var cursorPt))
+                                _dragPreviewWindow.UpdatePosition(cursorPt.X, cursorPt.Y);
+
+                            // Attach GiveFeedback to track cursor during drag
+                            listView.GiveFeedback += DragPreview_GiveFeedback;
+
+                            // Attach QueryContinueDrag to detect cancelled drags (Escape, focus loss)
+                            listView.QueryContinueDrag += DragPreview_QueryContinueDrag;
+
+                            // Dim the source card to 40% opacity for visual feedback
+                            dragSourceContainer = ItemsControl.ContainerFromElement(listView, 
+                                e.OriginalSource as DependencyObject) as ListViewItem;
+                            if (dragSourceContainer == null)
+                            {
+                                // Fallback: find by data context
+                                dragSourceContainer = listView.ItemContainerGenerator
+                                    .ContainerFromItem(firstItem) as ListViewItem;
+                            }
+                            if (dragSourceContainer != null)
+                                dragSourceContainer.Opacity = 0.35;
+                        }
+                        catch (Exception previewEx)
+                        {
+                            // Drag preview is non-critical — log and proceed without it
+                            Classes.Logger.LogAction("DRAG_PREVIEW", $"Preview creation failed: {previewEx.Message}");
+                        }
+
                         try
                         {
                             // Retrieve the MemoryStream so we can dispose it after DoDragDrop returns
                             dragDropEffect = dataObj.GetData("Preferred DropEffect") as System.IO.MemoryStream;
+
+                            // Record cursor position BEFORE drag starts — we'll use it for fallback paste
                             DragDropEffects result = DragDrop.DoDragDrop(listView, dataObj, DragDropEffects.Copy | DragDropEffects.Move);
                             
-                            // Items remain persistent on the shelf after drag-out
+                            // ═══ FALLBACK PASTE ═══
+                            // When the OLE drop is rejected by the target (result == None), fall back
+                            // to clipboard paste: copy text to clipboard → focus the window under cursor
+                            // → Ctrl+V. This makes drag-and-drop work like Windows clipboard, even on
+                            // targets that don't support OLE drops (browser text fields, Electron apps, etc.)
+                            if (result == DragDropEffects.None && !string.IsNullOrEmpty(firstItem.RawContent))
+                            {
+                                // Get the window under the current cursor position
+                                if (Classes.NativeMethods.GetCursorPos(out var dropPt))
+                                {
+                                    IntPtr targetHwnd = WindowFromPhysicalPoint(new Classes.NativeMethods.POINT { X = dropPt.X, Y = dropPt.Y });
+                                    if (targetHwnd != IntPtr.Zero)
+                                    {
+                                        // Get the top-level ancestor window
+                                        IntPtr rootHwnd = GetAncestor(targetHwnd, 2 /* GA_ROOT */);
+                                        if (rootHwnd == IntPtr.Zero) rootHwnd = targetHwnd;
+                                        
+                                        // Don't paste back into our own window
+                                        var selfHwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                                        if (rootHwnd != selfHwnd)
+                                        {
+                                            // Copy text to clipboard
+                                            Classes.ClipboardHelper.SafeSetText(firstItem.RawContent, suppressEcho: true, echoDelayMs: 2000);
+                                            
+                                            // Click the target to focus the text field, then paste
+                                            SetForegroundWindow(rootHwnd);
+
+                                            // Click the exact cursor position to place caret in the text field
+                                            SendClickAt(dropPt.X, dropPt.Y);
+
+                                            // Brief delay for focus + click to settle
+                                            await System.Threading.Tasks.Task.Delay(120);
+                                            
+                                            // Simulate Ctrl+V
+                                            keybd_event(VK_CONTROL, 0, 0, UIntPtr.Zero);
+                                            keybd_event(VK_V, 0, 0, UIntPtr.Zero);
+                                            keybd_event(VK_V, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+                                            keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, UIntPtr.Zero);
+
+                                            // Hide the FlyShelf window after paste
+                                            AnimateAndHide();
+                                        }
+                                    }
+                                }
+                            }
                         }
                         catch (Exception ex)
                         {
@@ -439,9 +543,55 @@ namespace FlyShelf
                         {
                             _isInternalDragSource = false;
                             dragDropEffect?.Dispose();
+
+                            // ═══ Cleanup Drag Preview ═══
+                            listView.GiveFeedback -= DragPreview_GiveFeedback;
+                            listView.QueryContinueDrag -= DragPreview_QueryContinueDrag;
+                            try
+                            {
+                                _dragPreviewWindow?.SafeClose();
+                            }
+                            catch { /* Window may already be disposed */ }
+                            _dragPreviewWindow = null;
+
+                            // Restore source card opacity
+                            if (dragSourceContainer != null)
+                                dragSourceContainer.Opacity = 1.0;
                         }
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// GiveFeedback handler — fires continuously during drag to track cursor position.
+        /// Updates the DragPreviewWindow to follow the mouse with zero lag.
+        /// </summary>
+        private void DragPreview_GiveFeedback(object sender, GiveFeedbackEventArgs e)
+        {
+            if (_dragPreviewWindow != null &&
+                Classes.NativeMethods.GetCursorPos(out var pt))
+            {
+                _dragPreviewWindow.UpdatePosition(pt.X, pt.Y);
+            }
+
+            // Keep the default system cursors (copy/move arrows, no-drop circle)
+            e.UseDefaultCursors = true;
+            e.Handled = true;
+        }
+
+        /// <summary>
+        /// QueryContinueDrag handler — fires when drag state changes.
+        /// If drag is cancelled (Escape, focus loss), immediately close the preview
+        /// so it doesn't linger as a ghost artifact on screen.
+        /// </summary>
+        private void DragPreview_QueryContinueDrag(object sender, QueryContinueDragEventArgs e)
+        {
+            if (e.Action == DragAction.Cancel || e.Action == DragAction.Drop)
+            {
+                // Drag is ending — close preview immediately, don't wait for finally block
+                try { _dragPreviewWindow?.SafeClose(); } catch { }
+                _dragPreviewWindow = null;
             }
         }
 
@@ -517,7 +667,7 @@ namespace FlyShelf
                         if (hwnd != IntPtr.Zero)
                             Classes.NativeMethods.ShowWindow(hwnd, 0 /*SW_HIDE*/);
                     }
-                    catch { }
+                    catch (Exception ex) { Classes.Logger.LogAction("VD_HIDE_ERROR", ex.Message); }
                     // Don't return — fall through to clipboard show path
                 }
                 else
@@ -649,6 +799,8 @@ namespace FlyShelf
                             OpenNotesPanel();
                         else if (panelToRestore == "todo")
                             OpenTodoPanel();
+                        else if (panelToRestore == "research")
+                            OpenResearchPanel();
                     }, System.Windows.Threading.DispatcherPriority.Loaded);
                 }
                 else
@@ -752,7 +904,7 @@ namespace FlyShelf
                                 needsRecreate = true;
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { Classes.Logger.LogAction("HUB_VD_CHECK_ERROR", ex.Message); }
 
                     if (needsRecreate)
                     {
@@ -826,7 +978,8 @@ namespace FlyShelf
         private void UnpinSelectedBtn_Click(object sender, RoutedEventArgs e)
         {
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
-            var pinnedSelected = ShelfListView.SelectedItems
+            var listView = _isAltUIActive ? AltShelfListView : ShelfListView;
+            var pinnedSelected = listView.SelectedItems
                 .Cast<ClipboardItem>()
                 .Where(i => i.IsPinned)
                 .ToList();
@@ -844,7 +997,7 @@ namespace FlyShelf
             
             UnpinSelectedBtn.Visibility = Visibility.Collapsed;
             UpdateToolbarButtonsVisibility();
-            ShelfListView.SelectedItems.Clear();
+            listView.SelectedItems.Clear();
         }
 
         // ═══ PDF Merge, Convert & Smart Actions moved to MainWindow.PdfMerge.cs ═══

@@ -3,6 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import * as Crypto from 'expo-crypto';
 
+export type ConnectionType = 'LAN' | 'Cloud' | 'Offline';
+
 export type PairedDevice = {
   deviceId: string;
   deviceName: string;
@@ -10,6 +12,13 @@ export type PairedDevice = {
   pairedAt: number; // timestamp
   isPro?: boolean;
   licenseKey?: string;
+  // Live status fields (updated by sync loop, not persisted)
+  lastSeen?: number;
+  isOnline?: boolean;
+  connectionType?: ConnectionType;
+  latencyMs?: number;
+  localUrl?: string;
+  globalUrl?: string;
 };
 
 type SettingsContextType = {
@@ -33,6 +42,7 @@ type SettingsContextType = {
   addPairedDevice: (device: PairedDevice) => Promise<void>;
   removePairedDevice: (deviceId: string) => Promise<void>;
   updatePairedDeviceLicensing: (deviceId: string, isPro: boolean, licenseKey: string) => Promise<void>;
+  updateDeviceStatus: (deviceId: string, status: { isOnline?: boolean; connectionType?: ConnectionType; latencyMs?: number; lastSeen?: number; localUrl?: string; globalUrl?: string }) => void;
   pairingKey: string;
   regeneratePairingKey: () => Promise<string>;
 };
@@ -57,6 +67,7 @@ const SettingsContext = createContext<SettingsContextType>({
   addPairedDevice: async () => {},
   removePairedDevice: async () => {},
   updatePairedDeviceLicensing: async () => {},
+  updateDeviceStatus: () => {},
   pairingKey: '',
   regeneratePairingKey: async () => '',
 });
@@ -217,6 +228,22 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     });
   };
 
+  /** Update live connection status for a device (not persisted — runtime only) */
+  const updateDeviceStatus = (deviceId: string, status: { isOnline?: boolean; connectionType?: ConnectionType; latencyMs?: number; lastSeen?: number; localUrl?: string; globalUrl?: string }) => {
+    setPairedDevicesState(prev => {
+      const idx = prev.findIndex(d => d.deviceId === deviceId);
+      if (idx === -1) return prev;
+      const device = prev[idx];
+      // Only update if something actually changed
+      const changed = Object.entries(status).some(([k, v]) => (device as any)[k] !== v);
+      if (!changed) return prev;
+      const updated = [...prev];
+      updated[idx] = { ...device, ...status };
+      // Don't persist live status to AsyncStorage — it's ephemeral
+      return updated;
+    });
+  };
+
   const regeneratePairingKey = async (): Promise<string> => {
     const newKey = generatePairingKey();
     setPairingKeyState(newKey);
@@ -225,7 +252,7 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   return (
-    <SettingsContext.Provider value={{ pcLocalIp, setPcLocalIp, deviceName, setDeviceName, deviceId, isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, setFloatingBallEnabled, defaultTargetDeviceName, setDefaultTargetDeviceName, floatingBallSize, setFloatingBallSize, floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, addPairedDevice, removePairedDevice, updatePairedDeviceLicensing, pairingKey, regeneratePairingKey }}>
+    <SettingsContext.Provider value={{ pcLocalIp, setPcLocalIp, deviceName, setDeviceName, deviceId, isGlobalSyncEnabled, setGlobalSyncEnabled, isFloatingBallEnabled, setFloatingBallEnabled, defaultTargetDeviceName, setDefaultTargetDeviceName, floatingBallSize, setFloatingBallSize, floatingBallAutoHide, setFloatingBallAutoHide, pairedDevices, addPairedDevice, removePairedDevice, updatePairedDeviceLicensing, updateDeviceStatus, pairingKey, regeneratePairingKey }}>
       {children}
     </SettingsContext.Provider>
   );

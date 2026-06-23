@@ -40,6 +40,16 @@ namespace FlyShelf
         private const int VK_ESCAPE = 0x1B;
         private IntPtr _keyboardHookId = IntPtr.Zero;
         private Classes.NativeMethods.LowLevelKeyboardProc? _keyboardHookProc;
+
+        // ═══ Low-Level Mouse Hook for click-to-release arrow ownership ═══
+        private IntPtr _mouseHookId = IntPtr.Zero;
+        private Classes.NativeMethods.LowLevelMouseProc? _mouseHookProc;
+        /// <summary>When true, the keyboard hook intercepts Up/Down/Enter/Escape for clipboard navigation.
+        /// Starts true when the clipboard is summoned. Set to false when the user clicks outside
+        /// the clipboard window (giving arrows back to the target app). Set back to true when
+        /// the user clicks on the clipboard window.</summary>
+        private bool _hookOwnsArrows = true;
+
         /// <summary>True when the clipboard was spawned in no-focus mode (stealFocus=false).
         /// Used by CopyItemAndPaste to skip SetForegroundWindow since the target app already has focus.</summary>
         private bool _spawnedWithoutFocus = false;
@@ -146,6 +156,24 @@ namespace FlyShelf
             CloseSearch();
             CloseEmojiPicker();
             Classes.SpawnProfiler.Instance.Mark("CLOSE_SEARCH_EMOJI");
+
+            // ═══ SCROLL RESET ON EVERY SUMMON ═══
+            // Previously scroll was only reset in AnimateAndHide (dismiss), but if the dismiss
+            // sequence was interrupted or SmoothScroll had residual state, the offset persisted.
+            // Always scroll to top on summon so the user sees the most recent card first.
+            try
+            {
+                Classes.SmoothScroll.ResetScrollState(GetShelfScrollViewer());
+                var sv = GetShelfScrollViewer();
+                if (sv != null)
+                {
+                    sv.ScrollToVerticalOffset(0);
+                    sv.ScrollToTop();
+                }
+                if (ShelfListView.Items.Count > 0)
+                    ShelfListView.SelectedIndex = 0;
+            }
+            catch { }
 
             // Increment spawn token at the very beginning of the summon sequence.
             // This immediately invalidates any active or pending dismiss/hide animation callbacks.
@@ -256,7 +284,11 @@ namespace FlyShelf
             {
                 try
                 {
-                    var bgVdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                    // PERF: Reuse thread-local COM instance instead of creating new ones per-call.
+                    // This prevents COM object leaks when tasks timeout and get abandoned,
+                    // matching the pattern in IsWindowOnCurrentVirtualDesktop.
+                    _threadLocalVdm ??= (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                    var bgVdm = _threadLocalVdm;
                     
                     // Capture _lastActiveExternalWindowWasOnCurrentAtSummon for callback use
                     if (capturedLastExternal != IntPtr.Zero && IsWindow(capturedLastExternal))
@@ -309,6 +341,8 @@ namespace FlyShelf
                 }
                 catch (Exception ex)
                 {
+                    // COM call failed — reset thread-local instance so next call creates fresh one
+                    _threadLocalVdm = null;
                     Classes.Logger.LogAction("DESKTOP_ERR", $"Failed to capture summoned desktop ID: {ex.Message}");
                 }
             });
@@ -961,6 +995,14 @@ namespace FlyShelf
                     // Guard: Ensure containers are fully generated before evaluating visibility or eviction
                     if (ShelfListView.ItemContainerGenerator.Status != System.Windows.Controls.Primitives.GeneratorStatus.ContainersGenerated)
                     {
+                        // Containers not ready yet (e.g. right after spawn) — schedule a retry
+                        // instead of silently giving up. Without this, thumbnails never load if
+                        // the initial 300ms post-spawn timer fires before containers are materialized.
+                        if (_scrollHighQualityTimer != null && !_scrollHighQualityTimer.IsEnabled)
+                        {
+                            _scrollHighQualityTimer.Interval = TimeSpan.FromMilliseconds(100);
+                            _scrollHighQualityTimer.Start();
+                        }
                         return;
                     }
 
@@ -1192,25 +1234,41 @@ namespace FlyShelf
         /// <summary>
         /// Installs a WH_KEYBOARD_LL hook so Up/Down/Enter/Escape work on the clipboard
         /// even though it doesn't have keyboard focus (stealFocus=false).
+        /// Also installs a WH_MOUSE_LL hook to detect clicks inside/outside the clipboard
+        /// for click-to-release arrow ownership.
         /// </summary>
         private void InstallKeyboardHook()
         {
             if (_keyboardHookId != IntPtr.Zero) return; // Already installed
 
+            // Reset arrow ownership — arrows are always active on fresh summon
+            _hookOwnsArrows = true;
+
             _keyboardHookProc = KeyboardHookCallback;
+            _mouseHookProc = MouseHookCallback;
             using (var curProcess = System.Diagnostics.Process.GetCurrentProcess())
-            using (var curModule = curProcess.MainModule!)
             {
-                _keyboardHookId = Classes.NativeMethods.SetWindowsHookEx(
-                    Classes.NativeMethods.WH_KEYBOARD_LL,
-                    _keyboardHookProc,
-                    Classes.NativeMethods.GetModuleHandle(curModule.ModuleName),
-                    0);
+                var mainModule = curProcess.MainModule;
+                if (mainModule == null) return;
+                using (mainModule)
+                {
+                    var hMod = Classes.NativeMethods.GetModuleHandle(mainModule.ModuleName);
+                    _keyboardHookId = Classes.NativeMethods.SetWindowsHookEx(
+                        Classes.NativeMethods.WH_KEYBOARD_LL,
+                        _keyboardHookProc,
+                        hMod,
+                        0);
+                    _mouseHookId = Classes.NativeMethods.SetWindowsHookEx(
+                        Classes.NativeMethods.WH_MOUSE_LL,
+                        _mouseHookProc,
+                        hMod,
+                        0);
+                }
             }
         }
 
         /// <summary>
-        /// Removes the low-level keyboard hook. Safe to call multiple times.
+        /// Removes the low-level keyboard and mouse hooks. Safe to call multiple times.
         /// </summary>
         private void UninstallKeyboardHook()
         {
@@ -1220,12 +1278,21 @@ namespace FlyShelf
                 _keyboardHookId = IntPtr.Zero;
             }
             _keyboardHookProc = null;
+
+            if (_mouseHookId != IntPtr.Zero)
+            {
+                Classes.NativeMethods.UnhookWindowsHookEx(_mouseHookId);
+                _mouseHookId = IntPtr.Zero;
+            }
+            _mouseHookProc = null;
         }
 
         /// <summary>
         /// Low-level keyboard hook callback. Intercepts Up/Down/Enter/Escape ONLY when
-        /// the clipboard is visible (_isCurrentlySummoned) and navigates the ListView
-        /// programmatically — without stealing focus from the target application.
+        /// the clipboard is visible (_isCurrentlySummoned) and _hookOwnsArrows is true.
+        /// Navigates the ListView programmatically without stealing focus from the target app.
+        /// Arrow ownership is released when the user clicks outside the clipboard (detected
+        /// by the companion mouse hook) and reclaimed when they click inside it.
         /// </summary>
         private IntPtr KeyboardHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
         {
@@ -1237,29 +1304,15 @@ namespace FlyShelf
                     return Classes.NativeMethods.CallNextHookEx(_keyboardHookId, nCode, wParam, lParam);
                 int vkCode = Marshal.ReadInt32(lParam);
 
-                // Only intercept navigation keys if the cursor is over the clipboard window.
-                // This lets the user "click outside" to give arrow keys back to their app,
-                // then "click on clipboard" to navigate it again — matching Win+V behavior.
+                // Only intercept navigation keys if we currently own arrow input.
+                // Ownership starts as true when the clipboard is summoned.
+                // Clicking outside the clipboard releases ownership (mouse hook sets _hookOwnsArrows=false).
+                // Clicking back on the clipboard reclaims ownership (_hookOwnsArrows=true).
                 if (vkCode == VK_DOWN || vkCode == VK_UP || vkCode == VK_RETURN || vkCode == VK_ESCAPE)
                 {
-                    bool cursorOnClipboard = false;
-                    try
+                    if (!_hookOwnsArrows)
                     {
-                        if (Classes.NativeMethods.GetCursorPos(out var pt))
-                        {
-                            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                            if (hwnd != IntPtr.Zero && Classes.NativeMethods.GetWindowRect(hwnd, out var rect))
-                            {
-                                cursorOnClipboard = pt.X >= rect.Left && pt.X <= rect.Right &&
-                                                    pt.Y >= rect.Top && pt.Y <= rect.Bottom;
-                            }
-                        }
-                    }
-                    catch { }
-
-                    if (!cursorOnClipboard)
-                    {
-                        // Cursor is outside clipboard — let keys pass through to the target app
+                        // Ownership released — let keys pass through to the target app
                         return Classes.NativeMethods.CallNextHookEx(_keyboardHookId, nCode, wParam, lParam);
                     }
                 }
@@ -1312,6 +1365,42 @@ namespace FlyShelf
             }
 
             return Classes.NativeMethods.CallNextHookEx(_keyboardHookId, nCode, wParam, lParam);
+        }
+
+        /// <summary>
+        /// Low-level mouse hook callback. Detects mouse clicks to toggle arrow-key ownership:
+        /// - Click inside the clipboard window → reclaim arrow ownership (_hookOwnsArrows = true)
+        /// - Click outside the clipboard window → release arrow ownership (_hookOwnsArrows = false)
+        /// This lets the user "click outside" to give arrows back to their app,
+        /// then "click on clipboard" to navigate it again — matching Win+V behavior.
+        /// </summary>
+        private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+        {
+            if (nCode >= 0 && _isCurrentlySummoned && !_isAnimatingHide)
+            {
+                int msg = (int)wParam;
+                if (msg == Classes.NativeMethods.WM_LBUTTONDOWN ||
+                    msg == Classes.NativeMethods.WM_RBUTTONDOWN ||
+                    msg == Classes.NativeMethods.WM_MBUTTONDOWN)
+                {
+                    try
+                    {
+                        if (Classes.NativeMethods.GetCursorPos(out var pt))
+                        {
+                            var hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+                            if (hwnd != IntPtr.Zero && Classes.NativeMethods.GetWindowRect(hwnd, out var rect))
+                            {
+                                bool clickedOnClipboard = pt.X >= rect.Left && pt.X <= rect.Right &&
+                                                         pt.Y >= rect.Top && pt.Y <= rect.Bottom;
+                                _hookOwnsArrows = clickedOnClipboard;
+                            }
+                        }
+                    }
+                    catch { }
+                }
+            }
+
+            return Classes.NativeMethods.CallNextHookEx(_mouseHookId, nCode, wParam, lParam);
         }
 
         private void UpdatePositionToLockedBottomEdge()

@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Net.WebSockets;
@@ -20,6 +21,14 @@ namespace FlyShelf.Classes
 {
     public partial class NetworkSyncServer
     {
+        // SECURITY (H-05): Constant-time string comparison to prevent timing attacks on PIN tokens.
+        private static bool ConstantTimeEquals(string a, string b)
+        {
+            if (a == null || b == null) return false;
+            var bytesA = Encoding.UTF8.GetBytes(a);
+            var bytesB = Encoding.UTF8.GetBytes(b);
+            return CryptographicOperations.FixedTimeEquals(bytesA, bytesB);
+        }
         // ═══ RATE LIMITING: Per-IP request counter ═══
         // TRUSTED (paired P2P devices): Very high limit — never throttle real sync.
         // UNTRUSTED (web client / external): Strict limit — prevent DoS via public URL.
@@ -112,7 +121,7 @@ namespace FlyShelf.Classes
                 if (!string.IsNullOrEmpty(corsOrigin))
                     res.AddHeader("Access-Control-Allow-Origin", corsOrigin);
                 res.AddHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-                res.AddHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Original-Date, X-FlyShelf-Client, X-Pairing-Key, X-File-Name, X-File-Type, X-Item-Type, X-Source-Device, X-Source-DeviceId, X-Batch-Name, X-Upload-Session, X-Chunk-Index, X-Total-Chunks, X-Device-Id");
+                res.AddHeader("Access-Control-Allow-Headers", "Authorization, Content-Type, Content-Range, X-Original-Date, X-FlyShelf-Client, X-Pairing-Key, X-File-Name, X-File-Type, X-Item-Type, X-Source-Device, X-Source-DeviceId, X-Batch-Name, X-Upload-Session, X-Chunk-Index, X-Total-Chunks, X-Device-Id, X-Transfer-Id");
                 res.AddHeader("Access-Control-Expose-Headers", "X-Global-Url");
                 // Enable Keep-Alive to allow socket reuse (crucial for zero-handshake P2P sync and chunked uploads)
                 res.KeepAlive = true;
@@ -214,7 +223,7 @@ namespace FlyShelf.Classes
                     string dlPairingKey = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"] ?? "";
                     string dlPin = req.Headers["Authorization"]?.Replace("Bearer ", "") ?? req.QueryString["pin"] ?? "";
                     bool dlAuthed = DevicePairingManager.IsDevicePaired(dlPairingKey) ||
-                                   (!string.IsNullOrEmpty(dlPin) && dlPin == SettingsManager.Current.WebClientPinToken);
+                                   (!string.IsNullOrEmpty(dlPin) && ConstantTimeEquals(dlPin, SettingsManager.Current.WebClientPinToken));
                     if (!dlAuthed)
                     {
                         Logger.LogAction("SECURITY", $"⛔ Rejected unauthenticated /download from {req.RemoteEndPoint}");
@@ -243,13 +252,13 @@ namespace FlyShelf.Classes
                         string remoteIp = req.RemoteEndPoint?.Address?.ToString() ?? "";
                         if (!string.IsNullOrEmpty(deviceId)) DevicePairingManager.TouchDevice(deviceId, remoteIp);
 
+                        // SECURITY (M-06): Removed licenseKey — no need to expose even masked keys to peers.
                         var info = new { 
                             status = "ok", 
                             localUrl = DisplayUrl, 
                             globalUrl = GlobalUrl ?? "", 
                             deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
-                            isPro = LicenseManager.IsPro,
-                            licenseKey = LicenseManager.IsPro ? LicenseManager.MaskedKey : ""
+                            isPro = LicenseManager.IsPro
                         };
                         byte[] json = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(info));
                         res.StatusCode = 200; res.ContentType = "application/json";
@@ -264,6 +273,11 @@ namespace FlyShelf.Classes
                         res.Close();
                     }
                 }
+                else if (path == "/api/nearby" && req.HttpMethod == "GET")
+                {
+                    // Public endpoint for Android subnet scanning (no auth needed, just returns device info)
+                    await HandleNearbyQuery(req, res);
+                }
                 else
                 {
                     // HARD SECURE AUTHENTICATION BARRIER
@@ -273,7 +287,7 @@ namespace FlyShelf.Classes
                     string pairingKey = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"];
                     bool isPairedDevice = DevicePairingManager.IsDevicePaired(pairingKey);
 
-                    if (!isPairedDevice && (string.IsNullOrEmpty(providedPin) || providedPin != SettingsManager.Current.WebClientPinToken))
+                    if (!isPairedDevice && (string.IsNullOrEmpty(providedPin) || !ConstantTimeEquals(providedPin, SettingsManager.Current.WebClientPinToken)))
                     {
                         byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"401 Unauthorized - Invalid PIN\"}");
                         res.StatusCode = 401; res.ContentType = "application/json";
@@ -286,6 +300,20 @@ namespace FlyShelf.Classes
                     {
                         try
                         {
+                            // Register Android/Mobile devices as nearby when they health-check from LAN
+                            string flyshelfClient = req.Headers["X-FlyShelf-Client"] ?? "";
+                            if (flyshelfClient == "MobileCompanion" && NearbyDiscovery.Instance != null)
+                            {
+                                string mobileDeviceId = req.Headers["X-Device-Id"] ?? req.Headers["X-Source-Device"] ?? "";
+                                string mobileDeviceName = req.Headers["X-Source-Device"] ?? "Mobile";
+                                string mobileIp = req.RemoteEndPoint?.Address?.ToString() ?? "";
+                                if (!string.IsNullOrEmpty(mobileIp) && !string.IsNullOrEmpty(mobileDeviceId))
+                                {
+                                    NearbyDiscovery.Instance.RecordHttpDiscovery(
+                                        mobileDeviceId, mobileDeviceName, mobileIp, 8999, "Mobile");
+                                }
+                            }
+
                             var healthData = new
                             {
                                 status = "online",
@@ -296,6 +324,7 @@ namespace FlyShelf.Classes
                                 uptime = (int)(DateTime.UtcNow - System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime()).TotalSeconds,
                                 transport = new { lan = CloudDiscoveryManager.CachedLocalUrl ?? "", cloudflare = CloudDiscoveryManager.CachedGlobalUrl ?? "" },
                                 peers = PeerManager.Instance?.AliveCount ?? 0,
+                                transferPort = LanTransferEngine.TRANSFER_PORT, // Dedicated TCP port for zero-copy file transfers
                                 timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
                             };
                             string json = JsonSerializer.Serialize(healthData);
@@ -351,6 +380,14 @@ namespace FlyShelf.Classes
                     else if (path == "/api/logs/stream" && req.HttpMethod == "GET") { await ServeLogStream(req, res); }
                     else if (path == "/api/logs" && req.HttpMethod == "GET") { ServeLogsJson(req, res); }
                     else if (path == "/api/logs" && req.HttpMethod == "POST") { await HandleRemoteLogPost(req, res); }
+                    else if (path == "/api/notes" && req.HttpMethod == "GET") { ServeNotesData(res); }
+                    else if (path == "/api/notes" && req.HttpMethod == "POST") { await HandleNotesUpdate(req, res); }
+                    else if (path == "/api/todos" && req.HttpMethod == "GET") { ServeTodosData(res); }
+                    else if (path == "/api/todos" && req.HttpMethod == "POST") { await HandleTodosUpdate(req, res); }
+                    // ═══ Android REST Transfer Endpoints ═══
+                    else if (path == "/api/transfer/offer" && req.HttpMethod == "POST") { await HandleTransferOffer(req, res); }
+                    else if (path == "/api/transfer/upload" && req.HttpMethod == "POST") { await HandleTransferUpload(req, res); }
+                    else if (path == "/api/transfer/status" && req.HttpMethod == "GET") { await HandleTransferStatus(req, res); }
                     else { res.StatusCode = 404; res.Close(); }
                 }
             }
@@ -454,6 +491,53 @@ namespace FlyShelf.Classes
                                         _ = Task.Run(() => PeerManager.Instance.HandlePeerUrlUpdateFromWebSocket(
                                             sourceDeviceId, sourceDeviceName, newLanUrl, newCfUrl));
                                     }
+                                }
+                                // ═══ LAN TRANSFER CONTROL MESSAGES ═══
+                                else if (envelopeType == "TransferOffer" && LanTransferManager.Instance != null)
+                                {
+                                    string tidStr = root.TryGetProperty("transferId", out var tiProp) ? tiProp.GetString() ?? "" : "";
+                                    string fileName = root.TryGetProperty("fileName", out var fnProp) ? fnProp.GetString() ?? "" : "";
+                                    long fileSize = root.TryGetProperty("fileSize", out var fsProp2) ? fsProp2.GetInt64() : 0;
+                                    string srcDeviceId = root.TryGetProperty("sourceDeviceId", out var siProp) ? siProp.GetString() ?? "" : "";
+                                    string srcDeviceName = root.TryGetProperty("sourceDeviceName", out var snProp) ? snProp.GetString() ?? "" : "";
+                                    string xxhash = root.TryGetProperty("xxhash64", out var xhProp) ? xhProp.GetString() : null;
+                                    if (Guid.TryParse(tidStr, out Guid tid))
+                                    {
+                                        _ = Task.Run(() => LanTransferManager.Instance.HandleTransferOffer(
+                                            tid, fileName, fileSize, srcDeviceId, srcDeviceName, xxhash));
+                                    }
+                                }
+                                else if (envelopeType == "TransferAccept" && LanTransferManager.Instance != null)
+                                {
+                                    string tidStr = root.TryGetProperty("transferId", out var tiProp) ? tiProp.GetString() ?? "" : "";
+                                    long resumeFrom = root.TryGetProperty("resumeFrom", out var rfProp) ? rfProp.GetInt64() : 0;
+                                    if (Guid.TryParse(tidStr, out Guid tid))
+                                        _ = Task.Run(() => LanTransferManager.Instance.HandleTransferAccepted(tid, resumeFrom, peerDeviceId));
+                                }
+                                else if (envelopeType == "TransferPause" && LanTransferManager.Instance != null)
+                                {
+                                    string tidStr = root.TryGetProperty("transferId", out var tiProp) ? tiProp.GetString() ?? "" : "";
+                                    if (Guid.TryParse(tidStr, out Guid tid))
+                                        _ = Task.Run(() => LanTransferManager.Instance.HandlePeerPause(tid));
+                                }
+                                else if (envelopeType == "TransferResume" && LanTransferManager.Instance != null)
+                                {
+                                    string tidStr = root.TryGetProperty("transferId", out var tiProp) ? tiProp.GetString() ?? "" : "";
+                                    long resumeFrom = root.TryGetProperty("bytesTransferred", out var rfProp) ? rfProp.GetInt64() : 0;
+                                    if (Guid.TryParse(tidStr, out Guid tid))
+                                        LanTransferManager.Instance.HandlePeerResume(tid, resumeFrom);
+                                }
+                                else if (envelopeType == "TransferCancel" && LanTransferManager.Instance != null)
+                                {
+                                    string tidStr = root.TryGetProperty("transferId", out var tiProp) ? tiProp.GetString() ?? "" : "";
+                                    if (Guid.TryParse(tidStr, out Guid tid))
+                                        LanTransferManager.Instance.HandlePeerCancel(tid);
+                                }
+                                else if (envelopeType == "TransferComplete" && LanTransferManager.Instance != null)
+                                {
+                                    string tidStr = root.TryGetProperty("transferId", out var tiProp) ? tiProp.GetString() ?? "" : "";
+                                    if (Guid.TryParse(tidStr, out Guid tid))
+                                        LanTransferManager.Instance.HandlePeerComplete(tid);
                                 }
                                 else if (envelopeType == "SyncFileStart")
                                 {

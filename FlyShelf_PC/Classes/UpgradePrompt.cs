@@ -151,6 +151,11 @@ namespace FlyShelf.Classes
             FlyShelf.Windows.ToastWindow.ShowToast("Custom sniffer folders are a Pro feature. Upgrade to add more folders!");
         }
 
+        public static void ShowNoteImageLimit()
+        {
+            FlyShelf.Windows.ToastWindow.ShowToast($"Image limit reached ({LicenseManager.FREE_NOTE_IMAGES_PER_CARD} per card). Upgrade to Pro for up to {LicenseManager.PRO_NOTE_IMAGES_PER_CARD} images!");
+        }
+
         // ═════════════════════════════════════════════════════════════
         // ACTIVATION DIALOG
         // ═════════════════════════════════════════════════════════════

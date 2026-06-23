@@ -47,6 +47,9 @@ namespace FlyShelf.Classes
 
         // Active file transfer tracking (prevents marking peer dead mid-transfer)
         public int ActiveTransfers;
+
+        // Dedicated TCP port for LAN file transfers (discovered via /api/health)
+        public int TransferPort { get; set; } = 8998;
     }
 
     /// <summary>

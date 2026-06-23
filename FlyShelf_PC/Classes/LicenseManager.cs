@@ -129,16 +129,18 @@ namespace FlyShelf.Classes
         // and build goodwill. Only power users hit these.
         public const int FREE_HISTORY_CAP = 500;
         public const int PRO_HISTORY_CAP = 2500;
-        public const int FREE_PDF_MERGE_DAILY = 20;
-        public const int FREE_PDF_SAVE_DAILY = 20;
+        public const int FREE_PDF_MERGE_DAILY = 10;
+        public const int FREE_PDF_SAVE_DAILY = 10;
         public const int FREE_DOC_CONVERT_DAILY = 10;
         public const int FREE_IMAGE_TO_PDF_DAILY = 10;
-        public const int FREE_QR_SCAN_DAILY = 20;
-        public const int FREE_OCR_DAILY = 30;
-        public const int FREE_TABLE_EXTRACT_DAILY = 15;
+        public const int FREE_QR_SCAN_DAILY = 2;
+        public const int FREE_OCR_DAILY = 15;
+        public const int FREE_TABLE_EXTRACT_DAILY = 5;
         public const int FREE_PIN_LIMIT = 20;
         public const int FREE_TODO_DAILY = 10;
         public const int FREE_NOTE_DAYS = 60;
+        public const int FREE_NOTE_IMAGES_PER_CARD = 1;
+        public const int PRO_NOTE_IMAGES_PER_CARD = 5;
 
         // ═══ KEY VALIDATION SECRET (XOR-obfuscated so it's not plaintext in the binary) ═══
         // Obfuscated with XOR key — decoded at runtime only when needed
@@ -313,10 +315,10 @@ namespace FlyShelf.Classes
             return IsPro;
         }
 
-        /// <summary>Check if Glass UI theme can be applied.</summary>
+        /// <summary>Check if Glass UI (Acrylic Blur) theme can be applied. Free for all users.</summary>
         public static bool CanUseGlassTheme()
         {
-            return IsPro;
+            return true;
         }
 
         /// <summary>Check if Cloudflare tunnel can be enabled.</summary>

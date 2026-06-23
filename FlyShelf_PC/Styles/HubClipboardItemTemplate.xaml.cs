@@ -95,5 +95,15 @@ namespace FlyShelf.Styles
         {
             FindHub(sender)?.SendToDevice_Click(sender, e);
         }
+
+        private void RotateImageSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.RotateImageSpecific_Click(sender, e);
+        private void SmartActionSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.SmartActionSpecific_Click(sender, e);
+        private void RunTerminalSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.RunTerminalSpecific_Click(sender, e);
+        private void OpenExplorer_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.OpenExplorer_Click(sender, e);
+        private void ConvertToZip_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.ConvertToZip_Click(sender, e);
+        private void SyncZipLan_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.SyncZipLan_Click(sender, e);
+        private void SanitizeUrlSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.SanitizeUrlSpecific_Click(sender, e);
+        private void MakePasswordSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.MakePasswordSpecific_Click(sender, e);
+        private void RenamePasswordSpecific_Click(object sender, MouseButtonEventArgs e) => FindHub(sender)?.RenamePasswordSpecific_Click(sender, e);
     }
 }

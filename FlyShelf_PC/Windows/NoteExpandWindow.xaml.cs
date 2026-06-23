@@ -1,22 +1,36 @@
 using System;
+using System.IO;
+using System.Linq;
+using System.Text;
 using System.Windows;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using FlyShelf.Classes;
 
 namespace FlyShelf.Windows
 {
     /// <summary>
     /// Sticky-note style expanded view for freeform notes.
-    /// Binds to a FreeformSection and syncs text changes back in real-time.
+    /// Uses a RichTextBox for real bold/italic/strikethrough formatting and inline images.
+    /// Persists formatted content as XAML in FreeformSection.RichContent,
+    /// while keeping plain-text Content in sync for backward compatibility.
+    /// Images are stored on disk and tracked in FreeformSection.Images.
     /// </summary>
     public partial class NoteExpandWindow : Window
     {
-        private readonly FlyShelf.Classes.FreeformSection _section;
+        private readonly FreeformSection _section;
         private readonly System.Windows.Threading.DispatcherTimer _saveTimer;
         private bool _isPinned = true;
         private bool _isDirty = false;
+        private bool _isLoading = false;
 
-        public NoteExpandWindow(FlyShelf.Classes.FreeformSection section, string dayLabel = "Note")
+        // Font size cycling
+        private static readonly double[] _fontSizes = { 12, 13, 14, 16, 18, 20 };
+        private int _fontSizeIndex = 1; // default 13
+
+        public NoteExpandWindow(FreeformSection section, string dayLabel = "Note")
         {
             InitializeComponent();
             _section = section ?? throw new ArgumentNullException(nameof(section));
@@ -32,7 +46,8 @@ namespace FlyShelf.Windows
             };
 
             HeaderTitle.Text = dayLabel;
-            NoteTextBox.Text = _section.Content ?? "";
+            LoadContent();
+            LoadSectionImages();
             UpdateWordCount();
 
             // Reset dirty status after initial load
@@ -45,16 +60,369 @@ namespace FlyShelf.Windows
         {
             try
             {
-                NoteTextBox.Focus();
-                NoteTextBox.CaretIndex = NoteTextBox.Text.Length;
+                NoteRichTextBox.Focus();
+                NoteRichTextBox.CaretPosition = NoteRichTextBox.Document.ContentEnd;
             }
             catch { }
         }
 
-        // ═══ TEXT EDITING ═══
+        // ═══════════════════════════════════════════════════════════
+        // LOAD / SAVE
+        // ═══════════════════════════════════════════════════════════
 
-        private void NoteTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        private void LoadContent()
         {
+            _isLoading = true;
+            try
+            {
+                // Try loading rich content first
+                if (!string.IsNullOrEmpty(_section.RichContent))
+                {
+                    try
+                    {
+                        using var ms = new MemoryStream(Encoding.UTF8.GetBytes(_section.RichContent));
+                        var range = new TextRange(
+                            NoteRichTextBox.Document.ContentStart,
+                            NoteRichTextBox.Document.ContentEnd);
+                        range.Load(ms, DataFormats.Xaml);
+                        NoteRichTextBox.Document.PagePadding = new Thickness(0);
+                        return;
+                    }
+                    catch { /* Fall through to plain text */ }
+                }
+
+                // Fallback: load plain text content
+                NoteRichTextBox.Document = new FlowDocument(
+                    new Paragraph(new Run(_section.Content ?? "")))
+                {
+                    PagePadding = new Thickness(0),
+                    Foreground = new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xF0)),
+                    FontFamily = new FontFamily("Segoe UI"),
+                    FontSize = 13
+                };
+            }
+            finally
+            {
+                _isLoading = false;
+            }
+        }
+
+        /// <summary>Insert images from section.Images into the document at the top.</summary>
+        private void LoadSectionImages()
+        {
+            if (_section.Images == null || _section.Images.Count == 0) return;
+
+            _isLoading = true;
+            try
+            {
+                Block firstBlock = NoteRichTextBox.Document.Blocks.FirstBlock;
+                Block lastInserted = null;
+
+                foreach (var img in _section.Images)
+                {
+                    if (!img.HasImage) continue;
+
+                    try
+                    {
+                        var imageEl = CreateImageElement(img.ImagePath, img.DisplayWidth);
+                        var imgParagraph = new Paragraph { Margin = new Thickness(0, 2, 0, 2) };
+                        imgParagraph.Inlines.Add(new InlineUIContainer(imageEl));
+
+                        if (lastInserted != null)
+                            NoteRichTextBox.Document.Blocks.InsertAfter(lastInserted, imgParagraph);
+                        else if (firstBlock != null)
+                            NoteRichTextBox.Document.Blocks.InsertBefore(firstBlock, imgParagraph);
+                        else
+                            NoteRichTextBox.Document.Blocks.Add(imgParagraph);
+
+                        lastInserted = imgParagraph;
+                    }
+                    catch { }
+                }
+            }
+            finally
+            {
+                _isLoading = false;
+            }
+        }
+
+        private void SaveContent()
+        {
+            if (!_isDirty) return;
+
+            // Remove image elements from the document before XAML serialization
+            // (TextRange.Save does not serialize UIElements properly)
+            var imageParagraphs = NoteRichTextBox.Document.Blocks
+                .OfType<Paragraph>()
+                .Where(p => p.Inlines.OfType<InlineUIContainer>().Any(
+                    iuc => iuc.Child is System.Windows.Controls.Image))
+                .ToList();
+
+            // Track paragraph positions relative to other blocks
+            var blockOrder = NoteRichTextBox.Document.Blocks.ToList();
+            foreach (var ip in imageParagraphs)
+                NoteRichTextBox.Document.Blocks.Remove(ip);
+
+            // Save formatted text as XAML (images excluded)
+            try
+            {
+                using var ms = new MemoryStream();
+                var range = new TextRange(
+                    NoteRichTextBox.Document.ContentStart,
+                    NoteRichTextBox.Document.ContentEnd);
+                range.Save(ms, DataFormats.Xaml);
+                _section.RichContent = Encoding.UTF8.GetString(ms.ToArray());
+            }
+            catch { }
+
+            // Re-insert image paragraphs at their original positions
+            foreach (var ip in imageParagraphs)
+            {
+                int origIdx = blockOrder.IndexOf(ip);
+                // Find the block that was just before this in the original order
+                Block insertAfter = null;
+                for (int i = origIdx - 1; i >= 0; i--)
+                {
+                    if (NoteRichTextBox.Document.Blocks.Contains(blockOrder[i]))
+                    {
+                        insertAfter = blockOrder[i];
+                        break;
+                    }
+                }
+                if (insertAfter != null)
+                    NoteRichTextBox.Document.Blocks.InsertAfter(insertAfter, ip);
+                else if (NoteRichTextBox.Document.Blocks.FirstBlock != null)
+                    NoteRichTextBox.Document.Blocks.InsertBefore(NoteRichTextBox.Document.Blocks.FirstBlock, ip);
+                else
+                    NoteRichTextBox.Document.Blocks.Add(ip);
+            }
+
+            // Sync plain text for backward compat (main window card)
+            try
+            {
+                var textRange = new TextRange(
+                    NoteRichTextBox.Document.ContentStart,
+                    NoteRichTextBox.Document.ContentEnd);
+                _section.Content = textRange.Text?.TrimEnd('\r', '\n') ?? "";
+            }
+            catch { }
+
+            _isDirty = false;
+            if (FooterStatus != null) FooterStatus.Text = "✓ Saved";
+            try { NoteManager.SaveNow(); } catch { }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // IMAGE HELPERS
+        // ═══════════════════════════════════════════════════════════
+
+        /// <summary>Create an Image element for embedding in the FlowDocument.</summary>
+        private System.Windows.Controls.Image CreateImageElement(string imagePath, double width = 200)
+        {
+            var bmp = new BitmapImage();
+            bmp.BeginInit();
+            bmp.UriSource = new Uri(imagePath);
+            bmp.CacheOption = BitmapCacheOption.OnLoad;
+            bmp.DecodePixelWidth = Math.Min((int)width * 2, 800); // Memory-efficient decode
+            bmp.EndInit();
+            bmp.Freeze();
+
+            var image = new System.Windows.Controls.Image
+            {
+                Source = bmp,
+                Width = Math.Min(width, 460),
+                MaxWidth = 500,
+                Stretch = Stretch.Uniform,
+                Margin = new Thickness(0, 4, 8, 4),
+                Cursor = Cursors.Hand,
+                Tag = imagePath // store path for reference
+            };
+
+            RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.HighQuality);
+
+            // Scroll-to-resize on the image
+            image.MouseWheel += (s, ev) =>
+            {
+                if (s is System.Windows.Controls.Image img)
+                {
+                    double delta = ev.Delta > 0 ? 20 : -20;
+                    img.Width = Math.Clamp(img.Width + delta, 60, 500);
+                    // Sync DisplayWidth back
+                    if (img.Tag is string p)
+                    {
+                        var fi = _section.Images.FirstOrDefault(i => i.ImagePath == p);
+                        if (fi != null) fi.DisplayWidth = img.Width;
+                    }
+                    _isDirty = true;
+                    ev.Handled = true;
+                }
+            };
+
+            // Click to open in default viewer
+            image.MouseLeftButtonDown += (s, ev) =>
+            {
+                if (s is System.Windows.Controls.Image img && img.Tag is string p)
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(p) { UseShellExecute = true });
+                    }
+                    catch { }
+                }
+                ev.Handled = true;
+            };
+
+            return image;
+        }
+
+        /// <summary>Insert an image at the caret position in the RichTextBox.</summary>
+        private void InsertImageAtCaret(string imagePath, double displayWidth = 200)
+        {
+            try
+            {
+                var image = CreateImageElement(imagePath, displayWidth);
+                var imgParagraph = new Paragraph { Margin = new Thickness(0, 2, 0, 2) };
+                imgParagraph.Inlines.Add(new InlineUIContainer(image));
+
+                var caret = NoteRichTextBox.CaretPosition;
+                var currentPara = caret.Paragraph;
+
+                if (currentPara != null)
+                    NoteRichTextBox.Document.Blocks.InsertAfter(currentPara, imgParagraph);
+                else
+                    NoteRichTextBox.Document.Blocks.Add(imgParagraph);
+
+                // Move caret after the image paragraph
+                NoteRichTextBox.CaretPosition = imgParagraph.ContentEnd;
+                _isDirty = true;
+            }
+            catch { }
+        }
+
+        /// <summary>Check if we can add another image to this section (tier limits).</summary>
+        private bool CanAddImage()
+        {
+            int maxImages = LicenseManager.IsPro
+                ? LicenseManager.PRO_NOTE_IMAGES_PER_CARD
+                : LicenseManager.FREE_NOTE_IMAGES_PER_CARD;
+
+            if (_section.Images.Count >= maxImages)
+            {
+                if (!LicenseManager.IsPro)
+                    UpgradePrompt.ShowNoteImageLimit();
+                else
+                    ToastWindow.ShowToast($"Max {LicenseManager.PRO_NOTE_IMAGES_PER_CARD} images per card");
+                return false;
+            }
+            return true;
+        }
+
+        private static bool IsImageFile(string path)
+        {
+            var ext = Path.GetExtension(path).ToLowerInvariant();
+            return ext is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" or ".webp";
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // IMAGE PASTE HANDLER
+        // ═══════════════════════════════════════════════════════════
+
+        private void NoteRichTextBox_Paste(object sender, DataObjectPastingEventArgs e)
+        {
+            var dataObject = e.DataObject;
+            if (dataObject == null) return;
+
+            try
+            {
+                // Handle bitmap paste (screenshots, copied images)
+                if (dataObject.GetDataPresent(DataFormats.Bitmap) ||
+                    dataObject.GetDataPresent(typeof(BitmapSource)) ||
+                    dataObject.GetDataPresent("DeviceIndependentBitmap"))
+                {
+                    // Check if there's also text (user might have copied formatted text WITH an image)
+                    // Only intercept if there's NO text data — otherwise let default paste handle text
+                    bool hasText = dataObject.GetDataPresent(DataFormats.UnicodeText) ||
+                                   dataObject.GetDataPresent(DataFormats.Text);
+
+                    // If clipboard has ONLY an image (no text), handle it as an image paste
+                    if (!hasText)
+                    {
+                        e.CancelCommand(); // Prevent default paste
+
+                        BitmapSource img = null;
+                        if (dataObject.GetDataPresent(DataFormats.Bitmap))
+                            img = dataObject.GetData(DataFormats.Bitmap) as BitmapSource;
+                        if (img == null && dataObject.GetDataPresent(typeof(BitmapSource)))
+                            img = dataObject.GetData(typeof(BitmapSource)) as BitmapSource;
+                        if (img == null)
+                            img = Clipboard.GetImage();
+
+                        if (img != null)
+                        {
+                            if (!CanAddImage()) return;
+
+                            string path = NoteManager.SaveImage(img);
+                            var freeformImg = new FreeformImage
+                            {
+                                ImagePath = path,
+                                DisplayWidth = Math.Min(img.PixelWidth, 300)
+                            };
+                            _section.Images.Add(freeformImg);
+                            InsertImageAtCaret(path, freeformImg.DisplayWidth);
+                            NoteManager.MarkDirty();
+                            FooterStatus.Text = "✓ Image pasted";
+                        }
+                    }
+                }
+                // Handle file drop (dragged image files)
+                else if (dataObject.GetDataPresent(DataFormats.FileDrop))
+                {
+                    var files = dataObject.GetData(DataFormats.FileDrop) as string[];
+                    if (files != null)
+                    {
+                        bool anyImage = false;
+                        foreach (string f in files)
+                        {
+                            if (f != null && IsImageFile(f))
+                            {
+                                anyImage = true;
+                                e.CancelCommand();
+
+                                if (!CanAddImage()) break;
+
+                                string destDir = NoteManager.GetImagesDirectory();
+                                string destFile = Path.Combine(destDir,
+                                    $"note_img_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..6]}_{Path.GetFileName(f)}");
+                                File.Copy(f, destFile, overwrite: true);
+
+                                var freeformImg = new FreeformImage
+                                {
+                                    ImagePath = destFile,
+                                    DisplayWidth = 200
+                                };
+                                _section.Images.Add(freeformImg);
+                                InsertImageAtCaret(destFile, 200);
+                                NoteManager.MarkDirty();
+                                FooterStatus.Text = "✓ Image added";
+                                break; // one at a time
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NOTES_EXPAND", $"Paste error: {ex.Message}");
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // TEXT CHANGE & CURSOR TRACKING
+        // ═══════════════════════════════════════════════════════════
+
+        private void NoteRichTextBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            if (_isLoading) return;
             _isDirty = true;
             UpdateWordCount();
             if (FooterStatus != null) FooterStatus.Text = "Editing...";
@@ -62,37 +430,585 @@ namespace FlyShelf.Windows
             _saveTimer?.Start();
         }
 
-        private void SaveContent()
+        private void NoteRichTextBox_SelectionChanged(object sender, RoutedEventArgs e)
         {
-            if (!_isDirty) return;
-            _section.Content = NoteTextBox.Text;
-            _isDirty = false;
-            if (FooterStatus != null) FooterStatus.Text = "✓ Saved";
-            try { FlyShelf.Classes.NoteManager.SaveNow(); } catch { }
+            UpdateCursorPosition();
         }
 
         private void UpdateWordCount()
         {
             if (WordCountBadge == null || CharCountLabel == null) return;
-            var text = NoteTextBox.Text ?? "";
-            var charCount = text.Length;
-            var wordCount = string.IsNullOrWhiteSpace(text)
-                ? 0
-                : text.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+            try
+            {
+                var textRange = new TextRange(
+                    NoteRichTextBox.Document.ContentStart,
+                    NoteRichTextBox.Document.ContentEnd);
+                var text = textRange.Text ?? "";
+                var charCount = text.TrimEnd('\r', '\n').Length;
+                var wordCount = string.IsNullOrWhiteSpace(text)
+                    ? 0
+                    : text.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
 
-            WordCountBadge.Text = $"{wordCount} word{(wordCount == 1 ? "" : "s")}";
-            CharCountLabel.Text = $"{charCount} char{(charCount == 1 ? "" : "s")}";
+                WordCountBadge.Text = $"{wordCount} word{(wordCount == 1 ? "" : "s")}";
+                CharCountLabel.Text = $"{charCount} char{(charCount == 1 ? "" : "s")}";
+            }
+            catch { }
         }
 
-        // ═══ HEADER BUTTONS ═══
+        private void UpdateCursorPosition()
+        {
+            if (CursorPosLabel == null) return;
+            try
+            {
+                var caretPos = NoteRichTextBox.CaretPosition;
+                var docStart = NoteRichTextBox.Document.ContentStart;
+                string textBefore = new TextRange(docStart, caretPos).Text;
+                int line = textBefore.Count(c => c == '\n') + 1;
+                int lastNewline = textBefore.LastIndexOf('\n');
+                int col = (lastNewline < 0 ? textBefore.Length : textBefore.Length - lastNewline - 1) + 1;
+                CursorPosLabel.Text = $"Ln {line}, Col {col}";
+            }
+            catch { CursorPosLabel.Text = ""; }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // FORMAT TOOLBAR — REAL INLINE FORMATTING
+        // ═══════════════════════════════════════════════════════════
+
+        private void BoldBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            EditingCommands.ToggleBold.Execute(null, NoteRichTextBox);
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void ItalicBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            EditingCommands.ToggleItalic.Execute(null, NoteRichTextBox);
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void StrikeBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            ToggleStrikethrough();
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void BulletBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            EditingCommands.ToggleBullets.Execute(null, NoteRichTextBox);
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void CheckboxBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            InsertOrToggleCheckbox();
+            e.Handled = true;
+        }
+
+        private void DividerBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            var caret = NoteRichTextBox.CaretPosition;
+            var currentPara = caret?.Paragraph;
+            var divider = new Paragraph()
+            {
+                BorderBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x3A, 0x55)),
+                BorderThickness = new Thickness(0, 0, 0, 1),
+                Margin = new Thickness(0, 8, 0, 8),
+                FontSize = 1
+            };
+            if (currentPara != null)
+                NoteRichTextBox.Document.Blocks.InsertAfter(currentPara, divider);
+            else
+                NoteRichTextBox.Document.Blocks.Add(divider);
+            NoteRichTextBox.CaretPosition = divider.ContentEnd;
+            NoteRichTextBox.Focus();
+            _isDirty = true;
+            e.Handled = true;
+        }
+
+        private void TimestampBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            InsertText($"[{DateTime.Now:hh:mm tt}] ");
+            e.Handled = true;
+        }
+
+        private void FontSizeBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            CycleFontSize();
+            e.Handled = true;
+        }
+
+        // ─── NEW TOOLBAR HANDLERS ───
+
+        private void UnderlineBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            EditingCommands.ToggleUnderline.Execute(null, NoteRichTextBox);
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void HeadingBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            CycleHeading();
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void NumberedListBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            EditingCommands.ToggleNumbering.Execute(null, NoteRichTextBox);
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void IndentBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            EditingCommands.IncreaseIndentation.Execute(null, NoteRichTextBox);
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void OutdentBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            EditingCommands.DecreaseIndentation.Execute(null, NoteRichTextBox);
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void AlignLeftBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            EditingCommands.AlignLeft.Execute(null, NoteRichTextBox);
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void AlignCenterBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            EditingCommands.AlignCenter.Execute(null, NoteRichTextBox);
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void AlignRightBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            EditingCommands.AlignRight.Execute(null, NoteRichTextBox);
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void LinkBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            InsertHyperlink();
+            e.Handled = true;
+        }
+
+        private void QuoteBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            ToggleBlockquote();
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void CodeBlockBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            ToggleCodeBlock();
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void TextColorBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            CycleTextColor();
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void HighlightBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            CycleHighlightColor();
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void ClearFormatBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            ClearFormatting();
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void UndoBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            ApplicationCommands.Undo.Execute(null, NoteRichTextBox);
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        private void RedoBtn_Click(object sender, MouseButtonEventArgs e)
+        {
+            ApplicationCommands.Redo.Execute(null, NoteRichTextBox);
+            NoteRichTextBox.Focus();
+            e.Handled = true;
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // FORMAT HELPERS
+        // ═══════════════════════════════════════════════════════════
+
+        private void ToggleStrikethrough()
+        {
+            var selection = NoteRichTextBox.Selection;
+            if (selection.IsEmpty) return;
+
+            var currentDecor = selection.GetPropertyValue(Inline.TextDecorationsProperty);
+            bool hasStrike = currentDecor is TextDecorationCollection tdc
+                && tdc.Any(td => td.Location == TextDecorationLocation.Strikethrough);
+
+            selection.ApplyPropertyValue(
+                Inline.TextDecorationsProperty,
+                hasStrike ? new TextDecorationCollection() : TextDecorations.Strikethrough);
+        }
+
+        private void InsertText(string text)
+        {
+            NoteRichTextBox.Selection.Text = text;
+            NoteRichTextBox.CaretPosition = NoteRichTextBox.Selection.End;
+            NoteRichTextBox.Focus();
+        }
+
+        private void InsertOrToggleCheckbox()
+        {
+            try
+            {
+                var para = NoteRichTextBox.CaretPosition?.Paragraph;
+                if (para != null)
+                {
+                    string paraText = new TextRange(para.ContentStart, para.ContentEnd).Text;
+                    if (paraText.StartsWith("☐") || paraText.StartsWith("☑"))
+                    {
+                        var pos = para.ContentStart;
+                        while (pos != null && pos.CompareTo(para.ContentEnd) < 0)
+                        {
+                            if (pos.GetPointerContext(LogicalDirection.Forward) == TextPointerContext.Text)
+                            {
+                                var nextPos = pos.GetPositionAtOffset(1);
+                                if (nextPos != null)
+                                {
+                                    string ch = new TextRange(pos, nextPos).Text;
+                                    if (ch == "☐") { new TextRange(pos, nextPos).Text = "☑"; return; }
+                                    if (ch == "☑") { new TextRange(pos, nextPos).Text = "☐"; return; }
+                                }
+                                break;
+                            }
+                            pos = pos.GetNextContextPosition(LogicalDirection.Forward);
+                        }
+                    }
+                }
+            }
+            catch { }
+
+            InsertText("☐ ");
+        }
+
+        private void CycleFontSize()
+        {
+            _fontSizeIndex = (_fontSizeIndex + 1) % _fontSizes.Length;
+            double size = _fontSizes[_fontSizeIndex];
+            NoteRichTextBox.FontSize = size;
+            NoteRichTextBox.Document.FontSize = size;
+            UpdateFontSizeLabel();
+            FooterStatus.Text = $"Font: {size:0}px";
+        }
+
+        private void UpdateFontSizeLabel()
+        {
+            if (FontSizeLabel != null)
+                FontSizeLabel.Text = $"{NoteRichTextBox.FontSize:0}";
+        }
+
+        // ─── HEADING ───
+        private static readonly (double size, FontWeight weight, string label)[] _headingLevels =
+        {
+            (13, FontWeights.Normal, "¶"),   // Normal paragraph
+            (24, FontWeights.Bold, "H1"),
+            (20, FontWeights.Bold, "H2"),
+            (17, FontWeights.SemiBold, "H3"),
+        };
+        private int _headingIndex = 0;
+
+        private void CycleHeading()
+        {
+            var para = NoteRichTextBox.CaretPosition?.Paragraph;
+            if (para == null) return;
+
+            _headingIndex = (_headingIndex + 1) % _headingLevels.Length;
+            var (size, weight, label) = _headingLevels[_headingIndex];
+
+            para.FontSize = size;
+            para.FontWeight = weight;
+            para.Margin = _headingIndex > 0 ? new Thickness(0, 8, 0, 4) : new Thickness(0);
+
+            if (HeadingLabel != null) HeadingLabel.Text = label;
+            FooterStatus.Text = _headingIndex == 0 ? "Paragraph" : label;
+        }
+
+        // ─── REAL BULLET LIST (replaces fake "• " insertion) ───
+        // Note: The old BulletBtn_Click just did InsertText("• "). Now we use proper FlowDocument List:
+        // We override it in the existing BulletBtn_Click to use EditingCommands.ToggleBullets
+
+        // ─── LINK INSERTION ───
+        private void InsertHyperlink()
+        {
+            try
+            {
+                string selectedText = NoteRichTextBox.Selection.Text?.Trim() ?? "";
+                string clipboardText = "";
+                try { clipboardText = Clipboard.GetText()?.Trim() ?? ""; } catch { }
+
+                // Determine URL and display text
+                string url;
+                string displayText;
+
+                if (selectedText.StartsWith("http") || selectedText.StartsWith("www."))
+                {
+                    url = selectedText;
+                    displayText = selectedText;
+                }
+                else if (clipboardText.StartsWith("http") || clipboardText.StartsWith("www."))
+                {
+                    url = clipboardText;
+                    displayText = string.IsNullOrEmpty(selectedText) ? clipboardText : selectedText;
+                }
+                else
+                {
+                    FooterStatus.Text = "Copy a URL first, then select text and click Link";
+                    return;
+                }
+
+                if (!url.StartsWith("http")) url = "https://" + url;
+
+                var hyperlink = new Hyperlink(new Run(displayText))
+                {
+                    NavigateUri = new Uri(url),
+                    Foreground = new SolidColorBrush(Color.FromRgb(0x63, 0x84, 0xFF)),
+                    TextDecorations = TextDecorations.Underline,
+                    ToolTip = url
+                };
+                hyperlink.RequestNavigate += (s, ev) =>
+                {
+                    try
+                    {
+                        System.Diagnostics.Process.Start(
+                            new System.Diagnostics.ProcessStartInfo(ev.Uri.AbsoluteUri) { UseShellExecute = true });
+                    }
+                    catch { }
+                    ev.Handled = true;
+                };
+
+                if (!NoteRichTextBox.Selection.IsEmpty)
+                    NoteRichTextBox.Selection.Text = "";
+
+                var insertPos = NoteRichTextBox.CaretPosition;
+                var para = insertPos.Paragraph ?? NoteRichTextBox.Document.Blocks.LastBlock as Paragraph;
+                if (para == null)
+                {
+                    para = new Paragraph();
+                    NoteRichTextBox.Document.Blocks.Add(para);
+                }
+                para.Inlines.Add(hyperlink);
+                para.Inlines.Add(new Run(" ")); // space after link
+
+                FooterStatus.Text = "✓ Link added";
+                _isDirty = true;
+            }
+            catch (Exception ex)
+            {
+                FooterStatus.Text = $"Link error: {ex.Message}";
+            }
+        }
+
+        // ─── BLOCKQUOTE ───
+        private void ToggleBlockquote()
+        {
+            var para = NoteRichTextBox.CaretPosition?.Paragraph;
+            if (para == null) return;
+
+            bool isQuote = para.BorderBrush != null && para.BorderThickness.Left > 0;
+            if (isQuote)
+            {
+                // Remove quote styling
+                para.BorderBrush = null;
+                para.BorderThickness = new Thickness(0);
+                para.Padding = new Thickness(0);
+                para.Background = null;
+                para.FontStyle = FontStyles.Normal;
+                FooterStatus.Text = "Quote removed";
+            }
+            else
+            {
+                // Apply quote styling: left border + slight indent + italic
+                para.BorderBrush = new SolidColorBrush(Color.FromRgb(0x6B, 0x6B, 0x9B));
+                para.BorderThickness = new Thickness(3, 0, 0, 0);
+                para.Padding = new Thickness(12, 4, 0, 4);
+                para.Background = new SolidColorBrush(Color.FromArgb(0x15, 0xFF, 0xFF, 0xFF));
+                para.FontStyle = FontStyles.Italic;
+                FooterStatus.Text = "Blockquote applied";
+            }
+            _isDirty = true;
+        }
+
+        // ─── CODE BLOCK ───
+        private void ToggleCodeBlock()
+        {
+            var para = NoteRichTextBox.CaretPosition?.Paragraph;
+            if (para == null) return;
+
+            bool isCode = para.FontFamily?.Source?.Contains("Consolas") == true
+                       || para.FontFamily?.Source?.Contains("Cascadia") == true;
+            if (isCode)
+            {
+                // Remove code block styling
+                para.FontFamily = new FontFamily("Segoe UI");
+                para.Background = null;
+                para.Padding = new Thickness(0);
+                para.Margin = new Thickness(0);
+                FooterStatus.Text = "Code block removed";
+            }
+            else
+            {
+                // Apply code block styling
+                para.FontFamily = new FontFamily("Cascadia Code, Consolas, Courier New");
+                para.Background = new SolidColorBrush(Color.FromArgb(0x30, 0x00, 0x00, 0x00));
+                para.Padding = new Thickness(8, 4, 8, 4);
+                para.Margin = new Thickness(0, 4, 0, 4);
+                FooterStatus.Text = "Code block applied";
+            }
+            _isDirty = true;
+        }
+
+        // ─── TEXT COLOR ───
+        private static readonly (string name, Color color)[] _textColors =
+        {
+            ("Default", Color.FromRgb(0xE8, 0xE8, 0xF0)),
+            ("Red", Color.FromRgb(0xEF, 0x44, 0x44)),
+            ("Orange", Color.FromRgb(0xF5, 0x9E, 0x0B)),
+            ("Green", Color.FromRgb(0x10, 0xB9, 0x81)),
+            ("Blue", Color.FromRgb(0x3B, 0x82, 0xF6)),
+            ("Purple", Color.FromRgb(0x8B, 0x5C, 0xF6)),
+        };
+        private int _textColorIndex = 0;
+
+        private void CycleTextColor()
+        {
+            var selection = NoteRichTextBox.Selection;
+            if (selection.IsEmpty)
+            {
+                FooterStatus.Text = "Select text first";
+                return;
+            }
+
+            _textColorIndex = (_textColorIndex + 1) % _textColors.Length;
+            var (name, color) = _textColors[_textColorIndex];
+
+            selection.ApplyPropertyValue(TextElement.ForegroundProperty, new SolidColorBrush(color));
+            if (TextColorIndicator != null)
+                TextColorIndicator.Background = new SolidColorBrush(color);
+            FooterStatus.Text = $"Text: {name}";
+            _isDirty = true;
+        }
+
+        // ─── HIGHLIGHT ───
+        private static readonly (string name, Color color)[] _highlightColors =
+        {
+            ("None", Colors.Transparent),
+            ("Yellow", Color.FromArgb(0x50, 0xFB, 0xBF, 0x24)),
+            ("Green", Color.FromArgb(0x50, 0x10, 0xB9, 0x81)),
+            ("Blue", Color.FromArgb(0x50, 0x3B, 0x82, 0xF6)),
+            ("Purple", Color.FromArgb(0x50, 0x8B, 0x5C, 0xF6)),
+            ("Pink", Color.FromArgb(0x50, 0xEC, 0x48, 0x99)),
+        };
+        private int _highlightColorIndex = 0;
+
+        private void CycleHighlightColor()
+        {
+            var selection = NoteRichTextBox.Selection;
+            if (selection.IsEmpty)
+            {
+                FooterStatus.Text = "Select text first";
+                return;
+            }
+
+            _highlightColorIndex = (_highlightColorIndex + 1) % _highlightColors.Length;
+            var (name, color) = _highlightColors[_highlightColorIndex];
+
+            selection.ApplyPropertyValue(TextElement.BackgroundProperty, new SolidColorBrush(color));
+            if (HighlightColorIndicator != null)
+                HighlightColorIndicator.Background = new SolidColorBrush(color == Colors.Transparent ? Color.FromRgb(0xFB, 0xBF, 0x24) : color);
+            FooterStatus.Text = $"Highlight: {name}";
+            _isDirty = true;
+        }
+
+        // ─── CLEAR FORMATTING ───
+        private void ClearFormatting()
+        {
+            var selection = NoteRichTextBox.Selection;
+            if (selection.IsEmpty)
+            {
+                FooterStatus.Text = "Select text first";
+                return;
+            }
+
+            selection.ApplyPropertyValue(TextElement.FontWeightProperty, FontWeights.Normal);
+            selection.ApplyPropertyValue(TextElement.FontStyleProperty, FontStyles.Normal);
+            selection.ApplyPropertyValue(Inline.TextDecorationsProperty, new TextDecorationCollection());
+            selection.ApplyPropertyValue(TextElement.ForegroundProperty, new SolidColorBrush(Color.FromRgb(0xE8, 0xE8, 0xF0)));
+            selection.ApplyPropertyValue(TextElement.BackgroundProperty, new SolidColorBrush(Colors.Transparent));
+            selection.ApplyPropertyValue(TextElement.FontSizeProperty, NoteRichTextBox.FontSize);
+            selection.ApplyPropertyValue(TextElement.FontFamilyProperty, new FontFamily("Segoe UI"));
+
+            FooterStatus.Text = "Formatting cleared";
+            _isDirty = true;
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // CTRL+SCROLL ZOOM
+        // ═══════════════════════════════════════════════════════════
+
+        private void NoteRichTextBox_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+            {
+                double current = NoteRichTextBox.FontSize;
+                double next = e.Delta > 0
+                    ? Math.Min(current + 1, 24)
+                    : Math.Max(current - 1, 10);
+                NoteRichTextBox.FontSize = next;
+                NoteRichTextBox.Document.FontSize = next;
+                UpdateFontSizeLabel();
+                FooterStatus.Text = $"Font: {next:0}px";
+                e.Handled = true;
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // HEADER BUTTONS
+        // ═══════════════════════════════════════════════════════════
 
         private void CopyBtn_Click(object sender, MouseButtonEventArgs e)
         {
             try
             {
-                if (!string.IsNullOrEmpty(NoteTextBox.Text))
+                var textRange = new TextRange(
+                    NoteRichTextBox.Document.ContentStart,
+                    NoteRichTextBox.Document.ContentEnd);
+                string text = textRange.Text?.TrimEnd('\r', '\n') ?? "";
+                if (!string.IsNullOrEmpty(text))
                 {
-                    Clipboard.SetText(NoteTextBox.Text);
+                    Clipboard.SetText(text);
                     FooterStatus.Text = "✓ Copied";
                 }
             }
@@ -117,13 +1033,14 @@ namespace FlyShelf.Windows
             e.Handled = true;
         }
 
-        // ═══ WINDOW CHROME ═══
+        // ═══════════════════════════════════════════════════════════
+        // WINDOW CHROME
+        // ═══════════════════════════════════════════════════════════
 
         private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             if (e.ClickCount == 2)
             {
-                // Double-click toggles between compact and expanded
                 if (Height < 500)
                 { Width = 520; Height = 600; }
                 else
@@ -141,21 +1058,68 @@ namespace FlyShelf.Windows
             SaveContent();
         }
 
-        // ═══ KEYBOARD SHORTCUTS ═══
+        // ═══════════════════════════════════════════════════════════
+        // KEYBOARD SHORTCUTS
+        // (Ctrl+B and Ctrl+I are handled natively by RichTextBox)
+        // ═══════════════════════════════════════════════════════════
 
         protected override void OnPreviewKeyDown(KeyEventArgs e)
         {
             base.OnPreviewKeyDown(e);
+
             if (e.Key == Key.Escape)
             {
                 Close();
                 e.Handled = true;
             }
-            else if (e.Key == Key.S && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+            else if (e.Key == Key.S && Keyboard.Modifiers == ModifierKeys.Control)
             {
                 _saveTimer.Stop();
                 SaveContent();
                 FooterStatus.Text = "✓ Saved";
+                e.Handled = true;
+            }
+            else if (e.Key == Key.D && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                InsertText("────────────────");
+                e.Handled = true;
+            }
+            else if (e.Key == Key.T && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                InsertText($"[{DateTime.Now:hh:mm tt}] ");
+                e.Handled = true;
+            }
+            else if (e.Key == Key.L && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                EditingCommands.ToggleBullets.Execute(null, NoteRichTextBox);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.K && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                InsertHyperlink();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.C && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift))
+            {
+                InsertOrToggleCheckbox();
+                e.Handled = true;
+            }
+            else if ((e.Key == Key.OemPlus || e.Key == Key.Add) && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                double size = Math.Min(NoteRichTextBox.FontSize + 1, 24);
+                NoteRichTextBox.FontSize = size;
+                NoteRichTextBox.Document.FontSize = size;
+                UpdateFontSizeLabel();
+                FooterStatus.Text = $"Font: {size:0}px";
+                e.Handled = true;
+            }
+            else if ((e.Key == Key.OemMinus || e.Key == Key.Subtract) && Keyboard.Modifiers == ModifierKeys.Control)
+            {
+                double size = Math.Max(NoteRichTextBox.FontSize - 1, 10);
+                NoteRichTextBox.FontSize = size;
+                NoteRichTextBox.Document.FontSize = size;
+                UpdateFontSizeLabel();
+                FooterStatus.Text = $"Font: {size:0}px";
                 e.Handled = true;
             }
         }

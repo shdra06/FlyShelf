@@ -1,0 +1,12 @@
+{
+  "name": "flyshelf-md2pdf",
+  "version": "1.0.0",
+  "description": "Premium Markdown to PDF Converter for FlyShelf",
+  "main": "convert.js",
+  "type": "commonjs",
+  "dependencies": {
+    "marked": "^12.0.0",
+    "prismjs": "^1.29.0",
+    "puppeteer-core": "^22.6.0"
+  }
+}

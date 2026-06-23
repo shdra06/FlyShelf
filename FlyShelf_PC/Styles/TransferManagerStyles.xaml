@@ -1,0 +1,414 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:classes="clr-namespace:FlyShelf.Classes">
+
+    <!-- ═══════════════════════════════════════════════════════════ -->
+    <!-- TransferManagerStyles — Premium glassmorphic UI styles     -->
+    <!-- ═══════════════════════════════════════════════════════════ -->
+
+    <!-- ═══ Converters ═══ -->
+
+    <classes:FileSizeConverter x:Key="FileSizeConverter" />
+    <classes:SpeedConverter x:Key="SpeedConverter" />
+    <classes:StateToBrushConverter x:Key="StateToBrushConverter" />
+    <classes:BoolToVisConverter x:Key="BoolToVisibility" />
+    <classes:InverseBoolToVisConverter x:Key="InverseBoolToVisibility" />
+    <classes:EqualityToVisConverter x:Key="EqualityToVisibility" />
+    <classes:TransferDirectionToIconConverter x:Key="DirectionIconConverter" />
+
+    <!-- ═══ Gradient Brush Definitions ═══ -->
+
+    <LinearGradientBrush x:Key="ProgressGradientActive" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#22C55E" Offset="0.0" />
+        <GradientStop Color="#3B82F6" Offset="0.5" />
+        <GradientStop Color="#8B5CF6" Offset="1.0" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="ProgressGradientPaused" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#F59E0B" Offset="0.0" />
+        <GradientStop Color="#D97706" Offset="1.0" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="ProgressGradientCompleted" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#22C55E" Offset="0.0" />
+        <GradientStop Color="#10B981" Offset="1.0" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="ProgressGradientFailed" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#EF4444" Offset="0.0" />
+        <GradientStop Color="#DC2626" Offset="1.0" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="GlowGradientUpload" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#153B82F6" Offset="0" />
+        <GradientStop Color="#303B82F6" Offset="0.5" />
+        <GradientStop Color="#153B82F6" Offset="1" />
+    </LinearGradientBrush>
+
+    <LinearGradientBrush x:Key="GlowGradientDownload" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#1522C55E" Offset="0" />
+        <GradientStop Color="#3022C55E" Offset="0.5" />
+        <GradientStop Color="#1522C55E" Offset="1" />
+    </LinearGradientBrush>
+
+    <!-- ═══ Transfer Card Style — Glassmorphic with hover elevation ═══ -->
+
+    <Style x:Key="TransferCardStyle" TargetType="Border">
+        <Setter Property="RenderTransformOrigin" Value="0.5,0.5" />
+        <Setter Property="RenderTransform">
+            <Setter.Value>
+                <TranslateTransform Y="0" />
+            </Setter.Value>
+        </Setter>
+        <Setter Property="UseLayoutRounding" Value="True" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorSecondary}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorDefault}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="12" />
+        <Setter Property="Padding" Value="16,14" />
+        <Setter Property="Margin" Value="0,0,0,8" />
+        <Setter Property="Opacity" Value="0.92" />
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Background" Value="{DynamicResource MicaWPF.Brushes.SubtleFillColorTertiary}" />
+                <Setter Property="BorderBrush" Value="{DynamicResource MicaWPF.Brushes.ControlStrokeColorSecondary}" />
+                <Trigger.EnterActions>
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="-2" Duration="0:0:0.2">
+                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="1" Duration="0:0:0.2">
+                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                    <BeginStoryboard>
+                        <Storyboard>
+                            <DoubleAnimation Storyboard.TargetProperty="RenderTransform.(TranslateTransform.Y)" To="0" Duration="0:0:0.25">
+                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                            <DoubleAnimation Storyboard.TargetProperty="Opacity" To="0.92" Duration="0:0:0.25">
+                                <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
+                            </DoubleAnimation>
+                        </Storyboard>
+                    </BeginStoryboard>
+                </Trigger.ExitActions>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ═══ Animated Progress Bar ═══ -->
+
+    <Style x:Key="AnimatedProgressBarStyle" TargetType="ProgressBar">
+        <Setter Property="Height" Value="6" />
+        <Setter Property="Minimum" Value="0" />
+        <Setter Property="Maximum" Value="100" />
+        <Setter Property="Background" Value="#15FFFFFF" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ProgressBar">
+                    <Grid ClipToBounds="True">
+                        <!-- Track -->
+                        <Border x:Name="PART_Track" 
+                                Background="{TemplateBinding Background}" 
+                                CornerRadius="3" />
+                        <!-- Fill with animated gradient -->
+                        <Border x:Name="PART_Indicator" 
+                                CornerRadius="3"
+                                HorizontalAlignment="Left">
+                            <Border.Width>
+                                <MultiBinding Converter="{x:Static classes:ProgressWidthConverter.Instance}">
+                                    <Binding Path="Value" RelativeSource="{RelativeSource TemplatedParent}" />
+                                    <Binding Path="Maximum" RelativeSource="{RelativeSource TemplatedParent}" />
+                                    <Binding Path="ActualWidth" ElementName="PART_Track" />
+                                </MultiBinding>
+                            </Border.Width>
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                    <GradientStop Color="#22C55E" Offset="0.0" />
+                                    <GradientStop Color="#3B82F6" Offset="0.5" />
+                                    <GradientStop Color="#8B5CF6" Offset="1.0" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <!-- Shimmer overlay -->
+                            <Border CornerRadius="3" Opacity="0.4">
+                                <Border.Background>
+                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0"
+                                                         x:Name="ShimmerBrush">
+                                        <LinearGradientBrush.Transform>
+                                            <TranslateTransform X="-200" />
+                                        </LinearGradientBrush.Transform>
+                                        <GradientStop Color="Transparent" Offset="0" />
+                                        <GradientStop Color="#40FFFFFF" Offset="0.5" />
+                                        <GradientStop Color="Transparent" Offset="1" />
+                                    </LinearGradientBrush>
+                                </Border.Background>
+                            </Border>
+                        </Border>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <!-- Shimmer animation for active transfers -->
+                        <Trigger Property="IsEnabled" Value="True">
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard RepeatBehavior="Forever">
+                                        <DoubleAnimation Storyboard.TargetName="ShimmerBrush"
+                                                         Storyboard.TargetProperty="Transform.(TranslateTransform.X)"
+                                                         From="-200" To="600"
+                                                         Duration="0:0:2">
+                                            <DoubleAnimation.EasingFunction>
+                                                <CubicEase EasingMode="EaseInOut" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ═══ Speed Badge Style ═══ -->
+
+    <Style x:Key="SpeedBadgeStyle" TargetType="Border">
+        <Setter Property="Background" Value="#18FFFFFF" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="8,3" />
+        <Setter Property="Margin" Value="4,0" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- ═══ Upload Speed Badge ═══ -->
+    <Style x:Key="UploadSpeedBadge" TargetType="Border" BasedOn="{StaticResource SpeedBadgeStyle}">
+        <Setter Property="Background" Value="#183B82F6" />
+        <Setter Property="BorderBrush" Value="#303B82F6" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <!-- ═══ Download Speed Badge ═══ -->
+    <Style x:Key="DownloadSpeedBadge" TargetType="Border" BasedOn="{StaticResource SpeedBadgeStyle}">
+        <Setter Property="Background" Value="#1822C55E" />
+        <Setter Property="BorderBrush" Value="#3022C55E" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <!-- ═══ Action Button Base ═══ -->
+
+    <Style x:Key="TransferActionButton" TargetType="Button">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Padding" Value="8,5" />
+        <Setter Property="Margin" Value="2,0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="Bd" 
+                            Background="{TemplateBinding Background}"
+                            CornerRadius="8" 
+                            Padding="{TemplateBinding Padding}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            SnapsToDevicePixels="True">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.85" />
+                        </Trigger>
+                        <Trigger Property="IsPressed" Value="True">
+                            <Setter TargetName="Bd" Property="Opacity" Value="0.7" />
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.35" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Pause button (Amber) -->
+    <Style x:Key="PauseButtonStyle" TargetType="Button" BasedOn="{StaticResource TransferActionButton}">
+        <Setter Property="Background" Value="#20F59E0B" />
+        <Setter Property="Foreground" Value="#FBBF24" />
+    </Style>
+
+    <!-- Resume button (Green) -->
+    <Style x:Key="ResumeButtonStyle" TargetType="Button" BasedOn="{StaticResource TransferActionButton}">
+        <Setter Property="Background" Value="#2022C55E" />
+        <Setter Property="Foreground" Value="#4ADE80" />
+    </Style>
+
+    <!-- Cancel button (Red) -->
+    <Style x:Key="CancelButtonStyle" TargetType="Button" BasedOn="{StaticResource TransferActionButton}">
+        <Setter Property="Background" Value="#20EF4444" />
+        <Setter Property="Foreground" Value="#F87171" />
+    </Style>
+
+    <!-- Open File button (Blue) -->
+    <Style x:Key="OpenFileButtonStyle" TargetType="Button" BasedOn="{StaticResource TransferActionButton}">
+        <Setter Property="Background" Value="#203B82F6" />
+        <Setter Property="Foreground" Value="#60A5FA" />
+    </Style>
+
+    <!-- Primary accent button -->
+    <Style x:Key="AccentButtonStyle" TargetType="Button" BasedOn="{StaticResource TransferActionButton}">
+        <Setter Property="Background" Value="{DynamicResource ThemeAccentBg}" />
+        <Setter Property="Foreground" Value="{DynamicResource ThemeAccentLight}" />
+        <Setter Property="Padding" Value="16,8" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- ═══ State Indicator (Pulsing dot) ═══ -->
+
+    <Style x:Key="StateIndicatorStyle" TargetType="Ellipse">
+        <Setter Property="Width" Value="8" />
+        <Setter Property="Height" Value="8" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Margin" Value="0,0,8,0" />
+    </Style>
+
+    <!-- Active pulsing indicator -->
+    <Style x:Key="ActivePulseIndicator" TargetType="Ellipse" BasedOn="{StaticResource StateIndicatorStyle}">
+        <Setter Property="Fill" Value="#22C55E" />
+        <Style.Triggers>
+            <EventTrigger RoutedEvent="Loaded">
+                <BeginStoryboard>
+                    <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                         From="1" To="0.3" Duration="0:0:0.8">
+                            <DoubleAnimation.EasingFunction>
+                                <SineEase EasingMode="EaseInOut" />
+                            </DoubleAnimation.EasingFunction>
+                        </DoubleAnimation>
+                    </Storyboard>
+                </BeginStoryboard>
+            </EventTrigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- ═══ Filter Tab Style (Segmented Control) ═══ -->
+
+    <Style x:Key="FilterTabStyle" TargetType="RadioButton">
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="RadioButton">
+                    <Border x:Name="TabBd"
+                            Background="Transparent"
+                            CornerRadius="8"
+                            Padding="14,7"
+                            Cursor="Hand"
+                            Margin="2,0"
+                            SnapsToDevicePixels="True">
+                        <Border.RenderTransform>
+                            <ScaleTransform ScaleX="1" ScaleY="1" />
+                        </Border.RenderTransform>
+                        <Border.RenderTransformOrigin>0.5,0.5</Border.RenderTransformOrigin>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock x:Name="TabText"
+                                       Text="{TemplateBinding Content}"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
+                                       VerticalAlignment="Center" />
+                            <Border x:Name="CountBadge"
+                                    Background="#20FFFFFF"
+                                    CornerRadius="8"
+                                    Padding="6,1"
+                                    Margin="6,0,0,0"
+                                    VerticalAlignment="Center"
+                                    Visibility="{TemplateBinding Tag, Converter={x:Null}}">
+                                <TextBlock x:Name="CountText"
+                                           Text="{TemplateBinding Tag}"
+                                           FontSize="10"
+                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" />
+                            </Border>
+                        </StackPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                            <Setter TargetName="TabBd" Property="Background" Value="{DynamicResource ThemeAccentBg}" />
+                            <Setter TargetName="TabText" Property="Foreground" Value="{DynamicResource ThemeAccentLight}" />
+                            <Setter TargetName="TabText" Property="FontWeight" Value="SemiBold" />
+                            <Setter TargetName="CountBadge" Property="Background" Value="#30FFFFFF" />
+                            <Setter TargetName="CountText" Property="Foreground" Value="{DynamicResource ThemeAccentLight}" />
+                        </Trigger>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="TabBd" Property="Background" Value="#10FFFFFF" />
+                            <Trigger.EnterActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="TabBd"
+                                                         Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)"
+                                                         To="1.03" Duration="0:0:0.15">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="TabBd"
+                                                         Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)"
+                                                         To="1.03" Duration="0:0:0.15">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut" /></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.EnterActions>
+                            <Trigger.ExitActions>
+                                <BeginStoryboard>
+                                    <Storyboard>
+                                        <DoubleAnimation Storyboard.TargetName="TabBd"
+                                                         Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleX)"
+                                                         To="1" Duration="0:0:0.2">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                        <DoubleAnimation Storyboard.TargetName="TabBd"
+                                                         Storyboard.TargetProperty="RenderTransform.(ScaleTransform.ScaleY)"
+                                                         To="1" Duration="0:0:0.2">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut" /></DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </Trigger.ExitActions>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ═══ Dashboard Stat Card ═══ -->
+
+    <Style x:Key="DashboardStatCard" TargetType="Border">
+        <Setter Property="Background" Value="#10FFFFFF" />
+        <Setter Property="CornerRadius" Value="10" />
+        <Setter Property="Padding" Value="14,8" />
+        <Setter Property="Margin" Value="4,0" />
+        <Setter Property="BorderBrush" Value="#15FFFFFF" />
+        <Setter Property="BorderThickness" Value="1" />
+    </Style>
+
+    <!-- ═══ Empty State Style ═══ -->
+
+    <Style x:Key="EmptyStateContainer" TargetType="StackPanel">
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Opacity" Value="0.5" />
+    </Style>
+
+    <!-- ═══ Quick Send Bar ═══ -->
+
+    <Style x:Key="QuickSendBar" TargetType="Border">
+        <Setter Property="Background" Value="{DynamicResource ThemeOverlayBg}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource ThemeSeparator}" />
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+        <Setter Property="Padding" Value="14,8" />
+    </Style>
+
+</ResourceDictionary>

@@ -39,6 +39,9 @@ namespace FlyShelf.Windows
             // Theme override dictionary modification thrashes visual tree at construction,
             // so we only apply the theme in OnSourceInitialized when the handle is active.
 
+            // Build hotkey keycaps for the settings tab
+            BuildHotkeyKeycaps();
+
             // Auto-refresh device list when a new device pairs
             _devicePairedHandler = (deviceName) =>
             {
@@ -165,6 +168,9 @@ namespace FlyShelf.Windows
             // Auto-refresh device list every 30 seconds + on initial load
             _deviceRefreshTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
             _deviceRefreshTimer.Tick += (s, ev) => RefreshDevices_Click(null, null);
+
+            // Initialize Networking Command Center (file queue, history, nearby discovery)
+            InitializeNetworkingHub();
 
             IsVisibleChanged += (s, ev) =>
             {
@@ -582,6 +588,18 @@ namespace FlyShelf.Windows
             }
         }
 
+        private void NetworkInnerTab_Checked(object sender, RoutedEventArgs e)
+        {
+            // Guard: panels may not be loaded yet during InitializeComponent
+            if (NetworkDevicesTab == null || NetworkFileQueueTab == null || NetworkHistoryTab == null || NetworkNearbyTab == null)
+                return;
+
+            NetworkDevicesTab.Visibility = (NetworkTabDevices?.IsChecked == true) ? Visibility.Visible : Visibility.Collapsed;
+            NetworkFileQueueTab.Visibility = (NetworkTabFileQueue?.IsChecked == true) ? Visibility.Visible : Visibility.Collapsed;
+            NetworkHistoryTab.Visibility = (NetworkTabHistory?.IsChecked == true) ? Visibility.Visible : Visibility.Collapsed;
+            NetworkNearbyTab.Visibility = (NetworkTabNearby?.IsChecked == true) ? Visibility.Visible : Visibility.Collapsed;
+        }
+
         private void DashboardCard_Click(object sender, MouseButtonEventArgs e)
         {
             if (sender is FrameworkElement fe && fe.Tag is string tag)
@@ -697,6 +715,65 @@ namespace FlyShelf.Windows
                     SettingsManager.Current.ClipboardRetentionDays = days;
                     SettingsManager.Save();
                 }
+            }
+        }
+
+        // ═══ Incognito Mode ═══
+
+        private void IncognitoToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (Classes.IncognitoManager.IsIncognito)
+            {
+                Classes.IncognitoManager.DisableIncognito();
+                UpdateIncognitoUI();
+                ToastWindow.ShowToast("👁 Clipboard monitoring resumed");
+                return;
+            }
+
+            // Get selected duration
+            int hours = 1;
+            if (IncognitoDurationCombo.SelectedItem is ComboBoxItem selected && selected.Tag != null)
+            {
+                if (int.TryParse(selected.Tag.ToString(), out int h))
+                    hours = h;
+            }
+
+            // Pro gate for 6h and 8h
+            if (hours >= 6 && !LicenseManager.IsPro)
+            {
+                ToastWindow.ShowToast("🔒 6+ hour incognito requires Pro!");
+                UpgradePrompt.ShowActivationDialog(this);
+                return;
+            }
+
+            Classes.IncognitoManager.EnableIncognito(hours);
+            UpdateIncognitoUI();
+            ToastWindow.ShowToast($"🕶 Incognito enabled for {hours}h");
+        }
+
+        internal void UpdateIncognitoUI()
+        {
+            if (IncognitoToggleBtn == null) return;
+
+            if (Classes.IncognitoManager.IsIncognito)
+            {
+                IncognitoToggleBtn.Content = "Disable";
+                IncognitoToggleBtn.Appearance = Wpf.Ui.Controls.ControlAppearance.Danger;
+                IncognitoDurationCombo.IsEnabled = false;
+
+                string remaining = Classes.IncognitoManager.RemainingTimeText;
+                if (!string.IsNullOrEmpty(remaining))
+                {
+                    IncognitoStatusText.Text = $"🕶 Active — {remaining}";
+                    IncognitoStatusText.Visibility = Visibility.Visible;
+                }
+            }
+            else
+            {
+                IncognitoToggleBtn.Content = "Enable";
+                IncognitoToggleBtn.Appearance = Wpf.Ui.Controls.ControlAppearance.Caution;
+                IncognitoDurationCombo.IsEnabled = true;
+                IncognitoStatusText.Visibility = Visibility.Collapsed;
             }
         }
 

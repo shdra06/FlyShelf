@@ -361,6 +361,61 @@ namespace FlyShelf.Classes
                                     string newCf = root.TryGetProperty("cfUrl", out var nc) ? nc.GetString() ?? "" : "";
                                     _ = Task.Run(() => HandlePeerUrlUpdateFromWebSocket(srcId, srcName, newLan, newCf));
                                 }
+                                // ═══ LAN TRANSFER CONTROL MESSAGES ═══
+                                else if (msgType == "TransferOffer" && LanTransferManager.Instance != null)
+                                {
+                                    string tidStr = root.TryGetProperty("transferId", out var ti) ? ti.GetString() ?? "" : "";
+                                    string fileName = root.TryGetProperty("fileName", out var fn) ? fn.GetString() ?? "" : "";
+                                    long fileSize = root.TryGetProperty("fileSize", out var fs) ? fs.GetInt64() : 0;
+                                    string srcDeviceId = root.TryGetProperty("sourceDeviceId", out var si) ? si.GetString() ?? "" : "";
+                                    string srcDeviceName = root.TryGetProperty("sourceDeviceName", out var sn) ? sn.GetString() ?? "" : "";
+                                    string xxhash = root.TryGetProperty("xxhash64", out var xh) ? xh.GetString() : null;
+                                    if (Guid.TryParse(tidStr, out Guid tid))
+                                    {
+                                        _ = Task.Run(() => LanTransferManager.Instance.HandleTransferOffer(
+                                            tid, fileName, fileSize, srcDeviceId, srcDeviceName, xxhash));
+                                    }
+                                }
+                                else if (msgType == "TransferAccept" && LanTransferManager.Instance != null)
+                                {
+                                    string tidStr = root.TryGetProperty("transferId", out var ti) ? ti.GetString() ?? "" : "";
+                                    long resumeFrom = root.TryGetProperty("resumeFrom", out var rf) ? rf.GetInt64() : 0;
+                                    if (Guid.TryParse(tidStr, out Guid tid))
+                                    {
+                                        _ = Task.Run(() => LanTransferManager.Instance.HandleTransferAccepted(tid, resumeFrom, peer.DeviceId));
+                                    }
+                                }
+                                else if (msgType == "TransferPause" && LanTransferManager.Instance != null)
+                                {
+                                    string tidStr = root.TryGetProperty("transferId", out var ti) ? ti.GetString() ?? "" : "";
+                                    if (Guid.TryParse(tidStr, out Guid tid))
+                                        _ = Task.Run(() => LanTransferManager.Instance.HandlePeerPause(tid));
+                                }
+                                else if (msgType == "TransferResume" && LanTransferManager.Instance != null)
+                                {
+                                    string tidStr = root.TryGetProperty("transferId", out var ti) ? ti.GetString() ?? "" : "";
+                                    long resumeFrom = root.TryGetProperty("bytesTransferred", out var rf) ? rf.GetInt64() : 0;
+                                    if (Guid.TryParse(tidStr, out Guid tid))
+                                        LanTransferManager.Instance.HandlePeerResume(tid, resumeFrom);
+                                }
+                                else if (msgType == "TransferCancel" && LanTransferManager.Instance != null)
+                                {
+                                    string tidStr = root.TryGetProperty("transferId", out var ti) ? ti.GetString() ?? "" : "";
+                                    if (Guid.TryParse(tidStr, out Guid tid))
+                                        LanTransferManager.Instance.HandlePeerCancel(tid);
+                                }
+                                else if (msgType == "TransferComplete" && LanTransferManager.Instance != null)
+                                {
+                                    string tidStr = root.TryGetProperty("transferId", out var ti) ? ti.GetString() ?? "" : "";
+                                    if (Guid.TryParse(tidStr, out Guid tid))
+                                        LanTransferManager.Instance.HandlePeerComplete(tid);
+                                }
+                                else if (msgType == "TransferCheckpoint" && LanTransferManager.Instance != null)
+                                {
+                                    // Checkpoint ACK from receiver — update our send session progress
+                                    string tidStr = root.TryGetProperty("transferId", out var ti) ? ti.GetString() ?? "" : "";
+                                    // Checkpoint is informational — we track progress on the send side already
+                                }
                             }
                             catch { /* Best-effort JSON parsing */ }
                         }

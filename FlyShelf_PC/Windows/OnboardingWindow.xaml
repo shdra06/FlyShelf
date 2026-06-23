@@ -59,30 +59,15 @@
                     <!-- ══════════════════════════════════════ -->
                     <StackPanel x:Name="Step2" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
                         <!-- Keyboard keys visual -->
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,32">
-                            <Border CornerRadius="8" Padding="16,10" Background="#2A2D3E" BorderBrush="#3A3D4E" BorderThickness="1">
-                                <Border.Effect>
-                                    <DropShadowEffect BlurRadius="8" Opacity="0.3" ShadowDepth="2" Direction="270" Color="#000000"/>
-                                </Border.Effect>
-                                <TextBlock Text="Alt" FontSize="24" FontWeight="Bold" Foreground="#A78BFA"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
-                            <TextBlock Text="+" FontSize="24" FontWeight="Bold" Foreground="#64748B"
-                                       VerticalAlignment="Center" Margin="14,0"/>
-                            <Border CornerRadius="8" Padding="16,10" Background="#2A2D3E" BorderBrush="#3A3D4E" BorderThickness="1">
-                                <Border.Effect>
-                                    <DropShadowEffect BlurRadius="8" Opacity="0.3" ShadowDepth="2" Direction="270" Color="#000000"/>
-                                </Border.Effect>
-                                <TextBlock Text="C" FontSize="24" FontWeight="Bold" Foreground="#A78BFA"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                            </Border>
+                        <StackPanel x:Name="HotkeyKeycapsPanel" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,32">
+                            <!-- Keycaps built dynamically in code-behind -->
                         </StackPanel>
 
                         <TextBlock Text="Summon Your Shelf" FontSize="24" FontWeight="Bold"
                                    Foreground="White" HorizontalAlignment="Center" Margin="0,0,0,12"/>
-                        <TextBlock Text="Press Alt+C anytime to summon or dismiss your clipboard shelf"
+                        <TextBlock x:Name="HotkeyDescriptionText" Text="Press Alt+C anytime to summon or dismiss your clipboard shelf. You can change this in Settings."
                                    FontSize="14" Foreground="#94A3B8" HorizontalAlignment="Center"
-                                   TextAlignment="Center" Margin="0,0,0,8"/>
+                                   TextAlignment="Center" TextWrapping="Wrap" MaxWidth="480" Margin="0,0,0,8"/>
                         <TextBlock Text="Works from anywhere — even fullscreen apps" FontSize="13"
                                    Foreground="#64748B" HorizontalAlignment="Center"/>
                     </StackPanel>

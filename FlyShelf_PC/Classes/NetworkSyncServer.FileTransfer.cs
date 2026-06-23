@@ -10,6 +10,7 @@ using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using FlyShelf.ViewModels;
 
@@ -17,6 +18,40 @@ namespace FlyShelf.Classes
 {
     public partial class NetworkSyncServer
     {
+        // ═══ Pair-endpoint rate limiter ═══
+        // Tracks failed pairing attempts per remote IP.
+        // Key: IP string. Value: (failCount, windowStartTicks)
+        private static readonly ConcurrentDictionary<string, (int count, long windowStart)> _pairFailsByIp = new();
+        private const int PAIR_MAX_FAILS_PER_IP   = 5;          // max failures from one IP per window
+        private const int PAIR_MAX_FAILS_GLOBAL    = 20;         // total failures across all IPs before global lockout
+        private static int _pairGlobalFailCount    = 0;
+        private const long PAIR_RATE_WINDOW_TICKS  = 60L * 10_000_000; // 60-second window
+
+        // ═══ HTTP Transfer tracking (for Android REST-based file transfers) ═══
+        private static readonly ConcurrentDictionary<Guid, HttpTransferInfo> _pendingHttpTransfers = new();
+        private const int TRANSFER_STALE_MINUTES = 30; // Auto-cleanup abandoned transfers after 30 min
+
+        private class HttpTransferInfo
+        {
+            public Guid TransferId { get; set; }
+            public string FileName { get; set; } = "";
+            public long FileSize { get; set; }
+            public string FilePath { get; set; } = "";
+            public string DeviceId { get; set; } = "";
+            public string DeviceName { get; set; } = "";
+            public long ResumeFrom { get; set; }
+            public DateTime CreatedAt { get; set; }
+        }
+
+        /// <summary>Purge HTTP transfers older than TRANSFER_STALE_MINUTES to prevent memory leaks.</summary>
+        private static void CleanupStaleHttpTransfers()
+        {
+            var stale = _pendingHttpTransfers.Where(kv =>
+                (DateTime.UtcNow - kv.Value.CreatedAt).TotalMinutes > TRANSFER_STALE_MINUTES).ToList();
+            foreach (var kv in stale)
+                _pendingHttpTransfers.TryRemove(kv.Key, out _);
+        }
+
         private async Task ServeFileDownload(HttpListenerRequest req, HttpListenerResponse res)
         {
             string path = req.QueryString["path"];
@@ -120,8 +155,40 @@ namespace FlyShelf.Classes
         // ═══ QR Code Pairing Handler ═══
         private async Task HandlePairRequest(HttpListenerRequest req, HttpListenerResponse res)
         {
+            string remoteIp = req.RemoteEndPoint?.Address?.ToString() ?? "unknown";
             try
             {
+                // ═══ RATE LIMIT CHECK ═══
+                long nowTicks = DateTime.UtcNow.Ticks;
+
+                // Global lockout: too many failures from any IP combined
+                if (System.Threading.Volatile.Read(ref _pairGlobalFailCount) >= PAIR_MAX_FAILS_GLOBAL)
+                {
+                    byte[] tooMany = Encoding.UTF8.GetBytes("{\"error\":\"Too many pairing attempts. Try again later.\"}");
+                    res.StatusCode = 429;
+                    res.ContentType = "application/json";
+                    try { res.OutputStream.Write(tooMany, 0, tooMany.Length); } catch { }
+                    Logger.LogAction("SECURITY", $"⛔ /api/pair global rate-limit hit from {remoteIp}");
+                    return;
+                }
+
+                // Per-IP lockout
+                if (_pairFailsByIp.TryGetValue(remoteIp, out var ipState))
+                {
+                    // Reset window if 60s has elapsed
+                    if (nowTicks - ipState.windowStart > PAIR_RATE_WINDOW_TICKS)
+                        _pairFailsByIp.TryRemove(remoteIp, out _);
+                    else if (ipState.count >= PAIR_MAX_FAILS_PER_IP)
+                    {
+                        byte[] blocked = Encoding.UTF8.GetBytes("{\"error\":\"Too many pairing attempts from this device. Try again in 60 seconds.\"}");
+                        res.StatusCode = 429;
+                        res.ContentType = "application/json";
+                        try { res.OutputStream.Write(blocked, 0, blocked.Length); } catch { }
+                        Logger.LogAction("SECURITY", $"⛔ /api/pair rate-limited IP: {remoteIp} ({ipState.count} fails)");
+                        return;
+                    }
+                }
+
                 string body;
                 using (var reader = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8))
                 {
@@ -133,7 +200,6 @@ namespace FlyShelf.Classes
                 string deviceId = pairData.TryGetProperty("deviceId", out var di) ? di.GetString() : "";
                 string deviceName = pairData.TryGetProperty("deviceName", out var dn) ? dn.GetString() : "Unknown";
                 string deviceType = pairData.TryGetProperty("deviceType", out var dt) ? dt.GetString() : "Mobile";
-                string remoteIp = req.RemoteEndPoint?.Address?.ToString() ?? "unknown";
 
                 if (string.IsNullOrEmpty(deviceId))
                     deviceId = $"{deviceName}_{remoteIp}";
@@ -142,6 +208,9 @@ namespace FlyShelf.Classes
 
                 if (success)
                 {
+                    // Clear any recorded failures from this IP on success
+                    _pairFailsByIp.TryRemove(remoteIp, out _);
+
                     var response = new
                     {
                         status = "paired",
@@ -166,10 +235,24 @@ namespace FlyShelf.Classes
                 }
                 else
                 {
+                    // Record the failure for rate limiting
+                    _pairFailsByIp.AddOrUpdate(
+                        remoteIp,
+                        _ => (1, nowTicks),
+                        (_, old) => (old.windowStart + PAIR_RATE_WINDOW_TICKS < nowTicks)
+                            ? (1, nowTicks)                   // window expired — reset
+                            : (old.count + 1, old.windowStart) // still in window — increment
+                    );
+                    System.Threading.Interlocked.Increment(ref _pairGlobalFailCount);
+                    // Auto-reset global counter after 5 minutes to recover from transient attack
+                    _ = System.Threading.Tasks.Task.Delay(TimeSpan.FromMinutes(5))
+                        .ContinueWith(_ => System.Threading.Interlocked.Decrement(ref _pairGlobalFailCount));
+
                     byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Invalid pairing key\"}");
                     res.StatusCode = 403;
                     res.ContentType = "application/json";
                     res.OutputStream.Write(err, 0, err.Length);
+                    Logger.LogAction("SECURITY", $"⚠️ Failed pair attempt from {remoteIp} (key length={pairingKey?.Length ?? 0})");
                 }
             }
             catch (Exception ex)
@@ -444,6 +527,238 @@ namespace FlyShelf.Classes
                     Logger.LogAction("TEXT INJECTION ERR", ex.Message);
                 }
             });
+        }
+
+        // ═══ Android REST Transfer Endpoints ═══
+
+        private async Task HandleNearbyQuery(HttpListenerRequest req, HttpListenerResponse res)
+        {
+            try
+            {
+                var info = new
+                {
+                    type = "FlyShelf_Nearby_v1",
+                    deviceId = SettingsManager.Current.DeviceId ?? Environment.MachineName,
+                    deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
+                    deviceType = "PC",
+                    httpPort = CurrentPort,
+                    transferPort = LanTransferEngine.TRANSFER_PORT,
+                    version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.0.0",
+                    peerCount = PeerManager.Instance?.AliveCount ?? 0,
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()
+                };
+                byte[] data = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(info));
+                res.StatusCode = 200;
+                res.ContentType = "application/json";
+                await res.OutputStream.WriteAsync(data, 0, data.Length);
+            }
+            catch { res.StatusCode = 500; }
+            finally { try { res.Close(); } catch { } }
+        }
+
+        private async Task HandleTransferOffer(HttpListenerRequest req, HttpListenerResponse res)
+        {
+            try
+            {
+                // Cleanup abandoned transfers older than 30 minutes
+                CleanupStaleHttpTransfers();
+                string body;
+                using (var reader = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8))
+                    body = await reader.ReadToEndAsync();
+
+                var offer = JsonSerializer.Deserialize<JsonElement>(body);
+                string fileName = offer.TryGetProperty("fileName", out var fn) ? fn.GetString() ?? "unnamed" : "unnamed";
+                // SECURITY: Sanitize filename — strip directory separators and path traversal
+                fileName = Path.GetFileName(fileName);
+                if (string.IsNullOrWhiteSpace(fileName) || fileName == "." || fileName == "..")
+                    fileName = $"transfer_{DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()}";
+                long fileSize = offer.TryGetProperty("fileSize", out var fs) ? fs.GetInt64() : 0;
+                string deviceId = offer.TryGetProperty("deviceId", out var di) ? di.GetString() ?? "" : "";
+                string deviceName = offer.TryGetProperty("deviceName", out var dn) ? dn.GetString() ?? "Mobile" : "Mobile";
+                // SECURITY: Sanitize deviceName used in directory path
+                deviceName = string.Join("_", deviceName.Split(Path.GetInvalidFileNameChars()));
+
+                var transferId = Guid.NewGuid();
+                string receivePath = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                    "FlyShelf", "SyncedFiles", "Received", deviceName);
+                Directory.CreateDirectory(receivePath);
+                string filePath = Path.Combine(receivePath, fileName);
+
+                // Check for existing partial file (resume support)
+                long resumeFrom = 0;
+                if (File.Exists(filePath))
+                {
+                    var existingFile = new FileInfo(filePath);
+                    if (existingFile.Length < fileSize)
+                        resumeFrom = existingFile.Length;
+                }
+
+                // Store pending transfer info for the upload endpoint
+                _pendingHttpTransfers[transferId] = new HttpTransferInfo
+                {
+                    TransferId = transferId,
+                    FileName = fileName,
+                    FileSize = fileSize,
+                    FilePath = filePath,
+                    DeviceId = deviceId,
+                    DeviceName = deviceName,
+                    ResumeFrom = resumeFrom,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                Logger.LogAction("TRANSFER", $"📥 HTTP transfer offer from {deviceName}: {fileName} ({fileSize / 1024}KB), resume from {resumeFrom}");
+
+                var response = new
+                {
+                    transferId = transferId.ToString(),
+                    accepted = true,
+                    resumeFrom = resumeFrom
+                };
+                byte[] data = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response));
+                res.StatusCode = 200;
+                res.ContentType = "application/json";
+                await res.OutputStream.WriteAsync(data, 0, data.Length);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("TRANSFER", $"Transfer offer error: {ex.Message}");
+                byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Transfer offer failed\"}");
+                res.StatusCode = 500;
+                res.ContentType = "application/json";
+                try { await res.OutputStream.WriteAsync(err, 0, err.Length); } catch { }
+            }
+            finally { try { res.Close(); } catch { } }
+        }
+
+        private async Task HandleTransferUpload(HttpListenerRequest req, HttpListenerResponse res)
+        {
+            try
+            {
+                string transferIdStr = req.QueryString["id"] ?? req.Headers["X-Transfer-Id"] ?? "";
+                if (!Guid.TryParse(transferIdStr, out var transferId) || !_pendingHttpTransfers.TryGetValue(transferId, out var info))
+                {
+                    byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Invalid or expired transfer ID\"}");
+                    res.StatusCode = 404;
+                    res.ContentType = "application/json";
+                    await res.OutputStream.WriteAsync(err, 0, err.Length);
+                    res.Close();
+                    return;
+                }
+
+                // Determine write position from Content-Range or resumeFrom
+                long writePosition = info.ResumeFrom;
+                string rangeHeader = req.Headers["Content-Range"];
+                if (!string.IsNullOrEmpty(rangeHeader))
+                {
+                    // Format: "bytes START-END/TOTAL"
+                    var match = Regex.Match(rangeHeader, @"bytes (\d+)-(\d+)/(\d+)");
+                    if (match.Success)
+                        writePosition = long.Parse(match.Groups[1].Value);
+                }
+
+                // SECURITY: Validate write position is within bounds
+                if (writePosition < 0 || writePosition > info.FileSize)
+                {
+                    byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Invalid write position\"}");
+                    res.StatusCode = 400;
+                    res.ContentType = "application/json";
+                    await res.OutputStream.WriteAsync(err, 0, err.Length);
+                    res.Close();
+                    return;
+                }
+
+                Logger.LogAction("TRANSFER", $"📥 HTTP upload: {info.FileName} from pos {writePosition}");
+
+                // Stream write with 1MB buffer
+                using var fs = new FileStream(info.FilePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None, 1048576, FileOptions.Asynchronous);
+                fs.Seek(writePosition, SeekOrigin.Begin);
+
+                byte[] buffer = System.Buffers.ArrayPool<byte>.Shared.Rent(1048576);
+                long totalWritten = writePosition;
+                try
+                {
+                    int bytesRead;
+                    while ((bytesRead = await req.InputStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    {
+                        await fs.WriteAsync(buffer, 0, bytesRead);
+                        totalWritten += bytesRead;
+                        // Guard: stop if we've received more data than declared file size
+                        if (totalWritten >= info.FileSize) break;
+                    }
+                    await fs.FlushAsync();
+                }
+                finally
+                {
+                    System.Buffers.ArrayPool<byte>.Shared.Return(buffer);
+                }
+
+                bool isComplete = totalWritten >= info.FileSize;
+
+                if (isComplete)
+                {
+                    _pendingHttpTransfers.TryRemove(transferId, out _);
+                    // Inject into clipboard
+                    InjectReceivedFile(info.FilePath, info.DeviceName, "HTTP", "Mobile");
+                    Logger.LogAction("TRANSFER", $"✅ HTTP transfer complete: {info.FileName} ({totalWritten / 1024}KB) from {info.DeviceName}");
+                }
+
+                var response = new
+                {
+                    status = isComplete ? "completed" : "partial",
+                    bytesReceived = totalWritten,
+                    fileSize = info.FileSize,
+                    progress = info.FileSize > 0 ? Math.Round((double)totalWritten / info.FileSize * 100, 1) : 100.0
+                };
+                byte[] data = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response));
+                res.StatusCode = 200;
+                res.ContentType = "application/json";
+                await res.OutputStream.WriteAsync(data, 0, data.Length);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("TRANSFER", $"Transfer upload error: {ex.Message}");
+                byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Transfer upload failed\"}");
+                res.StatusCode = 500;
+                res.ContentType = "application/json";
+                try { await res.OutputStream.WriteAsync(err, 0, err.Length); } catch { }
+            }
+            finally { try { res.Close(); } catch { } }
+        }
+
+        private Task HandleTransferStatus(HttpListenerRequest req, HttpListenerResponse res)
+        {
+            try
+            {
+                string transferIdStr = req.QueryString["id"] ?? req.Headers["X-Transfer-Id"] ?? "";
+                if (!Guid.TryParse(transferIdStr, out var transferId) || !_pendingHttpTransfers.TryGetValue(transferId, out var info))
+                {
+                    byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Transfer not found\"}");
+                    res.StatusCode = 404;
+                    res.ContentType = "application/json";
+                    res.OutputStream.Write(err, 0, err.Length);
+                    res.Close();
+                    return Task.CompletedTask;
+                }
+
+                long currentSize = File.Exists(info.FilePath) ? new FileInfo(info.FilePath).Length : 0;
+                var response = new
+                {
+                    transferId = transferId.ToString(),
+                    fileName = info.FileName,
+                    fileSize = info.FileSize,
+                    bytesReceived = currentSize,
+                    progress = info.FileSize > 0 ? Math.Round((double)currentSize / info.FileSize * 100, 1) : 0.0,
+                    status = currentSize >= info.FileSize ? "completed" : "receiving"
+                };
+                byte[] data = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(response));
+                res.StatusCode = 200;
+                res.ContentType = "application/json";
+                res.OutputStream.Write(data, 0, data.Length);
+            }
+            catch { res.StatusCode = 500; }
+            finally { try { res.Close(); } catch { } }
+            return Task.CompletedTask;
         }
     }
 }

@@ -252,6 +252,65 @@ namespace FlyShelf
             }
         }
 
+        private async void TranslateContextMenu_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                // The sender is a sub-MenuItem whose Tag is the target language string.
+                // The ClipboardItem is stored in the parent MenuItem's Tag.
+                string targetLanguage = null;
+                ClipboardItem clipItem = null;
+
+                if (sender is MenuItem subItem)
+                {
+                    targetLanguage = subItem.Tag as string;
+                    if (subItem.Parent is MenuItem parentItem)
+                    {
+                        clipItem = parentItem.Tag as ClipboardItem;
+                    }
+                }
+
+                if (clipItem == null || string.IsNullOrEmpty(clipItem.RawContent) || string.IsNullOrEmpty(targetLanguage))
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("No text content to translate.");
+                    return;
+                }
+
+                // Check AI availability
+                if (!AiProviderService.Instance.IsAvailable)
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Translate requires an AI API key");
+                    return;
+                }
+
+                FlyShelf.Windows.ToastWindow.ShowToast($"🌐 Translating to {targetLanguage}...");
+
+                string translated = await AiProviderService.Instance.TranslateAsync(clipItem.RawContent, targetLanguage);
+
+                if (!string.IsNullOrWhiteSpace(translated))
+                {
+                    if (ClipboardHelper.SafeSetText(translated))
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowToast($"🌐 Translated to {targetLanguage} — copied to clipboard!");
+                    }
+                    else
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowToast("Clipboard busy — try again");
+                    }
+                    Logger.LogAction("TRANSLATE", $"Context menu: translated {clipItem.RawContent.Length} chars to {targetLanguage}");
+                }
+                else
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("Translation returned empty result.");
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("TRANSLATE", $"Context menu failed: {ex.Message}");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Translation failed: {ex.Message}");
+            }
+        }
+
 
         private async void ConvertPdfToWord_Click(object sender, RoutedEventArgs e)
         {
@@ -331,6 +390,130 @@ $word.Quit()
                 FlyShelf.Windows.ToastWindow.ShowToast($"❌ PDF to Word error: {ex.Message}");
             }
 #endif
+        }
+
+        private void ReorderPdfPages_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var clipItem = GetClipItemFromSender(sender);
+                if (clipItem == null || string.IsNullOrEmpty(clipItem.FilePath) || !System.IO.File.Exists(clipItem.FilePath))
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ PDF file not found.");
+                    return;
+                }
+
+                var mergeItem = new FlyShelf.Windows.PdfMergeItem(clipItem.FilePath);
+                if (!mergeItem.IsValid)
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Cannot read PDF: {mergeItem.Error}");
+                    return;
+                }
+
+                var reorderWin = new FlyShelf.Windows.PageReorderWindow(mergeItem);
+                reorderWin.WindowStartupLocation = WindowStartupLocation.CenterScreen;
+                reorderWin.Topmost = true;
+                reorderWin.ShowDialog();
+
+                if (reorderWin.WasConfirmed)
+                {
+                    // Save reordered PDF using PDFsharp
+                    string dir = System.IO.Path.GetDirectoryName(clipItem.FilePath) ?? System.IO.Path.GetTempPath();
+                    string baseName = System.IO.Path.GetFileNameWithoutExtension(clipItem.FilePath);
+                    string outputPath = System.IO.Path.Combine(dir, $"{baseName}_Reordered.pdf");
+
+                    try
+                    {
+                        if (reorderWin.HasExternalPages)
+                        {
+                            // Multi-source mode: pages come from multiple PDF files
+                            var entries = reorderWin.GetFinalPageEntries();
+                            var openDocs = new Dictionary<string, PdfSharp.Pdf.PdfDocument>();
+
+                            try
+                            {
+                                using (var outputDoc = new PdfSharp.Pdf.PdfDocument())
+                                {
+                                    foreach (var entry in entries)
+                                    {
+                                        // Open each unique source file once (cached)
+                                        if (!openDocs.ContainsKey(entry.SourceFile))
+                                        {
+                                            openDocs[entry.SourceFile] = PdfSharp.Pdf.IO.PdfReader.Open(
+                                                entry.SourceFile, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
+                                        }
+
+                                        var srcDoc = openDocs[entry.SourceFile];
+                                        int pageIdx = entry.OriginalPage - 1; // Convert 1-indexed to 0-indexed
+                                        if (pageIdx >= 0 && pageIdx < srcDoc.PageCount)
+                                            outputDoc.AddPage(srcDoc.Pages[pageIdx]);
+                                    }
+                                    outputDoc.Save(outputPath);
+                                }
+                            }
+                            finally
+                            {
+                                // Dispose all opened source documents
+                                foreach (var doc in openDocs.Values)
+                                {
+                                    try { doc.Dispose(); } catch { }
+                                }
+                            }
+                        }
+                        else
+                        {
+                            // Single-source mode: all pages from original file
+                            var finalOrder = reorderWin.GetFinalPageOrder(); // 0-indexed page indices
+
+                            // Check if the order actually changed
+                            bool orderChanged = false;
+                            if (finalOrder.Count != mergeItem.TotalPages)
+                                orderChanged = true;
+                            else
+                            {
+                                for (int i = 0; i < finalOrder.Count; i++)
+                                {
+                                    if (finalOrder[i] != i) { orderChanged = true; break; }
+                                }
+                            }
+
+                            if (!orderChanged)
+                            {
+                                FlyShelf.Windows.ToastWindow.ShowToast("📄 Page order unchanged.");
+                                return;
+                            }
+
+                            using (var inputDoc = PdfSharp.Pdf.IO.PdfReader.Open(clipItem.FilePath, PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import))
+                            using (var outputDoc = new PdfSharp.Pdf.PdfDocument())
+                            {
+                                foreach (int pageIdx in finalOrder)
+                                {
+                                    if (pageIdx >= 0 && pageIdx < inputDoc.PageCount)
+                                        outputDoc.AddPage(inputDoc.Pages[pageIdx]);
+                                }
+                                outputDoc.Save(outputPath);
+                            }
+                        }
+
+                        // Open output location in Explorer
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = "explorer.exe",
+                            Arguments = $"/select,\"{outputPath}\"",
+                            UseShellExecute = true
+                        });
+                        FlyShelf.Windows.ToastWindow.ShowToast($"✅ Reordered PDF saved: {System.IO.Path.GetFileName(outputPath)}");
+                    }
+                    catch (Exception ex)
+                    {
+                        FlyShelf.Windows.ToastWindow.ShowToast($"❌ Failed to save reordered PDF: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast($"❌ Reorder error: {ex.Message}");
+            }
         }
 
         private void MarkAsPassword_Click(object sender, RoutedEventArgs e)

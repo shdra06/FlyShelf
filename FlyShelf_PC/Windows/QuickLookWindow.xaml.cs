@@ -263,6 +263,9 @@ namespace FlyShelf.Windows
                     this.Width = 550;
                     this.Height = 650;
                     _isImageLoaded = true; // allow native dragging for textual representations
+
+                    // Show translate button for text-type items
+                    if (TranslateBtn != null) TranslateBtn.Visibility = Visibility.Visible;
                 }
                 else
                 {
@@ -296,6 +299,87 @@ namespace FlyShelf.Windows
             finally
             {
                 LoadingProgress.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        // ═════════════════════════════════════════════════════════════
+        // TRANSLATE
+        // ═════════════════════════════════════════════════════════════
+
+        private static readonly string[] _translateLanguages = new[]
+        {
+            "English", "Spanish", "French", "German", "Japanese",
+            "Chinese", "Hindi", "Arabic", "Korean", "Portuguese"
+        };
+
+        private void TranslateButton_Click(object sender, RoutedEventArgs e)
+        {
+            // Build a context menu with language options
+            var menu = new System.Windows.Controls.ContextMenu();
+            foreach (var lang in _translateLanguages)
+            {
+                var menuItem = new System.Windows.Controls.MenuItem { Header = $"🌐 {lang}" };
+                string targetLang = lang; // capture for closure
+                menuItem.Click += async (s, ev) =>
+                {
+                    await TranslateTextAsync(targetLang);
+                };
+                menu.Items.Add(menuItem);
+            }
+
+            menu.PlacementTarget = TranslateBtn;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            menu.IsOpen = true;
+        }
+
+        private async System.Threading.Tasks.Task TranslateTextAsync(string targetLanguage)
+        {
+            // Get the current text content from the text preview
+            string sourceText = TextPreview?.Text;
+            if (string.IsNullOrWhiteSpace(sourceText))
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast("No text content to translate.");
+                return;
+            }
+
+            // Check AI availability
+            if (!FlyShelf.Classes.AiProviderService.Instance.IsAvailable)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Translate requires an AI API key");
+                return;
+            }
+
+            try
+            {
+                LoadingProgress.Visibility = Visibility.Visible;
+                TranslateBtn.IsEnabled = false;
+                HeaderTitle.Text = $"Translating to {targetLanguage}...";
+
+                string translated = await FlyShelf.Classes.AiProviderService.Instance.TranslateAsync(sourceText, targetLanguage);
+
+                if (!string.IsNullOrWhiteSpace(translated))
+                {
+                    TextPreview.Text = translated;
+                    HeaderTitle.Text = $"Translated to {targetLanguage}";
+                    FlyShelf.Windows.ToastWindow.ShowToast($"🌐 Translated to {targetLanguage}");
+                    FlyShelf.Classes.Logger.LogAction("TRANSLATE", $"Translated {sourceText.Length} chars to {targetLanguage}");
+                }
+                else
+                {
+                    HeaderTitle.Text = "Quick Look";
+                    FlyShelf.Windows.ToastWindow.ShowToast("Translation returned empty result.");
+                }
+            }
+            catch (Exception ex)
+            {
+                HeaderTitle.Text = "Quick Look";
+                FlyShelf.Classes.Logger.LogAction("TRANSLATE", $"Failed: {ex.Message}");
+                FlyShelf.Windows.ToastWindow.ShowToast($"Translation failed: {ex.Message}");
+            }
+            finally
+            {
+                LoadingProgress.Visibility = Visibility.Collapsed;
+                TranslateBtn.IsEnabled = true;
             }
         }
 

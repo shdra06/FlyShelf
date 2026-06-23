@@ -13,9 +13,10 @@ import * as TaskManager from 'expo-task-manager';
 import * as SplashScreen from 'expo-splash-screen';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold } from '@expo-google-fonts/inter';
-// import * as Notifications from 'expo-notifications';
+import * as Notifications from 'expo-notifications';
 import { database } from '../firebaseConfig';
 import { ref, get, query, limitToLast } from 'firebase/database';
+import { getSecureItem } from '../utils/secureStorage';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -33,13 +34,13 @@ export const unstable_settings = {
   anchor: '(tabs)',
 };
 
-// Notifications.setNotificationHandler({
-//   handleNotification: async () => ({
-//     shouldShowAlert: true,
-//     shouldPlaySound: true,
-//     shouldSetBadge: false,
-//     }),
-// });
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    }),
+});
 
 import { Platform } from 'react-native';
 
@@ -48,16 +49,19 @@ const BACKGROUND_FETCH_TASK = 'background-clipboard-sync';
 if (Platform.OS !== 'web') {
   TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
     try {
-       const snaps = await get(query(ref(database, 'clipboard'), limitToLast(1)));
-       // if (snaps.exists()) {
-       //     await Notifications.scheduleNotificationAsync({
-       //        content: {
-       //           title: "FlyShelf Payload Detected",
-       //           body: "A new payload hit the mesh. Tap to inject instantly!",
-       //        },
-       //        trigger: null,
-       //     });
-       // }
+       // Read the pairing key to scope the query to this user's data
+       const pk = await getSecureItem('pairingKey');
+       if (!pk) return BackgroundFetch.BackgroundFetchResult.NoData;
+       const snaps = await get(query(ref(database, `clipboard/${pk}`), limitToLast(1)));
+       if (snaps.exists()) {
+           await Notifications.scheduleNotificationAsync({
+              content: {
+                 title: "FlyShelf Payload Detected",
+                 body: "A new payload hit the mesh. Tap to inject instantly!",
+              },
+              trigger: null,
+           });
+       }
        return BackgroundFetch.BackgroundFetchResult.NewData;
     } catch (err) {
        return BackgroundFetch.BackgroundFetchResult.Failed;
@@ -90,6 +94,23 @@ export default function RootLayout() {
             startOnBoot: true,
          }).catch(console.warn);
      }
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS === 'android') {
+      Notifications.setNotificationChannelAsync('default', {
+        name: 'FlyShelf',
+        importance: Notifications.AndroidImportance.DEFAULT,
+        vibrationPattern: [0, 250],
+        lightColor: '#6384FF',
+      });
+    }
+    (async () => {
+      const { status } = await Notifications.getPermissionsAsync();
+      if (status !== 'granted') {
+        await Notifications.requestPermissionsAsync();
+      }
+    })();
   }, []);
 
   if (!fontsLoaded) return null;

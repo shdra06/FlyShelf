@@ -1,0 +1,422 @@
+<controls:MicaWindow x:Class="FlyShelf.Windows.TransferManagerWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:MicaWPF.Controls;assembly=MicaWPF"
+        xmlns:classes="clr-namespace:FlyShelf.Classes"
+        xmlns:vm="clr-namespace:FlyShelf.ViewModels"
+        Title="FlyShelf — Transfer Manager"
+        Height="650" Width="850"
+        MinWidth="600" MinHeight="450"
+        WindowStartupLocation="CenterScreen"
+        SystemBackdropType="Mica"
+        Background="Transparent"
+        AllowDrop="True"
+        Drop="Window_Drop"
+        DragOver="Window_DragOver"
+        Closing="Window_Closing"
+        KeyDown="Window_KeyDown"
+        Icon="/Resources/FlyShelfLogo.ico">
+
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="38" ResizeBorderThickness="6" CornerRadius="8" GlassFrameThickness="-1" />
+    </WindowChrome.WindowChrome>
+
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="/Styles/TransferManagerStyles.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- Inline DataTemplates for transfer states -->
+            <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        </ResourceDictionary>
+    </Window.Resources>
+
+    <Grid x:Name="RootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="38"/>    <!-- Title bar -->
+            <RowDefinition Height="Auto"/>  <!-- Dashboard -->
+            <RowDefinition Height="Auto"/>  <!-- Filter tabs -->
+            <RowDefinition Height="*"/>     <!-- Transfer list -->
+            <RowDefinition Height="Auto"/>  <!-- Quick send bar -->
+            <RowDefinition Height="26"/>    <!-- Status bar -->
+        </Grid.RowDefinitions>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!-- ROW 0: TITLE BAR                                   -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <Border Grid.Row="0" Background="{DynamicResource ThemeOverlayBg}">
+            <DockPanel Margin="14,0">
+                <!-- Title -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="⚡" FontSize="14" VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBlock Text="Transfer Manager" 
+                               Foreground="{DynamicResource ThemeAccentLight}" 
+                               FontWeight="SemiBold" FontSize="13" 
+                               VerticalAlignment="Center" />
+                </StackPanel>
+
+                <!-- Right-side window controls -->
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" HorizontalAlignment="Right"
+                            WindowChrome.IsHitTestVisibleInChrome="True">
+                    <!-- Bulk actions -->
+                    <Button Content="⏸ All" Style="{StaticResource PauseButtonStyle}"
+                            Command="{Binding PauseAllCommand}" ToolTip="Pause all active transfers"
+                            FontSize="11" Padding="6,3" Margin="0,0,2,0" />
+                    <Button Content="▶ All" Style="{StaticResource ResumeButtonStyle}"
+                            Command="{Binding ResumeAllCommand}" ToolTip="Resume all paused transfers"
+                            FontSize="11" Padding="6,3" Margin="0,0,2,0" />
+                    <Button Content="🗑 Clear" Style="{StaticResource CancelButtonStyle}"
+                            Command="{Binding ClearCompletedCommand}" ToolTip="Clear completed transfers"
+                            FontSize="11" Padding="6,3" Margin="0,0,8,0" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!-- ROW 1: DASHBOARD BAR                               -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <Border Grid.Row="1" Background="{DynamicResource ThemeOverlayBgPressed}" Padding="14,8">
+            <WrapPanel HorizontalAlignment="Center">
+                <!-- Upload speed -->
+                <Border Style="{StaticResource UploadSpeedBadge}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="📤" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0" />
+                        <TextBlock Text="Upload" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
+                                   FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding TotalUploadSpeedText}" 
+                                   Foreground="#60A5FA" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Download speed -->
+                <Border Style="{StaticResource DownloadSpeedBadge}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="📥" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0" />
+                        <TextBlock Text="Download" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
+                                   FontSize="11" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock Text="{Binding TotalDownloadSpeedText}" 
+                                   Foreground="#4ADE80" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Active count -->
+                <Border Style="{StaticResource DashboardStatCard}">
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse Width="7" Height="7" Fill="#22C55E" VerticalAlignment="Center" Margin="0,0,6,0">
+                            <Ellipse.Style>
+                                <Style TargetType="Ellipse">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasActiveTransfers}" Value="True">
+                                            <DataTrigger.EnterActions>
+                                                <BeginStoryboard>
+                                                    <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                                        <DoubleAnimation Storyboard.TargetProperty="Opacity"
+                                                                         From="1" To="0.3" Duration="0:0:0.8" />
+                                                    </Storyboard>
+                                                </BeginStoryboard>
+                                            </DataTrigger.EnterActions>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Ellipse.Style>
+                        </Ellipse>
+                        <TextBlock Text="{Binding ActiveCount, StringFormat='{}{0} active'}" 
+                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
+                                   FontSize="11.5" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Peer count -->
+                <Border Style="{StaticResource DashboardStatCard}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="🖥" FontSize="11" VerticalAlignment="Center" Margin="0,0,5,0" />
+                        <TextBlock Text="{Binding PeerCountText}" 
+                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" 
+                                   FontSize="11" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Border>
+            </WrapPanel>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!-- ROW 2: FILTER TABS                                 -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <Border Grid.Row="2" Padding="14,6" Background="{DynamicResource ThemeOverlayBg}"
+                BorderBrush="{DynamicResource ThemeSeparator}" BorderThickness="0,0,0,1">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <RadioButton Style="{StaticResource FilterTabStyle}" 
+                             Content="All" Tag="{Binding AllCount}"
+                             IsChecked="True" GroupName="TransferFilter"
+                             Click="FilterAll_Click" />
+                <RadioButton Style="{StaticResource FilterTabStyle}" 
+                             Content="Active" Tag="{Binding ActiveFilterCount}"
+                             GroupName="TransferFilter"
+                             Click="FilterActive_Click" />
+                <RadioButton Style="{StaticResource FilterTabStyle}" 
+                             Content="Completed" Tag="{Binding CompletedCount}"
+                             GroupName="TransferFilter"
+                             Click="FilterCompleted_Click" />
+                <RadioButton Style="{StaticResource FilterTabStyle}" 
+                             Content="Failed" Tag="{Binding FailedCount}"
+                             GroupName="TransferFilter"
+                             Click="FilterFailed_Click" />
+            </StackPanel>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!-- ROW 3: TRANSFER LIST                               -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <Grid Grid.Row="3">
+            <!-- Empty state -->
+            <StackPanel Style="{StaticResource EmptyStateContainer}"
+                        Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}">
+                <TextBlock Text="📂" FontSize="48" HorizontalAlignment="Center" Margin="0,0,0,12" Opacity="0.4" />
+                <TextBlock Text="No transfers yet" 
+                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
+                           FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,6" />
+                <TextBlock Text="Drop files here or click Send File to start a transfer"
+                           Foreground="{DynamicResource ThemeTextMuted}"
+                           FontSize="12" HorizontalAlignment="Center" Opacity="0.7" />
+            </StackPanel>
+
+            <!-- Transfer cards -->
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          Padding="14,10" CanContentScroll="False">
+                <ItemsControl ItemsSource="{Binding FilteredTransfers}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource TransferCardStyle}">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />  <!-- File info + actions -->
+                                        <RowDefinition Height="Auto" />  <!-- Progress bar -->
+                                        <RowDefinition Height="Auto" />  <!-- Speed / Size / ETA -->
+                                    </Grid.RowDefinitions>
+
+                                    <!-- Row 0: File info + direction + actions -->
+                                    <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                                        <!-- Action buttons (right side) -->
+                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Top">
+                                            <!-- Pause (visible when transferring) -->
+                                            <Button Style="{StaticResource PauseButtonStyle}"
+                                                    Visibility="{Binding CanPause, Converter={StaticResource BoolToVis}}"
+                                                    Command="{Binding DataContext.PauseCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Pause transfer">
+                                                <TextBlock Text="⏸" FontSize="13" />
+                                            </Button>
+                                            <!-- Resume (visible when paused) -->
+                                            <Button Style="{StaticResource ResumeButtonStyle}"
+                                                    Visibility="{Binding CanResume, Converter={StaticResource BoolToVis}}"
+                                                    Command="{Binding DataContext.ResumeCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Resume transfer">
+                                                <TextBlock Text="▶" FontSize="13" />
+                                            </Button>
+                                            <!-- Cancel (visible when active/paused) -->
+                                            <Button Style="{StaticResource CancelButtonStyle}"
+                                                    Visibility="{Binding CanCancel, Converter={StaticResource BoolToVis}}"
+                                                    Command="{Binding DataContext.CancelCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Cancel transfer">
+                                                <TextBlock Text="✕" FontSize="13" />
+                                            </Button>
+                                            <!-- Open file location (visible when completed) -->
+                                            <Button Style="{StaticResource OpenFileButtonStyle}"
+                                                    Visibility="{Binding IsCompleted, Converter={StaticResource BoolToVis}}"
+                                                    Command="{Binding DataContext.OpenFileLocationCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"
+                                                    ToolTip="Open file location">
+                                                <TextBlock Text="📂" FontSize="13" />
+                                            </Button>
+                                        </StackPanel>
+
+                                        <!-- File icon + name + direction -->
+                                        <StackPanel Orientation="Horizontal">
+                                            <!-- State icon -->
+                                            <TextBlock Text="{Binding StateIcon}" FontSize="20" 
+                                                       VerticalAlignment="Center" Margin="0,0,10,0" />
+
+                                            <StackPanel VerticalAlignment="Center">
+                                                <!-- File name -->
+                                                <TextBlock Text="{Binding FileName}" 
+                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
+                                                           FontSize="13.5" FontWeight="SemiBold"
+                                                           TextTrimming="CharacterEllipsis" MaxWidth="450" />
+                                                <!-- Direction + peer -->
+                                                <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                    <TextBlock Text="{Binding DirectionText}" 
+                                                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
+                                                               FontSize="11" />
+                                                    <TextBlock Text=" " FontSize="11" />
+                                                    <TextBlock Text="{Binding PeerDeviceName}" 
+                                                               Foreground="{DynamicResource ThemeAccentLight}"
+                                                               FontSize="11" FontWeight="SemiBold" />
+                                                    <!-- Error message for failed transfers -->
+                                                    <TextBlock Text=" — " FontSize="11"
+                                                               Foreground="#F87171"
+                                                               Visibility="{Binding IsFailed, Converter={StaticResource BoolToVis}}" />
+                                                    <TextBlock Text="{Binding ErrorMessage}" FontSize="11"
+                                                               Foreground="#F87171" TextTrimming="CharacterEllipsis"
+                                                               MaxWidth="300"
+                                                               Visibility="{Binding IsFailed, Converter={StaticResource BoolToVis}}" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </StackPanel>
+                                    </DockPanel>
+
+                                    <!-- Row 1: Progress bar (hidden when completed/failed) -->
+                                    <Grid Grid.Row="1" Margin="0,0,0,6">
+                                        <ProgressBar Style="{StaticResource AnimatedProgressBarStyle}"
+                                                     Value="{Binding ProgressPercent, Mode=OneWay}"
+                                                     IsEnabled="{Binding IsActive}" />
+                                        <!-- Completed: full green bar -->
+                                        <Border CornerRadius="3" Height="6"
+                                                Background="{StaticResource ProgressGradientCompleted}"
+                                                Visibility="{Binding IsCompleted, Converter={StaticResource BoolToVis}}" />
+                                        <!-- Failed: full red bar -->
+                                        <Border CornerRadius="3" Height="6"
+                                                Background="{StaticResource ProgressGradientFailed}"
+                                                Visibility="{Binding IsFailed, Converter={StaticResource BoolToVis}}" />
+                                    </Grid>
+
+                                    <!-- Row 2: Details bar (speed, size, ETA / peak speed, elapsed) -->
+                                    <DockPanel Grid.Row="2">
+                                        <!-- Right side: percentage -->
+                                        <TextBlock DockPanel.Dock="Right"
+                                                   Text="{Binding ProgressPercent, StringFormat='{}{0:F1}%'}"
+                                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
+                                                   FontSize="11" VerticalAlignment="Center" FontWeight="SemiBold" />
+
+                                        <StackPanel Orientation="Horizontal">
+                                            <!-- Speed badge (active transfers) -->
+                                            <Border Style="{StaticResource SpeedBadgeStyle}"
+                                                    Visibility="{Binding IsActive, Converter={StaticResource BoolToVis}}">
+                                                <TextBlock Text="{Binding SpeedText}" FontSize="11"
+                                                           Foreground="#60A5FA" FontWeight="SemiBold" />
+                                            </Border>
+
+                                            <!-- Size progress -->
+                                            <TextBlock Text="{Binding ProgressText}" FontSize="11"
+                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
+                                                       VerticalAlignment="Center" Margin="4,0" />
+
+                                            <!-- ETA -->
+                                            <TextBlock FontSize="11"
+                                                       Foreground="{DynamicResource ThemeTextMuted}"
+                                                       VerticalAlignment="Center" Margin="4,0">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Text" Value="{Binding EtaText}" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding EtaText}" Value="">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+
+                                            <!-- Peak speed (completed transfers) -->
+                                            <Border Style="{StaticResource SpeedBadgeStyle}"
+                                                    Visibility="{Binding IsCompleted, Converter={StaticResource BoolToVis}}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="Peak: " FontSize="10"
+                                                               Foreground="{DynamicResource ThemeTextMuted}" />
+                                                    <TextBlock Text="{Binding PeakSpeedText}" FontSize="10"
+                                                               Foreground="#4ADE80" FontWeight="SemiBold" />
+                                                </StackPanel>
+                                            </Border>
+
+                                            <!-- State text (Paused/Queued/etc.) -->
+                                            <TextBlock Text="{Binding StateDisplayText}" FontSize="11"
+                                                       FontWeight="SemiBold" VerticalAlignment="Center" Margin="4,0"
+                                                       Foreground="{Binding State, Converter={StaticResource StateToBrushConverter}}">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding IsActive}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                        </StackPanel>
+                                    </DockPanel>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <!-- Drag-drop overlay -->
+            <Border x:Name="DropOverlay" Grid.Row="3" Visibility="Collapsed"
+                    Background="#90000000" CornerRadius="0">
+                <Border Background="#10FFFFFF" BorderBrush="#506366F1" BorderThickness="2"
+                        CornerRadius="16" Margin="20" VerticalAlignment="Center" HorizontalAlignment="Center"
+                        Padding="40,30">
+                    <StackPanel HorizontalAlignment="Center">
+                        <TextBlock Text="📂" FontSize="40" HorizontalAlignment="Center" Margin="0,0,0,8" />
+                        <TextBlock Text="Drop files to send" 
+                                   Foreground="#A78BFA" FontSize="16" FontWeight="SemiBold"
+                                   HorizontalAlignment="Center" />
+                        <TextBlock x:Name="DropTargetText" Text="Select a peer device below"
+                                   Foreground="#9CA3AF" FontSize="12"
+                                   HorizontalAlignment="Center" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+            </Border>
+        </Grid>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!-- ROW 4: QUICK SEND BAR                              -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <Border Grid.Row="4" Style="{StaticResource QuickSendBar}">
+            <DockPanel>
+                <!-- Send button (right) -->
+                <Button DockPanel.Dock="Right" Style="{StaticResource AccentButtonStyle}"
+                        Command="{Binding SendFileCommand}"
+                        ToolTip="Choose a file to send">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="📤" FontSize="13" VerticalAlignment="Center" Margin="0,0,6,0" />
+                        <TextBlock Text="Send File" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+
+                <!-- Device selector -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Send to:" 
+                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
+                               FontSize="12" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <ComboBox x:Name="PeerSelector" Width="200" 
+                              ItemsSource="{Binding ConnectedPeers}"
+                              SelectedItem="{Binding SelectedPeer}"
+                              DisplayMemberPath="DeviceName"
+                              VerticalAlignment="Center" />
+                    <TextBlock Text="  (or drag files onto this window)"
+                               Foreground="{DynamicResource ThemeTextMuted}"
+                               FontSize="11" VerticalAlignment="Center" Opacity="0.6" />
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- ═══════════════════════════════════════════════════ -->
+        <!-- ROW 5: STATUS BAR                                  -->
+        <!-- ═══════════════════════════════════════════════════ -->
+        <Border Grid.Row="5" Background="{DynamicResource ThemeOverlayBgPressed}" Padding="14,2">
+            <DockPanel>
+                <TextBlock Text="{Binding TcpStatusText}" 
+                           Foreground="{DynamicResource ThemeTextMuted}" 
+                           FontSize="10.5" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding PeerCountText}" 
+                           Foreground="{DynamicResource ThemeTextMuted}" 
+                           FontSize="10.5" VerticalAlignment="Center"
+                           HorizontalAlignment="Right" DockPanel.Dock="Right" />
+            </DockPanel>
+        </Border>
+    </Grid>
+
+</controls:MicaWindow>

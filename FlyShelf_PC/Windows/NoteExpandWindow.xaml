@@ -19,11 +19,12 @@
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="34" />
+                    <RowDefinition Height="Auto" />
                     <RowDefinition Height="*" />
                     <RowDefinition Height="22" />
                 </Grid.RowDefinitions>
 
-                <!-- ═══ TITLE BAR (Sticky Note Style — purple gradient) ═══ -->
+                <!-- ═══ TITLE BAR ═══ -->
                 <Border Grid.Row="0" CornerRadius="10,10,0,0" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                     <Border.Background>
                         <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
@@ -32,19 +33,14 @@
                         </LinearGradientBrush>
                     </Border.Background>
                     <Grid>
-                        <!-- Left: Title -->
                         <TextBlock x:Name="HeaderTitle" Text="📝 Note" Foreground="White" 
                                    VerticalAlignment="Center" Margin="12,0,0,0" 
                                    FontWeight="SemiBold" FontSize="12" IsHitTestVisible="False"/>
-
-                        <!-- Right: Buttons -->
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,6,0">
-                            <!-- Word count -->
                             <Border CornerRadius="4" Padding="5,1" Margin="0,0,4,0" Background="#30FFFFFF" VerticalAlignment="Center">
                                 <TextBlock x:Name="WordCountBadge" Text="0" FontSize="9.5" 
                                            Foreground="#E0E0FF" VerticalAlignment="Center"/>
                             </Border>
-                            <!-- Copy -->
                             <Border CornerRadius="4" Cursor="Hand" Padding="4,3" Margin="0,0,2,0"
                                     Background="#20FFFFFF" MouseLeftButtonDown="CopyBtn_Click" ToolTip="Copy">
                                 <Border.Style>
@@ -58,7 +54,6 @@
                                 </Border.Style>
                                 <ui:SymbolIcon Symbol="Copy24" FontSize="12" Foreground="White" VerticalAlignment="Center"/>
                             </Border>
-                            <!-- Pin -->
                             <Border CornerRadius="4" Cursor="Hand" Padding="4,3" Margin="0,0,2,0"
                                     Background="#20FFFFFF" MouseLeftButtonDown="PinBtn_Click" ToolTip="Pin on top">
                                 <Border.Style>
@@ -72,7 +67,6 @@
                                 </Border.Style>
                                 <ui:SymbolIcon x:Name="PinIcon" Symbol="Pin24" FontSize="12" Foreground="White" VerticalAlignment="Center"/>
                             </Border>
-                            <!-- Close -->
                             <Border CornerRadius="4" Cursor="Hand" Padding="4,3"
                                     Background="#20FFFFFF" MouseLeftButtonDown="CloseBtn_Click" ToolTip="Close (Esc)">
                                 <Border.Style>
@@ -90,23 +84,145 @@
                     </Grid>
                 </Border>
 
-                <!-- ═══ NOTE CONTENT ═══ -->
-                <TextBox x:Name="NoteTextBox" Grid.Row="1" 
-                         TextWrapping="Wrap" AcceptsReturn="True" AcceptsTab="True"
-                         FontSize="13" BorderThickness="0" 
-                         Padding="14,10,14,10"
-                         Background="#1A1A2E"
-                         Foreground="#E8E8F0"
-                         CaretBrush="#E8E8F0"
-                         SelectionBrush="#608B5CF6"
-                         VerticalScrollBarVisibility="Auto"
-                         HorizontalScrollBarVisibility="Disabled"
-                         TextChanged="NoteTextBox_TextChanged">
-                    <TextBox.Style>
-                        <Style TargetType="TextBox">
+                <!-- ═══ FORMAT TOOLBAR ═══ -->
+                <Border Grid.Row="1" Background="#14142A" BorderBrush="#2A2A45" BorderThickness="0,0,0,1" Padding="4,2">
+                    <Border.Resources>
+                        <Style x:Key="FmtBtn" TargetType="Border">
+                            <Setter Property="CornerRadius" Value="5"/>
+                            <Setter Property="Cursor" Value="Hand"/>
+                            <Setter Property="Padding" Value="5,3"/>
+                            <Setter Property="Margin" Value="1,0"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="MinWidth" Value="26"/>
+                            <Style.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter Property="Background" Value="#25FFFFFF"/>
+                                </Trigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Resources>
+                    <StackPanel>
+                        <!-- Row 1: Text Format + Paragraph -->
+                        <StackPanel Orientation="Horizontal" Margin="2,1">
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="BoldBtn_Click" ToolTip="Bold (Ctrl+B)">
+                                <TextBlock Text="B" FontWeight="Bold" FontSize="12" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="ItalicBtn_Click" ToolTip="Italic (Ctrl+I)">
+                                <TextBlock Text="I" FontStyle="Italic" FontSize="12" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center" FontFamily="Georgia"/>
+                            </Border>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="UnderlineBtn_Click" ToolTip="Underline (Ctrl+U)">
+                                <TextBlock Text="U" FontSize="12" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center" TextDecorations="Underline"/>
+                            </Border>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="StrikeBtn_Click" ToolTip="Strikethrough">
+                                <TextBlock Text="S" FontSize="12" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center" TextDecorations="Strikethrough"/>
+                            </Border>
+                            <Border Width="1" Background="#2A2A45" Margin="4,4,4,4"/>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="HeadingBtn_Click" ToolTip="Heading (Ctrl+H)">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock x:Name="HeadingLabel" Text="H" FontWeight="Bold" FontSize="12" Foreground="#A0A0E0" VerticalAlignment="Center"/>
+                                    <TextBlock Text="▾" FontSize="8" Foreground="#6B6B9B" VerticalAlignment="Center" Margin="1,0,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Width="1" Background="#2A2A45" Margin="4,4,4,4"/>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="BulletBtn_Click" ToolTip="Bullet list (Ctrl+L)">
+                                <TextBlock Text="⊙" FontSize="12" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="NumberedListBtn_Click" ToolTip="Numbered list">
+                                <TextBlock Text="1." FontSize="11" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center" FontWeight="SemiBold"/>
+                            </Border>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="CheckboxBtn_Click" ToolTip="Checkbox (Ctrl+Shift+C)">
+                                <TextBlock Text="☑" FontSize="12" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                            <Border Width="1" Background="#2A2A45" Margin="4,4,4,4"/>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="OutdentBtn_Click" ToolTip="Decrease indent (Shift+Tab)">
+                                <TextBlock Text="⇤" FontSize="13" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="IndentBtn_Click" ToolTip="Increase indent (Tab)">
+                                <TextBlock Text="⇥" FontSize="13" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                            <Border Width="1" Background="#2A2A45" Margin="4,4,4,4"/>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="AlignLeftBtn_Click" ToolTip="Align left">
+                                <TextBlock Text="≡" FontSize="13" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,-2,0,0"/>
+                            </Border>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="AlignCenterBtn_Click" ToolTip="Align center">
+                                <TextBlock Text="≡" FontSize="13" Foreground="#A0A0E0" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,-2,0,0" FontStyle="Italic"/>
+                            </Border>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="AlignRightBtn_Click" ToolTip="Align right">
+                                <TextBlock Text="⫸" FontSize="11" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                        </StackPanel>
+                        <!-- Row 2: Insert + Colors + Tools -->
+                        <StackPanel Orientation="Horizontal" Margin="2,1">
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="LinkBtn_Click" ToolTip="Insert link (Ctrl+K)">
+                                <TextBlock Text="🔗" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="DividerBtn_Click" ToolTip="Divider (Ctrl+D)">
+                                <TextBlock Text="─" FontSize="11" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="QuoteBtn_Click" ToolTip="Blockquote">
+                                <TextBlock Text="❝" FontSize="13" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="CodeBlockBtn_Click" ToolTip="Code block">
+                                <TextBlock Text="⟨/⟩" FontSize="10" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center" FontFamily="Consolas"/>
+                            </Border>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="TimestampBtn_Click" ToolTip="Timestamp (Ctrl+T)">
+                                <TextBlock Text="⏱" FontSize="11" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                            <Border Width="1" Background="#2A2A45" Margin="4,4,4,4"/>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="TextColorBtn_Click" ToolTip="Text color">
+                                <StackPanel>
+                                    <TextBlock Text="A" FontSize="12" FontWeight="Bold" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                    <Border x:Name="TextColorIndicator" Height="2" CornerRadius="1" Background="#EF4444" Margin="0,-1,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="HighlightBtn_Click" ToolTip="Highlight color">
+                                <StackPanel>
+                                    <TextBlock Text="🖊" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                    <Border x:Name="HighlightColorIndicator" Height="2" CornerRadius="1" Background="#FBBF24" Margin="0,-1,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Width="1" Background="#2A2A45" Margin="4,4,4,4"/>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="FontSizeBtn_Click" ToolTip="Font size (Ctrl+Scroll)">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Aa" FontSize="10" Foreground="#D0D0FF" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="FontSizeLabel" Text="13" FontSize="8.5" Foreground="#8888AA" VerticalAlignment="Center" Margin="2,0,0,0"/>
+                                </StackPanel>
+                            </Border>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="ClearFormatBtn_Click" ToolTip="Clear formatting">
+                                <TextBlock Text="Tₓ" FontSize="11" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                            <Border Width="1" Background="#2A2A45" Margin="4,4,4,4"/>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="UndoBtn_Click" ToolTip="Undo (Ctrl+Z)">
+                                <TextBlock Text="↩" FontSize="13" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                            <Border Style="{StaticResource FmtBtn}" MouseLeftButtonDown="RedoBtn_Click" ToolTip="Redo (Ctrl+Y)">
+                                <TextBlock Text="↪" FontSize="13" Foreground="#D0D0FF" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- ═══ RICH TEXT EDITOR ═══ -->
+                <RichTextBox x:Name="NoteRichTextBox" Grid.Row="2" 
+                             BorderThickness="0" 
+                             Padding="14,10,14,10"
+                             Background="#1A1A2E"
+                             Foreground="#E8E8F0"
+                             CaretBrush="#E8E8F0"
+                             SelectionBrush="#608B5CF6"
+                             FontFamily="Segoe UI" FontSize="13"
+                             VerticalScrollBarVisibility="Auto"
+                             HorizontalScrollBarVisibility="Disabled"
+                             AcceptsTab="True"
+                             TextChanged="NoteRichTextBox_TextChanged"
+                             SelectionChanged="NoteRichTextBox_SelectionChanged"
+                             PreviewMouseWheel="NoteRichTextBox_PreviewMouseWheel"
+                             DataObject.Pasting="NoteRichTextBox_Paste">
+                    <RichTextBox.Style>
+                        <Style TargetType="RichTextBox">
                             <Setter Property="Template">
                                 <Setter.Value>
-                                    <ControlTemplate TargetType="TextBox">
+                                    <ControlTemplate TargetType="RichTextBox">
                                         <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
                                             <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
                                         </Border>
@@ -114,16 +230,23 @@
                                 </Setter.Value>
                             </Setter>
                         </Style>
-                    </TextBox.Style>
-                </TextBox>
+                    </RichTextBox.Style>
+                    <RichTextBox.Document>
+                        <FlowDocument PagePadding="0" Foreground="#E8E8F0" FontFamily="Segoe UI" FontSize="13"/>
+                    </RichTextBox.Document>
+                </RichTextBox>
 
                 <!-- ═══ STATUS BAR ═══ -->
-                <Border Grid.Row="2" Background="#14142A" BorderBrush="#2A2A45" BorderThickness="0,1,0,0">
+                <Border Grid.Row="3" Background="#14142A" BorderBrush="#2A2A45" BorderThickness="0,1,0,0">
                     <Grid Margin="12,0">
                         <TextBlock x:Name="FooterStatus" Text="Ready" FontSize="9.5" 
                                    Foreground="#6B7280" VerticalAlignment="Center" HorizontalAlignment="Left"/>
-                        <TextBlock x:Name="CharCountLabel" Text="" FontSize="9.5" 
-                                   Foreground="#6B7280" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <TextBlock x:Name="CursorPosLabel" Text="Ln 1, Col 1" FontSize="9.5" 
+                                       Foreground="#6B7280" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <TextBlock x:Name="CharCountLabel" Text="" FontSize="9.5" 
+                                       Foreground="#6B7280" VerticalAlignment="Center"/>
+                        </StackPanel>
                     </Grid>
                 </Border>
             </Grid>

@@ -379,9 +379,51 @@ namespace FlyShelf.Classes
                 {
                     if (LatestVersion == CurrentVersion)
                     {
-                        // Repair mode: allow without hash since we're re-downloading the same version
-                        Logger.LogAction("UPDATE", "⚠️ Warning: No SHA-256 hash provided for current version repair — proceeding with size check only.");
-                        StatusChanged?.Invoke("Verified via size check (repair mode).");
+                        // UPD-2 FIX: Repair mode — server provided no reference hash, but we can still
+                        // compute the hash of the download and compare it with the currently installed EXE.
+                        // If they match, the repair is definitely safe. If they differ, log but continue
+                        // (the installed exe may itself be corrupt — that's why we're repairing).
+                        Logger.LogAction("UPDATE", "⚠️ Repair mode: no server hash provided. Comparing download to current installed exe...");
+                        StatusChanged?.Invoke("Verifying repair download...");
+                        try
+                        {
+                            string downloadedHash;
+                            using (var sha = System.Security.Cryptography.SHA256.Create())
+                            using (var s = File.OpenRead(tempExePath))
+                                downloadedHash = BitConverter.ToString(sha.ComputeHash(s)).Replace("-", "").ToLowerInvariant();
+
+                            string currentExe = System.Reflection.Assembly.GetEntryAssembly()?.Location
+                                                ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
+                            if (File.Exists(currentExe))
+                            {
+                                string currentHash;
+                                using (var sha = System.Security.Cryptography.SHA256.Create())
+                                using (var s = File.OpenRead(currentExe))
+                                    currentHash = BitConverter.ToString(sha.ComputeHash(s)).Replace("-", "").ToLowerInvariant();
+
+                                if (downloadedHash == currentHash)
+                                {
+                                    Logger.LogAction("UPDATE", $"✅ Repair verified: downloaded binary matches current exe (SHA256: {downloadedHash})");
+                                    StatusChanged?.Invoke("Repair verified — binary matches installed version.");
+                                }
+                                else
+                                {
+                                    // Different hash — the installed binary may be corrupt; log both hashes for audit
+                                    Logger.LogAction("UPDATE", $"⚠️ Repair hash differs from current exe. Downloaded={downloadedHash} Installed={currentHash}. Proceeding with repair.");
+                                    StatusChanged?.Invoke("Repair download verified via size check (hashes differ — current exe may be corrupt).");
+                                }
+                            }
+                            else
+                            {
+                                Logger.LogAction("UPDATE", $"⚠️ Repair mode: could not locate current exe. Proceeding with size-only verification. SHA256={downloadedHash}");
+                                StatusChanged?.Invoke("Verified via size check (repair mode).");
+                            }
+                        }
+                        catch (Exception hashEx)
+                        {
+                            Logger.LogAction("UPDATE", $"⚠️ Repair self-hash check failed: {hashEx.Message}. Proceeding.");
+                            StatusChanged?.Invoke("Verified via size check (repair mode).");
+                        }
                     }
                     else
                     {

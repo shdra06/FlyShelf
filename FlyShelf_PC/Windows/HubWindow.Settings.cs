@@ -20,6 +20,200 @@ namespace FlyShelf.Windows
 {
     public partial class HubWindow
     {
+        // ═══ Summon Hotkey Customization ═══
+        private bool _isRecordingHotkey = false;
+        private uint _recordedModifier = 0;
+        private uint _recordedKey = 0;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
+
+        internal void BuildHotkeyKeycaps()
+        {
+            if (HotkeyDisplay == null) return;
+            HotkeyDisplay.Children.Clear();
+            var display = SettingsManager.Current.HotkeyDisplayString;
+            var parts = display.Split(new[] { " + " }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (i > 0)
+                {
+                    HotkeyDisplay.Children.Add(new TextBlock
+                    {
+                        Text = "+",
+                        Foreground = (Brush)FindResource("MicaWPF.Brushes.TextFillColorSecondary"),
+                        FontSize = 14, FontWeight = FontWeights.Bold,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(6, 0, 6, 0)
+                    });
+                }
+                var border = new Border
+                {
+                    Background = new SolidColorBrush(Color.FromArgb(40, 99, 102, 241)),
+                    CornerRadius = new CornerRadius(8),
+                    Padding = new Thickness(12, 6, 12, 6),
+                    Child = new TextBlock
+                    {
+                        Text = parts[i],
+                        Foreground = (Brush)FindResource("MicaWPF.Brushes.TextFillColorPrimary"),
+                        FontSize = 14, FontWeight = FontWeights.SemiBold
+                    }
+                };
+                HotkeyDisplay.Children.Add(border);
+            }
+
+            // Show reset button only if not default
+            var s = SettingsManager.Current;
+            ResetHotkeyBtn.Visibility = (s.HotkeyModifier == 0x0001 && s.HotkeyKey == 0x43)
+                ? Visibility.Collapsed : Visibility.Visible;
+
+            // Update dynamic labels elsewhere
+            if (SummonHotkeyLabel != null)
+                SummonHotkeyLabel.Text = $"{s.HotkeyDisplayString} / Widget popup";
+            if (ShortcutsHotkeyLabel != null)
+                ShortcutsHotkeyLabel.Text = s.HotkeyDisplayString.Replace(" ", "");
+        }
+
+        private void ChangeHotkey_Click(object sender, RoutedEventArgs e)
+        {
+            if (_isRecordingHotkey)
+            {
+                StopRecording();
+                return;
+            }
+            _isRecordingHotkey = true;
+            _recordedModifier = 0;
+            _recordedKey = 0;
+            ChangeHotkeyBtn.Content = "Cancel";
+            HotkeyRecorderBorder.Visibility = Visibility.Visible;
+            HotkeyRecorderText.Text = "Press keys...";
+            HotkeyWarningBar.Visibility = Visibility.Collapsed;
+            HotkeyRecorderBorder.Focus();
+            this.PreviewKeyDown += HotkeyRecorder_PreviewKeyDown;
+            this.PreviewKeyUp += HotkeyRecorder_PreviewKeyUp;
+        }
+
+        private void StopRecording()
+        {
+            _isRecordingHotkey = false;
+            ChangeHotkeyBtn.Content = "Change";
+            HotkeyRecorderBorder.Visibility = Visibility.Collapsed;
+            this.PreviewKeyDown -= HotkeyRecorder_PreviewKeyDown;
+            this.PreviewKeyUp -= HotkeyRecorder_PreviewKeyUp;
+        }
+
+        private void HotkeyRecorder_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (!_isRecordingHotkey) return;
+            e.Handled = true;
+
+            var key = e.Key == Key.System ? e.SystemKey : e.Key;
+
+            // Escape cancels
+            if (key == Key.Escape)
+            {
+                StopRecording();
+                return;
+            }
+
+            // Collect modifiers
+            uint mod = 0;
+            if (Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl)) mod |= 0x0002;
+            if (Keyboard.IsKeyDown(Key.LeftAlt) || Keyboard.IsKeyDown(Key.RightAlt)) mod |= 0x0001;
+            if (Keyboard.IsKeyDown(Key.LeftShift) || Keyboard.IsKeyDown(Key.RightShift)) mod |= 0x0004;
+            if (Keyboard.IsKeyDown(Key.LWin) || Keyboard.IsKeyDown(Key.RWin)) mod |= 0x0008;
+
+            bool isModifier = key == Key.LeftCtrl || key == Key.RightCtrl ||
+                              key == Key.LeftAlt || key == Key.RightAlt ||
+                              key == Key.LeftShift || key == Key.RightShift ||
+                              key == Key.LWin || key == Key.RWin;
+
+            if (isModifier)
+            {
+                _recordedModifier = mod;
+                var mparts = new List<string>();
+                if ((mod & 0x0002) != 0) mparts.Add("Ctrl");
+                if ((mod & 0x0001) != 0) mparts.Add("Alt");
+                if ((mod & 0x0004) != 0) mparts.Add("Shift");
+                if ((mod & 0x0008) != 0) mparts.Add("Win");
+                HotkeyRecorderText.Text = string.Join(" + ", mparts) + " + ...";
+                return;
+            }
+
+            // Must have at least one modifier
+            if (mod == 0)
+            {
+                HotkeyRecorderText.Text = "Need modifier key";
+                return;
+            }
+
+            // Convert WPF Key to Win32 VK
+            uint vk = (uint)KeyInterop.VirtualKeyFromKey(key);
+            if (vk == 0) return;
+
+            _recordedModifier = mod;
+            _recordedKey = vk;
+
+            // Test registration
+            bool available = TestHotkeyAvailability(mod, vk);
+
+            if (available)
+            {
+                var s = SettingsManager.Current;
+                s.HotkeyModifier = mod;
+                s.HotkeyKey = vk;
+                HotkeyWarningBar.Visibility = Visibility.Collapsed;
+                StopRecording();
+                BuildHotkeyKeycaps();
+                ToastWindow.ShowToast($"✅ Hotkey changed to {s.HotkeyDisplayString}");
+            }
+            else
+            {
+                var keyName = AdvanceSettings.GetKeyName(vk);
+                var fparts = new List<string>();
+                if ((mod & 0x0002) != 0) fparts.Add("Ctrl");
+                if ((mod & 0x0001) != 0) fparts.Add("Alt");
+                if ((mod & 0x0004) != 0) fparts.Add("Shift");
+                if ((mod & 0x0008) != 0) fparts.Add("Win");
+                fparts.Add(keyName);
+                HotkeyRecorderText.Text = string.Join("+", fparts) + " ❌";
+                HotkeyWarningBar.Visibility = Visibility.Visible;
+                HotkeyWarningText.Text = $"⚠️ {string.Join(" + ", fparts)} is used by another application";
+            }
+        }
+
+        private void HotkeyRecorder_PreviewKeyUp(object sender, KeyEventArgs e)
+        {
+            // No-op — hotkey captured on KeyDown
+        }
+
+        private bool TestHotkeyAvailability(uint mod, uint vk)
+        {
+            var mainWin = Application.Current.MainWindow;
+            if (mainWin == null) return true;
+            var hwnd = new System.Windows.Interop.WindowInteropHelper(mainWin).Handle;
+            if (hwnd == IntPtr.Zero) return true;
+
+            const int TEST_HOTKEY_ID = 9999;
+            bool ok = RegisterHotKey(hwnd, TEST_HOTKEY_ID, mod | 0x4000, vk);
+            if (ok) UnregisterHotKey(hwnd, TEST_HOTKEY_ID);
+            return ok;
+        }
+
+        private void ResetHotkey_Click(object sender, RoutedEventArgs e)
+        {
+            var s = SettingsManager.Current;
+            s.HotkeyModifier = 0x0001; // MOD_ALT
+            s.HotkeyKey = 0x43; // VK_C
+            HotkeyWarningBar.Visibility = Visibility.Collapsed;
+            StopRecording();
+            BuildHotkeyKeycaps();
+            ToastWindow.ShowToast("✅ Hotkey reset to Alt + C");
+        }
+
         private void RunDiagnostics_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -32,8 +226,10 @@ namespace FlyShelf.Windows
                         Logger.DumpNetworkDiagnostics();
                         Dispatcher.Invoke(() =>
                         {
-                            ToastWindow.ShowToast("🔍 Network diagnostics captured!");
+                            ToastWindow.ShowToast("🔍  Network diagnostics captured!");
+#if !MSIX_STORE
                             RefreshLogs_Click(null, null);
+#endif
                         });
                     }
                     catch (Exception ex)
@@ -77,6 +273,22 @@ namespace FlyShelf.Windows
             catch { }
         }
 #endif // !MSIX_STORE
+
+#if MSIX_STORE
+        // ─── Store-build stub: XAML references this Click handler ───
+        private void OpenNetworkLogs_Click(object sender, RoutedEventArgs e) { }
+#endif
+
+        // ═══ LAN TRANSFER MANAGER WINDOW ═══
+        private static TransferManagerWindow? _transferManagerWindow;
+        private void OpenTransferManager_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                TransferManagerWindow.ShowOrActivate();
+            }
+            catch { }
+        }
 
         private async void CopyDeviceLogs_Click(object sender, RoutedEventArgs e)
         {

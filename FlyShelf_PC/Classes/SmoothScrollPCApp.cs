@@ -23,7 +23,7 @@ namespace FlyShelf.Classes
         // ═══ Input Scaling ═══
         private const double TouchpadScale        = 0.60;     // Sensitivity multiplier for trackpad deltas (flick & drag)
         private const double MouseStepPx          = 96.0;     // Pixels per mouse wheel notch (standard Windows)
-        private const double MouseImpulseBoost    = 1.5;      // Mouse wheel step multiplier
+        private const double MouseImpulseBoost    = 3.0;      // Mouse wheel step multiplier (increased from 1.5 for faster mouse scrolling)
         private const double DeltaCapTouchpad     = 60.0;     // Clamp raw trackpad delta to absorb driver spikes
         private const double DeltaCapMouse        = 360.0;    // Clamp raw mouse delta
 

@@ -39,9 +39,6 @@ namespace FlyShelf
                 WallpaperFrostTint.Background = new SolidColorBrush(
                     Color.FromArgb(0x25, 0, 0, 0)); // Reset to default neutral tint
 
-                // Clear pre-blurred wallpaper cache (used by selected card frosted glass)
-                Resources["PreBlurredWallpaper"] = null;
-
                 // Stop mascot
                 MascotIdle.StopAnimation();
 
@@ -173,7 +170,7 @@ namespace FlyShelf
                 bmp.BeginInit();
                 bmp.UriSource = new Uri(desktopWp, UriKind.Absolute);
                 bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                bmp.DecodePixelWidth = 600; // Low-res for performance
+                bmp.DecodePixelWidth = 400; // Low-res for performance (panel is max 850px, blurred = 400 is plenty)
                 bmp.EndInit();
                 bmp.Freeze();
 
@@ -190,11 +187,15 @@ namespace FlyShelf
                     WallpaperBg.Opacity = 0.35;
                     // Heavy software blur on background thread (radius 25 for strong frosted effect)
                     var capturedBmp = bmp;
+                    // Capture actual monitor DPI on UI thread — PreBlurBitmap runs on background thread
+                    var dpiForBlur = VisualTreeHelper.GetDpi(this);
+                    double capturedDpiX = dpiForBlur.PixelsPerInchX;
+                    double capturedDpiY = dpiForBlur.PixelsPerInchY;
                     _ = System.Threading.Tasks.Task.Run(() =>
                     {
                         try
                         {
-                            var blurred = PreBlurBitmap(capturedBmp, 25);
+                            var blurred = PreBlurBitmap(capturedBmp, 25, capturedDpiX, capturedDpiY);
                             Dispatcher.InvokeAsync(() =>
                             {
                                 WallpaperBg.Source = blurred;
@@ -402,7 +403,7 @@ namespace FlyShelf
                     bmp.BeginInit();
                     bmp.UriSource = new Uri(path, UriKind.Absolute);
                     bmp.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
-                    bmp.DecodePixelWidth = 1200; // High-quality decoded resolution
+                    bmp.DecodePixelWidth = 800; // Panel is max 850px — 800px is plenty for a background image
                     bmp.EndInit();
                     bmp.Freeze();
 
@@ -420,22 +421,25 @@ namespace FlyShelf
 
                         var capturedPathForBlur = path;
                         var bmpForBlur = bmp;
+                        // Capture actual monitor DPI on UI thread — PreBlurBitmap runs on background thread
+                        var dpiForWpBlur = VisualTreeHelper.GetDpi(this);
+                        double wpDpiX = dpiForWpBlur.PixelsPerInchX;
+                        double wpDpiY = dpiForWpBlur.PixelsPerInchY;
                         _ = System.Threading.Tasks.Task.Run(() =>
                         {
                             try
                             {
-                                // Pre-blur background at a soft radius of 15 for a premium glassmorphic feel
-                                var blurredBg = PreBlurBitmap(bmpForBlur, 15);
-                                // Pre-blur at radius 12 for frosted header (replaces runtime BlurEffect)
-                                var blurredHeader = PreBlurBitmap(bmpForBlur, 12);
-                                // Pre-blur at radius 18 for selected card backdrop
-                                var blurredCards = PreBlurBitmap(bmpForBlur, 18);
+                                // MEMORY FIX: Single blur at radius 15, reused for both background and header.
+                                // Previously created 3 separate blurred copies (radii 12, 15, 18) each allocating
+                                // ~5.5MB pixel buffers = ~33MB peak. Now a single blur = ~5.5MB peak.
+                                // Visual difference between radius 12–18 is imperceptible at 800px decode.
+                                var blurred = PreBlurBitmap(bmpForBlur, 15, wpDpiX, wpDpiY);
                                 Dispatcher.InvokeAsync(() =>
                                 {
                                     if (_currentLoadedWallpaperPath != capturedPathForBlur) return; // Stale
-                                    WallpaperBg.Source = blurredBg;
-                                    WallpaperFrostImg.Source = blurredHeader;
-                                    Resources["PreBlurredWallpaper"] = blurredCards;
+                                    WallpaperBg.Source = blurred;
+                                    WallpaperFrostImg.Source = blurred; // Reuse same blur for frost header
+                                    // PreBlurredWallpaper resource removed — was never consumed by XAML or code
                                 });
                             }
                             catch { }
@@ -511,27 +515,27 @@ namespace FlyShelf
             try
             {
                 var formatted = new System.Windows.Media.Imaging.FormatConvertedBitmap(bmp, PixelFormats.Bgra32, null, 0);
+                formatted.Freeze();
                 int w = formatted.PixelWidth;
                 int h = formatted.PixelHeight;
-                int stride = w * 4;
-                // PERF: consider sampling fewer pixels — currently copies entire buffer for 9 sample points
-                byte[] pixels = new byte[stride * h];
-                formatted.CopyPixels(pixels, stride, 0);
 
-                // Sample 9 points in center region
+                // Sample 9 points in center region — read only the needed pixels, not the entire buffer
                 int totalR = 0, totalG = 0, totalB = 0, count = 0;
                 int[] xs = { w / 4, w / 2, 3 * w / 4 };
                 int[] ys = { h / 4, h / 2, 3 * h / 4 };
+                byte[] singlePixel = new byte[4]; // Reusable 4-byte buffer for one BGRA pixel
 
                 foreach (int x in xs)
                     foreach (int y in ys)
                     {
-                        int idx = y * stride + x * 4;
-                        if (idx + 2 < pixels.Length)
+                        if (x >= 0 && x < w && y >= 0 && y < h)
                         {
-                            totalB += pixels[idx];
-                            totalG += pixels[idx + 1];
-                            totalR += pixels[idx + 2];
+                            formatted.CopyPixels(
+                                new System.Windows.Int32Rect(x, y, 1, 1),
+                                singlePixel, 4 /* stride for 1 pixel */, 0);
+                            totalB += singlePixel[0];
+                            totalG += singlePixel[1];
+                            totalR += singlePixel[2];
                             count++;
                         }
                     }
@@ -613,9 +617,14 @@ namespace FlyShelf
         /// Safe to call from any thread (no WPF DispatcherObjects created).
         /// Returns a frozen BitmapSource safe for cross-thread assignment to Image.Source.
         /// Uses 3-pass box blur to approximate Gaussian blur.
+        /// 
+        /// dpiX/dpiY: The monitor DPI to use for the output bitmap. Must be captured on the UI
+        /// thread via VisualTreeHelper.GetDpi() before calling this on a background thread.
+        /// Defaults to 96 for backward compatibility if not specified.
         /// </summary>
         public static System.Windows.Media.Imaging.BitmapSource PreBlurBitmap(
-            System.Windows.Media.Imaging.BitmapImage source, int radius)
+            System.Windows.Media.Imaging.BitmapImage source, int radius,
+            double dpiX = 96, double dpiY = 96)
         {
             int w = source.PixelWidth;
             int h = source.PixelHeight;
@@ -683,11 +692,183 @@ namespace FlyShelf
                 }
             }
 
-            // Create frozen WriteableBitmap from blurred pixel data
+            // Create frozen WriteableBitmap from blurred pixel data using actual monitor DPI
             var result = System.Windows.Media.Imaging.BitmapSource.Create(
-                w, h, 96, 96, PixelFormats.Pbgra32, null, pixels, stride);
+                w, h, dpiX, dpiY, PixelFormats.Pbgra32, null, pixels, stride);
             result.Freeze();
             return result;
         }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // Desktop Wallpaper Auto-Refresh
+        // ═══════════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Checks if the Windows desktop wallpaper has changed since the last time we loaded it,
+        /// and if so, auto-applies the new wallpaper immediately.
+        /// Call this on every window activation (OnActivated) when in FlyShelf/desktop mode.
+        /// The registry read is instant (~0ms) so this is safe to call frequently.
+        /// </summary>
+        private void RefreshDesktopWallpaperIfChanged()
+        {
+            try
+            {
+                string mode = Classes.SettingsManager.Current.ThemeDisplayMode ?? "mica";
+                if (mode != "desktop") return;
+
+                // If user has manually set a wallpaper, don't override it
+                string manualWp = Classes.SettingsManager.Current.ManualWallpaperPath ?? "";
+                if (!string.IsNullOrEmpty(manualWp) && System.IO.File.Exists(manualWp)) return;
+
+                // If a color theme wallpaper is active, don't override it
+                string currentWp = Classes.SettingsManager.Current.ClipboardWallpaperPath ?? "";
+                if (currentWp.Contains("ColorThemeWallpapers", StringComparison.OrdinalIgnoreCase)) return;
+
+                // Read wallpaper path fresh from registry (bypass cache)
+                string freshWp = GetDesktopWallpaperPathUncached();
+                if (string.IsNullOrEmpty(freshWp) || !System.IO.File.Exists(freshWp)) return;
+
+                // Check if wallpaper actually changed
+                if (string.Equals(freshWp, currentWp, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(freshWp, _currentLoadedWallpaperPath, StringComparison.OrdinalIgnoreCase))
+                    return; // Same wallpaper — nothing to do
+
+                // Wallpaper has changed — apply it
+                _cachedDesktopWallpaperPath = freshWp;
+                Classes.SettingsManager.Current.ClipboardWallpaperPath = freshWp;
+                _currentLoadedWallpaperPath = ""; // Force reload
+                ApplyWallpaper();
+                Classes.Logger.LogAction("WALLPAPER", $"Auto-refreshed desktop wallpaper: {freshWp}");
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Reads the desktop wallpaper path directly from the registry, bypassing the cache.
+        /// Used by RefreshDesktopWallpaperIfChanged for instant change detection.
+        /// </summary>
+        private static string GetDesktopWallpaperPathUncached()
+        {
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\Desktop"))
+                {
+                    return key?.GetValue("Wallpaper") as string ?? "";
+                }
+            }
+            catch { return ""; }
+        }
+
+        // ═══ TranscodedWallpaper File Watcher ═══
+        // Windows writes the active wallpaper image to %APPDATA%\Microsoft\Windows\Themes\TranscodedWallpaper
+        // every time the wallpaper changes. FileSystemWatcher catches Spotlight, slideshow, Bing, etc.
+        // that WM_SETTINGCHANGE sometimes misses.
+
+        private System.IO.FileSystemWatcher? _wallpaperFileWatcher;
+        private System.IO.FileSystemWatcher? _wallpaperCachedFilesWatcher;
+        private System.Windows.Threading.DispatcherTimer? _wallpaperDebounceTimer;
+
+        /// <summary>
+        /// Start monitoring the TranscodedWallpaper file and CachedFiles subfolder for changes.
+        /// Call once during initialization.
+        /// </summary>
+        internal void StartWallpaperFileWatcher()
+        {
+            try
+            {
+                string themesDir = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "Microsoft", "Windows", "Themes");
+
+                if (!System.IO.Directory.Exists(themesDir)) return;
+
+                _wallpaperFileWatcher = new System.IO.FileSystemWatcher(themesDir)
+                {
+                    Filter = "TranscodedWallpaper",
+                    NotifyFilter = System.IO.NotifyFilters.LastWrite | System.IO.NotifyFilters.Size,
+                    EnableRaisingEvents = true
+                };
+
+                _wallpaperFileWatcher.Changed += OnWallpaperFileChanged;
+
+                // Watch the CachedFiles subfolder (Windows 10/11 puts slideshow wallpapers here)
+                string cachedFilesDir = System.IO.Path.Combine(themesDir, "CachedFiles");
+                if (System.IO.Directory.Exists(cachedFilesDir))
+                {
+                    _wallpaperCachedFilesWatcher = new System.IO.FileSystemWatcher(cachedFilesDir)
+                    {
+                        Filter = "*",
+                        NotifyFilter = System.IO.NotifyFilters.LastWrite | System.IO.NotifyFilters.FileName | System.IO.NotifyFilters.Size,
+                        EnableRaisingEvents = true
+                    };
+                    _wallpaperCachedFilesWatcher.Changed += OnWallpaperFileChanged;
+                    _wallpaperCachedFilesWatcher.Created += OnWallpaperFileChanged;
+                }
+
+                // Debounce timer — 800ms delay to coalesce rapid filesystem events
+                _wallpaperDebounceTimer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromMilliseconds(800)
+                };
+                _wallpaperDebounceTimer.Tick += (s, e) =>
+                {
+                    _wallpaperDebounceTimer.Stop();
+                    RefreshDesktopWallpaperIfChanged();
+                };
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("WALLPAPER", $"File watcher init failed: {ex.Message}");
+            }
+        }
+
+        private void OnWallpaperFileChanged(object sender, System.IO.FileSystemEventArgs e)
+        {
+            // FileSystemWatcher fires on a background thread — marshal to UI thread
+            try
+            {
+                Dispatcher.InvokeAsync(() =>
+                {
+                    // Clear cached path so GetDesktopWallpaperPath reads fresh from registry
+                    _cachedDesktopWallpaperPath = null;
+
+                    // Restart debounce timer (coalesces rapid filesystem events)
+                    _wallpaperDebounceTimer?.Stop();
+                    _wallpaperDebounceTimer?.Start();
+                });
+            }
+            catch { }
+        }
+
+        /// <summary>
+        /// Stops the wallpaper file watcher and debounce timer.
+        /// </summary>
+        internal void StopWallpaperFileWatcher()
+        {
+            try
+            {
+                _wallpaperDebounceTimer?.Stop();
+                _wallpaperDebounceTimer = null;
+
+                if (_wallpaperFileWatcher != null)
+                {
+                    _wallpaperFileWatcher.EnableRaisingEvents = false;
+                    _wallpaperFileWatcher.Changed -= OnWallpaperFileChanged;
+                    _wallpaperFileWatcher.Dispose();
+                    _wallpaperFileWatcher = null;
+                }
+
+                if (_wallpaperCachedFilesWatcher != null)
+                {
+                    _wallpaperCachedFilesWatcher.EnableRaisingEvents = false;
+                    _wallpaperCachedFilesWatcher.Changed -= OnWallpaperFileChanged;
+                    _wallpaperCachedFilesWatcher.Created -= OnWallpaperFileChanged;
+                    _wallpaperCachedFilesWatcher.Dispose();
+                    _wallpaperCachedFilesWatcher = null;
+                }
+            }
+            catch { }
+        }
     }
 }
+

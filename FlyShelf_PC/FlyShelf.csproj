@@ -15,9 +15,9 @@
     <ApplicationIcon>Resources\FlyShelfLogo.ico</ApplicationIcon>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <NoWarn>CS4014;CS0168;CS0162;CS0414;CS8632;CS0169</NoWarn>
-    <Version>3.0.0</Version>
-    <AssemblyVersion>3.0.0</AssemblyVersion>
-    <FileVersion>3.0.0</FileVersion>
+    <Version>3.6.0</Version>
+    <AssemblyVersion>3.6.0</AssemblyVersion>
+    <FileVersion>3.6.0</FileVersion>
     <AssemblyTitle>FlyShelf</AssemblyTitle>
     <Product>FlyShelf — Seamless Cross-Device Clipboard</Product>
     <Company>Shivendra</Company>
@@ -36,7 +36,15 @@
     <WindowsPackageType>MSIX</WindowsPackageType>
     <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
     <GenerateAppxPackageOnBuild>true</GenerateAppxPackageOnBuild>
+    <AppxBundle>Never</AppxBundle>
     <AppxPackageDir>..\MicrosoftBuild\Output\</AppxPackageDir>
+    <!-- Force self-contained: bundle .NET runtime inside MSIX so users don't need to install .NET -->
+    <SelfContained>true</SelfContained>
+    <PublishSelfContained>true</PublishSelfContained>
+    <!-- Use Store-specific manifest WITHOUT the sparse MSIX identity element.
+         The default app.manifest embeds publisher=CN=FlyShelfWebsiteCert which
+         conflicts with the Store publisher and prevents Microsoft from signing. -->
+    <ApplicationManifest>app.store.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <!-- MSIX assets — included for all builds (required for sparse package registration in standalone EXE) -->
@@ -44,10 +52,11 @@
     <Content Include="..\MicrosoftBuild\Assets\**\*" Link="Assets\%(RecursiveDir)%(FileName)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
-  <!-- Bundled cloudflared secure agent — only included for Store builds to keep standalone EXE under 90MB -->
-  <ItemGroup Condition="'$(StorePublish)' == 'true' AND Exists('..\MicrosoftBuild\agent\cloudflared.exe')">
+  <!-- cloudflared.exe EXCLUDED from Store builds — unsigned native PE causes Store signing failure.
+       LAN sync works without it. Global sync is handled by CloudflareDaemon download at runtime. -->
+  <!-- <ItemGroup Condition="'$(StorePublish)' == 'true' AND Exists('..\MicrosoftBuild\agent\cloudflared.exe')">
     <Content Include="..\MicrosoftBuild\agent\cloudflared.exe" Link="agent\cloudflared.exe" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
+  </ItemGroup> -->
 
   <!-- Prevent process crash from unobserved async Task exceptions -->
   <ItemGroup>
@@ -62,6 +71,7 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
     <PackageReference Include="Microsoft.Recognizers.Text.DateTime" Version="1.8.13" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
     <!-- Pin NuGet.CommandLine to a non-vulnerable version and exclude all its assets.
          It is a build-time tool incorrectly declared as a transitive runtime dependency
          by Microsoft.Recognizers.Text; this suppresses NU1901/NU1904 warnings. -->

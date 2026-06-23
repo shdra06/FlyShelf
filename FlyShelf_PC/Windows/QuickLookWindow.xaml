@@ -71,6 +71,12 @@
                                    Visibility="Collapsed">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Copy24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
+                        <!-- Translate Button (text items only) -->
+                        <ui:Button x:Name="TranslateBtn" Click="TranslateButton_Click" Appearance="Secondary" 
+                                   Foreground="{DynamicResource InfoColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Translate text"
+                                   Visibility="Collapsed">
+                            <TextBlock Text="🌐" FontSize="13" Margin="3,0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                        </ui:Button>
                         <!-- Pin Button (toggle always on top) -->
                         <ui:Button x:Name="PinBtn" Click="PinButton_Click" Appearance="Secondary" 
                                    Foreground="{DynamicResource PinActiveColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Pin on top">

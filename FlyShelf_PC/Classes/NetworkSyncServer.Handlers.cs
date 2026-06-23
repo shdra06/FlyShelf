@@ -266,7 +266,26 @@ namespace FlyShelf.Classes
                 {
                     if (_rxWinPath.IsMatch(possiblePath) || possiblePath.StartsWith("\\\\"))
                     {
-                        isPath = true;
+                        // PT-2 FIX: Validate the resolved path before trusting it.
+                        // Reject: non-rooted paths, paths inside system directories, non-existent files.
+                        string fullPath = Path.GetFullPath(possiblePath);
+                        string winDir = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+                        string progFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+                        string progFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+
+                        bool isSensitive = fullPath.StartsWith(winDir, StringComparison.OrdinalIgnoreCase)
+                                        || fullPath.StartsWith(progFiles, StringComparison.OrdinalIgnoreCase)
+                                        || fullPath.StartsWith(progFilesX86, StringComparison.OrdinalIgnoreCase);
+
+                        if (!isSensitive && Path.IsPathRooted(fullPath) && File.Exists(fullPath))
+                        {
+                            possiblePath = fullPath; // Use normalized, validated path
+                            isPath = true;
+                        }
+                        else if (isSensitive)
+                        {
+                            Logger.LogAction("SECURITY", $"⛔ Rejected file:// path in sensitive directory from {capturedSource}: {fullPath}");
+                        }
                     }
                 }
                 catch { }
@@ -440,9 +459,9 @@ namespace FlyShelf.Classes
 
                 // Copy stream to temporary file on disk with progress
                 tempFile = Path.Combine(Path.GetTempPath(), $"FS_Upload_{Guid.NewGuid().ToString().Substring(0, 8)}.tmp");
-                using (var tempFs = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None))
+                using (var tempFs = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None, 1_048_576, FileOptions.Asynchronous | FileOptions.SequentialScan))
                 {
-                    byte[] buffer = new byte[65536];
+                    byte[] buffer = new byte[1_048_576]; // 1MB buffer (upgraded from 64KB for high-throughput LAN)
                     long totalRead = 0;
                     int read;
                     var lastProgressUpdate = DateTime.MinValue;
@@ -958,6 +977,176 @@ namespace FlyShelf.Classes
             finally
             {
                 res.Close();
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // NOTES & TODOS SYNC
+        // ═══════════════════════════════════════════════════════════
+
+        private byte[]? _cachedNotesJson = null;
+        private long _cachedNotesTimestamp = 0;
+        private const int NOTES_CACHE_TTL_MS = 2000;
+
+        private void ServeNotesData(HttpListenerResponse res)
+        {
+            try
+            {
+                long now = Environment.TickCount64;
+                var cached = _cachedNotesJson;
+                if (cached != null && (now - _cachedNotesTimestamp) < NOTES_CACHE_TTL_MS)
+                {
+                    res.ContentType = "application/json; charset=utf-8";
+                    res.ContentLength64 = cached.Length;
+                    try { res.OutputStream.Write(cached, 0, cached.Length); } catch { }
+                    res.Close();
+                    return;
+                }
+
+                // Lazy-load notes if not yet loaded
+                if (!NoteManager.Days.Any())
+                {
+                    try { NoteManager.Load(); } catch { }
+                }
+
+                string json = NoteManager.GetSyncPayload();
+                byte[] data = Encoding.UTF8.GetBytes(json);
+                _cachedNotesJson = data;
+                _cachedNotesTimestamp = now;
+
+                res.ContentType = "application/json; charset=utf-8";
+                res.ContentLength64 = data.Length;
+                try { res.OutputStream.Write(data, 0, data.Length); } catch { }
+                res.Close();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NOTES_SERVE", $"ServeNotesData failed: {ex.Message}");
+                try { res.StatusCode = 500; } catch { }
+                try { res.Close(); } catch { }
+            }
+        }
+
+        private async Task HandleNotesUpdate(HttpListenerRequest req, HttpListenerResponse res)
+        {
+            try
+            {
+                using var reader = new StreamReader(req.InputStream, Encoding.UTF8);
+                string json = await reader.ReadToEndAsync();
+
+                if (string.IsNullOrWhiteSpace(json))
+                {
+                    res.StatusCode = 400;
+                    res.Close();
+                    return;
+                }
+
+                // Lazy-load notes if not yet loaded
+                if (!NoteManager.Days.Any())
+                {
+                    try { NoteManager.Load(); } catch { }
+                }
+
+                NoteManager.MergeFromMobile(json);
+
+                // Invalidate cache
+                _cachedNotesJson = null;
+
+                byte[] ok = Encoding.UTF8.GetBytes("{\"status\":\"ok\"}");
+                res.StatusCode = 200;
+                res.ContentType = "application/json";
+                res.ContentLength64 = ok.Length;
+                res.OutputStream.Write(ok, 0, ok.Length);
+                res.Close();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("NOTES_SYNC", $"HandleNotesUpdate failed: {ex.Message}");
+                try { res.StatusCode = 500; } catch { }
+                try { res.Close(); } catch { }
+            }
+        }
+
+        private byte[]? _cachedTodosJson = null;
+        private long _cachedTodosTimestamp = 0;
+        private const int TODOS_CACHE_TTL_MS = 2000;
+
+        private void ServeTodosData(HttpListenerResponse res)
+        {
+            try
+            {
+                long now = Environment.TickCount64;
+                var cached = _cachedTodosJson;
+                if (cached != null && (now - _cachedTodosTimestamp) < TODOS_CACHE_TTL_MS)
+                {
+                    res.ContentType = "application/json; charset=utf-8";
+                    res.ContentLength64 = cached.Length;
+                    try { res.OutputStream.Write(cached, 0, cached.Length); } catch { }
+                    res.Close();
+                    return;
+                }
+
+                // Lazy-load todos if not yet loaded
+                if (!TodoManager.Days.Any())
+                {
+                    try { TodoManager.Load(); } catch { }
+                }
+
+                string json = TodoManager.GetSyncPayload();
+                byte[] data = Encoding.UTF8.GetBytes(json);
+                _cachedTodosJson = data;
+                _cachedTodosTimestamp = now;
+
+                res.ContentType = "application/json; charset=utf-8";
+                res.ContentLength64 = data.Length;
+                try { res.OutputStream.Write(data, 0, data.Length); } catch { }
+                res.Close();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("TODOS_SERVE", $"ServeTodosData failed: {ex.Message}");
+                try { res.StatusCode = 500; } catch { }
+                try { res.Close(); } catch { }
+            }
+        }
+
+        private async Task HandleTodosUpdate(HttpListenerRequest req, HttpListenerResponse res)
+        {
+            try
+            {
+                using var reader = new StreamReader(req.InputStream, Encoding.UTF8);
+                string json = await reader.ReadToEndAsync();
+
+                if (string.IsNullOrWhiteSpace(json))
+                {
+                    res.StatusCode = 400;
+                    res.Close();
+                    return;
+                }
+
+                // Lazy-load todos if not yet loaded
+                if (!TodoManager.Days.Any())
+                {
+                    try { TodoManager.Load(); } catch { }
+                }
+
+                TodoManager.MergeFromMobile(json);
+
+                // Invalidate cache
+                _cachedTodosJson = null;
+
+                byte[] ok = Encoding.UTF8.GetBytes("{\"status\":\"ok\"}");
+                res.StatusCode = 200;
+                res.ContentType = "application/json";
+                res.ContentLength64 = ok.Length;
+                res.OutputStream.Write(ok, 0, ok.Length);
+                res.Close();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("TODOS_SYNC", $"HandleTodosUpdate failed: {ex.Message}");
+                try { res.StatusCode = 500; } catch { }
+                try { res.Close(); } catch { }
             }
         }
     }

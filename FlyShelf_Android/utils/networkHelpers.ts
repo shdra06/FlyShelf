@@ -106,7 +106,8 @@ export const getSubnet = (ip: string): string => {
 };
 
 /** Determine connection type for a device relative to this phone */
-export const getConnectionType = (device: any, myLocalIp: string): 'Local' | 'Cloud' => {
+export const getConnectionType = (device: any, myLocalIp: string): 'Local' | 'Cloud' | 'Offline' => {
+  if (device._isOffline) return 'Offline';
   const deviceIp = device.LocalIp || device.Url || '';
   const mySubnet = getSubnet(myLocalIp);
   const deviceSubnet = getSubnet(deviceIp);
@@ -114,10 +115,11 @@ export const getConnectionType = (device: any, myLocalIp: string): 'Local' | 'Cl
   return 'Cloud';
 };
 
-/** Color map for connection types */
+/** Color map for connection types — uses theme accent colors */
 export const connectionColors: Record<string, string> = {
-  Local: '#10B981',
-  Cloud: '#F59E0B',
+  Local: '#34D399',   // colors.accent.success
+  Cloud: '#FBBF24',   // colors.accent.warning
+  Offline: '#F87171', // colors.accent.error
 };
 
 /**

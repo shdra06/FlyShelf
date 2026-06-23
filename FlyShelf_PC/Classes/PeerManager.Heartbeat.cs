@@ -39,7 +39,15 @@ namespace FlyShelf.Classes
                     if (ct.IsCancellationRequested) return;
 
                     // Skip peers with active file transfers — don't kill mid-transfer
-                    if (peer.ActiveTransfers > 0) return;
+                    int legacyTransfers = peer.ActiveTransfers;
+                    int tcpTransfers = LanTransferManager.Instance?.ActiveTransfers
+                        .Count(s => s.PeerDeviceId == peer.DeviceId && s.IsActive) ?? 0;
+                    int totalTransfers = legacyTransfers + tcpTransfers;
+                    if (totalTransfers > 0)
+                    {
+                        Logger.LogAction("PEER", $"💓 Skipping heartbeat for {peer.DeviceName} — {totalTransfers} active transfer(s)");
+                        return;
+                    }
 
                     bool ok = await PingPeer(peer);
                     if (ok)

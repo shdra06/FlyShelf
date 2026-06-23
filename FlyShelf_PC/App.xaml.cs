@@ -14,6 +14,7 @@ public partial class App : Application
     private static MainWindow _mainWinInstance;
     private static volatile bool _isCreatingMainWindow = false;
     private static System.Threading.Timer? _shakeTimer;
+    private static bool _isHandlingCrash;
 
     /// <summary>Reference to open PDF merge window; shake suppressed only when it's focused.</summary>
     internal static Window? ActiveMergeWindow = null;
@@ -252,6 +253,13 @@ public partial class App : Application
         // Without these, RuntimeHost/SettingsManager failures show raw OS crash dialog.
         DispatcherUnhandledException += (s, args) =>
         {
+            if (_isHandlingCrash)
+            {
+                // Re-entrant crash — avoid infinite loop, exit immediately
+                try { Environment.Exit(1); } catch { }
+                return;
+            }
+            _isHandlingCrash = true;
             args.Handled = true; // Prevents the default Windows crash dialog
             TriggerSafeModeAndRestart($"[UI Thread Exception]\n{args.Exception}");
         };
@@ -274,8 +282,27 @@ public partial class App : Application
         FlyShelf.Classes.RuntimeHost.Initialize();
         // ------------------------------------------------------------------
 
-        FlyShelf.Classes.SettingsManager.Load();
-        FlyShelf.Classes.LicenseManager.Load();
+        try { FlyShelf.Classes.SettingsManager.Load(); }
+        catch (Exception ex)
+        {
+            FlyShelf.Classes.Logger.LogAction("SETTINGS_RECOVERY", $"Settings load failed, resetting to defaults: {ex.Message}");
+            try { FlyShelf.Classes.SettingsManager.ResetToDefaults(); FlyShelf.Classes.SettingsManager.Load(); }
+            catch { /* will trigger safe mode via outer handler */ throw; }
+        }
+
+        try { FlyShelf.Classes.LicenseManager.Load(); }
+        catch (Exception ex)
+        {
+            FlyShelf.Classes.Logger.LogAction("LICENSE_RECOVERY", $"License load failed, deleting corrupt file: {ex.Message}");
+            try
+            {
+                string licensePath = System.IO.Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "license.json");
+                if (System.IO.File.Exists(licensePath)) System.IO.File.Delete(licensePath);
+                FlyShelf.Classes.LicenseManager.Load();
+            }
+            catch { /* will trigger safe mode via outer handler */ throw; }
+        }
         FlyShelf.Classes.ReminderManager.Load();
         
         // ═══ SECURITY v2.0.0: Verify binary hasn't been patched ═══
@@ -283,7 +310,7 @@ public partial class App : Application
         
         // ═══ INTERNAL CLOCK: Sync with NTP before any Firebase/networking ═══
         // Protects against wrong system clock causing auth failures and dead heartbeats
-        _ = FlyShelf.Classes.NetworkClock.InitializeAsync();
+        _ = FlyShelf.Classes.NetworkClock.InitializeAsync().ContinueWith(t => { if (t.IsFaulted) FlyShelf.Classes.Logger.LogAction("ASYNC_ERR", $"NetworkClock.InitializeAsync failed: {t.Exception?.InnerException?.Message}"); }, TaskContinuationOptions.OnlyOnFaulted);
         
         // Initialize Auto-Start status asynchronously based on stored setting (non-blocking)
         _ = System.Threading.Tasks.Task.Run(async () =>
@@ -335,6 +362,9 @@ public partial class App : Application
                     Topmost = true
                 };
 
+                // H-01: Use a Grid as root so we can layer the close button over the content
+                var rootGrid = new System.Windows.Controls.Grid();
+
                 var outerBorder = new System.Windows.Controls.Border {
                     Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(25, 25, 25)),
                     BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(45, 45, 45)),
@@ -375,13 +405,15 @@ public partial class App : Application
                     CornerRadius = new CornerRadius(6)
                 };
                 
+                // H-06: MaxLength = 50 to cap device name length
                 var input = new System.Windows.Controls.TextBox { 
                     FontSize = 15, 
                     Padding = new Thickness(12), 
                     Background = System.Windows.Media.Brushes.Transparent, 
                     Foreground = System.Windows.Media.Brushes.White,
                     BorderThickness = new Thickness(0),
-                    CaretBrush = System.Windows.Media.Brushes.White
+                    CaretBrush = System.Windows.Media.Brushes.White,
+                    MaxLength = 50
                 };
                 inputBorder.Child = input;
                 stack.Children.Add(inputBorder);
@@ -407,10 +439,14 @@ public partial class App : Application
                 btnBorder.MouseEnter += (s, ev) => btnBorder.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(5, 150, 105));
                 btnBorder.MouseLeave += (s, ev) => btnBorder.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(16, 185, 129));
                 
+                // H-06: Sanitize device name — strip characters that break Firebase paths or JSON
                 btnBorder.MouseLeftButtonDown += (s, ev) => {
-                    if (!string.IsNullOrWhiteSpace(input.Text))
+                    string rawName = input.Text?.Trim() ?? "";
+                    // Strip Firebase/JSON-unsafe characters: . $ # [ ] /
+                    string sanitized = System.Text.RegularExpressions.Regex.Replace(rawName, @"[.\$#\[\]/]", "");
+                    if (!string.IsNullOrWhiteSpace(sanitized))
                     {
-                        FlyShelf.Classes.SettingsManager.Current.DeviceName = input.Text.Trim();
+                        FlyShelf.Classes.SettingsManager.Current.DeviceName = sanitized;
                         FlyShelf.Classes.SettingsManager.Save();
                         namingWindow.DialogResult = true;
                         namingWindow.Close();
@@ -419,8 +455,52 @@ public partial class App : Application
                 stack.Children.Add(btnBorder);
                 
                 outerBorder.Child = stack;
-                namingWindow.Content = outerBorder;
+                rootGrid.Children.Add(outerBorder);
+
+                // H-01: Close (X) button in top-right corner
+                var closeBtnBorder = new System.Windows.Controls.Border {
+                    Width = 28,
+                    Height = 28,
+                    CornerRadius = new CornerRadius(6),
+                    Background = System.Windows.Media.Brushes.Transparent,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    VerticalAlignment = VerticalAlignment.Top,
+                    Margin = new Thickness(0, 8, 8, 0),
+                    Cursor = Cursors.Hand
+                };
+                var closeText = new System.Windows.Controls.TextBlock {
+                    Text = "✕",
+                    Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(140, 140, 140)),
+                    FontSize = 14,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center
+                };
+                closeBtnBorder.Child = closeText;
+                closeBtnBorder.MouseEnter += (s, ev) => closeBtnBorder.Background = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(60, 60, 60));
+                closeBtnBorder.MouseLeave += (s, ev) => closeBtnBorder.Background = System.Windows.Media.Brushes.Transparent;
+                closeBtnBorder.MouseLeftButtonDown += (s, ev) => {
+                    // Default to machine name when closed without input
+                    FlyShelf.Classes.SettingsManager.Current.DeviceName = Environment.MachineName;
+                    FlyShelf.Classes.SettingsManager.Save();
+                    namingWindow.DialogResult = true;
+                    namingWindow.Close();
+                };
+                rootGrid.Children.Add(closeBtnBorder);
+
+                namingWindow.Content = rootGrid;
                 
+                // H-01: Escape key closes window with machine name as default
+                namingWindow.PreviewKeyDown += (s, ev) => {
+                    if (ev.Key == Key.Escape)
+                    {
+                        FlyShelf.Classes.SettingsManager.Current.DeviceName = Environment.MachineName;
+                        FlyShelf.Classes.SettingsManager.Save();
+                        namingWindow.DialogResult = true;
+                        namingWindow.Close();
+                        ev.Handled = true;
+                    }
+                };
+
                 namingWindow.Loaded += (s, ev) => { input.Focus(); };
                 
                 namingWindow.ShowDialog();
@@ -454,46 +534,8 @@ public partial class App : Application
             // ═══ SLEEP/RESUME RECOVERY ═══
             // When PC wakes from sleep, all sockets die and Cloudflare tunnel breaks.
             // Force-restart the tunnel (old URL is dead) and push fresh LAN heartbeat.
-            Microsoft.Win32.SystemEvents.PowerModeChanged += (s, ev) =>
-            {
-                if (ev.Mode == Microsoft.Win32.PowerModes.Resume)
-                {
-                    FlyShelf.Classes.Logger.LogAction("POWER", "⚡ PC resumed from sleep — force-restarting network in 5s");
-                    _ = System.Threading.Tasks.Task.Run(async () =>
-                    {
-                        await System.Threading.Tasks.Task.Delay(5000); // Wait for network stack to stabilize
-                        
-                        // Force-restart Cloudflare tunnel — the old URL is dead after sleep
-                        // The GlobalUrlUpdated event will auto-purge stale Firebase entries
-                        var server = FlyShelf.Classes.NetworkSyncServer.Instance;
-                        if (server != null)
-                        {
-                            FlyShelf.Classes.Logger.LogAction("POWER", "Killing stale Cloudflare tunnel — will get new URL...");
-                            // Push heartbeat with LAN IP ONLY (no stale Cloudflare URL) so Android can reach us via LAN immediately
-                            try { await FlyShelf.Classes.CloudDiscoveryManager.PushTunnelUrl(server.DisplayUrl, true, server.DisplayUrl); }
-                            catch (Exception ex) { FlyShelf.Classes.Logger.LogAction("POWER", $"LAN heartbeat failed: {ex.Message}"); }
-                        }
-                        
-                        FlyShelf.Classes.Logger.DumpNetworkDiagnostics();
-                        FlyShelf.Classes.Logger.LogAction("POWER", "✅ Post-sleep recovery complete — forcing immediate tunnel health check");
-
-                        // Force immediate tunnel health check on wake — don't wait 4 minutes for health timer
-                        try
-                        {
-                            var srvCheck = FlyShelf.Classes.NetworkSyncServer.Instance;
-                            if (srvCheck != null)
-                            {
-                                _ = System.Threading.Tasks.Task.Run(async () =>
-                                {
-                                    await System.Threading.Tasks.Task.Delay(3000); // Let network stack fully stabilize
-                                    srvCheck.ForceCheckTunnelHealth();
-                                });
-                            }
-                        }
-                        catch { }
-                    });
-                }
-            };
+            // C-08: Use named handler for static event to allow proper unsubscription and GC
+            Microsoft.Win32.SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
             // Offload the massive WPF XAML layout rasterization payload directly to the background!
             // This drops FlyShelf's actual active startup boot time from ~2000ms straight to < 10ms!
@@ -534,10 +576,10 @@ public partial class App : Application
                     FlyShelf.Classes.ReminderScheduler.Start();
                     
                     // One-time cleanup: purge old GUID-based device entries from Firebase
-                    _ = FlyShelf.Classes.CloudDiscoveryManager.CleanupStaleDevices();
+                    _ = FlyShelf.Classes.CloudDiscoveryManager.CleanupStaleDevices().ContinueWith(t => { if (t.IsFaulted) FlyShelf.Classes.Logger.LogAction("ASYNC_ERR", $"CleanupStaleDevices failed: {t.Exception?.InnerException?.Message}"); }, TaskContinuationOptions.OnlyOnFaulted);
                     
                     // Revalidate Pro license on server (checks for revoked keys)
-                    _ = FlyShelf.Classes.LicenseManager.RevalidateLicenseAsync();
+                    _ = FlyShelf.Classes.LicenseManager.RevalidateLicenseAsync().ContinueWith(t => { if (t.IsFaulted) FlyShelf.Classes.Logger.LogAction("ASYNC_ERR", $"RevalidateLicenseAsync failed: {t.Exception?.InnerException?.Message}"); }, TaskContinuationOptions.OnlyOnFaulted);
                     
                     // Dump full network diagnostics at startup for remote debugging
                     _ = System.Threading.Tasks.Task.Run(async () =>
@@ -584,6 +626,12 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // C-08: Unsubscribe from static SystemEvents to allow proper GC of App instance
+        try { Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged; } catch { }
+
+        // Release single-instance mutex so a new instance can start cleanly
+        try { _mutex?.ReleaseMutex(); _mutex?.Dispose(); } catch { }
+
         // Stop any active audio playback on application exit
         ViewModels.ClipboardItem.StopActivePlayback();
 
@@ -611,8 +659,9 @@ public partial class App : Application
         }
         catch { }
         
-        // Flush any pending notes to disk
+        // Flush any pending notes and todos to disk
         try { FlyShelf.Classes.NoteManager.SaveNow(); } catch { }
+        try { FlyShelf.Classes.TodoManager.SaveNow(); } catch { }
 
         FlyShelf.Classes.Logger.Shutdown();
         base.OnExit(e);
@@ -663,6 +712,14 @@ public partial class App : Application
                 // Note: Shake-to-spawn works even when the Hub (settings) window is open.
 
                 if (!FlyShelf.Classes.SettingsManager.Current.EnableShakeToOpen)
+                {
+                    _shakeCount = 0;
+                    return;
+                }
+
+                // Suppress shake-to-summon when a fullscreen app is in the foreground
+                // (games, videos, presentations, etc.) to prevent accidental triggers.
+                if (IsForegroundFullScreen())
                 {
                     _shakeCount = 0;
                     return;
@@ -821,6 +878,44 @@ public partial class App : Application
         }, null, 0, SHAKE_FAST_MS); // Start at fast rate; auto-throttles to slow after 30s idle
     }
 
+    /// <summary>
+    /// Checks whether the current foreground window covers the entire monitor area.
+    /// Used to suppress shake-to-summon during fullscreen apps (games, videos, presentations).
+    /// Thread-safe — called from the shake timer's ThreadPool callback.
+    /// </summary>
+    private static bool IsForegroundFullScreen()
+    {
+        try
+        {
+            IntPtr fgHandle = Classes.NativeMethods.GetForegroundWindow();
+            if (fgHandle == IntPtr.Zero) return false;
+
+            // Don't suppress if the desktop is focused
+            var className = new System.Text.StringBuilder(256);
+            Classes.NativeMethods.GetClassName(fgHandle, className, className.Capacity);
+            string cls = className.ToString();
+            if (cls == "Progman" || cls == "WorkerW") return false;
+
+            // Compare foreground window rect against its monitor's full area
+            Classes.NativeMethods.GetWindowRect(fgHandle, out Classes.NativeMethods.RECT fgRect);
+            var monitor = Classes.Utils.MonitorUtil.GetMonitor(fgHandle);
+
+            int fgWidth = fgRect.Right - fgRect.Left;
+            int fgHeight = fgRect.Bottom - fgRect.Top;
+            int monWidth = (int)monitor.monitorArea.Width;
+            int monHeight = (int)monitor.monitorArea.Height;
+
+            if (fgWidth >= monWidth && fgHeight >= monHeight &&
+                fgRect.Left <= monitor.monitorArea.Left &&
+                fgRect.Top <= monitor.monitorArea.Top)
+            {
+                return true;
+            }
+        }
+        catch { }
+        return false;
+    }
+
     private void LaunchClipboardManager(double x, double y, bool isPersistent, int mode, bool stealFocus = true)
     {
         if (_mainWinInstance == null)
@@ -971,6 +1066,51 @@ public partial class App : Application
             }
             LogAndPrint("");
             LogAndPrint("RESULT: NO, NOT COMPATIBLE");
+        }
+    }
+
+    /// <summary>
+    /// C-08: Named handler for PowerModeChanged so it can be unsubscribed from the static event.
+    /// Handles PC wake-from-sleep: force-restarts network tunnel and pushes fresh heartbeat.
+    /// </summary>
+    private void OnPowerModeChanged(object sender, Microsoft.Win32.PowerModeChangedEventArgs ev)
+    {
+        if (ev.Mode == Microsoft.Win32.PowerModes.Resume)
+        {
+            FlyShelf.Classes.Logger.LogAction("POWER", "⚡ PC resumed from sleep — force-restarting network in 5s");
+            _ = System.Threading.Tasks.Task.Run(async () =>
+            {
+                await System.Threading.Tasks.Task.Delay(5000); // Wait for network stack to stabilize
+                
+                // Force-restart Cloudflare tunnel — the old URL is dead after sleep
+                // The GlobalUrlUpdated event will auto-purge stale Firebase entries
+                var server = FlyShelf.Classes.NetworkSyncServer.Instance;
+                if (server != null)
+                {
+                    FlyShelf.Classes.Logger.LogAction("POWER", "Killing stale Cloudflare tunnel — will get new URL...");
+                    // Push heartbeat with LAN IP ONLY (no stale Cloudflare URL) so Android can reach us via LAN immediately
+                    try { await FlyShelf.Classes.CloudDiscoveryManager.PushTunnelUrl(server.DisplayUrl, true, server.DisplayUrl); }
+                    catch (Exception ex) { FlyShelf.Classes.Logger.LogAction("POWER", $"LAN heartbeat failed: {ex.Message}"); }
+                }
+                
+                FlyShelf.Classes.Logger.DumpNetworkDiagnostics();
+                FlyShelf.Classes.Logger.LogAction("POWER", "✅ Post-sleep recovery complete — forcing immediate tunnel health check");
+
+                // Force immediate tunnel health check on wake — don't wait 4 minutes for health timer
+                try
+                {
+                    var srvCheck = FlyShelf.Classes.NetworkSyncServer.Instance;
+                    if (srvCheck != null)
+                    {
+                        _ = System.Threading.Tasks.Task.Run(async () =>
+                        {
+                            await System.Threading.Tasks.Task.Delay(3000); // Let network stack fully stabilize
+                            srvCheck.ForceCheckTunnelHealth();
+                        });
+                    }
+                }
+                catch { }
+            });
         }
     }
 

@@ -24,6 +24,7 @@ import * as Linking from 'expo-linking';
 import * as ImagePicker from 'expo-image-picker';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 
 
 // ═══ Extracted Modules ═══
@@ -37,6 +38,8 @@ import AnimatedCard from '../../components/AnimatedCard';
 
 import CachedImage from '../../components/CachedImage';
 import PdfPageEditor from '../../components/PdfPageEditor';
+import OnboardingWizard from '../../components/OnboardingWizard';
+import { ActiveDevice } from '../../components/DeviceHub';
 import { mergePdfs as localMergePdfs, convertImageToPdf as localConvertImageToPdf } from '../../utils/pdfUtils';
 
 const { AdvanceOverlay } = NativeModules;
@@ -121,7 +124,7 @@ export default function SyncScreen() {
           IsPinned: c.IsPinned || undefined,
         }));
         AsyncStorage.setItem(CLIPS_STORAGE_KEY, JSON.stringify(toSave)).catch(() => {});
-      } catch {}
+      } catch (e) { syncLog('PERSIST', `Clip persist failed: ${(e as any)?.message || e}`); }
     }, 800);
   }, []);
 
@@ -299,6 +302,10 @@ export default function SyncScreen() {
             (c.id === item.id || c.Title === item.title) ? { ...c, CachedUri: item.destPath } : c
           ));
           if (Platform.OS === 'android') ToastAndroid.show(`✅ ${item.title} saved`, ToastAndroid.SHORT);
+          Notifications.scheduleNotificationAsync({
+            content: { title: '📁 File Downloaded', body: `${item.title} saved successfully` },
+            trigger: null,
+          }).catch(() => {});
           if (item.id) { try { await markFileDownloaded(item.id); } catch {} }
         } else {
           syncLog('DL-QUEUE', `❌ ${item.title} failed (all attempts exhausted)`);
@@ -577,7 +584,7 @@ export default function SyncScreen() {
         const targetUrl = await getCachedPcUrl();
         if (targetUrl) AdvanceOverlay.setPcUrl(targetUrl);
         if (deviceName) AdvanceOverlay.setDeviceName(deviceName);
-      } catch {}
+      } catch (e) { syncLog('OVERLAY', `Overlay URL config failed: ${(e as any)?.message || e}`); }
     })();
     const pollInterval = setInterval(async () => {
       try {
@@ -595,17 +602,18 @@ export default function SyncScreen() {
           };
           setClips(prev => [newItem, ...prev]);
           scrollToTop();
-          if (isGlobalSyncEnabled) {
-            try { if (pairingKeyRef.current) { const clipRef = push(ref(database, clipboardPath())); await set(clipRef, { ...newItem, EventId: overlayEventId }); } } catch(e) {}
+          if (isGlobalSyncEnabled && copiedText.length <= 1_000_000) {
+            try { if (pairingKeyRef.current) { const clipRef = push(ref(database, clipboardPath())); await set(clipRef, { ...newItem, EventId: overlayEventId }); } } catch(e) { syncLog('OVERLAY', `Overlay poll error: ${(e as any)?.message || e}`); }
           }
         }
-      } catch(e) {}
+      } catch(e) { syncLog('OVERLAY', `Overlay poll error: ${(e as any)?.message || e}`); }
     }, 1500);
     return () => clearInterval(pollInterval);
   }, [isFloatingBallEnabled, deviceName, isGlobalSyncEnabled]);
 
   // ─── Device Discovery ───
   const [activeDevices, setActiveDevices] = useState<any[]>([]);
+  const [activeDevicesList, setActiveDevicesList] = useState<ActiveDevice[]>([]);
   const activeDevicesRef = useRef<any[]>([]);
   // Keep ref in sync with state so interval callbacks never use stale data
   useEffect(() => { activeDevicesRef.current = activeDevices; }, [activeDevices]);
@@ -650,6 +658,7 @@ export default function SyncScreen() {
   const [pageEditorVisible, setPageEditorVisible] = useState(false);
   const [pageEditorUri, setPageEditorUri] = useState('');
   const [pageEditorTitle, setPageEditorTitle] = useState('');
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   // ─── Persistence ───
   useEffect(() => {
@@ -660,6 +669,9 @@ export default function SyncScreen() {
     AsyncStorage.getItem('localDeletedIds').then(val => {
       if (val) { try { const arr = JSON.parse(val); setLocalDeletedIds(new Set(arr.slice(-500))); } catch(e) {} }
     });
+    (async () => {
+      if (!(await AsyncStorage.getItem('@flyshelf_onboarding_done'))) setShowOnboarding(true);
+    })();
   }, []);
 
   // ─── Peer Relay ───
@@ -680,12 +692,15 @@ export default function SyncScreen() {
               if (perm.status === 'granted') {
                 await Promise.all(batch.urls.map(async (url: string, idx: number) => {
                   const localUri = `${SYNC_CACHE_BASE}relayed_${NetworkClock.now()}_${idx}.jpg`;
-                  const dl = await FileSystem.downloadAsync(url, localUri, {
-                    headers: {
-                      'X-FlyShelf-Client': 'MobileCompanion',
-                      'X-Pairing-Key': pairingKeyRef.current
-                    }
-                  });
+                  const dl = await Promise.race([
+                    FileSystem.downloadAsync(url, localUri, {
+                      headers: {
+                        'X-FlyShelf-Client': 'MobileCompanion',
+                        'X-Pairing-Key': pairingKeyRef.current
+                      }
+                    }),
+                    new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Peer download timeout')), 60000))
+                  ]);
                   const asset = await MediaLibrary.createAssetAsync(dl.uri);
                   await MediaLibrary.createAlbumAsync("FlyShelf Extractions", asset, false);
                 }));
@@ -996,6 +1011,21 @@ export default function SyncScreen() {
           }
         }
         setActiveDevices(rawDevices);
+        // Build typed ActiveDevice list for DeviceHub
+        const typedList: ActiveDevice[] = rawDevices.map((d: any) => ({
+          deviceId: d._key || d.DeviceId || '',
+          deviceName: d.DeviceName || 'Unknown',
+          deviceType: (d.DeviceType === 'PC' ? 'PC' : d.DeviceType === 'Mobile' ? 'Mobile' : 'Browser') as ActiveDevice['deviceType'],
+          isOnline: !!d.IsOnline,
+          connectionType: (d._lanVerified ? 'LAN' : d.GlobalUrl ? 'Cloud' : 'Offline') as ActiveDevice['connectionType'],
+          latencyMs: undefined,
+          localUrl: d._lanUrl || d.LocalIp || undefined,
+          globalUrl: d.GlobalUrl || undefined,
+          isPro: !!d.IsPro,
+          licenseKey: d.LicenseKey || undefined,
+          lastSeen: d.Timestamp || undefined,
+        }));
+        setActiveDevicesList(typedList);
         const activePc = rawDevices.find(d => d.DeviceType === 'PC');
         if (activePc) {
           const isPro = !!activePc.IsPro;
@@ -1238,6 +1268,10 @@ export default function SyncScreen() {
                       setLastCopiedText(latestRaw);
                       lastCopiedRef.current = latestRaw;
                       if (Platform.OS === 'android') ToastAndroid.show(`📋 ${latestRaw.substring(0, 40)}...`, ToastAndroid.SHORT);
+                      Notifications.scheduleNotificationAsync({
+                        content: { title: '📋 Clipboard Synced', body: latestRaw?.substring(0, 80) || 'New content from PC' },
+                        trigger: null,
+                      }).catch(() => {});
                     }
                   }
                 } else if (latest.Type === 'Image' || latest.Type === 'ImageLink' || latest.Type === 'QRCode') {
@@ -1541,6 +1575,7 @@ export default function SyncScreen() {
     // /api/events blocks for up to 30s until clipboard changes on PC
     // When it returns 200, immediately fetch the new data via pollFn()
     let longPollActive = true;
+    let currentLongPollController: AbortController | null = null;
     let longPollBackoff = 0;
     const runLongPoll = async () => {
       // Wait for first successful poll to establish cachedPcUrlRef
@@ -1560,6 +1595,7 @@ export default function SyncScreen() {
             const lpHeaders: any = { 'X-FlyShelf-Client': 'MobileCompanion' };
             if (pairingKey) lpHeaders['X-Pairing-Key'] = pairingKey;
             const controller = new AbortController();
+            currentLongPollController = controller;
             const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s timeout (server blocks 30s)
             const res = await fetch(`${url}/api/events`, { headers: lpHeaders, signal: controller.signal });
             clearTimeout(timeoutId);
@@ -1595,6 +1631,7 @@ export default function SyncScreen() {
     return () => {
       if (pollTimer !== null) { clearTimeout(pollTimer); pollTimer = null; }
       longPollActive = false; // Stop long-poll loop
+      if (currentLongPollController) currentLongPollController.abort();
     };
   }, [isGlobalSyncEnabled, pcLocalIp, deviceName]);
 
@@ -1605,7 +1642,7 @@ export default function SyncScreen() {
     const pk = pairingKeyRef.current;
     if (!pk) return;
     const registerSelf = async () => {
-      try { await set(ref(database, `active_devices/${pk}/${myDeviceId}`), { DeviceId: myDeviceId, DeviceName: deviceName, DeviceType: 'Mobile', IsOnline: true, LocalIp: '', Timestamp: NetworkClock.now() }); } catch(e) {}
+      try { await set(ref(database, `active_devices/${pk}/${myDeviceId}`), { DeviceId: myDeviceId, DeviceName: deviceName, DeviceType: 'Mobile', IsOnline: true, LocalIp: '', Timestamp: NetworkClock.now() }); } catch(e) { syncLog('HEARTBEAT', `Device registration failed: ${(e as any)?.message || e}`); }
     };
     registerSelf();
     // Reduced from 30s to 600s — Firebase writes are expensive at scale (10-minute heartbeat)
@@ -1891,7 +1928,7 @@ export default function SyncScreen() {
                 Platform.OS === 'android' && ToastAndroid.show("Image Copied Natively", ToastAndroid.SHORT);
               }
             }
-          } catch (e) {}
+          } catch (e) { syncLog('SYNC', `Auto-copy failed: ${(e as any)?.message || e}`); }
         })();
       }
     }
@@ -1900,7 +1937,9 @@ export default function SyncScreen() {
   // ─── Auto-Download Rich Media ───
   useEffect(() => {
     if (clips.length === 0) return;
+    let aborted = false;
     clips.forEach(async (item) => {
+      if (aborted) return;
       if (!item.id || downloadedItems.has(item.id)) return;
       const autoTargetTypes = ['ImageLink', 'Image', 'Pdf', 'Document', 'Archive', 'Video', 'File', 'Presentation'];
       const mediaUrl = getMediaUrlForItem(item);
@@ -1950,6 +1989,7 @@ export default function SyncScreen() {
         } catch(e) { const transferId = item.id || (item.Title || '').replace(/[^a-zA-Z0-9.-]/g, '_'); setIncomingTransferProgress(p => { const n = {...p}; delete n[transferId]; return n; }); await FileSystem.deleteAsync(DOWNLOAD_BASE + (item.Title || '').replace(/[^a-zA-Z0-9.-]/g, '_'), { idempotent: true }).catch(() => {}); }
       } else { setDownloadedItems(prev => new Set(prev).add(item.id!)); }
     });
+    return () => { aborted = true; };
   }, [clips]);
 
   // ─── Send Text ───
@@ -2023,6 +2063,8 @@ export default function SyncScreen() {
           encRaw = await aesEncrypt(encRaw);
           encrypted = true;
         } catch (e: any) { syncLog('SYNC_CRYPTO', `Encryption failed, sending plaintext: ${e?.message || 'unknown'}`); }
+        // Size validation: reject payloads > 1MB to prevent Firebase billing abuse
+        if (encRaw.length > 1_000_000) { syncLog('SYNC', 'Payload too large for Firebase (>1MB), skipping cloud sync'); setIsSending(false); return; }
         const payload = { Title: encTitle, Type: finalType, Raw: encRaw, Time: new Date().toLocaleTimeString(), Timestamp: NetworkClock.now(), EventId: txEventId, Encrypted: encrypted, SourceDeviceName: deviceName || 'Unknown Mobile', SourceDeviceType: 'Mobile' };
         const RETRY_DELAYS = [2000, 5000, 10000];
         for (let attempt = 0; attempt < RETRY_DELAYS.length; attempt++) {
@@ -2039,7 +2081,7 @@ export default function SyncScreen() {
           }
         }
       }
-    } catch (e) {}
+    } catch (e) { syncLog('SYNC', `Text transmit error: ${(e as any)?.message || e}`); }
     setIsSending(false);
   };
 
@@ -2448,7 +2490,7 @@ export default function SyncScreen() {
     if (Platform.OS === 'android') ToastAndroid.show('Looking up code...', ToastAndroid.SHORT);
     try {
       const _authToken = await getFirebaseIdToken();
-      const res = await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code.toUpperCase().trim()}.json${_authToken ? `?auth=${_authToken}` : ''}`);
+      const res = await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code.toUpperCase().trim()}.json${_authToken ? `?auth=${_authToken}` : ''}`, { signal: AbortSignal.timeout(10000) });
       const data = await res.json();
       if (!data) { setIsPairing(false); Alert.alert('Code Not Found', 'No device found with this code.\nMake sure the code is correct and the other device is online.'); return; }
 
@@ -2494,6 +2536,7 @@ export default function SyncScreen() {
       const _pubToken = await getFirebaseIdToken();
       await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_pubToken ? `?auth=${_pubToken}` : ''}`, {
         method: 'PUT',
+        signal: AbortSignal.timeout(10000),
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -2510,7 +2553,7 @@ export default function SyncScreen() {
         try {
           const pk = pairingKeyRef.current;
           const _pollToken = await getFirebaseIdToken();
-          const devicesRes = await fetch(`${firebaseDatabaseUrl}/active_devices/${pk}.json${_pollToken ? `?auth=${_pollToken}` : ''}`);
+          const devicesRes = await fetch(`${firebaseDatabaseUrl}/active_devices/${pk}.json${_pollToken ? `?auth=${_pollToken}` : ''}`, { signal: AbortSignal.timeout(10000) });
           const devices = await devicesRes.json();
           if (!devices) return;
 
@@ -2550,12 +2593,12 @@ export default function SyncScreen() {
                 }
                 setMyPairingCode(null);
                 // Clean up the pairing code from Firebase
-                try { const _delToken = await getFirebaseIdToken(); await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_delToken ? `?auth=${_delToken}` : ''}`, { method: 'DELETE' }); } catch {}
+                try { const _delToken = await getFirebaseIdToken(); await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_delToken ? `?auth=${_delToken}` : ''}`, { method: 'DELETE', signal: AbortSignal.timeout(10000) }); } catch {}
                 break;
               }
             }
           }
-        } catch {}
+        } catch (e) { syncLog('PAIR', `Connection poll error: ${(e as any)?.message || e}`); }
       }, 3000);
       connectionPollRef.current = pollForConnection;
 
@@ -2564,7 +2607,7 @@ export default function SyncScreen() {
         clearInterval(pollForConnection);
         connectionPollRef.current = null;
         connectionTimeoutRef.current = null;
-        try { const _expToken = await getFirebaseIdToken(); await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_expToken ? `?auth=${_expToken}` : ''}`, { method: 'DELETE' }); } catch {}
+        try { const _expToken = await getFirebaseIdToken(); await fetch(`${firebaseDatabaseUrl}/pairing_codes/${code}.json${_expToken ? `?auth=${_expToken}` : ''}`, { method: 'DELETE', signal: AbortSignal.timeout(10000) }); } catch {}
         if (myPairingCode === code) setMyPairingCode(null);
       }, 5 * 60 * 1000);
     } catch { Alert.alert('Error', 'Could not generate code.'); }
@@ -3391,6 +3434,7 @@ export default function SyncScreen() {
           )}
         </View>
       </Modal>
+      <OnboardingWizard visible={showOnboarding} onComplete={() => { setShowOnboarding(false); AsyncStorage.setItem('@flyshelf_onboarding_done', 'true'); }} />
     </SafeAreaView>
     </LinearGradient>
   );

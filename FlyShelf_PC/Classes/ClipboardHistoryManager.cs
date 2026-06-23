@@ -331,6 +331,11 @@ namespace FlyShelf.Classes
 
                     // Write to temp file first, then atomic rename for safety
                     var tempPath = _historyPath + ".tmp";
+                    if (!DiskSpaceHelper.HasSufficientDiskSpace(_historyPath, json.Length * 2 + 1_000_000))
+                    {
+                        Logger.LogAction("CLIPBOARD", "Insufficient disk space to save history — skipping write");
+                        return;
+                    }
                     RunWithRetry(() => File.WriteAllText(tempPath, json));
 
                     // Create a backup copy before moving the temp file to historyPath
@@ -355,6 +360,8 @@ namespace FlyShelf.Classes
                 catch (Exception ex)
                 {
                     Logger.LogAction("HISTORY_COMPACT_ERROR", $"Compaction failed: {ex.Message}");
+                    // CHM-1 FIX: Clean up stale .tmp file so it doesn't accumulate on repeated failures
+                    try { File.Delete(_historyPath + ".tmp"); } catch { }
                 }
             }
         }
@@ -628,12 +635,32 @@ namespace FlyShelf.Classes
             action();
         }
 
+        /// <summary>
+        /// Computes a deterministic FNV-1a hash from a string.
+        /// Unlike String.GetHashCode(), this is stable across process restarts and .NET versions.
+        /// </summary>
+        private static int Fnv1aHash(string input)
+        {
+            const uint fnvOffsetBasis = 2166136261;
+            const uint fnvPrime = 16777619;
+
+            uint hash = fnvOffsetBasis;
+            foreach (char c in input)
+            {
+                hash ^= (byte)(c & 0xFF);
+                hash *= fnvPrime;
+                hash ^= (byte)(c >> 8);
+                hash *= fnvPrime;
+            }
+            return unchecked((int)hash);
+        }
+
         private static string GetItemId(ViewModels.ClipboardItem item)
         {
-            // Use a deterministic hash based on content, NOT object.GetHashCode()
-            // which is randomized per-process in .NET 6+ and non-stable across restarts.
+            // Use a deterministic FNV-1a hash based on content — stable across process restarts.
+            // String.GetHashCode() is randomized per-process in .NET 6+ and cannot be used.
             string contentKey = item.RawContent ?? item.FileName ?? item.FilePath ?? "";
-            int stableHash = contentKey.GetHashCode(StringComparison.Ordinal);
+            int stableHash = Fnv1aHash(contentKey);
             return $"{item.ItemType}_{item.DateCopied.Ticks}_{stableHash:X8}";
         }
 

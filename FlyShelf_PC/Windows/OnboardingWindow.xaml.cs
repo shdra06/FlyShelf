@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Collections.Generic;
 
 namespace FlyShelf.Windows
 {
@@ -20,6 +21,7 @@ namespace FlyShelf.Windows
             _stepPanels = new[] { Step1, Step2, Step3, Step4, Step5, Step6 };
             _dots = new[] { Dot1, Dot2, Dot3, Dot4, Dot5, Dot6 };
             ShowStep(0);
+            BuildOnboardingKeycaps();
         }
 
         private void ShowStep(int index)
@@ -91,6 +93,54 @@ namespace FlyShelf.Windows
                 ThemeCard_Mica.BorderBrush = mode == "mica" ? selectedGlow : inactiveBrush;
                 ThemeCard_Desktop.BorderBrush = mode == "desktop" ? selectedGlow : inactiveBrush;
             }
+        }
+
+        private void BuildOnboardingKeycaps()
+        {
+            if (HotkeyKeycapsPanel == null) return;
+            HotkeyKeycapsPanel.Children.Clear();
+            var display = Classes.SettingsManager.Current.HotkeyDisplayString;
+            var parts = display.Split(new[] { " + " }, StringSplitOptions.RemoveEmptyEntries);
+            for (int i = 0; i < parts.Length; i++)
+            {
+                if (i > 0)
+                {
+                    HotkeyKeycapsPanel.Children.Add(new TextBlock
+                    {
+                        Text = "+",
+                        FontSize = 24, FontWeight = FontWeights.Bold,
+                        Foreground = new SolidColorBrush(Color.FromRgb(100, 116, 139)), // #64748B
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Margin = new Thickness(14, 0, 14, 0)
+                    });
+                }
+                var keycap = new Border
+                {
+                    CornerRadius = new CornerRadius(8),
+                    Padding = new Thickness(16, 10, 16, 10),
+                    Background = new SolidColorBrush(Color.FromRgb(42, 45, 62)), // #2A2D3E
+                    BorderBrush = new SolidColorBrush(Color.FromRgb(58, 61, 78)), // #3A3D4E
+                    BorderThickness = new Thickness(1),
+                    Effect = new System.Windows.Media.Effects.DropShadowEffect
+                    {
+                        BlurRadius = 8, Opacity = 0.3, ShadowDepth = 2,
+                        Direction = 270, Color = Colors.Black
+                    },
+                    Child = new TextBlock
+                    {
+                        Text = parts[i],
+                        FontSize = 24, FontWeight = FontWeights.Bold,
+                        Foreground = new SolidColorBrush(Color.FromRgb(167, 139, 250)), // #A78BFA
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        VerticalAlignment = VerticalAlignment.Center
+                    }
+                };
+                HotkeyKeycapsPanel.Children.Add(keycap);
+            }
+
+            // Update description text
+            if (HotkeyDescriptionText != null)
+                HotkeyDescriptionText.Text = $"Press {display} anytime to summon or dismiss your clipboard shelf. You can change this in Settings.";
         }
 
         private void CompleteOnboarding()

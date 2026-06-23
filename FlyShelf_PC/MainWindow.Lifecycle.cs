@@ -52,6 +52,10 @@ namespace FlyShelf
                 }
                 catch { }
             }, System.Windows.Threading.DispatcherPriority.Send);
+
+            // ═══ Auto-refresh desktop wallpaper if it changed while window was hidden ═══
+            // Registry read is instant (~0ms) — safe to call on every activation.
+            RefreshDesktopWallpaperIfChanged();
         }
 
 
@@ -189,16 +193,18 @@ namespace FlyShelf
                 var myHwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
                 if (myHwnd != IntPtr.Zero)
                 {
-                    System.Threading.Tasks.Task.Run(() =>
+                    System.Threading.Tasks.Task.Run(async () =>
                     {
                         try
                         {
                             // Wait for VDM state to settle — EVENT_SYSTEM_FOREGROUND fires
                             // before IVirtualDesktopManager is fully updated during desktop switches.
                             // Without this delay, GetWindowDesktopId returns stale/empty GUIDs.
-                            System.Threading.Thread.Sleep(80);
+                            await System.Threading.Tasks.Task.Delay(80);
 
-                            var localVdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                            if (_cachedVdm == null)
+                                _cachedVdm = new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
+                            var localVdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)_cachedVdm;
                             
                             // Get thread/process ID of the new foreground window
                             uint focusedProcIdCheck = 0;
@@ -316,6 +322,7 @@ namespace FlyShelf
             }
             catch { /* COM may fail on older Windows builds — silently ignore */ }
         }
+        private FlyShelf.Classes.NativeMethods.VirtualDesktopManager? _cachedVdm;
         private bool _isPersistentMode = false;
         private bool _isAnimatingHide = false;
         private bool _isShowAnimating = false;
@@ -323,7 +330,7 @@ namespace FlyShelf
         private bool _isApplyingTheme = false;
         private volatile int _spawnGeneration = 0; // Incremented on each spawn to invalidate stale callbacks
         private bool _desktopSwitchedSinceLastDismiss = false; // True when dismiss was triggered by a desktop switch
-        private string? _lastPanelBeforeDismiss = null; // "notes" or "todo" — remembers panel for same-desktop resummon
+        private string? _lastPanelBeforeDismiss = null; // "notes", "todo", or "research" — remembers panel for same-desktop resummon
 
         /// <summary>
         /// Starts or restarts the 1-minute auto-revert timer for Notes/Todo panels.
@@ -356,12 +363,13 @@ namespace FlyShelf
             StopPanelAutoRevertTimer(); // One-shot
 
             // If a panel is still active after 1 minute, auto-revert to clipboard mode
-            if (_isNotesActive || _isTodoActive)
+            if (_isNotesActive || _isTodoActive || _isResearchActive)
             {
                 Classes.Logger.LogAction("AUTO_REVERT", "Panel idle for 1 minute — auto-reverting to clipboard mode.");
 
                 if (_isNotesActive) CloseNotesPanel(immediate: true);
                 if (_isTodoActive) CloseTodoPanel(immediate: true);
+                if (_isResearchActive) CloseResearchPanel(immediate: true);
 
                 // Ensure clean state for next summon — clear panel memory too
                 _lastPanelBeforeDismiss = null;
@@ -433,7 +441,7 @@ namespace FlyShelf
                     int exStyle = GetWindowLong(hwnd, GWL_EXSTYLE);
                     if ((exStyle & WS_EX_LAYERED) == 0)
                     {
-                        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
+                        SetWindowLongSafe(hwnd, GWL_EXSTYLE, exStyle | WS_EX_LAYERED);
                     }
                     SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
                 }
@@ -518,11 +526,23 @@ namespace FlyShelf
             ForceFirstSpawnRepaint();
 
             int capturedGen = _spawnGeneration;
-            var animTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render);
-            animTimer.Interval = TimeSpan.FromMilliseconds(150);
-            animTimer.Tick += (s, ev) =>
+            // M-21: Reuse the cached _showAnimEndTimer instead of creating a new DispatcherTimer each call
+            if (_showAnimEndTimer == null)
             {
-                animTimer.Stop();
+                _showAnimEndTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Render);
+                _showAnimEndTimer.Interval = TimeSpan.FromMilliseconds(150);
+            }
+            else
+            {
+                _showAnimEndTimer.Stop();
+            }
+            // Remove any previous handler to avoid stacking closures
+            // Use a local method so we can unsubscribe cleanly
+            EventHandler onAnimTimerTick = null!;
+            onAnimTimerTick = (s, ev) =>
+            {
+                _showAnimEndTimer.Stop();
+                _showAnimEndTimer.Tick -= onAnimTimerTick;
                 // Bail if a new spawn started (stale handler) or if the window was dismissed
                 if (_spawnGeneration != capturedGen || !_isCurrentlySummoned) return;
 
@@ -585,7 +605,8 @@ namespace FlyShelf
                     }
                 }, System.Windows.Threading.DispatcherPriority.Render);
             };
-            animTimer.Start();
+            _showAnimEndTimer.Tick += onAnimTimerTick;
+            _showAnimEndTimer.Start();
         }
 
         /// <summary>
@@ -642,15 +663,16 @@ namespace FlyShelf
 
             Classes.Logger.LogAction("VD_HIDE", $"AnimateAndHide | notes={_isNotesActive} todo={_isTodoActive} deskSwitchFlag={_desktopSwitchedSinceLastDismiss}");
 
-            // ═══ CLOSE NOTES/TODO ═══
-            if (_isNotesActive || _isTodoActive)
+            // ═══ CLOSE NOTES/TODO/RESEARCH ═══
+            if (_isNotesActive || _isTodoActive || _isResearchActive)
             {
                 // Always save which panel was active — ToggleMainClipboard decides whether to restore
-                _lastPanelBeforeDismiss = _isNotesActive ? "notes" : "todo";
+                _lastPanelBeforeDismiss = _isNotesActive ? "notes" : _isTodoActive ? "todo" : "research";
                 Classes.Logger.LogAction("VD_HIDE", $"Panel close: saved={_lastPanelBeforeDismiss}");
 
                 if (_isNotesActive) CloseNotesPanel(immediate: true);
                 if (_isTodoActive) CloseTodoPanel(immediate: true);
+                if (_isResearchActive) CloseResearchPanel(immediate: true);
             }
 
             StopPanelAutoRevertTimer();
@@ -836,10 +858,11 @@ namespace FlyShelf
                         // Only trim if working set is higher than 45MB
                         if (workingSet > 45 * 1024 * 1024)
                         {
-                            // Forced Gen 2 collection — reclaims all templates, styles, and unmanaged bitmaps
-                            System.GC.Collect(2, System.GCCollectionMode.Forced, true, true);
+                            // Non-blocking Gen 2 collection — reclaims all templates, styles, and unmanaged bitmaps
+                            // Uses Optimized mode with non-blocking, non-compacting to avoid worst-case GC pauses
+                            System.GC.Collect(2, System.GCCollectionMode.Optimized, false, false);
                             System.GC.WaitForPendingFinalizers();
-                            System.GC.Collect(2, System.GCCollectionMode.Forced, true, true);
+                            System.GC.Collect(2, System.GCCollectionMode.Optimized, false, false);
 
                             // Set working set floor to 20MB, ceiling to 50MB for aggressive idle trimming.
                             // 20MB keeps .NET runtime + core WPF resources resident, avoiding cold-start lag.
