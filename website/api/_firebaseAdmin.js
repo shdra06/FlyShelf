@@ -1,0 +1,45 @@
+// ═══════════════════════════════════════════════════════════════════
+// Firebase Admin Helper — Authenticated RTDB REST API (v2.2.1)
+//
+// [SECURITY FIX C2]: All Vercel API endpoints were previously accessing
+// the payment Firebase RTDB without any authentication, meaning anyone
+// who discovered the RTDB URL could read all customer data.
+//
+// This module adds authentication to ALL Firebase REST calls using
+// the FIREBASE_DB_SECRET env var (legacy database secret from
+// Firebase Console → Project Settings → Service Accounts → Database Secrets).
+//
+// Usage:
+//   const { firebaseFetch } = require('./_firebaseAdmin');
+//   const data = await firebaseFetch('/payments/xyz.json');
+//   await firebaseFetch('/payments/xyz.json', { method: 'PUT', body: ... });
+// ═══════════════════════════════════════════════════════════════════
+
+const DB_SECRET = process.env.FIREBASE_DB_SECRET;
+
+/**
+ * Authenticated fetch wrapper for Firebase RTDB REST API.
+ * Authenticates via Authorization header with the database secret.
+ * Throws if FIREBASE_DB_SECRET is not set (fail-closed).
+ * 
+ * @param {string} url - Full Firebase REST URL (e.g. `${DB_URL}/payments/xyz.json`)
+ * @param {object} [options] - Standard fetch options (method, headers, body)
+ * @returns {Promise<Response>} - The fetch Response object
+ */
+async function firebaseFetch(url, options = {}) {
+  if (DB_SECRET) {
+    // [SECURITY FIX v2.5.0]: Use Authorization header instead of URL query param
+    // Prevents the DB secret from appearing in server logs, Firebase audit logs, and proxy logs
+    options.headers = {
+      ...options.headers,
+      'Authorization': `Bearer ${DB_SECRET}`
+    };
+  } else {
+    // [SECURITY FIX v2.4.0]: Fail closed — never allow unauthenticated Firebase access
+    throw new Error('[_firebaseAdmin] FIREBASE_DB_SECRET not set — refusing unauthenticated request. Set the environment variable.');
+  }
+
+  return fetch(url, options);
+}
+
+module.exports = { firebaseFetch };
