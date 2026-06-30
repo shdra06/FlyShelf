@@ -119,9 +119,9 @@ namespace FlyShelf.Windows
         protected override void OnClosed(EventArgs e)
         {
             _isClosed = true;
-            try { _timer?.Stop(); } catch { }
-            try { Microsoft.Win32.SystemEvents.UserPreferenceChanged -= SystemEvents_UserPreferenceChanged; } catch { }
-            try { SettingsManager.Current.PropertyChanged -= OnSettingsPropertyChanged; } catch { }
+            try { _timer?.Stop(); } catch { } // Best-effort: failure is acceptable
+            try { Microsoft.Win32.SystemEvents.UserPreferenceChanged -= SystemEvents_UserPreferenceChanged; } catch { } // Best-effort: failure is acceptable
+            try { SettingsManager.Current.PropertyChanged -= OnSettingsPropertyChanged; } catch { } // Best-effort: failure is acceptable
             base.OnClosed(e);
         }
 
@@ -138,7 +138,7 @@ namespace FlyShelf.Windows
                     DwmSetWindowAttribute(handle, DWMWA_BORDER_COLOR, ref colorNone, Marshal.SizeOf<int>());
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         protected override void OnSourceInitialized(EventArgs e)
@@ -150,7 +150,7 @@ namespace FlyShelf.Windows
                 HwndSource source = (HwndSource)PresentationSource.FromDependencyObject(this);
                 source?.AddHook(WindowProc);
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private static IntPtr WindowProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -215,7 +215,7 @@ namespace FlyShelf.Windows
             IntPtr checkWindowClass(IntPtr wnd)
             {
                 var len = GetClassName(wnd, className, className.Capacity);
-                if (className.Equals("Shell_SecondaryTrayWnd"))
+                if (className.ToString() == "Shell_SecondaryTrayWnd")
                 {
                     if (MonitorUtil.GetMonitor(wnd).deviceId == selectedMonitor.deviceId)
                         return wnd;
@@ -390,7 +390,7 @@ namespace FlyShelf.Windows
                 }
                 SetWindowRgn(windowHandle, rgn, true);
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void UpdatePosition()
@@ -426,7 +426,7 @@ namespace FlyShelf.Windows
                     Dispatcher.BeginInvoke(() => { CalculateFloatingPosition(interop.Handle, taskbarHandle); }, DispatcherPriority.Background);
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private bool IsForegroundFullScreen()
@@ -463,7 +463,7 @@ namespace FlyShelf.Windows
                     return true;
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             return false;
         }
 
@@ -699,7 +699,7 @@ namespace FlyShelf.Windows
                         }
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
 
                 if (alignment == -1) // Auto — default to lower-left
                 {
@@ -774,7 +774,7 @@ namespace FlyShelf.Windows
 
                 Visibility = Visibility.Visible;
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             finally
             {
                 _positionUpdateInProgress = false;

@@ -197,7 +197,7 @@ namespace FlyShelf.Classes
                     _data.Tier = "free";
                     _data.LicenseKey = "";
                     _tierSentinel = 0;
-                    try { Save(); } catch { }
+                    try { Save(); } catch (Exception ex) { Logger.LogAction("LICENSE", $"Failed to save after sentinel reset: {ex.Message}"); }
                     return false;
                 }
 
@@ -598,9 +598,10 @@ namespace FlyShelf.Classes
         }
 
         /// <summary>
-        /// Synchronous wrapper for backward compatibility (e.g. UpgradePrompt dialog).
+        /// Synchronous wrapper — DEPRECATED. Use ActivateLicenseAsync instead.
         /// Uses Task.Run to avoid SynchronizationContext deadlock on UI thread.
         /// </summary>
+        [System.Obsolete("Use ActivateLicenseAsync instead to avoid UI thread blocking.")]
         public static bool ActivateLicense(string key)
         {
             return Task.Run(() => ActivateLicenseAsync(key)).GetAwaiter().GetResult();
@@ -717,7 +718,7 @@ namespace FlyShelf.Classes
                                     _data.Tier = "free";
                                     _data.ActivatedAt = "";
                                     // Save the clean state back
-                                    try { SaveInternal(); } catch { }
+                                    try { SaveInternal(); } catch (Exception ex) { Logger.LogAction("LICENSE", $"Failed to save after HMAC reset: {ex.Message}"); }
                                 }
                             }
 
@@ -793,17 +794,20 @@ namespace FlyShelf.Classes
         /// </summary>
         private static void EnsureTodayReset()
         {
-            // [SECURITY FIX v2.4.0]: Use trusted time (NTP > persisted anchor + monotonic clock > OS)
-            // Prevents daily limit reset bypass via system clock manipulation
-            var (trustedNow, _) = NetworkClock.GetTrustedUtcNow();
-            DateTime correctedNow = trustedNow.ToLocalTime().DateTime;
-            string today = correctedNow.Date.ToString("yyyy-MM-dd");
-
-            if (_data.DailyUsage.Date != today)
+            lock (_lock)
             {
-                _data.DailyUsage = new DailyUsageData { Date = today };
-                Save();
-                Logger.LogAction("LICENSE", $"Daily usage counters reset (new day: {today}, trusted: {NetworkClock.IsTimeTrusted})");
+                // [SECURITY FIX v2.4.0]: Use trusted time (NTP > persisted anchor + monotonic clock > OS)
+                // Prevents daily limit reset bypass via system clock manipulation
+                var (trustedNow, _) = NetworkClock.GetTrustedUtcNow();
+                DateTime correctedNow = trustedNow.ToLocalTime().DateTime;
+                string today = correctedNow.Date.ToString("yyyy-MM-dd");
+
+                if (_data.DailyUsage.Date != today)
+                {
+                    _data.DailyUsage = new DailyUsageData { Date = today };
+                    Save();
+                    Logger.LogAction("LICENSE", $"Daily usage counters reset (new day: {today}, trusted: {NetworkClock.IsTimeTrusted})");
+                }
             }
         }
 
@@ -842,7 +846,7 @@ namespace FlyShelf.Classes
 
                 // Get Firebase auth token for authenticated REST calls (security audit v2.1.0)
                 string firebaseAuth = null;
-                try { firebaseAuth = await FirebaseAuthManager.GetIdTokenAsync(); } catch { }
+                try { firebaseAuth = await FirebaseAuthManager.GetIdTokenAsync(); } catch (Exception ex) { Logger.LogAction("LICENSE", $"Firebase auth token fetch failed: {ex.Message}"); }
                 // Helper to append ?auth= or &auth= to Firebase REST URLs
                 string AuthUrl(string url)
                 {
@@ -876,7 +880,7 @@ namespace FlyShelf.Classes
                 string activationUrl = AuthUrl($"{dbUrl}/licenses/activations/{safeKey}/{deviceId}.json");
                 // Get Firebase UID for rule compliance: .validate requires uid === auth.uid
                 string firebaseUid = "";
-                try { firebaseUid = await FirebaseAuthManager.GetUidAsync() ?? ""; } catch { }
+                try { firebaseUid = await FirebaseAuthManager.GetUidAsync() ?? ""; } catch (Exception ex) { Logger.LogAction("LICENSE", $"Firebase UID fetch failed: {ex.Message}"); }
                 var activationPayload = JsonSerializer.Serialize(new
                 {
                     deviceId,
@@ -1162,7 +1166,7 @@ namespace FlyShelf.Classes
                             // DON'T update the hash file until revalidation succeeds.
                             _data.ActivationToken = "";
                             _data.LastValidated = "";
-                            try { SaveInternal(); } catch { }
+                            try { SaveInternal(); } catch (Exception ex) { Logger.LogAction("INTEGRITY", $"Failed to save after JWT clear: {ex.Message}"); }
                             Logger.LogAction("INTEGRITY", "Pro JWT cleared — server re-activation required");
 
                             _ = Task.Run(async () =>

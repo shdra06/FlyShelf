@@ -306,7 +306,7 @@ namespace FlyShelf.Classes
                     {
                         string wordText = (string)word.Text;
                         double confidence = 1.0;
-                        try { confidence = (double)word.Confidence; } catch { }
+                        try { confidence = (double)word.Confidence; } catch { } // Best-effort: failure is acceptable
 
                         // BoundingBox is a BoundingBoxWithKeyPoints (polygon)
                         // Extract bounding rectangle from the polygon corners
@@ -370,7 +370,7 @@ namespace FlyShelf.Classes
                     if (textRecognizer is IDisposable disposable)
                         disposable.Dispose();
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -433,7 +433,7 @@ namespace FlyShelf.Classes
                             var error = asyncOp.ErrorCode;
                             Logger.LogAction("MODERN_OCR", $"Async operation failed: status={statusInt}, error={error}");
                         }
-                        catch { }
+                        catch { } // Best-effort: failure is acceptable
                         return null;
                     }
                 }

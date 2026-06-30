@@ -144,6 +144,8 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
             isSelected && s.pageCellSelected,
           ]}
           activeOpacity={0.6}
+          accessibilityLabel={`Page ${i}${isSelected ? `, selected, order ${orderIdx + 1}` : ''}`}
+          accessibilityRole="checkbox"
         >
           <Text style={[s.pageNum, isSelected && s.pageNumSelected]}>{i}</Text>
           {isSelected && (
@@ -169,6 +171,8 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
           onPress={() => movePageInOrder(idx, 'up')}
           style={[s.reorderBtn, idx === 0 && { opacity: 0.3 }]}
           disabled={idx === 0}
+          accessibilityLabel={`Move page ${pageNum} up`}
+          accessibilityRole="button"
         >
           <IconSymbol name="chevron.up" size={16} color="#FFF" />
         </TouchableOpacity>
@@ -176,12 +180,16 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
           onPress={() => movePageInOrder(idx, 'down')}
           style={[s.reorderBtn, idx === selectedPages.length - 1 && { opacity: 0.3 }]}
           disabled={idx === selectedPages.length - 1}
+          accessibilityLabel={`Move page ${pageNum} down`}
+          accessibilityRole="button"
         >
           <IconSymbol name="chevron.down" size={16} color="#FFF" />
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => setSelectedPages(prev => prev.filter((_, i) => i !== idx))}
           style={[s.reorderBtn, { backgroundColor: '#EF444433' }]}
+          accessibilityLabel={`Remove page ${pageNum}`}
+          accessibilityRole="button"
         >
           <IconSymbol name="xmark" size={14} color="#EF4444" />
         </TouchableOpacity>
@@ -201,7 +209,7 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
                 {pdfTitle} {pageCount > 0 ? `• ${pageCount} pages` : ''}
               </Text>
             </View>
-            <TouchableOpacity onPress={onClose} style={s.closeBtn}>
+            <TouchableOpacity onPress={onClose} style={s.closeBtn} accessibilityLabel="Close PDF editor" accessibilityRole="button">
               <IconSymbol name="xmark" size={18} color="#FFF" />
             </TouchableOpacity>
           </View>
@@ -218,12 +226,16 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
                 <TouchableOpacity
                   onPress={() => setMode('select')}
                   style={[s.tab, mode === 'select' && s.tabActive]}
+                  accessibilityLabel={`Select pages mode${mode === 'select' ? ', active' : ''}`}
+                  accessibilityRole="tab"
                 >
                   <Text style={[s.tabText, mode === 'select' && s.tabTextActive]}>Select Pages</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   onPress={() => setMode('reorder')}
                   style={[s.tab, mode === 'reorder' && s.tabActive]}
+                  accessibilityLabel={`Reorder pages mode, ${selectedPages.length} selected${mode === 'reorder' ? ', active' : ''}`}
+                  accessibilityRole="tab"
                 >
                   <Text style={[s.tabText, mode === 'reorder' && s.tabTextActive]}>
                     Reorder ({selectedPages.length})
@@ -234,10 +246,10 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
               {/* Quick Actions */}
               {mode === 'select' && (
                 <View style={s.quickActions}>
-                  <TouchableOpacity onPress={selectAll} style={s.quickBtn}>
+                  <TouchableOpacity onPress={selectAll} style={s.quickBtn} accessibilityLabel="Select all pages" accessibilityRole="button">
                     <Text style={s.quickBtnText}>Select All</Text>
                   </TouchableOpacity>
-                  <TouchableOpacity onPress={deselectAll} style={s.quickBtn}>
+                  <TouchableOpacity onPress={deselectAll} style={s.quickBtn} accessibilityLabel="Clear page selection" accessibilityRole="button">
                     <Text style={s.quickBtnText}>Clear</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -314,13 +326,15 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
                   {selectedPages.length} of {pageCount} pages selected
                 </Text>
                 <View style={s.footerButtons}>
-                  <TouchableOpacity onPress={onClose} style={s.cancelBtn}>
+                  <TouchableOpacity onPress={onClose} style={s.cancelBtn} accessibilityLabel="Cancel" accessibilityRole="button">
                     <Text style={s.cancelBtnText}>Cancel</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={handleSave}
                     style={[s.saveBtn, selectedPages.length === 0 && { opacity: 0.4 }]}
                     disabled={selectedPages.length === 0 || saving}
+                    accessibilityLabel={`Save ${selectedPages.length} pages as new PDF`}
+                    accessibilityRole="button"
                   >
                     {saving ? (
                       <ActivityIndicator size="small" color="#FFF" />

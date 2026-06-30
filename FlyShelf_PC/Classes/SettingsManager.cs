@@ -316,6 +316,10 @@ namespace FlyShelf.Classes
         private bool _enableNotifications = true;
         public bool EnableNotifications { get => _enableNotifications; set => SetProperty(ref _enableNotifications, value); }
 
+        // Show Source App Label — displays "Copied from [app]" on clipboard cards
+        private bool _showSourceAppLabel = true;
+        public bool ShowSourceAppLabel { get => _showSourceAppLabel; set => SetProperty(ref _showSourceAppLabel, value); }
+
         // First-time onboarding — tracks whether the user has completed the startup tutorial
         private bool _hasCompletedOnboarding = false;
         public bool HasCompletedOnboarding { get => _hasCompletedOnboarding; set => SetProperty(ref _hasCompletedOnboarding, value); }
@@ -353,6 +357,10 @@ namespace FlyShelf.Classes
         /// <summary>Preferred language for AI translations (empty = auto-detect).</summary>
         private string _aiPreferredLanguage = "";
         public string AiPreferredLanguage { get => _aiPreferredLanguage; set => SetProperty(ref _aiPreferredLanguage, value); }
+
+        /// <summary>Default AI method for OCR/Table: "auto" (API if key exists, else popup), "api" (always API), "local" (always local).</summary>
+        private string _defaultAiMethod = "auto";
+        public string DefaultAiMethod { get => _defaultAiMethod; set => SetProperty(ref _defaultAiMethod, value); }
 
         /// <summary>
         /// Reflection-based property copying to keep the static Current reference stable.
@@ -399,12 +407,13 @@ namespace FlyShelf.Classes
         }
 
         private static System.Threading.Timer? _saveDebounce;
+        private static bool _handlersRegistered = false;
 
         public static void Load()
         {
             string path = GetConfigPath();
             // SM-2 FIX: Clean up any stale .tmp file left from a crash mid-write on the previous run
-            try { File.Delete(path + ".tmp"); } catch { }
+            try { File.Delete(path + ".tmp"); } catch { } // Best-effort: failure is acceptable
             try
             {
                 if (File.Exists(path))
@@ -440,7 +449,7 @@ namespace FlyShelf.Classes
                             RunWithRetry(() => File.Copy(path, corruptBackup, true));
                             Logger.LogAction("SETTINGS_LOAD_WARN", $"Backed up corrupt settings to {corruptBackup}");
                         } 
-                        catch { }
+                        catch { } // Best-effort: failure is acceptable
                     }
 
                     var settings = JsonSerializer.Deserialize<AdvanceSettings>(json);
@@ -470,7 +479,7 @@ namespace FlyShelf.Classes
                                 RunWithRetry(() => File.WriteAllText(tmpPath, migJson));
                                 RunWithRetry(() => File.Move(tmpPath, path, true));
                             }
-                            catch { }
+                            catch { } // Best-effort: failure is acceptable
                         }
                     }
                 }
@@ -491,10 +500,14 @@ namespace FlyShelf.Classes
                 Logger.LogAction("SETTINGS_LOAD_ERROR", $"Failed to load settings: {ex.Message}");
             }
             
-            Current.PropertyChanged += (s, e) => DebouncedSave();
-            if (Current.CustomSnifferPaths != null)
+            if (!_handlersRegistered)
             {
-                Current.CustomSnifferPaths.CollectionChanged += (s, e) => DebouncedSave();
+                _handlersRegistered = true;
+                Current.PropertyChanged += (s, e) => DebouncedSave();
+                if (Current.CustomSnifferPaths != null)
+                {
+                    Current.CustomSnifferPaths.CollectionChanged += (s, e) => DebouncedSave();
+                }
             }
         }
 
@@ -583,14 +596,14 @@ namespace FlyShelf.Classes
                 {
                     foreach (var dir in Directory.GetDirectories(appDataDir))
                     {
-                        try { Directory.Delete(dir, true); } catch { }
+                        try { Directory.Delete(dir, true); } catch { } // Best-effort: failure is acceptable
                     }
                     foreach (var file in Directory.GetFiles(appDataDir))
                     {
-                        try { File.Delete(file); } catch { }
+                        try { File.Delete(file); } catch { } // Best-effort: failure is acceptable
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
 
             // 3. Delete sandbox temp directory if it exists

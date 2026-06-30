@@ -23,6 +23,7 @@
             <ResourceDictionary.MergedDictionaries>
                 <ui:ThemesDictionary Theme="Dark"/>
                 <ui:ControlsDictionary />
+                <ResourceDictionary Source="/Resources/Styles/GlobalScrollBar.xaml"/>
             </ResourceDictionary.MergedDictionaries>
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
 
@@ -55,7 +56,7 @@
 
 
             <!-- Shared ContextMenu cached at Window level to prevent duplicate MenuItem element allocations -->
-            <ContextMenu x:Key="CardContextMenu" x:Shared="False" StaysOpen="True">
+            <ContextMenu x:Key="CardContextMenu" x:Shared="False" StaysOpen="False" Opened="CardContextMenu_Opened">
                 <ContextMenu.Resources>
                     <Style TargetType="Separator">
                         <Setter Property="Margin" Value="8,4"/>
@@ -80,40 +81,42 @@
                 <Separator />
 
                 <!-- ═══ TEXT / CODE Actions ═══ -->
-                <MenuItem Header="🔍 Search on Google" Click="GoogleSearch_Click" 
-                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                          Visibility="{Binding PlacementTarget.DataContext.IsTextPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-
-                <!-- 🌐 Translate -->
-                <MenuItem Header="🌐 Translate"
+                <MenuItem Click="GoogleSearch_Click" 
                           Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Visibility="{Binding PlacementTarget.DataContext.IsTextPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <MenuItem Header="🌐 English"    Click="TranslateContextMenu_Click" Tag="English"/>
-                    <MenuItem Header="🌐 Spanish"    Click="TranslateContextMenu_Click" Tag="Spanish"/>
-                    <MenuItem Header="🌐 French"     Click="TranslateContextMenu_Click" Tag="French"/>
-                    <MenuItem Header="🌐 German"     Click="TranslateContextMenu_Click" Tag="German"/>
-                    <MenuItem Header="🌐 Japanese"   Click="TranslateContextMenu_Click" Tag="Japanese"/>
-                    <MenuItem Header="🌐 Chinese"    Click="TranslateContextMenu_Click" Tag="Chinese"/>
-                    <MenuItem Header="🌐 Hindi"      Click="TranslateContextMenu_Click" Tag="Hindi"/>
-                    <MenuItem Header="🌐 Arabic"     Click="TranslateContextMenu_Click" Tag="Arabic"/>
-                    <MenuItem Header="🌐 Korean"     Click="TranslateContextMenu_Click" Tag="Korean"/>
-                    <MenuItem Header="🌐 Portuguese" Click="TranslateContextMenu_Click" Tag="Portuguese"/>
+                    <MenuItem.Header>
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Search24" FontSize="14" Margin="0,0,8,0"/><TextBlock Text="Search on Google"/></StackPanel>
+                    </MenuItem.Header>
                 </MenuItem>
 
+
+
                 <!-- 🔒 Mark as Password -->
-                <MenuItem Header="🔒 Mark as Password" Click="MarkAsPassword_Click"
+                <MenuItem Click="MarkAsPassword_Click"
                           Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                          Visibility="{Binding PlacementTarget.DataContext.CanConvertToPassword, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                          Visibility="{Binding PlacementTarget.DataContext.CanConvertToPassword, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <MenuItem.Header>
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Shield24" FontSize="14" Margin="0,0,8,0"/><TextBlock Text="Mark as Password"/></StackPanel>
+                    </MenuItem.Header>
+                </MenuItem>
 
                 <!-- 🔑 View/Edit Password -->
-                <MenuItem Header="🔑 View/Edit Password" Click="ViewEditPassword_Click"
+                <MenuItem Click="ViewEditPassword_Click"
                           Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                          Visibility="{Binding PlacementTarget.DataContext.IsPassword, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                          Visibility="{Binding PlacementTarget.DataContext.IsPassword, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <MenuItem.Header>
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Key24" FontSize="14" Margin="0,0,8,0"/><TextBlock Text="View/Edit Password"/></StackPanel>
+                    </MenuItem.Header>
+                </MenuItem>
 
                 <!-- ✏️ Rename Label -->
-                <MenuItem Header="✏️ Rename Label" Click="RenamePasswordLabel_Click"
+                <MenuItem Click="RenamePasswordLabel_Click"
                           Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
-                          Visibility="{Binding PlacementTarget.DataContext.IsPassword, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                          Visibility="{Binding PlacementTarget.DataContext.IsPassword, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <MenuItem.Header>
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Edit24" FontSize="14" Margin="0,0,8,0"/><TextBlock Text="Rename Label"/></StackPanel>
+                    </MenuItem.Header>
+                </MenuItem>
 
                 <!-- Revert to Normal Text -->
                 <MenuItem Header="Revert to Normal Text" Click="RevertToText_Click"
@@ -134,12 +137,84 @@
                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                           Visibility="{Binding PlacementTarget.DataContext.IsCPlusPlusPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
+                <!-- ═══ SMART ACTIONS ═══ -->
+                <MenuItem>
+                    <MenuItem.Header>
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Rocket24" FontSize="14" Margin="0,0,8,0"/><TextBlock Text="Smart Actions"/></StackPanel>
+                    </MenuItem.Header>
+                    <MenuItem.Style>
+                        <Style TargetType="MenuItem">
+                            <Setter Property="Padding" Value="10,6"/>
+                            <Setter Property="FontSize" Value="12.5"/>
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding PlacementTarget.DataContext.HasSmartBadge, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding PlacementTarget.DataContext.HasEmail, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding PlacementTarget.DataContext.IsJsonPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </MenuItem.Style>
+                    <MenuItem Header="Pretty Print JSON" Click="PrettyPrintJson_Click"
+                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              Visibility="{Binding PlacementTarget.DataContext.IsJsonPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    <MenuItem Header="Compose Email" Click="ComposeEmail_Click"
+                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              Visibility="{Binding PlacementTarget.DataContext.HasEmail, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    <MenuItem Header="Evaluate Math" Click="EvaluateMath_Click"
+                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              Visibility="{Binding PlacementTarget.DataContext.IsMathExpression, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    <MenuItem Header="Decode Base64" Click="DecodeBase64_Click"
+                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              Visibility="{Binding PlacementTarget.DataContext.IsBase64Content, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    <MenuItem Header="Convert Timestamp" Click="ConvertEpoch_Click"
+                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              Visibility="{Binding PlacementTarget.DataContext.IsEpochTimestamp, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                </MenuItem>
+
+                <!-- ═══ AI ACTIONS (Text items) ═══ -->
+                <MenuItem>
+                    <MenuItem.Header>
+                        <StackPanel Orientation="Horizontal"><ui:SymbolIcon Symbol="Sparkle24" FontSize="14" Margin="0,0,8,0" Foreground="#A78BFA"/><TextBlock Text="AI Actions"/></StackPanel>
+                    </MenuItem.Header>
+                    <MenuItem.Style>
+                        <Style TargetType="MenuItem">
+                            <Setter Property="Visibility" Value="Collapsed"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding PlacementTarget.DataContext.IsTextPreview, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding PlacementTarget.DataContext.IsCodePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}}" Value="True">
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </MenuItem.Style>
+                    <MenuItem Header="Summarize" Click="AISummarize_Click"
+                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                    <MenuItem Header="Fix Grammar" Click="AIFixGrammar_Click"
+                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                    <MenuItem Header="Rewrite (Formal)" Click="AIRewriteFormal_Click"
+                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                    <MenuItem Header="Rewrite (Casual)" Click="AIRewriteCasual_Click"
+                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"/>
+                    <Separator/>
+                    <MenuItem Header="Explain Code" Click="AIExplainCode_Click"
+                              Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                              Visibility="{Binding PlacementTarget.DataContext.IsCodePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                </MenuItem>
+
                 <!-- ═══ IMAGE: OCR Extract + Gemini Table ═══ -->
                 <MenuItem Header="Extract Text (OCR)" 
                           Command="{Binding PlacementTarget.Tag.ExtractTextCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                           Visibility="{Binding PlacementTarget.DataContext.IsImagePreview, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <MenuItem Header="📊 Extract Table Data" 
+                <MenuItem Header="Extract Table Data" 
                           Command="{Binding PlacementTarget.Tag.ExtractTableCommand, RelativeSource={RelativeSource AncestorType=ContextMenu}}" 
                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Foreground="{DynamicResource GeminiAccentColor}"
@@ -181,7 +256,7 @@
                 <Separator />
 
                 <!-- ═══ FILE-BACKED: Rename ═══ -->
-                <MenuItem Header="✏️ Rename" Click="RenameItem_Click"
+                <MenuItem Header="Rename" Click="RenameItem_Click"
                           Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Visibility="{Binding PlacementTarget.DataContext.CanRename, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
@@ -191,7 +266,11 @@
                           CommandParameter="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
                           Visibility="{Binding PlacementTarget.DataContext.CanShowInExplorer, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"/>
 
-
+                <!-- ═══ FILE-BACKED: Copy File Path ═══ -->
+                <MenuItem Header="Copy Path" Click="CopyFilePath_Click"
+                          Tag="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource AncestorType=ContextMenu}}"
+                          Visibility="{Binding PlacementTarget.DataContext.HasFilePath, RelativeSource={RelativeSource AncestorType=ContextMenu}, Converter={StaticResource BooleanToVisibilityConverter}}"
+                          AutomationProperties.Name="Copy file path to clipboard"/>
 
                 <!-- ═══ Universal: Delete ═══ -->
                 <MenuItem Header="Delete" Click="DeleteContextMenu_Click" Foreground="{DynamicResource DangerColor}"/>
@@ -203,7 +282,7 @@
         <WindowChrome GlassFrameThickness="-1" CornerRadius="14" CaptionHeight="0" UseAeroCaptionButtons="False" ResizeBorderThickness="0" />
     </WindowChrome.WindowChrome>
     <Border CornerRadius="14" ClipToBounds="True">
-    <Grid x:Name="RootContent" Margin="0" MouseLeftButtonDown="Header_MouseLeftButtonDown" Background="#01000000">
+    <Grid x:Name="RootContent" Margin="0" MouseLeftButtonDown="Header_MouseLeftButtonDown" PreviewMouseDown="RootContent_PreviewMouseDown" Background="#01000000">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -294,7 +373,7 @@
                                VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
                     <Button Grid.Column="2" x:Name="UpdateBannerDismissBtn" Click="UpdateBannerDismiss_Click"
                             Focusable="False" Cursor="Hand" VerticalAlignment="Center" Margin="4,0,0,0"
-                            ToolTip="Dismiss">
+                            ToolTip="Dismiss" AutomationProperties.Name="Dismiss update notification">
                         <Button.Style>
                             <Style TargetType="Button">
                                 <Setter Property="OverridesDefaultStyle" Value="True"/>
@@ -359,7 +438,8 @@
                                  FontSize="12" VerticalAlignment="Center" VerticalContentAlignment="Center" 
                                  CaretBrush="{DynamicResource ThemeAccent}" Padding="0" Margin="0"
                                  HorizontalContentAlignment="Left" MinWidth="100"
-                                 TextChanged="SearchTextBox_TextChanged" PreviewKeyDown="SearchTextBox_PreviewKeyDown">
+                                 TextChanged="SearchTextBox_TextChanged" PreviewKeyDown="SearchTextBox_PreviewKeyDown"
+                                 AutomationProperties.Name="Search clipboard history" TabIndex="1">
                             <TextBox.Style>
                                 <Style TargetType="TextBox">
                                     <Setter Property="Background" Value="Transparent"/>
@@ -389,7 +469,7 @@
                         <!-- Clear search button -->
                         <ui:Button Grid.Column="1" Focusable="False" Appearance="Transparent" Foreground="{DynamicResource SubtleTextColor}" Click="ClearSearch_Click" ToolTip="Clear Search" 
                                    Margin="2,0,0,0" Padding="3,3" CornerRadius="5" Width="20" Height="20" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                                   Background="Transparent" BorderThickness="0">
+                                   Background="Transparent" BorderThickness="0" AutomationProperties.Name="Clear search">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss12" FontSize="9"/></ui:Button.Icon>
                         </ui:Button>
                     </Grid>
@@ -400,7 +480,7 @@
                     <StackPanel x:Name="ToolbarButtonsPanel" Orientation="Horizontal" HorizontalAlignment="Right">
                     
                         <!-- Search Toggle -->
-                        <ui:Button x:Name="SearchToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="SearchToggle_Click" ToolTip="Search Clipboard (Ctrl+F)" Margin="0,0,6,0">
+                        <ui:Button x:Name="SearchToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="SearchToggle_Click" ToolTip="Search Clipboard (Ctrl+F)" Margin="0,0,6,0" AutomationProperties.Name="Search clipboard" TabIndex="2">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" /></ui:Button.Icon>
                         </ui:Button>
  
@@ -447,7 +527,7 @@
                          </Grid>
  
                          <!-- Quick Notes Toggle -->
-                         <ui:Button x:Name="NotesToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="NotesToggle_Click" ToolTip="Quick Notes" Margin="0,0,6,0">
+                         <ui:Button x:Name="NotesToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="NotesToggle_Click" ToolTip="Quick Notes" Margin="0,0,6,0" AutomationProperties.Name="Quick Notes" TabIndex="3">
                              <ui:Button.Resources>
                                  <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
                                  <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
@@ -457,7 +537,7 @@
                          </ui:Button>
 
                          <!-- To-Do List Toggle -->
-                         <ui:Button x:Name="TodoToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="TodoToggle_Click" ToolTip="To-Do List" Margin="0,0,6,0">
+                         <ui:Button x:Name="TodoToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="TodoToggle_Click" ToolTip="To-Do List" Margin="0,0,6,0" AutomationProperties.Name="To-Do List" TabIndex="4">
                              <ui:Button.Resources>
                                  <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
                                  <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
@@ -467,7 +547,7 @@
                          </ui:Button>
 
                          <!-- Networking Mode Toggle -->
-                         <ui:Button x:Name="ResearchToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ResearchToggle_Click" ToolTip="Networking — Send files to connected devices" Margin="0,0,6,0">
+                         <ui:Button x:Name="ResearchToggleBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ResearchToggle_Click" ToolTip="Networking — Send files to connected devices" Margin="0,0,6,0" AutomationProperties.Name="Networking panel" TabIndex="5">
                              <ui:Button.Resources>
                                  <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#286366F1"/>
                                  <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#606366F1"/>
@@ -477,12 +557,12 @@
                          </ui:Button>
 
                          <!-- Sort/Filter by Category -->
-                         <ui:Button x:Name="SortFilterBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="SortFilter_Click" ToolTip="Filter by Category" Margin="0,0,6,0">
+                         <ui:Button x:Name="SortFilterBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="SortFilter_Click" ToolTip="Filter by Category" Margin="0,0,6,0" AutomationProperties.Name="Filter by category" TabIndex="6">
                              <ui:Button.Icon><ui:FontIcon Glyph="&#xE71C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" /></ui:Button.Icon>
                          </ui:Button>
 
                          <!-- Stopwatch Button (only visible in To-Do list mode) -->
-                         <ui:Button x:Name="TodoStopwatchBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="TodoStopwatch_Click" ToolTip="Stopwatch Timer" Margin="0,0,6,0" Visibility="Collapsed">
+                         <ui:Button x:Name="TodoStopwatchBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="TodoStopwatch_Click" ToolTip="Stopwatch Timer" Margin="0,0,6,0" Visibility="Collapsed" AutomationProperties.Name="Stopwatch timer">
                              <ui:Button.Resources>
                                  <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#288B5CF6"/>
                                  <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#608B5CF6"/>
@@ -490,6 +570,17 @@
                              </ui:Button.Resources>
                              <ui:Button.Icon><ui:SymbolIcon Symbol="Timer24" /></ui:Button.Icon>
                          </ui:Button>
+
+                         <!-- AI Settings Toggle (hidden from toolbar — accessible via Settings) -->
+                         <ui:Button x:Name="AiSettingsToggleBtn" Visibility="Collapsed" Style="{StaticResource PremiumHeaderButtonStyle}" Click="AiSettingsToggle_Click" ToolTip="AI Settings" Margin="0,0,6,0" AutomationProperties.Name="AI Settings">
+                             <ui:Button.Resources>
+                                 <SolidColorBrush x:Key="ButtonBackgroundPointerOver" Color="#28A78BFA"/>
+                                 <SolidColorBrush x:Key="ButtonBorderBrushPointerOver" Color="#60A78BFA"/>
+                                 <SolidColorBrush x:Key="ButtonForegroundPointerOver" Color="#A78BFA"/>
+                             </ui:Button.Resources>
+                             <ui:Button.Icon><ui:SymbolIcon Symbol="Sparkle24" /></ui:Button.Icon>
+                         </ui:Button>
+
 
                           <!-- ═══ Incognito Mode Badge ═══ -->
                           <Border x:Name="IncognitoBadge" Visibility="Collapsed" Cursor="Hand"
@@ -516,7 +607,7 @@
                           </Border>
 
                           <!-- More Options Button -->
-                          <ui:Button x:Name="MoreBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="MoreBtn_Click" ToolTip="More Options" Margin="0,0,6,0" Visibility="Collapsed">
+                          <ui:Button x:Name="MoreBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="MoreBtn_Click" ToolTip="More Options" Margin="0,0,6,0" Visibility="Collapsed" AutomationProperties.Name="More options" TabIndex="7">
                               <ui:Button.Icon><ui:SymbolIcon Symbol="MoreHorizontal24" /></ui:Button.Icon>
                           </ui:Button>
 
@@ -544,7 +635,7 @@
                               </StackPanel>
                           </Border>
 
-                          <ui:Button Style="{StaticResource PremiumHeaderButtonStyle}" Click="CloseWindow_Click" ToolTip="Hide (Esc)">
+                          <ui:Button Style="{StaticResource PremiumHeaderButtonStyle}" Click="CloseWindow_Click" ToolTip="Hide (Esc)" AutomationProperties.Name="Hide window" TabIndex="8">
                               <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" Filled="True"/></ui:Button.Icon>
                           </ui:Button>
                     </StackPanel>
@@ -719,44 +810,44 @@
                             BorderBrush="#0AFFFFFF" Background="Transparent">
                     <StackPanel Orientation="Horizontal">
                         <!-- Emoji Picker -->
-                        <ui:Button x:Name="EmojiBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,4,0" Padding="0">
+                        <ui:Button x:Name="EmojiBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="EmojiPicker_Click" ToolTip="Emoji Picker" Margin="0,0,4,0" Padding="0" AutomationProperties.Name="Emoji picker">
                             <emoji:TextBlock Text="😊" FontSize="16" 
                                              VerticalAlignment="Center" HorizontalAlignment="Center"
                                              Margin="0,-1,0,0"/>
                         </ui:Button>
 
                         <!-- Merge PDF button — hidden by default, replaces emoji space when PDFs selected -->
-                        <ui:Button x:Name="MergePdfToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,4,0">
+                        <ui:Button x:Name="MergePdfToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" ToolTip="Merge Selected PDFs" Margin="0,0,4,0" AutomationProperties.Name="Merge selected PDFs">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentCopy24"/></ui:Button.Icon>
                         </ui:Button>
                         
                         <!-- Global Sync Toggle -->
-                        <ui:Button x:Name="SyncToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ToggleGlobalSync_Click" ToolTip="Toggle All Sync" Margin="0,0,4,0">
+                        <ui:Button x:Name="SyncToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ToggleGlobalSync_Click" ToolTip="Toggle All Sync" Margin="0,0,4,0" AutomationProperties.Name="Toggle sync">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowSync24" Filled="True"/></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Unpin toolbar button — hidden by default, replaces sync space when pinned items selected -->
-                        <ui:Button x:Name="UnpinToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="UnpinSelectedBtn_Click" ToolTip="Unpin Selected Items" Margin="0,0,4,0">
+                        <ui:Button x:Name="UnpinToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Visibility="Collapsed" Click="UnpinSelectedBtn_Click" ToolTip="Unpin Selected Items" Margin="0,0,4,0" AutomationProperties.Name="Unpin selected items">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="PinOff24"/></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Shortcuts Button -->
-                        <ui:Button x:Name="ShortcutsToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ShortcutsBtn_Click" ToolTip="Text Shortcuts" Margin="0,0,4,0">
+                        <ui:Button x:Name="ShortcutsToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ShortcutsBtn_Click" ToolTip="Text Shortcuts" Margin="0,0,4,0" AutomationProperties.Name="Text shortcuts">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Rocket24" /></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Reminders Button -->
-                        <ui:Button x:Name="ReminderToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ReminderBtn_Click" ToolTip="Reminders" Margin="0,0,4,0">
+                        <ui:Button x:Name="ReminderToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ReminderBtn_Click" ToolTip="Reminders" Margin="0,0,4,0" AutomationProperties.Name="Reminders">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Alert24" /></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Clear Shelf Button -->
-                        <ui:Button x:Name="ClearAllToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ClearAllToolbar_Click" ToolTip="Clear Shelf (Delete Unpinned)" Margin="0,0,4,0">
+                        <ui:Button x:Name="ClearAllToolbarBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="ClearAllToolbar_Click" ToolTip="Clear Shelf (Delete Unpinned)" Margin="0,0,4,0" AutomationProperties.Name="Clear shelf">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24"/></ui:Button.Icon>
                         </ui:Button>
 
                         <!-- Open Settings Hub -->
-                        <ui:Button x:Name="OpenSettingsBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="OpenApp_Click" ToolTip="Open Hub (Settings)">
+                        <ui:Button x:Name="OpenSettingsBtn" Style="{StaticResource PremiumHeaderButtonStyle}" Click="OpenApp_Click" ToolTip="Open Hub (Settings)" AutomationProperties.Name="Open settings hub">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Settings24" /></ui:Button.Icon>
                         </ui:Button>
                     </StackPanel>
@@ -829,6 +920,7 @@
 
         <ListView Name="ShelfListView" Grid.Row="1" ItemsSource="{Binding DroppedItems}" Background="#01000000" BorderThickness="0" Margin="12,0,2,12" Padding="0,0,0,250"
                   Focusable="True" KeyboardNavigation.DirectionalNavigation="Contained" FocusVisualStyle="{x:Null}"
+                  AutomationProperties.Name="Clipboard items list" TabIndex="10"
                   UseLayoutRounding="True" SnapsToDevicePixels="True"
                   TextOptions.TextFormattingMode="Ideal"
                   TextOptions.TextRenderingMode="ClearType"
@@ -1011,7 +1103,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorLight1}" PreviewMouseLeftButtonDown="SmartActionSpecific_Click">
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource MicaWPF.Brushes.SystemAccentColorLight1}" PreviewMouseLeftButtonDown="SmartActionSpecific_Click" AutomationProperties.Name="{Binding SmartActionName}">
                                         <ui:Button.ToolTip><ToolTip Content="{Binding SmartActionName}" /></ui:Button.ToolTip>
                                         <ui:Button.Icon>
                                             <ui:SymbolIcon FontSize="14">
@@ -1043,7 +1135,7 @@
                                             <Style.Triggers><DataTrigger Binding="{Binding ItemType}" Value="Code"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource SyncIncomingColor}" PreviewMouseLeftButtonDown="RunTerminalSpecific_Click" ToolTip="Run Script">
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource SyncIncomingColor}" PreviewMouseLeftButtonDown="RunTerminalSpecific_Click" ToolTip="Run Script" AutomationProperties.Name="Run script">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Play24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
@@ -1065,7 +1157,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource DeviceLaptopColor}" PreviewMouseLeftButtonDown="OpenSpecific_Click" ToolTip="Open">
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource DeviceLaptopColor}" PreviewMouseLeftButtonDown="OpenSpecific_Click" ToolTip="Open" AutomationProperties.Name="Open file">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Open24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
@@ -1087,7 +1179,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource PinActiveColor}" ToolTip="Show in Explorer"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource PinActiveColor}" ToolTip="Show in Explorer" AutomationProperties.Name="Show in Explorer"
                                                PreviewMouseLeftButtonDown="OpenExplorer_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1103,7 +1195,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource PinActiveColor}" ToolTip="Open Folder"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource PinActiveColor}" ToolTip="Open Folder" AutomationProperties.Name="Open folder"
                                                PreviewMouseLeftButtonDown="OpenExplorer_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="FolderOpen24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1132,7 +1224,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource CyanAccentColor}" ToolTip="Convert to .zip"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource CyanAccentColor}" ToolTip="Convert to .zip" AutomationProperties.Name="Convert to zip archive"
                                                PreviewMouseLeftButtonDown="ConvertToZip_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="FolderZip24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1193,6 +1285,8 @@
                                             <Style.Triggers>
                                                 <DataTrigger Binding="{Binding ItemType}" Value="Image"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                                                 <DataTrigger Binding="{Binding ItemType}" Value="QRCode"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                <DataTrigger Binding="{Binding IsMarkdownPreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+                                                <DataTrigger Binding="{Binding IsDocPreview}" Value="True"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
@@ -1213,7 +1307,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource SyncIncomingColor}" ToolTip="Search on Google"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource SyncIncomingColor}" ToolTip="Search on Google" AutomationProperties.Name="Search on Google"
                                                PreviewMouseLeftButtonDown="GoogleSearchSpecific_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1229,7 +1323,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource WarningColor}" ToolTip="Peek password (5s)"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource WarningColor}" ToolTip="Peek password (5s)" AutomationProperties.Name="Peek password"
                                                PreviewMouseLeftButtonDown="PeekPasswordSpecific_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Eye24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1247,7 +1341,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource SanitizeColor}" ToolTip="Sanitize URL (Remove trackers)"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource SanitizeColor}" ToolTip="Sanitize URL (Remove trackers)" AutomationProperties.Name="Sanitize URL"
                                                PreviewMouseLeftButtonDown="SanitizeUrlSpecific_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Shield24" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1265,7 +1359,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource WarningColor}" ToolTip="Protect as Password"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource WarningColor}" ToolTip="Protect as Password" AutomationProperties.Name="Protect as password"
                                                PreviewMouseLeftButtonDown="MakePasswordSpecific_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Key24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1273,7 +1367,7 @@
 
                                 <!-- ═══ Pin/Unpin ═══ -->
                                 <Border Style="{StaticResource ActionPillStyle}" Margin="0,0,2,0" Padding="0">
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" PreviewMouseLeftButtonDown="PinSpecific_Click" ToolTip="{Binding PinLabel}">
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" PreviewMouseLeftButtonDown="PinSpecific_Click" ToolTip="{Binding PinLabel}" AutomationProperties.Name="{Binding PinLabel}">
                                         <ui:Button.Icon>
                                             <ui:SymbolIcon FontSize="14">
                                                 <ui:SymbolIcon.Style>
@@ -1305,7 +1399,7 @@
                                             </Style.Triggers>
                                         </Style>
                                     </Border.Style>
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource WarningColor}" ToolTip="Rename Password Label"
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource WarningColor}" ToolTip="Rename Password Label" AutomationProperties.Name="Rename password label"
                                                PreviewMouseLeftButtonDown="RenamePasswordSpecific_Click">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Edit24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
@@ -1313,7 +1407,7 @@
 
                                 <!-- ═══ Delete ═══ -->
                                 <Border Style="{StaticResource ActionPillStyle}" Padding="0">
-                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource DangerColor}" PreviewMouseLeftButtonDown="DeleteSpecific_Click" ToolTip="Delete">
+                                    <ui:Button Focusable="False" Appearance="Secondary" Padding="4,3" Foreground="{DynamicResource DangerColor}" PreviewMouseLeftButtonDown="DeleteSpecific_Click" ToolTip="Delete" AutomationProperties.Name="Delete item">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" Filled="True" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </Border>
@@ -1668,6 +1762,7 @@
                                             <DataTrigger Binding="{Binding HasDetectedColor}" Value="True">
                                                 <Setter Property="Visibility" Value="Collapsed"/>
                                             </DataTrigger>
+
                                         </Style.Triggers>
                                     </Style>
                                 </Border.Style>
@@ -1768,6 +1863,30 @@
                                                 </Style>
                                             </ui:SymbolIcon.Style>
                                         </ui:SymbolIcon>
+                                        <TextBlock Text="{Binding SourceAppName}" Foreground="{DynamicResource SubtleTextColor}" FontSize="9" Margin="0,0,2,0" VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasSourceApp}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                        <TextBlock Text="·" Foreground="{DynamicResource SeparatorDotColor}" FontSize="9" Margin="0,0,2,0" VerticalAlignment="Center">
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding HasSourceApp}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
                                         <TextBlock Text="{Binding SourceDeviceName}" Foreground="{DynamicResource SubtleTextColor}" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center" />
                                         <TextBlock Text="·" Foreground="{DynamicResource SeparatorDotColor}" FontSize="9" Margin="0,0,4,0" VerticalAlignment="Center" />
                                         <TextBlock FontSize="8" FontWeight="SemiBold" VerticalAlignment="Center">
@@ -1805,6 +1924,52 @@
                                 <TextBlock Name="TitleText" 
                                            Text="{Binding FileName}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" FontWeight="SemiBold" FontSize="13" LineHeight="19" TextWrapping="Wrap" 
                                            TextTrimming="CharacterEllipsis" MaxHeight="{Binding CollapsedMaxHeight}" />
+
+                                <!-- Source App Label — small subtle "Copied from [app]" indicator -->
+                                <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                    <StackPanel.Style>
+                                        <Style TargetType="StackPanel">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding HasSourceApp}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                                <!-- Hide for items that already have clear identity -->
+                                                <DataTrigger Binding="{Binding IsImagePreview}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsPdfPreview}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsDocPreview}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding IsMarkdownPreview}" Value="True">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                                <!-- Master toggle from Settings -->
+                                                <DataTrigger Binding="{Binding Source={x:Static settings:SettingsManager.Current}, Path=ShowSourceAppLabel}" Value="False">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </StackPanel.Style>
+                                    <!-- App icon: only visible when extracted (current session), gracefully hidden after restart -->
+                                    <Image Source="{Binding SourceAppIcon}" Width="14" Height="14" Stretch="Uniform" 
+                                           RenderOptions.BitmapScalingMode="Fant" VerticalAlignment="Center" Margin="0,0,4,0">
+                                        <Image.Style>
+                                            <Style TargetType="Image">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding HasSourceAppIcon}" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Image.Style>
+                                    </Image>
+                                    <TextBlock Text="{Binding SourceAppName}" FontSize="10" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" 
+                                               VerticalAlignment="Center" FontWeight="Regular" Opacity="0.8"/>
+                                </StackPanel>
                                 
                                 <!-- File Transfer / Download Progress Panel -->
                                 <StackPanel Margin="0,4,0,0" Visibility="{Binding IsTransferring, Converter={StaticResource BooleanToVisibilityConverter}}">
@@ -1837,7 +2002,7 @@
                                     
                                     <!-- Play/Pause Button -->
                                     <ui:Button Grid.Column="0" Focusable="False" Padding="6" CornerRadius="18" Width="36" Height="36" VerticalAlignment="Center" Margin="0,0,8,0"
-                                               Command="{Binding PlayPauseAudioCommand}" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}">
+                                               Command="{Binding PlayPauseAudioCommand}" Background="{DynamicResource MicaWPF.Brushes.ControlFillColorDefault}" AutomationProperties.Name="Play or pause audio">
                                         <ui:Button.Icon>
                                             <ui:SymbolIcon FontSize="18">
                                                 <ui:SymbolIcon.Style>
@@ -1858,7 +2023,7 @@
 
                                     <!-- Progress Slider -->
                                     <Slider Grid.Column="1" Value="{Binding AudioPosition, Mode=TwoWay}" Maximum="{Binding AudioDuration}" Minimum="0"
-                                            VerticalAlignment="Center" Height="22" Focusable="False" Foreground="#EC4899"/>
+                                            VerticalAlignment="Center" Height="22" Focusable="False" Foreground="#EC4899" AutomationProperties.Name="Audio playback position"/>
 
                                     <!-- Time indicator text -->
                                     <TextBlock Grid.Column="2" Text="{Binding AudioPlaybackText}" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
@@ -1918,6 +2083,12 @@
                              <Setter TargetName="TitleText" Property="Foreground" Value="#6EE7B7" />
                              <Setter TargetName="TitleText" Property="FontSize" Value="11.5" />
                         </DataTrigger>
+                        <!-- Markdown styling with purple accent -->
+                        <DataTrigger Binding="{Binding IsMarkdownPreview}" Value="True">
+                             <Setter TargetName="TitleText" Property="FontFamily" Value="Segoe UI, Inter" />
+                             <Setter TargetName="TitleText" Property="Foreground" Value="#C084FC" />
+                             <Setter TargetName="TitleText" Property="FontSize" Value="12" />
+                        </DataTrigger>
                         
                         <!-- Hover Effect on the Container -->
                         <Trigger Property="IsMouseOver" Value="True">
@@ -1969,7 +2140,7 @@
             <StackPanel Orientation="Horizontal">
                 <!-- Merge PDF action (primary — always left, theme-aware accent pill) -->
                 <Button x:Name="MergeSelectedPdfsBtn" Visibility="Collapsed" Click="MergeSelectedPdfsBtn_Click" Cursor="Hand"
-                        Focusable="False" OverridesDefaultStyle="True" Content="Merge 2 PDFs">
+                        Focusable="False" OverridesDefaultStyle="True" Content="Merge 2 PDFs" AutomationProperties.Name="Merge selected PDFs">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
                             <Border x:Name="MergePillBg" CornerRadius="20" Padding="16,9" BorderThickness="1">
@@ -2020,7 +2191,7 @@
 
                 <!-- Unpin action (secondary — right side, theme-aware amber pill) -->
                 <Button x:Name="UnpinSelectedBtn" Visibility="Collapsed" Click="UnpinSelectedBtn_Click" Cursor="Hand"
-                        Focusable="False" OverridesDefaultStyle="True" Content="Unpin Selected">
+                        Focusable="False" OverridesDefaultStyle="True" Content="Unpin Selected" AutomationProperties.Name="Unpin selected items">
                     <Button.Template>
                         <ControlTemplate TargetType="Button">
                             <Border x:Name="UnpinPillBg" CornerRadius="20" Padding="14,9" BorderThickness="1">
@@ -2198,7 +2369,7 @@
                                 <TextBox x:Name="AltSearchTextBox" Grid.Column="1" Padding="0" Margin="0"
                                          FontSize="12" Foreground="{DynamicResource AltTextPrimary}" CaretBrush="{DynamicResource AltTextPrimary}"
                                          TextChanged="AltSearch_TextChanged" VerticalAlignment="Center" VerticalContentAlignment="Center"
-                                         MinWidth="100">
+                                         MinWidth="100" AutomationProperties.Name="Search clipboard history">
                                     <TextBox.Style>
                                         <Style TargetType="TextBox">
                                             <Setter Property="Background" Value="Transparent"/>
@@ -2286,6 +2457,7 @@
                     <ListView x:Name="AltShelfListView" Grid.Column="1" ItemsSource="{Binding DroppedItems}"
                               Background="Transparent" BorderThickness="0" Margin="4,4,4,12" Padding="0,0,0,50"
                               Focusable="True" FocusVisualStyle="{x:Null}" UseLayoutRounding="True" SnapsToDevicePixels="True"
+                              AutomationProperties.Name="Clipboard items list"
                               TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType"
                               ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Auto"
                               ScrollViewer.CanContentScroll="True" VirtualizingStackPanel.IsVirtualizing="True"
@@ -3039,7 +3211,8 @@
                                                              Foreground="#F3F4F6" CaretBrush="#F3F4F6"
                                                              SelectionBrush="#608B5CF6"
                                                              TextChanged="NoteBulletHeader_TextChanged"
-                                                             PreviewKeyDown="NoteBulletHeader_PreviewKeyDown">
+                                                             PreviewKeyDown="NoteBulletHeader_PreviewKeyDown"
+                                                             AutomationProperties.Name="Note bullet header">
                                                         <TextBox.Style>
                                                             <Style TargetType="TextBox">
                                                                 <Setter Property="Template">
@@ -3153,7 +3326,8 @@
                                                          TextChanged="NoteBulletText_TextChanged"
                                                          PreviewKeyDown="NoteBulletText_PreviewKeyDown"
                                                          GotFocus="NoteBulletText_GotFocus"
-                                                         DataObject.Pasting="NoteBulletText_Paste">
+                                                         DataObject.Pasting="NoteBulletText_Paste"
+                                                         AutomationProperties.Name="Note bullet content">
                                                     <TextBox.Style>
                                                         <Style TargetType="TextBox">
                                                             <Setter Property="Template">
@@ -3215,7 +3389,8 @@
                                                                              Padding="0,1" Foreground="#C8C8E0"
                                                                              CaretBrush="#C8C8E0" SelectionBrush="#608B5CF6"
                                                                              PreviewKeyDown="SubBulletText_PreviewKeyDown"
-                                                                             Tag="{Binding}">
+                                                                             Tag="{Binding}"
+                                                                             AutomationProperties.Name="Sub-bullet text">
                                                                         <TextBox.Style>
                                                                             <Style TargetType="TextBox">
                                                                                 <Setter Property="Template">
@@ -3375,6 +3550,30 @@
                                                 BorderThickness="1" BorderBrush="#2A2A45">
                                             <Grid>
                                                 <StackPanel>
+                                                    <!-- Note Title -->
+                                                    <TextBox x:Name="FreeformSectionTitleBox" 
+                                                             Text="{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                             FontSize="13.5" FontWeight="SemiBold"
+                                                             Background="Transparent" BorderThickness="0" 
+                                                             Foreground="#CDD6F4" CaretBrush="#CDD6F4"
+                                                             SelectionBrush="#608B5CF6"
+                                                             Padding="10,8,100,2" 
+                                                             TextChanged="NotesFreeformBox_TextChanged"
+                                                             AutomationProperties.Name="Note title">
+                                                        <TextBox.Style>
+                                                            <Style TargetType="TextBox">
+                                                                <Setter Property="Template">
+                                                                    <Setter.Value>
+                                                                        <ControlTemplate TargetType="TextBox">
+                                                                            <Border Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}">
+                                                                                <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False" Margin="0"/>
+                                                                            </Border>
+                                                                        </ControlTemplate>
+                                                                    </Setter.Value>
+                                                                </Setter>
+                                                            </Style>
+                                                        </TextBox.Style>
+                                                    </TextBox>
                                                     <!-- Embedded images (up to 5 for Pro, 1 for Free) -->
                                                     <ItemsControl ItemsSource="{Binding Images}" Margin="6,6,6,0">
                                                         <ItemsControl.ItemsPanel>
@@ -3421,7 +3620,8 @@
                                                              TextChanged="NotesFreeformBox_TextChanged"
                                                              GotFocus="NotesFreeformBox_GotFocus"
                                                              PreviewKeyDown="NotesFreeformBox_PreviewKeyDown"
-                                                             DataObject.Pasting="NotesFreeformBox_Paste">
+                                                             DataObject.Pasting="NotesFreeformBox_Paste"
+                                                             AutomationProperties.Name="Freeform note content">
                                                         <TextBox.Style>
                                                             <Style TargetType="TextBox">
                                                                 <Setter Property="Template">
@@ -3476,6 +3676,16 @@
                                                         Opacity="1" IsHitTestVisible="True"
                                                         MouseLeftButtonDown="NotesFreeformExpand_Click" ToolTip="Expand Note">
                                                     <ui:SymbolIcon Symbol="ArrowMaximize24" FontSize="12" Foreground="#22D3EE" VerticalAlignment="Center"/>
+                                                </Border>
+
+                                                <!-- AI Improve Button (quick one-click improve) -->
+                                                <Border x:Name="FreeformSectionImproveBtn" CornerRadius="6" Cursor="Hand"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Top"
+                                                        Padding="5,4" Margin="0,4,108,0" Panel.ZIndex="10"
+                                                        Background="#1810B981" BorderBrush="#3010B981" BorderThickness="1"
+                                                        Opacity="1" IsHitTestVisible="True"
+                                                        MouseLeftButtonDown="NotesFreeformImprove_Click" ToolTip="AI Improve (fix grammar, clarity)">
+                                                    <ui:SymbolIcon Symbol="Sparkle24" FontSize="12" Foreground="#10B981" VerticalAlignment="Center"/>
                                                 </Border>
                                             </Grid>
                                         </Border>
@@ -3728,7 +3938,7 @@
                 <!-- ═══ TO-DO LIST CONTENT AREA ═══ -->
                 <Grid Grid.Column="1">
                     <ScrollViewer x:Name="TodoScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                        <ItemsControl x:Name="TodoListItemsControl" VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling">
+                        <ItemsControl x:Name="TodoListItemsControl" Margin="0,6,0,0" VirtualizingStackPanel.IsVirtualizing="True" VirtualizingStackPanel.VirtualizationMode="Recycling">
                             <!-- BUG-2 FIX: VirtualizingStackPanel as items host -->
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -3773,9 +3983,9 @@
                                         <Border.ContextMenu>
                                             <ContextMenu>
                                                 <MenuItem Header="Set Priority" Icon="{ui:SymbolIcon Symbol=Flag16}">
-                                                    <MenuItem Header="🔴 High" Click="TodoItemPriorityHigh_Click"/>
-                                                    <MenuItem Header="🟡 Medium" Click="TodoItemPriorityMedium_Click"/>
-                                                    <MenuItem Header="🟢 Low" Click="TodoItemPriorityLow_Click"/>
+                                                    <MenuItem Header="High" Click="TodoItemPriorityHigh_Click" Foreground="#EF4444"/>
+                                                    <MenuItem Header="Medium" Click="TodoItemPriorityMedium_Click" Foreground="#EAB308"/>
+                                                    <MenuItem Header="Low" Click="TodoItemPriorityLow_Click" Foreground="#22C55E"/>
                                                     <MenuItem Header="Clear Priority" Click="TodoItemPriorityNone_Click"/>
                                                 </MenuItem>
                                                 <MenuItem Header="Due Date" Icon="{ui:SymbolIcon Symbol=CalendarLtr16}" Click="TodoItemDueDate_Click"/>
@@ -3970,7 +4180,8 @@
                                                              AcceptsReturn="True" TextWrapping="Wrap"
                                                              TextChanged="TodoItemText_TextChanged"
                                                              GotFocus="TodoItemText_GotFocus"
-                                                             PreviewKeyDown="TodoItemText_PreviewKeyDown">
+                                                             PreviewKeyDown="TodoItemText_PreviewKeyDown"
+                                                             AutomationProperties.Name="To-do item text">
                                                         <TextBox.Style>
                                                             <Style TargetType="TextBox">
                                                                 <Setter Property="Foreground" Value="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"/>
@@ -4394,6 +4605,146 @@
                     </StackPanel>
                 </Grid>
             </Grid>
+        </Grid>
+
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <!-- AI SETTINGS PANEL -->
+        <!-- ═══════════════════════════════════════════════════════════ -->
+        <Grid x:Name="AiSettingsPanel" Grid.Row="1" Visibility="Collapsed" Opacity="0" Margin="0"
+              Panel.ZIndex="30">
+            <Border CornerRadius="0" Padding="0">
+                <Border.Background>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                        <GradientStop Color="#1A1A2E" Offset="0"/>
+                        <GradientStop Color="#16162A" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.Background>
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="16,8,16,16">
+                    <StackPanel>
+                        <!-- Header -->
+                        <StackPanel Orientation="Horizontal" Margin="0,4,0,12">
+                            <ui:SymbolIcon Symbol="Sparkle24" FontSize="20" Foreground="#A78BFA" Margin="0,0,10,0"/>
+                            <TextBlock Text="AI Settings" FontSize="18" FontWeight="SemiBold" Foreground="#CDD6F4"/>
+                        </StackPanel>
+
+                        <!-- ═══ API Key ═══ -->
+                        <Border CornerRadius="10" Background="#222240" Padding="14,12" Margin="0,0,0,8">
+                            <StackPanel>
+                                <TextBlock Text="API Key" FontSize="13" FontWeight="SemiBold" Foreground="#A5B4FC" Margin="0,0,0,6"/>
+                                <TextBlock Text="Enter your Gemini, OpenAI, or Claude API key. The key is encrypted and stored locally." FontSize="11" Foreground="#64748B" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="AiApiKeyBox" Grid.Column="0" FontSize="12" Padding="8,6"
+                                             Background="#1A1A35" Foreground="#E8E8F0" CaretBrush="#E8E8F0"
+                                             BorderBrush="#2A2A45" BorderThickness="1"
+                                             TextChanged="AiApiKey_TextChanged"
+                                             AutomationProperties.Name="AI API Key">
+                                        <TextBox.Style>
+                                            <Style TargetType="TextBox">
+                                                <Setter Property="Template">
+                                                    <Setter.Value>
+                                                        <ControlTemplate TargetType="TextBox">
+                                                            <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                                                                <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False"/>
+                                                            </Border>
+                                                        </ControlTemplate>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </Style>
+                                        </TextBox.Style>
+                                    </TextBox>
+                                    <ui:Button Grid.Column="1" x:Name="AiApiKeySaveBtn" Content="Save" Appearance="Primary" 
+                                               Click="AiApiKeySave_Click" Margin="8,0,0,0" Padding="12,6" CornerRadius="6"/>
+                                </Grid>
+                                <TextBlock x:Name="AiApiKeyStatus" FontSize="11" Foreground="#10B981" Margin="0,6,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ═══ Provider ═══ -->
+                        <Border CornerRadius="10" Background="#222240" Padding="14,12" Margin="0,0,0,8">
+                            <StackPanel>
+                                <TextBlock Text="AI Provider" FontSize="13" FontWeight="SemiBold" Foreground="#A5B4FC" Margin="0,0,0,6"/>
+                                <TextBlock Text="Choose which AI provider to use. 'Auto' picks the best available." FontSize="11" Foreground="#64748B" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                                <StackPanel x:Name="AiProviderRadioPanel" Orientation="Horizontal">
+                                    <RadioButton x:Name="AiProviderAuto" Content="Auto" GroupName="AiProvider" Foreground="#CDD6F4" Margin="0,0,16,0" Checked="AiProvider_Checked" Tag="auto"/>
+                                    <RadioButton x:Name="AiProviderGemini" Content="Gemini" GroupName="AiProvider" Foreground="#CDD6F4" Margin="0,0,16,0" Checked="AiProvider_Checked" Tag="gemini"/>
+                                    <RadioButton x:Name="AiProviderOpenAI" Content="OpenAI" GroupName="AiProvider" Foreground="#CDD6F4" Margin="0,0,16,0" Checked="AiProvider_Checked" Tag="openai"/>
+                                    <RadioButton x:Name="AiProviderClaude" Content="Claude" GroupName="AiProvider" Foreground="#CDD6F4" Margin="0,0,16,0" Checked="AiProvider_Checked" Tag="claude"/>
+                                    <RadioButton x:Name="AiProviderWindows" Content="Windows AI" GroupName="AiProvider" Foreground="#CDD6F4" Margin="0,0,16,0" Checked="AiProvider_Checked" Tag="windows"/>
+                                </StackPanel>
+                                <TextBlock x:Name="AiProviderStatus" FontSize="11" Foreground="#64748B" Margin="0,6,0,0"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ═══ Default OCR/Table Method ═══ -->
+                        <Border CornerRadius="10" Background="#222240" Padding="14,12" Margin="0,0,0,8">
+                            <StackPanel>
+                                <TextBlock Text="Default Data Extraction Method" FontSize="13" FontWeight="SemiBold" Foreground="#A5B4FC" Margin="0,0,0,6"/>
+                                <TextBlock Text="For OCR and Table Extraction from images. 'Auto' shows a choice popup when no API key is set." FontSize="11" Foreground="#64748B" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton x:Name="AiMethodAuto" Content="Auto (Recommended)" GroupName="AiMethod" Foreground="#CDD6F4" Margin="0,0,16,0" Checked="AiMethod_Checked" Tag="auto"/>
+                                    <RadioButton x:Name="AiMethodApi" Content="Always API" GroupName="AiMethod" Foreground="#CDD6F4" Margin="0,0,16,0" Checked="AiMethod_Checked" Tag="api"/>
+                                    <RadioButton x:Name="AiMethodLocal" Content="Always Local" GroupName="AiMethod" Foreground="#CDD6F4" Checked="AiMethod_Checked" Tag="local"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ═══ Model Override ═══ -->
+                        <Border CornerRadius="10" Background="#222240" Padding="14,12" Margin="0,0,0,8">
+                            <StackPanel>
+                                <TextBlock Text="Model Override (Optional)" FontSize="13" FontWeight="SemiBold" Foreground="#A5B4FC" Margin="0,0,0,6"/>
+                                <TextBlock Text="Override the default model. Leave empty for auto-detection. Examples: gpt-4o, gemini-2.0-flash, claude-3-5-haiku-latest" FontSize="11" Foreground="#64748B" Margin="0,0,0,8" TextWrapping="Wrap"/>
+                                <TextBox x:Name="AiModelOverrideBox" FontSize="12" Padding="8,6"
+                                         Background="#1A1A35" Foreground="#E8E8F0" CaretBrush="#E8E8F0"
+                                         BorderBrush="#2A2A45" BorderThickness="1"
+                                         TextChanged="AiModelOverride_TextChanged"
+                                         AutomationProperties.Name="AI Model Override">
+                                    <TextBox.Style>
+                                        <Style TargetType="TextBox">
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="TextBox">
+                                                        <Border Background="{TemplateBinding Background}" CornerRadius="6" Padding="{TemplateBinding Padding}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                                                            <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" Focusable="False"/>
+                                                        </Border>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </TextBox.Style>
+                                </TextBox>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- ═══ AI Enabled Toggle ═══ -->
+                        <Border CornerRadius="10" Background="#222240" Padding="14,12" Margin="0,0,0,8">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="AI Features" FontSize="13" FontWeight="SemiBold" Foreground="#A5B4FC"/>
+                                    <TextBlock Text="Master toggle for all AI features. Turn off to disable AI completely." FontSize="11" Foreground="#64748B" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                                </StackPanel>
+                                <CheckBox x:Name="AiEnabledToggle" Grid.Column="1" VerticalAlignment="Center" 
+                                          Checked="AiEnabled_Changed" Unchecked="AiEnabled_Changed"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- ═══ Active Provider Info ═══ -->
+                        <Border CornerRadius="10" Background="#1A2A1A" BorderBrush="#3010B981" BorderThickness="1" Padding="14,12" Margin="0,0,0,8">
+                            <StackPanel>
+                                <TextBlock Text="Current Status" FontSize="13" FontWeight="SemiBold" Foreground="#10B981" Margin="0,0,0,6"/>
+                                <TextBlock x:Name="AiCurrentStatus" Text="Loading..." FontSize="12" Foreground="#CDD6F4" TextWrapping="Wrap"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
         </Grid>
 
         <!-- Drag-Over Overlay Zone removed - replaced with elegant mini arrow animation in button header -->

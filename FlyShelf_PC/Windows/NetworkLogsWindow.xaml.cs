@@ -129,7 +129,7 @@ namespace FlyShelf.Windows
                     EnsureDeviceTabs();
                 });
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private async Task PollDevice(string deviceName, string baseUrl, bool isLocal)
@@ -341,7 +341,7 @@ namespace FlyShelf.Windows
                     }
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             return "LOG";
         }
 
@@ -411,7 +411,7 @@ namespace FlyShelf.Windows
                     ToastWindow.ShowToast($"📋 Copied {_filteredLogs.Count} log entries");
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void LogScroller_ScrollChanged(object sender, ScrollChangedEventArgs e)

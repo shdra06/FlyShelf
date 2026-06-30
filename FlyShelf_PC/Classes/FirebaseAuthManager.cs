@@ -204,7 +204,7 @@ namespace FlyShelf.Classes
                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     Windows.ToastWindow.ShowToast("☁️ Cloud sync unavailable — check your internet connection"));
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         /// <summary>
@@ -315,7 +315,7 @@ namespace FlyShelf.Classes
             {
                 if (File.Exists(_tokenPath)) File.Delete(_tokenPath);
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         /// <summary>

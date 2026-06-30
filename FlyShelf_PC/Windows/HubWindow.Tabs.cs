@@ -113,7 +113,7 @@ namespace FlyShelf.Windows
                             int colorDark = 0x00202020;
                             NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref colorDark, sizeof(int));
                         }
-                    } catch { }
+                    } catch { } // Best-effort: failure is acceptable
                 }
                 else
                 {
@@ -132,7 +132,7 @@ namespace FlyShelf.Windows
                             int dwmColor = isLight ? ((248 << 16) | (246 << 8) | 245) : ((26 << 16) | (18 << 8) | 18);
                             NativeMethods.DwmSetWindowAttribute(hwnd, 35, ref dwmColor, sizeof(int));
                         }
-                    } catch { }
+                    } catch { } // Best-effort: failure is acceptable
                 }
 
                 // Color scheme — always dark mode (Light mode removed)
@@ -304,7 +304,7 @@ namespace FlyShelf.Windows
                     Windows.ToastWindow.ShowToast("Pairing info copied! 📋");
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private async void ForcePeerSync_Click(object sender, RoutedEventArgs e)
@@ -500,7 +500,7 @@ namespace FlyShelf.Windows
             {
                 Logger.LogAction("THEME UI", $"PopulateThemeCombo failed: {ex.Message}");
                 // Ensure event handler is re-attached even on error
-                try { ThemeCombo.SelectionChanged += ThemeCombo_SelectionChanged; } catch { }
+                try { ThemeCombo.SelectionChanged += ThemeCombo_SelectionChanged; } catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -641,7 +641,7 @@ namespace FlyShelf.Windows
                     });
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void OpenThemesFolder_Click(object sender, MouseButtonEventArgs e)
@@ -653,7 +653,7 @@ namespace FlyShelf.Windows
                     System.IO.Directory.CreateDirectory(themesDir);
                 System.Diagnostics.Process.Start("explorer.exe", themesDir);
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void ImportTheme_Click(object sender, MouseButtonEventArgs e)
@@ -747,7 +747,7 @@ namespace FlyShelf.Windows
 
                     mainWin.ShowNearPosition(targetX, targetY, mode: 1, isPersistent: false, stealFocus: false);
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             });
         }
 

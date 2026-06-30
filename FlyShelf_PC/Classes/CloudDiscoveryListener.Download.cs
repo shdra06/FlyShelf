@@ -110,7 +110,7 @@ namespace FlyShelf.Classes
                     _ = Task.Run(async () =>
                     {
                         try { await CloudDiscoveryManager.MarkDownloading(cloudItem.Id); }
-                        catch { }
+                        catch (Exception ex) { Logger.LogAction("FIREBASE SSE", $"MarkDownloading failed: {ex.Message}"); }
                     });
                 }
 
@@ -147,7 +147,7 @@ namespace FlyShelf.Classes
                             }
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { Logger.LogAction("FIREBASE SSE", $"Sender URL lookup failed: {ex.Message}"); }
 
                     if (!string.IsNullOrEmpty(cloudItem.DownloadUrl) && cloudItem.DownloadUrl.StartsWith("http") && cloudItem.DownloadUrl != cloudItem.Raw)
                         urlsToTry.Add(cloudItem.DownloadUrl);
@@ -182,7 +182,7 @@ namespace FlyShelf.Classes
                             }
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { Logger.LogAction("FIREBASE SSE", $"LAN URL lookup failed: {ex.Message}"); }
                 }
 
                 urlsToTry = urlsToTry.Distinct().ToList();
@@ -313,7 +313,7 @@ namespace FlyShelf.Classes
                 if (!string.IsNullOrEmpty(cloudItem.FileHash))
                 {
                     integrityOk = VerifyFileHash(filePath, cloudItem.FileHash, cloudItem.Title);
-                    if (!integrityOk) try { File.Delete(filePath); } catch { }
+                    if (!integrityOk) try { File.Delete(filePath); } catch { } // Best-effort: failure is acceptable
                 }
                 else if (response.Headers.TryGetValues("X-Content-SHA256", out var hashValues))
                 {
@@ -321,7 +321,7 @@ namespace FlyShelf.Classes
                     if (!string.IsNullOrEmpty(serverHash))
                     {
                         integrityOk = VerifyFileHash(filePath, serverHash, cloudItem.Title);
-                        if (!integrityOk) try { File.Delete(filePath); } catch { }
+                        if (!integrityOk) try { File.Delete(filePath); } catch { } // Best-effort: failure is acceptable
                     }
                 }
 
@@ -414,7 +414,7 @@ namespace FlyShelf.Classes
                     FlyShelf.Windows.ToastWindow.ShowToast($"❌ Dropped: {cloudItem.Title} — source unreachable");
                 });
                 
-                try { if (File.Exists(filePath)) File.Delete(filePath); } catch { }
+                try { if (File.Exists(filePath)) File.Delete(filePath); } catch { } // Best-effort: failure is acceptable
                 
                 Logger.LogAction("FIREBASE SSE", $"Download failed but keeping Firebase entry for other devices: {cloudItem.Title} [{cloudItem.Id}]");
             }

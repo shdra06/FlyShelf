@@ -579,13 +579,13 @@ namespace FlyShelf.Classes
 
                         // Both attempts failed
                         Logger.LogAction("PEER_CHUNK_ERROR", $"Chunk {chunkIndex} failed after 2 attempts — aborting batch");
-                        try { batchCts.Cancel(); } catch { }
+                        try { batchCts.Cancel(); } catch { } // Best-effort: failure is acceptable
                         return false;
                     }
                     catch (Exception ex)
                     {
                         Logger.LogAction("PEER_CHUNK_ERROR", $"Chunk {chunkIndex} upload failed: {ex.Message}");
-                        try { batchCts.Cancel(); } catch { }
+                        try { batchCts.Cancel(); } catch { } // Best-effort: failure is acceptable
                         return false;
                     }
                     finally { semaphore.Release(); }

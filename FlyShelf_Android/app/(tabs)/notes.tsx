@@ -50,7 +50,7 @@ const NOTE_TEMPLATES = [
 const getCachedPcUrl = async (): Promise<string | null> => {
   try {
     // Try Cloudflare tunnel first (works from anywhere)
-    const globalUrl = await AsyncStorage.getItem('pairedGlobalUrl');
+    const globalUrl = await getSecureItem('pairedGlobalUrl');
     if (globalUrl && globalUrl !== 'offline') {
       const url = globalUrl.trim().replace(/\/$/, '');
       if (url) return url;
@@ -565,6 +565,8 @@ export default function NotesScreen() {
           setDeletingBulletId(item.Id);
         }}
         delayLongPress={400}
+        accessibilityLabel={`Note: ${item.Header || 'Untitled'}. Long press to delete`}
+        accessibilityRole="button"
       >
         <View style={styles.bulletCard}>
           <View style={styles.bulletCardInner}>
@@ -578,6 +580,8 @@ export default function NotesScreen() {
                   <TouchableOpacity
                     style={styles.pinIndicator}
                     onPress={() => handleTogglePin(item.Id)}
+                    accessibilityLabel="Unpin note"
+                    accessibilityRole="button"
                   >
                     <Text style={styles.pinText}>📌</Text>
                   </TouchableOpacity>
@@ -589,12 +593,16 @@ export default function NotesScreen() {
                   placeholder="Title..."
                   placeholderTextColor={colors.text.tertiary}
                   returnKeyType="next"
+                  accessibilityLabel="Note title"
+                  accessibilityRole="text"
                 />
                 {!item.IsPinned && (
                   <TouchableOpacity
                     style={styles.pinIndicator}
                     onPress={() => handleTogglePin(item.Id)}
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    accessibilityLabel="Pin note"
+                    accessibilityRole="button"
                   >
                     <Text style={[styles.pinText, { opacity: 0.3 }]}>📌</Text>
                   </TouchableOpacity>
@@ -609,6 +617,8 @@ export default function NotesScreen() {
                 placeholder="Write something..."
                 placeholderTextColor={colors.text.tertiary}
                 multiline
+                accessibilityLabel="Note content"
+                accessibilityRole="text"
               />
 
               {/* Tags */}
@@ -618,6 +628,8 @@ export default function NotesScreen() {
                     key={`${tag}-${i}`}
                     style={styles.tagPill}
                     onLongPress={() => handleRemoveTag(item.Id, i)}
+                    accessibilityLabel={`Tag: ${tag}. Long press to remove`}
+                    accessibilityRole="button"
                   >
                     <Text style={styles.tagPillText}>{tag}</Text>
                   </TouchableOpacity>
@@ -638,6 +650,8 @@ export default function NotesScreen() {
                   <TouchableOpacity
                     style={styles.addTagButton}
                     onPress={() => { setEditingTagBulletId(item.Id); setNewTagText(''); }}
+                    accessibilityLabel="Add tag"
+                    accessibilityRole="button"
                   >
                     <Text style={styles.addTagText}>+ tag</Text>
                   </TouchableOpacity>
@@ -655,6 +669,8 @@ export default function NotesScreen() {
                           sub.IsDone && styles.subBulletCheckboxDone,
                         ]}
                         onPress={() => handleToggleSubBullet(item.Id, sub.Id)}
+                        accessibilityLabel={`Sub-item: ${sub.Text || 'Untitled'}, ${sub.IsDone ? 'completed' : 'not completed'}`}
+                        accessibilityRole="checkbox"
                       >
                         {sub.IsDone && <Text style={styles.subBulletCheckmark}>✓</Text>}
                       </TouchableOpacity>
@@ -677,6 +693,8 @@ export default function NotesScreen() {
               <TouchableOpacity
                 style={styles.addSubBulletButton}
                 onPress={() => handleAddSubBullet(item.Id)}
+                accessibilityLabel="Add sub-item"
+                accessibilityRole="button"
               >
                 <Text style={[styles.addSubBulletText, { color: colors.accent.primary }]}>+</Text>
                 <Text style={styles.addSubBulletText}>sub-item</Text>
@@ -689,6 +707,9 @@ export default function NotesScreen() {
                   <TouchableOpacity
                     style={styles.bulletActionButton}
                     onPress={() => setShowColorPicker(isColorPicking ? null : item.Id)}
+                    accessibilityLabel={isColorPicking ? 'Close color picker' : 'Change note color'}
+                    accessibilityRole="button"
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                   >
                     <View style={[styles.colorDot, { backgroundColor: item.Color || colors.text.tertiary }]} />
                   </TouchableOpacity>
@@ -707,6 +728,8 @@ export default function NotesScreen() {
                         item.Color === c && styles.colorOptionSelected,
                       ]}
                       onPress={() => handleSetColor(item.Id, c)}
+                      accessibilityLabel={`Color option ${i + 1}${item.Color === c ? ', selected' : ''}`}
+                      accessibilityRole="button"
                     />
                   ))}
                 </View>
@@ -721,12 +744,16 @@ export default function NotesScreen() {
                 <TouchableOpacity
                   style={styles.deleteButton}
                   onPress={() => handleDeleteBullet(item.Id)}
+                  accessibilityLabel="Delete note"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.deleteButtonText}>Delete</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.cancelButton}
                   onPress={() => setDeletingBulletId(null)}
+                  accessibilityLabel="Cancel delete"
+                  accessibilityRole="button"
                 >
                   <Text style={styles.cancelButtonText}>Cancel</Text>
                 </TouchableOpacity>
@@ -768,6 +795,8 @@ export default function NotesScreen() {
       <TouchableOpacity
         style={styles.addSectionButton}
         onPress={() => handleAddFreeformSection(index)}
+        accessibilityLabel="Add freeform section"
+        accessibilityRole="button"
       >
         <Text style={[styles.addSectionText, { color: colors.accent.primary }]}>+</Text>
         <Text style={styles.addSectionText}>section</Text>
@@ -823,6 +852,8 @@ export default function NotesScreen() {
               ]}
               onPress={() => handleSelectDay(idx)}
               activeOpacity={0.7}
+              accessibilityLabel={`${month} ${dayNum}${isTodayDate ? ', today' : ''}${isActive ? ', selected' : ''}${hasContent ? ', has notes' : ''}`}
+              accessibilityRole="tab"
             >
               <Text style={[
                 styles.dayChipNumber,
@@ -876,6 +907,8 @@ export default function NotesScreen() {
         style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}
         activeOpacity={1}
         onPress={() => setShowTemplates(false)}
+        accessibilityLabel="Close templates"
+        accessibilityRole="button"
       >
         <TouchableOpacity activeOpacity={1} style={{
           width: '85%', maxHeight: '70%', backgroundColor: colors.bg.elevated,
@@ -897,6 +930,8 @@ export default function NotesScreen() {
                 }}
                 activeOpacity={0.7}
                 onPress={() => handleApplyTemplate(tpl)}
+                accessibilityLabel={`Apply template: ${tpl.name}`}
+                accessibilityRole="button"
               >
                 <Text style={{ color: colors.text.primary, fontSize: 15, fontWeight: '600' }}>{tpl.name}</Text>
                 <Text style={{ color: colors.text.tertiary, fontSize: 12, marginTop: 3 }} numberOfLines={1}>
@@ -944,6 +979,8 @@ export default function NotesScreen() {
               <TouchableOpacity
                 onPress={() => { if (dayIdx >= 0) handleSelectDay(dayIdx); }}
                 style={{ paddingVertical: 8 }}
+                accessibilityLabel={`Go to ${items[0].displayDate}`}
+                accessibilityRole="button"
               >
                 <Text style={{ color: colors.accent.primary, fontSize: 13, fontWeight: '700', letterSpacing: 0.5 }}>
                   {items[0].displayDate.toUpperCase()}
@@ -1009,6 +1046,8 @@ export default function NotesScreen() {
                 style={{ padding: 6, marginRight: 2 }}
                 onPress={() => setShowTemplates(true)}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Note templates"
+                accessibilityRole="button"
               >
                 <Text style={{ fontSize: 18 }}>📋</Text>
               </TouchableOpacity>
@@ -1018,6 +1057,8 @@ export default function NotesScreen() {
                 style={{ padding: 6, marginRight: 6 }}
                 onPress={handleExport}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Export notes"
+                accessibilityRole="button"
               >
                 <Text style={{ fontSize: 16, color: colors.text.secondary }}>↗</Text>
               </TouchableOpacity>
@@ -1028,6 +1069,8 @@ export default function NotesScreen() {
                   style={[styles.modeButton, !isFreeformMode && styles.modeButtonActive]}
                   onPress={isFreeformMode ? handleToggleMode : undefined}
                   activeOpacity={isFreeformMode ? 0.7 : 1}
+                  accessibilityLabel={`Bullet mode${!isFreeformMode ? ', active' : ''}`}
+                  accessibilityRole="tab"
                 >
                   <Text style={[
                     styles.modeButtonText,
@@ -1040,6 +1083,8 @@ export default function NotesScreen() {
                   style={[styles.modeButton, isFreeformMode && styles.modeButtonActive]}
                   onPress={!isFreeformMode ? handleToggleMode : undefined}
                   activeOpacity={!isFreeformMode ? 0.7 : 1}
+                  accessibilityLabel={`Free mode${isFreeformMode ? ', active' : ''}`}
+                  accessibilityRole="tab"
                 >
                   <Text style={[
                     styles.modeButtonText,
@@ -1074,11 +1119,15 @@ export default function NotesScreen() {
                 placeholderTextColor={colors.text.tertiary}
                 returnKeyType="search"
                 onFocus={() => setIsSearching(searchQuery.length > 0)}
+                accessibilityLabel="Search all notes"
+                accessibilityRole="search"
               />
               {searchQuery.length > 0 && (
                 <TouchableOpacity
                   onPress={() => { setSearchQuery(''); setIsSearching(false); }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel="Clear search"
+                  accessibilityRole="button"
                 >
                   <Text style={{ fontSize: 16, color: colors.text.tertiary }}>✕</Text>
                 </TouchableOpacity>
@@ -1130,6 +1179,8 @@ export default function NotesScreen() {
               onPressOut={handleFabPressOut}
               activeOpacity={0.9}
               style={{ width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }}
+              accessibilityLabel={isFreeformMode ? 'Add freeform section' : 'Add bullet note'}
+              accessibilityRole="button"
             >
               <Text style={styles.fabText}>+</Text>
             </TouchableOpacity>

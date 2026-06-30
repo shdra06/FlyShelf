@@ -23,6 +23,9 @@ namespace FlyShelf
         private DateTime _lastHotkeyTime = DateTime.MinValue;
         private bool _waitingForHotkeyRelease = false;
 
+        // ═══ Source App Icon Cache: keyed by process name → frozen BitmapSource ═══
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, System.Windows.Media.Imaging.BitmapSource?> _sourceAppIconCache = new();
+
 
 
         private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
@@ -37,7 +40,7 @@ namespace FlyShelf
                     int cn = DWMWA_COLOR_NONE;
                     DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
 
                 Dispatcher.InvokeAsync(() =>
                 {
@@ -46,7 +49,7 @@ namespace FlyShelf
                         int cn = DWMWA_COLOR_NONE;
                         DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }, System.Windows.Threading.DispatcherPriority.Send);
             }
 
@@ -220,13 +223,14 @@ namespace FlyShelf
                     if (currentToken != System.Threading.Volatile.Read(ref _clipboardUpdateToken))
                         return; // A newer update has arrived, cancel this one
 
-                    await Application.Current.Dispatcher.InvokeAsync(() =>
+                    var op = Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
                         if (currentToken == System.Threading.Volatile.Read(ref _clipboardUpdateToken))
                         {
                             HandleClipboardUpdateDeferred();
                         }
                     });
+                    if (op != null) await op.Task;
                 });
                 
                 handled = true;
@@ -244,6 +248,107 @@ namespace FlyShelf
                     Classes.Logger.LogAction("CLIPBOARD", "Skipped clipboard update: Cooldown (150ms) active.");
                     return;
                 }
+
+                // ═══ SOURCE APP TRACKING: Capture which app the user copied from ═══
+                string sourceAppName = "";
+                System.Windows.Media.Imaging.BitmapSource sourceAppIcon = null;
+                try
+                {
+                    IntPtr fgWindow = GetForegroundWindow();
+                    if (fgWindow != IntPtr.Zero)
+                    {
+                        // Get process name
+                        uint processId = 0;
+                        GetWindowThreadProcessId(fgWindow, out processId);
+                        string processName = "";
+                        string processExePath = null;
+                        try
+                        {
+                            var proc = System.Diagnostics.Process.GetProcessById((int)processId);
+                            processName = proc.ProcessName;
+                            try { processExePath = proc.MainModule?.FileName; } catch { } // Access denied for elevated processes
+                        }
+                        catch { }
+
+                        // Get window title
+                        var sb = new System.Text.StringBuilder(512);
+                        GetWindowText(fgWindow, sb, sb.Capacity);
+                        string windowTitle = sb.ToString();
+
+                        // Format: prefer "README.md - VS Code" style, fallback to process name
+                        if (!string.IsNullOrEmpty(windowTitle) && windowTitle != "FlyShelf")
+                        {
+                            // Clean up common process names to friendly names
+                            string friendlyName = processName?.ToLower() switch
+                            {
+                                "code" => "VS Code",
+                                "devenv" => "Visual Studio",
+                                "chrome" => "Chrome",
+                                "msedge" => "Edge",
+                                "firefox" => "Firefox",
+                                "explorer" => "Explorer",
+                                "notepad" => "Notepad",
+                                "powershell" => "PowerShell",
+                                "windowsterminal" => "Terminal",
+                                "cmd" => "CMD",
+                                "slack" => "Slack",
+                                "teams" => "Teams",
+                                "discord" => "Discord",
+                                "outlook" => "Outlook",
+                                "winword" => "Word",
+                                "excel" => "Excel",
+                                "powerpnt" => "PowerPoint",
+                                _ => processName ?? ""
+                            };
+
+                            // If window title contains the friendly name or process name, use full title
+                            // e.g. "README.md - Visual Studio Code" → show as-is but trimmed
+                            if (windowTitle.Length > 60)
+                                windowTitle = windowTitle.Substring(0, 57) + "...";
+                            
+                            // Check if title is meaningful (not just the app name repeated)
+                            if (windowTitle.Equals(friendlyName, StringComparison.OrdinalIgnoreCase) ||
+                                windowTitle.Equals(processName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                sourceAppName = friendlyName;
+                            }
+                            else
+                            {
+                                sourceAppName = friendlyName;
+                            }
+                        }
+
+                        // ═══ SOURCE APP ICON: Extract from process exe (cached) ═══
+                        if (!string.IsNullOrEmpty(processName))
+                        {
+                            string cacheKey = processName.ToLower();
+                            if (_sourceAppIconCache.TryGetValue(cacheKey, out var cachedIcon))
+                            {
+                                sourceAppIcon = cachedIcon;
+                            }
+                            else
+                            {
+                                try
+                                {
+                                    if (!string.IsNullOrEmpty(processExePath) && System.IO.File.Exists(processExePath))
+                                    {
+                                        using var icon = System.Drawing.Icon.ExtractAssociatedIcon(processExePath);
+                                        if (icon != null)
+                                        {
+                                            sourceAppIcon = System.Windows.Interop.Imaging.CreateBitmapSourceFromHIcon(
+                                                icon.Handle, Int32Rect.Empty,
+                                                System.Windows.Media.Imaging.BitmapSizeOptions.FromEmptyOptions());
+                                            sourceAppIcon.Freeze(); // Thread-safe
+                                        }
+                                    }
+                                }
+                                catch { } // Best-effort: icon extraction should never break clipboard
+                                _sourceAppIconCache[cacheKey] = sourceAppIcon; // Cache even null to avoid re-trying
+                            }
+                        }
+                    }
+                }
+                catch { } // Best-effort: source tracking should never break clipboard
 
                 // PERF: Clipboard.GetDataObject() is a COM call that MUST run on the STA UI thread.
                 // Extract the MINIMUM data here, then offload ALL processing to a background thread.
@@ -297,7 +402,34 @@ namespace FlyShelf
                         if (string.IsNullOrEmpty(text) && data.GetDataPresent(DataFormats.Text))
                             text = data.GetData(DataFormats.Text) as string;
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
+                }
+
+                // ═══ FLYSHELF INTERNAL SIGNATURE: Dedup check for self-originated copies ═══
+                // When FlyShelf writes to clipboard via SafeSetTextAllowCapture, it adds a
+                // FlyShelf_Internal_v1 tag. If we see this tag, check if the content already
+                // exists as the most recent item — skip if duplicate (prevents loop).
+                bool isFlyShelfInternal = false;
+                try { isFlyShelfInternal = data.GetDataPresent(Classes.ClipboardHelper.FLYSHELF_INTERNAL_FORMAT); } catch { }
+                
+                if (isFlyShelfInternal && !string.IsNullOrEmpty(text))
+                {
+                    var vm2 = DataContext as FlyShelfViewModel;
+                    if (vm2 != null)
+                    {
+                        // Check the top 20 items for exact match — prevents duplicate cards
+                        var recentItems = vm2.DroppedItems.Take(20);
+                        foreach (var existing in recentItems)
+                        {
+                            string existingContent = existing.RawContent ?? existing.FileName ?? "";
+                            if (string.Equals(existingContent.Trim(), text.Trim(), StringComparison.Ordinal))
+                            {
+                                Classes.Logger.LogAction("CLIPBOARD", "→ Skipped: FlyShelf internal copy is duplicate of recent item");
+                                return;
+                            }
+                        }
+                        Classes.Logger.LogAction("CLIPBOARD", "→ FlyShelf internal copy is NEW content — allowing capture");
+                    }
                 }
 
                 // ═══ SHORTCUT EXPANSION: Intercept /trigger text before normal processing ═══
@@ -387,7 +519,7 @@ namespace FlyShelf
                     _ = Task.Run(() =>
                     {
                         Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as BITMAP ({capturedBitmap.PixelWidth}x{capturedBitmap.PixelHeight})");
-                        vm.HandleDropInternal(null, capturedBitmap, null, false, false);
+                        vm.HandleDropInternal(null, capturedBitmap, null, false, false, sourceAppName: sourceAppName, sourceAppIcon: sourceAppIcon);
                     });
                 }
                 else if (files != null && files.Length > 0)
@@ -395,7 +527,7 @@ namespace FlyShelf
                     _lastClipboardCaptureTime = DateTime.UtcNow;
                     Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as FILES ({files.Length} items)");
                     var capturedFiles = files;
-                    _ = Task.Run(() => vm.HandleDropInternal(capturedFiles, null, null, false, false));
+                    _ = Task.Run(() => vm.HandleDropInternal(capturedFiles, null, null, false, false, sourceAppName: sourceAppName, sourceAppIcon: sourceAppIcon));
                 }
                 else if (!string.IsNullOrWhiteSpace(text))
                 {
@@ -414,7 +546,7 @@ namespace FlyShelf
                         // If already Pro, just copy the plain key — no need to re-activate
                         if (Classes.LicenseManager.IsPro)
                         {
-                            try { Clipboard.SetText(keyCandidate); } catch { }
+                            try { Clipboard.SetText(keyCandidate); } catch { } // Best-effort: failure is acceptable
                             Classes.Logger.LogAction("LICENSE", "Already Pro — copied plain key to clipboard");
                             return;
                         }
@@ -462,7 +594,7 @@ namespace FlyShelf
                     _lastClipboardCaptureTime = DateTime.UtcNow;
                     Classes.Logger.LogAction("CLIPBOARD", $"→ Routing as TEXT ({text.Length} chars)");
                     var capturedText = text;
-                    _ = Task.Run(() => vm.HandleDropInternal(null, null, capturedText, false, false));
+                    _ = Task.Run(() => vm.HandleDropInternal(null, null, capturedText, false, false, sourceAppName: sourceAppName, sourceAppIcon: sourceAppIcon));
                 }
                 else
                 {
@@ -554,7 +686,7 @@ namespace FlyShelf
                     }
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             finally
             {
                 if (hToken != IntPtr.Zero) CloseHandle(hToken);

@@ -289,7 +289,7 @@ namespace FlyShelf.Windows
             if (e.ChangedButton == MouseButton.Left)
             {
                 ResetAutoDismissTimer();
-                try { DragMove(); } catch { }
+                try { DragMove(); } catch { } // Best-effort: failure is acceptable
             }
         }
 

@@ -114,6 +114,7 @@ namespace FlyShelf.Classes
         private static Timer? _saveTimer;
         private static readonly object _lock = new();
         private static volatile int _isDirty = 0; // RM-1 FIX: int for Interlocked atomic ops (0=clean, 1=dirty)
+        private static bool _isLoaded = false;
 
         public static ObservableCollection<ReminderItem> Reminders
         {
@@ -129,6 +130,7 @@ namespace FlyShelf.Classes
                     if (!File.Exists(_remindersPath))
                     {
                         _reminders = new ObservableCollection<ReminderItem>();
+                        _isLoaded = true;
                         return;
                     }
 
@@ -142,10 +144,12 @@ namespace FlyShelf.Classes
                     {
                         var sorted = loaded.OrderBy(r => r.DueAt).ToList();
                         _reminders = new ObservableCollection<ReminderItem>(sorted);
+                        _isLoaded = true;
                     }
                     else
                     {
                         _reminders = new ObservableCollection<ReminderItem>();
+                        _isLoaded = true;
                     }
                 }
                 catch (Exception ex)
@@ -167,6 +171,7 @@ namespace FlyShelf.Classes
                             {
                                 var sorted = bakLoaded.OrderBy(r => r.DueAt).ToList();
                                 _reminders = new ObservableCollection<ReminderItem>(sorted);
+                                _isLoaded = true;
                                 return;
                             }
                         }
@@ -176,6 +181,7 @@ namespace FlyShelf.Classes
                         Logger.LogAction("REMINDERS", $"Backup recovery also failed: {bakEx.Message}");
                     }
                     _reminders = new ObservableCollection<ReminderItem>();
+                    _isLoaded = true;
                 }
             }
         }
@@ -349,6 +355,7 @@ namespace FlyShelf.Classes
 
         public static void SaveNow()
         {
+            if (!_isLoaded) return;
             List<ReminderItem> snapshot;
             lock (_lock)
             {
@@ -382,7 +389,7 @@ namespace FlyShelf.Classes
                         Directory.CreateDirectory(_appDataDir);
 
                     // Create backup before saving
-                    try { if (File.Exists(_remindersPath)) File.Copy(_remindersPath, _remindersPath + ".bak", overwrite: true); } catch { }
+                    try { if (File.Exists(_remindersPath)) File.Copy(_remindersPath, _remindersPath + ".bak", overwrite: true); } catch { } // Best-effort: failure is acceptable
 
                     string tmpPath = _remindersPath + ".tmp";
                     File.WriteAllText(tmpPath, json);

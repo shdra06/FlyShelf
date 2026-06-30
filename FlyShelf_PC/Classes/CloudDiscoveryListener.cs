@@ -71,7 +71,7 @@ namespace FlyShelf.Classes
         {
             if (_cts != null)
             {
-                try { _cts.Cancel(); } catch { }
+                try { _cts.Cancel(); } catch { } // Best-effort: failure is acceptable
                 _cts = null;
             }
         }

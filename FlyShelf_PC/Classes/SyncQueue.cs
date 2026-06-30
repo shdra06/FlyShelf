@@ -65,7 +65,7 @@ namespace FlyShelf.Classes
         public static void Stop()
         {
             _running = false;
-            try { _cts?.Cancel(); } catch { }
+            try { _cts?.Cancel(); } catch { } // Best-effort: failure is acceptable
             Logger.LogAction("SYNC_QUEUE", $"Stopped. {_queue.Count} items remaining in queue.");
         }
 

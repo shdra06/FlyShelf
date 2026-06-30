@@ -13,7 +13,8 @@
         ResizeMode="NoResize"
         ShowInTaskbar="False"
         Topmost="False"
-        Deactivated="Window_Deactivated">
+        Deactivated="Window_Deactivated"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
 
     <WindowChrome.WindowChrome>
         <WindowChrome GlassFrameThickness="-1" CornerRadius="14" CaptionHeight="0" UseAeroCaptionButtons="False" ResizeBorderThickness="0" />
@@ -42,12 +43,12 @@
             <!-- Pin / Unpin toggle button -->
             <ui:Button x:Name="PinBtn" Grid.Column="1" Appearance="Secondary" Padding="6,4" CornerRadius="8"
                        Click="Pin_Click" ToolTip="Pinned (always on top)" Margin="0,0,4,0"
-                       Foreground="{DynamicResource TypeDefaultColor}">
+                       Foreground="{DynamicResource TypeDefaultColor}" AutomationProperties.Name="Pin on top">
                 <ui:Button.Icon><ui:SymbolIcon x:Name="PinIcon" Symbol="Pin24" FontSize="12"/></ui:Button.Icon>
             </ui:Button>
 
             <!-- Close button -->
-            <ui:Button Grid.Column="2" Appearance="Secondary" Padding="6,4" CornerRadius="8" Click="Close_Click" ToolTip="Close" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}">
+            <ui:Button Grid.Column="2" Appearance="Secondary" Padding="6,4" CornerRadius="8" Click="Close_Click" ToolTip="Close" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}" AutomationProperties.Name="Close emoji picker">
                 <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" FontSize="12"/></ui:Button.Icon>
             </ui:Button>
         </Grid>
@@ -75,7 +76,8 @@
                 <TextBox x:Name="EmojiSearchBox" Background="Transparent" BorderThickness="0" 
                          Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}" 
                          FontSize="12" Padding="12,8" CaretBrush="#6366F1"
-                         TextChanged="EmojiSearchBox_TextChanged"/>
+                         TextChanged="EmojiSearchBox_TextChanged"
+                         AutomationProperties.Name="Search emojis"/>
             </Grid>
         </Border>
 

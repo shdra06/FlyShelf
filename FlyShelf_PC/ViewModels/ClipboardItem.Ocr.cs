@@ -32,22 +32,195 @@ namespace FlyShelf.ViewModels
                     return;
                 }
 
-                // Open QuickLook and auto-trigger its OCR (the T button).
-                // This ensures bounding boxes are perfectly aligned with the displayed image,
-                // unlike running a separate OCR pipeline with different upscaling/coordinates.
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                var method = FlyShelf.Classes.SettingsManager.Current.DefaultAiMethod ?? "auto";
+
+                // "local" → always use local engine, skip popup
+                if (method == "local")
                 {
-                    var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
-                    if (mainWin != null)
-                    {
-                        mainWin.ShowQuickLookForItem(this, preLoadedOcr: null, autoTriggerOcr: true);
-                    }
-                });
+                    ExtractTextLocal();
+                    return;
+                }
+
+                // "api" → always use API (if key exists)
+                if (method == "api" && FlyShelf.Classes.AiProviderService.Instance.HasCloudApiKey)
+                {
+                    await ExtractTextWithAI();
+                    return;
+                }
+
+                // "auto" (default) → API if key exists, else popup
+                if (FlyShelf.Classes.AiProviderService.Instance.HasCloudApiKey)
+                {
+                    await ExtractTextWithAI();
+                    return;
+                }
+
+                // No API key → show choice popup
+                bool? useAI = await ShowAiOrLocalChoiceAsync("OCR Text Extraction");
+                if (useAI == null) return; // Cancelled
+                if (useAI == true)
+                {
+                    await ExtractTextWithAI();
+                    return;
+                }
+
+                // Local fallback
+                ExtractTextLocal();
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"[OCR] ExtractText error: {ex.Message}");
             }
+        }
+
+        private void ExtractTextLocal()
+        {
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
+                if (mainWin != null)
+                {
+                    mainWin.ShowQuickLookForItem(this, preLoadedOcr: null, autoTriggerOcr: true);
+                }
+            });
+        }
+
+        private async Task ExtractTextWithAI()
+        {
+            try
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast("🧠 AI OCR in progress... ⏳");
+
+                byte[] imageBytes = await Task.Run(() => File.ReadAllBytes(FilePath));
+                string ext = Path.GetExtension(FilePath).ToLower();
+                string mimeType = ext switch
+                {
+                    ".jpg" or ".jpeg" => "image/jpeg",
+                    ".png" => "image/png",
+                    ".gif" => "image/gif",
+                    ".webp" => "image/webp",
+                    ".bmp" => "image/bmp",
+                    _ => "image/png"
+                };
+
+                string result = await FlyShelf.Classes.AiProviderService.Instance.GenerateWithImageAsync(
+                    "Extract ALL text from this image. Return only the extracted text, preserving the original formatting and line breaks. Do not add any commentary.",
+                    imageBytes, mimeType);
+
+                if (!string.IsNullOrWhiteSpace(result))
+                {
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        try { System.Windows.Clipboard.SetText(result); } catch { }
+                        FlyShelf.Windows.ToastWindow.ShowToast("✅ AI OCR text copied to clipboard!");
+                    });
+                }
+                else
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("⚠ AI OCR returned empty result");
+                }
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast($"❌ AI OCR failed: {ex.Message}");
+                Classes.Logger.LogAction("AI_OCR", $"Failed: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Shows a popup with two choices: "Use API Key" or "Use Local (Weak)".
+        /// Returns true for AI, false for local, null for cancelled.
+        /// </summary>
+        private Task<bool?> ShowAiOrLocalChoiceAsync(string featureName)
+        {
+            var tcs = new TaskCompletionSource<bool?>();
+
+            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            {
+                var dialog = new System.Windows.Window
+                {
+                    Title = featureName,
+                    Width = 380,
+                    Height = 200,
+                    WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen,
+                    WindowStyle = System.Windows.WindowStyle.ToolWindow,
+                    ResizeMode = System.Windows.ResizeMode.NoResize,
+                    Background = new System.Windows.Media.SolidColorBrush(
+                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#1E1E2E"))
+                };
+
+                var panel = new System.Windows.Controls.StackPanel
+                {
+                    Margin = new System.Windows.Thickness(20),
+                    VerticalAlignment = System.Windows.VerticalAlignment.Center
+                };
+
+                var title = new System.Windows.Controls.TextBlock
+                {
+                    Text = $"No API key configured for {featureName}",
+                    FontSize = 14,
+                    FontWeight = System.Windows.FontWeights.SemiBold,
+                    Foreground = System.Windows.Media.Brushes.White,
+                    TextWrapping = System.Windows.TextWrapping.Wrap,
+                    Margin = new System.Windows.Thickness(0, 0, 0, 16)
+                };
+
+                var btnPanel = new System.Windows.Controls.StackPanel
+                {
+                    Orientation = System.Windows.Controls.Orientation.Horizontal,
+                    HorizontalAlignment = System.Windows.HorizontalAlignment.Center
+                };
+
+                var aiBtn = new System.Windows.Controls.Button
+                {
+                    Content = "🔑 Set Up API Key",
+                    Padding = new System.Windows.Thickness(16, 8, 16, 8),
+                    Margin = new System.Windows.Thickness(0, 0, 10, 0),
+                    FontSize = 13,
+                    Background = new System.Windows.Media.SolidColorBrush(
+                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#7C3AED")),
+                    Foreground = System.Windows.Media.Brushes.White,
+                    BorderThickness = new System.Windows.Thickness(0)
+                };
+
+                var localBtn = new System.Windows.Controls.Button
+                {
+                    Content = "📋 Use Local (Weak)",
+                    Padding = new System.Windows.Thickness(16, 8, 16, 8),
+                    FontSize = 13,
+                    Background = new System.Windows.Media.SolidColorBrush(
+                        (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString("#374151")),
+                    Foreground = System.Windows.Media.Brushes.White,
+                    BorderThickness = new System.Windows.Thickness(0)
+                };
+
+                aiBtn.Click += (s, e) =>
+                {
+                    dialog.Close();
+                    bool hasKey = FlyShelf.Classes.AiProviderService.Instance.EnsureApiKeyOrPrompt(null);
+                    tcs.TrySetResult(hasKey ? true : null);
+                };
+
+                localBtn.Click += (s, e) =>
+                {
+                    dialog.Close();
+                    tcs.TrySetResult(false);
+                };
+
+                dialog.Closed += (s, e) =>
+                {
+                    tcs.TrySetResult(null);
+                };
+
+                btnPanel.Children.Add(aiBtn);
+                btnPanel.Children.Add(localBtn);
+                panel.Children.Add(title);
+                panel.Children.Add(btnPanel);
+                dialog.Content = panel;
+                dialog.ShowDialog();
+            });
+
+            return tcs.Task;
         }
 
 

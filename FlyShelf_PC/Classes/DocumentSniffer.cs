@@ -194,7 +194,7 @@ namespace FlyShelf.Classes
                             sizeStr = $" ({FlyShelf.Classes.FormatHelper.FormatSize(new FileInfo(targetPath).Length)})";
                         }
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                     string friendlyType = FlyShelf.Classes.FormatHelper.GetFileTypeFriendly(targetPath);
                     FlyShelf.Windows.ToastWindow.ShowToast($"{friendlyType} sniffed{sizeStr} 📄");
                 });

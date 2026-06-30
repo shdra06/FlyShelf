@@ -318,7 +318,7 @@ namespace FlyShelf.Classes
                 BorderThickness = new Thickness(0),
                 Cursor = Cursors.Hand
             };
-            activateBtn.Click += (s, e) =>
+            activateBtn.Click += async (s, e) =>
             {
                 string key = keyInput.Text.Trim();
                 if (string.IsNullOrEmpty(key))
@@ -328,7 +328,7 @@ namespace FlyShelf.Classes
                     return;
                 }
 
-                if (LicenseManager.ActivateLicense(key))
+                if (await LicenseManager.ActivateLicenseAsync(key))
                 {
                     statusLabel.Text = "License activated! Welcome to FlyShelf Pro!";
                     statusLabel.Foreground = successBrush;
@@ -383,7 +383,7 @@ namespace FlyShelf.Classes
                     }
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             return null;
         }
@@ -464,7 +464,7 @@ namespace FlyShelf.Classes
                     if (src is System.Windows.Controls.Primitives.ButtonBase || src is System.Windows.Controls.Button) return;
                     src = System.Windows.Media.VisualTreeHelper.GetParent(src);
                 }
-                try { dialog.DragMove(); } catch { }
+                try { dialog.DragMove(); } catch { } // Best-effort: failure is acceptable
             };
 
             var rootGrid = new Grid();

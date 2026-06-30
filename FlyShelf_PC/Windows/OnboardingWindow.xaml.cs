@@ -159,7 +159,7 @@ namespace FlyShelf.Windows
         // Allow dragging the window
         private void Window_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
-            try { this.DragMove(); } catch { }
+            try { this.DragMove(); } catch { } // Best-effort: failure is acceptable
         }
     }
 }

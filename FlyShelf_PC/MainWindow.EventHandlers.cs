@@ -143,7 +143,7 @@ namespace FlyShelf
                 {
                     this.DragMove();
                 }
-                catch { } 
+                catch { } // Best-effort: failure is acceptable 
             }
         }
 
@@ -481,7 +481,7 @@ namespace FlyShelf
                     _emojiPickerInstance.Close();
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             _emojiPickerInstance = null;
         }
 
@@ -741,7 +741,7 @@ namespace FlyShelf
                     Classes.NativeMethods.SetCursorPos(pt.X, pt.Y);
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         /// <summary>Logs screen-relative Y positions of all visible ListViewItem containers.</summary>
@@ -770,7 +770,7 @@ namespace FlyShelf
                     logged++;
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             return posMap;
         }
 
@@ -796,7 +796,7 @@ namespace FlyShelf
                     map[itemKey] = pos.Y;
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             return map;
         }
 
@@ -836,7 +836,7 @@ namespace FlyShelf
 
         internal void ShowQuickLookForItem(FlyShelf.ViewModels.ClipboardItem item, global::Windows.Media.Ocr.OcrResult preLoadedOcr = null, bool autoTriggerOcr = false)
         {
-            try { _activeQuickLook?.Close(); } catch { }
+            try { _activeQuickLook?.Close(); } catch { } // Best-effort: failure is acceptable
             _activeQuickLook = null;
 
             var qLook = new FlyShelf.Windows.QuickLookWindow(item, preLoadedOcr, autoTriggerOcr);
@@ -849,7 +849,7 @@ namespace FlyShelf
             // (both are Topmost, so re-show ensures the shelf isn't hidden)
             Dispatcher.InvokeAsync(() =>
             {
-                try { this.Show(); } catch { }
+                try { this.Show(); } catch { } // Best-effort: failure is acceptable
             }, System.Windows.Threading.DispatcherPriority.Background);
         }
 
@@ -998,12 +998,12 @@ namespace FlyShelf
                 else if (item.SmartActionType == "OpenPDF" || item.SmartActionType == "JoinMeeting" || item.SmartActionType == "OpenBrowser")
                 {
                     string target = item.SmartActionType == "OpenPDF" ? item.FilePath : item.RawContent;
-                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { }
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { } // Best-effort: failure is acceptable
                 }
                 else if (item.SmartActionType == "OpenMap")
                 {
                     string target = "https://www.google.com/maps/search/?api=1&query=" + Uri.EscapeDataString(item.RawContent);
-                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { }
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { } // Best-effort: failure is acceptable
                 }
                 else if (item.SmartActionType == "ConvertToPdf")
                 {
@@ -1128,7 +1128,7 @@ namespace FlyShelf
                         AnimateAndHide();
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
                 e.Handled = true;
             }
             else if (e.Key == Key.F && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
@@ -1241,7 +1241,7 @@ namespace FlyShelf
             // Summon the clipboard popup if not already visible
             if (!_isCurrentlySummoned || !_viewModel.IsFullMode)
             {
-                try { ToggleMainClipboard(); } catch { }
+                try { ToggleMainClipboard(); } catch { } // Best-effort: failure is acceptable
             }
 
             // Also open the Hub window
@@ -1256,7 +1256,7 @@ namespace FlyShelf
             // Summon the clipboard popup if not already visible
             if (!_isCurrentlySummoned || !_viewModel.IsFullMode)
             {
-                try { ToggleMainClipboard(); } catch { }
+                try { ToggleMainClipboard(); } catch { } // Best-effort: failure is acceptable
             }
 
             // Also open the Hub window

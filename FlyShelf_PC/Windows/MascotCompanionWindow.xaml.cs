@@ -294,7 +294,7 @@ namespace FlyShelf.Windows
                     _state = CompanionState.Falling;
                     PlayThemeAnimation("falling");
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
         }
 

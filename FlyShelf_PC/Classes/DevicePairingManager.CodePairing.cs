@@ -178,7 +178,7 @@ namespace FlyShelf.Classes
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(10 * 60_000);
-                    try { await _httpClient.DeleteAsync(url); } catch { }
+                    try { await _httpClient.DeleteAsync(url); } catch (Exception ex) { Logger.LogAction("PAIR", $"Firebase pairing cleanup failed: {ex.Message}"); }
                 });
             }
             catch (Exception ex)
@@ -240,7 +240,7 @@ namespace FlyShelf.Classes
                     }
 
                     // Clean up processed handshake
-                    try { await _httpClient.DeleteAsync((await AuthUrl($"pairing_handshake/{pairingKey}/{prop.Name}.json"))); } catch { }
+                    try { await _httpClient.DeleteAsync((await AuthUrl($"pairing_handshake/{pairingKey}/{prop.Name}.json"))); } catch (Exception ex) { Logger.LogAction("PAIR", $"Firebase pairing cleanup failed: {ex.Message}"); }
                 }
 
                 if (anyNew) Save();

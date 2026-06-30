@@ -9,7 +9,8 @@
         ShowInTaskbar="False"
         WindowStartupLocation="CenterScreen"
         Loaded="Window_Loaded"
-        Closing="Window_Closing">
+        Closing="Window_Closing"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="0" ResizeBorderThickness="5" CornerRadius="10" GlassFrameThickness="-1"/>
     </WindowChrome.WindowChrome>

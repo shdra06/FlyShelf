@@ -63,7 +63,7 @@ namespace FlyShelf.Windows
                 NoteRichTextBox.Focus();
                 NoteRichTextBox.CaretPosition = NoteRichTextBox.Document.ContentEnd;
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         // ═══════════════════════════════════════════════════════════
@@ -137,7 +137,7 @@ namespace FlyShelf.Windows
 
                         lastInserted = imgParagraph;
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }
             }
             finally
@@ -205,11 +205,11 @@ namespace FlyShelf.Windows
                     NoteRichTextBox.Document.ContentEnd);
                 _section.Content = textRange.Text?.TrimEnd('\r', '\n') ?? "";
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             _isDirty = false;
             if (FooterStatus != null) FooterStatus.Text = "✓ Saved";
-            try { NoteManager.SaveNow(); } catch { }
+            try { NoteManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
         }
 
         // ═══════════════════════════════════════════════════════════
@@ -267,7 +267,7 @@ namespace FlyShelf.Windows
                     {
                         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(p) { UseShellExecute = true });
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }
                 ev.Handled = true;
             };
@@ -296,7 +296,7 @@ namespace FlyShelf.Windows
                 NoteRichTextBox.CaretPosition = imgParagraph.ContentEnd;
                 _isDirty = true;
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         /// <summary>Check if we can add another image to this section (tier limits).</summary>
@@ -452,7 +452,7 @@ namespace FlyShelf.Windows
                 WordCountBadge.Text = $"{wordCount} word{(wordCount == 1 ? "" : "s")}";
                 CharCountLabel.Text = $"{charCount} char{(charCount == 1 ? "" : "s")}";
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void UpdateCursorPosition()
@@ -709,7 +709,7 @@ namespace FlyShelf.Windows
                     }
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             InsertText("☐ ");
         }
@@ -805,7 +805,7 @@ namespace FlyShelf.Windows
                         System.Diagnostics.Process.Start(
                             new System.Diagnostics.ProcessStartInfo(ev.Uri.AbsoluteUri) { UseShellExecute = true });
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                     ev.Handled = true;
                 };
 
@@ -1012,7 +1012,7 @@ namespace FlyShelf.Windows
                     FooterStatus.Text = "✓ Copied";
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             e.Handled = true;
         }
 
@@ -1048,7 +1048,7 @@ namespace FlyShelf.Windows
             }
             else
             {
-                try { DragMove(); } catch { }
+                try { DragMove(); } catch { } // Best-effort: failure is acceptable
             }
         }
 

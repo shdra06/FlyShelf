@@ -15,7 +15,8 @@
         DragOver="Window_DragOver"
         Closing="Window_Closing"
         KeyDown="Window_KeyDown"
-        Icon="/Resources/FlyShelfLogo.ico">
+        Icon="/Resources/FlyShelfLogo.ico"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
 
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="38" ResizeBorderThickness="6" CornerRadius="8" GlassFrameThickness="-1" />
@@ -148,19 +149,19 @@
                 <RadioButton Style="{StaticResource FilterTabStyle}" 
                              Content="All" Tag="{Binding AllCount}"
                              IsChecked="True" GroupName="TransferFilter"
-                             Click="FilterAll_Click" />
+                             Click="FilterAll_Click" AutomationProperties.Name="Show all transfers" />
                 <RadioButton Style="{StaticResource FilterTabStyle}" 
                              Content="Active" Tag="{Binding ActiveFilterCount}"
                              GroupName="TransferFilter"
-                             Click="FilterActive_Click" />
+                             Click="FilterActive_Click" AutomationProperties.Name="Show active transfers" />
                 <RadioButton Style="{StaticResource FilterTabStyle}" 
                              Content="Completed" Tag="{Binding CompletedCount}"
                              GroupName="TransferFilter"
-                             Click="FilterCompleted_Click" />
+                             Click="FilterCompleted_Click" AutomationProperties.Name="Show completed transfers" />
                 <RadioButton Style="{StaticResource FilterTabStyle}" 
                              Content="Failed" Tag="{Binding FailedCount}"
                              GroupName="TransferFilter"
-                             Click="FilterFailed_Click" />
+                             Click="FilterFailed_Click" AutomationProperties.Name="Show failed transfers" />
             </StackPanel>
         </Border>
 

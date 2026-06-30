@@ -86,6 +86,8 @@ namespace FlyShelf.Classes
             }
 
             Logger.LogAction("PEER", $"v5 PeerManager starting [device={_myDeviceId}]");
+            _cts?.Cancel();
+            _cts?.Dispose();
             _cts = new CancellationTokenSource();
 
             // ═ ═ ═ FIX 1: Re-publish our own URLs to Firebase on startup ═ ═ ═
@@ -210,9 +212,9 @@ namespace FlyShelf.Classes
             if (_peers.TryRemove(deviceId, out var peer))
             {
                 Logger.LogAction("PEER", $"Disconnecting unpaired peer: {peer.DeviceName}");
-                try { peer.WsCts?.Cancel(); } catch { }
-                try { peer.LiveSocket?.Dispose(); } catch { }
-                try { peer.LiveSocket = null; } catch { }
+                try { peer.WsCts?.Cancel(); } catch { } // Best-effort: failure is acceptable
+                try { peer.LiveSocket?.Dispose(); } catch { } // Best-effort: failure is acceptable
+                try { peer.LiveSocket = null; } catch { } // Best-effort: failure is acceptable
                 // Remove from URL cache
                 SaveUrlCache();
             }
@@ -257,12 +259,13 @@ namespace FlyShelf.Classes
         public void Stop()
         {
             _cts.Cancel();
+            _cts.Dispose();
             StopUdpDiscovery();
             foreach (var p in _peers.Values)
             {
                 p.IsAlive = false;
-                try { p.WsCts?.Cancel(); } catch { }
-                try { p.LiveSocket?.Dispose(); } catch { }
+                try { p.WsCts?.Cancel(); } catch { } // Best-effort: failure is acceptable
+                try { p.LiveSocket?.Dispose(); } catch { } // Best-effort: failure is acceptable
             }
             if (Instance == this)
             {
@@ -419,7 +422,7 @@ namespace FlyShelf.Classes
                         using var reqCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                         await _sharedClient.PutAsync(requestUrl, new StringContent(body, Encoding.UTF8, "application/json"), reqCts.Token);
                     }
-                    catch { }
+                    catch (Exception ex) { Logger.LogAction("PEER", $"URL request to peer failed: {ex.Message}"); }
                 }
 
                 // Also re-publish OUR OWN URLs so the other peer can find us
@@ -535,8 +538,8 @@ namespace FlyShelf.Classes
             // Reset liveness and attempt targeted handshake
             lock (peer.StateLock) { peer.IsAlive = false; peer.Transport = "offline"; }
             peer.ConsecutiveFailures = 0;
-            try { peer.WsCts?.Cancel(); } catch { }
-            try { peer.LiveSocket?.Dispose(); } catch { }
+            try { peer.WsCts?.Cancel(); } catch { } // Best-effort: failure is acceptable
+            try { peer.LiveSocket?.Dispose(); } catch { } // Best-effort: failure is acceptable
             peer.LiveSocket = null;
 
             await Handshake(peer);
@@ -570,8 +573,8 @@ namespace FlyShelf.Classes
                 // Peer is known but dead — reset and handshake with the fresh URLs
                 existing.IsAlive = false;
                 existing.ConsecutiveFailures = 0;
-                try { existing.WsCts?.Cancel(); } catch { }
-                try { existing.LiveSocket?.Dispose(); } catch { }
+                try { existing.WsCts?.Cancel(); } catch { } // Best-effort: failure is acceptable
+                try { existing.LiveSocket?.Dispose(); } catch { } // Best-effort: failure is acceptable
                 existing.LiveSocket = null;
             }
             else

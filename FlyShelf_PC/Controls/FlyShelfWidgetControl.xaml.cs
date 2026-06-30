@@ -42,7 +42,7 @@ namespace FlyShelf.Controls
                         logicalY = pt.Y / scaleY;
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
             else
             {

@@ -136,12 +136,12 @@ namespace FlyShelf.Windows
                     NetStatusPeerCount.Text = $"{aliveCount} peer{(aliveCount != 1 ? "s" : "")}";
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void NetworkOpenTransferManager_Click(object sender, RoutedEventArgs e)
         {
-            try { TransferManagerWindow.ShowOrActivate(); } catch { }
+            try { TransferManagerWindow.ShowOrActivate(); } catch { } // Best-effort: failure is acceptable
         }
 
         // ═══════════════════════════════════════════════════════════════
@@ -167,7 +167,7 @@ namespace FlyShelf.Windows
                         ? Visibility.Visible : Visibility.Collapsed;
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void AddFilesToQueue_Click(object sender, RoutedEventArgs e)
@@ -261,7 +261,7 @@ namespace FlyShelf.Windows
                         System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{file.FilePath}\"");
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -281,7 +281,7 @@ namespace FlyShelf.Windows
                     }
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void QueueDragOver_Handler(object sender, DragEventArgs e)
@@ -341,7 +341,7 @@ namespace FlyShelf.Windows
                     Clipboard.SetText(url);
                     ToastWindow.ShowToast("📋 IP copied to clipboard");
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -407,7 +407,7 @@ namespace FlyShelf.Windows
                     HistoryEmptyState.Visibility = !entries.Any() ? Visibility.Visible : Visibility.Collapsed;
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void HistoryFilterTab_Click(object sender, RoutedEventArgs e)
@@ -512,7 +512,7 @@ namespace FlyShelf.Windows
                 };
                 timer.Start();
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void RefreshNearbyDevices()
@@ -524,7 +524,7 @@ namespace FlyShelf.Windows
                     NearbyDevicesPanel.ItemsSource = NearbyDiscovery.Instance.DiscoveredDevices.ToList();
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private async void ConnectByIp_Click(object sender, RoutedEventArgs e)
@@ -577,7 +577,7 @@ namespace FlyShelf.Windows
                     _ = NearbyDiscovery.Instance?.ConnectToDevice(device);
                     ToastWindow.ShowToast($"🔗 Connecting to {device.DeviceName}...");
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -611,7 +611,7 @@ namespace FlyShelf.Windows
                     Logger.LogAction("NETWORK_HUB", $"Auto-staged clipboard file: {fi.Name} ({FormatSize(fi.Length)})");
                 });
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         // ═══════════════════════════════════════════════════════════════

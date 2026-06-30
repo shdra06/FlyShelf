@@ -7,7 +7,8 @@
         Title="Reminders" Height="620" Width="500"
         WindowStartupLocation="CenterScreen"
         SystemBackdropType="Mica" Background="Transparent"
-        Icon="/Resources/FlyShelfLogo.ico">
+        Icon="/Resources/FlyShelfLogo.ico"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
 
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="32" ResizeBorderThickness="6" CornerRadius="12" GlassFrameThickness="-1"/>

@@ -5,12 +5,49 @@ using System.Windows.Media;
 namespace FlyShelf
 {
     /// <summary>
-    /// MainWindow partial — Theme Engine, Wallpaper, Backdrop & Color Accent Management.
-    /// Contains: RestoreMicaBlur, ApplyNonMicaBackground, ApplyWallpaper, ExtractDominantColor,
-    ///           ApplyDominantColorAccent, ResetSelectionAccent, GetDesktopWallpaperPath, ClearWallpaperLayers.
+    /// MainWindow partial — Theme Engine, Wallpaper, Backdrop &amp; Color Accent Management.
+    /// 
+    /// ═══════════════════════════════════════════════════════════════════════════════
+    /// ARCHITECTURE NOTE — Why this is NOT extracted to a standalone ThemeController
+    /// ═══════════════════════════════════════════════════════════════════════════════
+    /// 
+    /// Analysis (2026-06-28) found 15+ tight MainWindow dependencies that make
+    /// extraction impractical without degrading the design:
+    /// 
+    /// XAML Named Elements accessed (8):
+    ///   WallpaperBg, WallpaperThemeOverlay, WallpaperFrostImg, WallpaperFrostHeader,
+    ///   WallpaperFrostTint, WallpaperRadialBrush, RootContent, MascotIdle
+    /// 
+    /// Window Properties mutated (4):
+    ///   this.SystemBackdropType, this.Background,
+    ///   WindowInteropHelper(this).Handle, VisualTreeHelper.GetDpi(this)
+    /// 
+    /// Threading:
+    ///   Dispatcher.InvokeAsync (4 call sites — background blur + wallpaper refresh)
+    /// 
+    /// Shared Fields (declared in MainWindow.xaml.cs, used here + WndProc + Lifecycle):
+    ///   _currentLoadedWallpaperPath — 9 refs here, 2 in xaml.cs
+    ///   _cachedDesktopWallpaperPath — 7 refs here, 1 in WndProc.cs, 1 in xaml.cs
+    /// 
+    /// Methods called FROM other partials (public interface):
+    ///   RestoreMicaBlur()                — 5 calls from MainWindow.xaml.cs
+    ///   RestoreAcrylicBlur()             — 2 calls from MainWindow.xaml.cs
+    ///   ApplyNonMicaBackground()         — 6 calls from MainWindow.xaml.cs
+    ///   ApplyWallpaper()                 — 11 calls from MainWindow.xaml.cs, 1 internal
+    ///   ApplyPopupBackground()           — 1 call from MainWindow.xaml.cs, 2 internal
+    ///   GetDesktopWallpaperPath()        — 2 calls from MainWindow.xaml.cs
+    ///   RefreshDesktopWallpaperIfChanged — 1 call from Lifecycle.cs, 1 from WndProc.cs
+    ///   StartWallpaperFileWatcher()      — 1 call from MainWindow.xaml.cs
+    ///   StopWallpaperFileWatcher()       — 1 call from MainWindow.xaml.cs
+    /// 
+    /// A ThemeController would need the entire MainWindow + 8 XAML element references
+    /// passed in, making it a worse abstraction than the current partial class approach.
+    /// ═══════════════════════════════════════════════════════════════════════════════
     /// </summary>
     public partial class MainWindow
     {
+        #region ═══ Layer Cleanup ═══
+
         /// <summary>
         /// Clears ALL wallpaper/theme visual layers without touching the window backdrop.
         /// Shared cleanup used by both RestoreMicaBlur and ApplyNonMicaBackground.
@@ -25,7 +62,7 @@ namespace FlyShelf
                     var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
                     animator?.Dispose();
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
                 WallpaperBg.Source = null;
                 WallpaperBg.Visibility = Visibility.Collapsed;
@@ -45,8 +82,12 @@ namespace FlyShelf
                 // Reset tracking
                 _currentLoadedWallpaperPath = "";
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
+
+        #endregion
+
+        #region ═══ Backdrop Modes (Mica / Acrylic / Non-Mica) ═══
 
         /// <summary>
         /// Activates Mica blur mode — sets SystemBackdropType to Mica if blur is enabled,
@@ -130,6 +171,10 @@ namespace FlyShelf
             ResetSelectionAccent();
         }
 
+        #endregion
+
+        #region ═══ Fallback Background (Popup Software Blur) ═══
+
         /// <summary>
         /// Applies a fallback background for the popup clipboard when system blur is disabled.
         /// Instead of a flat solid color, loads the Windows desktop wallpaper and applies a
@@ -207,7 +252,7 @@ namespace FlyShelf
                                 WallpaperRadialBrush.GradientStops[1].Color = Color.FromArgb(160, 10, 10, 20);
                             });
                         }
-                        catch { }
+                        catch { } // Best-effort: failure is acceptable
                     });
                 }
                 else
@@ -223,6 +268,10 @@ namespace FlyShelf
                 Classes.Logger.LogAction("THEME", $"Software blur fallback failed: {ex.Message}");
             }
         }
+
+        #endregion
+
+        #region ═══ Selection Accent Colors ═══
 
         /// <summary>
         /// Injects the wallpaper's dominant color as selection accent brushes.
@@ -275,7 +324,7 @@ namespace FlyShelf
                 app.Resources["ShelfCardSelectionBg"] = selBg;
                 app.Resources["ShelfCardFocusBorder"] = focusBorder;
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void ResetSelectionAccent()
@@ -302,8 +351,12 @@ namespace FlyShelf
                 app.Resources["ShelfCardSelectionBg"] = selBg;
                 app.Resources["ShelfCardFocusBorder"] = focusBorder;
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
+
+        #endregion
+
+        #region ═══ Desktop Wallpaper Registry ═══
 
         /// <summary>Gets current Windows desktop wallpaper path from registry (cached).</summary>
         private static string GetDesktopWallpaperPath()
@@ -326,6 +379,10 @@ namespace FlyShelf
             }
         }
 
+        #endregion
+
+        #region ═══ Wallpaper Application (Static + Animated GIF) ═══
+
         private void ApplyWallpaper()
         {
             string path = Classes.SettingsManager.Current.ClipboardWallpaperPath;
@@ -339,7 +396,7 @@ namespace FlyShelf
                     var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
                     animator?.Dispose();
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
                 WallpaperBg.Source = null;
                 WallpaperBg.Visibility = Visibility.Collapsed;
@@ -369,7 +426,7 @@ namespace FlyShelf
                         var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
                         animator?.Dispose();
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                     WallpaperBg.Source = null; // Clear static source
                     var uri = new Uri(path, UriKind.Absolute);
                     XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, uri);
@@ -396,7 +453,7 @@ namespace FlyShelf
                         var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
                         animator?.Dispose();
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                     XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null); // Clear any GIF
 
                     var bmp = new System.Windows.Media.Imaging.BitmapImage();
@@ -442,7 +499,7 @@ namespace FlyShelf
                                     // PreBlurredWallpaper resource removed — was never consumed by XAML or code
                                 });
                             }
-                            catch { }
+                            catch { } // Best-effort: failure is acceptable
                         });
                     }
                     else
@@ -485,7 +542,7 @@ namespace FlyShelf
                                      // Inject wallpaper dominant color as selection accent
                                      ApplyDominantColorAccent(dominantColor);
                                  }
-                                 catch { }
+                                 catch { } // Best-effort: failure is acceptable
                              });
                         }
                     });
@@ -499,7 +556,7 @@ namespace FlyShelf
                     var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
                     animator?.Dispose();
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
                 WallpaperBg.Visibility = Visibility.Collapsed;
                 WallpaperThemeOverlay.Visibility = Visibility.Collapsed;
@@ -543,10 +600,14 @@ namespace FlyShelf
                 if (count > 0)
                     return Color.FromRgb((byte)(totalR / count), (byte)(totalG / count), (byte)(totalB / count));
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             return Color.FromRgb(99, 102, 241); // Fallback indigo
         }
+
+        #endregion
+
+        #region ═══ Color Conversion Utilities ═══
 
         private static void RgbToHsl(Color rgb, out double h, out double s, out double l)
         {
@@ -611,6 +672,10 @@ namespace FlyShelf
             if (t < 2.0 / 3.0) return p + (q - p) * (2.0 / 3.0 - t) * 6.0;
             return p;
         }
+
+        #endregion
+
+        #region ═══ Bitmap Software Blur ═══
 
         /// <summary>
         /// Pre-renders a blurred version of a BitmapImage using a pure pixel-level box blur.
@@ -699,9 +764,9 @@ namespace FlyShelf
             return result;
         }
 
-        // ═══════════════════════════════════════════════════════════════════════
-        // Desktop Wallpaper Auto-Refresh
-        // ═══════════════════════════════════════════════════════════════════════
+        #endregion
+
+        #region ═══ Desktop Wallpaper Auto-Refresh ═══
 
         /// <summary>
         /// Checks if the Windows desktop wallpaper has changed since the last time we loaded it,
@@ -740,7 +805,7 @@ namespace FlyShelf
                 ApplyWallpaper();
                 Classes.Logger.LogAction("WALLPAPER", $"Auto-refreshed desktop wallpaper: {freshWp}");
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         /// <summary>
@@ -837,7 +902,7 @@ namespace FlyShelf
                     _wallpaperDebounceTimer?.Start();
                 });
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         /// <summary>
@@ -867,8 +932,10 @@ namespace FlyShelf
                     _wallpaperCachedFilesWatcher = null;
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
+
+        #endregion
     }
 }
 

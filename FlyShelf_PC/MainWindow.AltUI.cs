@@ -291,7 +291,7 @@ namespace FlyShelf
                         SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }, System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
@@ -413,7 +413,7 @@ namespace FlyShelf
                                 System.Windows.Rect bounds = transform.TransformBounds(new System.Windows.Rect(0, 0, container.ActualWidth, container.ActualHeight));
                                 isVisible = viewportRect.IntersectsWith(bounds);
                             }
-                            catch { }
+                            catch { } // Best-effort: failure is acceptable
                         }
 
                         if (isVisible)

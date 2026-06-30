@@ -2,6 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+        xmlns:avalonEdit="http://icsharpcode.net/sharpdevelop/avalonedit"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
         Title="Quick Look" Height="500" Width="400"
         WindowStyle="None" AllowsTransparency="False" Background="{DynamicResource ThemeWindowFallback}"
         Topmost="True" ResizeMode="CanResizeWithGrip"
@@ -10,7 +12,8 @@
         MouseDoubleClick="Window_MouseDoubleClick"
         MouseMove="Window_MouseMove" Deactivated="Window_Deactivated"
         Loaded="Window_Loaded"
-        Icon="/Resources/FlyShelfLogo.ico">
+        Icon="/Resources/FlyShelfLogo.ico"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="0" ResizeBorderThickness="6" CornerRadius="12" GlassFrameThickness="-1" />
     </WindowChrome.WindowChrome>
@@ -32,58 +35,71 @@
                         <!-- Rotate Button (image only) -->
                         <ui:Button x:Name="RotateBtn" Click="RotateButton_Click" Appearance="Secondary" 
                                    Foreground="{DynamicResource InfoColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Rotate 90° clockwise"
-                                   Visibility="Collapsed">
+                                   Visibility="Collapsed" AutomationProperties.Name="Rotate image">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowRotateClockwise24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                         <!-- Doodle Button (image only) -->
                         <ui:Button x:Name="DoodleBtn" Click="DoodleButton_Click" Appearance="Secondary" 
                                    Foreground="#A78BFA" Padding="5,3" Margin="0,0,4,0" ToolTip="Draw / Annotate"
-                                   Visibility="Collapsed">
+                                   Visibility="Collapsed" AutomationProperties.Name="Draw and annotate">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Edit24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                         <!-- Doodle Undo -->
                         <ui:Button x:Name="DoodleUndoBtn" Click="DoodleUndo_Click" Appearance="Secondary" 
                                    Foreground="#94A3B8" Padding="5,3" Margin="0,0,2,0" ToolTip="Undo (Ctrl+Z)"
-                                   Visibility="Collapsed">
+                                   Visibility="Collapsed" AutomationProperties.Name="Undo drawing">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowUndo24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                         <!-- Doodle Redo -->
                         <ui:Button x:Name="DoodleRedoBtn" Click="DoodleRedo_Click" Appearance="Secondary" 
                                    Foreground="#94A3B8" Padding="5,3" Margin="0,0,2,0" ToolTip="Redo (Ctrl+Y)"
-                                   Visibility="Collapsed">
+                                   Visibility="Collapsed" AutomationProperties.Name="Redo drawing">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="ArrowRedo24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                         <!-- Doodle Save -->
                         <ui:Button x:Name="DoodleSaveBtn" Click="DoodleSave_Click" Appearance="Secondary" 
                                    Foreground="#34D399" Padding="5,3" Margin="0,0,4,0" ToolTip="Save annotated image (Ctrl+S)"
-                                   Visibility="Collapsed">
+                                   Visibility="Collapsed" AutomationProperties.Name="Save annotated image">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Save24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                         <!-- OCR Button (image only) -->
                         <ui:Button x:Name="OcrBtn" Click="OcrButton_Click" Appearance="Secondary" 
                                    Foreground="{DynamicResource SuccessColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Extract &amp; Select Text (OCR)"
-                                   Visibility="Collapsed">
+                                   Visibility="Collapsed" AutomationProperties.Name="Extract text OCR">
                             <TextBlock Text="T" FontSize="13" FontWeight="Bold" FontFamily="Segoe UI" Margin="3,0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
                         </ui:Button>
                         <!-- Copy All OCR Text Button -->
                         <ui:Button x:Name="CopyAllOcrBtn" Click="CopyAllOcrButton_Click" Appearance="Secondary" 
                                    Foreground="{DynamicResource GeminiAccentColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Copy all detected text"
-                                   Visibility="Collapsed">
+                                   Visibility="Collapsed" AutomationProperties.Name="Copy all OCR text">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Copy24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                         <!-- Translate Button (text items only) -->
                         <ui:Button x:Name="TranslateBtn" Click="TranslateButton_Click" Appearance="Secondary" 
                                    Foreground="{DynamicResource InfoColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Translate text"
-                                   Visibility="Collapsed">
-                            <TextBlock Text="🌐" FontSize="13" Margin="3,0" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                   Visibility="Collapsed" AutomationProperties.Name="Translate text">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="Earth24" FontSize="14"/></ui:Button.Icon>
+                        </ui:Button>
+                        <!-- Zoom Reset Button (markdown only) -->
+                        <ui:Button x:Name="ZoomResetBtn" Click="MarkdownZoomReset_Click" Appearance="Secondary"
+                                   Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Padding="5,3" Margin="0,0,4,0" ToolTip="Reset zoom (Ctrl+0)"
+                                   Visibility="Collapsed" AutomationProperties.Name="Reset zoom">
+                            <TextBlock x:Name="ZoomLabel" Text="100%" FontSize="10.5" FontWeight="SemiBold" Margin="2,0" VerticalAlignment="Center"/>
+                        </ui:Button>
+                        <!-- Convert to PDF Button (markdown only) -->
+                        <ui:Button x:Name="MdToPdfBtn" Click="MarkdownToPdf_Click" Appearance="Secondary"
+                                   Foreground="#F472B6" Padding="5,3" Margin="0,0,4,0" ToolTip="Export as PDF"
+                                   Visibility="Collapsed" AutomationProperties.Name="Convert markdown to PDF">
+                            <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentPdf24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                         <!-- Pin Button (toggle always on top) -->
                         <ui:Button x:Name="PinBtn" Click="PinButton_Click" Appearance="Secondary" 
-                                   Foreground="{DynamicResource PinActiveColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Pin on top">
+                                   Foreground="{DynamicResource PinActiveColor}" Padding="5,3" Margin="0,0,4,0" ToolTip="Pin on top"
+                                   AutomationProperties.Name="Pin window on top">
                             <ui:Button.Icon><ui:SymbolIcon x:Name="PinIcon" Symbol="Pin24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                         <!-- Close -->
-                        <ui:Button x:Name="CloseBtn" Click="CloseButton_Click" Appearance="Secondary" Foreground="{DynamicResource DangerColor}" Padding="5,3" ToolTip="Close">
+                        <ui:Button x:Name="CloseBtn" Click="CloseButton_Click" Appearance="Secondary" Foreground="{DynamicResource DangerColor}" Padding="5,3" ToolTip="Close" AutomationProperties.Name="Close preview">
                             <ui:Button.Icon><ui:SymbolIcon Symbol="Dismiss24" Filled="True" FontSize="14"/></ui:Button.Icon>
                         </ui:Button>
                     </StackPanel>
@@ -163,6 +179,25 @@
                         <TextBlock x:Name="TextPreview" Foreground="{DynamicResource ThemeTextPrimary}" Margin="15" TextWrapping="Wrap" FontFamily="Consolas" FontSize="13" />
                     </ScrollViewer>
                     
+                    <!-- Markdown Rendered Preview (WebView2 for modern JS support) -->
+                    <wv2:WebView2 x:Name="MarkdownWebView"
+                        Visibility="Collapsed"
+                        DefaultBackgroundColor="Transparent" />
+                    
+                    <!-- Syntax-Highlighted Code Preview -->
+                    <avalonEdit:TextEditor x:Name="CodePreview"
+                        Visibility="Collapsed"
+                        IsReadOnly="True"
+                        ShowLineNumbers="True"
+                        FontFamily="Cascadia Code, Cascadia Mono, Consolas, monospace"
+                        FontSize="13"
+                        Background="#1E1E2E"
+                        Foreground="#CDD6F4"
+                        Padding="12"
+                        HorizontalScrollBarVisibility="Auto"
+                        VerticalScrollBarVisibility="Auto"
+                        Focusable="True" />
+
                     <!-- Document Mode (Fallback when all else fails) -->
                     <StackPanel x:Name="DocumentPanel" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
                         <ui:SymbolIcon x:Name="DocIcon" Symbol="Document24" FontSize="120" Foreground="{DynamicResource InfoColor}" HorizontalAlignment="Center"/>

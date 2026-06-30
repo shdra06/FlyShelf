@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------
 // LanTransferEngine — Dedicated TCP transfer engine
-// Zero-copy file sends via Socket.SendFileAsync (Windows TransmitFile)
+// Chunked file sends with pause/resume/cancel and real-time progress
 // Optimized 1MB buffered receives with checkpoint ACKs
 // ---------------------------------------------------------------
 using System;
@@ -37,7 +37,7 @@ namespace FlyShelf.Classes
 
         private TcpListener? _listener;
         private CancellationTokenSource _cts = new();
-        private bool _isRunning;
+        private volatile bool _isRunning;
 
         public bool IsRunning => _isRunning;
         public int Port => TRANSFER_PORT;
@@ -55,11 +55,9 @@ namespace FlyShelf.Classes
 
             try
             {
+                try { _cts?.Dispose(); } catch { } // Best-effort: failure is acceptable
                 _cts = new CancellationTokenSource();
                 _listener = new TcpListener(IPAddress.Any, TRANSFER_PORT);
-                _listener.Server.NoDelay = false; // Nagle ON for bulk throughput
-                _listener.Server.SendBufferSize = SOCKET_BUFFER_SIZE;
-                _listener.Server.ReceiveBufferSize = SOCKET_BUFFER_SIZE;
                 _listener.Start(ACCEPT_BACKLOG);
                 _isRunning = true;
                 Logger.LogAction("TCP_ENGINE", $"✅ Transfer engine started on port {TRANSFER_PORT}");
@@ -79,8 +77,8 @@ namespace FlyShelf.Classes
             if (!_isRunning) return;
 
             _isRunning = false;
-            try { _cts.Cancel(); } catch { }
-            try { _listener?.Stop(); } catch { }
+            try { _cts.Cancel(); } catch { } // Best-effort: failure is acceptable
+            try { _listener?.Stop(); } catch { } // Best-effort: failure is acceptable
             Logger.LogAction("TCP_ENGINE", "Transfer engine stopped.");
         }
 
@@ -142,6 +140,7 @@ namespace FlyShelf.Classes
                 if (version != PROTOCOL_VERSION)
                 {
                     Logger.LogAction("TCP_ENGINE", $"Protocol version mismatch: got {version}, expected {PROTOCOL_VERSION}");
+                    try { await new NetworkStream(socket, false).WriteAsync(new byte[] { 0xFF }, 0, 1); } catch { } // Best-effort: failure is acceptable
                     return;
                 }
 
@@ -150,6 +149,7 @@ namespace FlyShelf.Classes
                 if (string.IsNullOrEmpty(pairingKey))
                 {
                     Logger.LogAction("TCP_ENGINE", "No pairing key — rejecting TCP connection");
+                    try { await new NetworkStream(socket, false).WriteAsync(new byte[] { 0xFF }, 0, 1); } catch { } // Best-effort: failure is acceptable
                     return;
                 }
 
@@ -157,6 +157,7 @@ namespace FlyShelf.Classes
                 if (!CryptographicOperations.FixedTimeEquals(receivedHmac, expectedHmac))
                 {
                     Logger.LogAction("TCP_ENGINE", $"⛔ HMAC validation failed for transfer {transferId}");
+                    try { await new NetworkStream(socket, false).WriteAsync(new byte[] { 0xFF }, 0, 1); } catch { } // Best-effort: failure is acceptable
                     return;
                 }
 
@@ -167,6 +168,7 @@ namespace FlyShelf.Classes
                 if (session == null)
                 {
                     Logger.LogAction("TCP_ENGINE", $"No pending session for transfer {transferId} — rejecting");
+                    try { await new NetworkStream(socket, false).WriteAsync(new byte[] { 0xFF }, 0, 1); } catch { } // Best-effort: failure is acceptable
                     return;
                 }
 
@@ -180,15 +182,15 @@ namespace FlyShelf.Classes
             }
             finally
             {
-                try { client.Close(); } catch { }
+                try { client.Close(); } catch { } // Best-effort: failure is acceptable
             }
         }
 
-        // ═══ SEND — Zero-copy kernel transfer ═══
+        // ═══ SEND — Chunked transfer with progress ═══
 
         /// <summary>
-        /// Sends a file to a peer using a dedicated TCP connection with Socket.SendFileAsync.
-        /// On Windows, this uses the TransmitFile kernel API for zero-copy transfer.
+        /// Sends a file to a peer using a dedicated TCP connection.
+        /// Supports pause/resume/cancel and real-time progress tracking.
         /// </summary>
         public async Task SendFileAsync(string peerIp, int peerPort, LanTransferSession session)
         {
@@ -226,19 +228,9 @@ namespace FlyShelf.Classes
                     Logger.LogAction("TCP_ENGINE", $"📤 Resuming send from offset {LanTransferSession.FormatBytes(resumeFrom)}");
                 }
 
-                // Strategy: Zero-copy for fresh sends of files under 100MB (pause unlikely).
-                // For larger files or resume sends, always use chunked which supports
-                // pause/resume via WaitIfPausedAsync() — essential for 15GB+ transfers.
-                const long ZERO_COPY_THRESHOLD = 100L * 1024 * 1024; // 100MB
-
-                if (resumeFrom == 0 && fileSize <= ZERO_COPY_THRESHOLD)
-                {
-                    await SendFileZeroCopyAsync(socket, session);
-                }
-                else
-                {
-                    await SendFileChunkedAsync(socket, session, resumeFrom);
-                }
+                // Always use chunked send — supports pause/resume/cancel and provides real-time progress.
+                // Zero-copy (SendFileAsync) can't be paused, cancelled, or progress-tracked.
+                await SendFileChunkedAsync(socket, session, resumeFrom);
 
                 if (session.State == TransferState.Transferring)
                 {
@@ -268,65 +260,17 @@ namespace FlyShelf.Classes
             }
             finally
             {
-                try { socket?.Shutdown(SocketShutdown.Both); } catch { }
-                try { socket?.Close(); } catch { }
-                try { socket?.Dispose(); } catch { }
+                try { socket?.Shutdown(SocketShutdown.Both); } catch { } // Best-effort: failure is acceptable
+                try { socket?.Close(); } catch { } // Best-effort: failure is acceptable
+                try { socket?.Dispose(); } catch { } // Best-effort: failure is acceptable
             }
         }
 
-        /// <summary>
-        /// Zero-copy send using Socket.SendFileAsync (Windows TransmitFile API).
-        /// Data goes directly from file system page cache to NIC — no user-space copies.
-        /// </summary>
-        private async Task SendFileZeroCopyAsync(Socket socket, LanTransferSession session)
-        {
-            // Socket.SendFileAsync leverages Windows TransmitFile for kernel-mode transfer
-            // We use a background task to track progress since SendFileAsync doesn't report it
-            var progressTask = TrackSendProgress(socket, session);
-
-            try
-            {
-                await socket.SendFileAsync(session.FilePath, ReadOnlyMemory<byte>.Empty, ReadOnlyMemory<byte>.Empty, TransmitFileOptions.UseKernelApc);
-            }
-            finally
-            {
-                // Signal progress tracking to stop
-                session.BytesTransferred = session.FileSize;
-            }
-
-            await progressTask;
-        }
 
         /// <summary>
-        /// Tracks send progress by periodically checking the socket's bytes sent.
-        /// Used alongside SendFileAsync which doesn't provide progress callbacks.
-        /// </summary>
-        private async Task TrackSendProgress(Socket socket, LanTransferSession session)
-        {
-            long lastSample = 0;
-            while (session.State == TransferState.Transferring && session.BytesTransferred < session.FileSize)
-            {
-                try
-                {
-                    await Task.Delay(SPEED_SAMPLE_INTERVAL_MS, session.CancellationToken);
-                }
-                catch (OperationCanceledException) { break; }
-
-                // Estimate progress from file position (not perfect but adequate for zero-copy)
-                // The actual bytes will be set to FileSize when SendFileAsync completes
-                long sent = session.BytesTransferred;
-                if (sent != lastSample)
-                {
-                    session.RecordSpeedSample(sent);
-                    lastSample = sent;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Chunked send with manual FileStream reading. Used for resume transfers
-        /// where we need to Seek to an offset (SendFileAsync doesn't support offsets).
-        /// Still very fast with 1MB buffer from ArrayPool.
+        /// Chunked send with manual FileStream reading.
+        /// Supports pause/resume/cancel with real-time progress tracking.
+        /// Uses 1MB buffer from ArrayPool for high throughput.
         /// </summary>
         private async Task SendFileChunkedAsync(Socket socket, LanTransferSession session, long resumeFrom)
         {
@@ -412,6 +356,7 @@ namespace FlyShelf.Classes
                 if (resumeFrom > 0)
                 {
                     fs.Seek(resumeFrom, SeekOrigin.Begin);
+                    fs.SetLength(resumeFrom); // Remove stale tail from previous partial write
                     Logger.LogAction("TCP_ENGINE", $"📥 Resuming receive from offset {LanTransferSession.FormatBytes(resumeFrom)}");
                 }
 
@@ -422,6 +367,13 @@ namespace FlyShelf.Classes
                 while (totalReceived < fileSize)
                 {
                     linkedCts.Token.ThrowIfCancellationRequested();
+
+                    // Flush to disk before blocking on pause — prevents data loss on crash while paused
+                    if (session.IsPaused)
+                    {
+                        await fs.FlushAsync(linkedCts.Token);
+                        LanTransferManager.Instance?.PersistCheckpoints();
+                    }
 
                     // Check pause
                     await session.WaitIfPausedAsync();
@@ -468,6 +420,33 @@ namespace FlyShelf.Classes
 
                 // Final flush
                 await fs.FlushAsync(linkedCts.Token);
+
+                // Verify file integrity if hash was provided
+                if (!string.IsNullOrEmpty(session.XxHash64))
+                {
+                    try
+                    {
+                        using var hashStream = new FileStream(session.FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024);
+                        var hasher = new System.IO.Hashing.XxHash64();
+                        byte[] hashBuf = new byte[1024 * 1024];
+                        int hashRead;
+                        while ((hashRead = await hashStream.ReadAsync(hashBuf, linkedCts.Token)) > 0)
+                            hasher.Append(hashBuf.AsSpan(0, hashRead));
+                        string computed = Convert.ToHexString(hasher.GetCurrentHash()).ToLowerInvariant();
+                        if (computed != session.XxHash64.ToLowerInvariant())
+                        {
+                            session.MarkFailed($"Integrity check failed: expected {session.XxHash64}, got {computed}");
+                            Logger.LogAction("TCP_ENGINE", $"❌ Hash mismatch for {session.FileName}");
+                            return;
+                        }
+                        Logger.LogAction("TCP_ENGINE", $"✅ Hash verified for {session.FileName}");
+                    }
+                    catch (OperationCanceledException) { return; }
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("TCP_ENGINE", $"⚠️ Hash verification skipped: {ex.Message}");
+                    }
+                }
 
                 if (session.State == TransferState.Transferring)
                 {

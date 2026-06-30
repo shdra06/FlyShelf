@@ -52,8 +52,9 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Sync',
+          tabBarAccessibilityLabel: 'Sync tab',
           tabBarIcon: ({ color, focused }) => (
-            <View style={focused ? styles.activeIconContainer : undefined}>
+            <View style={focused ? styles.activeIconContainer : undefined} accessibilityLabel={focused ? 'Sync tab, selected' : 'Sync tab'}>
               <IconSymbol size={24} name="repeat" color={color} />
             </View>
           ),
@@ -63,8 +64,9 @@ export default function TabLayout() {
         name="archive"
         options={{
           title: 'Files',
+          tabBarAccessibilityLabel: 'Files tab',
           tabBarIcon: ({ color, focused }) => (
-            <View style={focused ? styles.activeIconContainer : undefined}>
+            <View style={focused ? styles.activeIconContainer : undefined} accessibilityLabel={focused ? 'Files tab, selected' : 'Files tab'}>
               <IconSymbol size={24} name="folder" color={color} />
             </View>
           ),
@@ -74,8 +76,9 @@ export default function TabLayout() {
         name="notes"
         options={{
           title: 'Notes',
+          tabBarAccessibilityLabel: 'Notes tab',
           tabBarIcon: ({ color, focused }) => (
-            <View style={focused ? styles.activeIconContainer : undefined}>
+            <View style={focused ? styles.activeIconContainer : undefined} accessibilityLabel={focused ? 'Notes tab, selected' : 'Notes tab'}>
               <IconSymbol size={24} name="doc.text" color={color} />
             </View>
           ),
@@ -85,8 +88,9 @@ export default function TabLayout() {
         name="todo"
         options={{
           title: 'Todo',
+          tabBarAccessibilityLabel: 'Todo tab',
           tabBarIcon: ({ color, focused }) => (
-            <View style={focused ? styles.activeIconContainer : undefined}>
+            <View style={focused ? styles.activeIconContainer : undefined} accessibilityLabel={focused ? 'Todo tab, selected' : 'Todo tab'}>
               <IconSymbol size={24} name="checklist" color={color} />
             </View>
           ),
@@ -96,8 +100,9 @@ export default function TabLayout() {
         name="settings"
         options={{
           title: 'Settings',
+          tabBarAccessibilityLabel: 'Settings tab',
           tabBarIcon: ({ color, focused }) => (
-            <View style={focused ? styles.activeIconContainer : undefined}>
+            <View style={focused ? styles.activeIconContainer : undefined} accessibilityLabel={focused ? 'Settings tab, selected' : 'Settings tab'}>
               <IconSymbol size={24} name="gear" color={color} />
             </View>
           ),

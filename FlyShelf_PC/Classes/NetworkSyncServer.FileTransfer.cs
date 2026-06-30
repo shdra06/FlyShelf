@@ -57,7 +57,7 @@ namespace FlyShelf.Classes
             string path = req.QueryString["path"];
             if (string.IsNullOrEmpty(path) || !File.Exists(path))
             {
-                try { res.StatusCode = 404; res.Close(); } catch { }
+                try { res.StatusCode = 404; res.Close(); } catch { } // Best-effort: failure is acceptable
                 return;
             }
 
@@ -73,7 +73,7 @@ namespace FlyShelf.Classes
                     res.OutputStream.Write(err, 0, err.Length);
                     res.Close();
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
                 return;
             }
 
@@ -148,7 +148,7 @@ namespace FlyShelf.Classes
             catch (Exception ex) { Logger.LogAction("DOWNLOAD ERROR", $"{ex.GetType().Name}: {ex.Message}"); }
             finally
             {
-                try { res.Close(); } catch { }
+                try { res.Close(); } catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -167,7 +167,7 @@ namespace FlyShelf.Classes
                     byte[] tooMany = Encoding.UTF8.GetBytes("{\"error\":\"Too many pairing attempts. Try again later.\"}");
                     res.StatusCode = 429;
                     res.ContentType = "application/json";
-                    try { res.OutputStream.Write(tooMany, 0, tooMany.Length); } catch { }
+                    try { res.OutputStream.Write(tooMany, 0, tooMany.Length); } catch { } // Best-effort: failure is acceptable
                     Logger.LogAction("SECURITY", $"⛔ /api/pair global rate-limit hit from {remoteIp}");
                     return;
                 }
@@ -183,10 +183,17 @@ namespace FlyShelf.Classes
                         byte[] blocked = Encoding.UTF8.GetBytes("{\"error\":\"Too many pairing attempts from this device. Try again in 60 seconds.\"}");
                         res.StatusCode = 429;
                         res.ContentType = "application/json";
-                        try { res.OutputStream.Write(blocked, 0, blocked.Length); } catch { }
+                        try { res.OutputStream.Write(blocked, 0, blocked.Length); } catch { } // Best-effort: failure is acceptable
                         Logger.LogAction("SECURITY", $"⛔ /api/pair rate-limited IP: {remoteIp} ({ipState.count} fails)");
                         return;
                     }
+                }
+
+                if (req.ContentLength64 > 65_536) // 64KB limit
+                {
+                    res.StatusCode = 413;
+                    await WriteJsonResponse(res, false, "Request body too large");
+                    return;
                 }
 
                 string body;
@@ -261,11 +268,11 @@ namespace FlyShelf.Classes
                 byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Internal server error\"}");
                 res.StatusCode = 500;
                 res.ContentType = "application/json";
-                try { res.OutputStream.Write(err, 0, err.Length); } catch { }
+                try { res.OutputStream.Write(err, 0, err.Length); } catch { } // Best-effort: failure is acceptable
             }
             finally
             {
-                try { res.Close(); } catch { }
+                try { res.Close(); } catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -279,6 +286,13 @@ namespace FlyShelf.Classes
         {
             try
             {
+                if (req.ContentLength64 > 65_536) // 64KB limit
+                {
+                    res.StatusCode = 413;
+                    await WriteJsonResponse(res, false, "Request body too large");
+                    return;
+                }
+
                 string body;
                 using (var reader = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8))
                 {
@@ -331,11 +345,11 @@ namespace FlyShelf.Classes
                 byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Internal server error\"}");
                 res.StatusCode = 500;
                 res.ContentType = "application/json";
-                try { res.OutputStream.Write(err, 0, err.Length); } catch { }
+                try { res.OutputStream.Write(err, 0, err.Length); } catch { } // Best-effort: failure is acceptable
             }
             finally
             {
-                try { res.Close(); } catch { }
+                try { res.Close(); } catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -370,7 +384,7 @@ namespace FlyShelf.Classes
                             sizeStr = $" ({FlyShelf.Classes.FormatHelper.FormatSize(new FileInfo(filePath).Length)})";
                         }
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                     string friendlyType = FlyShelf.Classes.FormatHelper.GetFileTypeFriendly(filePath);
                     FlyShelf.Windows.ToastWindow.ShowToast($"{friendlyType} received{sizeStr} via {transferMethod} 📥");
                     // Wake up any long-poll clients (e.g. other Android devices waiting on /api/events)
@@ -444,7 +458,7 @@ namespace FlyShelf.Classes
                         {
                             possiblePath = new Uri(possiblePath).LocalPath;
                         }
-                        catch { }
+                        catch { } // Best-effort: failure is acceptable
                     }
 
                     bool isPath = false;
@@ -455,7 +469,7 @@ namespace FlyShelf.Classes
                             isPath = true;
                         }
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
 
                     ClipboardItem clip;
                     if (isPath)
@@ -478,7 +492,7 @@ namespace FlyShelf.Classes
                                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() => clip.Icon = icon);
                                 }
                             }
-                            catch { }
+                            catch { } // Best-effort: failure is acceptable
                         });
                     }
                     else
@@ -553,7 +567,7 @@ namespace FlyShelf.Classes
                 await res.OutputStream.WriteAsync(data, 0, data.Length);
             }
             catch { res.StatusCode = 500; }
-            finally { try { res.Close(); } catch { } }
+            finally { try { res.Close(); } catch { } /* Best-effort: failure is acceptable */ }
         }
 
         private async Task HandleTransferOffer(HttpListenerRequest req, HttpListenerResponse res)
@@ -626,9 +640,9 @@ namespace FlyShelf.Classes
                 byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Transfer offer failed\"}");
                 res.StatusCode = 500;
                 res.ContentType = "application/json";
-                try { await res.OutputStream.WriteAsync(err, 0, err.Length); } catch { }
+                try { await res.OutputStream.WriteAsync(err, 0, err.Length); } catch { } // Best-effort: failure is acceptable
             }
-            finally { try { res.Close(); } catch { } }
+            finally { try { res.Close(); } catch { } /* Best-effort: failure is acceptable */ }
         }
 
         private async Task HandleTransferUpload(HttpListenerRequest req, HttpListenerResponse res)
@@ -721,9 +735,9 @@ namespace FlyShelf.Classes
                 byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Transfer upload failed\"}");
                 res.StatusCode = 500;
                 res.ContentType = "application/json";
-                try { await res.OutputStream.WriteAsync(err, 0, err.Length); } catch { }
+                try { await res.OutputStream.WriteAsync(err, 0, err.Length); } catch { } // Best-effort: failure is acceptable
             }
-            finally { try { res.Close(); } catch { } }
+            finally { try { res.Close(); } catch { } /* Best-effort: failure is acceptable */ }
         }
 
         private Task HandleTransferStatus(HttpListenerRequest req, HttpListenerResponse res)
@@ -757,7 +771,7 @@ namespace FlyShelf.Classes
                 res.OutputStream.Write(data, 0, data.Length);
             }
             catch { res.StatusCode = 500; }
-            finally { try { res.Close(); } catch { } }
+            finally { try { res.Close(); } catch { } /* Best-effort: failure is acceptable */ }
             return Task.CompletedTask;
         }
     }

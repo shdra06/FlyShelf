@@ -35,9 +35,19 @@ namespace FlyShelf.Classes
         public string Version { get; set; } = "";
         public string DeviceType { get; set; } = "";
 
-        // WebSocket for instant liveness detection
-        public ClientWebSocket? LiveSocket { get; set; }
-        public CancellationTokenSource? WsCts { get; set; }
+        // WebSocket for instant liveness detection — thread-safe via StateLock
+        private ClientWebSocket? _liveSocket;
+        public ClientWebSocket? LiveSocket
+        {
+            get { lock (StateLock) return _liveSocket; }
+            set { lock (StateLock) _liveSocket = value; }
+        }
+        private CancellationTokenSource? _wsCts;
+        public CancellationTokenSource? WsCts
+        {
+            get { lock (StateLock) return _wsCts; }
+            set { lock (StateLock) _wsCts = value; }
+        }
         public SemaphoreSlim SendSemaphore { get; } = new(1, 1);
         public SemaphoreSlim HandshakeLock { get; } = new(1, 1); // Prevents concurrent handshakes from HeartbeatLoop/DiscoveryLoop/UDP/PeerAnnounce/UrlUpdate
         public readonly object StateLock = new(); // Protects atomic IsAlive + Transport updates

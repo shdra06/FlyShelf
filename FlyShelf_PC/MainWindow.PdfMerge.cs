@@ -113,7 +113,7 @@ namespace FlyShelf
                             this.Activate();
                         }
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 };
                 win.WindowStartupLocation = System.Windows.WindowStartupLocation.CenterScreen;
                 win.Topmost = true;
@@ -358,7 +358,7 @@ $word.Quit()
                         {
                             if (!proc.WaitForExit(60000))
                             {
-                                try { proc.Kill(); } catch { }
+                                try { proc.Kill(); } catch { } // Best-effort: failure is acceptable
                             }
                             proc.Dispose();
                         }
@@ -456,7 +456,7 @@ $word.Quit()
                                 // Dispose all opened source documents
                                 foreach (var doc in openDocs.Values)
                                 {
-                                    try { doc.Dispose(); } catch { }
+                                    try { doc.Dispose(); } catch { } // Best-effort: failure is acceptable
                                 }
                             }
                         }
@@ -723,7 +723,7 @@ $word.Quit()
             };
 
             // Allow dragging the dialog
-            outerBorder.MouseLeftButtonDown += (_, me) => { try { dlg.DragMove(); } catch { } };
+            outerBorder.MouseLeftButtonDown += (_, me) => { try { dlg.DragMove(); } catch { } /* Best-effort: failure is acceptable */ };
 
             // Focus and select only the filename part (ignoring extension) on load
             dlg.ContentRendered += (_, __) =>

@@ -49,22 +49,38 @@ namespace FlyShelf.ViewModels
             {
                 try
                 {
-                    if (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath))
+                    string workFilePath = FilePath;
+
+                    // ── Markdown text items (clipboard text detected as markdown) have no file ──
+                    if (IsMarkdownPreview && (string.IsNullOrEmpty(workFilePath) || !File.Exists(workFilePath)))
+                    {
+                        string mdContent = !string.IsNullOrEmpty(RawContent) ? RawContent : FileName;
+                        if (string.IsNullOrEmpty(mdContent))
+                        {
+                            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                                FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No markdown content to convert"));
+                            return;
+                        }
+                        workFilePath = Path.Combine(Path.GetTempPath(), $"FlyShelf_MD_{DateTime.Now:yyyyMMdd_HHmmss}.md");
+                        File.WriteAllText(workFilePath, mdContent, System.Text.Encoding.UTF8);
+                    }
+                    else if (string.IsNullOrEmpty(workFilePath) || !File.Exists(workFilePath))
                     {
                         System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                             FlyShelf.Windows.ToastWindow.ShowToast("⚠️ File not found — cannot convert"));
                         return;
                     }
 
-                    string ext = Path.GetExtension(FilePath).ToUpperInvariant();
+                    string ext = Path.GetExtension(workFilePath).ToUpperInvariant();
 
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                         FlyShelf.Windows.ToastWindow.ShowToast("Converting to PDF... ♻️")
                     );
 
                     string targetPdf = Path.Combine(
-                         Path.GetDirectoryName(FilePath) ?? Path.GetTempPath(),
-                         Path.GetFileNameWithoutExtension(FilePath) + $"_Converted_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
+                         Path.GetDirectoryName(workFilePath) ?? Path.GetTempPath(),
+                         Path.GetFileNameWithoutExtension(workFilePath) + $"_Converted_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
+
 
                     bool converted = false;
 
@@ -73,11 +89,11 @@ namespace FlyShelf.ViewModels
                     // ═══════════════════════════════════════════════════════
                     if (ext == ".MD")
                     {
-                        converted = await FlyShelf.Classes.ConversionUtils.ConvertMarkdownToPdfAsync(FilePath, targetPdf);
+                        converted = await FlyShelf.Classes.ConversionUtils.ConvertMarkdownToPdfAsync(workFilePath, targetPdf);
                     }
                     else if (ext == ".TXT" || ext == ".LOG" || ext == ".CSV")
                     {
-                        converted = ConvertTextToPdfNative(FilePath, targetPdf);
+                        converted = ConvertTextToPdfNative(workFilePath, targetPdf);
                     }
 
                     if (!converted)
@@ -88,14 +104,14 @@ namespace FlyShelf.ViewModels
                         if (ext == ".DOCX" || ext == ".DOC" || ext == ".RTF")
                         {
                             if (Type.GetTypeFromProgID("Word.Application") != null)
-                                converted = TryWordComConvert(FilePath, targetPdf);
+                                converted = TryWordComConvert(workFilePath, targetPdf);
                         }
 
                         // ═══════════════════════════════════════════════════════
                         // STRATEGY 3: LibreOffice — fallback if Word not installed or failed
                         // ═══════════════════════════════════════════════════════
                         if (!converted)
-                            converted = TryLibreOfficeConvert(FilePath, targetPdf);
+                            converted = TryLibreOfficeConvert(workFilePath, targetPdf);
                     }
 
                     // ═══════════════════════════════════════════════════════
@@ -298,12 +314,12 @@ namespace FlyShelf.ViewModels
                     if (proc == null) return false;
 
                     // Register cancellation to kill LibreOffice if the other converter wins
-                    ct.Register(() => { try { if (!proc.HasExited) proc.Kill(); } catch { } });
+                    ct.Register(() => { try { if (!proc.HasExited) proc.Kill(); } catch { } /* Best-effort: failure is acceptable */ });
 
                     bool exited = proc.WaitForExit(30000); // 30s — enough for LO cold start
                     if (!exited || ct.IsCancellationRequested)
                     {
-                        try { proc.Kill(); } catch { }
+                        try { proc.Kill(); } catch { } // Best-effort: failure is acceptable
                         return false;
                     }
 
@@ -311,7 +327,7 @@ namespace FlyShelf.ViewModels
                     {
                         if (expectedPath != outputPdf)
                         {
-                            try { File.Move(expectedPath, outputPdf, true); } catch { }
+                            try { File.Move(expectedPath, outputPdf, true); } catch { } // Best-effort: failure is acceptable
                         }
                         return File.Exists(outputPdf);
                     }
@@ -353,7 +369,7 @@ namespace FlyShelf.ViewModels
                 {
                     wordApp.Options.WarnBeforeSavingPrintOrMailMerge = false;
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
                 try
                 {
                     // Disable Protected View triggers
@@ -448,8 +464,8 @@ namespace FlyShelf.ViewModels
             finally
             {
                 // Clean up COM objects — prevent orphaned WINWORD.EXE
-                try { if (doc != null) { doc.Close(0 /* wdDoNotSaveChanges */); System.Runtime.InteropServices.Marshal.ReleaseComObject(doc); } } catch { }
-                try { if (wordApp != null) { wordApp.Quit(0); System.Runtime.InteropServices.Marshal.ReleaseComObject(wordApp); } } catch { }
+                try { if (doc != null) { doc.Close(0 /* wdDoNotSaveChanges */); System.Runtime.InteropServices.Marshal.ReleaseComObject(doc); } } catch { } // Best-effort: failure is acceptable
+                try { if (wordApp != null) { wordApp.Quit(0); System.Runtime.InteropServices.Marshal.ReleaseComObject(wordApp); } } catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -466,7 +482,7 @@ namespace FlyShelf.ViewModels
                     FlyShelf.Classes.Logger.LogAction("CONVERT", $"Force-killed WINWORD PID {wordProcess.Id}");
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         /// <summary>

@@ -9,7 +9,8 @@
         SystemBackdropType="Mica"
         Background="Transparent"
         Closing="Window_Closing"
-        Icon="/Resources/FlyShelfLogo.ico">
+        Icon="/Resources/FlyShelfLogo.ico"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
 
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="38" ResizeBorderThickness="6" CornerRadius="8" GlassFrameThickness="-1" />

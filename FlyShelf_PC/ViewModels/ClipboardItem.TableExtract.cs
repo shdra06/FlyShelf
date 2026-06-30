@@ -26,6 +26,51 @@ namespace FlyShelf.ViewModels
 
                 if (!IsImagePreview || string.IsNullOrEmpty(FilePath)) return;
 
+                var method = FlyShelf.Classes.SettingsManager.Current.DefaultAiMethod ?? "auto";
+
+                // "local" → always use local engine, skip popup
+                if (method == "local")
+                {
+                    ExtractTableLocal();
+                    return;
+                }
+
+                // "api" → always use API (if key exists)
+                if (method == "api" && FlyShelf.Classes.AiProviderService.Instance.HasCloudApiKey)
+                {
+                    await ExtractTableWithAI();
+                    return;
+                }
+
+                // "auto" (default) → API if key exists, else popup
+                if (FlyShelf.Classes.AiProviderService.Instance.HasCloudApiKey)
+                {
+                    await ExtractTableWithAI();
+                    return;
+                }
+
+                // No API key → show choice popup
+                bool? useAI = await ShowAiOrLocalChoiceAsync("Table Extraction");
+                if (useAI == null) return; // Cancelled
+                if (useAI == true)
+                {
+                    await ExtractTableWithAI();
+                    return;
+                }
+
+                // Local fallback — run existing local extraction
+                ExtractTableLocal();
+            }
+            catch (Exception ex)
+            {
+                Classes.Logger.LogAction("TABLE", $"ExtractTable error: {ex.Message}");
+            }
+        }
+
+        private async void ExtractTableLocal()
+        {
+            try
+            {
                 FlyShelf.Windows.ToastWindow.ShowToast("Extracting Table from Image... ⏳");
 
                 string finalJsonPayload = string.Empty;
@@ -439,6 +484,66 @@ namespace FlyShelf.ViewModels
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
                     FlyShelf.Windows.ToastWindow.ShowToast($"Table Extraction Failed: {ex.Message}")
                 );
+            }
+        }
+
+        private async Task ExtractTableWithAI()
+        {
+            try
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast("🧠 AI Table Extraction... ⏳");
+
+                byte[] imageBytes = await Task.Run(() => File.ReadAllBytes(FilePath));
+                string ext = Path.GetExtension(FilePath).ToLower();
+                string mimeType = ext switch
+                {
+                    ".jpg" or ".jpeg" => "image/jpeg",
+                    ".png" => "image/png",
+                    ".gif" => "image/gif",
+                    ".webp" => "image/webp",
+                    _ => "image/png"
+                };
+
+                string result = await FlyShelf.Classes.AiProviderService.Instance.GenerateWithImageAsync(
+                    "Extract the table from this image. Return ONLY a valid JSON array of arrays where the first array is headers and subsequent arrays are rows. Example: [[\"Name\",\"Age\"],[\"Alice\",\"30\"]]. If there are multiple tables, extract the largest one. Do not add any commentary or markdown formatting.",
+                    imageBytes, mimeType, maxTokens: 8192);
+
+                if (!string.IsNullOrWhiteSpace(result))
+                {
+                    // Clean up the response — remove markdown code fences if present
+                    result = result.Trim();
+                    if (result.StartsWith("```"))
+                    {
+                        int firstNewline = result.IndexOf('\n');
+                        if (firstNewline > 0) result = result.Substring(firstNewline + 1);
+                        if (result.EndsWith("```")) result = result.Substring(0, result.Length - 3).Trim();
+                    }
+
+                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    {
+                        try
+                        {
+                            // Try to open in TableEditorWindow
+                            var tableWindow = new FlyShelf.Windows.TableEditorWindow(result);
+                            tableWindow.Show();
+                        }
+                        catch
+                        {
+                            // Fallback: copy to clipboard
+                            try { System.Windows.Clipboard.SetText(result); } catch { }
+                            FlyShelf.Windows.ToastWindow.ShowToast("✅ AI table data copied to clipboard!");
+                        }
+                    });
+                }
+                else
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("⚠ AI returned empty result");
+                }
+            }
+            catch (Exception ex)
+            {
+                FlyShelf.Windows.ToastWindow.ShowToast($"❌ AI Table Extract failed: {ex.Message}");
+                Classes.Logger.LogAction("AI_TABLE", $"Failed: {ex.Message}");
             }
         }
     }

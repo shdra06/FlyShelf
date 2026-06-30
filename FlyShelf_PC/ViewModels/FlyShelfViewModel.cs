@@ -90,7 +90,7 @@ namespace FlyShelf.ViewModels
                 _ = System.Threading.Tasks.Task.Run(() =>
                 {
                     try { Classes.ClipboardHistoryManager.ScavengeSandboxDirectories(); }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 });
 
                 var items = await System.Threading.Tasks.Task.Run(() => Classes.ClipboardHistoryManager.LoadHistory());
@@ -130,7 +130,7 @@ namespace FlyShelf.ViewModels
 
                         allItems.Add(item);
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }
 
                 // Combine the already loaded pinned items and newly loaded history items
@@ -239,7 +239,7 @@ namespace FlyShelf.ViewModels
                                         await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
                                 }
                             }
-                            catch { }
+                            catch { } // Best-effort: failure is acceptable
                             finally { _iconDecodeSemaphore.Release(); }
                         }
                     });
@@ -293,7 +293,7 @@ namespace FlyShelf.ViewModels
                             PersistHistory();
                         });
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }, null, 2000, System.Threading.Timeout.Infinite);
             }
         }
@@ -455,11 +455,11 @@ namespace FlyShelf.ViewModels
                 {
                     string content = !string.IsNullOrEmpty(item.RawContent) ? item.RawContent : item.FileName;
                     if (!string.IsNullOrEmpty(content))
-                        Classes.ClipboardHelper.SafeSetText(content);
+                        Classes.ClipboardHelper.SafeSetTextAllowCapture(content);
                     FlyShelf.Windows.ToastWindow.ShowToast("Copied to clipboard! 📋");
-                    try { Classes.AnimationTriggerService.Instance.OnCopy(); } catch { }
+                    try { Classes.AnimationTriggerService.Instance.OnCopy(); } catch { } // Best-effort: failure is acceptable
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             });
             MergeSelectedPdfsCommand = new RelayCommand(() => {
                 var pdfs = DroppedItems.Where(i => i.ItemType == ClipboardItemType.Pdf && !string.IsNullOrEmpty(i.FilePath) && System.IO.File.Exists(i.FilePath)).ToList();

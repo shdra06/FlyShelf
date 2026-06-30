@@ -91,7 +91,7 @@ namespace FlyShelf.Classes
                 uint size = (uint)System.Runtime.InteropServices.Marshal.SizeOf(state);
                 SetProcessInformation(hProcess, ProcessPowerThrottling, ref state, size);
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private class ScrollState
@@ -174,7 +174,7 @@ namespace FlyShelf.Classes
             // Restore system timer resolution when all scroll states are detached
             if (_states.Count == 0)
             {
-                try { TimeEndPeriod(1); } catch { }
+                try { TimeEndPeriod(1); } catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -281,7 +281,7 @@ namespace FlyShelf.Classes
                     var parentWin = Window.GetWindow(sv) as MainWindow;
                     parentWin?.SuspendThemeAnimations();
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -306,21 +306,14 @@ namespace FlyShelf.Classes
                 // ═══ SYNCHRONIZE WITH WPF LAYOUT SHIFTS ═══
                 // WPF's VirtualizingPanel causes micro layout shifts when realizing items,
                 // especially when scrolling UP (items above viewport need realization).
-                // Small shifts (< 5px): Don't absorb into TrueOffset — just resync tracking.
-                //   Absorbing them fights the scroll and causes upward choppiness.
-                // Large shifts (> 5px): Absorb into TrueOffset to prevent position jumps
-                //   from async image loads or major layout changes.
+                // ALL shifts are absorbed into TrueOffset to keep the physics engine in sync
+                // with WPF's actual position. Without this, the engine fights WPF's shifts
+                // and produces visible jitter on small upward scrolls.
                 double actualOffset = sv.VerticalOffset;
                 double wpfDelta = actualOffset - state.LastSetOffset;
-                if (Math.Abs(wpfDelta) > 5.0)
+                if (Math.Abs(wpfDelta) > 0.001)
                 {
-                    // Large shift — absorb to prevent visible jump
                     state.TrueOffset += wpfDelta;
-                    state.LastSetOffset = actualOffset;
-                }
-                else if (Math.Abs(wpfDelta) > 0.001)
-                {
-                    // Small virtualization shift — just resync, don't fight the scroll
                     state.LastSetOffset = actualOffset;
                 }
 
@@ -338,9 +331,9 @@ namespace FlyShelf.Classes
                     targetVelocity = Math.Clamp(targetVelocity, -MaxVelocity, MaxVelocity);
 
                     // Detect if user is scrolling AGAINST current motion.
-                    // Only trigger for significant opposing velocity — residual micro-velocity
-                    // (< 2.5) should NOT cause braking or upward scrolling feels sluggish.
-                    bool isReversal = Math.Abs(state.Velocity) > 2.5 &&
+                    // Lowered threshold to 1.5 so small residual velocity from the opposite
+                    // direction gets properly braked instead of sluggishly blended.
+                    bool isReversal = Math.Abs(state.Velocity) > 1.5 &&
                                      Math.Sign(targetVelocity) != Math.Sign(state.Velocity);
 
                     if (isReversal)
@@ -410,10 +403,10 @@ namespace FlyShelf.Classes
                     state.InCoastPhase = false;
 
                     // ═══ MICRO-SCROLL DIRECT TRACKING ═══
-                    // Only for truly sub-pixel movement (< 0.3 px/frame) where WPF's
-                    // device-pixel snapping makes the velocity system produce visible steps.
-                    // Everything above 0.3 flows through the smooth velocity+friction system.
-                    if (state.IsTouchpad && Math.Abs(state.Velocity) < 0.3 && state.PendingImpulse != 0)
+                    // For small velocities (< 1.2 px/frame) where WPF's integer-pixel
+                    // snapping makes the velocity system produce visible steps/jitter.
+                    // Direct 1:1 tracking gives crisp, lag-free movement for gentle scrolls.
+                    if (state.IsTouchpad && Math.Abs(state.Velocity) < 1.2 && state.PendingImpulse != 0)
                     {
                         // Apply the impulse directly as displacement (1:1 tracking)
                         double directDisplacement = -state.PendingImpulse * (TargetFrameMs / 1.0);
@@ -551,7 +544,7 @@ namespace FlyShelf.Classes
                         if (nowMs - state.LastPrefetchTime > 200)
                         {
                             state.LastPrefetchTime = nowMs;
-                            try { CoastPrefetchNeeded?.Invoke(); } catch { }
+                            try { CoastPrefetchNeeded?.Invoke(); } catch { } // Best-effort: failure is acceptable
                         }
                         anyAnimating = true;
                     }
@@ -575,7 +568,7 @@ namespace FlyShelf.Classes
                     var mainWin = Application.Current.MainWindow as MainWindow;
                     mainWin?.ResumeThemeAnimations();
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
         }
 

@@ -136,11 +136,11 @@ namespace FlyShelf.Windows
                 else if (item.SmartActionType == "OpenPDF" || item.SmartActionType == "JoinMeeting" || item.SmartActionType == "OpenBrowser")
                 {
                     string target = item.SmartActionType == "OpenPDF" ? item.FilePath : item.RawContent;
-                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { }
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = target, UseShellExecute = true }); } catch { } // Best-effort: failure is acceptable
                 }
                 else if (item.SmartActionType == "OpenMap")
                 {
-                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = "bingmaps:?q=" + Uri.EscapeDataString(item.RawContent), UseShellExecute = true }); } catch { }
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = "bingmaps:?q=" + Uri.EscapeDataString(item.RawContent), UseShellExecute = true }); } catch { } // Best-effort: failure is acceptable
                 }
             }
         }

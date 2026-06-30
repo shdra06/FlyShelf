@@ -83,6 +83,11 @@ namespace FlyShelf.ViewModels
         public string SourceDeviceType { get; set; } = "PC";
         public string TransferMethod { get; set; } = "Local"; // Local, LAN, Cloudflare
 
+        // ═══ Source App Tracking ═══
+        public string SourceAppName { get; set; } = "";
+        public bool HasSourceApp => !string.IsNullOrEmpty(SourceAppName);
+
+
         /// <summary>
         /// Computed display badge combining transfer method emoji + device name.
         /// Used in XAML for the transfer badge overlay.
@@ -127,7 +132,8 @@ namespace FlyShelf.ViewModels
                 RawContent = downloadUrl, // Override Raw with the download URL for remote sync
                 SourceDeviceName = this.SourceDeviceName,
                 SourceDeviceType = this.SourceDeviceType,
-                TransferMethod = this.TransferMethod
+                TransferMethod = this.TransferMethod,
+                SourceAppName = this.SourceAppName,
             };
         }
 
@@ -146,6 +152,30 @@ namespace FlyShelf.ViewModels
                 }
             }
         }
+
+        private BitmapSource? _sourceAppIcon;
+        
+        /// <summary>
+        /// Icon of the source application (Chrome, Notepad, VS Code, etc.) that the content was copied from.
+        /// Displayed on Text/URL/Code cards that don't have their own file-type icon.
+        /// </summary>
+        [JsonIgnore]
+        public BitmapSource? SourceAppIcon
+        {
+            get => _sourceAppIcon;
+            set
+            {
+                if (_sourceAppIcon != value)
+                {
+                    _sourceAppIcon = value;
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(SourceAppIcon)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasSourceAppIcon)));
+                }
+            }
+        }
+
+        [JsonIgnore]
+        public bool HasSourceAppIcon => _sourceAppIcon != null;
 
         private string _formattedSize = string.Empty;
         public string FormattedSize 
@@ -308,6 +338,20 @@ namespace FlyShelf.ViewModels
         public bool IsPdfPreview => ItemType == ClipboardItemType.Pdf;
         public bool IsUrlPreview => ItemType == ClipboardItemType.Url;
         public bool IsCodePreview => ItemType == ClipboardItemType.Code;
+        public bool IsMarkdownPreview => 
+            (ItemType == ClipboardItemType.Text && Extension == "MARKDOWN") ||
+            (ItemType == ClipboardItemType.Document && 
+             (Extension == ".MD" || Extension == "MD"));
+        public bool IsJsonPreview => 
+            (ItemType == ClipboardItemType.Code && Extension == "JSON") ||
+            (ItemType == ClipboardItemType.Text && Extension == "JSON");
+        public bool HasEmail { get; set; }
+        public bool HasPhoneNumber { get; set; }
+        public bool IsMathExpression { get; set; }
+        public bool IsBase64Content { get; set; }
+        public bool IsEpochTimestamp { get; set; }
+        public string SmartBadge { get; set; } = "";
+        public bool HasSmartBadge => !string.IsNullOrEmpty(SmartBadge);
         public bool IsGroupPreview => ItemType == ClipboardItemType.Group;
         public bool IsShareablePreview => true;
         
@@ -319,6 +363,7 @@ namespace FlyShelf.ViewModels
             get 
             {
                 if (ItemType == ClipboardItemType.Image) return "Image/Bitmap";
+                if (ItemType == ClipboardItemType.Text && Extension == "MARKDOWN") return "Markdown";
                 if (ItemType == ClipboardItemType.Text) return "Raw Text";
                 if (ItemType == ClipboardItemType.Code) return "Code Snippet";
                 if (ItemType == ClipboardItemType.Folder) return "Folder";

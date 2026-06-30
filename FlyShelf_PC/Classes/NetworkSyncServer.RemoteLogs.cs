@@ -49,7 +49,7 @@ namespace FlyShelf.Classes
                 if (File.Exists(netLogPath))
                     lastLineCount = File.ReadAllLines(netLogPath).Length;
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             var timer = new System.Threading.Timer(_ =>
             {
@@ -85,7 +85,7 @@ namespace FlyShelf.Classes
                     }
                     lastLineCount = lines.Length;
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }, null, 2000, 1000); // Check every 1s for responsiveness
         }
 
@@ -149,12 +149,13 @@ namespace FlyShelf.Classes
             }
             catch (Exception ex)
             {
-                byte[] err = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
+                Logger.LogAction("REMOTE_LOGS", $"Error fetching logs: {ex.Message}");
+                byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Internal server error\"}");
                 res.StatusCode = 500;
                 res.ContentType = "application/json";
                 res.OutputStream.Write(err, 0, err.Length);
             }
-            finally { try { res.Close(); } catch { } }
+            finally { try { res.Close(); } catch { } /* Best-effort: failure is acceptable */ }
         }
 
         /// <summary>
@@ -194,12 +195,12 @@ namespace FlyShelf.Classes
                     catch { break; } // Client disconnected
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             finally
             {
                 // Remove from SSE clients
                 _sseLogClients.TryRemove(clientId, out _);
-                try { res.Close(); } catch { }
+                try { res.Close(); } catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -232,6 +233,13 @@ namespace FlyShelf.Classes
         {
             try
             {
+                if (req.ContentLength64 > 1_048_576) // 1MB limit
+                {
+                    res.StatusCode = 413;
+                    await WriteJsonResponse(res, false, "Request body too large");
+                    return;
+                }
+
                 using var reader = new StreamReader(req.InputStream, req.ContentEncoding ?? Encoding.UTF8);
                 string body = await reader.ReadToEndAsync();
                 var doc = JsonDocument.Parse(body);
@@ -273,12 +281,13 @@ namespace FlyShelf.Classes
             }
             catch (Exception ex)
             {
-                byte[] err = Encoding.UTF8.GetBytes($"{{\"error\":\"{ex.Message}\"}}");
+                Logger.LogAction("REMOTE_LOGS", $"HandleRemoteLogPost error: {ex.Message}");
+                byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"Internal server error\"}");
                 res.StatusCode = 400;
                 res.ContentType = "application/json";
                 res.OutputStream.Write(err, 0, err.Length);
             }
-            finally { try { res.Close(); } catch { } }
+            finally { try { res.Close(); } catch { } /* Best-effort: failure is acceptable */ }
         }
 
         /// <summary>
@@ -412,7 +421,7 @@ fetch('/api/logs?lines=200')
             res.ContentType = "text/html; charset=utf-8";
             res.ContentLength64 = htmlBytes.Length;
             res.OutputStream.Write(htmlBytes, 0, htmlBytes.Length);
-            try { res.Close(); } catch { }
+            try { res.Close(); } catch { } // Best-effort: failure is acceptable
         }
 
         // ═══ Helper for log cross-device sync ═══
@@ -460,11 +469,11 @@ fetch('/api/logs?lines=200')
                                 var content = new System.Net.Http.StringContent(payload, Encoding.UTF8, "application/json");
                                 await client.PostAsync($"{peer.ActiveUrl.TrimEnd('/')}/api/logs", content);
                             }
-                            catch { } // Don't fail if a peer is unreachable
+                            catch { } // Best-effort: failure is acceptable � Don't fail if a peer is unreachable
                         }
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }, null, 10_000, 5_000); // Start after 10s, push every 5s
         }
 
@@ -484,7 +493,7 @@ fetch('/api/logs?lines=200')
                     }
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         }
 

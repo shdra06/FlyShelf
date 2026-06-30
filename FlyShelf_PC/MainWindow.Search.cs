@@ -83,7 +83,7 @@ namespace FlyShelf
                 }, System.Windows.Threading.DispatcherPriority.Input);
 
                 // Trigger mascot search animation
-                try { Classes.AnimationTriggerService.Instance.OnSearchToggle(true); } catch { }
+                try { Classes.AnimationTriggerService.Instance.OnSearchToggle(true); } catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -326,7 +326,7 @@ namespace FlyShelf
                                 string ext = System.IO.Path.GetExtension(item.FilePath).Replace(".", "").Trim().ToLowerInvariant();
                                 if (ext == qLower) return true;
                             }
-                            catch { }
+                            catch { } // Best-effort: failure is acceptable
                         }
 
                         // 3. Check exact match with the item type string
@@ -632,7 +632,7 @@ namespace FlyShelf
                     altListView.Filter = filterPredicate;
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void OverflowPopup_Closed(object sender, EventArgs e)
@@ -676,7 +676,7 @@ namespace FlyShelf
                             SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOSIZE | SWP_NOMOVE | SWP_NOACTIVATE);
                         }
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }, System.Windows.Threading.DispatcherPriority.Loaded);
             }
         }

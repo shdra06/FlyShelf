@@ -53,7 +53,7 @@ namespace FlyShelf.Windows
                     NativeMethods.DwmSetWindowAttribute(hwnd, NativeMethods.DWMWA_BORDER_COLOR, ref colorNone, sizeof(int));
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             NativeMethods.ApplyWindowBackdropAndBackground(this);
         }
 

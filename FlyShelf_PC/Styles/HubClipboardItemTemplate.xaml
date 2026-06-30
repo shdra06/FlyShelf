@@ -1050,12 +1050,15 @@
                                                             <DataTrigger Binding="{Binding IsDocPreview}" Value="True">
                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                             </DataTrigger>
+                                                            <DataTrigger Binding="{Binding IsMarkdownPreview}" Value="True">
+                                                                <Setter Property="Visibility" Value="Visible"/>
+                                                            </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </ui:Button.Style>
                                             </ui:Button>
 
-                                            <!-- Search Google -->
+                                            <!-- Search Google (hidden for Markdown & terminal/batch cards) -->
                                             <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Search on Google" Command="{Binding DataContext.GoogleSearchCommand, RelativeSource={RelativeSource AncestorType=ListView}}" CommandParameter="{Binding}">
                                                 <ui:Button.Icon><ui:SymbolIcon Symbol="Search24" FontSize="14" Foreground="{DynamicResource MenuCodeActionColor}" /></ui:Button.Icon>
                                                 <ui:Button.Style>
@@ -1065,10 +1068,19 @@
                                                             <DataTrigger Binding="{Binding IsTextPreview}" Value="True">
                                                                 <Setter Property="Visibility" Value="Visible"/>
                                                             </DataTrigger>
+                                                            <!-- Hide for markdown text -->
+                                                            <DataTrigger Binding="{Binding IsMarkdownPreview}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
+                                                            <!-- Hide for .bat / .cmd / .ps1 files -->
+                                                            <DataTrigger Binding="{Binding IsTerminalPreview}" Value="True">
+                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                            </DataTrigger>
                                                         </Style.Triggers>
                                                     </Style>
                                                 </ui:Button.Style>
                                             </ui:Button>
+
 
                                             <!-- Send to Device (Group/Archive/Folder) -->
                                             <ui:Button Appearance="Secondary" Padding="6,4" Margin="0,0,3,0" ToolTip="Send to Device" PreviewMouseLeftButtonDown="SendToDevice_Click">

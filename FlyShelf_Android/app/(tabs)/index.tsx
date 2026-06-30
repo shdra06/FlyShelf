@@ -38,6 +38,10 @@ import AnimatedCard from '../../components/AnimatedCard';
 
 import CachedImage from '../../components/CachedImage';
 import PdfPageEditor from '../../components/PdfPageEditor';
+import { usePdfEditor } from '../../hooks/usePdfEditor';
+import { useMultiSelect } from '../../hooks/useMultiSelect';
+import { usePairing } from '../../hooks/usePairing';
+import { useModals } from '../../hooks/useModals';
 import OnboardingWizard from '../../components/OnboardingWizard';
 import { ActiveDevice } from '../../components/DeviceHub';
 import { mergePdfs as localMergePdfs, convertImageToPdf as localConvertImageToPdf } from '../../utils/pdfUtils';
@@ -631,33 +635,19 @@ export default function SyncScreen() {
   const [isSending, setIsSending] = useState(false);
   const [lastCopiedText, setLastCopiedText] = useState('');
   const [setupName, setSetupName] = useState('');
-  const [isTargetModalVisible, setIsTargetModalVisible] = useState(false);
+  const { isTargetModalVisible, setIsTargetModalVisible, isCameraOptionsVisible, setIsCameraOptionsVisible, isQRScannerActive, setIsQRScannerActive, expandedImage, setExpandedImage, isMergeModalVisible, setIsMergeModalVisible, mergeQueue, setMergeQueue, isForceSyncModalVisible, setIsForceSyncModalVisible, forceSyncDevices, setForceSyncDevices, isConnectModalVisible, setIsConnectModalVisible } = useModals();
   const [pendingUploadPayload, setPendingUploadPayload] = useState<any>(null);
   const [downloadedItems, setDownloadedItems] = useState<Set<string>>(new Set());
   const [downloadProgress, setDownloadProgress] = useState<{[key: string]: number}>({});
   const [incomingTransferProgress, setIncomingTransferProgress] = useState<{[key: string]: number}>({});
-  const [isCameraOptionsVisible, setIsCameraOptionsVisible] = useState(false);
-  const [isQRScannerActive, setIsQRScannerActive] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
-  const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [lastScannedImageId, setLastScannedImageId] = useState<string | null>(null);
   const [latestIngestedId, setLatestIngestedId] = useState<string | null>(null);
   const [activeOptionsId, setActiveOptionsId] = useState<string | null>(null);
-  const [isMultiSelectMode, setIsMultiSelectMode] = useState(false);
-  const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
-  const [isMergeModalVisible, setIsMergeModalVisible] = useState(false);
-  const [mergeQueue, setMergeQueue] = useState<ClipItem[]>([]);
-  const [isForceSyncModalVisible, setIsForceSyncModalVisible] = useState(false);
-  const [forceSyncDevices, setForceSyncDevices] = useState<any[]>([]);
-  const [isConnectModalVisible, setIsConnectModalVisible] = useState(false);
-  const [pairingCodeInput, setPairingCodeInput] = useState('');
-  const [myPairingCode, setMyPairingCode] = useState<string | null>(null);
-  const [isPairing, setIsPairing] = useState(false);
-  const [pairedPcName, setPairedPcName] = useState<string | null>(null);
+  const { isMultiSelectMode, selectedItemIds, toggleSelectItem, exitMultiSelect, enterMultiSelect } = useMultiSelect();
+  const { pairingCodeInput, setPairingCodeInput, myPairingCode, setMyPairingCode, isPairing, setIsPairing, pairedPcName, setPairedPcName } = usePairing(pairedDevices.length);
   // ── PDF Page Editor ──
-  const [pageEditorVisible, setPageEditorVisible] = useState(false);
-  const [pageEditorUri, setPageEditorUri] = useState('');
-  const [pageEditorTitle, setPageEditorTitle] = useState('');
+  const { pageEditorVisible, pageEditorUri, pageEditorTitle, openPageEditor, closePageEditor } = usePdfEditor();
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   // ─── Persistence ───
@@ -2086,8 +2076,6 @@ export default function SyncScreen() {
   };
 
   // ─── Multi-Select ───
-  const toggleSelectItem = (id: string) => { setSelectedItemIds(prev => { const u = new Set(prev); if (u.has(id)) u.delete(id); else u.add(id); return u; }); };
-  const exitMultiSelect = () => { setIsMultiSelectMode(false); setSelectedItemIds(new Set()); };
   const getSelectedClips = () => clips.filter(c => (c.IsPinned || (c.Timestamp || 0) >= localWipeTimestamp) && (!c.id || !localDeletedIds.has(c.id)) && (c.Raw || c.Title)).filter(c => selectedItemIds.has(c.id || ''));
 
   // ─── PDF Merge ───
@@ -2633,17 +2621,7 @@ export default function SyncScreen() {
     setInputText(data);
   };
 
-  // Load paired PC name on startup
-  useEffect(() => {
-    getSecureItem('pairedPcName').then(name => { if (name) setPairedPcName(name); });
-  }, []);
 
-  // Clear pairedPcName when all paired devices are removed in Settings
-  useEffect(() => {
-    if (pairedDevices.length === 0) {
-      setPairedPcName(null);
-    }
-  }, [pairedDevices]);
 
   // ─── Heavy Upload ───
   const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB (optimized to prevent Base64 string memory exhaustion on mobile devices)
@@ -2848,8 +2826,8 @@ export default function SyncScreen() {
         <View style={styles.modalOverlay}><View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Name this Device</Text>
           <Text style={styles.modalSubtitle}>Identify this device in the FlyShelf network.</Text>
-          <TextInput style={styles.modalInput} value={setupName} onChangeText={setSetupName} placeholder="e.g. Galaxy S23" placeholderTextColor="#4C5361" autoFocus />
-          <TouchableOpacity style={styles.modalButton} onPress={() => { if(setupName.trim()) setDeviceName(setupName.trim()); }}><Text style={styles.modalButtonText}>Get Started</Text></TouchableOpacity>
+          <TextInput style={styles.modalInput} value={setupName} onChangeText={setSetupName} placeholder="e.g. Galaxy S23" placeholderTextColor="#4C5361" autoFocus accessibilityLabel="Device name" accessibilityRole="text" />
+          <TouchableOpacity style={styles.modalButton} onPress={() => { if(setupName.trim()) setDeviceName(setupName.trim()); }} accessibilityLabel="Get started" accessibilityRole="button"><Text style={styles.modalButtonText}>Get Started</Text></TouchableOpacity>
         </View></View>
       </Modal>
 
@@ -2858,7 +2836,7 @@ export default function SyncScreen() {
         <View style={styles.modalOverlay}><View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Select Target Node</Text>
           <Text style={styles.modalSubtitle}>Where do you want to transfer this payload?</Text>
-          <TouchableOpacity style={styles.targetOption} onPress={() => executeHeavyUpload('Global')}>
+          <TouchableOpacity style={styles.targetOption} onPress={() => executeHeavyUpload('Global')} accessibilityLabel="Send to all devices via cloud" accessibilityRole="button">
             <IconSymbol name="cloud.fill" size={24} color="#4A62EB" />
             <View style={{marginLeft: 12}}><Text style={{color: '#FFF', fontSize: 16, fontWeight: '600'}}>Cloud Hub</Text><Text style={{color: '#8A8F98', fontSize: 12}}>10MB Limit. Shared across your ecosystem.</Text></View>
           </TouchableOpacity>
@@ -2878,7 +2856,7 @@ export default function SyncScreen() {
               </TouchableOpacity>
             );
           })}
-          <TouchableOpacity style={[styles.modalButton, {backgroundColor: '#2A2F3A', marginTop: 10}]} onPress={() => { setIsTargetModalVisible(false); setPendingUploadPayload(null); }}><Text style={styles.modalButtonText}>Cancel</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.modalButton, {backgroundColor: '#2A2F3A', marginTop: 10}]} onPress={() => { setIsTargetModalVisible(false); setPendingUploadPayload(null); }} accessibilityLabel="Cancel" accessibilityRole="button"><Text style={styles.modalButtonText}>Cancel</Text></TouchableOpacity>
         </View></View>
       </Modal>
 
@@ -2887,15 +2865,15 @@ export default function SyncScreen() {
         <View style={styles.modalOverlay}><View style={styles.modalContent}>
           <Text style={styles.modalTitle}>Capture Mode</Text>
           <Text style={styles.modalSubtitle}>Take a photo to transfer or scan a data code.</Text>
-          <TouchableOpacity style={styles.targetOption} onPress={launchDirectCamera}>
+          <TouchableOpacity style={styles.targetOption} onPress={launchDirectCamera} accessibilityLabel="Take photo" accessibilityRole="button">
             <IconSymbol name="camera.fill" size={24} color="#F59E0B" />
             <View style={{marginLeft: 12}}><Text style={{color: '#FFF', fontSize: 16, fontWeight: '600'}}>Take Photo</Text><Text style={{color: '#8A8F98', fontSize: 12}}>Instantly transfer a camera image.</Text></View>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.targetOption} onPress={launchQRScanner}>
+          <TouchableOpacity style={styles.targetOption} onPress={launchQRScanner} accessibilityLabel="Scan QR code" accessibilityRole="button">
             <IconSymbol name="qrcode" size={24} color="#8B5CF6" />
             <View style={{marginLeft: 12}}><Text style={{color: '#FFF', fontSize: 16, fontWeight: '600'}}>Scan QR Code</Text><Text style={{color: '#8A8F98', fontSize: 12}}>Pair with PC or extract data.</Text></View>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.modalButton, {backgroundColor: '#2A2F3A', marginTop: 10}]} onPress={() => setIsCameraOptionsVisible(false)}><Text style={styles.modalButtonText}>Cancel</Text></TouchableOpacity>
+          <TouchableOpacity style={[styles.modalButton, {backgroundColor: '#2A2F3A', marginTop: 10}]} onPress={() => setIsCameraOptionsVisible(false)} accessibilityLabel="Cancel" accessibilityRole="button"><Text style={styles.modalButtonText}>Cancel</Text></TouchableOpacity>
         </View></View>
       </Modal>
 
@@ -2975,7 +2953,7 @@ export default function SyncScreen() {
         <Modal visible={isQRScannerActive} animationType="fade" transparent={false}>
           <View style={{flex: 1, backgroundColor: '#000'}}>
             <CameraView style={{flex: 1}} facing="back" barcodeScannerSettings={{ barcodeTypes: ["qr"] }} onBarcodeScanned={handleBarcodeScanned} />
-            <TouchableOpacity style={{position: 'absolute', bottom: 50, alignSelf: 'center', backgroundColor: '#EF4444', padding: 15, borderRadius: 30}} onPress={() => setIsQRScannerActive(false)}>
+            <TouchableOpacity style={{position: 'absolute', bottom: 50, alignSelf: 'center', backgroundColor: '#EF4444', padding: 15, borderRadius: 30}} onPress={() => setIsQRScannerActive(false)} accessibilityLabel="Close QR scanner" accessibilityRole="button">
               <Text style={{color: '#fff', fontWeight: 'bold', fontSize: 16}}>Cancel Scan</Text>
             </TouchableOpacity>
           </View>
@@ -2993,13 +2971,13 @@ export default function SyncScreen() {
             </View>
           </View>
           <View style={{flexDirection: 'row', gap: 10}}>
-            <TouchableOpacity onPress={() => setIsConnectModalVisible(true)} style={{padding: 10, backgroundColor: '#8B5CF622', borderRadius: 10}}>
+            <TouchableOpacity onPress={() => setIsConnectModalVisible(true)} style={{padding: 10, backgroundColor: '#8B5CF622', borderRadius: 10}} accessibilityLabel="Connect devices" accessibilityRole="button">
               <IconSymbol name="link" size={20} color="#8B5CF6" />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setGlobalSyncEnabled(!isGlobalSyncEnabled)} style={{padding: 10, backgroundColor: isGlobalSyncEnabled ? '#10B98122' : '#2A2F3A', borderRadius: 10, borderWidth: 1, borderColor: isGlobalSyncEnabled ? '#10B98155' : 'transparent'}}>
+            <TouchableOpacity onPress={() => setGlobalSyncEnabled(!isGlobalSyncEnabled)} style={{padding: 10, backgroundColor: isGlobalSyncEnabled ? '#10B98122' : '#2A2F3A', borderRadius: 10, borderWidth: 1, borderColor: isGlobalSyncEnabled ? '#10B98155' : 'transparent'}} accessibilityLabel={isGlobalSyncEnabled ? 'Disable cloud sync' : 'Enable cloud sync'} accessibilityRole="button">
               <IconSymbol name={isGlobalSyncEnabled ? "cloud.fill" : "cloud"} size={20} color={isGlobalSyncEnabled ? "#10B981" : "#8A8F98"} />
             </TouchableOpacity>
-            <TouchableOpacity onPress={clearAllClips} style={{padding: 10, backgroundColor: '#2A2F3A', borderRadius: 10}}><IconSymbol name="trash" size={20} color="#EF4444" /></TouchableOpacity>
+            <TouchableOpacity onPress={clearAllClips} style={{padding: 10, backgroundColor: '#2A2F3A', borderRadius: 10}} accessibilityLabel="Clear all clips" accessibilityRole="button"><IconSymbol name="trash" size={20} color="#EF4444" /></TouchableOpacity>
           </View>
         </View>
 
@@ -3035,7 +3013,7 @@ export default function SyncScreen() {
               returnKeyType="search"
             />
             {feedSearch.length > 0 && (
-              <TouchableOpacity onPress={() => setFeedSearch('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <TouchableOpacity onPress={() => setFeedSearch('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} accessibilityLabel="Clear feed search" accessibilityRole="button">
                 <IconSymbol name="xmark.circle.fill" size={16} color={colors.text.tertiary} />
               </TouchableOpacity>
             )}
@@ -3119,7 +3097,7 @@ export default function SyncScreen() {
                     index={itemIndex}
                     style={[styles.clipCard, { flexDirection: 'column', alignItems: 'stretch' }, isMultiSelectMode && selectedItemIds.has(item.id || '') && { borderColor: colors.accent.primary, borderWidth: 1.5 }]}
                     onPress={() => { const itemKey = item.id || `idx_${itemIndex}`; if (isMultiSelectMode) toggleSelectItem(item.id || ''); else if (activeOptionsId === itemKey) setActiveOptionsId(null); else setActiveOptionsId(itemKey); }}
-                    onLongPress={() => { if (!isMultiSelectMode) { setIsMultiSelectMode(true); setSelectedItemIds(new Set([item.id || ''])); setActiveOptionsId(null); } }}
+                    onLongPress={() => { if (!isMultiSelectMode) { enterMultiSelect(item.id || ''); setActiveOptionsId(null); } }}
                     skipEntrance={itemIndex > 12}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%', marginBottom: (item.Type === 'Image' || item.Type === 'ImageLink') ? space.sm : 0 }}>
@@ -3351,15 +3329,15 @@ export default function SyncScreen() {
                 </View>
               ))}
             </ScrollView>
-            <TouchableOpacity style={{backgroundColor: '#EF4444', paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 16}} onPress={executePdfMerge}><Text style={{color: '#FFF', fontSize: 16, fontWeight: '800'}}>Merge {mergeQueue.length} PDFs</Text></TouchableOpacity>
-            <TouchableOpacity style={{backgroundColor: '#2A2F3A', paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 8}} onPress={() => setIsMergeModalVisible(false)}><Text style={{color: '#FFF', fontSize: 14, fontWeight: '600'}}>Cancel</Text></TouchableOpacity>
+            <TouchableOpacity style={{backgroundColor: '#EF4444', paddingVertical: 16, borderRadius: 14, alignItems: 'center', marginTop: 16}} onPress={executePdfMerge} accessibilityLabel={`Merge ${mergeQueue.length} PDFs`} accessibilityRole="button"><Text style={{color: '#FFF', fontSize: 16, fontWeight: '800'}}>Merge {mergeQueue.length} PDFs</Text></TouchableOpacity>
+            <TouchableOpacity style={{backgroundColor: '#2A2F3A', paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 8}} onPress={() => setIsMergeModalVisible(false)} accessibilityLabel="Cancel merge" accessibilityRole="button"><Text style={{color: '#FFF', fontSize: 14, fontWeight: '600'}}>Cancel</Text></TouchableOpacity>
           </View></View>
         </Modal>
 
         {/* PDF Page Editor */}
         <PdfPageEditor
           visible={pageEditorVisible}
-          onClose={() => setPageEditorVisible(false)}
+          onClose={closePageEditor}
           pdfUri={pageEditorUri}
           pdfTitle={pageEditorTitle}
           outputDir={CONVERTED_BASE}
@@ -3380,7 +3358,7 @@ export default function SyncScreen() {
           <View style={styles.modalOverlay}><View style={[styles.modalContent, {maxHeight: '80%'}]}>
             <Text style={styles.modalTitle}>⚡ Force Sync</Text>
             <Text style={styles.modalSubtitle}>Push {selectedItemIds.size} items to selected devices.</Text>
-            <TouchableOpacity style={{backgroundColor: '#4A62EB', paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 12, flexDirection: 'row', justifyContent: 'center', gap: 6}} onPress={() => executeForcedSync(forceSyncDevices.map(d => d.key))}><IconSymbol name="bolt.fill" size={16} color="#FFF" /><Text style={{color: '#FFF', fontSize: 15, fontWeight: '800'}}>Force to ALL ({forceSyncDevices.length})</Text></TouchableOpacity>
+            <TouchableOpacity style={{backgroundColor: '#4A62EB', paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 12, flexDirection: 'row', justifyContent: 'center', gap: 6}} onPress={() => executeForcedSync(forceSyncDevices.map(d => d.key))} accessibilityLabel={`Force sync to all ${forceSyncDevices.length} devices`} accessibilityRole="button"><IconSymbol name="bolt.fill" size={16} color="#FFF" /><Text style={{color: '#FFF', fontSize: 15, fontWeight: '800'}}>Force to ALL ({forceSyncDevices.length})</Text></TouchableOpacity>
             <Text style={{color: '#8A8F98', fontSize: 12, marginTop: 16, marginBottom: 8, fontWeight: '700', textTransform: 'uppercase'}}>Or Select Individual Devices</Text>
             <ScrollView style={{maxHeight: 250}}>
               {forceSyncDevices.map((device, i) => (
@@ -3399,17 +3377,17 @@ export default function SyncScreen() {
               ))}
               {forceSyncDevices.length === 0 && <Text style={{color: '#8A8F98', textAlign: 'center', marginTop: 20}}>No devices registered yet.</Text>}
             </ScrollView>
-            <TouchableOpacity style={{backgroundColor: '#2A2F3A', paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 12}} onPress={() => setIsForceSyncModalVisible(false)}><Text style={{color: '#FFF', fontSize: 14, fontWeight: '600'}}>Cancel</Text></TouchableOpacity>
+            <TouchableOpacity style={{backgroundColor: '#2A2F3A', paddingVertical: 14, borderRadius: 14, alignItems: 'center', marginTop: 12}} onPress={() => setIsForceSyncModalVisible(false)} accessibilityLabel="Cancel" accessibilityRole="button"><Text style={{color: '#FFF', fontSize: 14, fontWeight: '600'}}>Cancel</Text></TouchableOpacity>
           </View></View>
         </Modal>
 
         {/* Input Area */}
         <View style={styles.inputArea}>
-          <TouchableOpacity style={styles.attachButton} onPress={pickImageAndSend} disabled={isSending}><IconSymbol name="photo.on.rectangle.angled" size={24} color="#8A8F98" /></TouchableOpacity>
-          <TouchableOpacity style={styles.attachButton} onPress={pickFileAndSend} disabled={isSending}><IconSymbol name="paperclip" size={24} color="#8A8F98" /></TouchableOpacity>
-          <TouchableOpacity style={styles.attachButton} onPress={() => setIsCameraOptionsVisible(true)} disabled={isSending}><IconSymbol name="camera.fill" size={24} color="#8A8F98" /></TouchableOpacity>
-          <TextInput style={styles.textInput} placeholder="Type or paste to send to PC..." placeholderTextColor="#4C5361" value={inputText} onChangeText={setInputText} multiline />
-          <TouchableOpacity style={styles.sendButton} onPress={sendTextToPc} disabled={isSending || !inputText}>
+          <TouchableOpacity style={styles.attachButton} onPress={pickImageAndSend} disabled={isSending} accessibilityLabel="Attach image" accessibilityRole="button"><IconSymbol name="photo.on.rectangle.angled" size={24} color="#8A8F98" /></TouchableOpacity>
+          <TouchableOpacity style={styles.attachButton} onPress={pickFileAndSend} disabled={isSending} accessibilityLabel="Attach file" accessibilityRole="button"><IconSymbol name="paperclip" size={24} color="#8A8F98" /></TouchableOpacity>
+          <TouchableOpacity style={styles.attachButton} onPress={() => setIsCameraOptionsVisible(true)} disabled={isSending} accessibilityLabel="Camera options" accessibilityRole="button"><IconSymbol name="camera.fill" size={24} color="#8A8F98" /></TouchableOpacity>
+          <TextInput style={styles.textInput} placeholder="Type or paste to send to PC..." placeholderTextColor="#4C5361" value={inputText} onChangeText={setInputText} multiline accessibilityLabel="Message to send to PC" accessibilityRole="text" />
+          <TouchableOpacity style={styles.sendButton} onPress={sendTextToPc} disabled={isSending || !inputText} accessibilityLabel="Send message" accessibilityRole="button">
             {isSending ? <ActivityIndicator color="#fff" /> : <IconSymbol name="arrow.up.circle.fill" size={36} color={inputText ? "#4A62EB" : "#2A2F3A"} />}
           </TouchableOpacity>
         </View>
@@ -3418,18 +3396,18 @@ export default function SyncScreen() {
       {/* Expanded Image Modal */}
       <Modal visible={!!expandedImage} transparent={true} animationType="fade" onRequestClose={() => setExpandedImage(null)}>
         <View style={{flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center'}}>
-          <TouchableOpacity style={{position: 'absolute', top: 60, right: 20, zIndex: 10, padding: 10, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, width: 44, height: 44, alignItems: 'center', justifyContent: 'center'}} onPress={() => setExpandedImage(null)}><IconSymbol name="xmark" size={24} color="#FFF" /></TouchableOpacity>
+          <TouchableOpacity style={{position: 'absolute', top: 60, right: 20, zIndex: 10, padding: 10, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 20, width: 44, height: 44, alignItems: 'center', justifyContent: 'center'}} onPress={() => setExpandedImage(null)} accessibilityLabel="Close image" accessibilityRole="button"><IconSymbol name="xmark" size={24} color="#FFF" /></TouchableOpacity>
           {expandedImage && <Image source={{uri: expandedImage, headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' }}} style={{width: '100%', height: '80%'}} contentFit="contain" />}
           {expandedImage && (
             <View style={{position: 'absolute', bottom: 50, flexDirection: 'row', gap: 30, zIndex: 10}}>
               <TouchableOpacity style={{backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 30, width: 60, height: 60, alignItems: 'center', justifyContent: 'center'}} onPress={async () => {
                 if (Platform.OS === 'web') return;
                 try { const safeName = `image_${Date.now()}.jpg`; const localUri = DOWNLOAD_BASE + safeName; const dl = await FileSystem.downloadAsync(expandedImage, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }); const perm = await MediaLibrary.requestPermissionsAsync(); if (perm.status === 'granted') { await MediaLibrary.saveToLibraryAsync(dl.uri); if (Platform.OS === 'android') ToastAndroid.show("Saved to Gallery", ToastAndroid.SHORT); } } catch(e) {}
-              }}><IconSymbol name="arrow.down" size={26} color="#FFF" /></TouchableOpacity>
+              }} accessibilityLabel="Save image to gallery" accessibilityRole="button"><IconSymbol name="arrow.down" size={26} color="#FFF" /></TouchableOpacity>
               <TouchableOpacity style={{backgroundColor: '#4A62EB', borderRadius: 30, width: 60, height: 60, alignItems: 'center', justifyContent: 'center'}} onPress={async () => {
                 if (Platform.OS === 'web') return;
                 try { const safeName = `image_share_${Date.now()}.jpg`; const localUri = SYNC_CACHE_BASE + safeName; const dl = await FileSystem.downloadAsync(expandedImage, localUri, { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }); if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(dl.uri); } catch(e) {}
-              }}><IconSymbol name="square.and.arrow.up" size={26} color="#FFF" /></TouchableOpacity>
+              }} accessibilityLabel="Share image" accessibilityRole="button"><IconSymbol name="square.and.arrow.up" size={26} color="#FFF" /></TouchableOpacity>
             </View>
           )}
         </View>

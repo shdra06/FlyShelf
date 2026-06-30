@@ -35,7 +35,7 @@ namespace FlyShelf.Windows
                     ServerDiagnosticsLog.Text = GetServerDiagnostics();
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void SendAllLogs_Click(object sender, RoutedEventArgs e)
@@ -250,7 +250,7 @@ namespace FlyShelf.Windows
                 ToastWindow.ShowToast(msg);
 
                 // Open the Logs folder so user can grab the file
-                try { System.Diagnostics.Process.Start("explorer.exe", logsDir); } catch { }
+                try { System.Diagnostics.Process.Start("explorer.exe", logsDir); } catch { } // Best-effort: failure is acceptable
             }
             catch (Exception ex)
             {
@@ -278,7 +278,7 @@ namespace FlyShelf.Windows
                 _viewModel.HandleDrop(e.Data, true);
                 e.Handled = true;
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void Window_DragEnter(object sender, DragEventArgs e)

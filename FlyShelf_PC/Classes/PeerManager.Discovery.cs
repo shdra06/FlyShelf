@@ -54,14 +54,14 @@ namespace FlyShelf.Classes
             {
                 _udpCts?.Cancel();
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             try
             {
                 _udpListener?.Close();
                 _udpListener?.Dispose();
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             
             _udpListener = null;
             Logger.LogAction("PEER_UDP", "UDP local discovery stopped.");
@@ -131,7 +131,7 @@ namespace FlyShelf.Classes
                                         await sender.SendAsync(dataBytes, dataBytes.Length, targetEp);
                                     }
                                 }
-                                catch { }
+                                catch { } // Best-effort: failure is acceptable
                             }
                         }
                     }
@@ -186,7 +186,7 @@ namespace FlyShelf.Classes
                                     _udpListener.JoinMulticastGroup(multicastGroup, unicast.Address);
                                     joinedInterfacesCount++;
                                 }
-                                catch { }
+                                catch { } // Best-effort: failure is acceptable
                             }
                         }
                     }
@@ -300,7 +300,7 @@ namespace FlyShelf.Classes
                         _udpListener?.Close();
                         _udpListener?.Dispose();
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                     _udpListener = null;
 
                     try { await Task.Delay(10000, ct); } catch { break; }

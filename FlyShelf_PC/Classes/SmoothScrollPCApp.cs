@@ -27,6 +27,14 @@ namespace FlyShelf.Classes
         private const double DeltaCapTouchpad     = 60.0;     // Clamp raw trackpad delta to absorb driver spikes
         private const double DeltaCapMouse        = 360.0;    // Clamp raw mouse delta
 
+        // ═══ Mouse Velocity Physics (mouse-only smooth momentum) ═══
+        private const double MouseVelocityFriction   = 0.88;     // Per-frame exponential decay — smooth deceleration
+        private const double MouseMaxVelocity        = 60.0;     // Maximum velocity cap (px/frame)
+        private const double MouseImpulseScale       = 65.0;     // Raw velocity impulse per wheel notch (blended at 0.55)
+        private const double MouseMinVelocity        = 1.5;      // Below this → stop animation (cuts imperceptible tail)
+        private const double MouseDirectionBrakeMul  = 0.35;     // Retained velocity on direction reversal
+        private const double MouseTargetFrameMs      = 16.667;   // 60 FPS baseline for frame-time compensation
+
         // ═══ Progressive Touchpad Acceleration ═══
         private const double ProgressiveFloor     = 0.50;
         private const double ProgressiveCeiling   = 1.00;
@@ -78,7 +86,7 @@ namespace FlyShelf.Classes
                 uint size = (uint)System.Runtime.InteropServices.Marshal.SizeOf(state);
                 SetProcessInformation(hProcess, ProcessPowerThrottling, ref state, size);
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private class ScrollState
@@ -93,11 +101,18 @@ namespace FlyShelf.Classes
             public double DurationMs;
             public double ViewportHeight;
 
-            public double PendingDelta;      // Coalesced target displacement
+            public double PendingDelta;      // Coalesced target displacement (touchpad only)
             public long LastInputTime;       // Environment.TickCount64 of last input event
 
             public double LastOffset;        // Position at the previous rendering frame
             public long LastFrameTick;       // Timestamp of the previous rendering frame
+
+            // Mouse velocity mode state
+            public bool IsMouseVelocityMode;
+            public double MouseVelocity;
+            public double PendingMouseImpulse;
+            public double TrueOffset;        // Sub-pixel precise position for mouse mode
+            public double LastSetOffset;     // Last written ScrollViewer offset for mouse mode
         }
 
         // ═══ GPU Caching — Disabled ═══
@@ -202,37 +217,64 @@ namespace FlyShelf.Classes
             state.IsTouchpad = isTouchpad;
             state.LastInputTime = now;
 
-            double displacement;
-
             if (isTouchpad)
             {
+                // ═══ TOUCHPAD: VS Code target-based animation (unchanged) ═══
+                // If switching from mouse velocity mode, cancel it cleanly
+                if (state.IsMouseVelocityMode)
+                {
+                    state.IsMouseVelocityMode = false;
+                    state.MouseVelocity = 0;
+                    state.PendingMouseImpulse = 0;
+                    state.IsAnimating = false; // Force touchpad to re-seed VS Code animation
+                }
+
                 // Treat touchpad deltas as raw pixel displacement
                 double rawAbs = Math.Abs(delta);
                 double capped = Math.Min(rawAbs, DeltaCapTouchpad);
                 double speedRatio = Math.Min(capped / ProgressiveThreshold, 1.0);
                 double progressiveMul = ProgressiveFloor + (ProgressiveCeiling - ProgressiveFloor) * speedRatio;
+                double displacement = -Math.Sign(delta) * capped * progressiveMul * TouchpadScale;
 
-                displacement = -Math.Sign(delta) * capped * progressiveMul * TouchpadScale;
+                // Coalesce incoming scroll deltas to prevent micro-stuttering
+                state.PendingDelta += displacement;
+
+                if (!state.IsAnimating)
+                {
+                    // Seed starting values for VS Code animation
+                    state.FromOffset = sv.VerticalOffset;
+                    state.ToOffset = sv.VerticalOffset;
+                    state.ViewportHeight = sv.ViewportHeight;
+                    state.LastOffset = sv.VerticalOffset;
+                    state.LastFrameTick = System.Diagnostics.Stopwatch.GetTimestamp();
+                }
             }
             else
             {
-                // Mouse wheel notches
+                // ═══ MOUSE: Velocity-based momentum physics ═══
+                // If switching from touchpad VS Code animation, cancel it cleanly
+                if (state.IsAnimating && !state.IsMouseVelocityMode)
+                {
+                    state.IsAnimating = false;
+                    state.PendingDelta = 0;
+                }
+                state.IsMouseVelocityMode = true;
+
                 double notches = delta / 120.0;
                 double capped = Math.Sign(notches) * Math.Min(Math.Abs(notches), DeltaCapMouse / 120.0);
-                displacement = -capped * MouseStepPx * MouseImpulseBoost;
-            }
+                double impulse = -capped * MouseImpulseScale;
 
-            // Coalesce incoming scroll deltas to prevent micro-stuttering
-            state.PendingDelta += displacement;
+                // Coalesce mouse impulses for per-frame drain
+                state.PendingMouseImpulse += impulse;
 
-            if (!state.IsAnimating)
-            {
-                // Seed starting values
-                state.FromOffset = sv.VerticalOffset;
-                state.ToOffset = sv.VerticalOffset;
-                state.ViewportHeight = sv.ViewportHeight;
-                state.LastOffset = sv.VerticalOffset;
-                state.LastFrameTick = System.Diagnostics.Stopwatch.GetTimestamp();
+                if (!state.IsAnimating)
+                {
+                    state.IsAnimating = true;
+                    state.TrueOffset = sv.VerticalOffset;
+                    state.LastSetOffset = sv.VerticalOffset;
+                    state.LastOffset = sv.VerticalOffset;
+                    state.LastFrameTick = System.Diagnostics.Stopwatch.GetTimestamp();
+                }
             }
 
             if (!_renderingAttached)
@@ -256,6 +298,126 @@ namespace FlyShelf.Classes
             foreach (var sv in scrollKeys)
             {
                 if (!_states.TryGetValue(sv, out var state)) continue;
+
+                // ═══ MOUSE VELOCITY PHYSICS MODE ═══
+                if (state.IsMouseVelocityMode)
+                {
+                    if (!state.IsAnimating)
+                    {
+                        state.IsMouseVelocityMode = false;
+                        completed.Add(sv);
+                        continue;
+                    }
+
+                    // Frame-time compensation
+                    long mouseTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
+                    double mouseElapsedMs = (double)(mouseTimestamp - state.LastFrameTick) * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+                    if (mouseElapsedMs <= 0) mouseElapsedMs = 1.0;
+                    double mouseTimeScale = Math.Min(mouseElapsedMs / MouseTargetFrameMs, 3.0);
+                    state.LastFrameTick = mouseTimestamp;
+
+                    // Synchronize with WPF layout shifts (same approach as clipboard SmoothScroll)
+                    double mouseActualOffset = sv.VerticalOffset;
+                    double mouseWpfDelta = mouseActualOffset - state.LastSetOffset;
+                    if (Math.Abs(mouseWpfDelta) > 5.0)
+                    {
+                        state.TrueOffset += mouseWpfDelta;
+                        state.LastSetOffset = mouseActualOffset;
+                    }
+                    else if (Math.Abs(mouseWpfDelta) > 0.001)
+                    {
+                        state.LastSetOffset = mouseActualOffset;
+                    }
+
+                    // Drain coalesced mouse impulse into velocity with smooth blending
+                    if (state.PendingMouseImpulse != 0)
+                    {
+                        double mousePending = state.PendingMouseImpulse;
+                        state.PendingMouseImpulse = 0;
+
+                        double mouseTargetV = state.MouseVelocity + mousePending;
+                        mouseTargetV = Math.Clamp(mouseTargetV, -MouseMaxVelocity, MouseMaxVelocity);
+
+                        // Smooth direction reversal: 2-phase brake-and-reverse
+                        bool mouseReversal = Math.Abs(state.MouseVelocity) > 2.0 &&
+                                             Math.Sign(mouseTargetV) != Math.Sign(state.MouseVelocity);
+
+                        if (mouseReversal)
+                        {
+                            // Phase 1: Fast brake toward zero
+                            state.MouseVelocity *= MouseDirectionBrakeMul;
+                            if (Math.Abs(state.MouseVelocity) < 0.3)
+                                state.MouseVelocity = 0;
+                        }
+                        else
+                        {
+                            // Responsive acceleration blend
+                            state.MouseVelocity += (mouseTargetV - state.MouseVelocity) * 0.55;
+                        }
+
+                        state.MouseVelocity = Math.Clamp(state.MouseVelocity, -MouseMaxVelocity, MouseMaxVelocity);
+                    }
+
+                    // Boundary check — stop cleanly at scroll limits
+                    bool mouseBound = (state.TrueOffset <= 0 && state.MouseVelocity < 0) ||
+                                      (state.TrueOffset >= sv.ScrollableHeight && state.MouseVelocity > 0);
+
+                    if (mouseBound)
+                    {
+                        state.MouseVelocity = 0;
+                        state.TrueOffset = Math.Clamp(Math.Round(state.TrueOffset), 0, sv.ScrollableHeight);
+                        sv.ScrollToVerticalOffset(state.TrueOffset);
+                        state.LastSetOffset = state.TrueOffset;
+                        state.IsAnimating = false;
+                        state.IsMouseVelocityMode = false;
+                        completed.Add(sv);
+                        continue;
+                    }
+
+                    // Apply velocity with frame-time compensation
+                    double mouseDisplacement = state.MouseVelocity * mouseTimeScale;
+                    state.TrueOffset += mouseDisplacement;
+                    state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
+
+                    double mouseNextOffset = Math.Round(state.TrueOffset);
+                    sv.ScrollToVerticalOffset(mouseNextOffset);
+                    state.LastSetOffset = state.TrueOffset;
+
+                    // Apply exponential friction
+                    state.MouseVelocity *= Math.Pow(MouseVelocityFriction, mouseTimeScale);
+
+                    // Stop when velocity is imperceptible
+                    if (Math.Abs(state.MouseVelocity) < MouseMinVelocity)
+                    {
+                        state.MouseVelocity = 0;
+                        state.TrueOffset = Math.Clamp(state.TrueOffset, 0, sv.ScrollableHeight);
+                        sv.ScrollToVerticalOffset(state.TrueOffset);
+                        state.LastSetOffset = state.TrueOffset;
+                        state.IsAnimating = false;
+                        state.IsMouseVelocityMode = false;
+                        completed.Add(sv);
+                    }
+                    else
+                    {
+                        anyAnimating = true;
+                    }
+
+                    // Dispatch telemetry for mouse scroll
+                    try
+                    {
+                        double mouseDiff = mouseNextOffset - state.LastOffset;
+                        double mouseVelPxSec = Math.Abs(mouseDiff / (mouseElapsedMs / 1000.0));
+                        state.LastOffset = mouseNextOffset;
+                        double mouseFps = 1000.0 / mouseElapsedMs;
+                        string mouseCardsData = ScrollTelemetryClient.GetVisibleItemsTelemetry(sv);
+                        ScrollTelemetryClient.SendTelemetry(mouseNextOffset, state.TrueOffset, mouseVelPxSec, mouseFps, mouseElapsedMs, sv.ViewportHeight, sv.ScrollableHeight, mouseCardsData);
+                    }
+                    catch { } // Best-effort: failure is acceptable
+
+                    continue; // Skip touchpad VS Code animation below
+                }
+
+                // ═══ TOUCHPAD: VS Code Target Animation (unchanged) ═══
 
                 // ═══ DRAIN COALESCED INPUT ═══
                 if (state.PendingDelta != 0)
@@ -337,7 +499,7 @@ namespace FlyShelf.Classes
                     string cardsData = ScrollTelemetryClient.GetVisibleItemsTelemetry(sv);
                     ScrollTelemetryClient.SendTelemetry(nextOffset, state.ToOffset, velocityInPixelsSec, fps, elapsedMs, sv.ViewportHeight, sv.ScrollableHeight, cardsData);
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
 
             foreach (var sv in completed)
@@ -408,7 +570,7 @@ namespace FlyShelf.Classes
             {
                 System.Threading.Thread.CurrentThread.Priority = System.Threading.ThreadPriority.AboveNormal;
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private static void RestoreUIThreadPriority()
@@ -417,7 +579,7 @@ namespace FlyShelf.Classes
             {
                 System.Threading.Thread.CurrentThread.Priority = System.Threading.ThreadPriority.Normal;
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         // ═══ Visual Tree Helpers ═══

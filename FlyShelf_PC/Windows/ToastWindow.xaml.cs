@@ -229,7 +229,7 @@ namespace FlyShelf.Windows
                 // Failsafe: ensure we don't block the queue
                 lock (_poolLock) { _isShowing = false; }
                 lock (_toastLock) { _activeToasts.Remove(this); }
-                try { this.Hide(); } catch { }
+                try { this.Hide(); } catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -240,7 +240,7 @@ namespace FlyShelf.Windows
         public static void ShowToast(string message)
         {
             // Respect user preference to disable notifications
-            try { if (!FlyShelf.Classes.SettingsManager.Current.EnableNotifications) return; } catch { }
+            try { if (!FlyShelf.Classes.SettingsManager.Current.EnableNotifications) return; } catch { } // Best-effort: failure is acceptable
 
             string smartMessage = MakeMessageSmart(message);
 
@@ -302,7 +302,7 @@ namespace FlyShelf.Windows
                 Classes.Logger.LogAction("TOAST", $"Show failed: {ex.Message}");
 
                 // If the pooled instance is corrupt, discard it
-                try { _pooledInstance?.Close(); } catch { }
+                try { _pooledInstance?.Close(); } catch { } // Best-effort: failure is acceptable
                 _pooledInstance = null;
             }
         }

@@ -102,7 +102,7 @@ namespace FlyShelf.Controls
                     var oldAnimator = AnimationBehavior.GetAnimator(SpriteImage);
                     oldAnimator?.Dispose();
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
 
                 string ext = Path.GetExtension(filePath).ToLowerInvariant();
 
@@ -171,7 +171,7 @@ namespace FlyShelf.Controls
                 var animator = AnimationBehavior.GetAnimator(SpriteImage);
                 animator?.Pause();
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         /// <summary>
@@ -184,7 +184,7 @@ namespace FlyShelf.Controls
                 var animator = AnimationBehavior.GetAnimator(SpriteImage);
                 animator?.Play();
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         /// <summary>
@@ -198,7 +198,7 @@ namespace FlyShelf.Controls
                 var animator = AnimationBehavior.GetAnimator(SpriteImage);
                 animator?.Dispose();
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             try
             {
                 AnimationBehavior.SetSourceUri(SpriteImage, null);
@@ -206,7 +206,7 @@ namespace FlyShelf.Controls
                 AnimatorRoot.Visibility = Visibility.Collapsed;
                 _currentFilePath = "";
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         /// <summary>

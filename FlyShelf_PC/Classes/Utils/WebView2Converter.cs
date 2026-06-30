@@ -123,7 +123,7 @@ namespace FlyShelf.Classes
                         Directory.Delete(userDataFolder, true);
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
 
                 return File.Exists(outputPath);
             }
@@ -136,11 +136,11 @@ namespace FlyShelf.Classes
             {
                 if (webView != null)
                 {
-                    try { webView.Dispose(); } catch { }
+                    try { webView.Dispose(); } catch { } // Best-effort: failure is acceptable
                 }
                 if (tempWindow != null)
                 {
-                    try { tempWindow.Close(); } catch { }
+                    try { tempWindow.Close(); } catch { } // Best-effort: failure is acceptable
                 }
             }
         }

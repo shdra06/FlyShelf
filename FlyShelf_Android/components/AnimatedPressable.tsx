@@ -21,6 +21,9 @@ interface AnimatedPressableProps {
   style?: StyleProp<ViewStyle>;
   scaleDown?: number;
   disabled?: boolean;
+  accessibilityLabel?: string;
+  accessibilityRole?: 'button' | 'link' | 'search' | 'image' | 'text' | 'none';
+  accessibilityHint?: string;
 }
 
 export default function AnimatedPressable({
@@ -30,6 +33,9 @@ export default function AnimatedPressable({
   style,
   scaleDown = 0.96,
   disabled = false,
+  accessibilityLabel,
+  accessibilityRole = 'button',
+  accessibilityHint,
 }: AnimatedPressableProps) {
   const pressed = useSharedValue(0);
 
@@ -64,7 +70,13 @@ export default function AnimatedPressable({
 
   return (
     <GestureDetector gesture={composed}>
-      <Animated.View style={[animatedStyle, style]}>
+      <Animated.View
+        style={[animatedStyle, style]}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole={accessibilityRole}
+        accessibilityHint={accessibilityHint}
+        accessible={true}
+      >
         {children}
       </Animated.View>
     </GestureDetector>

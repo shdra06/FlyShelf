@@ -220,9 +220,12 @@ namespace FlyShelf.Classes
             if (peer != null)
             {
                 Interlocked.Increment(ref peer.ActiveTransfers);
+                // M11 fix: Use Interlocked guard to prevent double-decrement on retry cycles
+                int decremented = 0;
                 session.StateChanged += (s, state) =>
                 {
-                    if (state == TransferState.Completed || state == TransferState.Failed || state == TransferState.Cancelled)
+                    if ((state == TransferState.Completed || state == TransferState.Failed || state == TransferState.Cancelled)
+                        && Interlocked.CompareExchange(ref decremented, 1, 0) == 0)
                     {
                         Interlocked.Decrement(ref peer.ActiveTransfers);
                     }
@@ -250,7 +253,7 @@ namespace FlyShelf.Classes
         {
             if (_activeSessions.TryGetValue(transferId, out var session))
             {
-                await session.PauseAsync();
+                session.PauseTransfer();
                 PersistCheckpoints();
                 // Notify peer
                 await SendControlMessage(session.PeerDeviceId, "TransferPause", transferId);
@@ -300,13 +303,14 @@ namespace FlyShelf.Classes
 
         // ═══ Peer Control Message Handlers ═══
 
-        public async Task HandlePeerPause(Guid transferId)
+        public Task HandlePeerPause(Guid transferId)
         {
             if (_activeSessions.TryGetValue(transferId, out var session))
             {
-                await session.PauseAsync();
+                session.PauseTransfer();
                 PersistCheckpoints();
             }
+            return Task.CompletedTask;
         }
 
         public void HandlePeerResume(Guid transferId, long resumeFrom)
@@ -446,9 +450,9 @@ namespace FlyShelf.Classes
                 // Use a short timeout — control messages are tiny
                 using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
 
-                // Don't compete with file data for SendSemaphore — transfer control messages
-                // should always get through even during large transfers
-                bool acquired = await peer.SendSemaphore.WaitAsync(2000, cts.Token);
+                // M15 fix: Control messages must get through even during large WS file transfers.
+                // 10s timeout (was 2s) to survive semaphore contention from concurrent large sends.
+                bool acquired = await peer.SendSemaphore.WaitAsync(10_000, cts.Token);
                 if (!acquired) return false;
 
                 try
@@ -537,12 +541,13 @@ namespace FlyShelf.Classes
 
         // ═══ Checkpoint Persistence ═══
 
-        public void PersistCheckpoints()
+        /// <summary>Persists checkpoints for active, paused, and failed sessions. Optionally bypasses throttle.</summary>
+        public void PersistCheckpoints(bool bypassThrottle = false)
         {
             lock (_checkpointLock)
             {
-                // Throttle writes
-                if ((DateTime.UtcNow - _lastCheckpointWrite).TotalMilliseconds < MIN_CHECKPOINT_INTERVAL_MS)
+                // H7 fix: bypass throttle for terminal states (called with bypassThrottle=true)
+                if (!bypassThrottle && (DateTime.UtcNow - _lastCheckpointWrite).TotalMilliseconds < MIN_CHECKPOINT_INTERVAL_MS)
                     return;
                 _lastCheckpointWrite = DateTime.UtcNow;
             }
@@ -555,12 +560,24 @@ namespace FlyShelf.Classes
                     .Select(SessionToCheckpoint)
                     .ToList();
 
-                // Also include failed sessions with progress (for resume across reconnection)
-                var failedWithProgress = CompletedTransfers
-                    .Where(s => s.IsFailed && s.BytesTransferred > 0)
-                    .Select(SessionToCheckpoint)
-                    .ToList();
-                checkpoints.AddRange(failedWithProgress);
+                // H4 fix: Snapshot CompletedTransfers on dispatcher to avoid cross-thread crash
+                List<LanTransferSession>? failedSnapshot = null;
+                var app = System.Windows.Application.Current;
+                if (app != null)
+                {
+                    try
+                    {
+                        app.Dispatcher.Invoke(() =>
+                        {
+                            failedSnapshot = CompletedTransfers
+                                .Where(s => s.IsFailed && s.BytesTransferred > 0)
+                                .ToList();
+                        });
+                    }
+                    catch { /* App shutting down */ }
+                }
+                if (failedSnapshot != null)
+                    checkpoints.AddRange(failedSnapshot.Select(SessionToCheckpoint));
 
                 string json = JsonSerializer.Serialize(checkpoints, new JsonSerializerOptions { WriteIndented = true });
                 string dir = Path.GetDirectoryName(_checkpointFile)!;
@@ -594,7 +611,7 @@ namespace FlyShelf.Classes
         /// This is the critical fallback for when a sender reconnects with a new transfer GUID
         /// but is re-sending the same file. Picks the checkpoint with the most progress.
         /// </summary>
-        private TransferCheckpoint? LoadCheckpointByContent(string fileName, long fileSize, string peerDeviceId)
+        private TransferCheckpoint? LoadCheckpointByContent(string fileName, long fileSize, string peerDeviceId, string? xxHash64 = null)
         {
             try
             {
@@ -603,14 +620,17 @@ namespace FlyShelf.Classes
                 var checkpoints = JsonSerializer.Deserialize<TransferCheckpoint[]>(json);
                 if (checkpoints == null) return null;
 
-                // Match by content fingerprint: same file name, same size, same sender
+                // M12 fix: Include xxHash64 in matching to prevent corrupt resume
+                // when same-name/same-size files are different content
                 return checkpoints
                     .Where(c => c.FileName == fileName
                              && c.FileSize == fileSize
                              && c.PeerDeviceId == peerDeviceId
                              && c.Direction == "Receive"
-                             && File.Exists(c.FilePath))
-                    .OrderByDescending(c => c.BytesTransferred) // Pick the one with most progress
+                             && File.Exists(c.FilePath)
+                             && (string.IsNullOrEmpty(xxHash64) || string.IsNullOrEmpty(c.XxHash64)
+                                 || string.Equals(c.XxHash64, xxHash64, StringComparison.OrdinalIgnoreCase)))
+                    .OrderByDescending(c => c.BytesTransferred)
                     .FirstOrDefault();
             }
             catch { return null; }
@@ -622,39 +642,40 @@ namespace FlyShelf.Classes
         /// </summary>
         public void PersistCheckpointsIncludingFailed(LanTransferSession failedSession)
         {
-            try
+            // H5 fix: Lock to prevent concurrent read-modify-write races
+            lock (_checkpointLock)
             {
-                // Load existing checkpoints
-                TransferCheckpoint[] existing = Array.Empty<TransferCheckpoint>();
-                if (File.Exists(_checkpointFile))
+                try
                 {
-                    string existingJson = File.ReadAllText(_checkpointFile);
-                    existing = JsonSerializer.Deserialize<TransferCheckpoint[]>(existingJson) ?? Array.Empty<TransferCheckpoint>();
+                    TransferCheckpoint[] existing = Array.Empty<TransferCheckpoint>();
+                    if (File.Exists(_checkpointFile))
+                    {
+                        string existingJson = File.ReadAllText(_checkpointFile);
+                        existing = JsonSerializer.Deserialize<TransferCheckpoint[]>(existingJson) ?? Array.Empty<TransferCheckpoint>();
+                    }
+
+                    var filtered = existing.Where(c =>
+                        !(c.FileName == failedSession.FileName
+                          && c.FileSize == failedSession.FileSize
+                          && c.PeerDeviceId == failedSession.PeerDeviceId)
+                        && c.TransferId != failedSession.TransferId.ToString()
+                    ).ToList();
+
+                    filtered.Add(SessionToCheckpoint(failedSession));
+
+                    string json = JsonSerializer.Serialize(filtered, new JsonSerializerOptions { WriteIndented = true });
+                    string dir = Path.GetDirectoryName(_checkpointFile)!;
+                    Directory.CreateDirectory(dir);
+                    string tmp = _checkpointFile + ".tmp";
+                    File.WriteAllText(tmp, json, Encoding.UTF8);
+                    File.Move(tmp, _checkpointFile, true);
+
+                    Logger.LogAction("TRANSFER", $"💾 Checkpoint saved for {failedSession.FileName}: {LanTransferSession.FormatBytes(failedSession.BytesTransferred)} of {LanTransferSession.FormatBytes(failedSession.FileSize)}");
                 }
-
-                // Remove any old checkpoint for this same content (prevent duplicates)
-                var filtered = existing.Where(c =>
-                    !(c.FileName == failedSession.FileName
-                      && c.FileSize == failedSession.FileSize
-                      && c.PeerDeviceId == failedSession.PeerDeviceId)
-                    && c.TransferId != failedSession.TransferId.ToString()
-                ).ToList();
-
-                // Add the fresh checkpoint with current progress
-                filtered.Add(SessionToCheckpoint(failedSession));
-
-                string json = JsonSerializer.Serialize(filtered, new JsonSerializerOptions { WriteIndented = true });
-                string dir = Path.GetDirectoryName(_checkpointFile)!;
-                Directory.CreateDirectory(dir);
-                string tmp = _checkpointFile + ".tmp";
-                File.WriteAllText(tmp, json, Encoding.UTF8);
-                File.Move(tmp, _checkpointFile, true);
-
-                Logger.LogAction("TRANSFER", $"💾 Checkpoint saved for {failedSession.FileName}: {LanTransferSession.FormatBytes(failedSession.BytesTransferred)} of {LanTransferSession.FormatBytes(failedSession.FileSize)}");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("TRANSFER", $"Checkpoint persist error: {ex.Message}");
+                catch (Exception ex)
+                {
+                    Logger.LogAction("TRANSFER", $"Checkpoint persist error: {ex.Message}");
+                }
             }
         }
 
@@ -693,10 +714,26 @@ namespace FlyShelf.Classes
                     return true;
                 }).ToArray();
 
+                // H6 fix: Also clean up stale pending receives
+                var staleReceiveIds = _pendingReceives
+                    .Where(kvp => (DateTime.UtcNow - kvp.Value.StartTime).TotalSeconds > 60)
+                    .Select(kvp => kvp.Key).ToList();
+                foreach (var id in staleReceiveIds)
+                {
+                    if (_pendingReceives.TryRemove(id, out var stale))
+                    {
+                        stale.MarkFailed("Connection timeout — no TCP connection received");
+                        MoveToCompleted(stale);
+                    }
+                }
+
                 if (valid.Length != checkpoints.Length)
                 {
                     string newJson = JsonSerializer.Serialize(valid, new JsonSerializerOptions { WriteIndented = true });
-                    File.WriteAllText(_checkpointFile, newJson, Encoding.UTF8);
+                    // M13 fix: Atomic write (was using File.WriteAllText directly)
+                    string tmp = _checkpointFile + ".tmp";
+                    File.WriteAllText(tmp, newJson, Encoding.UTF8);
+                    File.Move(tmp, _checkpointFile, true);
                 }
             }
             catch (Exception ex)
@@ -714,12 +751,16 @@ namespace FlyShelf.Classes
         /// </summary>
         public async Task RetryTransfer(Guid transferId)
         {
-            // Find in completed transfers
+            // M14 fix: Use InvokeAsync instead of Invoke to avoid deadlock
             LanTransferSession? session = null;
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            var app = System.Windows.Application.Current;
+            if (app != null)
             {
-                session = CompletedTransfers.FirstOrDefault(s => s.TransferId == transferId && s.CanRetry);
-            });
+                await app.Dispatcher.InvokeAsync(() =>
+                {
+                    session = CompletedTransfers.FirstOrDefault(s => s.TransferId == transferId && s.CanRetry);
+                });
+            }
 
             if (session == null)
             {
@@ -727,7 +768,14 @@ namespace FlyShelf.Classes
                 return;
             }
 
-            // Find the peer
+            // L9 fix: Verify source file still exists for send retries
+            if (session.Direction == TransferDirection.Send && !File.Exists(session.FilePath))
+            {
+                session.MarkFailed("Source file no longer exists");
+                Logger.LogAction("TRANSFER", $"Retry: source file missing: {session.FilePath}");
+                return;
+            }
+
             var peer = PeerManager.Instance?.ConnectedPeers.Values
                 .FirstOrDefault(p => p.DeviceId == session.PeerDeviceId);
             if (peer == null || !peer.IsAlive)
@@ -737,22 +785,22 @@ namespace FlyShelf.Classes
                 return;
             }
 
-            // Reset session state
             session.RetryTransfer();
 
-            // Move back from Completed to Active
-            System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+            if (app != null)
             {
-                CompletedTransfers.Remove(session);
-                ActiveTransfers.Add(session);
-            });
+                await app.Dispatcher.InvokeAsync(() =>
+                {
+                    CompletedTransfers.Remove(session);
+                    ActiveTransfers.Add(session);
+                });
+            }
             _activeSessions[session.TransferId] = session;
 
             Logger.LogAction("TRANSFER", $"↺ Retrying {session.FileName} from {LanTransferSession.FormatBytes(session.BytesTransferred)}");
 
             if (session.Direction == TransferDirection.Send)
             {
-                // Re-offer the file — the receiver will find the checkpoint and reply with resumeFrom
                 bool offered = await SendTransferOffer(peer, session);
                 if (!offered)
                 {
@@ -762,16 +810,40 @@ namespace FlyShelf.Classes
             }
             else // Receive
             {
-                // Ask the sender to re-send the file — they'll create a new offer
-                // which will match our content-based checkpoint
                 await SendControlMessage(session.PeerDeviceId, "TransferRetryRequest",
                     session.TransferId, session.BytesTransferred);
-                
-                // Put in pending receives so when the sender offers, we can accept
                 _pendingReceives[session.TransferId] = session;
             }
 
             TransferStarted?.Invoke(session);
+        }
+
+        /// <summary>
+        /// C1 fix: Handler for TransferRetryRequest from a receiver asking us to re-send a file.
+        /// Looks up the file from our checkpoint data and re-offers it.
+        /// </summary>
+        public async Task HandleTransferRetryRequest(Guid transferId, string peerDeviceId, long bytesTransferred)
+        {
+            // Find the checkpoint for this transfer (we were the sender)
+            var checkpoint = LoadCheckpointForTransfer(transferId);
+            if (checkpoint == null || !File.Exists(checkpoint.FilePath))
+            {
+                Logger.LogAction("TRANSFER", $"RetryRequest: no checkpoint or file missing for {transferId}");
+                return;
+            }
+
+            var peer = PeerManager.Instance?.ConnectedPeers.Values
+                .FirstOrDefault(p => p.DeviceId == peerDeviceId);
+            if (peer == null || !peer.IsAlive)
+            {
+                Logger.LogAction("TRANSFER", $"RetryRequest: peer {peerDeviceId} not connected");
+                return;
+            }
+
+            // Re-offer the file — the receiver's content-based matching will find the checkpoint
+            var session = await OfferFile(peer, checkpoint.FilePath);
+            if (session != null)
+                Logger.LogAction("TRANSFER", $"↺ Re-offering {checkpoint.FileName} per retry request from {peer.DeviceName}");
         }
 
         // ═══ Checkpoint Model ═══

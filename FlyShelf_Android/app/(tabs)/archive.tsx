@@ -261,7 +261,7 @@ export default function ConnectScreen() {
     });
     
     return () => unsubscribeNodes();
-  }, [deviceName, pcLocalIp]);
+  }, [deviceName, pcLocalIp, pairingKey]);
 
   // Permissions + auto-scan on mount
   const hasScannedRef = useRef(false);
@@ -765,6 +765,9 @@ export default function ConnectScreen() {
           else if (Platform.OS === 'android') ToastAndroid.show('No URLs available', ToastAndroid.SHORT);
         }}
         activeOpacity={0.7}
+        accessibilityLabel={`${device.DeviceName || 'Unknown'}, ${device.DeviceType}, ${type === 'local' ? 'local network' : 'cloud'}`}
+        accessibilityRole="button"
+        accessibilityHint="Tap to select as transfer target"
       >
         <View style={[s.deviceIcon, { backgroundColor: type === 'local' ? '#10B98118' : '#3B82F618' }]}>
           <IconSymbol name={isPC ? "desktopcomputer" : "iphone"} size={22} color={type === 'local' ? '#10B981' : '#3B82F6'} />
@@ -812,10 +815,10 @@ export default function ConnectScreen() {
             <View style={{ height: '100%', width: `${pct}%`, backgroundColor: colors.accent.success, borderRadius: 4 }} />
           </View>
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            <TouchableOpacity style={[s.controlBtn, { backgroundColor: isPaused ? colors.accent.success : colors.accent.warning, flex: 1 }]} onPress={() => { isPausedRef.current = !isPausedRef.current; setIsPaused(isPausedRef.current); }}>
+            <TouchableOpacity style={[s.controlBtn, { backgroundColor: isPaused ? colors.accent.success : colors.accent.warning, flex: 1 }]} onPress={() => { isPausedRef.current = !isPausedRef.current; setIsPaused(isPausedRef.current); }} accessibilityLabel={isPaused ? 'Resume transfer' : 'Pause transfer'} accessibilityRole="button">
               <Text style={s.controlBtnText}>{isPaused ? '▶ Resume' : '⏸ Pause'}</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[s.controlBtn, { backgroundColor: colors.accent.error, flex: 1 }]} onPress={() => { isCancelledRef.current = true; }}>
+            <TouchableOpacity style={[s.controlBtn, { backgroundColor: colors.accent.error, flex: 1 }]} onPress={() => { isCancelledRef.current = true; }} accessibilityLabel="Abort transfer" accessibilityRole="button">
               <Text style={s.controlBtnText}>✕ Abort</Text>
             </TouchableOpacity>
           </View>
@@ -835,7 +838,7 @@ export default function ConnectScreen() {
       <SafeAreaView style={s.container}>
         {/* Header with prominent back */}
         <View style={[s.header, { flexDirection: 'row', alignItems: 'center', paddingTop: 50 }]}>
-          <TouchableOpacity onPress={() => { setSelectedTarget(null); setMediaAssets([]); setBrowserFiles([]); setSelectedIds(new Set()); }} style={{ marginRight: 14, padding: 10, backgroundColor: '#EF4444', borderRadius: 12 }}>
+          <TouchableOpacity onPress={() => { setSelectedTarget(null); setMediaAssets([]); setBrowserFiles([]); setSelectedIds(new Set()); }} style={{ marginRight: 14, padding: 10, backgroundColor: '#EF4444', borderRadius: 12 }} accessibilityLabel="Go back" accessibilityRole="button">
             <IconSymbol name="chevron.left" size={18} color="#FFF" />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
@@ -849,15 +852,15 @@ export default function ConnectScreen() {
 
         {/* Date Range */}
         <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, marginBottom: 10, gap: 8 }}>
-          <TouchableOpacity style={s.dateBtn} onPress={() => setShowStartPicker(true)}>
+          <TouchableOpacity style={s.dateBtn} onPress={() => setShowStartPicker(true)} accessibilityLabel={`From date: ${startDate.toLocaleDateString()}`} accessibilityRole="button">
             <Text style={s.dateLabel}>FROM</Text>
             <Text style={s.dateValue}>{startDate.toLocaleDateString()}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={s.dateBtn} onPress={() => setShowEndPicker(true)}>
+          <TouchableOpacity style={s.dateBtn} onPress={() => setShowEndPicker(true)} accessibilityLabel={`To date: ${endDate.toLocaleDateString()}`} accessibilityRole="button">
             <Text style={s.dateLabel}>TO</Text>
             <Text style={s.dateValue}>{endDate.toLocaleDateString()}</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={{ backgroundColor: '#4A62EB', borderRadius: 12, padding: 12, paddingHorizontal: 16 }} onPress={scanMedia}>
+          <TouchableOpacity style={{ backgroundColor: '#4A62EB', borderRadius: 12, padding: 12, paddingHorizontal: 16 }} onPress={scanMedia} accessibilityLabel="Scan media files" accessibilityRole="button">
             <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700' }}>Scan</Text>
           </TouchableOpacity>
         </View>
@@ -867,13 +870,13 @@ export default function ConnectScreen() {
         {/* Source Filters */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 6, marginBottom: 8 }}>
           {(['All', 'Camera', 'WhatsApp', 'Downloads'] as SourceFilter[]).map(src => (
-            <TouchableOpacity key={src} style={[s.sourceChip, sourceFilter === src && s.sourceChipActive]} onPress={() => setSourceFilter(src)}>
+            <TouchableOpacity key={src} style={[s.sourceChip, sourceFilter === src && s.sourceChipActive]} onPress={() => setSourceFilter(src)} accessibilityLabel={`Filter: ${src}${sourceFilter === src ? ', selected' : ''}`} accessibilityRole="tab">
               <Text style={[s.sourceChipText, sourceFilter === src && s.sourceChipTextActive]}>
                 {src === 'Camera' ? '📷' : src === 'WhatsApp' ? '💬' : src === 'Downloads' ? '📂' : '🌐'} {src}
               </Text>
             </TouchableOpacity>
           ))}
-          <TouchableOpacity style={[s.sourceChip, { backgroundColor: '#4A62EB33', borderColor: '#4A62EB' }]} onPress={browseFiles}>
+          <TouchableOpacity style={[s.sourceChip, { backgroundColor: '#4A62EB33', borderColor: '#4A62EB' }]} onPress={browseFiles} accessibilityLabel="Browse Android files" accessibilityRole="button">
             <Text style={[s.sourceChipText, { color: '#4A62EB', fontWeight: '700' }]}>📁 Browse Android</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -890,7 +893,7 @@ export default function ConnectScreen() {
               return true;
             }).length;
             return (
-              <TouchableOpacity key={t} style={[s.tab, activeTab === t && s.tabActive]} onPress={() => setActiveTab(t)}>
+              <TouchableOpacity key={t} style={[s.tab, activeTab === t && s.tabActive]} onPress={() => setActiveTab(t)} accessibilityLabel={`${t} tab, ${count} items${activeTab === t ? ', selected' : ''}`} accessibilityRole="tab">
                 <Text style={[s.tabText, activeTab === t && s.tabTextActive]}>{t} ({count})</Text>
               </TouchableOpacity>
             );
@@ -902,7 +905,7 @@ export default function ConnectScreen() {
           <Text style={{ color: '#8A8F98', fontSize: 12, fontWeight: '600' }}>
             {allDisplayItems.length} found{browserFiles.length > 0 ? ` (+${browserFiles.length} browsed)` : ''} · {selectedIds.size} selected
           </Text>
-          <TouchableOpacity style={{ backgroundColor: '#2A2F3A', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }} onPress={() => toggleSelectAll(allDisplayItems)}>
+          <TouchableOpacity style={{ backgroundColor: '#2A2F3A', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }} onPress={() => toggleSelectAll(allDisplayItems)} accessibilityLabel="Select all files" accessibilityRole="button">
             <Text style={{ color: '#FFF', fontSize: 11, fontWeight: 'bold' }}>Select All</Text>
           </TouchableOpacity>
         </View>
@@ -917,7 +920,7 @@ export default function ConnectScreen() {
                 const isSelected = selectedIds.has(asset.id);
                 const isImage = asset.mediaType === 'photo' || asset.mediaType === 'video';
                 return (
-                  <TouchableOpacity key={idx} style={{ margin: 3, width: THUMB_SIZE, height: THUMB_SIZE }} onPress={() => toggleSelection(asset.id)} onLongPress={() => setEnlargedPreview(asset)}>
+                  <TouchableOpacity key={idx} style={{ margin: 3, width: THUMB_SIZE, height: THUMB_SIZE }} onPress={() => toggleSelection(asset.id)} onLongPress={() => setEnlargedPreview(asset)} accessibilityLabel={`${asset.filename || 'File'}, ${isSelected ? 'selected' : 'not selected'}`} accessibilityRole="checkbox">
                     {isImage ? (
                       <Image source={{ uri: asset.uri }} style={{ width: '100%', height: '100%', borderRadius: 10, backgroundColor: '#2A2F3A' }} />
                     ) : (
@@ -955,7 +958,7 @@ export default function ConnectScreen() {
         {/* Send Button */}
         {selectedIds.size > 0 && (
           <View style={{ position: 'absolute', bottom: 20, left: 20, right: 20 }}>
-            <TouchableOpacity style={s.sendButton} onPress={() => executeTransfer(selectedTarget)} activeOpacity={0.8}>
+            <TouchableOpacity style={s.sendButton} onPress={() => executeTransfer(selectedTarget)} activeOpacity={0.8} accessibilityLabel={`Send ${selectedIds.size} items to ${selectedTarget.DeviceName}`} accessibilityRole="button">
               <Text style={s.sendButtonText}>Send {selectedIds.size} Items to {selectedTarget.DeviceName}</Text>
               <Text style={{ color: '#CCFBF1', fontSize: 10, marginTop: 3 }}>{buildBatchName()}</Text>
             </TouchableOpacity>
@@ -965,7 +968,7 @@ export default function ConnectScreen() {
         {/* Preview Modal */}
         <Modal visible={!!enlargedPreview} animationType="fade" transparent>
           <View style={[s.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.95)' }]}>
-            <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setEnlargedPreview(null)}>
+            <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setEnlargedPreview(null)} accessibilityLabel="Close preview" accessibilityRole="button">
               <View style={{ padding: 10, backgroundColor: '#2A2F3A', borderRadius: 20 }}>
                 <IconSymbol name="xmark" size={24} color="#FFF" />
               </View>
@@ -1057,24 +1060,24 @@ export default function ConnectScreen() {
       <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg.input, borderRadius: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: colors.border.subtle }}>
           <IconSymbol name="magnifyingglass" size={16} color={colors.text.tertiary} />
-          <TextInput value={fileSearchText} onChangeText={setFileSearchText} placeholder="Search files..." placeholderTextColor={colors.text.tertiary} style={{ flex: 1, color: colors.text.primary, fontSize: 14, paddingVertical: 12, marginLeft: 10 }} />
-          {fileSearchText ? <TouchableOpacity onPress={() => setFileSearchText('')}><IconSymbol name="xmark.circle.fill" size={18} color={colors.text.tertiary} /></TouchableOpacity> : null}
+          <TextInput value={fileSearchText} onChangeText={setFileSearchText} placeholder="Search files..." placeholderTextColor={colors.text.tertiary} style={{ flex: 1, color: colors.text.primary, fontSize: 14, paddingVertical: 12, marginLeft: 10 }} accessibilityLabel="Search files" accessibilityRole="search" />
+          {fileSearchText ? <TouchableOpacity onPress={() => setFileSearchText('')} accessibilityLabel="Clear search" accessibilityRole="button" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><IconSymbol name="xmark.circle.fill" size={18} color={colors.text.tertiary} /></TouchableOpacity> : null}
         </View>
       </View>
 
       {/* Type Filter Chips */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0, marginBottom: 10 }} contentContainerStyle={{ paddingHorizontal: 20, gap: 6, paddingVertical: 4 }}>
         {(['All', 'PDFs', 'Docs', 'Images', 'Videos'] as const).map(t => (
-          <TouchableOpacity key={t} style={[s.sourceChip, activeTab === t && s.sourceChipActive]} onPress={() => setActiveTab(t)}>
+          <TouchableOpacity key={t} style={[s.sourceChip, activeTab === t && s.sourceChipActive]} onPress={() => setActiveTab(t)} accessibilityLabel={`${t} filter${activeTab === t ? ', selected' : ''}`} accessibilityRole="tab">
             <Text style={[s.sourceChipText, activeTab === t && s.sourceChipTextActive]}>
               {t === 'PDFs' ? '📄' : t === 'Docs' ? '📝' : t === 'Images' ? '🖼️' : t === 'Videos' ? '🎬' : '🌐'} {t}
             </Text>
           </TouchableOpacity>
         ))}
-        <TouchableOpacity style={[s.sourceChip, { backgroundColor: colors.accent.primaryDim, borderColor: colors.accent.primary }]} onPress={browseFiles}>
+        <TouchableOpacity style={[s.sourceChip, { backgroundColor: colors.accent.primaryDim, borderColor: colors.accent.primary }]} onPress={browseFiles} accessibilityLabel="Browse files" accessibilityRole="button">
           <Text style={[s.sourceChipText, { color: colors.accent.primary, fontFamily: font.bold }]}>📁 Browse</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[s.sourceChip, { backgroundColor: colors.accent.successDim, borderColor: colors.accent.success }]} onPress={scanMedia}>
+        <TouchableOpacity style={[s.sourceChip, { backgroundColor: colors.accent.successDim, borderColor: colors.accent.success }]} onPress={scanMedia} accessibilityLabel="Refresh files" accessibilityRole="button">
           <Text style={[s.sourceChipText, { color: colors.accent.success, fontFamily: font.bold }]}>🔄 Refresh</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -1084,7 +1087,7 @@ export default function ConnectScreen() {
         <Text style={{ color: colors.text.secondary, fontSize: 12, fontFamily: font.semibold }}>
           {[...getFilteredAssets(), ...browserFiles].filter(a => !fileSearchText || (a.filename || '').toLowerCase().includes(fileSearchText.toLowerCase())).length} files · {selectedIds.size} selected
         </Text>
-        <TouchableOpacity style={{ backgroundColor: colors.bg.cardHover, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: colors.border.subtle }} onPress={() => toggleSelectAll([...getFilteredAssets(), ...browserFiles])}>
+        <TouchableOpacity style={{ backgroundColor: colors.bg.cardHover, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: colors.border.subtle }} onPress={() => toggleSelectAll([...getFilteredAssets(), ...browserFiles])} accessibilityLabel="Select all files" accessibilityRole="button">
           <Text style={{ color: colors.text.primary, fontSize: 10, fontFamily: font.bold }}>Select All</Text>
         </TouchableOpacity>
       </View>
@@ -1116,6 +1119,8 @@ export default function ConnectScreen() {
                 style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg.card, borderRadius: 14, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: isSelected ? colors.accent.success : colors.border.subtle }}
                 onPress={() => toggleSelection(asset.id)}
                 onLongPress={() => isImage || isVideo ? setEnlargedPreview(asset) : openFile(asset)}
+                accessibilityLabel={`${asset.filename || 'Unnamed'}, ${isPdf ? 'PDF' : isDoc ? 'DOC' : isVideo ? 'VIDEO' : 'IMAGE'}${isSelected ? ', selected' : ''}`}
+                accessibilityRole="checkbox"
               >
                 {isImage ? (
                   <Image source={{ uri: asset.uri }} style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: colors.bg.cardHover }} />
@@ -1134,8 +1139,8 @@ export default function ConnectScreen() {
                   </View>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 4 }}>
-                  {(isPdf || isDoc) && <TouchableOpacity onPress={() => openFile(asset)} style={{ padding: 8, backgroundColor: colors.accent.infoDim, borderRadius: 8 }}><IconSymbol name="arrow.up.right" size={14} color={colors.accent.info} /></TouchableOpacity>}
-                  <TouchableOpacity onPress={() => shareFile(asset)} style={{ padding: 8, backgroundColor: colors.accent.successDim, borderRadius: 8 }}><IconSymbol name="square.and.arrow.up" size={14} color={colors.accent.success} /></TouchableOpacity>
+                  {(isPdf || isDoc) && <TouchableOpacity onPress={() => openFile(asset)} style={{ padding: 8, backgroundColor: colors.accent.infoDim, borderRadius: 8 }} accessibilityLabel={`Open ${asset.filename || 'file'}`} accessibilityRole="button"><IconSymbol name="arrow.up.right" size={14} color={colors.accent.info} /></TouchableOpacity>}
+                  <TouchableOpacity onPress={() => shareFile(asset)} style={{ padding: 8, backgroundColor: colors.accent.successDim, borderRadius: 8 }} accessibilityLabel={`Share ${asset.filename || 'file'}`} accessibilityRole="button"><IconSymbol name="square.and.arrow.up" size={14} color={colors.accent.success} /></TouchableOpacity>
                   <View style={[{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: isSelected ? colors.accent.success : colors.text.tertiary, alignItems: 'center', justifyContent: 'center' }, isSelected && { backgroundColor: colors.accent.success }]}>
                     {isSelected && <IconSymbol name="checkmark" size={12} color="#FFF" />}
                   </View>
@@ -1156,7 +1161,7 @@ export default function ConnectScreen() {
               const sel = [...getFilteredAssets(), ...browserFiles].filter(a => selectedIds.has(a.id));
               if (sel.length === 1) shareFile(sel[0]);
               else Alert.alert('Share', 'Select a single file to share via Android.');
-            }}>
+            }} accessibilityLabel="Share selected file" accessibilityRole="button">
               <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📤 Share</Text>
             </TouchableOpacity>
             {(() => {
@@ -1168,7 +1173,7 @@ export default function ConnectScreen() {
                   if (!pc) { Alert.alert('No PC', 'Connect to a PC to merge files.'); return; }
                   setSelectedTarget(pc);
                   executeTransfer(pc);
-                }}>
+                }} accessibilityLabel="Merge selected files on PC" accessibilityRole="button">
                   <Text style={{ color: colors.bg.base, fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📑 Merge on PC</Text>
                 </TouchableOpacity>
               ) : null;
@@ -1178,7 +1183,7 @@ export default function ConnectScreen() {
               if (allDevs.length === 0) { Alert.alert('No Devices', 'Expand Connect section below.'); return; }
               if (allDevs.length === 1) { setSelectedTarget(allDevs[0]); executeTransfer(allDevs[0]); return; }
               Alert.alert('Send to:', '', allDevs.map((d: any) => ({ text: `${d.DeviceName} (${d.connectionType === 'local' ? 'LAN' : 'Cloud'})`, onPress: () => { setSelectedTarget(d); executeTransfer(d); } })).concat([{ text: 'Cancel' } as any]));
-            }}>
+            }} accessibilityLabel={`Send ${selectedIds.size} files to device`} accessibilityRole="button">
               <Text style={{ color: '#FFF', fontSize: 13, fontWeight: '700', fontFamily: font.bold }}>📡 Send</Text>
             </TouchableOpacity>
           </View>
@@ -1189,7 +1194,7 @@ export default function ConnectScreen() {
       {/* Preview Modal */}
       <Modal visible={!!enlargedPreview} animationType="fade" transparent>
         <View style={[s.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.95)' }]}>
-          <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setEnlargedPreview(null)}>
+          <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setEnlargedPreview(null)} accessibilityLabel="Close preview" accessibilityRole="button">
             <View style={{ padding: 10, backgroundColor: '#2A2F3A', borderRadius: 20 }}><IconSymbol name="xmark" size={24} color="#FFF" /></View>
           </TouchableOpacity>
           {enlargedPreview && (enlargedPreview.mediaType === 'photo' || enlargedPreview.mediaType === 'video') ? (

@@ -6,7 +6,8 @@
         Title="Reorder Pages" Height="650" Width="780"
         WindowStartupLocation="CenterOwner"
         SystemBackdropType="Mica" Background="Transparent"
-        Icon="/Resources/FlyShelfLogo.ico">
+        Icon="/Resources/FlyShelfLogo.ico"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
     
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="32" ResizeBorderThickness="6" CornerRadius="8" GlassFrameThickness="-1" />

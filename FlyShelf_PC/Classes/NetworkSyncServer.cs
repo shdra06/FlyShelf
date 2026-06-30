@@ -270,7 +270,7 @@ namespace FlyShelf.Classes
                 if (socket.LocalEndPoint is System.Net.IPEndPoint ep)
                     sanBuilder.AddIpAddress(ep.Address);
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             req.CertificateExtensions.Add(sanBuilder.Build());
 
             // Valid for 2 years
@@ -336,7 +336,7 @@ namespace FlyShelf.Classes
                     }
                 }, System.Windows.Threading.DispatcherPriority.Normal, System.Threading.CancellationToken.None, TimeSpan.FromSeconds(2));
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             return paths;
         }
 
@@ -439,6 +439,7 @@ namespace FlyShelf.Classes
         /// </summary>
         private static async Task WriteJsonResponse(HttpListenerResponse res, bool ok, string message)
         {
+            message = message?.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r");
             var b = Encoding.UTF8.GetBytes($"{{\"ok\":{(ok ? "true" : "false")},\"message\":\"{message}\"}}");
             res.ContentType = "application/json";
             await res.OutputStream.WriteAsync(b, 0, b.Length);

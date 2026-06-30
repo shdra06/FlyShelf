@@ -60,7 +60,7 @@ namespace FlyShelf.Windows
                     FlyShelf.Classes.NativeMethods.DwmSetWindowAttribute(hwnd, FlyShelf.Classes.NativeMethods.DWMWA_BORDER_COLOR, ref colorNone, sizeof(int));
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             FlyShelf.Classes.NativeMethods.ApplyWindowBackdropAndBackground(this);
         }
 
@@ -272,12 +272,12 @@ namespace FlyShelf.Windows
 
                     ToastWindow.ShowToast($"Pasted {emoji}");
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
         }
 
         private void EmojiSearchBox_TextChanged(object sender, TextChangedEventArgs e) => FilterEmojis();
-        private void Header_MouseDown(object sender, MouseButtonEventArgs e) { if (e.LeftButton == MouseButtonState.Pressed) try { DragMove(); } catch { } }
+        private void Header_MouseDown(object sender, MouseButtonEventArgs e) { if (e.LeftButton == MouseButtonState.Pressed) try { DragMove(); } catch { } /* Best-effort: failure is acceptable */ }
         private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
         private void Window_Deactivated(object sender, EventArgs e)
@@ -285,7 +285,7 @@ namespace FlyShelf.Windows
             // Only auto-close when NOT pinned; pinned emoji picker stays open
             if (!_isPinned)
             {
-                try { if (IsLoaded) Close(); } catch { }
+                try { if (IsLoaded) Close(); } catch { } // Best-effort: failure is acceptable
             }
         }
     }

@@ -129,7 +129,7 @@ namespace FlyShelf.Classes
                         }
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
                 return false;
             }
         }

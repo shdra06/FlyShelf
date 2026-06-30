@@ -81,10 +81,10 @@ namespace FlyShelf.Classes
                 Logger.LogAction("SYNC_GATE", "Ignored loopback chunk finalization from self");
                 if (_chunkSessions.TryRemove(sessionId, out string gateChunkDir))
                 {
-                    try { if (Directory.Exists(gateChunkDir)) Directory.Delete(gateChunkDir, true); } catch { }
+                    try { if (Directory.Exists(gateChunkDir)) Directory.Delete(gateChunkDir, true); } catch { } // Best-effort: failure is acceptable
                 }
                 res.StatusCode = 200;
-                try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { }
+                try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { } // Best-effort: failure is acceptable
                 res.Close();
                 return;
             }
@@ -95,10 +95,10 @@ namespace FlyShelf.Classes
                 // Clean up chunk temp directory so it doesn't accumulate
                 if (_chunkSessions.TryRemove(sessionId, out string gateChunkDir))
                 {
-                    try { if (Directory.Exists(gateChunkDir)) Directory.Delete(gateChunkDir, true); } catch { }
+                    try { if (Directory.Exists(gateChunkDir)) Directory.Delete(gateChunkDir, true); } catch { } // Best-effort: failure is acceptable
                 }
                 res.StatusCode = 200;
-                try { await WriteJsonResponse(res, true, "sync_paused"); } catch { }
+                try { await WriteJsonResponse(res, true, "sync_paused"); } catch { } // Best-effort: failure is acceptable
                 res.Close();
                 return;
             }
@@ -113,20 +113,20 @@ namespace FlyShelf.Classes
                 string rawName = "uploaded_file.dat";
                 if (!string.IsNullOrEmpty(encodedName))
                 {
-                    try { rawName = Path.GetFileName(Uri.UnescapeDataString(encodedName)); } catch { }
+                    try { rawName = Path.GetFileName(Uri.UnescapeDataString(encodedName)); } catch { } // Best-effort: failure is acceptable
                 }
                 if (string.IsNullOrWhiteSpace(rawName)) rawName = "uploaded_file.dat";
 
                 if (!string.IsNullOrEmpty(batchName))
                 {
-                    try { batchName = Path.GetFileName(Uri.UnescapeDataString(batchName)); } catch { }
+                    try { batchName = Path.GetFileName(Uri.UnescapeDataString(batchName)); } catch { } // Best-effort: failure is acceptable
                 }
                 if (string.IsNullOrWhiteSpace(batchName)) batchName = "FlyShelf_Chunked_Transfer";
 
                 string sourceDevice = req.Headers["X-Source-Device"] ?? "Remote";
                 if (!string.IsNullOrEmpty(sourceDevice))
                 {
-                    try { sourceDevice = Path.GetFileName(Uri.UnescapeDataString(sourceDevice)); } catch { }
+                    try { sourceDevice = Path.GetFileName(Uri.UnescapeDataString(sourceDevice)); } catch { } // Best-effort: failure is acceptable
                 }
                 if (string.IsNullOrWhiteSpace(sourceDevice)) sourceDevice = "Remote";
 
@@ -181,8 +181,8 @@ namespace FlyShelf.Classes
                 var fileInfo = new FileInfo(finalPath);
                 if (fileInfo.Length > 50L * 1024 * 1024 && !LicenseManager.IsPro)
                 {
-                    try { File.Delete(finalPath); } catch { }
-                    try { Directory.Delete(chunkDir, true); } catch { }
+                    try { File.Delete(finalPath); } catch { } // Best-effort: failure is acceptable
+                    try { Directory.Delete(chunkDir, true); } catch { } // Best-effort: failure is acceptable
                     _chunkSessions.TryRemove(sessionId, out _);
 
                     res.StatusCode = 413;
@@ -204,11 +204,11 @@ namespace FlyShelf.Classes
                 }
                 if (originalDate.HasValue)
                 {
-                    try { File.SetCreationTime(finalPath, originalDate.Value); File.SetLastWriteTime(finalPath, originalDate.Value); } catch { }
+                    try { File.SetCreationTime(finalPath, originalDate.Value); File.SetLastWriteTime(finalPath, originalDate.Value); } catch { } // Best-effort: failure is acceptable
                 }
 
                 // Cleanup temp chunks
-                try { Directory.Delete(chunkDir, true); } catch { }
+                try { Directory.Delete(chunkDir, true); } catch { } // Best-effort: failure is acceptable
                 _chunkSessions.TryRemove(sessionId, out _);
 
                 string sizeStr = fileInfo.Length > 1_073_741_824 ? $"{fileInfo.Length / 1_073_741_824.0:F1} GB" : $"{fileInfo.Length / 1_048_576.0:F1} MB";
@@ -239,7 +239,7 @@ namespace FlyShelf.Classes
                         // Persist history so the synced assembled chunk file survives app restarts
                         _viewModel.PersistHistoryPublic();
                     }
-                    catch { }
+                    catch (Exception ex) { Logger.LogAction("SYNC", $"Failed to add synced chunk to shelf: {ex.Message}"); }
                 });
 
                 // Also track in batch for consistency 
@@ -279,7 +279,7 @@ namespace FlyShelf.Classes
                 string fileName = req.QueryString["name"] ?? "";
                 if (!string.IsNullOrEmpty(fileName))
                 {
-                    try { fileName = Path.GetFileName(Uri.UnescapeDataString(fileName)); } catch { }
+                    try { fileName = Path.GetFileName(Uri.UnescapeDataString(fileName)); } catch { } // Best-effort: failure is acceptable
                 }
                 if (string.IsNullOrWhiteSpace(fileName)) fileName = $"document_{DateTime.Now.Ticks}.docx";
 
@@ -340,7 +340,7 @@ namespace FlyShelf.Classes
                             word.Visible = false;
                             word.DisplayAlerts = 0;           // wdAlertsNone — suppress ALL dialogs
                             word.AutomationSecurity = 3;       // msoAutomationSecurityForceDisable
-                            try { word.Options.DoNotPromptForConvert = true; } catch { }
+                            try { word.Options.DoNotPromptForConvert = true; } catch { } // Best-effort: failure is acceptable
 
                             dynamic doc = word.Documents.Open(
                                 inputPath,          // FileName
@@ -372,7 +372,7 @@ namespace FlyShelf.Classes
                             System.Runtime.InteropServices.Marshal.ReleaseComObject(word);
                         }
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }
 
                 if (converted && File.Exists(pdfPath))
@@ -396,7 +396,7 @@ namespace FlyShelf.Classes
                     res.ContentType = "application/json; charset=utf-8";
                     res.ContentLength64 = buffer.Length;
                     res.StatusCode = 200;
-                    try { res.OutputStream.Write(buffer, 0, buffer.Length); } catch { }
+                    try { res.OutputStream.Write(buffer, 0, buffer.Length); } catch { } // Best-effort: failure is acceptable
                 }
                 else
                 {
@@ -405,7 +405,7 @@ namespace FlyShelf.Classes
                     res.ContentType = "application/json; charset=utf-8";
                     res.ContentLength64 = buffer.Length;
                     res.StatusCode = 500;
-                    try { res.OutputStream.Write(buffer, 0, buffer.Length); } catch { }
+                    try { res.OutputStream.Write(buffer, 0, buffer.Length); } catch { } // Best-effort: failure is acceptable
                 }
             }
             catch (Exception ex)
@@ -496,7 +496,7 @@ namespace FlyShelf.Classes
                                 {
                                     File.SetCreationTime(finalPath, applyDate.Value);
                                     File.SetLastWriteTime(finalPath, applyDate.Value);
-                                } catch { }
+                                } catch { } // Best-effort: failure is acceptable
                             }
 
                             return finalPath;
@@ -510,7 +510,7 @@ namespace FlyShelf.Classes
             }
             finally
             {
-                try { if (File.Exists(tempFilePath)) File.Delete(tempFilePath); } catch { }
+                try { if (File.Exists(tempFilePath)) File.Delete(tempFilePath); } catch { } // Best-effort: failure is acceptable
             }
             return null;
         }
@@ -610,7 +610,7 @@ namespace FlyShelf.Classes
                                 }
                             }
                         }
-                        catch {}
+                        catch {} // Best-effort: failure is acceptable
                     }
 
                     // Download if not resolved locally
@@ -750,7 +750,7 @@ namespace FlyShelf.Classes
                             File.Delete(tempFile);
                         }
                     }
-                    catch {}
+                    catch {} // Best-effort: failure is acceptable
                 }
 
                 if (mergeSuccess && File.Exists(outputPath))

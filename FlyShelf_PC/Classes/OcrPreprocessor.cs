@@ -52,6 +52,10 @@ namespace FlyShelf.Classes
         {
             var variants = new List<(SoftwareBitmap bitmap, string name)>();
 
+            // Adaptive: for large images (>4 megapixels), use only the most effective
+            // 4 variants to reduce peak memory usage from ~256MB to ~128MB.
+            bool isLargeImage = (long)input.PixelWidth * input.PixelHeight > 4_000_000;
+
             // Variant 1: Enhanced (highlight neutralization + contrast stretch)
             // Best for: light backgrounds with colored row highlights (tables, spreadsheets)
             try
@@ -103,6 +107,7 @@ namespace FlyShelf.Classes
             }
 
             // Variant 5: Simple inversion without highlight neutralization
+            if (!isLargeImage)
             try
             {
                 variants.Add((InvertColors(input), "InvertedOnly"));
@@ -127,6 +132,7 @@ namespace FlyShelf.Classes
             // Variant 7: Inverted + Bold (morphological text thickening)
             // Thin text strokes (especially '%' character with tiny circles and diagonal)
             // are too few pixels for OCR to recognize. Bolding doubles the stroke width.
+            if (!isLargeImage)
             try
             {
                 variants.Add((InvertAndBolden(input), "InvertedBold"));
@@ -138,6 +144,7 @@ namespace FlyShelf.Classes
 
             // Variant 8: Grayscale with aggressive contrast stretch
             // Maximum dynamic range — 0th/100th percentile stretch
+            if (!isLargeImage)
             try
             {
                 variants.Add((GrayscaleMaxContrast(input), "GrayscaleStretch"));
@@ -156,7 +163,7 @@ namespace FlyShelf.Classes
                         BitmapPixelFormat.Bgra8, BitmapAlphaMode.Premultiplied);
                     variants.Add((copy, "Original"));
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
 
             return variants.ToArray();

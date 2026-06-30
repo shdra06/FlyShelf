@@ -81,8 +81,8 @@ namespace FlyShelf.Classes
         /// </summary>
         public void Stop()
         {
-            try { _cts?.Cancel(); } catch { }
-            try { _listener?.Close(); _listener?.Dispose(); } catch { }
+            try { _cts?.Cancel(); } catch { } // Best-effort: failure is acceptable
+            try { _listener?.Close(); _listener?.Dispose(); } catch { } // Best-effort: failure is acceptable
             _listener = null;
         }
 
@@ -154,7 +154,7 @@ namespace FlyShelf.Classes
                     mcast.JoinMulticastGroup(IPAddress.Parse(NEARBY_MULTICAST));
                     await mcast.SendAsync(data, data.Length, new IPEndPoint(IPAddress.Parse(NEARBY_MULTICAST), NEARBY_PORT));
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
 
                 Logger.LogAction("NEARBY", $"Broadcast probe sent on {interfaces.Count} interface(s)");
             }
@@ -176,7 +176,7 @@ namespace FlyShelf.Classes
                 _listener.Client.Bind(new IPEndPoint(IPAddress.Any, NEARBY_PORT));
 
                 // Join multicast group
-                try { _listener.JoinMulticastGroup(IPAddress.Parse(NEARBY_MULTICAST)); } catch { }
+                try { _listener.JoinMulticastGroup(IPAddress.Parse(NEARBY_MULTICAST)); } catch { } // Best-effort: failure is acceptable
 
                 while (!ct.IsCancellationRequested)
                 {
@@ -265,7 +265,7 @@ namespace FlyShelf.Classes
                 using var udp = new UdpClient();
                 await udp.SendAsync(data, data.Length, new IPEndPoint(targetIp, NEARBY_PORT));
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void RecordDiscovery(string deviceId, string deviceName, string ip, int httpPort, int transferPort, string deviceType = "PC")
@@ -378,22 +378,23 @@ namespace FlyShelf.Classes
         }
 
         // ═══ HMAC SIGNING ═══
-        // Simple HMAC to verify probes come from genuine FlyShelf instances.
-        // Uses a hard-coded app key — not meant for cryptographic security,
-        // just to filter out random UDP noise.
+        // HMAC verifies probes come from genuine FlyShelf instances.
+        // Uses a composite key: app-wide base + device-specific pairing key
+        // to prevent spoofing by other FlyShelf instances on the LAN.
 
-        private const string APP_KEY = "FlyShelf_NearbyDiscovery_2025_Key";
+        private const string APP_KEY_BASE = "FlyShelf_NearbyDiscovery_2025_Key";
 
-        private static string ComputeProbeHmac(string deviceId)
+        private static string ComputeProbeHmac(string deviceId, string pairingKey = "")
         {
-            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(APP_KEY));
+            string compositeKey = APP_KEY_BASE + (string.IsNullOrEmpty(pairingKey) ? "" : "_" + pairingKey);
+            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(compositeKey));
             byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(deviceId));
             return Convert.ToHexString(hash).Substring(0, 16).ToLower();
         }
 
-        private static bool VerifyProbeHmac(string deviceId, string hmacStr)
+        private static bool VerifyProbeHmac(string deviceId, string hmacStr, string pairingKey = "")
         {
-            string expected = ComputeProbeHmac(deviceId);
+            string expected = ComputeProbeHmac(deviceId, pairingKey);
             return string.Equals(expected, hmacStr, StringComparison.OrdinalIgnoreCase);
         }
     }

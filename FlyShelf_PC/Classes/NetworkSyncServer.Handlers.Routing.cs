@@ -97,10 +97,10 @@ namespace FlyShelf.Classes
                         var globalUri = new Uri(CloudDiscoveryManager.CachedGlobalUrl);
                         if (host == globalUri.Host.ToLowerInvariant()) return origin;
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             return null; // Untrusted origin — no CORS header
         }
@@ -141,7 +141,7 @@ namespace FlyShelf.Classes
                     res.StatusCode = 429;
                     byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"429 Too Many Requests\"}");
                     res.ContentType = "application/json";
-                    try { res.OutputStream.Write(err, 0, err.Length); } catch { }
+                    try { res.OutputStream.Write(err, 0, err.Length); } catch { } // Best-effort: failure is acceptable
                     res.Close();
                     return;
                 }
@@ -361,7 +361,7 @@ namespace FlyShelf.Classes
                             else { res.StatusCode = 204; }
                         }
                         catch { res.StatusCode = 500; }
-                        finally { lock (_longPollLock) { _longPollWaiters.Remove(tcs); } try { res.Close(); } catch { } }
+                        finally { lock (_longPollLock) { _longPollWaiters.Remove(tcs); } try { res.Close(); } catch { } /* Best-effort: failure is acceptable */ }
                     }
                     else if (path == "/api/events/stream" && req.HttpMethod == "GET")
                     {
@@ -394,8 +394,8 @@ namespace FlyShelf.Classes
             catch (Exception ex)
             {
                 Logger.LogAction("SERVER REQUEST FAULT", ex.Message);
-                try { res.StatusCode = 500; } catch { }
-                try { res.Close(); } catch { }
+                try { res.StatusCode = 500; } catch { } // Best-effort: failure is acceptable
+                try { res.Close(); } catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -422,7 +422,7 @@ namespace FlyShelf.Classes
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
                             Logger.LogAction("WS", $"Peer {peerDeviceId} closed WebSocket gracefully");
-                            try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None); } catch { }
+                            try { await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "bye", CancellationToken.None); } catch { } // Best-effort: failure is acceptable
                             return;
                         }
                         ms.Write(buffer, 0, result.Count);
@@ -538,6 +538,15 @@ namespace FlyShelf.Classes
                                     string tidStr = root.TryGetProperty("transferId", out var tiProp) ? tiProp.GetString() ?? "" : "";
                                     if (Guid.TryParse(tidStr, out Guid tid))
                                         LanTransferManager.Instance.HandlePeerComplete(tid);
+                                }
+                                // C1 fix: Handle TransferRetryRequest — receiver asking us to re-send
+                                else if (envelopeType == "TransferRetryRequest" && LanTransferManager.Instance != null)
+                                {
+                                    string tidStr = root.TryGetProperty("transferId", out var tiProp) ? tiProp.GetString() ?? "" : "";
+                                    string srcDeviceId = root.TryGetProperty("sourceDeviceId", out var sidProp) ? sidProp.GetString() ?? "" : "";
+                                    long bytesTransferred = root.TryGetProperty("bytesTransferred", out var btProp) ? btProp.GetInt64() : 0;
+                                    if (Guid.TryParse(tidStr, out Guid tid))
+                                        _ = Task.Run(() => LanTransferManager.Instance.HandleTransferRetryRequest(tid, srcDeviceId, bytesTransferred));
                                 }
                                 else if (envelopeType == "SyncFileStart")
                                 {
@@ -705,7 +714,7 @@ namespace FlyShelf.Classes
                                     catch (Exception)
                                     {
                                         // Fix #2: Clean up partial file when WebSocket dies mid-transfer
-                                        try { if (File.Exists(finalPath)) File.Delete(finalPath); } catch { }
+                                        try { if (File.Exists(finalPath)) File.Delete(finalPath); } catch { } // Best-effort: failure is acceptable
 
                                         if (placeholder != null)
                                         {

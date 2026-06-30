@@ -50,7 +50,7 @@ namespace FlyShelf.ViewModels
                 if ((DateTime.Now - _lastDeleteAnimTime).TotalMilliseconds > 300)
                 {
                     _lastDeleteAnimTime = DateTime.Now;
-                    try { FlyShelf.Classes.AnimationTriggerService.Instance.OnDelete(); } catch { }
+                    try { FlyShelf.Classes.AnimationTriggerService.Instance.OnDelete(); } catch { } // Best-effort: failure is acceptable
                 }
 
                 // Cleanup backing file + DB delete asynchronously in background
@@ -67,7 +67,7 @@ namespace FlyShelf.ViewModels
                         CleanupTempFile(zippedPath);
                         Classes.ClipboardHistoryManager.DeletePersistentImage(filePath, itemType);
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 });
             }
         }
@@ -112,7 +112,7 @@ namespace FlyShelf.ViewModels
                         CleanupTempFile(item.ZippedArchivePath);
                         Classes.ClipboardHistoryManager.DeletePersistentImage(item.FilePath, item.ItemType);
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }
             });
 
@@ -198,7 +198,7 @@ namespace FlyShelf.ViewModels
                             CleanupTempFile(item.ZippedArchivePath);
                             Classes.ClipboardHistoryManager.DeletePersistentImage(item.FilePath, item.ItemType);
                         }
-                        catch { }
+                        catch { } // Best-effort: failure is acceptable
                     }
                 });
             }
@@ -268,7 +268,7 @@ namespace FlyShelf.ViewModels
                     try
                     {
                         // Create backup before saving
-                        try { if (File.Exists(path)) File.Copy(path, path + ".bak", overwrite: true); } catch { }
+                        try { if (File.Exists(path)) File.Copy(path, path + ".bak", overwrite: true); } catch { } // Best-effort: failure is acceptable
                         var json = System.Text.Json.JsonSerializer.Serialize(pinned);
                         string tmpPath = path + ".tmp";
                         File.WriteAllText(tmpPath, json);
@@ -359,7 +359,7 @@ namespace FlyShelf.ViewModels
                                         var icon = GetIcon(capturedD.FilePath);
                                         if (icon != null) Application.Current.Dispatcher.InvokeAsync(() => capturedD.Icon = icon);
                                     }
-                                    catch { }
+                                    catch { } // Best-effort: failure is acceptable
                                 });
                             }
                             else if (d.ItemType == ClipboardItemType.Image && !string.IsNullOrEmpty(d.FilePath))
@@ -379,7 +379,7 @@ namespace FlyShelf.ViewModels
                                                 capturedD.IsLoadedHighQuality = !IsScrolling;
                                             });
                                         }
-                                    } catch { }
+                                    } catch { } // Best-effort: failure is acceptable
                                 });
                             }
                             pinnedToAdd.Add(d);
@@ -641,9 +641,9 @@ namespace FlyShelf.ViewModels
                 {
                     foreach (var (path, zippedPath, type) in filesToCleanup)
                     {
-                        try { CleanupTempFile(path); } catch { }
-                        try { CleanupTempFile(zippedPath); } catch { }
-                        try { Classes.ClipboardHistoryManager.DeletePersistentImage(path, type); } catch { }
+                        try { CleanupTempFile(path); } catch { } // Best-effort: failure is acceptable
+                        try { CleanupTempFile(zippedPath); } catch { } // Best-effort: failure is acceptable
+                        try { Classes.ClipboardHistoryManager.DeletePersistentImage(path, type); } catch { } // Best-effort: failure is acceptable
                     }
                 });
 
@@ -762,7 +762,7 @@ namespace FlyShelf.ViewModels
                     return true;
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             return false;
         }

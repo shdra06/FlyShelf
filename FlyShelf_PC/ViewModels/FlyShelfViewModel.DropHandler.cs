@@ -56,7 +56,7 @@ namespace FlyShelf.ViewModels
                     }
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             try
             {
@@ -70,7 +70,7 @@ namespace FlyShelf.ViewModels
                 if (bitmap != null && bitmap.CanFreeze && !bitmap.IsFrozen)
                     bitmap.Freeze(); // Frozen to be safe for background threads
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             if (bitmap == null && (files == null || files.Length == 0))
             {
@@ -81,7 +81,7 @@ namespace FlyShelf.ViewModels
                     if (string.IsNullOrEmpty(text) && data.GetDataPresent(DataFormats.Text))
                         text = data.GetData(DataFormats.Text) as string;
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
 
             // Route all heavy tasks, zipping, file-saving and collection processing to background thread
@@ -89,7 +89,7 @@ namespace FlyShelf.ViewModels
                 HandleDropInternal(files, bitmap, text, forceClipboardSync, skipCloudSync, sourceDevice, sourceDeviceType, transferMethod));
         }
 
-        internal void HandleDropInternal(string[]? files, BitmapSource? bitmap, string? text, bool forceClipboardSync, bool skipCloudSync, string? sourceDevice = null, string? sourceDeviceType = null, string? transferMethod = null)
+        internal void HandleDropInternal(string[]? files, BitmapSource? bitmap, string? text, bool forceClipboardSync, bool skipCloudSync, string? sourceDevice = null, string? sourceDeviceType = null, string? transferMethod = null, string? sourceAppName = null, BitmapSource? sourceAppIcon = null)
         {
             if (files != null && files.Length > 0)
             {
@@ -123,6 +123,8 @@ namespace FlyShelf.ViewModels
                     if (sourceDevice != null) groupItem.SourceDeviceName = sourceDevice;
                     if (sourceDeviceType != null) groupItem.SourceDeviceType = sourceDeviceType;
                     if (transferMethod != null) groupItem.TransferMethod = transferMethod;
+                    if (!string.IsNullOrEmpty(sourceAppName)) groupItem.SourceAppName = sourceAppName;
+                    if (sourceAppIcon != null) groupItem.SourceAppIcon = sourceAppIcon;
                     
                     Application.Current.Dispatcher.InvokeAsync(() =>
                     {
@@ -160,6 +162,8 @@ namespace FlyShelf.ViewModels
                     if (sourceDevice != null) item.SourceDeviceName = sourceDevice;
                     if (sourceDeviceType != null) item.SourceDeviceType = sourceDeviceType;
                     if (transferMethod != null) item.TransferMethod = transferMethod;
+                    if (!string.IsNullOrEmpty(sourceAppName)) item.SourceAppName = sourceAppName;
+                    if (sourceAppIcon != null) item.SourceAppIcon = sourceAppIcon;
                     newItems.Add((item, file));
                 }
 
@@ -226,7 +230,7 @@ namespace FlyShelf.ViewModels
                                             });
                                         }
                                     }
-                                    catch { }
+                                    catch { } // Best-effort: failure is acceptable
                                 }
                                 else
                                 {
@@ -267,7 +271,7 @@ namespace FlyShelf.ViewModels
 
                                 try { using var probe = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite); }
                                 catch (IOException) { continue; }
-                                catch { }
+                                catch { } // Best-effort: failure is acceptable
 
                                 await SyncFileToDevicesAsync(filePath, item, label: "FILE");
                             }
@@ -294,6 +298,8 @@ namespace FlyShelf.ViewModels
                 if (sourceDevice != null) item.SourceDeviceName = sourceDevice;
                 if (sourceDeviceType != null) item.SourceDeviceType = sourceDeviceType;
                 if (transferMethod != null) item.TransferMethod = transferMethod;
+                if (!string.IsNullOrEmpty(sourceAppName)) item.SourceAppName = sourceAppName;
+                if (sourceAppIcon != null) item.SourceAppIcon = sourceAppIcon;
                 item._suppressPropertyNotifications = true; // PERF: No listeners yet
                 item.ItemType = ClipboardItemType.Image;
                 item.FileName = $"Screenshot {DateTime.Now:yyyy-MM-dd HHmmss}";
@@ -585,7 +591,7 @@ namespace FlyShelf.ViewModels
                         // Handle file:// and file:/// URI schemes with percent-encoded chars
                         if (possiblePath.StartsWith("file://", StringComparison.OrdinalIgnoreCase))
                         {
-                            try { possiblePath = new Uri(possiblePath).LocalPath; } catch { }
+                            try { possiblePath = new Uri(possiblePath).LocalPath; } catch { } // Best-effort: failure is acceptable
                         }
 
                         // Normalize path separators (VS Code on Windows sometimes uses forward slashes)
@@ -600,7 +606,7 @@ namespace FlyShelf.ViewModels
                             item = new ClipboardItem(possiblePath);
                         }
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
 
                     if (item == null)
                     {
@@ -645,7 +651,7 @@ namespace FlyShelf.ViewModels
                                     if (pathExt == ".MD")
                                     {
                                         // Read file contents if the file actually exists (best-effort)
-                                        try { if (File.Exists(trimmedText)) item.RawContent = File.ReadAllText(trimmedText); } catch { }
+                                        try { if (File.Exists(trimmedText)) item.RawContent = File.ReadAllText(trimmedText); } catch { } // Best-effort: failure is acceptable
                                         item.GenerateMarkdownIcon();
                                     }
 
@@ -659,9 +665,20 @@ namespace FlyShelf.ViewModels
                                     ? capturedText.Substring(0, 10000) 
                                     : capturedText;
 
-                                bool isCode = IsProperCode(classificationSample);
-                            
-                                if (isCode)
+                                // Markdown detection FIRST — IsProperCode() treats # headings
+                                // as code indicators, so markdown must be checked before code.
+                                bool isMarkdown = FlyShelf.Classes.MarkdownDetector.IsMarkdown(classificationSample);
+
+                                if (isMarkdown)
+                                {
+                                    item.ItemType = ClipboardItemType.Text;
+                                    item.RawContent = capturedText;
+                                    item.Extension = "MARKDOWN";
+                                    string mdDisplay = capturedText.Trim();
+                                    item.FileName = mdDisplay.Length > 5000 ? mdDisplay.Substring(0, 5000) + "..." : mdDisplay;
+                                    item.GenerateMarkdownIcon();
+                                }
+                                else if (IsProperCode(classificationSample))
                                 {
                                     item.ItemType = ClipboardItemType.Code;
                                     item.RawContent = capturedText;
@@ -742,11 +759,48 @@ namespace FlyShelf.ViewModels
                         item._suppressPropertyNotifications = true; // PERF: suppress during construction
                     }
 
+                    // ═══ SMART CONTENT DETECTION ═══
+                    if (item.ItemType == ClipboardItemType.Text && !item.IsPassword)
+                    {
+                        string sample = (item.RawContent ?? item.FileName ?? "").Trim();
+                        if (string.IsNullOrEmpty(sample) && !string.IsNullOrEmpty(capturedText))
+                            sample = capturedText.Trim();
+                        
+                        if (FlyShelf.Classes.SmartContentDetector.IsValidJson(sample))
+                        {
+                            item.Extension = "JSON";
+                            item.SmartBadge = "JSON";
+                        }
+                        else if (FlyShelf.Classes.SmartContentDetector.IsEpochTimestamp(sample))
+                        {
+                            item.SmartBadge = "EPOCH";
+                            item.IsEpochTimestamp = true;
+                        }
+                        else if (FlyShelf.Classes.SmartContentDetector.IsBase64(sample))
+                        {
+                            item.SmartBadge = "BASE64";
+                            item.IsBase64Content = true;
+                        }
+                        else if (FlyShelf.Classes.SmartContentDetector.IsMathExpression(sample))
+                        {
+                            item.SmartBadge = "MATH";
+                            item.IsMathExpression = true;
+                        }
+                        
+                        // These are non-exclusive — item can have email AND be text
+                        if (FlyShelf.Classes.SmartContentDetector.ContainsEmail(sample))
+                            item.HasEmail = true;
+                        if (FlyShelf.Classes.SmartContentDetector.ContainsPhoneNumber(sample))
+                            item.HasPhoneNumber = true;
+                    }
+
                     if (item != null)
                     {
                         if (sourceDevice != null) item.SourceDeviceName = sourceDevice;
                         if (sourceDeviceType != null) item.SourceDeviceType = sourceDeviceType;
                         if (transferMethod != null) item.TransferMethod = transferMethod;
+                        if (!string.IsNullOrEmpty(sourceAppName)) item.SourceAppName = sourceAppName;
+                        if (sourceAppIcon != null) item.SourceAppIcon = sourceAppIcon;
                     }
 
                     // PERF: Un-suppress before insert — item is about to enter the visual tree
@@ -900,7 +954,7 @@ namespace FlyShelf.ViewModels
                         }
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
 
             // FALLBACK: File missing or first call failed — use extension-based lookup.
@@ -961,7 +1015,7 @@ namespace FlyShelf.ViewModels
                         }
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
 
             return null;
@@ -1091,20 +1145,70 @@ namespace FlyShelf.ViewModels
             string[] words = trimmed.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             if (words.Length > 2) return false;
 
-            // If it's a known API key prefix
+            // ── NEGATIVE PATTERNS: things that are NOT passwords ──
+
             string lower = trimmed.ToLowerInvariant();
+
+            // File paths (e.g., "E:\Comfy-Desktop", "C:\Users\...", "/home/user/...")
+            if (trimmed.Contains(":\\") || trimmed.Contains(":/") || 
+                trimmed.StartsWith("\\\\") || trimmed.StartsWith("/") ||
+                trimmed.Contains("\\") || System.IO.Path.IsPathRooted(trimmed))
+                return false;
+
+            // URLs and URIs (e.g., "http://...", "https://...", "ftp://...", "localhost:3000")
+            if (lower.StartsWith("http://") || lower.StartsWith("https://") || 
+                lower.StartsWith("ftp://") || lower.StartsWith("file://") ||
+                lower.StartsWith("ws://") || lower.StartsWith("wss://") ||
+                lower.StartsWith("ssh://") || lower.StartsWith("git://") ||
+                lower.Contains("://") || lower.StartsWith("localhost") ||
+                lower.StartsWith("www."))
+                return false;
+
+            // Email addresses
+            if (trimmed.Contains("@") && trimmed.Contains(".") && !trimmed.Contains(" "))
+                return false;
+
+            // File extensions (e.g., "readme.md", "index.html", "package.json")
+            string[] commonExtensions = { ".txt", ".md", ".cs", ".ts", ".js", ".py", ".json", ".xml",
+                ".html", ".css", ".jpg", ".png", ".gif", ".pdf", ".exe", ".dll", ".zip",
+                ".config", ".yaml", ".yml", ".toml", ".log", ".bat", ".sh", ".ps1",
+                ".xaml", ".csproj", ".sln", ".gradle", ".kt", ".swift", ".dart" };
+            foreach (var ext in commonExtensions)
+            {
+                if (lower.EndsWith(ext)) return false;
+            }
+
+            // Common non-password words/phrases people copy
+            if (lower == "password" || lower == "username" || lower == "admin" ||
+                lower.StartsWith("hello") || lower.StartsWith("test") ||
+                lower.StartsWith("example") || lower.StartsWith("sample") ||
+                lower.StartsWith("version") || lower.StartsWith("release"))
+                return false;
+
+            // Pure numbers (phone numbers, IDs, etc.) -- not passwords
+            if (trimmed.All(c => char.IsDigit(c) || c == '-' || c == '+' || c == '(' || c == ')' || c == ' '))
+                return false;
+
+            // Plain English words: if it contains only letters and is a single word, skip
+            // (real passwords mix character types with randomness, not readable words)
+            if (words.Length == 1 && trimmed.All(char.IsLetter))
+                return false;
+
+            // ── POSITIVE PATTERNS: things that ARE passwords/keys ──
+
+            // Known API key prefixes (high confidence)
             if (lower.StartsWith("sk-") || lower.StartsWith("pk-") || lower.StartsWith("ghp_") || 
                 lower.StartsWith("key_") || lower.StartsWith("api_") || lower.StartsWith("token_") || 
                 lower.StartsWith("secret_") || lower.StartsWith("pwd_") || lower.StartsWith("passwd_") ||
-                lower.StartsWith("auth_"))
+                lower.StartsWith("auth_") || lower.StartsWith("bearer ") ||
+                lower.StartsWith("eyj"))  // JWT tokens start with base64 of {"
             {
                 return true;
             }
 
-            // Test each word
+            // Test each word for password-like entropy
             foreach (var w in words)
             {
-                // Basic entropy / password heuristics
                 bool hasUpper = w.Any(char.IsUpper);
                 bool hasLower = w.Any(char.IsLower);
                 bool hasDigit = w.Any(char.IsDigit);
@@ -1116,13 +1220,28 @@ namespace FlyShelf.ViewModels
                 if (hasDigit) charTypes++;
                 if (hasSymbol) charTypes++;
 
-                // If single word has at least 3 character types or mix of letters and digits and is reasonably long
-                if (charTypes >= 3 && w.Length >= 8) return true;
+                // Require ALL 4 character types for shorter strings, or 3+ for longer ones
+                // This prevents "MyFolder-123" (3 types) from triggering
+                if (charTypes >= 4 && w.Length >= 8) return true;
+                if (charTypes >= 3 && w.Length >= 12) return true;
 
-                // Typical API key or token: high length (e.g. >= 16 characters) consisting of alphanumeric/base64 without spaces
-                if (w.Length >= 16 && (hasUpper || hasDigit) && w.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' || c == '.' || c == '/' || c == '+'))
+                // High-entropy API key/token: 20+ chars, alphanumeric, with mixed case or digits
+                // But exclude anything with path separators
+                if (w.Length >= 20 && hasUpper && hasLower && hasDigit && 
+                    !w.Contains("\\") && !w.Contains("/") &&
+                    w.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_' || c == '+'))
                 {
-                    return true;
+                    // Extra check: ensure it's not just camelCase words (e.g., "MyApplicationSettings")
+                    // Real tokens have runs of random chars, not readable words
+                    int consecutiveDigits = 0;
+                    int maxConsecutiveDigits = 0;
+                    foreach (char c in w)
+                    {
+                        if (char.IsDigit(c)) { consecutiveDigits++; maxConsecutiveDigits = Math.Max(maxConsecutiveDigits, consecutiveDigits); }
+                        else consecutiveDigits = 0;
+                    }
+                    // Real API keys typically have digit runs or are mostly random
+                    if (maxConsecutiveDigits >= 2 || w.Count(char.IsDigit) >= 3) return true;
                 }
             }
 

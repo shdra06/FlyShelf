@@ -109,7 +109,7 @@ namespace FlyShelf.Classes
                 try
                 {
                     // Add random jitter (0-10s) to prevent thundering herd at synchronized boot
-                    int jitter = _jitterRng.Next(0, 10_000);
+                    int jitter = Random.Shared.Next(0, 10_000);
                     await Task.Delay(_discoveryBackoffMs + jitter, ct);
                 }
                 catch (OperationCanceledException) { return; }
@@ -170,8 +170,8 @@ namespace FlyShelf.Classes
             peer.ConsecutiveFailures = 0;
 
             // Close WebSocket
-            try { peer.WsCts?.Cancel(); } catch { }
-            try { peer.LiveSocket?.Dispose(); } catch { }
+            try { peer.WsCts?.Cancel(); } catch { } // Best-effort: failure is acceptable
+            try { peer.LiveSocket?.Dispose(); } catch { } // Best-effort: failure is acceptable
             peer.LiveSocket = null;
 
             // Fire event so UI updates immediately
@@ -194,7 +194,7 @@ namespace FlyShelf.Classes
         // Exponential backoff for DiscoveryLoop — prevents Firebase saturation when peers are offline
         private int _discoveryBackoffMs = DISCOVERY_MS; // Start at 30s, doubles up to DISCOVERY_MAX_MS
         private const int DISCOVERY_MAX_MS = 300_000;    // Cap at 5 minutes
-        private static readonly Random _jitterRng = new();
+
 
         /// <summary>
         /// Called when a data transfer to a peer fails. Increments failure count
@@ -227,8 +227,8 @@ namespace FlyShelf.Classes
             {
                 peer.IsAlive = false;
                 peer.ConsecutiveFailures = 0;
-                try { peer.WsCts?.Cancel(); } catch { }
-                try { peer.LiveSocket?.Dispose(); } catch { }
+                try { peer.WsCts?.Cancel(); } catch { } // Best-effort: failure is acceptable
+                try { peer.LiveSocket?.Dispose(); } catch { } // Best-effort: failure is acceptable
                 peer.LiveSocket = null;
             }
 
@@ -246,7 +246,7 @@ namespace FlyShelf.Classes
                 {
                     await CloudDiscoveryManager.PushTunnelUrl(globalUrl ?? "", true, localUrl, forceWrite: true);
                 }
-                catch { }
+                catch (Exception ex) { Logger.LogAction("PEER", $"PushTunnelUrl during recovery failed: {ex.Message}"); }
             }
 
             // Try cached URLs first, then Firebase

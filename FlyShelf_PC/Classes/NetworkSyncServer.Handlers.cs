@@ -43,8 +43,8 @@ namespace FlyShelf.Classes
                     res.OutputStream.Write(err, 0, err.Length);
                 }
             }
-            catch (Exception ex) { Logger.LogAction("HTML ERROR", ex.Message); try { res.StatusCode = 500; } catch { } }
-            finally { try { res.Close(); } catch { } }
+            catch (Exception ex) { Logger.LogAction("HTML ERROR", ex.Message); try { res.StatusCode = 500; } catch { } /* Best-effort: failure is acceptable */ }
+            finally { try { res.Close(); } catch { } /* Best-effort: failure is acceptable */ }
         }
 
         // ═ ═ ═ RESPONSE CACHE: Avoid re-serializing on rapid polls ═ ═ ═
@@ -67,7 +67,7 @@ namespace FlyShelf.Classes
                 {
                     res.ContentType = "application/json; charset=utf-8";
                     res.ContentLength64 = cached.Length;
-                    try { res.OutputStream.Write(cached, 0, cached.Length); } catch { }
+                    try { res.OutputStream.Write(cached, 0, cached.Length); } catch { } // Best-effort: failure is acceptable
                     res.Close();
                     return;
                 }
@@ -116,10 +116,10 @@ namespace FlyShelf.Classes
                 var freshCache = _cachedSyncJson!; // Capture reference after Dispatcher.Invoke
                 res.ContentType = "application/json; charset=utf-8";
                 res.ContentLength64 = freshCache.Length;
-                try { res.OutputStream.Write(freshCache, 0, freshCache.Length); } catch { }
+                try { res.OutputStream.Write(freshCache, 0, freshCache.Length); } catch { } // Best-effort: failure is acceptable
                 res.Close();
             }
-            catch (Exception ex) { Logger.LogAction("SYNC_SERVE", $"ServeClipboardData failed: {ex.Message}"); try { res.StatusCode = 500; } catch { } try { res.Close(); } catch { } }
+            catch (Exception ex) { Logger.LogAction("SYNC_SERVE", $"ServeClipboardData failed: {ex.Message}"); try { res.StatusCode = 500; } catch { } /* Best-effort */ try { res.Close(); } catch { } /* Best-effort */ }
         }
 
         private async Task HandleTextUpload(HttpListenerRequest req, HttpListenerResponse res)
@@ -128,7 +128,7 @@ namespace FlyShelf.Classes
             if (!SettingsManager.Current.EnableIncomingSync)
             {
                 res.StatusCode = 200;
-                try { await WriteJsonResponse(res, true, "sync_paused"); } catch { }
+                try { await WriteJsonResponse(res, true, "sync_paused"); } catch { } // Best-effort: failure is acceptable
                 res.Close();
                 return;
             }
@@ -219,7 +219,7 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("SYNC_GATE", "Ignored loopback sync_text from self");
                 res.StatusCode = 200;
-                try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { }
+                try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { } // Best-effort: failure is acceptable
                 res.Close();
                 return;
             }
@@ -258,7 +258,7 @@ namespace FlyShelf.Classes
                     {
                         possiblePath = new Uri(possiblePath).LocalPath;
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }
 
                 bool isPath = false;
@@ -288,7 +288,7 @@ namespace FlyShelf.Classes
                         }
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
 
                 ClipboardItem clip;
                 if (isPath)
@@ -311,7 +311,7 @@ namespace FlyShelf.Classes
                                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() => clip.Icon = icon);
                             }
                         }
-                        catch { }
+                        catch { } // Best-effort: failure is acceptable
                     });
                 }
                 else
@@ -366,7 +366,7 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("SYNC_GATE", "Ignored loopback sync_file from self");
                 res.StatusCode = 200;
-                try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { }
+                try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { } // Best-effort: failure is acceptable
                 res.Close();
                 return;
             }
@@ -387,7 +387,7 @@ namespace FlyShelf.Classes
             if (!SettingsManager.Current.EnableIncomingSync)
             {
                 res.StatusCode = 200;
-                try { await WriteJsonResponse(res, true, "sync_paused"); } catch { }
+                try { await WriteJsonResponse(res, true, "sync_paused"); } catch { } // Best-effort: failure is acceptable
                 res.Close();
                 return;
             }
@@ -403,7 +403,7 @@ namespace FlyShelf.Classes
                 if (string.IsNullOrEmpty(sourceDevice)) sourceDevice = req.QueryString["sourceDevice"];
                 if (!string.IsNullOrEmpty(sourceDevice))
                 {
-                    try { sourceDevice = Path.GetFileName(Uri.UnescapeDataString(sourceDevice)); } catch { }
+                    try { sourceDevice = Path.GetFileName(Uri.UnescapeDataString(sourceDevice)); } catch { } // Best-effort: failure is acceptable
                 }
                 if (string.IsNullOrWhiteSpace(sourceDevice))
                 {
@@ -419,7 +419,7 @@ namespace FlyShelf.Classes
                 string rawName = "uploaded_file.dat";
                 if (!string.IsNullOrEmpty(encodedName))
                 {
-                    try { rawName = Path.GetFileName(Uri.UnescapeDataString(encodedName)); } catch { }
+                    try { rawName = Path.GetFileName(Uri.UnescapeDataString(encodedName)); } catch { } // Best-effort: failure is acceptable
                 }
                 if (string.IsNullOrWhiteSpace(rawName)) rawName = "uploaded_file.dat";
 
@@ -427,7 +427,7 @@ namespace FlyShelf.Classes
                 if (totalBytes > 50L * 1024 * 1024 && !LicenseManager.IsPro)
                 {
                     res.StatusCode = 413; // Payload Too Large
-                    try { await WriteJsonResponse(res, false, "File size exceeds 50 MB limit for Free tier."); } catch { }
+                    try { await WriteJsonResponse(res, false, "File size exceeds 50 MB limit for Free tier."); } catch { } // Best-effort: failure is acceptable
                     res.Close();
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                         FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming transfer rejected: file exceeds 50 MB Free tier limit.");
@@ -504,7 +504,7 @@ namespace FlyShelf.Classes
                     try
                     {
                         applyDate = DateTimeOffset.FromUnixTimeMilliseconds(epochMs).UtcDateTime.ToLocalTime();
-                    } catch { }
+                    } catch { } // Best-effort: failure is acceptable
                 }
 
                 string? finalPath = null;
@@ -534,7 +534,7 @@ namespace FlyShelf.Classes
                         {
                             File.SetCreationTime(finalPath, applyDate.Value);
                             File.SetLastWriteTime(finalPath, applyDate.Value);
-                        } catch { }
+                        } catch { } // Best-effort: failure is acceptable
                     }
                 }
 
@@ -585,7 +585,7 @@ namespace FlyShelf.Classes
             {
                 if (!string.IsNullOrEmpty(tempFile) && File.Exists(tempFile))
                 {
-                    try { File.Delete(tempFile); } catch { }
+                    try { File.Delete(tempFile); } catch { } // Best-effort: failure is acceptable
                 }
                 res.Close();
             }
@@ -604,7 +604,7 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("SYNC_GATE", "Ignored loopback archive_upload from self");
                 res.StatusCode = 200;
-                try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { }
+                try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { } // Best-effort: failure is acceptable
                 res.Close();
                 return;
             }
@@ -625,7 +625,7 @@ namespace FlyShelf.Classes
             if (!SettingsManager.Current.EnableIncomingSync)
             {
                 res.StatusCode = 200;
-                try { await WriteJsonResponse(res, true, "sync_paused"); } catch { }
+                try { await WriteJsonResponse(res, true, "sync_paused"); } catch { } // Best-effort: failure is acceptable
                 res.Close();
                 return;
             }
@@ -634,7 +634,7 @@ namespace FlyShelf.Classes
             if (totalBytes > 50L * 1024 * 1024 && !LicenseManager.IsPro)
             {
                 res.StatusCode = 413;
-                try { await WriteJsonResponse(res, false, "File size exceeds 50 MB limit for Free tier."); } catch { }
+                try { await WriteJsonResponse(res, false, "File size exceeds 50 MB limit for Free tier."); } catch { } // Best-effort: failure is acceptable
                 res.Close();
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                     FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming archive rejected: exceeds 50 MB Free tier limit.");
@@ -647,14 +647,14 @@ namespace FlyShelf.Classes
                 string batchName = req.Headers["X-Batch-Name"];
                 if (!string.IsNullOrEmpty(batchName))
                 {
-                    try { batchName = Path.GetFileName(Uri.UnescapeDataString(batchName)); } catch { }
+                    try { batchName = Path.GetFileName(Uri.UnescapeDataString(batchName)); } catch { } // Best-effort: failure is acceptable
                 }
                 if (string.IsNullOrWhiteSpace(batchName)) batchName = "FlyShelf_Mobile_Transfer";
                 
                 string archiveSource = req.Headers["X-Source-Device"] ?? req.QueryString["sourceDevice"] ?? "Mobile";
                 if (!string.IsNullOrEmpty(archiveSource))
                 {
-                    try { archiveSource = Path.GetFileName(Uri.UnescapeDataString(archiveSource)); } catch { }
+                    try { archiveSource = Path.GetFileName(Uri.UnescapeDataString(archiveSource)); } catch { } // Best-effort: failure is acceptable
                 }
                 if (string.IsNullOrWhiteSpace(archiveSource)) archiveSource = "Mobile";
 
@@ -674,7 +674,7 @@ namespace FlyShelf.Classes
                 string rawName = "uploaded_media.dat";
                 if (!string.IsNullOrEmpty(encodedName))
                 {
-                    try { rawName = Path.GetFileName(Uri.UnescapeDataString(encodedName)); } catch { }
+                    try { rawName = Path.GetFileName(Uri.UnescapeDataString(encodedName)); } catch { } // Best-effort: failure is acceptable
                 }
                 if (string.IsNullOrWhiteSpace(rawName)) rawName = "uploaded_media.dat";
 
@@ -710,7 +710,7 @@ namespace FlyShelf.Classes
                             if (archiveTotalRead > maxArchiveSize)
                             {
                                 res.StatusCode = 413;
-                                try { await WriteJsonResponse(res, false, "Archive exceeds 500 MB size limit."); } catch { }
+                                try { await WriteJsonResponse(res, false, "Archive exceeds 500 MB size limit."); } catch { } // Best-effort: failure is acceptable
                                 return;
                             }
                             await fs.WriteAsync(copyBuf, 0, copyRead);
@@ -730,7 +730,7 @@ namespace FlyShelf.Classes
                     {
                         File.SetCreationTime(finalPath, originalDate.Value);
                         File.SetLastWriteTime(finalPath, originalDate.Value);
-                    } catch { }
+                    } catch { } // Best-effort: failure is acceptable
                 }
 
                 res.StatusCode = 200;
@@ -798,7 +798,7 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("SYNC_GATE", "Ignored loopback relay_upload from self");
                 res.StatusCode = 200;
-                try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { }
+                try { await WriteJsonResponse(res, true, "loopback_ignored"); } catch { } // Best-effort: failure is acceptable
                 res.Close();
                 return;
             }
@@ -819,7 +819,7 @@ namespace FlyShelf.Classes
             if (!SettingsManager.Current.EnableIncomingSync)
             {
                 res.StatusCode = 200;
-                try { await WriteJsonResponse(res, true, "sync_paused"); } catch { }
+                try { await WriteJsonResponse(res, true, "sync_paused"); } catch { } // Best-effort: failure is acceptable
                 res.Close();
                 return;
             }
@@ -828,7 +828,7 @@ namespace FlyShelf.Classes
             if (totalBytes > 50L * 1024 * 1024 && !LicenseManager.IsPro)
             {
                 res.StatusCode = 413;
-                try { await WriteJsonResponse(res, false, "File size exceeds 50 MB limit for Free tier."); } catch { }
+                try { await WriteJsonResponse(res, false, "File size exceeds 50 MB limit for Free tier."); } catch { } // Best-effort: failure is acceptable
                 res.Close();
                 System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
                     FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Incoming relay rejected: exceeds 50 MB Free tier limit.");
@@ -842,7 +842,7 @@ namespace FlyShelf.Classes
                 string senderDevice = req.Headers["X-Source-Device"] ?? "Android";
                 if (!string.IsNullOrEmpty(senderDevice))
                 {
-                    try { senderDevice = Path.GetFileName(Uri.UnescapeDataString(senderDevice)); } catch { }
+                    try { senderDevice = Path.GetFileName(Uri.UnescapeDataString(senderDevice)); } catch { } // Best-effort: failure is acceptable
                 }
                 if (string.IsNullOrWhiteSpace(senderDevice)) senderDevice = "Android";
                 
@@ -851,7 +851,7 @@ namespace FlyShelf.Classes
                 string rawName = "relayed_file.dat";
                 if (!string.IsNullOrEmpty(encodedName))
                 {
-                    try { rawName = Path.GetFileName(Uri.UnescapeDataString(encodedName)); } catch { }
+                    try { rawName = Path.GetFileName(Uri.UnescapeDataString(encodedName)); } catch { } // Best-effort: failure is acceptable
                 }
                 if (string.IsNullOrWhiteSpace(rawName)) rawName = "relayed_file.dat";
 
@@ -875,7 +875,7 @@ namespace FlyShelf.Classes
                 if (!string.IsNullOrEmpty(originalDateStr) && long.TryParse(originalDateStr, out long epochMs))
                 {
                     var dt = DateTimeOffset.FromUnixTimeMilliseconds(epochMs).UtcDateTime.ToLocalTime();
-                    try { File.SetCreationTime(finalPath, dt); File.SetLastWriteTime(finalPath, dt); } catch { }
+                    try { File.SetCreationTime(finalPath, dt); File.SetLastWriteTime(finalPath, dt); } catch { } // Best-effort: failure is acceptable
                 }
 
                 // Build Cloudflare download URL
@@ -940,7 +940,7 @@ namespace FlyShelf.Classes
                                     _ = Task.Run(async () =>
                                     {
                                         await Task.Delay(24 * 60 * 60_000);
-                                        try { await _httpClient.DeleteAsync(await FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/clipboard/{pairingKey}/{entryKey}.json")); } catch { }
+                                        try { await _httpClient.DeleteAsync(await FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/clipboard/{pairingKey}/{entryKey}.json")); } catch { } // Best-effort: failure is acceptable
                                     });
                                 }
                             }
@@ -998,7 +998,7 @@ namespace FlyShelf.Classes
                 {
                     res.ContentType = "application/json; charset=utf-8";
                     res.ContentLength64 = cached.Length;
-                    try { res.OutputStream.Write(cached, 0, cached.Length); } catch { }
+                    try { res.OutputStream.Write(cached, 0, cached.Length); } catch { } // Best-effort: failure is acceptable
                     res.Close();
                     return;
                 }
@@ -1006,7 +1006,7 @@ namespace FlyShelf.Classes
                 // Lazy-load notes if not yet loaded
                 if (!NoteManager.Days.Any())
                 {
-                    try { NoteManager.Load(); } catch { }
+                    try { NoteManager.Load(); } catch { } // Best-effort: failure is acceptable
                 }
 
                 string json = NoteManager.GetSyncPayload();
@@ -1016,14 +1016,14 @@ namespace FlyShelf.Classes
 
                 res.ContentType = "application/json; charset=utf-8";
                 res.ContentLength64 = data.Length;
-                try { res.OutputStream.Write(data, 0, data.Length); } catch { }
+                try { res.OutputStream.Write(data, 0, data.Length); } catch { } // Best-effort: failure is acceptable
                 res.Close();
             }
             catch (Exception ex)
             {
                 Logger.LogAction("NOTES_SERVE", $"ServeNotesData failed: {ex.Message}");
-                try { res.StatusCode = 500; } catch { }
-                try { res.Close(); } catch { }
+                try { res.StatusCode = 500; } catch { } // Best-effort: failure is acceptable
+                try { res.Close(); } catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -1044,7 +1044,7 @@ namespace FlyShelf.Classes
                 // Lazy-load notes if not yet loaded
                 if (!NoteManager.Days.Any())
                 {
-                    try { NoteManager.Load(); } catch { }
+                    try { NoteManager.Load(); } catch { } // Best-effort: failure is acceptable
                 }
 
                 NoteManager.MergeFromMobile(json);
@@ -1062,8 +1062,8 @@ namespace FlyShelf.Classes
             catch (Exception ex)
             {
                 Logger.LogAction("NOTES_SYNC", $"HandleNotesUpdate failed: {ex.Message}");
-                try { res.StatusCode = 500; } catch { }
-                try { res.Close(); } catch { }
+                try { res.StatusCode = 500; } catch { } // Best-effort: failure is acceptable
+                try { res.Close(); } catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -1081,7 +1081,7 @@ namespace FlyShelf.Classes
                 {
                     res.ContentType = "application/json; charset=utf-8";
                     res.ContentLength64 = cached.Length;
-                    try { res.OutputStream.Write(cached, 0, cached.Length); } catch { }
+                    try { res.OutputStream.Write(cached, 0, cached.Length); } catch { } // Best-effort: failure is acceptable
                     res.Close();
                     return;
                 }
@@ -1089,7 +1089,7 @@ namespace FlyShelf.Classes
                 // Lazy-load todos if not yet loaded
                 if (!TodoManager.Days.Any())
                 {
-                    try { TodoManager.Load(); } catch { }
+                    try { TodoManager.Load(); } catch { } // Best-effort: failure is acceptable
                 }
 
                 string json = TodoManager.GetSyncPayload();
@@ -1099,14 +1099,14 @@ namespace FlyShelf.Classes
 
                 res.ContentType = "application/json; charset=utf-8";
                 res.ContentLength64 = data.Length;
-                try { res.OutputStream.Write(data, 0, data.Length); } catch { }
+                try { res.OutputStream.Write(data, 0, data.Length); } catch { } // Best-effort: failure is acceptable
                 res.Close();
             }
             catch (Exception ex)
             {
                 Logger.LogAction("TODOS_SERVE", $"ServeTodosData failed: {ex.Message}");
-                try { res.StatusCode = 500; } catch { }
-                try { res.Close(); } catch { }
+                try { res.StatusCode = 500; } catch { } // Best-effort: failure is acceptable
+                try { res.Close(); } catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -1127,7 +1127,7 @@ namespace FlyShelf.Classes
                 // Lazy-load todos if not yet loaded
                 if (!TodoManager.Days.Any())
                 {
-                    try { TodoManager.Load(); } catch { }
+                    try { TodoManager.Load(); } catch { } // Best-effort: failure is acceptable
                 }
 
                 TodoManager.MergeFromMobile(json);
@@ -1145,8 +1145,8 @@ namespace FlyShelf.Classes
             catch (Exception ex)
             {
                 Logger.LogAction("TODOS_SYNC", $"HandleTodosUpdate failed: {ex.Message}");
-                try { res.StatusCode = 500; } catch { }
-                try { res.Close(); } catch { }
+                try { res.StatusCode = 500; } catch { } // Best-effort: failure is acceptable
+                try { res.Close(); } catch { } // Best-effort: failure is acceptable
             }
         }
     }

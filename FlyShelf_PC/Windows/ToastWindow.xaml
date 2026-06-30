@@ -5,7 +5,8 @@
         Title="Notification" Height="Auto" Width="Auto"
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowActivated="False" ResizeMode="NoResize"
-        ShowInTaskbar="False" SizeToContent="WidthAndHeight" Loaded="Window_Loaded">
+        ShowInTaskbar="False" SizeToContent="WidthAndHeight" Loaded="Window_Loaded"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
     
     <Grid Margin="16,8,16,8">
         <Border x:Name="ToastBorder" CornerRadius="24" Padding="0"

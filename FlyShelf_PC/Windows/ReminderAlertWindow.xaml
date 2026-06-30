@@ -5,7 +5,8 @@
         WindowStyle="None" AllowsTransparency="True" Background="Transparent"
         Topmost="True" ShowActivated="True" ShowInTaskbar="False"
         ResizeMode="NoResize" SizeToContent="WidthAndHeight" MaxWidth="400"
-        Loaded="Window_Loaded" MouseDown="Window_MouseDown">
+        Loaded="Window_Loaded" MouseDown="Window_MouseDown"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
 
     <Grid Margin="20,12,20,4">
         <Grid.RowDefinitions>

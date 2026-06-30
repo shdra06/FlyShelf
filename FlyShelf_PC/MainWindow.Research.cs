@@ -28,6 +28,7 @@ namespace FlyShelf
         // ═══════════════════════════════════════════════════════════
 
         private bool _isResearchActive;
+        private DispatcherTimer? _transferRefreshTimer; // C2 fix: live progress updates
         public bool IsResearchActive => _isResearchActive;
         private Brush? _originalResearchHeaderBg;
 
@@ -68,6 +69,7 @@ namespace FlyShelf
             // Close other modes
             if (_isNotesActive) CloseNotesPanel(immediate: true);
             if (_isTodoActive) CloseTodoPanel(immediate: true);
+            if (_isAiSettingsActive) CloseAiSettingsPanel(immediate: true);
             if (_isSearchActive) CloseSearch(switchingPanel: true);
             if (_isFilterBarActive) ToggleFilterBar(false);
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
@@ -119,6 +121,25 @@ namespace FlyShelf
             RefreshNetworkPanelQueue();
             RefreshNetworkPanelTransfers();
 
+            // C2 fix: Start timer for live transfer progress updates
+            _transferRefreshTimer?.Stop();
+            _transferRefreshTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
+            _transferRefreshTimer.Tick += (s, e) =>
+            {
+                if (_isResearchActive && LanTransferManager.Instance?.ActiveCount > 0)
+                    RefreshNetworkPanelTransfers();
+                else if (LanTransferManager.Instance?.ActiveCount == 0)
+                    _transferRefreshTimer?.Stop();
+            };
+            // Subscribe to TransferStarted to auto-start timer on new transfers
+            if (LanTransferManager.Instance != null)
+            {
+                LanTransferManager.Instance.TransferStarted -= OnTransferStarted_RefreshTimer;
+                LanTransferManager.Instance.TransferStarted += OnTransferStarted_RefreshTimer;
+            }
+            if (LanTransferManager.Instance?.ActiveCount > 0)
+                _transferRefreshTimer.Start();
+
             // Fix 3: Auto-refresh on peer connect/disconnect
             if (PeerManager.Instance != null)
             {
@@ -131,10 +152,22 @@ namespace FlyShelf
             // Trigger nearby scan so Nearby Devices populate immediately
             _ = Task.Run(async () =>
             {
-                try { await (NearbyDiscovery.Instance?.BroadcastProbe() ?? Task.CompletedTask); } catch { }
+                try { await (NearbyDiscovery.Instance?.BroadcastProbe() ?? Task.CompletedTask); } catch { } // Best-effort: failure is acceptable
             });
 
             Logger.LogAction("NETWORK", "Networking panel opened");
+        }
+
+        private void OnTransferStarted_RefreshTimer(LanTransferSession session)
+        {
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (_isResearchActive)
+                {
+                    RefreshNetworkPanelTransfers();
+                    _transferRefreshTimer?.Start();
+                }
+            });
         }
 
         /// <summary>
@@ -159,6 +192,10 @@ namespace FlyShelf
             _isResearchActive = false;
 
             // Unsubscribe auto-refresh events
+            _transferRefreshTimer?.Stop();
+            _transferRefreshTimer = null;
+            if (LanTransferManager.Instance != null)
+                LanTransferManager.Instance.TransferStarted -= OnTransferStarted_RefreshTimer;
             if (PeerManager.Instance != null)
             {
                 PeerManager.Instance.PeerConnected -= OnNetPanel_PeerChanged;
@@ -400,18 +437,44 @@ namespace FlyShelf
                 var mgr = LanTransferManager.Instance;
                 if (mgr == null) return;
 
-                // Active transfers
-                foreach (var session in mgr.ActiveTransfers.ToList())
+                // Active transfers with section header
+                var activeList = mgr.ActiveTransfers.ToList();
+                if (activeList.Count > 0)
                 {
-                    var card = CreateTransferSessionCard(session, isActive: true);
-                    NetPanelActiveTransfers.Children.Add(card);
+                    var header = new TextBlock
+                    {
+                        Text = $"ACTIVE TRANSFERS ({activeList.Count})",
+                        FontSize = 10,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(Color.FromRgb(0x63, 0x66, 0xF1)),
+                        Margin = new Thickness(4, 8, 0, 4)
+                    };
+                    NetPanelActiveTransfers.Children.Add(header);
+                    foreach (var session in activeList)
+                    {
+                        var card = CreateTransferSessionCard(session, isActive: true);
+                        NetPanelActiveTransfers.Children.Add(card);
+                    }
                 }
 
-                // Recent/completed transfers (show last 10, with retry on failed)
-                foreach (var session in mgr.CompletedTransfers.Take(10).ToList())
+                // Recent/completed transfers with section header
+                var recentList = mgr.CompletedTransfers.Take(10).ToList();
+                if (recentList.Count > 0)
                 {
-                    var card = CreateTransferSessionCard(session, isActive: false);
-                    NetPanelRecentTransfers.Children.Add(card);
+                    var header = new TextBlock
+                    {
+                        Text = "RECENT TRANSFERS",
+                        FontSize = 10,
+                        FontWeight = FontWeights.SemiBold,
+                        Foreground = new SolidColorBrush(Color.FromRgb(0x47, 0x55, 0x69)),
+                        Margin = new Thickness(4, 8, 0, 4)
+                    };
+                    NetPanelRecentTransfers.Children.Add(header);
+                    foreach (var session in recentList)
+                    {
+                        var card = CreateTransferSessionCard(session, isActive: false);
+                        NetPanelRecentTransfers.Children.Add(card);
+                    }
                 }
             }
             catch (Exception ex)
@@ -488,8 +551,14 @@ namespace FlyShelf
                 pauseBtn.MouseLeftButtonDown += async (s, e) =>
                 {
                     e.Handled = true;
-                    await LanTransferManager.Instance!.PauseTransfer(session.TransferId);
-                    RefreshNetworkPanelTransfers();
+                    try
+                    {
+                        var mgr = LanTransferManager.Instance;
+                        if (mgr == null) return;
+                        await mgr.PauseTransfer(session.TransferId);
+                        RefreshNetworkPanelTransfers();
+                    }
+                    catch (Exception ex) { Logger.LogAction("NETWORK", $"Pause error: {ex.Message}"); }
                 };
                 buttonStack.Children.Add(pauseBtn);
             }
@@ -500,8 +569,14 @@ namespace FlyShelf
                 resumeBtn.MouseLeftButtonDown += async (s, e) =>
                 {
                     e.Handled = true;
-                    await LanTransferManager.Instance!.ResumeTransfer(session.TransferId);
-                    RefreshNetworkPanelTransfers();
+                    try
+                    {
+                        var mgr = LanTransferManager.Instance;
+                        if (mgr == null) return;
+                        await mgr.ResumeTransfer(session.TransferId);
+                        RefreshNetworkPanelTransfers();
+                    }
+                    catch (Exception ex) { Logger.LogAction("NETWORK", $"Resume error: {ex.Message}"); }
                 };
                 buttonStack.Children.Add(resumeBtn);
             }
@@ -512,8 +587,14 @@ namespace FlyShelf
                 retryBtn.MouseLeftButtonDown += async (s, e) =>
                 {
                     e.Handled = true;
-                    await LanTransferManager.Instance!.RetryTransfer(session.TransferId);
-                    RefreshNetworkPanelTransfers();
+                    try
+                    {
+                        var mgr = LanTransferManager.Instance;
+                        if (mgr == null) return;
+                        await mgr.RetryTransfer(session.TransferId);
+                        RefreshNetworkPanelTransfers();
+                    }
+                    catch (Exception ex) { Logger.LogAction("NETWORK", $"Retry error: {ex.Message}"); }
                 };
                 buttonStack.Children.Add(retryBtn);
             }
@@ -524,8 +605,14 @@ namespace FlyShelf
                 cancelBtn.MouseLeftButtonDown += async (s, e) =>
                 {
                     e.Handled = true;
-                    await LanTransferManager.Instance!.CancelTransfer(session.TransferId);
-                    RefreshNetworkPanelTransfers();
+                    try
+                    {
+                        var mgr = LanTransferManager.Instance;
+                        if (mgr == null) return;
+                        await mgr.CancelTransfer(session.TransferId);
+                        RefreshNetworkPanelTransfers();
+                    }
+                    catch (Exception ex) { Logger.LogAction("NETWORK", $"Cancel error: {ex.Message}"); }
                 };
                 buttonStack.Children.Add(cancelBtn);
             }

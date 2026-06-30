@@ -22,6 +22,7 @@ namespace FlyShelf.Classes
         private readonly SemaphoreSlim _startLock = new SemaphoreSlim(1, 1); // Prevents concurrent StartTunnelCore from QUIC/exit/health triggers
         private int _healthCheckCount = 0;                // Counts health ticks for periodic public URL check
         private long _lastRetryScheduledTicks;             // Debounce: prevents multiple queued retries
+        private static readonly HttpClient _healthClient = new() { Timeout = TimeSpan.FromSeconds(10) };
 
         private volatile string _globalUrl = "Offline";
         public string GlobalUrl { get => _globalUrl; private set => _globalUrl = value; }
@@ -115,7 +116,7 @@ namespace FlyShelf.Classes
 
                 if (needsDownload)
                 {
-                    try { if (File.Exists(exePath)) File.Delete(exePath); } catch { }
+                    try { if (File.Exists(exePath)) File.Delete(exePath); } catch { } // Best-effort: failure is acceptable
 
                     GlobalUrl = "Downloading secure agent...";
                     GlobalUrlUpdated?.Invoke(GlobalUrl);
@@ -225,7 +226,7 @@ namespace FlyShelf.Classes
                 {
                     if (_stopped) return; // Don't retry if we intentionally stopped
                     int exitCode = -1;
-                    try { exitCode = _cfProcess?.ExitCode ?? -1; } catch { }
+                    try { exitCode = _cfProcess?.ExitCode ?? -1; } catch { } // Best-effort: failure is acceptable
                     Logger.LogAction("CLOUDFLARE", $"Process exited (code: {exitCode}). Will auto-restart...");
                     _consecutiveFailures++;
                     StopHealthMonitor();
@@ -413,7 +414,7 @@ namespace FlyShelf.Classes
                 try
                 {
                     // Ping localhost instead of public URL — avoids DNS resolution failures
-                    using var client = new HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
+                    var client = _healthClient;
                     var resp = await client.GetAsync($"http://localhost:{_localPort}/api/health");
                     if (resp.IsSuccessStatusCode)
                     {
@@ -447,7 +448,7 @@ namespace FlyShelf.Classes
                 {
                     try
                     {
-                        using var publicClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+                        var publicClient = _healthClient;
                         var publicResp = await publicClient.GetAsync(GlobalUrl + "/api/health");
                         if (!publicResp.IsSuccessStatusCode)
                         {
@@ -481,7 +482,7 @@ namespace FlyShelf.Classes
 
         private void StopHealthMonitor()
         {
-            try { _healthTimer?.Stop(); _healthTimer?.Dispose(); } catch { }
+            try { _healthTimer?.Stop(); _healthTimer?.Dispose(); } catch { } // Best-effort: failure is acceptable
             _healthTimer = null;
         }
 
@@ -500,7 +501,7 @@ namespace FlyShelf.Classes
             Logger.LogAction("CLOUDFLARE HEALTH", "⚡ Force health check triggered (post-sleep)");
             try
             {
-                using var client = new HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
+                var client = _healthClient;
                 var resp = await client.GetAsync($"http://localhost:{_localPort}/api/health");
                 if (resp.IsSuccessStatusCode)
                 {
@@ -598,7 +599,7 @@ namespace FlyShelf.Classes
                         if (totalRead < MIN_EXE_SIZE)
                         {
                             Logger.LogAction("CLOUDFLARE_ERROR", $"Download too small: {totalRead} bytes");
-                            try { File.Delete(tempPath); } catch { }
+                            try { File.Delete(tempPath); } catch { } // Best-effort: failure is acceptable
                             continue;
                         }
                     }
@@ -612,13 +613,13 @@ namespace FlyShelf.Classes
                         if (downloadedHash != TRUSTED_CF_HASH)
                         {
                             Logger.LogAction("CLOUDFLARE_ERROR", $"❌ SHA-256 mismatch! Downloaded: {downloadedHash}, Expected: {TRUSTED_CF_HASH}. Rejecting insecure binary.");
-                            try { File.Delete(tempPath); } catch { }
+                            try { File.Delete(tempPath); } catch { } // Best-effort: failure is acceptable
                             continue;
                         }
                     }
 
                     // Atomic rename: only replace after complete download and successful signature verification
-                    try { if (File.Exists(exePath)) File.Delete(exePath); } catch { }
+                    try { if (File.Exists(exePath)) File.Delete(exePath); } catch { } // Best-effort: failure is acceptable
                     File.Move(tempPath, exePath);
                     Logger.LogAction("CLOUDFLARE", $"✅ Download complete and verified: cloudflared.exe ({new FileInfo(exePath).Length / 1048576.0:F1} MB)");
                     return true;
@@ -647,7 +648,7 @@ namespace FlyShelf.Classes
             {
                 if (_cfProcess != null && !_cfProcess.HasExited)
                 {
-                    try { _cfProcess.Kill(); } catch { }
+                    try { _cfProcess.Kill(); } catch { } // Best-effort: failure is acceptable
                     _cfProcess.Dispose();
                     _cfProcess = null;
                 }
@@ -674,7 +675,7 @@ namespace FlyShelf.Classes
                     }
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
     }
 }

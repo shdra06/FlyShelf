@@ -5,6 +5,7 @@
 using System;
 using System.Buffers;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,7 +29,7 @@ namespace FlyShelf.Classes
     /// Represents a single PC-to-PC LAN file transfer with full pause/resume/cancel support.
     /// Thread-safe for concurrent updates from TCP engine and UI.
     /// </summary>
-    public class LanTransferSession : INotifyPropertyChanged
+    public class LanTransferSession : INotifyPropertyChanged, IDisposable
     {
         public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -60,29 +61,57 @@ namespace FlyShelf.Classes
 
         // ═══ State Machine ═══
         private TransferState _state = TransferState.Queued;
+        private readonly object _stateLock = new();
         public TransferState State
         {
             get => _state;
             set
             {
-                if (_state != value)
+                lock (_stateLock)
                 {
-                    _state = value;
-                    OnPropertyChanged();
-                    OnPropertyChanged(nameof(IsActive));
-                    OnPropertyChanged(nameof(IsPaused));
-                    OnPropertyChanged(nameof(IsCompleted));
-                    OnPropertyChanged(nameof(IsFailed));
-                    OnPropertyChanged(nameof(IsCancelled));
-                    OnPropertyChanged(nameof(CanPause));
-                    OnPropertyChanged(nameof(CanResume));
-                    OnPropertyChanged(nameof(CanCancel));
-                    OnPropertyChanged(nameof(CanRetry));
-                    OnPropertyChanged(nameof(StateDisplayText));
-                    OnPropertyChanged(nameof(StateIcon));
-                    StateChanged?.Invoke(this, value);
+                    if (_state != value)
+                    {
+                        if (!IsValidTransition(_state, value))
+                        {
+                            Debug.WriteLine($"[LanTransferSession] Invalid state transition: {_state} → {value}");
+                        }
+                        _state = value;
+                        OnPropertyChanged();
+                        OnPropertyChanged(nameof(IsActive));
+                        OnPropertyChanged(nameof(IsPaused));
+                        OnPropertyChanged(nameof(IsCompleted));
+                        OnPropertyChanged(nameof(IsFailed));
+                        OnPropertyChanged(nameof(IsCancelled));
+                        OnPropertyChanged(nameof(CanPause));
+                        OnPropertyChanged(nameof(CanResume));
+                        OnPropertyChanged(nameof(CanCancel));
+                        OnPropertyChanged(nameof(CanRetry));
+                        OnPropertyChanged(nameof(StateDisplayText));
+                        OnPropertyChanged(nameof(StateIcon));
+                        StateChanged?.Invoke(this, value);
+                    }
                 }
             }
+        }
+
+        private static bool IsValidTransition(TransferState from, TransferState to)
+        {
+            return (from, to) switch
+            {
+                (TransferState.Queued, TransferState.Connecting) => true,
+                (TransferState.Connecting, TransferState.Transferring) => true,
+                (TransferState.Connecting, TransferState.Failed) => true,
+                (TransferState.Connecting, TransferState.Cancelled) => true,
+                (TransferState.Transferring, TransferState.Paused) => true,
+                (TransferState.Transferring, TransferState.Completed) => true,
+                (TransferState.Transferring, TransferState.Failed) => true,
+                (TransferState.Transferring, TransferState.Cancelled) => true,
+                (TransferState.Paused, TransferState.Transferring) => true,
+                (TransferState.Paused, TransferState.Cancelled) => true,
+                (TransferState.Paused, TransferState.Failed) => true,
+                (TransferState.Failed, TransferState.Queued) => true, // retry
+                _ => false
+            };
         }
 
         public bool IsActive => _state == TransferState.Transferring || _state == TransferState.Connecting;
@@ -93,8 +122,8 @@ namespace FlyShelf.Classes
         public bool CanPause => _state == TransferState.Transferring;
         public bool CanResume => _state == TransferState.Paused;
         public bool CanCancel => _state == TransferState.Transferring || _state == TransferState.Paused || _state == TransferState.Queued || _state == TransferState.Connecting;
-        /// <summary>True if this transfer failed with partial progress and can be retried from checkpoint.</summary>
-        public bool CanRetry => _state == TransferState.Failed && BytesTransferred > 0;
+        /// <summary>True if this transfer failed and can be retried.</summary>
+        public bool CanRetry => _state == TransferState.Failed;
 
         public string StateDisplayText => _state switch
         {
@@ -242,28 +271,27 @@ namespace FlyShelf.Classes
         private CancellationTokenSource _cts = new();
         public CancellationToken CancellationToken => _cts.Token;
 
-        // SemaphoreSlim used to block the transfer loop when paused
-        private readonly SemaphoreSlim _pauseGate = new(1, 1);
+        // ManualResetEventSlim used to block the transfer loop when paused
+        private readonly ManualResetEventSlim _pauseGate = new(true);
 
         /// <summary>
         /// Pauses the transfer. The TCP connection stays open — sender/receiver loop blocks on _pauseGate.
         /// </summary>
-        public async Task PauseAsync()
+        public void PauseTransfer()
         {
             if (_state != TransferState.Transferring) return;
             State = TransferState.Paused;
-            // Acquire the gate — transfer loop will block trying to acquire it
-            await _pauseGate.WaitAsync();
+            _pauseGate.Reset();
         }
 
         /// <summary>
-        /// Resumes a paused transfer by releasing the pause gate.
+        /// Resumes a paused transfer by signaling the pause gate.
         /// </summary>
         public void ResumeTransfer()
         {
             if (_state != TransferState.Paused) return;
             State = TransferState.Transferring;
-            try { _pauseGate.Release(); } catch (SemaphoreFullException) { }
+            _pauseGate.Set();
         }
 
         /// <summary>
@@ -273,9 +301,9 @@ namespace FlyShelf.Classes
         {
             if (!CanCancel) return;
             State = TransferState.Cancelled;
-            try { _cts.Cancel(); } catch { }
-            // Release pause gate in case we're paused
-            try { _pauseGate.Release(); } catch (SemaphoreFullException) { }
+            try { _cts.Cancel(); } catch { } // Best-effort: failure is acceptable
+            // Signal pause gate in case we're paused
+            _pauseGate.Set();
         }
 
         /// <summary>
@@ -285,7 +313,11 @@ namespace FlyShelf.Classes
         public void RetryTransfer()
         {
             if (!CanRetry) return;
+            try { _cts.Dispose(); } catch { } // Best-effort: failure is acceptable
             _cts = new CancellationTokenSource();
+            _speedSampleCount = 0;
+            _speedSampleIndex = 0;
+            SpeedBps = 0;
             ErrorMessage = null;
             EndTime = null;
             State = TransferState.Queued;
@@ -297,9 +329,8 @@ namespace FlyShelf.Classes
         public async Task WaitIfPausedAsync()
         {
             if (_state != TransferState.Paused) return;
-            // Wait to acquire the gate (will block until Resume releases it)
-            await _pauseGate.WaitAsync(_cts.Token);
-            _pauseGate.Release(); // Release immediately so future checks don't block
+            // Block until Resume signals the gate or cancellation is requested
+            await Task.Run(() => _pauseGate.Wait(_cts.Token));
         }
 
         /// <summary>
@@ -310,8 +341,8 @@ namespace FlyShelf.Classes
             ErrorMessage = error;
             EndTime = DateTime.UtcNow;
             State = TransferState.Failed;
-            try { _cts.Cancel(); } catch { }
-            try { _pauseGate.Release(); } catch (SemaphoreFullException) { }
+            try { _cts.Cancel(); } catch { } // Best-effort: failure is acceptable
+            _pauseGate.Set();
         }
 
         /// <summary>
@@ -357,6 +388,13 @@ namespace FlyShelf.Classes
         protected void OnPropertyChanged([CallerMemberName] string? name = null)
         {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+        }
+
+        // ═══ IDisposable ═══
+        public void Dispose()
+        {
+            try { _cts.Dispose(); } catch { } // Best-effort: failure is acceptable
+            try { _pauseGate.Dispose(); } catch { } // Best-effort: failure is acceptable
         }
     }
 }

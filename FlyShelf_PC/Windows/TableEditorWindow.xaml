@@ -7,7 +7,8 @@
         WindowStartupLocation="CenterScreen"
         SystemBackdropType="Mica" Background="Transparent"
         KeyDown="Window_KeyDown"
-        Icon="/Resources/FlyShelfLogo.ico">
+        Icon="/Resources/FlyShelfLogo.ico"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
     <Grid TextElement.Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}">
         <!-- Main layout: Header + Content + Footer -->
         <Grid.RowDefinitions>
@@ -139,17 +140,18 @@
                     <TextBlock Text="EXPORT" FontSize="10" FontWeight="Bold" Opacity="0.4" 
                                VerticalAlignment="Center" Margin="4,0,8,0"/>
                     <ui:Button Content="Word Table" Appearance="Primary" Padding="12,6" FontSize="12"
-                               Click="ExportHtml_Click" Margin="0,2,4,2" ToolTip="Copy as rich HTML table for Word/Excel (Ctrl+Shift+W)">
+                               Click="ExportHtml_Click" Margin="0,2,4,2" ToolTip="Copy as rich HTML table for Word/Excel (Ctrl+Shift+W)"
+                               AutomationProperties.Name="Export as Word table">
                         <ui:Button.Icon><ui:SymbolIcon Symbol="Table24" FontSize="14"/></ui:Button.Icon>
                     </ui:Button>
                     <ui:Button Content="CSV" Appearance="Secondary" Padding="12,6" FontSize="12"
-                               Click="ExportCsv_Click" Margin="0,2,4,2" ToolTip="Copy as comma-separated values"/>
+                               Click="ExportCsv_Click" Margin="0,2,4,2" ToolTip="Copy as comma-separated values" AutomationProperties.Name="Export as CSV"/>
                     <ui:Button Content="TSV" Appearance="Transparent" Padding="10,6" FontSize="12"
-                               Click="ExportTsv_Click" Margin="0,2,4,2" ToolTip="Copy as tab-separated values"/>
+                               Click="ExportTsv_Click" Margin="0,2,4,2" ToolTip="Copy as tab-separated values" AutomationProperties.Name="Export as TSV"/>
                     <ui:Button Content="Markdown" Appearance="Transparent" Padding="10,6" FontSize="12"
-                               Click="ExportMarkdown_Click" Margin="0,2,4,2" ToolTip="Copy as markdown table"/>
+                               Click="ExportMarkdown_Click" Margin="0,2,4,2" ToolTip="Copy as markdown table" AutomationProperties.Name="Export as Markdown"/>
                     <ui:Button Content="💾 Save" Appearance="Transparent" Padding="10,6" FontSize="12"
-                               Click="SaveToFile_Click" Margin="0,2,8,2" ToolTip="Save to file (Ctrl+S)"/>
+                               Click="SaveToFile_Click" Margin="0,2,8,2" ToolTip="Save to file (Ctrl+S)" AutomationProperties.Name="Save table to file"/>
 
                     <Border Width="1" Height="20" Background="{DynamicResource ThemeOverlayBorder}" Margin="4,0,8,0"/>
 
@@ -157,33 +159,33 @@
                     <TextBlock Text="EDIT" FontSize="10" FontWeight="Bold" Opacity="0.4" 
                                VerticalAlignment="Center" Margin="0,0,8,0"/>
                     <ui:Button Content="+ Row" Appearance="Transparent" Padding="8,5" FontSize="11"
-                               Click="AddRow_Click" Margin="0,2,2,2" ToolTip="Add row at end"/>
+                               Click="AddRow_Click" Margin="0,2,2,2" ToolTip="Add row at end" AutomationProperties.Name="Add row"/>
                     <ui:Button Content="+ Col" Appearance="Transparent" Padding="8,5" FontSize="11"
-                               Click="AddCol_Click" Margin="0,2,2,2" ToolTip="Add column at end"/>
+                               Click="AddCol_Click" Margin="0,2,2,2" ToolTip="Add column at end" AutomationProperties.Name="Add column"/>
                     <ui:Button x:Name="InsertRowAboveBtn" Content="↑ Insert Row" Appearance="Transparent" 
                                Padding="8,5" FontSize="11" Click="InsertRowAbove_Click" 
-                               Margin="0,2,2,2" ToolTip="Insert row above selected cell"/>
+                               Margin="0,2,2,2" ToolTip="Insert row above selected cell" AutomationProperties.Name="Insert row above"/>
                     <ui:Button x:Name="InsertColLeftBtn" Content="← Insert Col" Appearance="Transparent" 
                                Padding="8,5" FontSize="11" Click="InsertColLeft_Click" 
-                               Margin="0,2,4,2" ToolTip="Insert column left of selected cell"/>
+                               Margin="0,2,4,2" ToolTip="Insert column left of selected cell" AutomationProperties.Name="Insert column left"/>
                     <ui:Button Content="✕ Row" Appearance="Transparent" Padding="8,5" FontSize="11"
                                Click="DelRow_Click" Foreground="{DynamicResource DangerColor}" Margin="0,2,2,2" 
-                               ToolTip="Delete selected row (or last row)"/>
+                               ToolTip="Delete selected row (or last row)" AutomationProperties.Name="Delete row"/>
                     <ui:Button Content="✕ Col" Appearance="Transparent" Padding="8,5" FontSize="11"
                                Click="DelCol_Click" Foreground="{DynamicResource DangerColor}" Margin="0,2,2,2" 
-                               ToolTip="Delete selected column (or last column)"/>
+                               ToolTip="Delete selected column (or last column)" AutomationProperties.Name="Delete column"/>
                     
                     <Border Width="1" Height="20" Background="{DynamicResource ThemeOverlayBorder}" Margin="4,0,8,0"/>
                     
                     <ui:Button Content="↩ Undo" Appearance="Transparent" Padding="8,5" FontSize="11"
-                               Click="Undo_Click" Margin="0,2,2,2" ToolTip="Undo last change (Ctrl+Z)"/>
+                               Click="Undo_Click" Margin="0,2,2,2" ToolTip="Undo last change (Ctrl+Z)" AutomationProperties.Name="Undo"/>
                 </WrapPanel>
                 
                 <!-- Image toggle -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
                     <ui:Button x:Name="ToggleImageBtn" Content="🖼 Source" Appearance="Transparent" 
                                Padding="10,6" FontSize="11" Click="ToggleImagePanel_Click" 
-                               Margin="4,2" ToolTip="Toggle source image preview"/>
+                               Margin="4,2" ToolTip="Toggle source image preview" AutomationProperties.Name="Toggle source image preview"/>
                 </StackPanel>
             </Grid>
         </Border>

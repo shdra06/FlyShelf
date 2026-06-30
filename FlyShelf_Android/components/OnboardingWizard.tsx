@@ -78,7 +78,7 @@ export default function OnboardingWizard({ visible, onComplete }: Props) {
       >
         {/* Skip button — hidden on last slide */}
         {!slide.isFinal && (
-          <TouchableOpacity style={s.skipBtn} onPress={handleComplete}>
+          <TouchableOpacity style={s.skipBtn} onPress={handleComplete} accessibilityLabel="Skip onboarding" accessibilityRole="button">
             <Text style={s.skipText}>Skip</Text>
           </TouchableOpacity>
         )}
@@ -121,7 +121,7 @@ export default function OnboardingWizard({ visible, onComplete }: Props) {
 
           {/* Action button */}
           {slide.isFinal ? (
-            <TouchableOpacity style={s.getStartedBtn} onPress={handleComplete} activeOpacity={0.85}>
+            <TouchableOpacity style={s.getStartedBtn} onPress={handleComplete} activeOpacity={0.85} accessibilityLabel="Get started" accessibilityRole="button">
               <LinearGradient
                 colors={['#4A62EB', '#6384FF']}
                 start={{ x: 0, y: 0 }}
@@ -132,7 +132,7 @@ export default function OnboardingWizard({ visible, onComplete }: Props) {
               </LinearGradient>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={s.nextBtn} onPress={handleNext} activeOpacity={0.85}>
+            <TouchableOpacity style={s.nextBtn} onPress={handleNext} activeOpacity={0.85} accessibilityLabel={`Next, step ${currentPage + 2} of ${SLIDES.length}`} accessibilityRole="button">
               <LinearGradient
                 colors={['#4A62EB', '#6384FF']}
                 start={{ x: 0, y: 0 }}

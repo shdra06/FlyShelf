@@ -214,7 +214,7 @@ namespace FlyShelf.ViewModels
                     {
                         System.Diagnostics.Process.Start("explorer.exe", $"/select,\"{s.FilePath}\"");
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }
             });
 

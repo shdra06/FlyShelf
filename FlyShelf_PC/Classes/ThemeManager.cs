@@ -12,7 +12,7 @@ using System.Linq;
 
 namespace FlyShelf.Classes
 {
-    public class ThemeManager
+    public class ThemeManager : IDisposable
     {
         // ═══ Singleton ═══
         private static ThemeManager? _instance;
@@ -409,7 +409,7 @@ namespace FlyShelf.Classes
             {
                 System.Diagnostics.Process.Start("explorer.exe", _themesDir);
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         /// <summary>
@@ -858,7 +858,7 @@ namespace FlyShelf.Classes
                     SetAeroResource(app, "AltSearchFg", "#5A4020");
                     SetAeroResource(app, "AltBottomBarBg", "#E0F8E8C8");
                     SetAeroResource(app, "AltBottomBarBorder", "#30C08020");
-                    SetAeroResource(app, "AltSidebarHover", "#20D0900");
+                    SetAeroResource(app, "AltSidebarHover", "#20D09000");
                     SetAeroResource(app, "AltTimestampFg", "#6A5030");
                     SetAeroResource(app, "AltSubtitleFg", "#6A5030");
                     break;
@@ -1014,7 +1014,7 @@ namespace FlyShelf.Classes
                 var color = (System.Windows.Media.Color)System.Windows.Media.ColorConverter.ConvertFromString(hexColor);
                 app.Resources[key] = new System.Windows.Media.SolidColorBrush(color);
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private static System.Windows.Media.Color ColorFromHex(string hex)
@@ -1059,7 +1059,7 @@ namespace FlyShelf.Classes
                             }
                         });
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 };
 
                 _watcher.Changed += (s, e) => { debounce.Stop(); debounce.Start(); };

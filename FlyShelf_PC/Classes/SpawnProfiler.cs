@@ -75,7 +75,7 @@ namespace FlyShelf.Classes
                 Directory.CreateDirectory(logDir);
                 _logPath = Path.Combine(logDir, "spawn_profile.txt");
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         /// <summary>
@@ -94,7 +94,7 @@ namespace FlyShelf.Classes
                 if (window != null)
                     _hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             _sw.Restart();
             _lastFrameTicks = _sw.ElapsedTicks;
             _isCapturing = true;
@@ -162,7 +162,7 @@ namespace FlyShelf.Classes
                         var sv = FindChild<System.Windows.Controls.ScrollViewer>(mainWin.ShelfListView);
                         if (sv != null) scrollOffset = sv.VerticalOffset;
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }
                 // Win32-level state: what DWM actually sees
                 if (_hwnd != IntPtr.Zero)
@@ -178,7 +178,7 @@ namespace FlyShelf.Classes
                     }
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             _frames.Add(new FrameTick
             {
@@ -324,7 +324,7 @@ namespace FlyShelf.Classes
                 writer.WriteLine();
                 writer.Flush();
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         /// <summary>

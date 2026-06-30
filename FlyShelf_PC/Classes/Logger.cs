@@ -80,7 +80,7 @@ namespace FlyShelf.Classes
                         File.Move(tmp, path, overwrite: true);
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -141,7 +141,7 @@ namespace FlyShelf.Classes
                         if (i == MAX_ROTATED_FILES && File.Exists(logPath + $".{i}"))
                             File.Delete(logPath + $".{i}");
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }
                 // Shift .2 → .3, .1 → .2
                 for (int i = MAX_ROTATED_FILES - 1; i >= 1; i--)
@@ -150,13 +150,13 @@ namespace FlyShelf.Classes
                     string dst = logPath + $".{i + 1}";
                     if (File.Exists(src))
                     {
-                        try { File.Move(src, dst, true); } catch { }
+                        try { File.Move(src, dst, true); } catch { } // Best-effort: failure is acceptable
                     }
                 }
                 // Rename current → .1
-                try { File.Move(logPath, logPath + ".1", true); } catch { }
+                try { File.Move(logPath, logPath + ".1", true); } catch { } // Best-effort: failure is acceptable
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private static void FlushBuffer()
@@ -176,7 +176,7 @@ namespace FlyShelf.Classes
                         while (_buffer.TryDequeue(out string entry))
                             writer.WriteLine(entry);
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }
 
                 // Drain network diagnostics log
@@ -189,7 +189,7 @@ namespace FlyShelf.Classes
                         while (_netBuffer.TryDequeue(out string entry))
                             writer.WriteLine(entry);
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }
             }
         }

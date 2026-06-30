@@ -167,7 +167,7 @@ namespace FlyShelf.ViewModels
                             folderCount++;
                         }
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }
 
                 string filesLabel = fileCount > 1 ? $"{fileCount} files" : (fileCount == 1 ? "1 file" : "");
@@ -198,7 +198,7 @@ namespace FlyShelf.ViewModels
                         path = uri.LocalPath;
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
 
             FilePath = path ?? string.Empty;
@@ -290,7 +290,7 @@ namespace FlyShelf.ViewModels
                             isDir = Directory.Exists(capturedPath);
                         }
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
 
                     if (exists)
                     {
@@ -320,14 +320,14 @@ namespace FlyShelf.ViewModels
                                 listing.AppendLine($"\nTotal uncompressed: {FormatBytes(totalSize)}");
                                 RawContent = listing.ToString();
                             }
-                            catch { }
+                            catch { } // Best-effort: failure is acceptable
                         }
 
                         // Explicitly read plain text in background thread
                         bool isPlainText = lowExt == ".txt" || lowExt == ".json" || lowExt == ".md" || lowExt == ".csv" || lowExt == ".xml" || preliminaryType == ClipboardItemType.Code;
                         if (isPlainText && length < 1000000)
                         {
-                            try { RawContent = File.ReadAllText(capturedPath); } catch { }
+                            try { RawContent = File.ReadAllText(capturedPath); } catch { } // Best-effort: failure is acceptable
                         }
 
                         // Trigger QR code and OCR parsing in the background
@@ -365,13 +365,13 @@ namespace FlyShelf.ViewModels
                                 if (entryIsDir)
                                 {
                                     int subCount = 0;
-                                    try { subCount = Directory.GetFileSystemEntries(entry).Length; } catch { }
+                                    try { subCount = Directory.GetFileSystemEntries(entry).Length; } catch { } // Best-effort: failure is acceptable
                                     listing.AppendLine($"  📂 {name}/ ({subCount} items)");
                                 }
                                 else
                                 {
                                     long fSize = 0;
-                                    try { fSize = new FileInfo(entry).Length; } catch { }
+                                    try { fSize = new FileInfo(entry).Length; } catch { } // Best-effort: failure is acceptable
                                     listing.AppendLine($"  📄 {name} ({FormatBytes(fSize)})");
                                 }
                             }
@@ -470,7 +470,7 @@ namespace FlyShelf.ViewModels
                     FormattedSize = FormatBytes(fileInfo.Length);
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private static string FormatBytes(long bytes)
@@ -532,7 +532,7 @@ namespace FlyShelf.ViewModels
                     }
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             return null;
         }
 
@@ -798,7 +798,7 @@ namespace FlyShelf.ViewModels
                     Process.Start(npp64, $"\"{filePath}\"");
                     return true;
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
 
             // 3. Try Notepad++ (standard 32-bit location)
@@ -810,7 +810,7 @@ namespace FlyShelf.ViewModels
                     Process.Start(npp32, $"\"{filePath}\"");
                     return true;
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
 
             // 4. Try Sublime Text
@@ -822,7 +822,7 @@ namespace FlyShelf.ViewModels
                     Process.Start(sublime, $"\"{filePath}\"");
                     return true;
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
 
             // 5. Fallback to Notepad (present on all Windows systems)
@@ -831,7 +831,7 @@ namespace FlyShelf.ViewModels
                 Process.Start("notepad.exe", $"\"{filePath}\"");
                 return true;
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             return false;
         }

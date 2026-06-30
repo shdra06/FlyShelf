@@ -107,7 +107,7 @@ type DeviceCardProps = {
   onRemove: (id: string, name: string) => void;
 };
 
-function DeviceCard({ device, activeInfo, index, onRemove }: DeviceCardProps) {
+const DeviceCard = React.memo(function DeviceCard({ device, activeInfo, index, onRemove }: DeviceCardProps) {
   const isOnline = activeInfo?.isOnline ?? false;
   const connectionType = activeInfo?.connectionType ?? 'Offline';
   const latencyMs = activeInfo?.latencyMs;
@@ -219,6 +219,8 @@ function DeviceCard({ device, activeInfo, index, onRemove }: DeviceCardProps) {
           s.deviceCard,
           isOnline ? s.deviceCardOnline : s.deviceCardOffline,
         ]}
+        accessibilityLabel={`${device.deviceName}, ${device.deviceType}, ${statusLabel}${connectionType !== 'Offline' ? `, ${connectionType}` : ''}`}
+        accessibilityRole="button"
       >
         {/* Online accent strip */}
         {isOnline && <View style={s.onlineStrip} />}
@@ -279,6 +281,8 @@ function DeviceCard({ device, activeInfo, index, onRemove }: DeviceCardProps) {
             style={s.removeBtn}
             onPress={() => onRemove(device.deviceId, device.deviceName)}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel={`Remove ${device.deviceName}`}
+            accessibilityRole="button"
           >
             <IconSymbol name="xmark" size={16} color={colors.accent.error} />
           </TouchableOpacity>
@@ -286,7 +290,7 @@ function DeviceCard({ device, activeInfo, index, onRemove }: DeviceCardProps) {
       </TouchableOpacity>
     </Animated.View>
   );
-}
+});
 
 // ═══════════════════════════════════════════
 // DEVICE HUB COMPONENT
@@ -456,7 +460,7 @@ export default function DeviceHub({ visible, onClose, activeDevices = [] }: Devi
                 <Text style={s.headerCountText}>{deviceCount}</Text>
               </View>
             </View>
-            <TouchableOpacity style={s.closeBtn} onPress={onClose}>
+            <TouchableOpacity style={s.closeBtn} onPress={onClose} accessibilityLabel="Close device hub" accessibilityRole="button">
               <IconSymbol name="xmark" size={18} color={colors.text.secondary} />
             </TouchableOpacity>
           </View>
@@ -541,6 +545,8 @@ export default function DeviceHub({ visible, onClose, activeDevices = [] }: Devi
                   style={s.emptyAddBtn}
                   onPress={handleAddDevice}
                   activeOpacity={0.85}
+                  accessibilityLabel="Add your first device"
+                  accessibilityRole="button"
                 >
                   <LinearGradient
                     colors={['#4A62EB', '#6384FF']}
@@ -560,6 +566,8 @@ export default function DeviceHub({ visible, onClose, activeDevices = [] }: Devi
                 style={s.keySectionHeader}
                 onPress={toggleKeySection}
                 activeOpacity={0.7}
+                accessibilityLabel={`Pairing key section, ${keyExpanded ? 'expanded' : 'collapsed'}`}
+                accessibilityRole="button"
               >
                 <View style={s.keySectionHeaderLeft}>
                   <IconSymbol
@@ -586,6 +594,8 @@ export default function DeviceHub({ visible, onClose, activeDevices = [] }: Devi
                         style={s.keyDisplay}
                         onPress={() => setKeyRevealed(prev => !prev)}
                         activeOpacity={0.7}
+                        accessibilityLabel={keyRevealed ? 'Hide pairing key' : 'Reveal pairing key'}
+                        accessibilityRole="button"
                       >
                         <Text style={s.keyText} numberOfLines={1}>
                           {keyRevealed ? pairingKey : maskKey(pairingKey)}
@@ -601,6 +611,9 @@ export default function DeviceHub({ visible, onClose, activeDevices = [] }: Devi
                         <TouchableOpacity
                           style={s.keyActionBtn}
                           onPress={handleCopyKey}
+                          accessibilityLabel="Copy pairing key"
+                          accessibilityRole="button"
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
                           <IconSymbol
                             name="doc.on.doc"
@@ -611,6 +624,10 @@ export default function DeviceHub({ visible, onClose, activeDevices = [] }: Devi
                         <TouchableOpacity
                           style={s.keyActionBtnRegen}
                           onPress={handleRegenerateKey}
+                          accessibilityLabel="Regenerate pairing key"
+                          accessibilityRole="button"
+                          accessibilityHint="All devices will need to re-pair"
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                         >
                           <IconSymbol
                             name="repeat"
@@ -637,6 +654,8 @@ export default function DeviceHub({ visible, onClose, activeDevices = [] }: Devi
                 style={s.addDeviceBtn}
                 onPress={handleAddDevice}
                 activeOpacity={0.85}
+                accessibilityLabel="Add device"
+                accessibilityRole="button"
               >
                 <LinearGradient
                   colors={['#4A62EB', '#6384FF']}

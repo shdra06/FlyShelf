@@ -209,7 +209,7 @@ $word.Quit()
                         bool exited = proc.WaitForExit(30000); // 30s timeout
                         if (!exited)
                         {
-                            try { proc.Kill(); } catch { }
+                            try { proc.Kill(); } catch { } // Best-effort: failure is acceptable
                             Logger.LogAction("MD2PDF_NODE", "Node process timed out.");
                             return false;
                         }

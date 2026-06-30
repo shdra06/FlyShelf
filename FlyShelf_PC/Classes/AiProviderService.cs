@@ -77,6 +77,23 @@ namespace FlyShelf.Classes
         public bool HasCloudApiKey => !string.IsNullOrEmpty(SettingsManager.Current.AiApiKey);
 
         /// <summary>
+        /// Checks if an API key is configured. If not, shows the AiSetupPopup dialog.
+        /// Returns true if a key is available (either already configured or just entered).
+        /// Must be called from UI thread.
+        /// </summary>
+        public bool EnsureApiKeyOrPrompt(System.Windows.Window owner = null)
+        {
+            if (HasCloudApiKey) return true;
+            try
+            {
+                var popup = new FlyShelf.Windows.AiSetupPopup(owner);
+                popup.ShowDialog();
+                return HasCloudApiKey;
+            }
+            catch { return false; }
+        }
+
+        /// <summary>
         /// Whether the active provider is a cloud provider (not local).
         /// </summary>
         public bool IsCloudProvider
@@ -285,6 +302,124 @@ namespace FlyShelf.Classes
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Vision/multimodal generation — sends image + text prompt to AI.
+        /// Only works with cloud providers (Gemini, OpenAI, Claude).
+        /// </summary>
+        public async Task<string> GenerateWithImageAsync(string userPrompt, byte[] imageBytes, string mimeType = "image/png",
+            string? systemPrompt = null, int? maxTokens = null, CancellationToken ct = default)
+        {
+            if (!HasCloudApiKey)
+                throw new InvalidOperationException("Vision requires a cloud API key.");
+
+            var tokens = maxTokens ?? Math.Max(SettingsManager.Current.AiMaxTokens, 4096);
+            var provider = DetectProviderFromKey();
+            var base64Image = Convert.ToBase64String(imageBytes);
+
+            return provider switch
+            {
+                "Gemini" => await CallGeminiVisionAsync(userPrompt, base64Image, mimeType, systemPrompt, tokens, ct),
+                "OpenAI" => await CallOpenAIVisionAsync(userPrompt, base64Image, mimeType, systemPrompt, tokens, ct),
+                _ => throw new InvalidOperationException($"Vision not supported for provider: {provider}")
+            };
+        }
+
+        private async Task<string> CallGeminiVisionAsync(string prompt, string base64Image, string mimeType,
+            string? systemPrompt, int maxTokens, CancellationToken ct)
+        {
+            var apiKey = SettingsManager.Current.AiApiKey;
+            var model = string.IsNullOrEmpty(SettingsManager.Current.AiModelOverride)
+                ? "gemini-2.0-flash" : SettingsManager.Current.AiModelOverride;
+
+            var url = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent";
+
+            var parts = new List<object>
+            {
+                new { text = prompt },
+                new { inline_data = new { mime_type = mimeType, data = base64Image } }
+            };
+
+            var requestBody = new Dictionary<string, object>
+            {
+                ["contents"] = new[] { new { parts = parts.ToArray() } },
+                ["generationConfig"] = new { maxOutputTokens = maxTokens }
+            };
+
+            if (!string.IsNullOrEmpty(systemPrompt))
+                requestBody["systemInstruction"] = new { parts = new[] { new { text = systemPrompt } } };
+
+            var json = JsonSerializer.Serialize(requestBody);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
+            request.Headers.Add("x-goog-api-key", apiKey);
+
+            var response = await _httpClient.SendAsync(request, ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync(ct);
+                throw new HttpRequestException($"Gemini Vision error {(int)response.StatusCode}: {TruncateError(error)}");
+            }
+
+            var responseJson = await response.Content.ReadAsStringAsync(ct);
+            using var doc = JsonDocument.Parse(responseJson);
+            return doc.RootElement
+                .GetProperty("candidates")[0]
+                .GetProperty("content")
+                .GetProperty("parts")[0]
+                .GetProperty("text")
+                .GetString() ?? "";
+        }
+
+        private async Task<string> CallOpenAIVisionAsync(string prompt, string base64Image, string mimeType,
+            string? systemPrompt, int maxTokens, CancellationToken ct)
+        {
+            var apiKey = SettingsManager.Current.AiApiKey;
+            var model = string.IsNullOrEmpty(SettingsManager.Current.AiModelOverride)
+                ? "gpt-4o-mini" : SettingsManager.Current.AiModelOverride;
+
+            var url = "https://api.openai.com/v1/chat/completions";
+
+            var messages = new List<object>();
+            if (!string.IsNullOrEmpty(systemPrompt))
+                messages.Add(new { role = "system", content = systemPrompt });
+
+            messages.Add(new {
+                role = "user",
+                content = new object[]
+                {
+                    new { type = "text", text = prompt },
+                    new { type = "image_url", image_url = new { url = $"data:{mimeType};base64,{base64Image}" } }
+                }
+            });
+
+            var requestBody = new Dictionary<string, object>
+            {
+                ["model"] = model,
+                ["messages"] = messages,
+                ["max_tokens"] = maxTokens
+            };
+
+            var json = JsonSerializer.Serialize(requestBody);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = content };
+            request.Headers.Add("Authorization", $"Bearer {apiKey}");
+
+            var response = await _httpClient.SendAsync(request, ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync(ct);
+                throw new HttpRequestException($"OpenAI Vision error {(int)response.StatusCode}: {TruncateError(error)}");
+            }
+
+            var responseJson = await response.Content.ReadAsStringAsync(ct);
+            using var doc = JsonDocument.Parse(responseJson);
+            return doc.RootElement
+                .GetProperty("choices")[0]
+                .GetProperty("message")
+                .GetProperty("content")
+                .GetString() ?? "";
         }
 
         /// <summary>

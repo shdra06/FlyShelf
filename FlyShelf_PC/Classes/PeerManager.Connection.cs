@@ -73,11 +73,11 @@ namespace FlyShelf.Classes
                         if (result.success)
                         {
                             handshakeSucceeded = true;
-                            try { cts.Cancel(); } catch { } // Cancel the other transport probe immediately
+                            try { cts.Cancel(); } catch { } // Best-effort: failure is acceptable
                             break;
                         }
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }
 
                 if (!handshakeSucceeded)
@@ -262,8 +262,8 @@ namespace FlyShelf.Classes
         private async Task ConnectWebSocket(PeerConnection peer)
         {
             // Close any existing WebSocket
-            try { peer.WsCts?.Cancel(); } catch { }
-            try { peer.LiveSocket?.Dispose(); } catch { }
+            try { peer.WsCts?.Cancel(); } catch { } // Best-effort: failure is acceptable
+            try { peer.LiveSocket?.Dispose(); } catch { } // Best-effort: failure is acceptable
 
             try
             {
@@ -410,6 +410,15 @@ namespace FlyShelf.Classes
                                     if (Guid.TryParse(tidStr, out Guid tid))
                                         LanTransferManager.Instance.HandlePeerComplete(tid);
                                 }
+                                // C1 fix: Handle TransferRetryRequest — receiver asking us to re-send a file
+                                else if (msgType == "TransferRetryRequest" && LanTransferManager.Instance != null)
+                                {
+                                    string tidStr = root.TryGetProperty("transferId", out var ti) ? ti.GetString() ?? "" : "";
+                                    string srcDeviceId = peer.DeviceId;
+                                    long bytesTransferred = root.TryGetProperty("bytesTransferred", out var bt) ? bt.GetInt64() : 0;
+                                    if (Guid.TryParse(tidStr, out Guid tid))
+                                        _ = Task.Run(() => LanTransferManager.Instance.HandleTransferRetryRequest(tid, srcDeviceId, bytesTransferred));
+                                }
                                 else if (msgType == "TransferCheckpoint" && LanTransferManager.Instance != null)
                                 {
                                     // Checkpoint ACK from receiver — update our send session progress
@@ -462,13 +471,13 @@ namespace FlyShelf.Classes
                         stillAlive = true;
                     }
                 }
-                catch { }
+                catch (Exception ex) { Logger.LogAction("PEER", $"Health check failed for {peer.DeviceName}: {ex.Message}"); }
 
                 if (stillAlive)
                 {
                     Logger.LogAction("WS", $"ℹ️  {peer.DeviceName} still reachable — reconnecting WebSocket...");
-                    try { peer.WsCts?.Cancel(); } catch { }
-                    try { peer.LiveSocket?.Dispose(); } catch { }
+                    try { peer.WsCts?.Cancel(); } catch { } // Best-effort: failure is acceptable
+                    try { peer.LiveSocket?.Dispose(); } catch { } // Best-effort: failure is acceptable
                     peer.LiveSocket = null;
                     // Re-establish WebSocket with exponential backoff to prevent tight reconnect loops
                     peer.WsReconnectAttempts++;
@@ -597,7 +606,7 @@ namespace FlyShelf.Classes
                         $"active_devices/{_myPairingKey}/{_myDeviceId}/urlRequest.json");
                     await _sharedClient.DeleteAsync(rUrl);
                 }
-                catch { }
+                catch (Exception ex) { Logger.LogAction("PEER", $"Failed to clean urlRequest from Firebase: {ex.Message}"); }
 
                 _urlCleanedFromFirebase = true;
                 _urlRequestSent = false;
@@ -709,8 +718,8 @@ namespace FlyShelf.Classes
                         {
                             peer.IsAlive = false;
                             peer.ConsecutiveFailures = 0;
-                            try { peer.WsCts?.Cancel(); } catch { }
-                            try { peer.LiveSocket?.Dispose(); } catch { }
+                            try { peer.WsCts?.Cancel(); } catch { } // Best-effort: failure is acceptable
+                            try { peer.LiveSocket?.Dispose(); } catch { } // Best-effort: failure is acceptable
                             peer.LiveSocket = null;
                             await Handshake(peer);
                         });

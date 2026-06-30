@@ -180,7 +180,7 @@ namespace FlyShelf.Windows
                 // 7. Close on next dispatcher frame (allows compositor to flush)
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    try { Close(); } catch { }
+                    try { Close(); } catch { } // Best-effort: failure is acceptable
                 }), System.Windows.Threading.DispatcherPriority.Background);
             }
             catch { /* Window may already be disposed */ }

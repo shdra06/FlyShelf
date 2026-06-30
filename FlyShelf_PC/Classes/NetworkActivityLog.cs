@@ -133,7 +133,7 @@ namespace FlyShelf.Classes
                 Application.Current?.Dispatcher?.InvokeAsync(() =>
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name)));
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
     }
 }

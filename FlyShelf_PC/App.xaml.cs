@@ -132,7 +132,7 @@ public partial class App : Application
                 var standardError = new System.IO.StreamWriter(Console.OpenStandardError()) { AutoFlush = true };
                 Console.SetError(standardError);
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             // Retrieve console PID to pass to relaunch if needed
             int activeConsolePid = -1;
@@ -146,7 +146,7 @@ public partial class App : Application
                     activeConsolePid = (int)pid;
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             if (!FlyShelf.Classes.StartupHelper.IsPackaged())
             {
@@ -213,11 +213,11 @@ public partial class App : Application
                 {
                     if (sender is Window w && w.Icon == null)
                     {
-                        try { w.Icon = iconSource; } catch { }
+                        try { w.Icon = iconSource; } catch { } // Best-effort: failure is acceptable
                     }
                 }));
         }
-        catch { }
+        catch { } // Best-effort: failure is acceptable
 
         if (startInSafeMode)
         {
@@ -231,7 +231,7 @@ public partial class App : Application
                     safeModeError = System.IO.File.ReadAllText(crashPath);
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             this.ShutdownMode = ShutdownMode.OnLastWindowClose;
             LaunchSafeMode(new Exception(safeModeError));
@@ -246,7 +246,7 @@ public partial class App : Application
             _ = typeof(Wpf.Ui.Controls.SymbolIcon).FullName;
             _ = typeof(MicaWPF.Controls.MicaWindow).FullName;
         }
-        catch { }
+        catch { } // Best-effort: failure is acceptable
 
         // ═══ GLOBAL CRASH HANDLERS ═══
         // Register FIRST — before any init code that could throw.
@@ -256,7 +256,7 @@ public partial class App : Application
             if (_isHandlingCrash)
             {
                 // Re-entrant crash — avoid infinite loop, exit immediately
-                try { Environment.Exit(1); } catch { }
+                try { Environment.Exit(1); } catch { } // Best-effort: failure is acceptable
                 return;
             }
             _isHandlingCrash = true;
@@ -274,7 +274,7 @@ public partial class App : Application
             args.SetObserved();
             try { System.IO.File.AppendAllText(
                 System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "Logs", "flyshelf_debugger.log"),
-                $"[{DateTime.Now}] ASYNC SWALLOWED: {args.Exception.Message}\n"); } catch { }
+                $"[{DateTime.Now}] ASYNC SWALLOWED: {args.Exception.Message}\n"); } catch { } // Best-effort: failure is acceptable
         };
 
         // ------------------------------------------------------------------
@@ -605,7 +605,7 @@ public partial class App : Application
                         if (!System.IO.Directory.Exists(errorDir)) System.IO.Directory.CreateDirectory(errorDir);
                         System.IO.File.AppendAllText(System.IO.Path.Combine(errorDir, "startup_error.txt"), $"[MainWindow Startup Failed] {ex}\n");
 #endif
-                    } catch { }
+                    } catch { } // Best-effort: failure is acceptable
                     LaunchSafeMode(ex);
                 }
             }, System.Windows.Threading.DispatcherPriority.Background);
@@ -619,18 +619,21 @@ public partial class App : Application
                 if (!System.IO.Directory.Exists(errorDir)) System.IO.Directory.CreateDirectory(errorDir);
                 System.IO.File.WriteAllText(System.IO.Path.Combine(errorDir, "startup_error.txt"), ex.ToString());
 #endif
-            } catch { }
+            } catch { } // Best-effort: failure is acceptable
             TriggerSafeModeAndRestart($"[Startup Fatal Exception]\n{ex}");
         }
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // Stop all centrally-managed timers before tearing down services they may reference
+        try { FlyShelf.Classes.TimerManager.StopAll(); } catch { } // Best-effort: failure is acceptable
+
         // C-08: Unsubscribe from static SystemEvents to allow proper GC of App instance
-        try { Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged; } catch { }
+        try { Microsoft.Win32.SystemEvents.PowerModeChanged -= OnPowerModeChanged; } catch { } // Best-effort: failure is acceptable
 
         // Release single-instance mutex so a new instance can start cleanly
-        try { _mutex?.ReleaseMutex(); _mutex?.Dispose(); } catch { }
+        try { _mutex?.ReleaseMutex(); _mutex?.Dispose(); } catch { } // Best-effort: failure is acceptable
 
         // Stop any active audio playback on application exit
         ViewModels.ClipboardItem.StopActivePlayback();
@@ -638,30 +641,30 @@ public partial class App : Application
         _shakeTimer?.Dispose();
         
         // Stop reminder scheduler and flush pending saves
-        try { FlyShelf.Classes.ReminderScheduler.Stop(); } catch { }
-        try { FlyShelf.Classes.ReminderManager.SaveNow(); } catch { }
+        try { FlyShelf.Classes.ReminderScheduler.Stop(); } catch { } // Best-effort: failure is acceptable
+        try { FlyShelf.Classes.ReminderManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
 
         try
         {
             FlyShelf.Classes.NetworkSyncServer.Instance?.Stop();
         }
-        catch { }
+        catch { } // Best-effort: failure is acceptable
 
         try
         {
             FlyShelf.Classes.PeerManager.Instance?.Stop();
         }
-        catch { }
+        catch { } // Best-effort: failure is acceptable
         
         try
         {
             FlyShelf.Classes.CloudDiscoveryManager.PushTunnelUrl("offline", false).Wait(1500);
         }
-        catch { }
+        catch { } // Best-effort: failure is acceptable
         
         // Flush any pending notes and todos to disk
-        try { FlyShelf.Classes.NoteManager.SaveNow(); } catch { }
-        try { FlyShelf.Classes.TodoManager.SaveNow(); } catch { }
+        try { FlyShelf.Classes.NoteManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
+        try { FlyShelf.Classes.TodoManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
 
         FlyShelf.Classes.Logger.Shutdown();
         base.OnExit(e);
@@ -673,9 +676,9 @@ public partial class App : Application
     /// </summary>
     protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
     {
-        try { FlyShelf.Classes.ReminderManager.SaveNow(); } catch { }
-        try { FlyShelf.Classes.NoteManager.SaveNow(); } catch { }
-        try { FlyShelf.Classes.TodoManager.SaveNow(); } catch { }
+        try { FlyShelf.Classes.ReminderManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
+        try { FlyShelf.Classes.NoteManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
+        try { FlyShelf.Classes.TodoManager.SaveNow(); } catch { } // Best-effort: failure is acceptable
         base.OnSessionEnding(e);
     }
 
@@ -874,7 +877,7 @@ public partial class App : Application
                     }
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }, null, 0, SHAKE_FAST_MS); // Start at fast rate; auto-throttles to slow after 30s idle
     }
 
@@ -912,7 +915,7 @@ public partial class App : Application
                 return true;
             }
         }
-        catch { }
+        catch { } // Best-effort: failure is acceptable
         return false;
     }
 
@@ -947,7 +950,7 @@ public partial class App : Application
                 logicalY = y / scaleY;
             }
         }
-        catch { }
+        catch { } // Best-effort: failure is acceptable
 
         // Spawn position: anchor to bottom-left of the work area
         double safeWidth = 260;
@@ -1000,7 +1003,7 @@ public partial class App : Application
         {
             Classes.Logger.LogAction("AI_TEST_DIAG", msg);
         }
-        catch { }
+        catch { } // Best-effort: failure is acceptable
 #endif
     }
 
@@ -1109,7 +1112,7 @@ public partial class App : Application
                         });
                     }
                 }
-                catch { }
+                catch (Exception ex) { FlyShelf.Classes.Logger.LogAction("NETWORK", $"Tunnel health check scheduling failed: {ex.Message}"); }
             });
         }
     }

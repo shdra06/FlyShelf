@@ -150,7 +150,7 @@ namespace FlyShelf.ViewModels
                         }
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
 
                 if (needsLoad)
                 {
@@ -205,7 +205,7 @@ namespace FlyShelf.ViewModels
                     _playbackTimer?.Stop();
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void StopAudioInternal()
@@ -228,7 +228,7 @@ namespace FlyShelf.ViewModels
                     _playingItem = null;
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         // --- MEDIA EVENT HANDLERS ---

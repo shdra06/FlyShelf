@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Windows;
 using System.Windows.Threading;
 
@@ -37,7 +37,7 @@ namespace FlyShelf.Windows
         public void ClosePreview()
         {
             _autoCloseTimer?.Stop();
-            try { Close(); } catch { }
+            try { Close(); } catch { } // Best-effort: failure is acceptable
         }
 
         protected override void OnClosed(EventArgs e)

@@ -7,6 +7,7 @@ using System.Windows.Controls;
 using System.Windows.Ink;
 using System.Windows.Media;
 using FlyShelf.Classes;
+using ICSharpCode.AvalonEdit.Highlighting;
 
 namespace FlyShelf.Windows
 {
@@ -15,6 +16,7 @@ namespace FlyShelf.Windows
         private FlyShelf.ViewModels.ClipboardItem _item;
         private Point _startPoint;
         private bool _isImageLoaded = false;
+        private string _markdownRawContent = null;
         private global::Windows.Media.Ocr.OcrResult _ocrResult = null;
         private System.Collections.Generic.List<FlyShelf.Classes.OcrPreprocessor.MergedOcrWord> _mergedOcrWords = null;
         private string _mergedOcrText = null;
@@ -82,7 +84,10 @@ namespace FlyShelf.Windows
 
         private async System.Threading.Tasks.Task LoadContentAsync()
         {
-            if (_item == null || string.IsNullOrEmpty(_item.FilePath)) return;
+            if (_item == null) return;
+
+            // Markdown clipboard items may have RawContent but no FilePath — allow them through
+            if (string.IsNullOrEmpty(_item.FilePath) && _item.Extension != "MARKDOWN" && _item.ItemType != FlyShelf.ViewModels.ClipboardItemType.Code && _item.Extension != "JSON") return;
 
             LoadingProgress.Visibility = Visibility.Visible;
 
@@ -211,13 +216,167 @@ namespace FlyShelf.Windows
                 else if (ext == ".pdf" || ext == ".html" || ext == ".htm" || ext == ".xml")
                 {
                     WebPreview.Visibility = Visibility.Visible;
-                    try { WebPreview.Navigate(new Uri(_item.FilePath)); } catch { }
+                    try { WebPreview.Navigate(new Uri(_item.FilePath)); } catch { } // Best-effort: failure is acceptable
                     
                     this.Width = 600;
                     this.Height = SystemParameters.WorkArea.Height * 0.8;
                     _isImageLoaded = true; // allow dragging natively
                 }
-                else if (ext == ".docx" || ext == ".txt" || ext == ".log" || ext == ".md" || ext == ".cs" || ext == ".cpp" || ext == ".js" || ext == ".json")
+                else if (ext == ".md" || _item.Extension == "MARKDOWN")
+                {
+                    // Render Markdown beautifully using WebView2 + MarkdownTemplate (same engine as PDF export)
+                    try
+                    {
+                        string mdText = null;
+                        if (!string.IsNullOrEmpty(_item.FilePath) && File.Exists(_item.FilePath))
+                        {
+                            mdText = await System.Threading.Tasks.Task.Run(() =>
+                            {
+                                try { return File.ReadAllText(_item.FilePath); }
+                                catch { return null; }
+                            });
+                        }
+                        if (string.IsNullOrEmpty(mdText) && !string.IsNullOrEmpty(_item.RawContent))
+                        {
+                            mdText = _item.RawContent;
+                        }
+
+                        if (!string.IsNullOrEmpty(mdText))
+                        {
+                            _markdownRawContent = mdText;
+                            MarkdownWebView.Visibility = Visibility.Visible;
+                            
+                            // Initialize WebView2 with isolated user data folder
+                            string userDataFolder = System.IO.Path.Combine(
+                                System.IO.Path.GetTempPath(), 
+                                "FlyShelf_QuickLook_" + System.Diagnostics.Process.GetCurrentProcess().Id);
+                            var env = await Microsoft.Web.WebView2.Core.CoreWebView2Environment.CreateAsync(null, userDataFolder);
+                            await MarkdownWebView.EnsureCoreWebView2Async(env);
+                            
+                            // Enable text selection + right-click copy, disable dev tools
+                            MarkdownWebView.CoreWebView2.Settings.AreDevToolsEnabled = false;
+                            MarkdownWebView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = true;
+                            MarkdownWebView.CoreWebView2.Settings.IsZoomControlEnabled = true;
+                            MarkdownWebView.CoreWebView2.Settings.IsPinchZoomEnabled = true;
+                            
+                            // Track zoom changes for the zoom label
+                            MarkdownWebView.ZoomFactorChanged += MarkdownWebView_ZoomFactorChanged;
+                            
+                            string html = FlyShelf.Classes.MarkdownTemplate.GetHtml(mdText);
+                            MarkdownWebView.NavigateToString(html);
+                            
+                            // Show markdown-specific buttons
+                            MdToPdfBtn.Visibility = Visibility.Visible;
+                            ZoomResetBtn.Visibility = Visibility.Visible;
+                        }
+                        else
+                        {
+                            TextPreviewScroll.Visibility = Visibility.Visible;
+                            TextPreview.Text = "[Empty Markdown]";
+                        }
+                    }
+                    catch
+                    {
+                        // Fallback to raw text if WebView2 rendering fails
+                        TextPreviewScroll.Visibility = Visibility.Visible;
+                        TextPreview.Text = _item.RawContent ?? "[Failed to render Markdown]";
+                    }
+
+                    this.Width = 600;
+                    this.Height = 700;
+                    _isImageLoaded = true;
+                }
+                else if (ext == ".svg")
+                {
+                    // Render SVG using WebBrowser
+                    try
+                    {
+                        string svgContent = await System.Threading.Tasks.Task.Run(() =>
+                        {
+                            try { return File.ReadAllText(_item.FilePath); }
+                            catch { return null; }
+                        });
+                        if (!string.IsNullOrEmpty(svgContent))
+                        {
+                            WebPreview.Visibility = Visibility.Visible;
+                            string html = $"<!DOCTYPE html><html><body style='margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#1a1a2e'>{svgContent}</body></html>";
+                            WebPreview.NavigateToString(html);
+                        }
+                    }
+                    catch { } // Best-effort: failure is acceptable
+                    this.Width = 500;
+                    this.Height = 500;
+                    _isImageLoaded = true;
+                }
+                else if (ext == ".cs" || ext == ".cpp" || ext == ".c" || ext == ".h" ||
+                         ext == ".js" || ext == ".ts" || ext == ".jsx" || ext == ".tsx" ||
+                         ext == ".py" || ext == ".java" || ext == ".json" ||
+                         ext == ".xml" || ext == ".yaml" || ext == ".yml" ||
+                         ext == ".sql" || ext == ".sh" || ext == ".bat" || ext == ".ps1" ||
+                         ext == ".css" || ext == ".html" || ext == ".htm" ||
+                         _item.Extension == "JSON" || _item.IsCodePreview)
+                {
+                    // Syntax-highlighted code preview via AvalonEdit
+                    string codeText = null;
+                    if (!string.IsNullOrEmpty(_item.FilePath) && File.Exists(_item.FilePath))
+                    {
+                        codeText = await System.Threading.Tasks.Task.Run(() =>
+                        {
+                            try { return File.ReadAllText(_item.FilePath); }
+                            catch { return null; }
+                        });
+                    }
+                    if (string.IsNullOrEmpty(codeText) && !string.IsNullOrEmpty(_item.RawContent))
+                        codeText = _item.RawContent;
+
+                    if (!string.IsNullOrEmpty(codeText))
+                    {
+                        // Auto-format JSON
+                        if ((ext == ".json" || _item.Extension == "JSON") && 
+                            FlyShelf.Classes.SmartContentDetector.IsValidJson(codeText))
+                        {
+                            codeText = FlyShelf.Classes.SmartContentDetector.PrettyPrintJson(codeText);
+                        }
+
+                        // Map extension to AvalonEdit highlighting name
+                        string highlightName = (ext?.TrimStart('.') ?? _item.Extension ?? "").ToLower() switch
+                        {
+                            "cs" => "C#",
+                            "c#" => "C#",
+                            "cpp" or "c" or "h" or "c++" => "C++",
+                            "js" or "jsx" or "ts" or "tsx" or "javascript" => "JavaScript",
+                            "json" => "JavaScript", // JSON highlights well with JS rules
+                            "py" or "python" => "Python",
+                            "java" => "Java",
+                            "xml" or "xaml" or "svg" or "csproj" => "XML",
+                            "html" or "htm" => "HTML",
+                            "css" => "CSS",
+                            "sql" => "SQL",
+                            "bat" or "cmd" or "ps1" or "powershell" or "sh" or "bash" => "Python", // Approximate
+                            _ => null
+                        };
+
+                        CodePreview.Text = codeText;
+                        if (highlightName != null)
+                        {
+                            var highlighting = HighlightingManager.Instance.GetDefinition(highlightName);
+                            if (highlighting != null)
+                                CodePreview.SyntaxHighlighting = highlighting;
+                        }
+                        CodePreview.Visibility = Visibility.Visible;
+                    }
+                    else
+                    {
+                        TextPreviewScroll.Visibility = Visibility.Visible;
+                        TextPreview.Text = "[Empty file]";
+                    }
+
+                    this.Width = 650;
+                    this.Height = 700;
+                    _isImageLoaded = true;
+                    if (TranslateBtn != null) TranslateBtn.Visibility = Visibility.Visible;
+                }
+                else if (ext == ".docx" || ext == ".txt" || ext == ".log")
                 {
                     TextPreviewScroll.Visibility = Visibility.Visible;
                     
@@ -247,7 +406,7 @@ namespace FlyShelf.Windows
                                 return File.ReadAllText(_item.FilePath);
                             }
                         } 
-                        catch { }
+                        catch { } // Best-effort: failure is acceptable
                         return null;
                     });
 
@@ -295,7 +454,7 @@ namespace FlyShelf.Windows
                     this.Height = 350;
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
             finally
             {
                 LoadingProgress.Visibility = Visibility.Collapsed;
@@ -519,7 +678,7 @@ namespace FlyShelf.Windows
                 // Allows the entire floating object to act as a 100% native draggable window!
                 if (e.LeftButton == MouseButtonState.Pressed && e.ClickCount == 1)
                 {
-                    try { this.DragMove(); } catch { }
+                    try { this.DragMove(); } catch { } // Best-effort: failure is acceptable
                 }
             }
         }
@@ -671,8 +830,76 @@ namespace FlyShelf.Windows
             {
                 WebPreview.Dispose();
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
+            try
+            {
+                MarkdownWebView.Dispose();
+            }
+            catch { } // Best-effort: failure is acceptable
             base.OnClosed(e);
+        }
+
+        // ═══ Markdown Preview: Zoom & PDF Export ═══
+
+        private void MarkdownWebView_ZoomFactorChanged(object sender, EventArgs e)
+        {
+            try
+            {
+                int pct = (int)Math.Round(MarkdownWebView.ZoomFactor * 100);
+                ZoomLabel.Text = $"{pct}%";
+            }
+            catch { } // Best-effort: failure is acceptable
+        }
+
+        private void MarkdownZoomReset_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                MarkdownWebView.ZoomFactor = 1.0;
+            }
+            catch { } // Best-effort: failure is acceptable
+        }
+
+        private async void MarkdownToPdf_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_markdownRawContent)) return;
+
+            try
+            {
+                var dlg = new Microsoft.Win32.SaveFileDialog
+                {
+                    Title = "Export Markdown as PDF",
+                    Filter = "PDF Files|*.pdf",
+                    DefaultExt = ".pdf",
+                    FileName = System.IO.Path.GetFileNameWithoutExtension(_item?.FilePath ?? "document") + ".pdf"
+                };
+
+                if (dlg.ShowDialog() == true)
+                {
+                    MdToPdfBtn.IsEnabled = false;
+                    LoadingProgress.Visibility = Visibility.Visible;
+
+                    bool success = await FlyShelf.Classes.WebView2Converter.ConvertMarkdownToPdfAsync(_markdownRawContent, dlg.FileName);
+
+                    LoadingProgress.Visibility = Visibility.Collapsed;
+                    MdToPdfBtn.IsEnabled = true;
+
+                    if (success && File.Exists(dlg.FileName))
+                    {
+                        // Open the exported PDF
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = dlg.FileName,
+                            UseShellExecute = true
+                        });
+                    }
+                }
+            }
+            catch
+            {
+                LoadingProgress.Visibility = Visibility.Collapsed;
+                MdToPdfBtn.IsEnabled = true;
+            }
         }
 
         private async void OcrButton_Click(object sender, RoutedEventArgs e)
@@ -789,7 +1016,7 @@ namespace FlyShelf.Windows
                                                 $"QuickLook {variants[v].name}: {varResult.Lines.Count} lines, {charCount} chars");
                                         }
                                     }
-                                    catch { }
+                                    catch { } // Best-effort: failure is acceptable
                                     finally
                                     {
                                         variants[v].bitmap.Dispose();
@@ -848,7 +1075,7 @@ namespace FlyShelf.Windows
             string textToCopy = _mergedOcrText ?? _ocrResult?.Text ?? "";
             try
             {
-                if (ClipboardHelper.SafeSetText(textToCopy))
+                if (ClipboardHelper.SafeSetTextAllowCapture(textToCopy))
                 {
                     FlyShelf.Windows.ToastWindow.ShowToast("All Image Text Copied to Clipboard! 📋");
                 }
@@ -1032,7 +1259,7 @@ namespace FlyShelf.Windows
                                 FlyShelf.Windows.ToastWindow.ShowToast($"Copied: {wordText}");
                             }
                         }
-                        catch { }
+                        catch { } // Best-effort: failure is acceptable
                     };
 
                     var copySelectedItem = new System.Windows.Controls.MenuItem { Header = "Copy Selected Words" };
@@ -1052,7 +1279,7 @@ namespace FlyShelf.Windows
                                 FlyShelf.Windows.ToastWindow.ShowToast("Copied full line");
                             }
                         }
-                        catch { }
+                        catch { } // Best-effort: failure is acceptable
                     };
 
                     menu.Items.Add(copyWordItem);
@@ -1130,11 +1357,11 @@ namespace FlyShelf.Windows
                         };
                         var menu = new System.Windows.Controls.ContextMenu();
                         var copyWordItem = new System.Windows.Controls.MenuItem { Header = "Copy Word" };
-                        copyWordItem.Click += (s, ev) => { try { ClipboardHelper.SafeSetText(wordText); } catch { } };
+                        copyWordItem.Click += (s, ev) => { try { ClipboardHelper.SafeSetText(wordText); } catch { } /* Best-effort: failure is acceptable */ };
                         var copySelectedItem = new System.Windows.Controls.MenuItem { Header = "Copy Selected Words" };
                         copySelectedItem.Click += (s, ev) => { CopySelectedOcrWords(); };
                         var copyLineItem = new System.Windows.Controls.MenuItem { Header = "Copy Full Line" };
-                        copyLineItem.Click += (s, ev) => { try { ClipboardHelper.SafeSetText(fullLineText); } catch { } };
+                        copyLineItem.Click += (s, ev) => { try { ClipboardHelper.SafeSetText(fullLineText); } catch { } /* Best-effort: failure is acceptable */ };
                         menu.Items.Add(copyWordItem);
                         menu.Items.Add(copySelectedItem);
                         menu.Items.Add(new System.Windows.Controls.Separator());
@@ -1220,7 +1447,7 @@ namespace FlyShelf.Windows
                 string combined = string.Join(" ", _selectedWordTexts);
                 FlyShelf.Classes.Logger.LogAction("OCR_COPY", $"Copying {_selectedWordTexts.Count} words: [{combined}]");
                 
-                if (ClipboardHelper.SafeSetText(combined))
+                if (ClipboardHelper.SafeSetTextAllowCapture(combined))
                 {
                     // Verify clipboard was actually set
                     try
@@ -1228,7 +1455,7 @@ namespace FlyShelf.Windows
                         string verify = System.Windows.Clipboard.GetText();
                         FlyShelf.Classes.Logger.LogAction("OCR_COPY", $"Clipboard verified: [{verify}]");
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                     
                     FlyShelf.Windows.ToastWindow.ShowToast($"Copied {_selectedWordTexts.Count} word{(_selectedWordTexts.Count > 1 ? "s" : "")}");
                 }
@@ -1595,7 +1822,7 @@ namespace FlyShelf.Windows
                         DoodleEraserLabel.Text = "Eraser";
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
             e.Handled = true;
         }

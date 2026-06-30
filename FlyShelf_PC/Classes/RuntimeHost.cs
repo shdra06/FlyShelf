@@ -25,7 +25,7 @@ namespace FlyShelf.Classes
             }
 
             // Version changed or clean install. Rebuild payload directories natively.
-            try { if (Directory.Exists(ExecutionDir)) Directory.Delete(ExecutionDir, true); } catch { }
+            try { if (Directory.Exists(ExecutionDir)) Directory.Delete(ExecutionDir, true); } catch { } // Best-effort: failure is acceptable
             Directory.CreateDirectory(ExecutionDir);
 
             ExtractResource("FlyShelf.WebClient.zip", Path.Combine(ExecutionDir, "Resources", "WebClient"));
@@ -66,7 +66,7 @@ namespace FlyShelf.Classes
                         }
                     }
                 }
-                try { File.Delete(tempZip); } catch { }
+                try { File.Delete(tempZip); } catch { } // Best-effort: failure is acceptable
             }
         }
     }

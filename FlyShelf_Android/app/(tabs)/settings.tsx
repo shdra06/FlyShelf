@@ -23,13 +23,13 @@ const StepSlider = ({ value, min, max, step, onValueChange, trackColor, thumbCol
   return (
     <View style={{marginTop: 8}}>
       <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
-        <TouchableOpacity onPress={() => { if (value - step >= min) onValueChange(value - step); }} style={{width: 36, height: 36, borderRadius: 10, backgroundColor: '#2A2F3A', alignItems: 'center', justifyContent: 'center'}}>
+        <TouchableOpacity onPress={() => { if (value - step >= min) onValueChange(value - step); }} style={{width: 36, height: 36, borderRadius: 10, backgroundColor: '#2A2F3A', alignItems: 'center', justifyContent: 'center'}} accessibilityLabel={`Decrease ${label}`} accessibilityRole="button">
           <Text style={{color: '#FFF', fontSize: 18, fontWeight: '800'}}>−</Text>
         </TouchableOpacity>
         <View style={{flex: 1, height: 8, backgroundColor: '#2A2F3A', borderRadius: 4, overflow: 'hidden'}}>
           <View style={{width: `${pct}%`, height: '100%', backgroundColor: trackColor, borderRadius: 4}} />
         </View>
-        <TouchableOpacity onPress={() => { if (value + step <= max) onValueChange(value + step); }} style={{width: 36, height: 36, borderRadius: 10, backgroundColor: '#2A2F3A', alignItems: 'center', justifyContent: 'center'}}>
+        <TouchableOpacity onPress={() => { if (value + step <= max) onValueChange(value + step); }} style={{width: 36, height: 36, borderRadius: 10, backgroundColor: '#2A2F3A', alignItems: 'center', justifyContent: 'center'}} accessibilityLabel={`Increase ${label}`} accessibilityRole="button">
           <Text style={{color: '#FFF', fontSize: 18, fontWeight: '800'}}>+</Text>
         </TouchableOpacity>
       </View>
@@ -214,7 +214,7 @@ export default function SettingsScreen() {
           </View>
 
           {/* Save Button at the top */}
-          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
+          <TouchableOpacity style={styles.saveButton} onPress={handleSave} accessibilityLabel="Save configuration" accessibilityRole="button">
             <Text style={styles.saveButtonText}>Save Configuration</Text>
           </TouchableOpacity>
 
@@ -234,6 +234,8 @@ export default function SettingsScreen() {
                 placeholder="e.g. 192.168.1.5:8999"
                 placeholderTextColor="#4C5361"
                 keyboardType="numbers-and-punctuation"
+                accessibilityLabel="PC API address"
+                accessibilityRole="text"
               />
               <Text style={styles.helperText}>Fallback IP for direct LAN transfers when your PC isn't auto-detected. If your PC shows up in Active Devices, this can be left blank. Format: 192.168.x.x:8999</Text>
             </View>
@@ -249,6 +251,8 @@ export default function SettingsScreen() {
                 onChangeText={setDeviceNameInput}
                 placeholder="e.g. John's Mobile Profile"
                 placeholderTextColor="#4C5361"
+                accessibilityLabel="Device profile name"
+                accessibilityRole="text"
               />
               <Text style={styles.helperText}>This name identifies you on the clipboard feed.</Text>
             </View>
@@ -266,6 +270,8 @@ export default function SettingsScreen() {
                     onValueChange={setGlobalSyncInput} 
                     trackColor={{ false: "#2A2F3A", true: "#4A62EB" }} 
                     thumbColor="#FFF"
+                    accessibilityLabel={globalSyncInput ? 'Cloud discovery enabled' : 'Cloud discovery disabled'}
+                    accessibilityRole="switch"
                   />
               </View>
               <Text style={styles.helperText}>If disabled, your clipboard and files will ONLY synchronize when connected locally. Cloud Discovery allows paired devices to find each other over the internet using a lightweight signaling coordinator.</Text>
@@ -286,6 +292,8 @@ export default function SettingsScreen() {
                 borderWidth: 1,
                 borderColor: colors.border.subtle,
               }}
+              accessibilityLabel={pairedDevices.length > 0 ? `${pairedDevices.length} devices paired, tap to manage` : 'No devices paired, tap to pair'}
+              accessibilityRole="button"
             >
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <View style={{
@@ -353,6 +361,8 @@ export default function SettingsScreen() {
                     onValueChange={setFloatingBallInput} 
                     trackColor={{ false: "#2A2F3A", true: "#8B5CF6" }} 
                     thumbColor="#FFF"
+                    accessibilityLabel={floatingBallInput ? 'Floating ball enabled' : 'Floating ball disabled'}
+                    accessibilityRole="switch"
                   />
               </View>
               <Text style={styles.helperText}>Enable the persistent floating ball on your screen for instant overlay clipboard access anywhere.</Text>
@@ -430,6 +440,8 @@ export default function SettingsScreen() {
                   }}
                   onPress={handleUpdatePress}
                   disabled={updateStatus === 'checking'}
+                  accessibilityLabel={updateStatus === 'available' ? `Download version ${latestVersion}` : updateStatus === 'checking' ? 'Checking for updates' : 'Check for updates'}
+                  accessibilityRole="button"
                 >
                   {getUpdateButtonContent()}
                 </TouchableOpacity>
@@ -466,6 +478,8 @@ export default function SettingsScreen() {
             <TouchableOpacity
               onPress={() => setShowNetLogs(!showNetLogs)}
               style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+              accessibilityLabel={`Network logs, ${netLogCount} entries, ${showNetLogs ? 'collapse' : 'expand'}`}
+              accessibilityRole="button"
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                 <Text style={{ fontSize: 18 }}>🌐</Text>
@@ -489,6 +503,8 @@ export default function SettingsScreen() {
                   await Clipboard.setStringAsync(logs);
                   Alert.alert('Copied!', `${logs.split('\n').length} network log entries copied.`);
                 }}
+                accessibilityLabel="Copy network logs"
+                accessibilityRole="button"
               >
                 <Text style={{ color: '#60A5FA', fontWeight: '700', fontSize: 12 }}>📋 Copy</Text>
               </TouchableOpacity>
@@ -500,6 +516,8 @@ export default function SettingsScreen() {
                   await Clipboard.setStringAsync(allLogs);
                   Alert.alert('Copied!', `${allLogs.split('\n').length} total log entries copied.`);
                 }}
+                accessibilityLabel="Copy all debug logs"
+                accessibilityRole="button"
               >
                 <Text style={{ color: '#8B5CF6', fontWeight: '700', fontSize: 12 }}>📋 All Logs</Text>
               </TouchableOpacity>
@@ -512,6 +530,8 @@ export default function SettingsScreen() {
                   setNetLogCount(0);
                   Alert.alert('Cleared', 'All logs cleared.');
                 }}
+                accessibilityLabel="Clear all logs"
+                accessibilityRole="button"
               >
                 <Text style={{ color: '#EF4444', fontWeight: '700', fontSize: 12 }}>🗑️</Text>
               </TouchableOpacity>
@@ -550,6 +570,8 @@ export default function SettingsScreen() {
                   }
                 } catch (e: any) { Alert.alert('Error', e?.message || 'Unknown error'); }
               }}
+              accessibilityLabel="Send logs to PC dashboard"
+              accessibilityRole="button"
             >
               <Text style={{ color: '#3B82F6', fontWeight: '700', fontSize: 13 }}>📤 Send Logs to PC Dashboard</Text>
             </TouchableOpacity>
@@ -579,7 +601,7 @@ export default function SettingsScreen() {
                   <Text style={{ color: '#4B5563', fontSize: 10, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', fontWeight: '600' }}>
                     LIVE NETWORK FEED — {netLogEntries.length} entries
                   </Text>
-                  <TouchableOpacity onPress={() => setNetLogEntries(getNetworkLogs().slice(0, 100))}>
+                  <TouchableOpacity onPress={() => setNetLogEntries(getNetworkLogs().slice(0, 100))} accessibilityLabel="Refresh network logs" accessibilityRole="button" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                     <Text style={{ color: '#6366F1', fontSize: 10, fontWeight: '700' }}>↻ Refresh</Text>
                   </TouchableOpacity>
                 </View>

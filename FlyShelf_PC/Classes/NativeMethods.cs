@@ -476,7 +476,7 @@ public static partial class NativeMethods
                 }
             }
         }
-        catch { }
+        catch { } // Best-effort: failure is acceptable
         return true; // Default to true if anything fails
     }
 
@@ -593,7 +593,7 @@ public static partial class NativeMethods
                 DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
             }
         }
-        catch { }
+        catch { } // Best-effort: failure is acceptable
 
         // Set backdrop and background based on active theme and blur setting
         if (window is MicaWPF.Controls.MicaWindow micaWin)
@@ -680,7 +680,7 @@ public static partial class NativeMethods
                     DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             // Defer setting to Send priority so it runs immediately after the activation message is processed by DefWindowProc
             window.Dispatcher.InvokeAsync(() =>
@@ -695,7 +695,7 @@ public static partial class NativeMethods
                         DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref borderColor, sizeof(int));
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }, System.Windows.Threading.DispatcherPriority.Send);
         }
     }

@@ -50,7 +50,7 @@ namespace FlyShelf
                         DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }, System.Windows.Threading.DispatcherPriority.Send);
 
             // ═══ Auto-refresh desktop wallpaper if it changed while window was hidden ═══
@@ -144,7 +144,7 @@ namespace FlyShelf
                         DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }, System.Windows.Threading.DispatcherPriority.Send);
         }
 
@@ -316,7 +316,7 @@ namespace FlyShelf
                                 }
                             }
                         }
-                        catch { }
+                        catch { } // Best-effort: failure is acceptable
                     });
                 }
             }
@@ -642,7 +642,7 @@ namespace FlyShelf
                             ShelfListView.InvalidateVisual();
                         }
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }, System.Windows.Threading.DispatcherPriority.Loaded);
             }, System.Windows.Threading.DispatcherPriority.Render);
         }
@@ -873,7 +873,7 @@ namespace FlyShelf
                         }
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             });
         }
 

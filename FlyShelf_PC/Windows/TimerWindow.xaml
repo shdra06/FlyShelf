@@ -9,7 +9,8 @@
         Topmost="True"
         Background="Transparent" ResizeMode="NoResize"
         AllowsTransparency="True"
-        Icon="/Resources/FlyShelfLogo.ico">
+        Icon="/Resources/FlyShelfLogo.ico"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
 
     <Grid>
         <!-- The Floating Table Timer Container (Dome Shape) -->
@@ -61,6 +62,7 @@
                                 </Style>
                             </Border.Style>
                             <TextBox x:Name="CustomTimeInput" VerticalContentAlignment="Center" HorizontalContentAlignment="Center"
+                                     AutomationProperties.Name="Timer minutes"
                                      FontSize="12" FontWeight="SemiBold" Text="5" Padding="0" MaxLength="5"
                                      Background="Transparent" BorderThickness="0" Foreground="White" 
                                      CaretBrush="White" SelectionBrush="#8B5CF6"
@@ -133,6 +135,7 @@
 
                         <!-- Play/Pause Button -->
                         <ui:Button x:Name="PlayPauseBtn" Grid.Column="0" Width="30" Height="30" CornerRadius="15"
+                                   AutomationProperties.Name="Play or pause timer"
                                    Background="#8B5CF6" BorderBrush="Transparent" Foreground="White" Padding="0"
                                    Click="Action_Click" Cursor="Hand" ToolTip="Play/Pause">
                             <ui:SymbolIcon x:Name="PlayPauseIcon" Symbol="Pause16" FontSize="12"/>
@@ -140,6 +143,7 @@
 
                         <!-- Reset Button -->
                         <ui:Button x:Name="ResetBtn" Grid.Column="2" Width="30" Height="30" CornerRadius="15"
+                                   AutomationProperties.Name="Reset timer"
                                    Background="#1FFFFFFF" BorderBrush="#15FFFFFF" Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}" Padding="0"
                                    Click="Reset_Click" Cursor="Hand" ToolTip="Reset Timer">
                             <ui:SymbolIcon Symbol="ArrowCounterclockwise16" FontSize="12"/>

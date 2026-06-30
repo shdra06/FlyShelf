@@ -7,7 +7,8 @@
         Title="Text Shortcuts" Height="560" Width="480"
         WindowStartupLocation="CenterScreen"
         SystemBackdropType="Mica" Background="Transparent"
-        Icon="/Resources/FlyShelfLogo.ico">
+        Icon="/Resources/FlyShelfLogo.ico"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
     
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="32" ResizeBorderThickness="6" CornerRadius="12" GlassFrameThickness="-1" />
@@ -49,6 +50,7 @@
             <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                 <!-- Add Shortcut Toggle Button -->
                 <ui:Button x:Name="ToggleAddMenuBtn" Appearance="Transparent" Click="ToggleAddMenuBtn_Click"
+                           AutomationProperties.Name="Add text shortcut"
                            ToolTip="Add New Shortcut" Padding="6" Margin="0,0,8,0" CornerRadius="8"
                            Background="Transparent" BorderThickness="0" WindowChrome.IsHitTestVisibleInChrome="True">
                     <ui:Button.Icon>
@@ -216,16 +218,17 @@
                             <ColumnDefinition Width="8"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
-                        <ui:TextBox x:Name="TriggerInput" Grid.Column="0" PlaceholderText="e.g. /address" FontSize="12"/>
-                        <ui:TextBox x:Name="LabelInput" Grid.Column="2" PlaceholderText="e.g. Home Address" FontSize="12"/>
+                        <ui:TextBox x:Name="TriggerInput" Grid.Column="0" PlaceholderText="e.g. /address" FontSize="12" AutomationProperties.Name="Shortcut trigger text"/>
+                        <ui:TextBox x:Name="LabelInput" Grid.Column="2" PlaceholderText="e.g. Home Address" FontSize="12" AutomationProperties.Name="Shortcut label"/>
                     </Grid>
 
                     <!-- Expansion input -->
                     <ui:TextBox x:Name="ExpansionInput" PlaceholderText="e.g. 42 Maple Street, Apt 7B, New York, NY 10001" FontSize="12"
+                                AutomationProperties.Name="Shortcut expansion text"
                                 AcceptsReturn="True" TextWrapping="Wrap" MinLines="1" MaxLines="2" Margin="0,0,0,8"/>
 
                     <!-- Add button -->
-                    <ui:Button x:Name="AddShortcutBtn" Appearance="Primary" Padding="14,6" Click="AddShortcut_Click" FontSize="12" CornerRadius="8" HorizontalAlignment="Right">
+                    <ui:Button x:Name="AddShortcutBtn" Appearance="Primary" Padding="14,6" Click="AddShortcut_Click" FontSize="12" CornerRadius="8" HorizontalAlignment="Right" AutomationProperties.Name="Save shortcut">
                         <StackPanel Orientation="Horizontal">
                             <ui:SymbolIcon Symbol="Add24" FontSize="13" Margin="0,0,6,0"/>
                             <TextBlock Text="Add Shortcut" FontSize="12" FontWeight="SemiBold"/>

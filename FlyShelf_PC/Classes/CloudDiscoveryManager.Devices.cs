@@ -129,7 +129,7 @@ namespace FlyShelf.Classes
                                 System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                                     Windows.ToastWindow.ShowToast("☁️ Cloud sync temporarily limited — retrying in 5 minutes"));
                             }
-                            catch { }
+                            catch { } // Best-effort: failure is acceptable
                         }
                     }
                     else
@@ -372,7 +372,7 @@ namespace FlyShelf.Classes
                 string url = (await AuthUrl($"device_groups/{pairingKey}/{groupId}.json"));
                 // SECURITY: Include ownerUid for Firebase rule ownership validation (M-01 hardening)
                 string ownerUid = "";
-                try { ownerUid = await FirebaseAuthManager.GetUidAsync() ?? ""; } catch { }
+                try { ownerUid = await FirebaseAuthManager.GetUidAsync() ?? ""; } catch (Exception ex) { Logger.LogAction("FIREBASE", $"UID fetch for device group failed: {ex.Message}"); }
                 var payload = new { name, deviceNames, ownerUid };
                 var json = JsonSerializer.Serialize(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");

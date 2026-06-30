@@ -450,6 +450,7 @@ namespace FlyShelf.Classes
                     }
                     _days = new ObservableCollection<TodoDay>();
                     _allDays = new List<TodoDay>();
+                    _isLoaded = true;
                 }
             }
         }
@@ -682,7 +683,7 @@ namespace FlyShelf.Classes
                     // Create backup before saving
                     if (File.Exists(_todosPath))
                     {
-                        try { File.Copy(_todosPath, _todosPath + ".bak", overwrite: true); } catch { }
+                        try { File.Copy(_todosPath, _todosPath + ".bak", overwrite: true); } catch { } // Best-effort: failure is acceptable
                     }
 
                     string tmpPath = _todosPath + ".tmp";
@@ -890,16 +891,17 @@ namespace FlyShelf.Classes
                         remoteDay.Date = remoteDay.Date.Kind == DateTimeKind.Utc ? remoteDay.Date.ToLocalTime().Date : remoteDay.Date.Date;
                         long remoteMod = remoteDay.LastModified ?? 0;
 
-                        var localDay = _days.FirstOrDefault(d => d.Date.Date == remoteDay.Date.Date);
-                        if (localDay == null)
+                        // Update _allDays (backing store) — mirrors NoteManager pattern
+                        var localAllDay = _allDays.FirstOrDefault(d => d.Date.Date == remoteDay.Date.Date);
+                        if (localAllDay == null)
                         {
-                            _days.Insert(0, remoteDay);
+                            _allDays.Add(remoteDay);
                             changed = true;
                         }
                         else
                         {
                             long localMod = 0;
-                            foreach (var item in localDay.Items)
+                            foreach (var item in localAllDay.Items)
                             {
                                 long iTs = new DateTimeOffset(item.CreatedAt).ToUnixTimeMilliseconds();
                                 if (iTs > localMod) localMod = iTs;
@@ -907,16 +909,17 @@ namespace FlyShelf.Classes
 
                             if (remoteMod > localMod)
                             {
-                                localDay.Items = new System.Collections.ObjectModel.ObservableCollection<TodoItem>(remoteDay.Items);
+                                localAllDay.Items = new System.Collections.ObjectModel.ObservableCollection<TodoItem>(remoteDay.Items);
                                 changed = true;
                             }
                         }
                     }
                     if (changed)
                     {
-                        var sorted = _days.OrderByDescending(d => d.Date).ToList();
+                        _allDays = _allDays.OrderByDescending(d => d.Date).ToList();
+                        // Rebuild _days from _allDays
                         _days.Clear();
-                        foreach (var d in sorted) _days.Add(d);
+                        foreach (var d in _allDays) _days.Add(d);
                     }
                 }
                 if (changed) ScheduleSave();

@@ -62,7 +62,7 @@ namespace FlyShelf.Classes
                     string ext = Path.GetExtension(item.FilePath).Replace(".", "").Trim();
                     pathExtMatch = ext.Equals(qLower, StringComparison.OrdinalIgnoreCase);
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
             bool typeMatch = item.ItemType.ToString().Equals(_query, StringComparison.OrdinalIgnoreCase);
 

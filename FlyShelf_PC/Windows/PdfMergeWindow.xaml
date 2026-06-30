@@ -6,7 +6,8 @@
         Title="PDF Merge" Height="580" Width="720"
         WindowStartupLocation="CenterScreen"
         SystemBackdropType="Mica" Background="Transparent"
-        Icon="/Resources/FlyShelfLogo.ico">
+        Icon="/Resources/FlyShelfLogo.ico"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
     
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="32" ResizeBorderThickness="6" CornerRadius="12" GlassFrameThickness="-1" />
@@ -233,19 +234,22 @@
                                     <!-- Reorder Pages -->
                                     <ui:Button Appearance="Transparent" Tag="{Binding}" Click="ReorderPages_Click" 
                                                ToolTip="Visual page reorder" Padding="7,5" Margin="0,0,2,0"
-                                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}">
+                                               Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"
+                                               AutomationProperties.Name="Reorder pages">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="DocumentMultiple24" FontSize="17"/></ui:Button.Icon>
                                     </ui:Button>
 
                                     <!-- Save single -->
                                     <ui:Button Appearance="Transparent" Tag="{Binding}" Click="SaveSinglePdf_Click" 
-                                               ToolTip="Save selected pages" Foreground="{DynamicResource SuccessColor}" Padding="5,4" Margin="0,0,2,0">
+                                               ToolTip="Save selected pages" Foreground="{DynamicResource SuccessColor}" Padding="5,4" Margin="0,0,2,0"
+                                               AutomationProperties.Name="Save selected pages">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Save24" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
 
                                     <!-- Delete -->
                                     <ui:Button Appearance="Transparent" Tag="{Binding}" Click="Remove_Click" 
-                                               ToolTip="Remove from list" Foreground="{DynamicResource DangerColor}" Padding="5,4">
+                                               ToolTip="Remove from list" Foreground="{DynamicResource DangerColor}" Padding="5,4"
+                                               AutomationProperties.Name="Remove PDF file">
                                         <ui:Button.Icon><ui:SymbolIcon Symbol="Delete24" FontSize="14"/></ui:Button.Icon>
                                     </ui:Button>
                                 </StackPanel>
@@ -265,7 +269,7 @@
             
             <!-- Left: Add -->
             <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
-                <ui:Button x:Name="AddFilesBtn" Appearance="Secondary" Padding="12,7" Click="AddPdf_Click" FontSize="12" CornerRadius="8" Margin="0,0,6,0">
+                <ui:Button x:Name="AddFilesBtn" Appearance="Secondary" Padding="12,7" Click="AddPdf_Click" FontSize="12" CornerRadius="8" Margin="0,0,6,0" AutomationProperties.Name="Add PDF files">
                     <StackPanel Orientation="Horizontal">
                         <ui:SymbolIcon Symbol="Add24" FontSize="13" Margin="0,0,6,0"/>
                         <TextBlock Text="Add Files" FontSize="12" FontWeight="Medium"/>
@@ -275,17 +279,17 @@
 
             <!-- Right: Cancel + Reverse + Save As + Merge -->
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                <ui:Button Content="Cancel" Appearance="Transparent" Margin="0,0,6,0" Padding="14,7" Click="Cancel_Click" FontSize="12" CornerRadius="8"/>
-                <ui:Button Appearance="Transparent" Margin="0,0,6,0" Padding="8,6" Click="ReverseAll_Click" ToolTip="Reverse file order" FontSize="12" CornerRadius="8">
+                <ui:Button Content="Cancel" Appearance="Transparent" Margin="0,0,6,0" Padding="14,7" Click="Cancel_Click" FontSize="12" CornerRadius="8" AutomationProperties.Name="Cancel"/>
+                <ui:Button Appearance="Transparent" Margin="0,0,6,0" Padding="8,6" Click="ReverseAll_Click" ToolTip="Reverse file order" FontSize="12" CornerRadius="8" AutomationProperties.Name="Reverse file order">
                     <StackPanel Orientation="Horizontal">
                         <ui:SymbolIcon Symbol="ArrowSort24" FontSize="13" Margin="0,0,4,0"/>
                         <TextBlock Text="Reverse" FontSize="12"/>
                     </StackPanel>
                 </ui:Button>
-                <ui:Button x:Name="SaveAsBtn" Appearance="Secondary" Margin="0,0,6,0" Padding="8,6" Click="SaveAs_Click" FontSize="13" CornerRadius="8">
+                <ui:Button x:Name="SaveAsBtn" Appearance="Secondary" Margin="0,0,6,0" Padding="8,6" Click="SaveAs_Click" FontSize="13" CornerRadius="8" AutomationProperties.Name="Save as">
                     <TextBlock Text="Save As" FontSize="13" FontWeight="SemiBold"/>
                 </ui:Button>
-                <ui:Button x:Name="MergeBtn" Appearance="Primary" Padding="16,7" Click="Merge_Click" FontSize="12" CornerRadius="8">
+                <ui:Button x:Name="MergeBtn" Appearance="Primary" Padding="16,7" Click="Merge_Click" FontSize="12" CornerRadius="8" AutomationProperties.Name="Merge PDF files">
                     <StackPanel Orientation="Horizontal">
                         <ui:SymbolIcon Symbol="DocumentCopy24" FontSize="13" Margin="0,0,6,0"/>
                         <TextBlock Text="Merge Files" FontSize="12" FontWeight="SemiBold"/>

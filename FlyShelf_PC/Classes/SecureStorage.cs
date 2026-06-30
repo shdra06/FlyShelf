@@ -23,8 +23,8 @@ namespace FlyShelf.Classes
             }
             catch (Exception ex)
             {
-                Logger.LogAction("SECURE_STORAGE", $"Encryption failed: {ex.Message}");
-                return plaintext; // Fallback to plaintext if DPAPI is unavailable
+                Logger.LogAction("SECURE_STORAGE", $"Encryption failed — refusing to store plaintext: {ex.Message}");
+                throw new CryptographicException($"DPAPI encryption failed: {ex.Message}", ex);
             }
         }
 

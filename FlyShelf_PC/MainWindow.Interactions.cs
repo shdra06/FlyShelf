@@ -136,15 +136,22 @@ namespace FlyShelf
                     var dropList = new System.Collections.Specialized.StringCollection();
                     dropList.Add(clipboardObj.FilePath);
                     dataObj.SetFileDropList(dropList);
-                    if (!string.IsNullOrEmpty(clipboardObj.RawContent))
-                    {
-                        dataObj.SetData(DataFormats.Text, clipboardObj.RawContent);
-                        dataObj.SetData(DataFormats.UnicodeText, clipboardObj.RawContent);
-                    }
-                    else
+                    // For executable/script files (.bat, .cmd, .ps1, .exe), text fields should receive
+                    // the file PATH, not the script content — that's what users expect when pasting.
+                    bool shouldPastePath = clipboardObj.IsTerminalPreview ||
+                        (!string.IsNullOrEmpty(clipboardObj.Extension) && (
+                            clipboardObj.Extension == ".EXE" || clipboardObj.Extension == ".MSI" ||
+                            clipboardObj.Extension == ".LNK"));
+
+                    if (shouldPastePath || string.IsNullOrEmpty(clipboardObj.RawContent))
                     {
                         dataObj.SetData(DataFormats.StringFormat, clipboardObj.FilePath);
                         dataObj.SetData(DataFormats.Text, clipboardObj.FilePath);
+                    }
+                    else if (!string.IsNullOrEmpty(clipboardObj.RawContent))
+                    {
+                        dataObj.SetData(DataFormats.Text, clipboardObj.RawContent);
+                        dataObj.SetData(DataFormats.UnicodeText, clipboardObj.RawContent);
                     }
                     dataObj.SetData("FileNameW", new string[] { clipboardObj.FilePath });
                     dataObj.SetData("FileName", new string[] { clipboardObj.FilePath });
@@ -444,7 +451,7 @@ namespace FlyShelf
                             // Close any stale preview that wasn't cleaned up
                             if (_dragPreviewWindow != null)
                             {
-                                try { _dragPreviewWindow.SafeClose(); } catch { }
+                                try { _dragPreviewWindow.SafeClose(); } catch { } // Best-effort: failure is acceptable
                                 _dragPreviewWindow = null;
                             }
 
@@ -590,7 +597,7 @@ namespace FlyShelf
             if (e.Action == DragAction.Cancel || e.Action == DragAction.Drop)
             {
                 // Drag is ending — close preview immediately, don't wait for finally block
-                try { _dragPreviewWindow?.SafeClose(); } catch { }
+                try { _dragPreviewWindow?.SafeClose(); } catch { } // Best-effort: failure is acceptable
                 _dragPreviewWindow = null;
             }
         }

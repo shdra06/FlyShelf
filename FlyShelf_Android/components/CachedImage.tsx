@@ -159,6 +159,9 @@ const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: 
       style={{ marginBottom: 8, height: 100, borderRadius: 12, backgroundColor: '#1C202B', justifyContent: 'center', alignItems: 'center' }}
       onPress={() => { setFailed(false); setRetryCount(c => c + 1); }}
       activeOpacity={0.7}
+      accessibilityLabel="Retry loading image"
+      accessibilityRole="button"
+      accessibilityHint="Attempts to reload the failed image"
     >
       <Text style={{ fontSize: 24 }}>🔄</Text>
       <Text style={{ color: '#8A8F98', fontSize: 11, marginTop: 4 }}>Tap to retry image</Text>
@@ -177,11 +180,12 @@ const CachedImage = React.memo(({ imgUri, onPress }: { imgUri: string; onPress: 
     : { width: '100%', minHeight: 160, maxHeight: 320, borderRadius: 12, backgroundColor: '#1C202B' };
 
   return (
-    <TouchableOpacity style={{ marginBottom: 8 }} onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity style={{ marginBottom: 8 }} onPress={onPress} activeOpacity={0.85} accessibilityLabel="Synced image" accessibilityRole="image" accessibilityHint="Tap to view full size">
       <Image
         source={{ uri: localUri }}
         style={imageStyle}
         contentFit="contain"
+        accessibilityLabel="Synced image preview"
         onError={() => {
           // If direct URL render fails, show retry instead of hiding
           setFailed(true);

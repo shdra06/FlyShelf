@@ -142,7 +142,7 @@ namespace FlyShelf.Windows
                     TimeDisplay.Foreground = new SolidColorBrush(DangerColor);
                     
                     DrawProgressArc(0);
-                    try { System.Media.SystemSounds.Exclamation.Play(); } catch { }
+                    try { System.Media.SystemSounds.Exclamation.Play(); } catch { } // Best-effort: failure is acceptable
                     this.Topmost = true;
                     this.Activate();
                     StartFlashAnimation();
@@ -351,7 +351,7 @@ namespace FlyShelf.Windows
         {
             if (e.ChangedButton == MouseButton.Left)
             {
-                try { this.DragMove(); } catch { }
+                try { this.DragMove(); } catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -402,7 +402,7 @@ namespace FlyShelf.Windows
                         StartTimer(new TimeSpan(0, m, s));
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
             else
             {

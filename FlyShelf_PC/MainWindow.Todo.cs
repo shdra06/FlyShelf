@@ -41,6 +41,7 @@ namespace FlyShelf
             // Close other modes
             if (_isNotesActive) CloseNotesPanel(immediate: true);
             if (_isResearchActive) CloseResearchPanel(immediate: true);
+            if (_isAiSettingsActive) CloseAiSettingsPanel(immediate: true);
             if (_isSearchActive) CloseSearch(switchingPanel: true);
             if (_isFilterBarActive) ToggleFilterBar(false);
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
@@ -627,7 +628,7 @@ namespace FlyShelf
 
         private void TodoStopwatch_Click(object sender, RoutedEventArgs e)
         {
-            try { _activeTimerWindow?.Close(); } catch { }
+            try { _activeTimerWindow?.Close(); } catch { } // Best-effort: failure is acceptable
             var tw = new FlyShelf.Windows.TimerWindow(null);
             tw.Show();
             _activeTimerWindow = tw;
@@ -642,7 +643,7 @@ namespace FlyShelf
                 {
                 // If the item already has a timer duration set, launch with that duration
                 string context = item.HasTimer ? $"{item.TimerMinutes}m" : null;
-                try { _activeTimerWindow?.Close(); } catch { }
+                try { _activeTimerWindow?.Close(); } catch { } // Best-effort: failure is acceptable
                 var tw = new FlyShelf.Windows.TimerWindow(context, item.Text);
                 tw.TimerCompleted += (taskName) =>
                 {
@@ -681,7 +682,7 @@ namespace FlyShelf
                 string title = !string.IsNullOrEmpty(item.Text) ? item.Text : "To-Do Reminder";
                 DateTime defaultDue = DateTime.Today.AddDays(1).AddHours(9); // Tomorrow 9 AM
 
-                try { _activeTodoReminderWindow?.Close(); } catch { }
+                try { _activeTodoReminderWindow?.Close(); } catch { } // Best-effort: failure is acceptable
                 var reminderWindow = new FlyShelf.Windows.ReminderCreateWindow(title, defaultDue);
                 reminderWindow.Show();
                 reminderWindow.Activate();
@@ -726,7 +727,7 @@ namespace FlyShelf
             // Support mm:ss format (e.g. "3:30")
             if (trimmed.Contains(":"))
             {
-                try { _activeTimerWindow?.Close(); } catch { }
+                try { _activeTimerWindow?.Close(); } catch { } // Best-effort: failure is acceptable
                 var tw = new FlyShelf.Windows.TimerWindow(trimmed);
                 tw.Show();
                 _activeTimerWindow = tw;
@@ -736,7 +737,7 @@ namespace FlyShelf
             // Try parse as number → treat as minutes
             if (int.TryParse(trimmed, out int mins) && mins > 0)
             {
-                try { _activeTimerWindow?.Close(); } catch { }
+                try { _activeTimerWindow?.Close(); } catch { } // Best-effort: failure is acceptable
                 var tw = new FlyShelf.Windows.TimerWindow($"{mins}m");
                 tw.Show();
                 _activeTimerWindow = tw;
@@ -744,7 +745,7 @@ namespace FlyShelf
             else
             {
                 // Fallback: pass as-is and let TimerWindow.ParseContext handle it
-                try { _activeTimerWindow?.Close(); } catch { }
+                try { _activeTimerWindow?.Close(); } catch { } // Best-effort: failure is acceptable
                 var tw = new FlyShelf.Windows.TimerWindow(trimmed);
                 tw.Show();
                 _activeTimerWindow = tw;
@@ -1083,7 +1084,7 @@ namespace FlyShelf
                     {
                         mi.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                     string capturedHex = hex;
                     mi.Click += (s, ev) =>
                     {
@@ -1155,18 +1156,21 @@ namespace FlyShelf
                 {
                 var menu = new ContextMenu();
 
-                var sortOptions = new (string Label, TodoSortMode Mode)[]
+                var sortOptions = new (string Label, Wpf.Ui.Controls.SymbolRegular Symbol, TodoSortMode Mode)[]
                 {
-                    ("↕ Manual", TodoSortMode.Manual),
-                    ("🔴 Priority", TodoSortMode.Priority),
-                    ("📅 Due Date", TodoSortMode.DueDate),
-                    ("🔤 A-Z", TodoSortMode.Alphabetical),
-                    ("🕐 Created", TodoSortMode.CreatedAt)
+                    ("Manual",   Wpf.Ui.Controls.SymbolRegular.ArrowSort24,   TodoSortMode.Manual),
+                    ("Priority", Wpf.Ui.Controls.SymbolRegular.Flag16,        TodoSortMode.Priority),
+                    ("Due Date", Wpf.Ui.Controls.SymbolRegular.CalendarLtr16, TodoSortMode.DueDate),
+                    ("A-Z",      Wpf.Ui.Controls.SymbolRegular.ArrowSort24, TodoSortMode.Alphabetical),
+                    ("Created",  Wpf.Ui.Controls.SymbolRegular.Timer24,       TodoSortMode.CreatedAt)
                 };
 
-                foreach (var (label, mode) in sortOptions)
+                foreach (var (label, symbol, mode) in sortOptions)
                 {
-                    var mi = new MenuItem { Header = label };
+                    var sp = new System.Windows.Controls.StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+                    sp.Children.Add(new Wpf.Ui.Controls.SymbolIcon { Symbol = symbol, FontSize = 14, Margin = new Thickness(0, 0, 8, 0) });
+                    sp.Children.Add(new System.Windows.Controls.TextBlock { Text = label });
+                    var mi = new MenuItem { Header = sp };
                     var capturedMode = mode;
                     mi.Click += (s, ev) =>
                     {
@@ -1769,7 +1773,7 @@ namespace FlyShelf
             {
                 string capturedHex = hex;
                 var mi = new MenuItem { Header = $"● {name}" };
-                try { mi.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); } catch { }
+                try { mi.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); } catch { } // Best-effort: failure is acceptable
                 mi.Click += (s, ev) => { item.Color = capturedHex; TodoManager.MarkDirty(); };
                 menu.Items.Add(mi);
             }

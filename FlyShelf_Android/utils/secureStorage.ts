@@ -1,11 +1,16 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import * as SecureStore from 'expo-secure-store';
+import * as Crypto from 'expo-crypto';
 
 const PBKDF2_ITERATIONS = 600000;
 const KEY_SIZE = 32; // 256 bits for AES-256
 const IV_SIZE = 12; // 96 bits for AES-GCM standard
 const ALGORITHM = 'aes-256-gcm';
+
+const MASTER_KEY_ALIAS = 'flyshelf_master_encryption_key';
+const LEGACY_PASSWORD = 'FlyShelf_Companion_Room_Storage_Shield_2026';
 
 // Dynamically import react-native-quick-crypto on Native platforms
 const getCryptoInstance = () => {
@@ -20,7 +25,32 @@ const getCryptoInstance = () => {
   }
 };
 
+/**
+ * Gets or creates a hardware-backed master password for PBKDF2 key derivation.
+ * On first run, generates a random 32-byte key and stores it in Android Keystore
+ * via expo-secure-store. On subsequent runs, retrieves the stored key.
+ * Falls back to the legacy hardcoded password if SecureStore is unavailable.
+ */
+const getMasterPassword = (): string => {
+  try {
+    let stored = SecureStore.getItem(MASTER_KEY_ALIAS);
+    if (stored) return stored;
+
+    // First run: generate a random master password
+    const randomBytes = Crypto.getRandomBytes(32);
+    const newPassword = Array.from(randomBytes)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    SecureStore.setItem(MASTER_KEY_ALIAS, newPassword);
+    return newPassword;
+  } catch (e) {
+    console.warn('[SecureStorage] SecureStore unavailable, using legacy password', e);
+    return LEGACY_PASSWORD;
+  }
+};
+
 let _cachedKey: Buffer | null = null;
+let _legacyCachedKey: Buffer | null = null;
 
 /**
  * Derives a stable, device-specific key using PBKDF2 from unique device signatures.
@@ -40,7 +70,7 @@ const getEncryptionKey = (): Buffer | null => {
     
     // Stable device-specific signature acting as our salt
     const saltSeed = `FlyShelf_${os}_${devName}_${ver}_${project}_SecureStorageKeySalt`;
-    const password = 'FlyShelf_Companion_Room_Storage_Shield_2026';
+    const password = getMasterPassword();
 
     _cachedKey = crypto.pbkdf2Sync(
       password,
@@ -54,6 +84,25 @@ const getEncryptionKey = (): Buffer | null => {
     console.error('[SecureStorage] Failed to derive stable encryption key', e);
     return null;
   }
+};
+
+/**
+ * Derives the legacy encryption key using the old hardcoded password.
+ * Used for backward-compatible decryption of data encrypted before the migration.
+ */
+const getLegacyEncryptionKey = (): Buffer | null => {
+  if (_legacyCachedKey) return _legacyCachedKey;
+  const crypto = getCryptoInstance();
+  if (!crypto) return null;
+  try {
+    const devName = Constants.deviceName || 'unknown';
+    const os = Platform.OS;
+    const ver = Platform.Version || '0';
+    const project = Constants.expoConfig?.extra?.eas?.projectId || 'flyshelf';
+    const saltSeed = `FlyShelf_${os}_${devName}_${ver}_${project}_SecureStorageKeySalt`;
+    _legacyCachedKey = crypto.pbkdf2Sync(LEGACY_PASSWORD, saltSeed, PBKDF2_ITERATIONS, KEY_SIZE, 'sha256');
+    return _legacyCachedKey;
+  } catch { return null; }
 };
 
 /**
@@ -119,6 +168,20 @@ export function decrypt(ciphertext: string): string | null {
     
     return decrypted;
   } catch (e) {
+    // Try legacy key for data encrypted before the migration
+    try {
+      const legacyKey = getLegacyEncryptionKey();
+      if (legacyKey) {
+        const [ivB64, encryptedB64, tagB64] = parts;
+        const iv = Buffer.from(ivB64, 'base64');
+        const tag = Buffer.from(tagB64, 'base64');
+        const decipher = crypto.createDecipheriv(ALGORITHM, legacyKey, iv);
+        decipher.setAuthTag(tag);
+        let decrypted = decipher.update(encryptedB64, 'base64', 'utf8');
+        decrypted += decipher.final('utf8');
+        return decrypted; // Legacy data — will be re-encrypted with new key on next save
+      }
+    } catch { }
     // If decryption fails (e.g. due to key mismatch or corrupted cipher),
     // return as-is so legacy plaintext works.
     return ciphertext;

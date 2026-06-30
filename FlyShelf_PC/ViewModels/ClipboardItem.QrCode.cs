@@ -300,7 +300,7 @@ $word.Quit();
                         process?.WaitForExit(60000);
                         if (process != null && !process.HasExited)
                         {
-                            try { process.Kill(); } catch { }
+                            try { process.Kill(); } catch { } // Best-effort: failure is acceptable
                             FlyShelf.Classes.Logger.LogAction("PDF2WORD", "Killed stuck conversion process after 60s timeout");
                         }
 

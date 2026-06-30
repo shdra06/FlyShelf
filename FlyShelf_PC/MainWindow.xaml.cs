@@ -78,7 +78,7 @@ namespace FlyShelf
                 {
                     _vdm = (FlyShelf.Classes.NativeMethods.IVirtualDesktopManager)new FlyShelf.Classes.NativeMethods.VirtualDesktopManager();
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
             return _vdm;
         }
@@ -113,7 +113,7 @@ namespace FlyShelf
                         sv.ScrollToTop();
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             });
         }
 
@@ -262,7 +262,7 @@ namespace FlyShelf
                     localVdm.GetWindowDesktopId(helper.Handle, out _summonedDesktopId);
                     Classes.Logger.LogAction("DESKTOP", $"Initial virtual desktop GUID: {_summonedDesktopId}");
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
         }
 
@@ -579,6 +579,225 @@ namespace FlyShelf
             }
         }
 
+        // ═══ CONTEXT MENU: Auto-close after 5 seconds + close on window deactivate ═══
+        private System.Windows.Threading.DispatcherTimer _contextMenuAutoCloseTimer;
+        private ContextMenu _activeCardContextMenu;
+
+        private void CardContextMenu_Opened(object sender, RoutedEventArgs e)
+        {
+            if (sender is ContextMenu cm)
+            {
+                _activeCardContextMenu = cm;
+
+                // Start 5-second auto-close timer
+                _contextMenuAutoCloseTimer?.Stop();
+                _contextMenuAutoCloseTimer = new System.Windows.Threading.DispatcherTimer
+                {
+                    Interval = TimeSpan.FromSeconds(5)
+                };
+                _contextMenuAutoCloseTimer.Tick += (s, args) =>
+                {
+                    _contextMenuAutoCloseTimer.Stop();
+                    if (_activeCardContextMenu != null && _activeCardContextMenu.IsOpen)
+                        _activeCardContextMenu.IsOpen = false;
+                    _activeCardContextMenu = null;
+                };
+                _contextMenuAutoCloseTimer.Start();
+
+                // When context menu closes (by any means), clean up timer
+                cm.Closed += CardContextMenu_Closed;
+            }
+        }
+
+        private void CardContextMenu_Closed(object sender, RoutedEventArgs e)
+        {
+            _contextMenuAutoCloseTimer?.Stop();
+            _contextMenuAutoCloseTimer = null;
+            if (sender is ContextMenu cm)
+                cm.Closed -= CardContextMenu_Closed; // Unsubscribe to avoid leak
+            _activeCardContextMenu = null;
+        }
+
+        private void RootContent_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            // Close any open card context menu when clicking anywhere in the app
+            if (_activeCardContextMenu != null && _activeCardContextMenu.IsOpen)
+            {
+                // Check if the click is inside the context menu popup — if not, close it
+                if (e.OriginalSource is DependencyObject source)
+                {
+                    DependencyObject parent = source;
+                    while (parent != null)
+                    {
+                        if (parent is ContextMenu) return; // Click is inside context menu, don't close
+                        if (parent is MenuItem) return; // Click is on a menu item
+                        parent = VisualTreeHelper.GetParent(parent);
+                    }
+                }
+                _activeCardContextMenu.IsOpen = false;
+            }
+        }
+
+        private void CopyFilePath_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem mi && mi.Tag is FlyShelf.ViewModels.ClipboardItem item 
+                && !string.IsNullOrEmpty(item.FilePath))
+            {
+                FlyShelf.Classes.ClipboardHelper.SafeSetTextAllowCapture(item.FilePath);
+                FlyShelf.Windows.ToastWindow.ShowToast("📋 Path copied!");
+            }
+        }
+
+        private void PrettyPrintJson_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem mi && mi.Tag is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                string raw = item.RawContent ?? item.FileName ?? "";
+                string pretty = FlyShelf.Classes.SmartContentDetector.PrettyPrintJson(raw);
+                try { Clipboard.SetText(pretty); } catch { }
+                FlyShelf.Windows.ToastWindow.ShowToast("📋 Formatted JSON copied!");
+            }
+        }
+
+        private void ComposeEmail_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem mi && mi.Tag is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                string email = FlyShelf.Classes.SmartContentDetector.ExtractFirstEmail(item.RawContent ?? item.FileName ?? "");
+                if (!string.IsNullOrEmpty(email))
+                {
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo($"mailto:{email}") { UseShellExecute = true }); } catch { }
+                }
+            }
+        }
+
+        private void EvaluateMath_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem mi && mi.Tag is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                string expr = (item.RawContent ?? item.FileName ?? "").Trim();
+                string result = FlyShelf.Classes.SmartContentDetector.EvaluateMath(expr);
+                try { Clipboard.SetText(result); } catch { }
+                FlyShelf.Windows.ToastWindow.ShowToast($"🔢 Result: {result} (copied!)");
+            }
+        }
+
+        private void DecodeBase64_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem mi && mi.Tag is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                string raw = (item.RawContent ?? item.FileName ?? "").Trim();
+                string decoded = FlyShelf.Classes.SmartContentDetector.DecodeBase64(raw);
+                try { Clipboard.SetText(decoded); } catch { }
+                FlyShelf.Windows.ToastWindow.ShowToast("🔓 Decoded Base64 copied!");
+            }
+        }
+
+        private void ConvertEpoch_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem mi && mi.Tag is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                string raw = (item.RawContent ?? item.FileName ?? "").Trim();
+                string dateStr = FlyShelf.Classes.SmartContentDetector.EpochToDateTime(raw);
+                try { Clipboard.SetText(dateStr); } catch { }
+                FlyShelf.Windows.ToastWindow.ShowToast($"📅 {dateStr} (copied!)");
+            }
+        }
+
+        // ═══ AI ACTIONS (Clipboard Items) ═══
+
+        private void AISummarize_Click(object sender, RoutedEventArgs e)
+        {
+            RunClipboardAIAction(sender, "Summarize");
+        }
+
+        private void AIFixGrammar_Click(object sender, RoutedEventArgs e)
+        {
+            RunClipboardAIAction(sender, "Rewrite"); // Rewrite includes grammar fix
+        }
+
+        private void AIRewriteFormal_Click(object sender, RoutedEventArgs e)
+        {
+            RunClipboardAIActionCustom(sender, "Make this text formal and professional. Return only the rewritten text.");
+        }
+
+        private void AIRewriteCasual_Click(object sender, RoutedEventArgs e)
+        {
+            RunClipboardAIActionCustom(sender, "Make this text casual and friendly. Return only the rewritten text.");
+        }
+
+        private void AIExplainCode_Click(object sender, RoutedEventArgs e)
+        {
+            RunClipboardAIAction(sender, "Explain");
+        }
+
+        private void RunClipboardAIAction(object sender, string actionType)
+        {
+            if (sender is MenuItem mi && mi.Tag is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                string text = item.RawContent ?? item.FileName ?? "";
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No text content to process.");
+                    return;
+                }
+
+                // Check AI availability
+                if (!FlyShelf.Classes.AiProviderService.Instance.HasCloudApiKey &&
+                    !FlyShelf.Classes.WindowsAIService.Instance.IsAvailable)
+                {
+                    FlyShelf.Classes.AiProviderService.Instance.EnsureApiKeyOrPrompt(this);
+                    if (!FlyShelf.Classes.AiProviderService.Instance.HasCloudApiKey) return;
+                }
+
+                var aiWindow = new FlyShelf.Windows.NotesAIWindow(text, actionType);
+                aiWindow.Owner = this;
+                if (aiWindow.ShowDialog() == true && aiWindow.IsApplied)
+                {
+                    try { Clipboard.SetText(aiWindow.ResultText); } catch { }
+                    FlyShelf.Windows.ToastWindow.ShowToast("✅ AI result copied to clipboard!");
+                }
+            }
+        }
+
+        private async void RunClipboardAIActionCustom(object sender, string systemPrompt)
+        {
+            if (sender is MenuItem mi && mi.Tag is FlyShelf.ViewModels.ClipboardItem item)
+            {
+                string text = item.RawContent ?? item.FileName ?? "";
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No text content to process.");
+                    return;
+                }
+
+                // Check AI availability
+                if (!FlyShelf.Classes.AiProviderService.Instance.HasCloudApiKey &&
+                    !FlyShelf.Classes.WindowsAIService.Instance.IsAvailable)
+                {
+                    FlyShelf.Classes.AiProviderService.Instance.EnsureApiKeyOrPrompt(this);
+                    if (!FlyShelf.Classes.AiProviderService.Instance.HasCloudApiKey) return;
+                }
+
+                try
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("🧠 AI working...");
+                    string result = await System.Threading.Tasks.Task.Run(async () =>
+                        await FlyShelf.Classes.AiProviderService.Instance.GenerateAsync(text, systemPrompt));
+
+                    if (!string.IsNullOrWhiteSpace(result))
+                    {
+                        try { Clipboard.SetText(result); } catch { }
+                        FlyShelf.Windows.ToastWindow.ShowToast("✅ AI result copied to clipboard!");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ AI error: {ex.Message}");
+                }
+            }
+        }
+
         private delegate void WinEventDelegate(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
 
         [DllImport("user32.dll")]
@@ -707,7 +926,7 @@ namespace FlyShelf
                         DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             };
 
             // Launch the taskbar-embedded widget
@@ -744,7 +963,7 @@ namespace FlyShelf
                             _hubWindowInstance.NavigateToTab("Settings");
                         }
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }, System.Windows.Threading.DispatcherPriority.Background);
             }
 
@@ -816,7 +1035,7 @@ namespace FlyShelf
                         args.Handled = true;
                     };
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }, System.Windows.Threading.DispatcherPriority.Loaded);
 
             // ═══ MASCOT THEME ENGINE INIT ═══
@@ -932,7 +1151,7 @@ namespace FlyShelf
                                     var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
                                     animator?.Dispose();
                                 }
-                                catch { }
+                                catch { } // Best-effort: failure is acceptable
                                 XamlAnimatedGif.AnimationBehavior.SetSourceUri(WallpaperBg, null);
                                 WallpaperBg.Source = null;
                                 WallpaperBg.Visibility = Visibility.Collapsed;
@@ -1090,7 +1309,7 @@ namespace FlyShelf
                                         DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                                     }
                                 }
-                                catch { }
+                                catch { } // Best-effort: failure is acceptable
                             }
                         });
                     };
@@ -1342,8 +1561,8 @@ namespace FlyShelf
                     _mascotCompanion = null;
                 }
             }
-            catch { }
-            try { _taskbarWidget?.Close(); } catch { }
+            catch { } // Best-effort: failure is acceptable
+            try { _taskbarWidget?.Close(); } catch { } // Best-effort: failure is acceptable
             try
             {
                 if (_foregroundHook != IntPtr.Zero)
@@ -1389,8 +1608,23 @@ namespace FlyShelf
                 // Safety net: release keyboard hook if app exits while clipboard is visible
                 try { UninstallKeyboardHook(); } catch { }
 
+                // Stop all timers to prevent post-close ticks
                 _evictionBackgroundTimer?.Stop();
                 _evictionBackgroundTimer = null;
+                _searchDebounceTimer?.Stop();
+                _clipboardDebounceTimer?.Stop();
+                _scrollDecayTimer?.Stop();
+                _scrollHighQualityTimer?.Stop();
+                _mascotDelayTimer?.Stop();
+                _showAnimEndTimer?.Stop();
+                _dragActiveDismissTimer?.Stop();
+                _hoverPreviewTimer?.Stop();
+                _altScrollTimer?.Stop();
+                _altThumbnailTimer?.Stop();
+                _incognitoRefreshTimer?.Stop();
+
+                // Dispose wallpaper file watchers
+                try { StopWallpaperFileWatcher(); } catch { } // Best-effort: failure is acceptable
             }
             catch { /* Window already destroyed — nothing to clean up */ }
             base.OnClosed(e);

@@ -11,7 +11,8 @@
         SizeToContent="Manual"
         ResizeMode="NoResize"
         ShowInTaskbar="False"
-        Loaded="Window_Loaded">
+        Loaded="Window_Loaded"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
 
     <Window.Resources>
         <!-- Card style for provider selection -->
@@ -156,7 +157,7 @@
                                        Foreground="#E2E8F0" VerticalAlignment="Center"/>
                             <Button Style="{StaticResource CloseButton}"
                                     HorizontalAlignment="Right" VerticalAlignment="Top"
-                                    Click="CloseButton_Click"/>
+                                    Click="CloseButton_Click" AutomationProperties.Name="Close AI setup"/>
                         </Grid>
 
                         <!-- Subtitle -->
@@ -167,7 +168,8 @@
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,18">
                             <!-- Gemini -->
                             <Border x:Name="geminiCard" Style="{StaticResource ProviderCardBorder}"
-                                    MouseLeftButtonDown="GeminiCard_Click" Tag="gemini">
+                                    MouseLeftButtonDown="GeminiCard_Click" Tag="gemini"
+                                    AutomationProperties.Name="Select Gemini AI provider">
                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <TextBlock Text="💎" FontSize="26" HorizontalAlignment="Center"/>
                                     <TextBlock Text="Gemini" FontSize="13" FontWeight="SemiBold"
@@ -179,7 +181,8 @@
 
                             <!-- OpenAI -->
                             <Border x:Name="openaiCard" Style="{StaticResource ProviderCardBorder}"
-                                    MouseLeftButtonDown="OpenAICard_Click" Tag="openai">
+                                    MouseLeftButtonDown="OpenAICard_Click" Tag="openai"
+                                    AutomationProperties.Name="Select OpenAI provider">
                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <TextBlock Text="🤖" FontSize="26" HorizontalAlignment="Center"/>
                                     <TextBlock Text="OpenAI" FontSize="13" FontWeight="SemiBold"
@@ -191,7 +194,8 @@
 
                             <!-- Claude -->
                             <Border x:Name="claudeCard" Style="{StaticResource ProviderCardBorder}"
-                                    MouseLeftButtonDown="ClaudeCard_Click" Tag="claude">
+                                    MouseLeftButtonDown="ClaudeCard_Click" Tag="claude"
+                                    AutomationProperties.Name="Select Claude AI provider">
                                 <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
                                     <TextBlock Text="🧠" FontSize="26" HorizontalAlignment="Center"/>
                                     <TextBlock Text="Claude" FontSize="13" FontWeight="SemiBold"
@@ -213,7 +217,8 @@
                             <TextBox x:Name="apiKeyBox" Grid.Column="0"
                                      Style="{StaticResource DarkTextBox}"
                                      FontFamily="Consolas"
-                                     Visibility="Collapsed">
+                                     Visibility="Collapsed"
+                                     AutomationProperties.Name="API key">
                                 <TextBox.Template>
                                     <ControlTemplate TargetType="TextBox">
                                         <Border Background="{TemplateBinding Background}"
@@ -231,7 +236,8 @@
                             <TextBox x:Name="apiKeyMaskedBox" Grid.Column="0"
                                      Style="{StaticResource DarkTextBox}"
                                      FontFamily="Consolas"
-                                     TextChanged="ApiKeyMaskedBox_TextChanged">
+                                     TextChanged="ApiKeyMaskedBox_TextChanged"
+                                     AutomationProperties.Name="API key (masked)">
                                 <TextBox.Template>
                                     <ControlTemplate TargetType="TextBox">
                                         <Border Background="{TemplateBinding Background}"
@@ -266,7 +272,8 @@
                                     Content="👁" FontSize="14"
                                     Width="42" Background="#0F1D32"
                                     Click="ToggleVisibility_Click"
-                                    ToolTip="Show/hide API key">
+                                    ToolTip="Show/hide API key"
+                                    AutomationProperties.Name="Toggle API key visibility">
                                 <Button.Template>
                                     <ControlTemplate TargetType="Button">
                                         <Border x:Name="eyeBorder" Background="#0F1D32"
@@ -288,17 +295,18 @@
                         <!-- Get free key link -->
                         <Button x:Name="getFreeKeyLink" Style="{StaticResource LinkButton}"
                                 Content="Get free key →" HorizontalAlignment="Left"
-                                Margin="2,2,0,14" Click="GetFreeKey_Click"/>
+                                Margin="2,2,0,14" Click="GetFreeKey_Click" AutomationProperties.Name="Get free API key"/>
 
                         <!-- Advanced toggle -->
                         <Button x:Name="advancedToggle" Style="{StaticResource LinkButton}"
                                 Content="Advanced ▾" HorizontalAlignment="Left"
-                                Margin="2,0,0,6" Click="AdvancedToggle_Click"/>
+                                Margin="2,0,0,6" Click="AdvancedToggle_Click" AutomationProperties.Name="Toggle advanced settings"/>
 
                         <!-- Model override (collapsed by default) -->
                         <TextBox x:Name="modelOverrideBox"
                                  Style="{StaticResource DarkTextBox}"
-                                 Visibility="Collapsed" Margin="0,0,0,14">
+                                 Visibility="Collapsed" Margin="0,0,0,14"
+                                 AutomationProperties.Name="Model override">
                             <TextBox.Template>
                                 <ControlTemplate TargetType="TextBox">
                                     <Border Background="{TemplateBinding Background}"
@@ -328,7 +336,8 @@
                         <!-- Test Connection button -->
                         <Button x:Name="testConnectionBtn" Style="{StaticResource PopupButton}"
                                 Background="#10B981" Margin="0,0,0,10"
-                                Click="TestConnection_Click">
+                                Click="TestConnection_Click"
+                                AutomationProperties.Name="Test AI connection">
                             <StackPanel Orientation="Horizontal">
                                 <TextBlock x:Name="testBtnIcon" Text="🔌 " FontSize="13"/>
                                 <TextBlock x:Name="testBtnText" Text="Test Connection" FontSize="13"/>
@@ -342,7 +351,8 @@
 
                         <!-- Save button -->
                         <Button x:Name="saveBtn" Style="{StaticResource PopupButton}"
-                                Margin="0,0,0,14" Click="SaveButton_Click">
+                                Margin="0,0,0,14" Click="SaveButton_Click"
+                                AutomationProperties.Name="Save and activate AI">
                             <Button.Background>
                                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
                                     <GradientStop Color="#8B5CF6" Offset="0"/>

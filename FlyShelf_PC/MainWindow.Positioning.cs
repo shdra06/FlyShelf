@@ -217,7 +217,7 @@ namespace FlyShelf
                     _isCurrentlySummoned = false; // Bypass guard
                     HideWindowInternal(); // Move offscreen immediately to hide from the DWM composition surface
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
 
             if (_isCurrentlySummoned)
@@ -692,7 +692,7 @@ namespace FlyShelf
                         DwmSetWindowAttribute(hwndUncloak, DWMWA_CLOAK, ref uncloakVal, sizeof(int));
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
 
                 this.Opacity = 1.0;
                 _isEdgeLocked = true;
@@ -725,7 +725,7 @@ namespace FlyShelf
                         DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }, System.Windows.Threading.DispatcherPriority.Background);
 
             // Defer mascot/HQ rendering to Background priority — avoids blocking spawn animation
@@ -752,7 +752,7 @@ namespace FlyShelf
                             MascotIdle.ResumePlayback();
                             Classes.AnimationTriggerService.Instance.StartIdleAnimation();
                         }
-                        catch { }
+                        catch { } // Best-effort: failure is acceptable
                     };
                 }
                 _mascotDelayTimer.Start();
@@ -896,7 +896,7 @@ namespace FlyShelf
                         }
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
                 return; // Don't process velocity/scrolling state during deletion
             }
 
@@ -1210,7 +1210,7 @@ namespace FlyShelf
                 var animator = XamlAnimatedGif.AnimationBehavior.GetAnimator(WallpaperBg);
                 animator?.Pause();
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         public void ResumeThemeAnimations()
@@ -1226,7 +1226,7 @@ namespace FlyShelf
                     animator?.Play();
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         // ═══ Low-Level Keyboard Hook — Arrow Navigation Without Focus ═══
@@ -1396,7 +1396,7 @@ namespace FlyShelf
                             }
                         }
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 }
             }
 

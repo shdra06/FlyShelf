@@ -325,7 +325,7 @@ namespace FlyShelf.Classes
                             System.Windows.Application.Current?.Dispatcher?.Invoke(() =>
                                 ToastWindow.ShowToast($"⚠️ Pairing limit reached ({MAX_PAIRED_DEVICES} devices)\nRemove existing devices to add new ones."));
                         }
-                        catch { }
+                        catch { } // Best-effort: failure is acceptable
                         return false;
                     }
 
@@ -412,7 +412,7 @@ namespace FlyShelf.Classes
             {
                 PeerManager.Instance?.DisconnectPeer(deviceId);
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
 
             // Fix #1B: Track recently-unpaired device to prevent UDP auto-re-registration
             lock (_unpairedLock)
@@ -477,7 +477,7 @@ namespace FlyShelf.Classes
                         await _httpClient.DeleteAsync((await AuthUrl($"pairing_codes/{CurrentPairingCode}.json")));
                         Logger.LogAction("PAIR CODE", $"Cleaned up previous code: {CurrentPairingCode}");
                     }
-                    catch { }
+                    catch (Exception ex) { Logger.LogAction("PAIR CODE", $"Failed to clean previous code: {ex.Message}"); }
                 }
 
                 // Also scan Firebase for any stale codes from this device ID and remove them
@@ -499,7 +499,7 @@ namespace FlyShelf.Classes
                                     await _httpClient.DeleteAsync((await AuthUrl($"pairing_codes/{prop.Name}.json")));
                                     Logger.LogAction("PAIR CODE", $"Purged stale code: {prop.Name}");
                                 }
-                                catch { }
+                                catch (Exception ex) { Logger.LogAction("PAIR CODE", $"Failed to purge stale code: {ex.Message}"); }
                             }
                         }
                     }
@@ -513,7 +513,7 @@ namespace FlyShelf.Classes
                 await CloudDiscoveryManager.RegisterRoomMembershipAsync(pairingKey);
                 // SECURITY: Include uid for Firebase rule ownership validation (M-01 hardening)
                 string uid = "";
-                try { uid = await FirebaseAuthManager.GetUidAsync() ?? ""; } catch { }
+                try { uid = await FirebaseAuthManager.GetUidAsync() ?? ""; } catch (Exception ex) { Logger.LogAction("PAIR", $"Firebase UID fetch failed: {ex.Message}"); }
                 string jsonPayload = JsonSerializer.Serialize(new
                 {
                     deviceId = SettingsManager.Current.DeviceId,
@@ -550,7 +550,7 @@ namespace FlyShelf.Classes
                             if (CurrentPairingCode == code) CurrentPairingCode = "";
                             Logger.LogAction("PAIR CODE", $"Expired pairing code: {code}");
                         }
-                        catch { }
+                        catch (Exception ex) { Logger.LogAction("PAIR CODE", $"Failed to expire code: {ex.Message}"); }
                     });
                 }
                 else

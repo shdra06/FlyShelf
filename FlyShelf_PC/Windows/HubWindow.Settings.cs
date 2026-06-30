@@ -252,7 +252,7 @@ namespace FlyShelf.Windows
                 if (!System.IO.Directory.Exists(logsDir)) System.IO.Directory.CreateDirectory(logsDir);
                 System.Diagnostics.Process.Start("explorer.exe", logsDir);
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
 #if !MSIX_STORE
@@ -270,7 +270,7 @@ namespace FlyShelf.Windows
                 _networkLogsWindow = new NetworkLogsWindow();
                 _networkLogsWindow.Show();
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 #endif // !MSIX_STORE
 
@@ -287,7 +287,7 @@ namespace FlyShelf.Windows
             {
                 TransferManagerWindow.ShowOrActivate();
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private async void CopyDeviceLogs_Click(object sender, RoutedEventArgs e)
@@ -660,7 +660,7 @@ namespace FlyShelf.Windows
                                 string ext = System.IO.Path.GetExtension(clip.FilePath).Replace(".", "").Trim().ToLowerInvariant();
                                 pathExtMatch = ext == q;
                             }
-                            catch { }
+                            catch { } // Best-effort: failure is acceptable
                         }
                         bool typeMatch = clip.ItemType.ToString().ToLowerInvariant() == q;
 
@@ -975,7 +975,7 @@ namespace FlyShelf.Windows
         }
 
         /// <summary>Settings tab license key — handles both Activate and Deactivate.</summary>
-        private void SettingsActivateLicense_Click(object sender, RoutedEventArgs e)
+        private async void SettingsActivateLicense_Click(object sender, RoutedEventArgs e)
         {
             if (FlyShelf.Classes.LicenseManager.IsPro)
             {
@@ -1005,7 +1005,7 @@ namespace FlyShelf.Windows
                     return;
                 }
 
-                bool success = FlyShelf.Classes.LicenseManager.ActivateLicense(key);
+                bool success = await FlyShelf.Classes.LicenseManager.ActivateLicenseAsync(key);
 
                 if (success)
                 {
@@ -1046,6 +1046,97 @@ namespace FlyShelf.Windows
                 private void BuyPremium_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             FlyShelf.Classes.UpgradePrompt.OpenSecureCheckout(this);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // AI SETTINGS — Separate AI Tab
+        // ═══════════════════════════════════════════════════════════════
+
+        internal void PopulateHubAiSettings()
+        {
+            var settings = SettingsManager.Current;
+
+            // API Key — show masked
+            if (!string.IsNullOrEmpty(settings.AiApiKey))
+            {
+                string key = settings.AiApiKey;
+                HubAiApiKeyBox.Text = key.Length > 8 ? key.Substring(0, 4) + "..." + key.Substring(key.Length - 4) : "••••••••";
+                HubAiApiKeyBox.Tag = "masked";
+                HubAiApiKeyStatus.Text = "✅ API key configured";
+                HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
+            }
+            else
+            {
+                HubAiApiKeyBox.Text = "";
+                HubAiApiKeyBox.Tag = null;
+                HubAiApiKeyStatus.Text = "⚠️ No API key set — paste one above to enable cloud AI";
+                HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F59E0B"));
+            }
+
+            // Show detected provider
+            UpdateHubProviderStatus();
+
+            // Method combo
+            var method = settings.DefaultAiMethod?.ToLowerInvariant() ?? "auto";
+            for (int i = 0; i < HubAiMethodCombo.Items.Count; i++)
+            {
+                if (HubAiMethodCombo.Items[i] is ComboBoxItem ci && ci.Tag as string == method)
+                {
+                    HubAiMethodCombo.SelectedIndex = i;
+                    break;
+                }
+            }
+
+            // Status
+            UpdateHubAiStatus();
+        }
+
+        private void UpdateHubProviderStatus()
+        {
+            string active = AiProviderService.Instance.ActiveProviderName;
+            HubAiProviderStatus.Text = $"Detected provider: {active}";
+        }
+
+        private void UpdateHubAiStatus()
+        {
+            var provider = AiProviderService.Instance.ActiveProviderName;
+            bool hasKey = AiProviderService.Instance.HasCloudApiKey;
+            HubAiCurrentStatus.Text = $"Provider: {provider} | API Key: {(hasKey ? "✅ Configured" : "❌ Not set")} | AI: {(SettingsManager.Current.AiEnabled ? "Enabled" : "Disabled")}";
+        }
+
+        private void HubAiApiKeySave_Click(object sender, RoutedEventArgs e)
+        {
+            string newKey = HubAiApiKeyBox.Text?.Trim() ?? "";
+            if (HubAiApiKeyBox.Tag as string == "masked") return;
+
+            SettingsManager.Current.AiApiKey = newKey;
+            // Auto-detect provider from key and save
+            SettingsManager.Current.AiProvider = "auto";
+            SettingsManager.Save();
+
+            if (!string.IsNullOrEmpty(newKey))
+            {
+                HubAiApiKeyBox.Text = newKey.Length > 8 ? newKey.Substring(0, 4) + "..." + newKey.Substring(newKey.Length - 4) : "••••••••";
+                HubAiApiKeyBox.Tag = "masked";
+                HubAiApiKeyStatus.Text = "✅ API key saved and encrypted!";
+                HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#10B981"));
+            }
+            else
+            {
+                HubAiApiKeyStatus.Text = "⚠️ API key cleared";
+                HubAiApiKeyStatus.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F59E0B"));
+            }
+            UpdateHubProviderStatus();
+            UpdateHubAiStatus();
+        }
+
+        private void HubAiMethod_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (HubAiMethodCombo.SelectedItem is ComboBoxItem ci && ci.Tag is string tag)
+            {
+                SettingsManager.Current.DefaultAiMethod = tag;
+                SettingsManager.Save();
+            }
         }
 
         // ═══ Device Send, Archive, Merge & Selection moved to HubWindow.SettingsHandlers.cs ═══

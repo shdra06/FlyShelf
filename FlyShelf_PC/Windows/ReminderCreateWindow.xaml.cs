@@ -377,8 +377,8 @@ namespace FlyShelf.Windows
             ToastWindow.ShowToast("Reminder set! 🔔");
 
             // Immediately hide then close to ensure the window disappears
-            try { Hide(); } catch { }
-            try { Close(); } catch { }
+            try { Hide(); } catch { } // Best-effort: failure is acceptable
+            try { Close(); } catch { } // Best-effort: failure is acceptable
         }
 
         private void FlashTitleError()

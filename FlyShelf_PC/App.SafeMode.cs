@@ -111,7 +111,7 @@ public partial class App
                     if (System.IO.File.Exists(crashCleanPath))
                         System.IO.File.Delete(crashCleanPath);
                 }
-                catch {}
+                catch {} // Best-effort: failure is acceptable
                 try
                 {
                     _mutex?.Dispose();
@@ -178,12 +178,12 @@ public partial class App
 
                     safeWindow.Closed += (s2, ev2) =>
                     {
-                        try { UnregisterHotKey(hwnd, 9000); } catch { }
+                        try { UnregisterHotKey(hwnd, 9000); } catch { } // Best-effort: failure is acceptable
                     };
                 }
             };
 
-            safeWindow.MouseLeftButtonDown += (s, ev) => { try { safeWindow.DragMove(); } catch { } };
+            safeWindow.MouseLeftButtonDown += (s, ev) => { try { safeWindow.DragMove(); } catch { } /* Best-effort: failure is acceptable */ };
             safeWindow.Show();
         }
         catch (Exception fatalEx)
@@ -208,20 +208,20 @@ public partial class App
             System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(crashPath));
             System.IO.File.WriteAllText(crashPath, errorDetails);
         }
-        catch { }
+        catch { } // Best-effort: failure is acceptable
 
         try
         {
             FlyShelf.Classes.Logger.LogAction("FATAL_CRASH", "App crashed, restarting in Safe Mode...");
             FlyShelf.Classes.Logger.Shutdown();
         }
-        catch { }
+        catch { } // Best-effort: failure is acceptable
 
         try
         {
             _mutex?.Dispose();
         }
-        catch { }
+        catch { } // Best-effort: failure is acceptable
 
         try
         {
@@ -238,12 +238,12 @@ public partial class App
             });
 #endif
         }
-        catch { }
+        catch { } // Best-effort: failure is acceptable
 
         try
         {
             Environment.Exit(1);
         }
-        catch { }
+        catch { } // Best-effort: failure is acceptable
     }
 }

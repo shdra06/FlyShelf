@@ -40,7 +40,7 @@ namespace FlyShelf.Classes
                         Logger.LogAction("CLEANUP", "Purged temporary chunk directories on startup.");
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
 
                 // Determine physical Local IP beforehand for bind fallback
                 string localIp = "127.0.0.1";
@@ -55,7 +55,7 @@ namespace FlyShelf.Classes
                         }
                     }
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
 
                 int publicPort = 8999;
                 bool needsProxy = false;
@@ -72,7 +72,7 @@ namespace FlyShelf.Classes
                     allInterfacesBound = true;
                 } catch (Exception ex) { 
                     Logger.LogAction("BIND", $"http://+:{publicPort}/ failed: {ex.Message}");
-                    if (_listener != null) { try { _listener.Close(); } catch { } } 
+                    if (_listener != null) { try { _listener.Close(); } catch { } /* Best-effort: failure is acceptable */ } 
                 }
 
                 // Strategy 2: http://*:port/
@@ -84,7 +84,7 @@ namespace FlyShelf.Classes
                     allInterfacesBound = true;
                 } catch (Exception ex) { 
                     Logger.LogAction("BIND", $"http://*:{publicPort}/ failed: {ex.Message}");
-                    if (_listener != null) { try { _listener.Close(); } catch { } } 
+                    if (_listener != null) { try { _listener.Close(); } catch { } /* Best-effort: failure is acceptable */ } 
                 }
 
                 // Strategy 3: http://{localIp}:port/ + http://localhost:port/
@@ -97,7 +97,7 @@ namespace FlyShelf.Classes
                     allInterfacesBound = true;
                 } catch (Exception ex) { 
                     Logger.LogAction("BIND", $"Dual-bind failed: {ex.Message}");
-                    if (_listener != null) { try { _listener.Close(); } catch { } } 
+                    if (_listener != null) { try { _listener.Close(); } catch { } /* Best-effort: failure is acceptable */ } 
                 }
 
                 // === PHASE 2: Localhost-only + TCP Proxy (works without admin) ===
@@ -115,7 +115,7 @@ namespace FlyShelf.Classes
                         Logger.LogAction("BIND", $"✅ HttpListener bound to http://localhost:{internalPort}/ (internal)");
                     } catch (Exception ex) {
                         Logger.LogAction("BIND", $"localhost:{internalPort} failed: {ex.Message}");
-                        if (_listener != null) { try { _listener.Close(); } catch { } }
+                        if (_listener != null) { try { _listener.Close(); } catch { } /* Best-effort: failure is acceptable */ }
                     }
 
                     // Fallback: try 127.0.0.1
@@ -127,7 +127,7 @@ namespace FlyShelf.Classes
                         Logger.LogAction("BIND", $"✅ HttpListener bound to http://127.0.0.1:{internalPort}/ (internal)");
                     } catch (Exception ex) {
                         Logger.LogAction("BIND", $"127.0.0.1:{internalPort} failed: {ex.Message}");
-                        if (_listener != null) { try { _listener.Close(); } catch { } }
+                        if (_listener != null) { try { _listener.Close(); } catch { } /* Best-effort: failure is acceptable */ }
                     }
 
                     if (!localhostBound)
@@ -235,11 +235,11 @@ namespace FlyShelf.Classes
                                         Logger.LogAction("CLEANUP", $"Deleted abandoned chunk session directory: {dirInfo.Name}");
                                     }
                                 }
-                                catch { }
+                                catch { } // Best-effort: failure is acceptable
                             }
                         }
                     }
-                    catch { }
+                    catch { } // Best-effort: failure is acceptable
                 };
                 _heartbeatTimer.AutoReset = true;
                 _heartbeatTimer.Start();
@@ -376,7 +376,7 @@ namespace FlyShelf.Classes
             if (!await _proxySemaphore.WaitAsync(TimeSpan.FromSeconds(5)))
             {
                 // Too many concurrent proxy connections — reject
-                try { client.Close(); } catch { }
+                try { client.Close(); } catch { } // Best-effort: failure is acceptable
                 return;
             }
             try
@@ -443,7 +443,7 @@ namespace FlyShelf.Classes
                     await Task.WhenAny(t1, t2);
                 }
             }
-            catch { } // Connection closed — normal
+            catch { } // Best-effort: failure is acceptable � Connection closed — normal
             finally
             {
                 _proxySemaphore.Release();
@@ -479,7 +479,7 @@ namespace FlyShelf.Classes
         {
             if (!await _proxySemaphore.WaitAsync(TimeSpan.FromSeconds(5)))
             {
-                try { client.Close(); } catch { }
+                try { client.Close(); } catch { } // Best-effort: failure is acceptable
                 return;
             }
             try
@@ -564,7 +564,7 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("TLS", $"Client TLS handshake failed: {ex.Message}");
             }
-            catch { } // Connection closed — normal
+            catch { } // Best-effort: failure is acceptable � Connection closed — normal
             finally
             {
                 _proxySemaphore.Release();
@@ -577,24 +577,24 @@ namespace FlyShelf.Classes
             _isRunning = false;
             _proxyRunning = false;
             ServerUrl = "Offline";
-            try { _heartbeatTimer?.Stop(); _heartbeatTimer?.Dispose(); } catch { }
-            try { System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged; } catch { }
+            try { _heartbeatTimer?.Stop(); _heartbeatTimer?.Dispose(); } catch { } // Best-effort: failure is acceptable
+            try { System.Net.NetworkInformation.NetworkChange.NetworkAddressChanged -= OnNetworkAddressChanged; } catch { } // Best-effort: failure is acceptable
             _cfDaemon.Stop();
-            try { PeerManager.Instance?.Stop(); } catch { }
+            try { PeerManager.Instance?.Stop(); } catch { } // Best-effort: failure is acceptable
             // Stop LAN Transfer Engine and persist checkpoints
-            try { LanTransferManager.Instance?.PersistCheckpoints(); } catch { }
-            try { LanTransferEngine.Instance?.Stop(); } catch { }
+            try { LanTransferManager.Instance?.PersistCheckpoints(); } catch { } // Best-effort: failure is acceptable
+            try { LanTransferEngine.Instance?.Stop(); } catch { } // Best-effort: failure is acceptable
             // Stop Nearby Discovery
-            try { NearbyDiscovery.Instance?.Stop(); } catch { }
+            try { NearbyDiscovery.Instance?.Stop(); } catch { } // Best-effort: failure is acceptable
             // Persist transfer history
-            try { TransferHistory.Instance?.Save(); } catch { }
+            try { TransferHistory.Instance?.Save(); } catch { } // Best-effort: failure is acceptable
             _ = CloudDiscoveryManager.PushTunnelUrl("offline", false, "", forceWrite: true);
-            try { _listener?.Stop(); } catch { }
-            try { _proxyListener?.Stop(); } catch { }
+            try { _listener?.Stop(); } catch { } // Best-effort: failure is acceptable
+            try { _proxyListener?.Stop(); } catch { } // Best-effort: failure is acceptable
             // Stop TLS proxy
             _tlsRunning = false;
-            try { _tlsListener?.Stop(); } catch { }
-            try { _tlsCert?.Dispose(); } catch { }
+            try { _tlsListener?.Stop(); } catch { } // Best-effort: failure is acceptable
+            try { _tlsCert?.Dispose(); } catch { } // Best-effort: failure is acceptable
             TlsUrl = "";
             System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.RefreshLocalServerData());
         }
@@ -651,7 +651,7 @@ namespace FlyShelf.Classes
                     _ = Task.Run(async () =>
                     {
                         try { await PeerManager.Instance?.BroadcastUrlUpdate(newDisplayUrl, GlobalUrl ?? ""); }
-                        catch { }
+                        catch { } // Best-effort: failure is acceptable
                     });
 
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(() => _viewModel.RefreshLocalServerData());

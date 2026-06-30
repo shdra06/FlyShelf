@@ -65,6 +65,7 @@ namespace FlyShelf
             // Close other modes
             if (_isTodoActive) CloseTodoPanel(immediate: true);
             if (_isResearchActive) CloseResearchPanel(immediate: true);
+            if (_isAiSettingsActive) CloseAiSettingsPanel(immediate: true);
             if (_isSearchActive) CloseSearch(switchingPanel: true);
             if (_isFilterBarActive) ToggleFilterBar(false);
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
@@ -226,7 +227,7 @@ namespace FlyShelf
                     DwmSetWindowAttribute(hwnd, DWMWA_BORDER_COLOR, ref cn, sizeof(int));
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         /// <summary>
@@ -358,9 +359,8 @@ namespace FlyShelf
                 // Let the XAML DataTrigger on DroppedItems.Count control visibility
                 EmptyStatePanel.ClearValue(VisibilityProperty);
 
-                // PERF: Defer save to Background priority so it doesn't block the summon pipeline.
-                Dispatcher.InvokeAsync(() => NoteManager.SaveNow(),
-                    System.Windows.Threading.DispatcherPriority.Background);
+                // NM-FIX: Save synchronously — deferred async saves were being dropped
+                NoteManager.SaveNow();
                 return;
             }
 
@@ -1401,7 +1401,7 @@ namespace FlyShelf
                     calculatedDue = _selectedNoteDay.Date.Date.AddHours(9);
                 }
 
-                try { _activeReminderCreateWindow?.Close(); } catch { }
+                try { _activeReminderCreateWindow?.Close(); } catch { } // Best-effort: failure is acceptable
                 var reminderWindow = new FlyShelf.Windows.ReminderCreateWindow(parsedTitle, calculatedDue);
                 reminderWindow.Show();
                 reminderWindow.Activate();
@@ -1436,7 +1436,7 @@ namespace FlyShelf
             {
                 // Nothing to parse — open with defaults
                 var defaultDue = DateTime.Today.AddDays(1).AddHours(9);
-                try { _activeReminderCreateWindow?.Close(); } catch { }
+                try { _activeReminderCreateWindow?.Close(); } catch { } // Best-effort: failure is acceptable
                 var reminderWindow = new FlyShelf.Windows.ReminderCreateWindow("Note Reminder", defaultDue);
                 reminderWindow.Show();
                 reminderWindow.Activate();
@@ -1453,7 +1453,7 @@ namespace FlyShelf
                 calculatedDue = _selectedNoteDay.Date.Date.AddHours(9);
             }
 
-            try { _activeReminderCreateWindow?.Close(); } catch { }
+            try { _activeReminderCreateWindow?.Close(); } catch { } // Best-effort: failure is acceptable
             var window = new FlyShelf.Windows.ReminderCreateWindow(parsedTitle, calculatedDue);
             window.Show();
             window.Activate();
@@ -1546,7 +1546,7 @@ namespace FlyShelf
                                         e.CancelCommand(); // Cancel text paste
                                     }
                                 }
-                                catch { }
+                                catch { } // Best-effort: failure is acceptable
                                 break; // Only first image
                             }
                         }
@@ -1591,7 +1591,7 @@ namespace FlyShelf
             {
                 if (bullet.HasImage)
                 {
-                    try { File.Delete(bullet.ImagePath); } catch { }
+                    try { File.Delete(bullet.ImagePath); } catch { } // Best-effort: failure is acceptable
                 }
                 bullet.ImagePath = "";
                 NoteManager.MarkDirty();
@@ -1604,7 +1604,7 @@ namespace FlyShelf
             {
                 if (bullet.HasImage2)
                 {
-                    try { File.Delete(bullet.ImagePath2); } catch { }
+                    try { File.Delete(bullet.ImagePath2); } catch { } // Best-effort: failure is acceptable
                 }
                 bullet.ImagePath2 = "";
                 NoteManager.MarkDirty();
@@ -1813,7 +1813,7 @@ namespace FlyShelf
                                 section.Images.Add(freeformImg);
                                 NoteManager.MarkDirty();
                             }
-                            catch { }
+                            catch { } // Best-effort: failure is acceptable
                             break;
                         }
                     }
@@ -1873,7 +1873,7 @@ namespace FlyShelf
                     walk = VisualTreeHelper.GetParent(walk);
                 }
 
-                if (fi.HasImage) { try { File.Delete(fi.ImagePath); } catch { } }
+                if (fi.HasImage) { try { File.Delete(fi.ImagePath); } catch { } /* Best-effort: failure is acceptable */ }
 
                 if (section != null)
                     section.Images.Remove(fi);
@@ -2331,7 +2331,7 @@ namespace FlyShelf
                             calculatedDue = _selectedNoteDay.Date.Date.AddHours(9);
                         }
 
-                        try { _activeReminderCreateWindow?.Close(); } catch { }
+                        try { _activeReminderCreateWindow?.Close(); } catch { } // Best-effort: failure is acceptable
                         var reminderWindow = new FlyShelf.Windows.ReminderCreateWindow(parsedTitle, calculatedDue);
                         reminderWindow.Show();
                         reminderWindow.Activate();
@@ -2412,6 +2412,41 @@ namespace FlyShelf
             }
         }
 
+        private void NotesFreeformImprove_Click(object sender, MouseButtonEventArgs e)
+        {
+            e.Handled = true;
+            if (sender is FrameworkElement fe && fe.DataContext is FreeformSection section)
+            {
+                if (string.IsNullOrWhiteSpace(section.Content))
+                {
+                    Windows.ToastWindow.ShowToast("⚠️ Note is empty. Type something first!");
+                    return;
+                }
+
+                bool hasCloudKey = AiProviderService.Instance.HasCloudApiKey;
+                if (!LicenseManager.IsPro && !hasCloudKey)
+                {
+                    UpgradePrompt.ShowNotesAILimit(this);
+                    return;
+                }
+
+                // Snapshot for undo before AI modifies the text
+                _notesUndoText = section.Content;
+                _notesUndoSection = section;
+
+                var aiWindow = new FlyShelf.Windows.NotesAIDiffWindow(section.Content);
+                aiWindow.Owner = this;
+                if (aiWindow.ShowDialog() == true && aiWindow.IsApplied)
+                {
+                    section.Content = aiWindow.ImprovedText;
+                    NoteManager.MarkDirty();
+
+                    // Show the undo button now that AI has modified text
+                    NotesUndoBtn.Visibility = Visibility.Visible;
+                }
+            }
+        }
+
         private void NotesUndo_Click(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
@@ -2425,6 +2460,7 @@ namespace FlyShelf
                 Windows.ToastWindow.ShowToast("↩️ Undo applied");
             }
         }
+
 
         private void OpenNotesAIDropdown(FrameworkElement target, string originalText, Action<string> onApplyText)
         {

@@ -64,12 +64,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="AvalonEdit" Version="6.3.1.120" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="Emoji.Wpf" Version="0.3.4" />
+    <PackageReference Include="MdXaml" Version="1.27.0" />
 
     <PackageReference Include="MicaWPF" Version="6.3.2" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
-    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.9" />
     <PackageReference Include="Microsoft.Recognizers.Text.DateTime" Version="1.8.13" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.2903.40" />
     <!-- Pin NuGet.CommandLine to a non-vulnerable version and exclude all its assets.
@@ -77,6 +79,7 @@
          by Microsoft.Recognizers.Text; this suppresses NU1901/NU1904 warnings. -->
     <PackageReference Include="NuGet.CommandLine" Version="6.12.5" ExcludeAssets="all" PrivateAssets="all" />
     <PackageReference Include="PDFsharp" Version="6.2.0" />
+    <PackageReference Include="System.IO.Hashing" Version="9.0.0" />
 
     <PackageReference Include="WPF-UI" Version="4.2.0" />
     <PackageReference Include="WPF-UI.Tray" Version="4.2.0" />
@@ -99,10 +102,7 @@
       <SecretsFile>Classes\FirebaseSecrets.cs</SecretsFile>
     </PropertyGroup>
     <!-- Stub: compiles but Firebase features won't work until real file is provided -->
-    <WriteLinesToFile File="$(SecretsFile)" 
-                      Lines="namespace FlyShelf.Classes%0D%0A{%0D%0A    public static class FirebaseSecrets%0D%0A    {%0D%0A        public static string ApiKey => &quot;&quot;;%0D%0A        public static string DatabaseUrl => &quot;&quot;;%0D%0A    }%0D%0A}" 
-                      Overwrite="true" 
-                      Condition="!Exists('$(SecretsFile)')" />
+    <WriteLinesToFile File="$(SecretsFile)" Lines="namespace FlyShelf.Classes%0D%0A{%0D%0A    public static class FirebaseSecrets%0D%0A    {%0D%0A        public static string ApiKey =&gt; &quot;&quot;;%0D%0A        public static string DatabaseUrl =&gt; &quot;&quot;;%0D%0A    }%0D%0A}" Overwrite="true" Condition="!Exists('$(SecretsFile)')" />
   </Target>
 
   <Target Name="ZipPayloads" BeforeTargets="BeforeBuild">
@@ -125,24 +125,16 @@
   </ItemGroup>
 
   <!-- ═══ OBFUSCATION: Run Obfuscar after compile, before single-file bundle ═══ -->
-  <Target Name="ObfuscateAssembly" AfterTargets="ComputeFilesToPublish" BeforeTargets="GenerateSingleFileBundle"
-          Condition="'$(Configuration)' == 'Release' AND '$(PublishSingleFile)' == 'true'">
+  <Target Name="ObfuscateAssembly" AfterTargets="ComputeFilesToPublish" BeforeTargets="GenerateSingleFileBundle" Condition="'$(Configuration)' == 'Release' AND '$(PublishSingleFile)' == 'true'">
     <Message Text="[OBFUSCATION] Running Obfuscar on FlyShelf.dll..." Importance="high" />
-    <Exec Command="cd /d &quot;$(MSBuildProjectDirectory)\bin\Release\net10.0-windows10.0.19041.0\win-x64&quot; &amp;&amp; obfuscar.console &quot;$(MSBuildProjectDirectory)\obfuscar.xml&quot;"
-          IgnoreExitCode="true"
-          ConsoleToMsBuild="true">
+    <Exec Command="cd /d &quot;$(MSBuildProjectDirectory)\bin\Release\net10.0-windows10.0.19041.0\win-x64&quot; &amp;&amp; obfuscar.console &quot;$(MSBuildProjectDirectory)\obfuscar.xml&quot;" IgnoreExitCode="true" ConsoleToMsBuild="true">
       <Output TaskParameter="ExitCode" PropertyName="ObfuscarExitCode" />
     </Exec>
     <Message Text="[OBFUSCATION] Obfuscar completed (exit: $(ObfuscarExitCode))" Importance="high" />
     <!-- Copy obfuscated DLL back over the original -->
-    <Copy SourceFiles="$(MSBuildProjectDirectory)\bin\Obfuscated\FlyShelf.dll"
-          DestinationFiles="$(MSBuildProjectDirectory)\bin\Release\net10.0-windows10.0.19041.0\win-x64\FlyShelf.dll"
-          OverwriteReadOnlyFiles="true"
-          Condition="'$(ObfuscarExitCode)' == '0'" />
-    <Message Text="[OBFUSCATION] ✅ Obfuscated DLL injected into publish pipeline" Importance="high"
-             Condition="'$(ObfuscarExitCode)' == '0'" />
-    <Warning Text="[OBFUSCATION] ⚠️ Obfuscation failed — publishing unobfuscated DLL"
-             Condition="'$(ObfuscarExitCode)' != '0'" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\bin\Obfuscated\FlyShelf.dll" DestinationFiles="$(MSBuildProjectDirectory)\bin\Release\net10.0-windows10.0.19041.0\win-x64\FlyShelf.dll" OverwriteReadOnlyFiles="true" Condition="'$(ObfuscarExitCode)' == '0'" />
+    <Message Text="[OBFUSCATION] ✅ Obfuscated DLL injected into publish pipeline" Importance="high" Condition="'$(ObfuscarExitCode)' == '0'" />
+    <Warning Text="[OBFUSCATION] ⚠️ Obfuscation failed — publishing unobfuscated DLL" Condition="'$(ObfuscarExitCode)' != '0'" />
   </Target>
 
 </Project>

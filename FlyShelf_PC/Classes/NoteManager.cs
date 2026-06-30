@@ -245,6 +245,16 @@ namespace FlyShelf.Classes
     {
         public string Id { get; set; } = Guid.NewGuid().ToString("N")[..8];
 
+        private string _title = "";
+        public string Title
+        {
+            get => _title;
+            set { if (_title != value) { _title = value; OnPropertyChanged(nameof(Title)); OnPropertyChanged(nameof(HasTitle)); } }
+        }
+
+        [JsonIgnore]
+        public bool HasTitle => !string.IsNullOrEmpty(_title);
+
         private string _content = "";
         public string Content
         {
@@ -382,6 +392,7 @@ namespace FlyShelf.Classes
         private static List<NoteDay> _allDays = new();
         private static Timer? _saveTimer;
         private static readonly object _lock = new();
+        private static readonly SemaphoreSlim _fileLock = new(1, 1);
         private static int _isDirty = 0;
         private static bool _isLoaded;
 
@@ -463,7 +474,7 @@ namespace FlyShelf.Classes
                     {
                         try
                         {
-                            string backupJson = File.ReadAllText(backupPath);
+                            string backupJson = RunWithRetry(() => File.ReadAllText(backupPath));
                             var loadedBackup = JsonSerializer.Deserialize<List<NoteDay>>(backupJson, new JsonSerializerOptions
                             {
                                 PropertyNameCaseInsensitive = true
@@ -490,6 +501,7 @@ namespace FlyShelf.Classes
 
                     _days = new ObservableCollection<NoteDay>();
                     _allDays = new List<NoteDay>();
+                    _isLoaded = true;
                 }
             }
         }
@@ -593,7 +605,7 @@ namespace FlyShelf.Classes
             // Clean up image file if exists
             if (bullet.HasImage)
             {
-                try { File.Delete(bullet.ImagePath); } catch { }
+                try { File.Delete(bullet.ImagePath); } catch { } // Best-effort: failure is acceptable
             }
             ScheduleSave();
         }
@@ -776,6 +788,7 @@ namespace FlyShelf.Classes
                 }
             }
 
+            _fileLock.Wait();
             try
             {
                 if (!Directory.Exists(_appDataDir))
@@ -808,6 +821,10 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("NOTES", $"Failed to save notes: {ex.Message}");
             }
+            finally
+            {
+                _fileLock.Release();
+            }
         }
 
         /// <summary>
@@ -821,8 +838,11 @@ namespace FlyShelf.Classes
             if (string.IsNullOrWhiteSpace(query)) return new();
             string q = query.Trim();
 
+            List<NoteDay> snapshot;
+            lock (_lock) { snapshot = _days.ToList(); }
+
             var results = new List<(NoteDay, NoteBullet)>();
-            foreach (var day in _days)
+            foreach (var day in snapshot)
             {
                 foreach (var bullet in day.Bullets)
                 {

@@ -39,7 +39,7 @@ namespace FlyShelf.Classes
         /// <summary>Cancels any in-progress download. Safe to call if nothing is downloading.</summary>
         public void CancelDownload()
         {
-            try { _downloadCts?.Cancel(); } catch { }
+            try { _downloadCts?.Cancel(); } catch { } // Best-effort: failure is acceptable
         }
 
         // ═══ Static cross-window notification ═══
@@ -289,7 +289,7 @@ namespace FlyShelf.Classes
             try
             {
                 // Clean up any leftover file from a previous failed attempt
-                try { if (File.Exists(tempExePath)) File.Delete(tempExePath); } catch { }
+                try { if (File.Exists(tempExePath)) File.Delete(tempExePath); } catch { } // Best-effort: failure is acceptable
 
                 StatusChanged?.Invoke("Downloading update...");
                 Logger.LogAction("UPDATE", $"Downloading from {DownloadUrl}");
@@ -350,7 +350,7 @@ namespace FlyShelf.Classes
                 {
                     Logger.LogAction("UPDATE", $"❌ REJECTED: Downloaded file is only {downloadedFile.Length / 1048576.0:F1} MB — expected ≥50 MB. This is not a valid self-contained build.");
                     StatusChanged?.Invoke($"❌ Update rejected — file too small ({downloadedFile.Length / 1048576.0:F1} MB). Must be ≥50 MB.");
-                    try { File.Delete(tempExePath); } catch { }
+                    try { File.Delete(tempExePath); } catch { } // Best-effort: failure is acceptable
                     return false;
                 }
                 Logger.LogAction("UPDATE", $"✅ Size check passed: {downloadedFile.Length / 1048576.0:F1} MB");
@@ -370,7 +370,7 @@ namespace FlyShelf.Classes
                     {
                         Logger.LogAction("UPDATE", $"\u274c HASH MISMATCH! Expected: {ExpectedHash}, Got: {actualHash}");
                         StatusChanged?.Invoke("\u274c Download corrupted \u2014 hash mismatch. Please retry.");
-                        try { File.Delete(tempExePath); } catch { }
+                        try { File.Delete(tempExePath); } catch { } // Best-effort: failure is acceptable
                         return false;
                     }
                     Logger.LogAction("UPDATE", $"\u2705 Hash verified: {actualHash}");
@@ -430,7 +430,7 @@ namespace FlyShelf.Classes
                         // Version upgrade: hash is mandatory for security
                         Logger.LogAction("UPDATE", "❌ REJECTED: No SHA-256 hash provided for version upgrade — refusing to apply unverified update.");
                         StatusChanged?.Invoke("❌ Update rejected — integrity hash missing. Please retry later.");
-                        try { File.Delete(tempExePath); } catch { }
+                        try { File.Delete(tempExePath); } catch { } // Best-effort: failure is acceptable
                         return false;
                     }
                 }
@@ -442,7 +442,7 @@ namespace FlyShelf.Classes
             {
                 Logger.LogAction("UPDATE", "Download cancelled by user.");
                 StatusChanged?.Invoke("Download cancelled.");
-                try { if (File.Exists(tempExePath)) File.Delete(tempExePath); } catch { }
+                try { if (File.Exists(tempExePath)) File.Delete(tempExePath); } catch { } // Best-effort: failure is acceptable
                 return false;
             }
             catch (Exception ex)
@@ -736,7 +736,7 @@ namespace FlyShelf.Classes
                 string logPath = Path.Combine(Path.GetTempPath(), "FlyShelf_Update", "update_log.txt");
                 void Log(string msg)
                 {
-                    try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss}] {msg}\n"); } catch { }
+                    try { File.AppendAllText(logPath, $"[{DateTime.Now:HH:mm:ss}] {msg}\n"); } catch { } // Best-effort: failure is acceptable
                 }
 
                 Log($"Self-updater started. Target: {targetPath}, WaitPID: {waitPid}");
@@ -751,7 +751,7 @@ namespace FlyShelf.Classes
                         if (!oldProcess.WaitForExit(30_000))
                         {
                             Log("Old process didn't exit in 30s — attempting kill...");
-                            try { oldProcess.Kill(); } catch { }
+                            try { oldProcess.Kill(); } catch { } // Best-effort: failure is acceptable
                             oldProcess.WaitForExit(5_000);
                         }
                         Log("Old process exited.");
@@ -839,7 +839,7 @@ namespace FlyShelf.Classes
                     string logPath = Path.Combine(Path.GetTempPath(), "FlyShelf_Update", "update_error.txt");
                     File.WriteAllText(logPath, $"[{DateTime.Now}] Update failed:\n{ex}");
                 }
-                catch { }
+                catch { } // Best-effort: failure is acceptable
             }
 
             return true; // Signal caller to exit without UI
@@ -865,7 +865,7 @@ namespace FlyShelf.Classes
                 });
                 File.WriteAllText(UpdateMarkerPath, json);
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         /// <summary>
@@ -894,7 +894,7 @@ namespace FlyShelf.Classes
                 {
                     // Update confirmed healthy — clean up everything
                     Logger.LogAction("UPDATE", "Post-update health check PASSED — cleaning up.");
-                    try { File.Delete(UpdateMarkerPath); } catch { }
+                    try { File.Delete(UpdateMarkerPath); } catch { } // Best-effort: failure is acceptable
                     CleanupTempDir();
                     return false;
                 }
@@ -919,7 +919,7 @@ namespace FlyShelf.Classes
                 if (string.IsNullOrEmpty(backupPath) || !File.Exists(backupPath))
                 {
                     Logger.LogAction("UPDATE", $"⚠️ Rollback requested but backup not found at: {backupPath}");
-                    try { File.Delete(UpdateMarkerPath); } catch { }
+                    try { File.Delete(UpdateMarkerPath); } catch { } // Best-effort: failure is acceptable
                     return false;
                 }
 
@@ -928,7 +928,7 @@ namespace FlyShelf.Classes
                 if (string.IsNullOrEmpty(targetPath))
                 {
                     Logger.LogAction("UPDATE", "⚠️ Cannot determine target path from backup — skipping rollback.");
-                    try { File.Delete(UpdateMarkerPath); } catch { }
+                    try { File.Delete(UpdateMarkerPath); } catch { } // Best-effort: failure is acceptable
                     return false;
                 }
 
@@ -942,12 +942,12 @@ namespace FlyShelf.Classes
                 catch (Exception ex)
                 {
                     Logger.LogAction("UPDATE", $"❌ Rollback copy failed: {ex.Message}");
-                    try { File.Delete(UpdateMarkerPath); } catch { }
+                    try { File.Delete(UpdateMarkerPath); } catch { } // Best-effort: failure is acceptable
                     return false;
                 }
 
                 // Clean up marker and restart with the restored version
-                try { File.Delete(UpdateMarkerPath); } catch { }
+                try { File.Delete(UpdateMarkerPath); } catch { } // Best-effort: failure is acceptable
 
                 try
                 {
@@ -967,7 +967,7 @@ namespace FlyShelf.Classes
             catch (Exception ex)
             {
                 Logger.LogAction("UPDATE", $"Health check error (non-fatal): {ex.Message}");
-                try { File.Delete(UpdateMarkerPath); } catch { }
+                try { File.Delete(UpdateMarkerPath); } catch { } // Best-effort: failure is acceptable
                 return false;
             }
         }

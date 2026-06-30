@@ -9,7 +9,8 @@
         SystemBackdropType="Mica" Topmost="True"
         Background="Transparent" ResizeMode="NoResize"
         AllowsTransparency="False"
-        Icon="/Resources/FlyShelfLogo.ico">
+        Icon="/Resources/FlyShelfLogo.ico"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
     <WindowChrome.WindowChrome>
         <WindowChrome CaptionHeight="0" ResizeBorderThickness="0" CornerRadius="12" GlassFrameThickness="-1" />
     </WindowChrome.WindowChrome>
@@ -25,7 +26,8 @@
                 <Button HorizontalAlignment="Right" Margin="0,0,4,0" Padding="10,6" 
                         Background="Transparent" BorderBrush="Transparent" 
                         Click="Close_Click" Cursor="Hand" ToolTip="Close"
-                        WindowChrome.IsHitTestVisibleInChrome="True">
+                        WindowChrome.IsHitTestVisibleInChrome="True"
+                        AutomationProperties.Name="Close AI assistant">
                     <TextBlock Text="✕" FontSize="13" Opacity="0.5" 
                                Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorSecondary}"/>
                 </Button>
@@ -79,7 +81,7 @@
                              Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
                              CaretBrush="{DynamicResource MicaWPF.Brushes.SystemAccentColor}"
                              TextWrapping="Wrap" AcceptsReturn="True" VerticalScrollBarVisibility="Auto"
-                             AcceptsTab="True"/>
+                             AcceptsTab="True" AutomationProperties.Name="AI suggestion result"/>
                 </Border>
                 
                 <!-- Quick stats / Info -->
@@ -96,12 +98,12 @@
                 
                 <!-- Copy output button (Left aligned) -->
                 <ui:Button x:Name="CopyBtn" Grid.Column="0" Content="📋 Copy Result" Click="Copy_Click" 
-                           Appearance="Secondary" Width="120" Height="32" CornerRadius="8" HorizontalAlignment="Left" Visibility="Collapsed"/>
+                           Appearance="Secondary" Width="120" Height="32" CornerRadius="8" HorizontalAlignment="Left" Visibility="Collapsed" AutomationProperties.Name="Copy AI result"/>
 
                 <!-- Action buttons (Right aligned) -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
-                    <ui:Button Content="Cancel" Click="Cancel_Click" Appearance="Transparent" Width="80" Height="32" CornerRadius="8" Margin="0,0,8,0"/>
-                    <ui:Button x:Name="ApplyBtn" Content="Apply" Click="Apply_Click" Appearance="Primary" Width="90" Height="32" CornerRadius="8" IsEnabled="False">
+                    <ui:Button Content="Cancel" Click="Cancel_Click" Appearance="Transparent" Width="80" Height="32" CornerRadius="8" Margin="0,0,8,0" AutomationProperties.Name="Cancel"/>
+                    <ui:Button x:Name="ApplyBtn" Content="Apply" Click="Apply_Click" Appearance="Primary" Width="90" Height="32" CornerRadius="8" IsEnabled="False" AutomationProperties.Name="Apply AI suggestion">
                         <ui:Button.Background>
                             <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
                                 <GradientStop Color="#8B5CF6" Offset="0"/>

@@ -430,7 +430,7 @@ namespace FlyShelf.Windows
                     DwmSetWindowAttribute(hwnd, 35, ref captionColor, Marshal.SizeOf<int>());
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
 
@@ -538,6 +538,7 @@ namespace FlyShelf.Windows
                 if (HistoryGrid != null) HistoryGrid.Visibility = tag == "History" ? Visibility.Visible : Visibility.Collapsed;
                 if (NetworkGrid != null) NetworkGrid.Visibility = tag == "Network" ? Visibility.Visible : Visibility.Collapsed;
                 if (SettingsGrid != null) SettingsGrid.Visibility = tag == "Settings" ? Visibility.Visible : Visibility.Collapsed;
+                if (AiGrid != null) AiGrid.Visibility = tag == "AI" ? Visibility.Visible : Visibility.Collapsed;
 #if MSIX_STORE
                 if (LogsGrid != null) LogsGrid.Visibility = Visibility.Collapsed;
 #else
@@ -559,6 +560,10 @@ namespace FlyShelf.Windows
                             ? Visibility.Visible
                             : Visibility.Collapsed;
                     }
+                }
+                if (tag == "AI")
+                {
+                    PopulateHubAiSettings();
                 }
                 if (tag == "Network")
                 {
@@ -835,7 +840,7 @@ namespace FlyShelf.Windows
                     mainWin.ShowNearPosition(screen.Width / 2, screen.Height / 2, 1, false, false);
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private void PreviewFlyShelfSize_Click(object sender, RoutedEventArgs e)
@@ -852,7 +857,7 @@ namespace FlyShelf.Windows
                     mainWin.ShowNearPosition(screen.Width / 2, screen.Height / 2, 0, false, false);
                 }
             }
-            catch { }
+            catch { } // Best-effort: failure is acceptable
         }
 
         private static T? FindVisualChild<T>(DependencyObject parent) where T : DependencyObject

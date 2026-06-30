@@ -345,7 +345,7 @@ namespace FlyShelf.Classes
                         {
                             RunWithRetry(() => File.Copy(_historyPath, _historyPath + ".bak", true));
                         }
-                        catch { }
+                        catch { } // Best-effort: failure is acceptable
                     }
 
                     RunWithRetry(() => File.Move(tempPath, _historyPath, true));
@@ -361,7 +361,7 @@ namespace FlyShelf.Classes
                 {
                     Logger.LogAction("HISTORY_COMPACT_ERROR", $"Compaction failed: {ex.Message}");
                     // CHM-1 FIX: Clean up stale .tmp file so it doesn't accumulate on repeated failures
-                    try { File.Delete(_historyPath + ".tmp"); } catch { }
+                    try { File.Delete(_historyPath + ".tmp"); } catch { } // Best-effort: failure is acceptable
                 }
             }
         }
@@ -371,8 +371,7 @@ namespace FlyShelf.Classes
         /// </summary>
         private static void ScheduleCompaction()
         {
-            _compactionTimer?.Dispose();
-            _compactionTimer = new Timer(_ =>
+            var newTimer = new Timer(_ =>
             {
                 // Read current state from disk for compaction
                 try
@@ -383,6 +382,8 @@ namespace FlyShelf.Classes
                 }
                 catch (Exception ex) { Logger.LogAction("HISTORY_COMPACT", $"Scheduled compaction failed: {ex.Message}"); }
             }, null, 5000, Timeout.Infinite);
+            var oldTimer = Interlocked.Exchange(ref _compactionTimer, newTimer);
+            oldTimer?.Dispose();
         }
 
         /// <summary>
@@ -412,7 +413,7 @@ namespace FlyShelf.Classes
                             }
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { Logger.LogAction("HISTORY_LOAD", $"Failed to load history snapshot: {ex.Message}"); }
                 }
                 if (File.Exists(_journalPath))
                 {
@@ -441,7 +442,7 @@ namespace FlyShelf.Classes
                             catch (Exception ex) { Logger.LogAction("HISTORY_JOURNAL", $"Failed to parse journal line: {ex.Message}"); }
                         }
                     }
-                    catch { }
+                    catch (Exception ex) { Logger.LogAction("HISTORY_LOAD", $"Failed to read journal: {ex.Message}"); }
                 }
                 return items.Take(MAX_HISTORY_ITEMS).ToList();
             }
@@ -512,7 +513,7 @@ namespace FlyShelf.Classes
                 // If parent directory is completely empty, clean it up too
                 if (!Directory.EnumerateFileSystemEntries(parentSandboxDir).Any())
                 {
-                    try { Directory.Delete(parentSandboxDir); } catch { }
+                    try { Directory.Delete(parentSandboxDir); } catch { } // Best-effort: failure is acceptable
                 }
             }
             catch (Exception ex)

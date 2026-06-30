@@ -10,7 +10,8 @@
         Topmost="True"
         ShowInTaskbar="False"
         ResizeMode="NoResize"
-        Loaded="Window_Loaded">
+        Loaded="Window_Loaded"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
     <Grid Name="RootGrid" Background="Transparent">
         <local:SpriteAnimator x:Name="MascotAnimator" 
                                SpriteWidth="128" 

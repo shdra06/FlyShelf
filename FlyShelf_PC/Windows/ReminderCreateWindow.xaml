@@ -6,7 +6,8 @@
         Topmost="True" ShowActivated="True" ShowInTaskbar="False"
         ResizeMode="NoResize" SizeToContent="Height" Width="380"
         WindowStartupLocation="CenterScreen"
-        Loaded="Window_Loaded" PreviewMouseDown="Window_PreviewMouseDown">
+        Loaded="Window_Loaded" PreviewMouseDown="Window_PreviewMouseDown"
+        TextOptions.TextRenderingMode="ClearType" TextOptions.TextFormattingMode="Ideal" TextOptions.TextHintingMode="Auto" UseLayoutRounding="True" SnapsToDevicePixels="True">
 
     <Window.Resources>
         <!-- ═══ Dark TextBox Template ═══ -->
@@ -267,7 +268,7 @@
                 <StackPanel Margin="0,16,0,0">
                     <TextBlock Text="Title" FontSize="12" Foreground="{DynamicResource ThemeTextSecondary}" Margin="0,0,0,4"/>
                     <TextBox x:Name="TitleInput" Style="{StaticResource DarkTextBoxStyle}"
-                             Padding="10,8" FontSize="14"/>
+                             Padding="10,8" FontSize="14" AutomationProperties.Name="Reminder title"/>
                 </StackPanel>
 
                 <!-- ═══ NOTES INPUT ═══ -->
@@ -276,7 +277,7 @@
                     <TextBox x:Name="NotesInput" Style="{StaticResource DarkTextBoxStyle}"
                              Padding="10,8" FontSize="13"
                              AcceptsReturn="True" TextWrapping="Wrap"
-                             MinHeight="36" MaxHeight="80"/>
+                             MinHeight="36" MaxHeight="80" AutomationProperties.Name="Reminder notes"/>
                 </StackPanel>
 
                 <!-- ═══ DATE / TIME ROW ═══ -->
@@ -321,7 +322,8 @@
                                 </Border.Effect>
                                 <Calendar x:Name="CalendarControl" Style="{StaticResource DarkCalendarStyle}"
                                           DisplayDateStart="{x:Static System:DateTime.Today}"
-                                          xmlns:System="clr-namespace:System;assembly=mscorlib"/>
+                                          xmlns:System="clr-namespace:System;assembly=mscorlib"
+                                          AutomationProperties.Name="Reminder date"/>
                             </Border>
                         </Popup>
                     </StackPanel>
@@ -441,7 +443,8 @@
 
                 <!-- ═══ SUBMIT BUTTON ═══ -->
                 <Border x:Name="SubmitButton" CornerRadius="10" Padding="0,11" Cursor="Hand"
-                        HorizontalAlignment="Stretch" MouseLeftButtonDown="Submit_Click">
+                        HorizontalAlignment="Stretch" MouseLeftButtonDown="Submit_Click"
+                        AutomationProperties.Name="Set reminder">
                     <Border.Style>
                         <Style TargetType="Border">
                             <Setter Property="Background" Value="#F59E0B"/>

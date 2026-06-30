@@ -225,7 +225,7 @@ ${prevCrash}
           <View style={s.card}>
             <Text style={s.sectionHeader}>Recovery Tools</Text>
             <View style={s.btnRow}>
-              <TouchableOpacity style={s.btnPrimary} onPress={this.handleCopyCrashReport}>
+              <TouchableOpacity style={s.btnPrimary} onPress={this.handleCopyCrashReport} accessibilityLabel="Copy crash report to clipboard" accessibilityRole="button">
                 <Text style={s.btnText}>📋 Copy Crash Report</Text>
               </TouchableOpacity>
               
@@ -233,6 +233,8 @@ ${prevCrash}
                 style={s.btnSecondary} 
                 onPress={this.handleClearCache}
                 disabled={this.state.isClearingCache}
+                accessibilityLabel="Clear app cache"
+                accessibilityRole="button"
               >
                 {this.state.isClearingCache ? (
                   <ActivityIndicator size="small" color="#FFF" />
@@ -246,6 +248,9 @@ ${prevCrash}
               style={[s.btnSecondary, { marginTop: 10, borderColor: colors.accent.errorDim }]} 
               onPress={this.handleFactoryReset}
               disabled={this.state.isResettingSettings}
+              accessibilityLabel="Factory reset all settings"
+              accessibilityRole="button"
+              accessibilityHint="Erases all FlyShelf settings and pairing keys"
             >
               {this.state.isResettingSettings ? (
                 <ActivityIndicator size="small" color={colors.accent.error} />
@@ -255,7 +260,7 @@ ${prevCrash}
             </TouchableOpacity>
           </View>
 
-          <TouchableOpacity style={s.btnRestart} onPress={this.handleRestart}>
+          <TouchableOpacity style={s.btnRestart} onPress={this.handleRestart} accessibilityLabel="Attempt normal restart" accessibilityRole="button">
             <Text style={s.btnRestartText}>🔄 Attempt Normal Restart</Text>
           </TouchableOpacity>
         </View>
@@ -282,10 +287,12 @@ ${prevCrash}
                     errorInfo: { componentStack: 'Previous session dump.' }
                   });
                 }}
+                accessibilityLabel="Inspect last crash"
+                accessibilityRole="button"
               >
                 <Text style={s.toastActionText}>Inspect</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[s.toastActionBtn, { backgroundColor: 'rgba(255,255,255,0.1)' }]} onPress={this.clearPreviousCrash}>
+              <TouchableOpacity style={[s.toastActionBtn, { backgroundColor: 'rgba(255,255,255,0.1)' }]} onPress={this.clearPreviousCrash} accessibilityLabel="Dismiss crash notification" accessibilityRole="button">
                 <Text style={[s.toastActionText, { color: colors.text.secondary }]}>Dismiss</Text>
               </TouchableOpacity>
             </View>

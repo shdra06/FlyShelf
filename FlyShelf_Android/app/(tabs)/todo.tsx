@@ -176,7 +176,9 @@ export default function TodoScreen() {
       if (globalUrl) { pcUrlRef.current = globalUrl; return; }
       const localIp = await AsyncStorage.getItem('@pcLocalIp');
       if (localIp) {
-        const base = localIp.includes('://') ? localIp : `http://${localIp}`;
+        let base = localIp.includes('://') ? localIp : `http://${localIp}`;
+        const hostPart = base.replace(/^https?:\/\//, '');
+        if (!hostPart.includes(':')) base = `${base}:8999`;
         pcUrlRef.current = base.replace(/\/$/, '');
       }
     } catch {}
@@ -858,6 +860,8 @@ export default function TodoScreen() {
               setSelectedDayIndex(index);
             }}
             activeOpacity={0.7}
+            accessibilityLabel={`${isDateToday ? 'Today' : shortDayName(date)} ${date.getDate()}${isActive ? ', selected' : ''}`}
+            accessibilityRole="tab"
           >
             <Text style={[s.dayChipDayName, isActive && s.dayChipDayNameActive]}>
               {isDateToday ? 'TODAY' : shortDayName(date)}
@@ -879,6 +883,8 @@ export default function TodoScreen() {
         style={[s.priorityBadge, { backgroundColor: color + '18' }]}
         onPress={() => handleCyclePriority(item)}
         activeOpacity={0.7}
+        accessibilityLabel={`Priority: ${PriorityLabels[item.Priority]}. Tap to change`}
+        accessibilityRole="button"
       >
         <View style={[s.priorityDot, { backgroundColor: color }]} />
         <Text style={[s.priorityText, { color }]}>{PriorityLabels[item.Priority]}</Text>
@@ -900,6 +906,8 @@ export default function TodoScreen() {
         ]}
         onPress={() => handleOpenDatePicker(item)}
         activeOpacity={0.7}
+        accessibilityLabel={`Due date: ${display}${overdue ? ', overdue' : ''}`}
+        accessibilityRole="button"
       >
         <Text style={{ fontSize: 11 }}>📅</Text>
         <Text style={[
@@ -920,6 +928,8 @@ export default function TodoScreen() {
         style={s.recurrenceBadge}
         onPress={() => handleCycleRecurrence(item)}
         activeOpacity={0.7}
+        accessibilityLabel={`Recurrence: ${RecurrenceLabels[item.Recurrence]}. Tap to change`}
+        accessibilityRole="button"
       >
         <Text style={s.recurrenceText}>{RecurrenceLabels[item.Recurrence]}</Text>
       </TouchableOpacity>
@@ -937,6 +947,8 @@ export default function TodoScreen() {
             onLongPress={() => handleRemoveTag(item.Id, tag)}
             onPress={() => setTagInputItemId(tagInputItemId === item.Id ? null : item.Id)}
             activeOpacity={0.7}
+            accessibilityLabel={`Tag: ${tag}. Long press to remove`}
+            accessibilityRole="button"
           >
             <Text style={s.tagPillText}>#{tag}</Text>
           </TouchableOpacity>
@@ -959,6 +971,8 @@ export default function TodoScreen() {
               style={[s.subtaskCheckbox, sub.IsDone && s.subtaskCheckboxDone]}
               onPress={() => handleToggleSubtask(item.Id, sub.Id)}
               activeOpacity={0.7}
+              accessibilityLabel={`Subtask: ${sub.Text || 'Untitled'}, ${sub.IsDone ? 'completed' : 'not completed'}`}
+              accessibilityRole="checkbox"
             >
               {sub.IsDone && <Text style={s.subtaskCheckmark}>✓</Text>}
             </TouchableOpacity>
@@ -980,6 +994,8 @@ export default function TodoScreen() {
                 style={{ flex: 1 }}
                 onPress={() => setEditingSubtaskId(sub.Id)}
                 activeOpacity={0.7}
+                accessibilityLabel={`Edit subtask: ${sub.Text || 'Untitled'}`}
+                accessibilityRole="button"
               >
                 <Text style={sub.IsDone ? s.subtaskTextDone : s.subtaskText}>
                   {sub.Text || 'Untitled'}
@@ -989,6 +1005,9 @@ export default function TodoScreen() {
             <TouchableOpacity
               style={s.subtaskDeleteBtn}
               onPress={() => handleDeleteSubtask(item.Id, sub.Id)}
+              accessibilityLabel={`Delete subtask: ${sub.Text || 'Untitled'}`}
+              accessibilityRole="button"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Text style={{ color: colors.text.tertiary, fontSize: 14 }}>✕</Text>
             </TouchableOpacity>
@@ -1004,6 +1023,8 @@ export default function TodoScreen() {
           style={s.addSubtaskBtn}
           onPress={() => handleAddSubtask(item.Id)}
           activeOpacity={0.7}
+          accessibilityLabel="Add subtask"
+          accessibilityRole="button"
         >
           <Text style={{ color: colors.accent.primary, fontSize: 14 }}>＋</Text>
           <Text style={s.addSubtaskText}>Add subtask</Text>
@@ -1072,6 +1093,8 @@ export default function TodoScreen() {
             style={s.actionBtn}
             onPress={() => handleCyclePriority(item)}
             activeOpacity={0.7}
+            accessibilityLabel={`Set priority, currently ${item.Priority === 0 ? 'none' : PriorityLabels[item.Priority]}`}
+            accessibilityRole="button"
           >
             <Text style={{ fontSize: 12 }}>🔥</Text>
             <Text style={s.actionBtnText}>
@@ -1083,6 +1106,8 @@ export default function TodoScreen() {
             style={s.actionBtn}
             onPress={() => handleOpenDatePicker(item)}
             activeOpacity={0.7}
+            accessibilityLabel="Set due date"
+            accessibilityRole="button"
           >
             <Text style={{ fontSize: 12 }}>📅</Text>
             <Text style={s.actionBtnText}>Due date</Text>
@@ -1092,6 +1117,8 @@ export default function TodoScreen() {
             style={s.actionBtn}
             onPress={() => handleCycleRecurrence(item)}
             activeOpacity={0.7}
+            accessibilityLabel={`Set recurrence, currently ${item.Recurrence === 0 ? 'none' : RecurrenceLabels[item.Recurrence]}`}
+            accessibilityRole="button"
           >
             <Text style={{ fontSize: 12 }}>🔄</Text>
             <Text style={s.actionBtnText}>
@@ -1103,6 +1130,8 @@ export default function TodoScreen() {
             style={s.actionBtn}
             onPress={() => setShowColorPicker(showColorPicker === item.Id ? null : item.Id)}
             activeOpacity={0.7}
+            accessibilityLabel="Set task color"
+            accessibilityRole="button"
           >
             <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: item.Color || colors.accent.primary }} />
             <Text style={s.actionBtnText}>Color</Text>
@@ -1112,6 +1141,8 @@ export default function TodoScreen() {
             style={s.actionBtn}
             onPress={() => setTagInputItemId(tagInputItemId === item.Id ? null : item.Id)}
             activeOpacity={0.7}
+            accessibilityLabel="Manage tags"
+            accessibilityRole="button"
           >
             <Text style={{ fontSize: 12 }}>🏷</Text>
             <Text style={s.actionBtnText}>Tags</Text>
@@ -1121,6 +1152,8 @@ export default function TodoScreen() {
             style={s.actionBtn}
             onPress={() => handleCycleTimer(item)}
             activeOpacity={0.7}
+            accessibilityLabel={`Set timer${item.TimerMinutes ? `, ${item.TimerMinutes} minutes` : ''}`}
+            accessibilityRole="button"
           >
             <Text style={{ fontSize: 12 }}>⏱</Text>
             <Text style={s.actionBtnText}>
@@ -1132,6 +1165,8 @@ export default function TodoScreen() {
             style={s.actionBtn}
             onPress={() => handleOpenReminderPicker(item)}
             activeOpacity={0.7}
+            accessibilityLabel={item.ReminderAt ? 'Change reminder' : 'Set reminder'}
+            accessibilityRole="button"
           >
             <Text style={{ fontSize: 12 }}>🔔</Text>
             <Text style={s.actionBtnText}>
@@ -1143,6 +1178,8 @@ export default function TodoScreen() {
             style={[s.actionBtn, s.actionBtnDanger]}
             onPress={() => handleDeleteItem(item.Id)}
             activeOpacity={0.7}
+            accessibilityLabel="Delete task"
+            accessibilityRole="button"
           >
             <Text style={{ fontSize: 12 }}>🗑</Text>
             <Text style={[s.actionBtnText, s.actionBtnDangerText]}>Delete</Text>
@@ -1185,6 +1222,8 @@ export default function TodoScreen() {
               style={item.IsDone ? s.checkboxChecked : s.checkboxUnchecked}
               onPress={() => handleToggleDone(item.Id)}
               activeOpacity={0.7}
+              accessibilityLabel={`${item.Text || 'Untitled'}, ${item.IsDone ? 'completed' : 'not completed'}`}
+              accessibilityRole="checkbox"
             >
               {item.IsDone && <Text style={s.checkboxCheckmark}>✓</Text>}
             </TouchableOpacity>
@@ -1205,6 +1244,8 @@ export default function TodoScreen() {
               <TouchableOpacity
                 onPress={() => setEditingItemId(item.Id)}
                 activeOpacity={0.7}
+                accessibilityLabel={`Edit task: ${item.Text || 'Untitled'}`}
+                accessibilityRole="button"
               >
                 <Text style={item.IsDone ? s.todoTextDone : s.todoText}>
                   {item.Text || 'Untitled'}
@@ -1223,7 +1264,7 @@ export default function TodoScreen() {
                 <Text style={{ color: '#FF6B6B', fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] }}>
                   {formatCountdown(activeTimers[item.Id].remaining)}
                 </Text>
-                <TouchableOpacity onPress={() => cancelTimer(item.Id)} style={{ marginLeft: 8 }}>
+                <TouchableOpacity onPress={() => cancelTimer(item.Id)} style={{ marginLeft: 8 }} accessibilityLabel="Cancel timer" accessibilityRole="button" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
                   <Text style={{ color: '#FF4444', fontSize: 12, fontWeight: '600' }}>✕</Text>
                 </TouchableOpacity>
               </View>
@@ -1280,6 +1321,9 @@ export default function TodoScreen() {
           <TouchableOpacity
             style={s.expandChevron}
             onPress={() => setExpandedItemId(isExpanded ? null : item.Id)}
+            accessibilityLabel={isExpanded ? 'Collapse task details' : 'Expand task details'}
+            accessibilityRole="button"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <Text style={s.expandChevronText}>{isExpanded ? '▾' : '▸'}</Text>
           </TouchableOpacity>
@@ -1327,6 +1371,8 @@ export default function TodoScreen() {
                 }}
                 onPress={() => setShowSortModal(true)}
                 activeOpacity={0.7}
+                accessibilityLabel="Sort tasks"
+                accessibilityRole="button"
               >
                 <Text style={{ fontSize: 16, color: sortMode !== 'manual' ? colors.accent.primary : colors.text.secondary }}>↕</Text>
               </TouchableOpacity>
@@ -1339,6 +1385,8 @@ export default function TodoScreen() {
                 }}
                 onPress={() => setShowTemplateModal(true)}
                 activeOpacity={0.7}
+                accessibilityLabel="Task templates"
+                accessibilityRole="button"
               >
                 <Text style={{ fontSize: 16, color: colors.text.secondary }}>📄</Text>
               </TouchableOpacity>
@@ -1384,11 +1432,16 @@ export default function TodoScreen() {
               placeholder="Search all tasks..."
               placeholderTextColor={colors.text.tertiary}
               returnKeyType="search"
+              accessibilityLabel="Search all tasks"
+              accessibilityRole="search"
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity
                 onPress={() => { setSearchQuery(''); setIsSearchActive(false); }}
                 activeOpacity={0.7}
+                accessibilityLabel="Clear search"
+                accessibilityRole="button"
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Text style={{ fontSize: 14, color: colors.text.tertiary }}>✕</Text>
               </TouchableOpacity>
@@ -1490,12 +1543,16 @@ export default function TodoScreen() {
               placeholderTextColor={colors.text.tertiary}
               onSubmitEditing={handleAddTodo}
               returnKeyType="done"
+              accessibilityLabel="New task text"
+              accessibilityRole="text"
             />
             <TouchableOpacity
               style={[s.inputBarSend, !newTodoText.trim() && s.inputBarSendDisabled]}
               onPress={handleAddTodo}
               disabled={!newTodoText.trim()}
               activeOpacity={0.7}
+              accessibilityLabel="Add task"
+              accessibilityRole="button"
             >
               <Text style={{ color: newTodoText.trim() ? '#FFF' : colors.text.disabled, fontSize: 20, fontWeight: '300' }}>＋</Text>
             </TouchableOpacity>
