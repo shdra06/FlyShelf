@@ -143,7 +143,13 @@
     <SolidColorBrush x:Key="DangerBgHover"     Color="#30EF4444" options:Freeze="True"/>
     <SolidColorBrush x:Key="DangerBorder"      Color="#50EF4444" options:Freeze="True"/>
     <SolidColorBrush x:Key="SuccessColor"      Color="#22C55E" options:Freeze="True"/>
+    <SolidColorBrush x:Key="SuccessBgSubtle"   Color="#2022C55E" options:Freeze="True"/>
+    <SolidColorBrush x:Key="SuccessBgHover"    Color="#3022C55E" options:Freeze="True"/>
+    <SolidColorBrush x:Key="SuccessBorder"     Color="#5022C55E" options:Freeze="True"/>
     <SolidColorBrush x:Key="WarningColor"      Color="#F59E0B" options:Freeze="True"/>
+    <SolidColorBrush x:Key="WarningBgSubtle"   Color="#20F59E0B" options:Freeze="True"/>
+    <SolidColorBrush x:Key="WarningBgHover"    Color="#30F59E0B" options:Freeze="True"/>
+    <SolidColorBrush x:Key="WarningBorder"     Color="#50F59E0B" options:Freeze="True"/>
     <SolidColorBrush x:Key="InfoColor"         Color="#3B82F6" options:Freeze="True"/>
 
     <!-- ═══ FIXED: Pin / Delete / Common ═══ -->

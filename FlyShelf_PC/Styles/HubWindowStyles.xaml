@@ -87,14 +87,14 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="ItemBorder" Property="Background" Value="#156366F1"/>
-                            <Setter Property="Foreground" Value="#818CF8"/>
+                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource ThemeAccentBg}"/>
+                            <Setter Property="Foreground" Value="{DynamicResource ThemeAccentLight}"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="ItemBorder" Property="Background" Value="#256366F1"/>
-                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="#406366F1"/>
+                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource ThemeAccentBgHover}"/>
+                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{DynamicResource ThemeAccentBorder}"/>
                             <Setter TargetName="ItemBorder" Property="BorderThickness" Value="1"/>
-                            <Setter Property="Foreground" Value="White"/>
+                            <Setter Property="Foreground" Value="{DynamicResource ThemeTextOnAccent}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45"/>

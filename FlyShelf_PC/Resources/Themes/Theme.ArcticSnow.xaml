@@ -87,6 +87,10 @@
     <SolidColorBrush x:Key="EmojiButtonBorder" Color="#30D97706" />
     <SolidColorBrush x:Key="DangerBgHover"     Color="#18EF4444" />
     <SolidColorBrush x:Key="DangerBorder"      Color="#30EF4444" />
+    <SolidColorBrush x:Key="SuccessBgSubtle"   Color="#1822C55E" />
+    <SolidColorBrush x:Key="SuccessBorder"     Color="#3022C55E" />
+    <SolidColorBrush x:Key="WarningBgSubtle"   Color="#18F59E0B" />
+    <SolidColorBrush x:Key="WarningBorder"     Color="#30F59E0B" />
 
     <!-- ── Toast ─────────────────────────────────────────────────────── -->
     <SolidColorBrush x:Key="ThemeToastBg"        Color="#F0F8FAFC" />
