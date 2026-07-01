@@ -32,6 +32,8 @@ namespace FlyShelf.Classes
         public int LatencyMs { get; set; } = -1;
         public bool IsConnected { get; set; }
         public string DeviceType { get; set; } = "PC";
+        public bool IsPaired { get; set; }
+        public bool IsOnline => (DateTime.UtcNow - DiscoveredAt).TotalSeconds < 30;
         public string StatusText => IsConnected ? "Connected" : $"Available ({LatencyMs}ms)";
     }
 
@@ -60,10 +62,13 @@ namespace FlyShelf.Classes
         public IReadOnlyCollection<NearbyDeviceInfo> DiscoveredDevices =>
             _discovered.Values.OrderByDescending(d => d.DiscoveredAt).ToList();
 
+        public event Action<NearbyDeviceInfo>? DeviceDiscovered;
+
         public NearbyDiscovery()
         {
             Instance = this;
             StartListener();
+            StartBroadcastLoop();
         }
 
         /// <summary>
@@ -74,6 +79,37 @@ namespace FlyShelf.Classes
             _cts = new CancellationTokenSource();
             _ = Task.Run(() => ListenLoop(_cts.Token));
             Logger.LogAction("NEARBY", $"Nearby discovery listener started on port {NEARBY_PORT}");
+        }
+
+        /// <summary>
+        /// Continuously broadcasts our presence so nearby devices can detect us.
+        /// Burst: 3 rapid probes at 1s intervals on startup, then settles to 5s.
+        /// </summary>
+        private void StartBroadcastLoop()
+        {
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    // Burst discovery: 3 rapid probes for instant detection
+                    for (int i = 0; i < 3; i++)
+                    {
+                        await BroadcastProbe();
+                        await Task.Delay(1000, _cts!.Token);
+                    }
+                    Logger.LogAction("NEARBY", "Burst discovery complete (3 probes sent)");
+
+                    // Steady-state: broadcast every 5 seconds
+                    while (!_cts!.Token.IsCancellationRequested)
+                    {
+                        await Task.Delay(5000, _cts.Token);
+                        await BroadcastProbe();
+                        PruneStale();
+                    }
+                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex) { Logger.LogAction("NEARBY", $"Broadcast loop error: {ex.Message}"); }
+            });
         }
 
         /// <summary>
@@ -207,10 +243,9 @@ namespace FlyShelf.Classes
 
                         string senderIp = result.RemoteEndPoint.Address.ToString();
 
-                        // Skip devices already connected via LAN PeerManager
-                        if (PeerManager.Instance?.ConnectedPeers.Values
-                            .Any(p => p.DeviceId == deviceId && p.IsAlive && p.Transport == "LAN") == true)
-                            continue;
+                        // Mark connected status but don't skip — show all devices
+                        bool isAlreadyConnected = PeerManager.Instance?.ConnectedPeers.Values
+                            .Any(p => p.DeviceId == deviceId && p.IsAlive) == true;
 
                         if (action == "probe")
                         {
@@ -218,11 +253,11 @@ namespace FlyShelf.Classes
                             _ = Task.Run(() => SendProbeResponse(result.RemoteEndPoint.Address, ct));
 
                             // Record the discovered device
-                            RecordDiscovery(deviceId, deviceName, senderIp, httpPort, transferPort, probeDeviceType);
+                            RecordDiscovery(deviceId, deviceName, senderIp, httpPort, transferPort, probeDeviceType, isAlreadyConnected);
                         }
                         else if (action == "response")
                         {
-                            RecordDiscovery(deviceId, deviceName, senderIp, httpPort, transferPort, probeDeviceType);
+                            RecordDiscovery(deviceId, deviceName, senderIp, httpPort, transferPort, probeDeviceType, isAlreadyConnected);
                         }
                     }
                     catch (OperationCanceledException) { break; }
@@ -268,7 +303,7 @@ namespace FlyShelf.Classes
             catch { } // Best-effort: failure is acceptable
         }
 
-        private void RecordDiscovery(string deviceId, string deviceName, string ip, int httpPort, int transferPort, string deviceType = "PC")
+        private void RecordDiscovery(string deviceId, string deviceName, string ip, int httpPort, int transferPort, string deviceType = "PC", bool isConnected = false)
         {
             var info = _discovered.AddOrUpdate(deviceId,
                 _ => new NearbyDeviceInfo
@@ -279,7 +314,9 @@ namespace FlyShelf.Classes
                     IpAddress = ip,
                     HttpPort = httpPort,
                     TransferPort = transferPort,
-                    DiscoveredAt = DateTime.UtcNow
+                    DiscoveredAt = DateTime.UtcNow,
+                    IsConnected = isConnected,
+                    IsPaired = DevicePairingManager.GetPairedDevices()?.Any(d => d.DeviceId == deviceId) == true
                 },
                 (_, existing) =>
                 {
@@ -289,6 +326,8 @@ namespace FlyShelf.Classes
                     existing.HttpPort = httpPort;
                     existing.TransferPort = transferPort;
                     existing.DiscoveredAt = DateTime.UtcNow;
+                    existing.IsConnected = isConnected;
+                    existing.IsPaired = DevicePairingManager.GetPairedDevices()?.Any(d => d.DeviceId == deviceId) == true;
                     return existing;
                 });
 
@@ -307,6 +346,7 @@ namespace FlyShelf.Classes
             });
 
             Logger.LogAction("NEARBY", $"Discovered: {deviceName} @ {ip}:{httpPort}");
+            DeviceDiscovered?.Invoke(info);
         }
 
         /// <summary>
@@ -357,21 +397,16 @@ namespace FlyShelf.Classes
             string myId = SettingsManager.Current.DeviceId ?? "";
             if (deviceId == myId) return;
 
-            // Skip already-connected LAN peers
-            if (PeerManager.Instance?.ConnectedPeers.Values
-                .Any(p => p.DeviceId == deviceId && p.IsAlive && p.Transport == "LAN") == true)
-                return;
-
             RecordDiscovery(deviceId, deviceName, ipAddress, httpPort, 0, deviceType);
             Logger.LogAction("NEARBY", $"📱 HTTP discovery: {deviceName} ({deviceType}) @ {ipAddress}:{httpPort}");
         }
 
         /// <summary>
-        /// Remove stale discoveries older than 5 minutes.
+        /// Remove stale discoveries older than 30 seconds.
         /// </summary>
         public void PruneStale()
         {
-            var staleIds = _discovered.Where(kv => (DateTime.UtcNow - kv.Value.DiscoveredAt).TotalMinutes > 5)
+            var staleIds = _discovered.Where(kv => (DateTime.UtcNow - kv.Value.DiscoveredAt).TotalSeconds > 30)
                 .Select(kv => kv.Key).ToList();
             foreach (var id in staleIds)
                 _discovered.TryRemove(id, out _);

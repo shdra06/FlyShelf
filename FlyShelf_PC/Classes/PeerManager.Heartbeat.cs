@@ -15,6 +15,8 @@ namespace FlyShelf.Classes
 {
     public partial class PeerManager
     {
+        private DateTime _allPeersHealthySince = DateTime.MinValue;
+
         /// <summary>
         /// Pings all alive peers every HEARTBEAT_MS (5s).
         /// If a peer fails MAX_FAILURES (3) consecutive health checks, it's marked dead.
@@ -27,7 +29,17 @@ namespace FlyShelf.Classes
             {
                 try
                 {
-                    await Task.Delay(HEARTBEAT_MS, ct);
+                    // Adaptive interval: use relaxed timing when all peers are healthy for >60s
+                    bool allHealthy = _peers.Values.All(p => p.IsAlive || string.IsNullOrEmpty(p.ActiveUrl));
+                    if (allHealthy && _allPeersHealthySince == DateTime.MinValue)
+                        _allPeersHealthySince = DateTime.UtcNow;
+                    else if (!allHealthy)
+                        _allPeersHealthySince = DateTime.MinValue;
+
+                    int interval = (allHealthy && _allPeersHealthySince != DateTime.MinValue
+                        && (DateTime.UtcNow - _allPeersHealthySince).TotalMilliseconds > RELAXED_AFTER_MS)
+                        ? HEARTBEAT_MS_RELAXED : HEARTBEAT_MS;
+                    await Task.Delay(interval, ct);
                 }
                 catch (OperationCanceledException) { return; }
 
@@ -82,7 +94,9 @@ namespace FlyShelf.Classes
             if (string.IsNullOrEmpty(peer.ActiveUrl)) return false;
             try
             {
-                using var cts = new CancellationTokenSource(HEARTBEAT_TIMEOUT_MS);
+                // Transport-aware timeout: LAN is faster, CF needs more time
+                int timeout = (peer.Transport == "LAN") ? HEARTBEAT_TIMEOUT_LAN_MS : HEARTBEAT_TIMEOUT_CF_MS_PING;
+                using var cts = new CancellationTokenSource(timeout);
                 using var req = new HttpRequestMessage(HttpMethod.Get, $"{peer.ActiveUrl.TrimEnd('/')}/api/health");
                 string pk = DevicePairingManager.GetPairingKeyForDevice(peer.DeviceId);
                 if (string.IsNullOrEmpty(pk)) pk = DevicePairingManager.EnsurePairingKey();
@@ -91,8 +105,9 @@ namespace FlyShelf.Classes
                 var resp = await _sharedClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, cts.Token);
                 return resp.IsSuccessStatusCode;
             }
-            catch
+            catch (Exception ex)
             {
+                Logger.LogAction("PEER_PING", $"Ping failed for {peer.DeviceName} at {peer.ActiveUrl}: {ex.GetType().Name}");
                 return false;
             }
         }
@@ -206,7 +221,10 @@ namespace FlyShelf.Classes
             if (peer.ConsecutiveFailures >= MAX_FAILURES)
             {
                 Logger.LogAction("PEER", $"💀 {peer.DeviceName} transfer failures hit {MAX_FAILURES} — marking dead ({reason})");
-                _ = HandlePeerDeath(peer);
+                _ = HandlePeerDeath(peer).ContinueWith(t =>
+                {
+                    if (t.IsFaulted) Logger.LogAction("PEER_ERR", $"HandlePeerDeath failed for {peer.DeviceName}: {t.Exception?.InnerException?.Message}");
+                }, TaskContinuationOptions.OnlyOnFaulted);
             }
             else
             {

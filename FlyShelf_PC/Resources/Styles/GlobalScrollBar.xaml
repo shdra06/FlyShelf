@@ -2,13 +2,14 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <!-- ═══════════════════════════════════════════════════════════════
-         FlyShelf — Apple-style Ultra-Compact Scrollbar
+         FlyShelf — Sleek Modern Scrollbar
          ─────────────────────────────────────────────────────────────
-         • Total rail width: 6px (fits beside clipboard edge)
-         • Default thumb: 3px rounded capsule, 20% white
-         • Hover: swells to 5px, brightens to 40%
-         • Drag: accent violet capsule with soft glow
-         • No arrows, no track background — invisible rail
+         • Total rail width: 10px (comfortable hit area)
+         • Default thumb: 5px slim rounded bar, 30% white
+         • Hover: expands to 8px, brightens to 50%
+         • Drag: accent violet, full opacity
+         • No arrows, no track background — clean invisible rail
+         • Smooth rounded corners on all states
          ═══════════════════════════════════════════════════════════════ -->
 
     <!-- Invisible page-up / page-down hit areas -->
@@ -26,34 +27,26 @@
     </Style>
 
     <!-- ─────────────────────────────────────
-         VERTICAL THUMB — rounded capsule
+         VERTICAL THUMB — slim rounded bar
          ───────────────────────────────────── -->
     <Style x:Key="AppleThumbV" TargetType="Thumb">
         <Setter Property="OverridesDefaultStyle" Value="True"/>
         <Setter Property="IsTabStop"             Value="False"/>
-        <Setter Property="MinHeight"             Value="40"/>
+        <Setter Property="MinHeight"             Value="30"/>
         <Setter Property="Cursor"                Value="Arrow"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
-                    <!-- Transparent hit-target fills the full 6px rail -->
+                    <!-- Transparent hit-target fills the full rail -->
                     <Grid Background="Transparent">
-                        <!-- Subtle glow behind thumb on drag -->
-                        <Border x:Name="Glow"
-                                Background="#7C3AED" Opacity="0"
-                                CornerRadius="3"
-                                HorizontalAlignment="Center" Width="6"
-                                Margin="0,2">
-                            <Border.Effect><BlurEffect Radius="4"/></Border.Effect>
-                        </Border>
-                        <!-- The visible capsule -->
+                        <!-- The visible slim bar -->
                         <Border x:Name="Pill"
                                 Background="#FFFFFF"
-                                Opacity="0.22"
-                                CornerRadius="2"
-                                HorizontalAlignment="Center"
-                                Width="4"
-                                Margin="0,2"/>
+                                Opacity="0.30"
+                                CornerRadius="3"
+                                HorizontalAlignment="Right"
+                                Width="5"
+                                Margin="0,1,1,1"/>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <!-- HOVER -->
@@ -63,14 +56,19 @@
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Pill"
                                                          Storyboard.TargetProperty="Width"
-                                                         To="6" Duration="0:0:0.15">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                                         To="8" Duration="0:0:0.15">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="Pill"
                                                          Storyboard.TargetProperty="Opacity"
-                                                         To="0.38" Duration="0:0:0.15">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                                         To="0.50" Duration="0:0:0.15">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
+                                        <ThicknessAnimation Storyboard.TargetName="Pill"
+                                                            Storyboard.TargetProperty="Margin"
+                                                            To="0,1,1,1" Duration="0:0:0.15">
+                                            <ThicknessAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></ThicknessAnimation.EasingFunction>
+                                        </ThicknessAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.EnterActions>
@@ -79,14 +77,19 @@
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Pill"
                                                          Storyboard.TargetProperty="Width"
-                                                         To="4" Duration="0:0:0.4">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+                                                         To="5" Duration="0:0:0.35">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="Pill"
                                                          Storyboard.TargetProperty="Opacity"
-                                                         To="0.22" Duration="0:0:0.5">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+                                                         To="0.30" Duration="0:0:0.5">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
+                                        <ThicknessAnimation Storyboard.TargetName="Pill"
+                                                            Storyboard.TargetProperty="Margin"
+                                                            To="0,1,1,1" Duration="0:0:0.35">
+                                            <ThicknessAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></ThicknessAnimation.EasingFunction>
+                                        </ThicknessAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.ExitActions>
@@ -98,24 +101,19 @@
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Pill"
                                                          Storyboard.TargetProperty="Width"
-                                                         To="6" Duration="0:0:0.08">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                                         To="8" Duration="0:0:0.08">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="Pill"
                                                          Storyboard.TargetProperty="Opacity"
-                                                         To="0.55" Duration="0:0:0.08">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                                         To="0.65" Duration="0:0:0.08">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <ColorAnimation  Storyboard.TargetName="Pill"
                                                          Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
                                                          To="#A78BFA" Duration="0:0:0.1">
-                                            <ColorAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></ColorAnimation.EasingFunction>
+                                            <ColorAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></ColorAnimation.EasingFunction>
                                         </ColorAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="Glow"
-                                                         Storyboard.TargetProperty="Opacity"
-                                                         To="0.15" Duration="0:0:0.12">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.EnterActions>
@@ -124,19 +122,19 @@
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Pill"
                                                          Storyboard.TargetProperty="Width"
-                                                         To="4" Duration="0:0:0.5">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+                                                         To="5" Duration="0:0:0.5">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="Pill"
                                                          Storyboard.TargetProperty="Opacity"
-                                                         To="0.22" Duration="0:0:0.6">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+                                                         To="0.30" Duration="0:0:0.6">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="Glow"
-                                                         Storyboard.TargetProperty="Opacity"
-                                                         To="0" Duration="0:0:0.5">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                        <ColorAnimation  Storyboard.TargetName="Pill"
+                                                         Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                         To="#FFFFFF" Duration="0:0:0.4">
+                                            <ColorAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></ColorAnimation.EasingFunction>
+                                        </ColorAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.ExitActions>
@@ -148,31 +146,24 @@
     </Style>
 
     <!-- ─────────────────────────────────────
-         HORIZONTAL THUMB
+         HORIZONTAL THUMB — slim rounded bar
          ───────────────────────────────────── -->
     <Style x:Key="AppleThumbH" TargetType="Thumb">
         <Setter Property="OverridesDefaultStyle" Value="True"/>
         <Setter Property="IsTabStop"             Value="False"/>
-        <Setter Property="MinWidth"              Value="40"/>
+        <Setter Property="MinWidth"              Value="30"/>
         <Setter Property="Cursor"                Value="Arrow"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
                     <Grid Background="Transparent">
-                        <Border x:Name="Glow"
-                                Background="#7C3AED" Opacity="0"
-                                CornerRadius="3"
-                                VerticalAlignment="Center" Height="6"
-                                Margin="2,0">
-                            <Border.Effect><BlurEffect Radius="4"/></Border.Effect>
-                        </Border>
                         <Border x:Name="Pill"
                                 Background="#FFFFFF"
-                                Opacity="0.22"
-                                CornerRadius="2"
-                                VerticalAlignment="Center"
-                                Height="4"
-                                Margin="2,0"/>
+                                Opacity="0.30"
+                                CornerRadius="3"
+                                VerticalAlignment="Bottom"
+                                Height="5"
+                                Margin="1,0,1,1"/>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
@@ -180,12 +171,12 @@
                                 <BeginStoryboard>
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Height"
-                                                         To="6" Duration="0:0:0.15">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                                         To="8" Duration="0:0:0.15">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Opacity"
-                                                         To="0.38" Duration="0:0:0.15">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                                         To="0.50" Duration="0:0:0.15">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
@@ -194,12 +185,12 @@
                                 <BeginStoryboard>
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Height"
-                                                         To="4" Duration="0:0:0.4">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+                                                         To="5" Duration="0:0:0.35">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Opacity"
-                                                         To="0.22" Duration="0:0:0.5">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+                                                         To="0.30" Duration="0:0:0.5">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
@@ -210,22 +201,18 @@
                                 <BeginStoryboard>
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Height"
-                                                         To="6" Duration="0:0:0.08">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                                         To="8" Duration="0:0:0.08">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Opacity"
-                                                         To="0.55" Duration="0:0:0.08">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                                         To="0.65" Duration="0:0:0.08">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <ColorAnimation  Storyboard.TargetName="Pill"
                                                          Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
                                                          To="#A78BFA" Duration="0:0:0.1">
-                                            <ColorAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></ColorAnimation.EasingFunction>
+                                            <ColorAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></ColorAnimation.EasingFunction>
                                         </ColorAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="Glow" Storyboard.TargetProperty="Opacity"
-                                                         To="0.15" Duration="0:0:0.12">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.EnterActions>
@@ -233,17 +220,18 @@
                                 <BeginStoryboard>
                                     <Storyboard>
                                         <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Height"
-                                                         To="4" Duration="0:0:0.5">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+                                                         To="5" Duration="0:0:0.5">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
                                         <DoubleAnimation Storyboard.TargetName="Pill" Storyboard.TargetProperty="Opacity"
-                                                         To="0.22" Duration="0:0:0.6">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
+                                                         To="0.30" Duration="0:0:0.6">
+                                            <DoubleAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
                                         </DoubleAnimation>
-                                        <DoubleAnimation Storyboard.TargetName="Glow" Storyboard.TargetProperty="Opacity"
-                                                         To="0" Duration="0:0:0.5">
-                                            <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseInOut"/></DoubleAnimation.EasingFunction>
-                                        </DoubleAnimation>
+                                        <ColorAnimation  Storyboard.TargetName="Pill"
+                                                         Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)"
+                                                         To="#FFFFFF" Duration="0:0:0.4">
+                                            <ColorAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></ColorAnimation.EasingFunction>
+                                        </ColorAnimation>
                                     </Storyboard>
                                 </BeginStoryboard>
                             </Trigger.ExitActions>
@@ -256,7 +244,7 @@
 
     <!-- ═══════════════════════════════════════════════════
          VERTICAL SCROLLBAR  (implicit — applies globally)
-         6px rail, no arrows, no track bg
+         10px rail, no arrows, no track bg
          ═══════════════════════════════════════════════════ -->
     <Style TargetType="ScrollBar">
         <Setter Property="OverridesDefaultStyle" Value="True"/>
@@ -264,8 +252,8 @@
         <Setter Property="Background"            Value="Transparent"/>
         <Setter Property="Foreground"            Value="Transparent"/>
         <Setter Property="BorderThickness"       Value="0"/>
-        <Setter Property="Width"                 Value="6"/>
-        <Setter Property="MinWidth"              Value="6"/>
+        <Setter Property="Width"                 Value="10"/>
+        <Setter Property="MinWidth"              Value="10"/>
         <Setter Property="Height"                Value="Auto"/>
         <Setter Property="Margin"                Value="0"/>
         <Setter Property="Padding"               Value="0"/>
@@ -295,8 +283,8 @@
             <Trigger Property="Orientation" Value="Horizontal">
                 <Setter Property="Width"    Value="Auto"/>
                 <Setter Property="MinWidth" Value="0"/>
-                <Setter Property="Height"   Value="6"/>
-                <Setter Property="MinHeight" Value="6"/>
+                <Setter Property="Height"   Value="10"/>
+                <Setter Property="MinHeight" Value="10"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ScrollBar">

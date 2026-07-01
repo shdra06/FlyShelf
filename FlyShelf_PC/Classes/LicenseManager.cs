@@ -9,7 +9,6 @@ using System;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -62,55 +61,13 @@ namespace FlyShelf.Classes
         private static bool _loaded = false;
 
         // ═══ ANTI-TAMPER: Runtime integrity sentinel (v2.4.0) ═══
-        // Computed from Tier+LicenseKey on activation/load. If _data.Tier is
-        // patched in memory (e.g. Cheat Engine), the sentinel won't match.
+        // Delegated to AntiTamperService — see AntiTamperService.cs
         private static int _tierSentinel = 0;
-        private static int _antiDebugCounter = 0;
-        private static bool _debuggerDetected = false;
 
-        // ═══ ANTI-DEBUG: Native API imports (v2.4.0) ═══
-        [DllImport("kernel32.dll")]
-        private static extern bool IsDebuggerPresent();
-
-        [DllImport("kernel32.dll", SetLastError = true)]
-        private static extern bool CheckRemoteDebuggerPresent(IntPtr hProcess, out bool isDebuggerPresent);
-
-        /// <summary>
-        /// Multi-layer debugger detection: managed debugger, native debugger, and remote debugger.
-        /// Called periodically (every 5th IsPro access) to catch runtime attachments.
-        /// </summary>
-        private static bool DetectDebugger()
-        {
-            try
-            {
-                // Layer 1: Managed debugger (Visual Studio, dnSpy debugger mode)
-                if (System.Diagnostics.Debugger.IsAttached) return true;
-
-                // Layer 2: Native debugger (x64dbg, WinDbg, Cheat Engine debugger)
-                if (IsDebuggerPresent()) return true;
-
-                // Layer 3: Remote debugger (attached from another process)
-                CheckRemoteDebuggerPresent(System.Diagnostics.Process.GetCurrentProcess().Handle, out bool remote);
-                if (remote) return true;
-            }
-            catch { /* P/Invoke may fail on non-Windows — ignore */ }
-            return false;
-        }
-
-        /// <summary>
-        /// Computes a sentinel value from Tier + LicenseKey + a runtime salt.
-        /// Must match _tierSentinel for IsPro to return true.
-        /// This prevents memory-patching _data.Tier from "free" to "pro".
-        /// </summary>
+        /// <summary>Computes tier sentinel via AntiTamperService.</summary>
         private static int ComputeTierSentinel(string tier, string key)
         {
-            try
-            {
-                using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(GetKeySecret()));
-                byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(tier + "|" + key + "|" + _appDataDir));
-                return BitConverter.ToInt32(hash, 0);
-            }
-            catch { return 0; }
+            return AntiTamperService.ComputeTierSentinel(tier, key, _appDataDir, GetKeySecret());
         }
 
         /// <summary>Updates the sentinel to match current _data state.</summary>
@@ -168,19 +125,8 @@ namespace FlyShelf.Classes
         {
             get
             {
-                // ═══ ANTI-DEBUG CHECK (v2.4.0) ═══
-                // Periodic debugger detection — every 5th access to avoid perf overhead.
-                // Once detected, permanently returns false until restart.
-                if (_debuggerDetected) return false;
-                if (Interlocked.Increment(ref _antiDebugCounter) % 5 == 0)
-                {
-                    if (DetectDebugger())
-                    {
-                        _debuggerDetected = true;
-                        Logger.LogAction("SECURITY", "⚠️ Debugger detected — Pro features disabled");
-                        return false;
-                    }
-                }
+                // ═══ ANTI-DEBUG CHECK (v2.4.0) — delegated to AntiTamperService ═══
+                if (AntiTamperService.CheckDebuggerPeriodic()) return false;
 
                 EnsureLoaded();
 
@@ -1084,137 +1030,55 @@ namespace FlyShelf.Classes
 
         // ═══════════════════════════════════════════════════════════════
         // ANTI-TAMPER: Runtime Assembly Integrity Check (v2.0.0)
-        // Detects if the compiled binary has been patched/modified.
-        // Call this on startup to catch dnSpy-style IL patching.
+        // Delegated to AntiTamperService.VerifyAssemblyIntegrity()
         // ═══════════════════════════════════════════════════════════════
-
-        private static string _expectedAssemblyHash = null;
-        private static bool _integrityChecked = false;
-
-        /// <summary>
-        /// HMAC-signs the assembly hash so the .assembly_hash file can't be tampered with.
-        /// An attacker can't just delete the file and write a new hash — they'd need the HMAC secret.
-        /// Format: "hash|hmac_of_hash"
-        /// </summary>
-        private static string SignAssemblyHash(string hash)
-        {
-            using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(GetKeySecret()));
-            byte[] sig = hmac.ComputeHash(Encoding.UTF8.GetBytes(hash + "|integrity"));
-            string sigHex = BitConverter.ToString(sig).Replace("-", "").Substring(0, 16).ToLowerInvariant();
-            return hash + "|" + sigHex;
-        }
-
-        private static bool VerifySignedHash(string stored, out string hash)
-        {
-            hash = null;
-            if (string.IsNullOrEmpty(stored)) return false;
-            var parts = stored.Split('|');
-            if (parts.Length == 1)
-            {
-                // Legacy unsigned hash — accept but will be re-signed on next write
-                hash = parts[0];
-                return true;
-            }
-            if (parts.Length != 2) return false;
-            hash = parts[0];
-            string expectedSigned = SignAssemblyHash(hash);
-            return stored == expectedSigned;
-        }
 
         public static void VerifyAssemblyIntegrity()
         {
-            if (_integrityChecked) return;
-            _integrityChecked = true;
-
-            try
-            {
-                string assemblyPath = System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName ?? "";
-                if (string.IsNullOrEmpty(assemblyPath) || !File.Exists(assemblyPath))
+            AntiTamperService.VerifyAssemblyIntegrity(
+                _appDataDir,
+                GetKeySecret(),
+                _data.Tier == "pro",
+                !string.IsNullOrEmpty(_data.LicenseKey),
+                onBinaryChanged: () =>
                 {
-                    Logger.LogAction("INTEGRITY", "Assembly path unavailable — skipping integrity check");
-                    return;
-                }
+                    // v2.4.0 SECURITY FIX: Force immediate server re-activation.
+                    // Clear JWT so next revalidation requires full re-activation.
+                    _data.ActivationToken = "";
+                    _data.LastValidated = "";
+                    try { SaveInternal(); } catch (Exception ex) { Logger.LogAction("INTEGRITY", $"Failed to save after JWT clear: {ex.Message}"); }
+                    Logger.LogAction("INTEGRITY", "Pro JWT cleared — server re-activation required");
 
-                using var sha = SHA256.Create();
-                using var stream = File.OpenRead(assemblyPath);
-                byte[] hashBytes = sha.ComputeHash(stream);
-                string currentHash = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
-
-                string hashFile = Path.Combine(_appDataDir, ".assembly_hash");
-                if (File.Exists(hashFile))
-                {
-                    string storedRaw = File.ReadAllText(hashFile).Trim();
-
-                    // v2.4.0: Verify HMAC signature on stored hash to prevent attacker
-                    // from pre-computing and writing a new hash for their patched binary
-                    if (!VerifySignedHash(storedRaw, out string storedHash))
+                    _ = Task.Run(async () =>
                     {
-                        Logger.LogAction("INTEGRITY", "⚠️ .assembly_hash signature invalid — file was tampered");
-                        // Treat as hash mismatch — force revalidation
-                        storedHash = "tampered";
-                    }
-
-                    if (!string.IsNullOrEmpty(storedHash) && storedHash != currentHash)
-                    {
-                        // Binary changed — could be legitimate update or binary patching.
-                        Logger.LogAction("INTEGRITY", $"Binary hash changed. Old: {storedHash.Substring(0, Math.Min(12, storedHash.Length))}..., New: {currentHash.Substring(0, 12)}...");
-
-                        if (_data.Tier == "pro" && !string.IsNullOrEmpty(_data.LicenseKey))
+                        try
                         {
-                            // v2.4.0 SECURITY FIX: Force immediate server re-activation.
-                            // Clear JWT so next revalidation requires full re-activation.
-                            // DON'T update the hash file until revalidation succeeds.
-                            _data.ActivationToken = "";
-                            _data.LastValidated = "";
-                            try { SaveInternal(); } catch (Exception ex) { Logger.LogAction("INTEGRITY", $"Failed to save after JWT clear: {ex.Message}"); }
-                            Logger.LogAction("INTEGRITY", "Pro JWT cleared — server re-activation required");
+                            await Task.Delay(5000);
+                            await RevalidateLicenseAsync();
 
-                            _ = Task.Run(async () =>
+                            if (_data.Tier == "pro" && !string.IsNullOrEmpty(_data.ActivationToken))
                             {
-                                try
+                                string currentHash = AntiTamperService.ComputeCurrentAssemblyHash();
+                                if (currentHash != null)
                                 {
-                                    await Task.Delay(5000); // Wait for network to initialize
-                                    await RevalidateLicenseAsync();
-
-                                    if (_data.Tier == "pro" && !string.IsNullOrEmpty(_data.ActivationToken))
-                                    {
-                                        // Revalidation succeeded — legitimate update confirmed
-                                        Directory.CreateDirectory(_appDataDir);
-                                        File.WriteAllText(hashFile, SignAssemblyHash(currentHash));
-                                        Logger.LogAction("INTEGRITY", "✅ Post-update revalidation successful — hash updated");
-                                    }
-                                    else
-                                    {
-                                        // Server rejected — binary may be tampered
-                                        Logger.LogAction("INTEGRITY", "⚠️ Post-update revalidation FAILED — license deactivated");
-                                    }
+                                    string hashFile = Path.Combine(_appDataDir, ".assembly_hash");
+                                    Directory.CreateDirectory(_appDataDir);
+                                    File.WriteAllText(hashFile, AntiTamperService.SignAssemblyHash(currentHash, GetKeySecret()));
+                                    Logger.LogAction("INTEGRITY", "✅ Post-update revalidation successful — hash updated");
                                 }
-                                catch (Exception ex)
-                                {
-                                    // Network failure — allow 48h grace for legitimate offline updates
-                                    Logger.LogAction("INTEGRITY", $"Post-update revalidation network error: {ex.Message}");
-                                }
-                            });
+                            }
+                            else
+                            {
+                                Logger.LogAction("INTEGRITY", "⚠️ Post-update revalidation FAILED — license deactivated");
+                            }
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            // Free tier — just update hash
-                            Directory.CreateDirectory(_appDataDir);
-                            File.WriteAllText(hashFile, SignAssemblyHash(currentHash));
+                            Logger.LogAction("INTEGRITY", $"Post-update revalidation network error: {ex.Message}");
                         }
-                        return;
-                    }
+                    });
                 }
-
-                // Store/update the signed hash on clean runs
-                Directory.CreateDirectory(_appDataDir);
-                File.WriteAllText(hashFile, SignAssemblyHash(currentHash));
-                Logger.LogAction("INTEGRITY", $"✅ Assembly integrity verified: {currentHash.Substring(0, 12)}...");
-            }
-            catch (Exception ex)
-            {
-                Logger.LogAction("INTEGRITY", $"Integrity check failed (non-fatal): {ex.Message}");
-            }
+            );
         }
     }
 }

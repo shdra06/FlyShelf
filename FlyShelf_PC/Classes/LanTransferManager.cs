@@ -92,6 +92,16 @@ namespace FlyShelf.Classes
                 PeerDeviceName = peer.DeviceName
             };
 
+            // Enable parallel chunked transfer for large files
+            const long CHUNKED_THRESHOLD = 100 * 1024 * 1024; // 100MB
+            if (fileInfo.Length >= CHUNKED_THRESHOLD)
+            {
+                session.IsChunked = true;
+                session.NumChunks = fileInfo.Length >= 500 * 1024 * 1024 ? 6 : 4;  // 6 chunks for >500MB, 4 for 100-500MB
+                session.ChunkSize = (long)Math.Ceiling((double)fileInfo.Length / session.NumChunks);
+                Logger.LogAction("TRANSFER", $"⚡ Large file ({LanTransferSession.FormatBytes(fileInfo.Length)}) → parallel chunked transfer with {session.NumChunks} streams");
+            }
+
             _activeSessions[session.TransferId] = session;
             AddToActiveTransfersOnDispatcher(session);
 
@@ -145,7 +155,10 @@ namespace FlyShelf.Classes
             try
             {
                 Logger.LogAction("TRANSFER", $"📤 Peer accepted — connecting TCP to {peerIp}:{peerPort} (resume from {LanTransferSession.FormatBytes(resumeFrom)})");
-                await LanTransferEngine.Instance!.SendFileAsync(peerIp, peerPort, session);
+                if (session.IsChunked)
+                    await LanTransferEngine.Instance!.SendFileParallelAsync(peerIp, peerPort, session);
+                else
+                    await LanTransferEngine.Instance!.SendFileAsync(peerIp, peerPort, session);
             }
             finally
             {
@@ -160,6 +173,25 @@ namespace FlyShelf.Classes
                 {
                     MoveToCompleted(session);
                     TransferFailed?.Invoke(session);
+
+                    // Auto-retry on network failure (not user-cancelled)
+                    if (session.IsFailed && session.State != TransferState.Cancelled
+                        && session.AutoRetryCount < LanTransferSession.MAX_AUTO_RETRIES
+                        && (session.ErrorMessage?.Contains("Network") == true 
+                            || session.ErrorMessage?.Contains("Connection") == true
+                            || session.ErrorMessage?.Contains("lost") == true))
+                    {
+                        int retryIdx = Math.Min(session.AutoRetryCount, LanTransferSession.AUTO_RETRY_DELAYS_MS.Length - 1);
+                        int delayMs = LanTransferSession.AUTO_RETRY_DELAYS_MS[retryIdx];
+                        session.AutoRetryCount++;
+                        Logger.LogAction("TRANSFER", $"🔄 Auto-retry {session.AutoRetryCount}/{LanTransferSession.MAX_AUTO_RETRIES} for {session.FileName} in {delayMs}ms");
+                        _ = Task.Run(async () =>
+                        {
+                            await Task.Delay(delayMs);
+                            try { await RetryTransfer(session.TransferId); }
+                            catch (Exception ex) { Logger.LogAction("TRANSFER", $"Auto-retry failed: {ex.Message}"); }
+                        });
+                    }
                 }
 
                 PersistCheckpoints();
@@ -173,7 +205,8 @@ namespace FlyShelf.Classes
         /// Creates a receive session and sends TransferAccept.
         /// </summary>
         public async Task HandleTransferOffer(Guid transferId, string fileName, long fileSize,
-            string peerDeviceId, string peerDeviceName, string? xxHash64)
+            string peerDeviceId, string peerDeviceName, string? xxHash64,
+            bool isChunked = false, int numChunks = 4, long chunkSize = 0)
         {
             // Check for resumable checkpoint — first by transferId, then by content fingerprint
             long resumeFrom = 0;
@@ -208,9 +241,42 @@ namespace FlyShelf.Classes
                 XxHash64 = xxHash64
             };
 
+            // Configure chunked receive
+            if (isChunked && numChunks > 1 && chunkSize > 0)
+            {
+                session.IsChunked = true;
+                session.NumChunks = numChunks;
+                session.ChunkSize = chunkSize;
+
+                // Pre-allocate file to full size so chunk writers can seek freely
+                string? dir = Path.GetDirectoryName(filePath);
+                if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+                using (var preAlloc = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    preAlloc.SetLength(fileSize);
+                }
+                Logger.LogAction("TRANSFER", $"⚡ Chunked receive: {numChunks} parallel streams, file pre-allocated ({LanTransferSession.FormatBytes(fileSize)})");
+            }
+
             _activeSessions[transferId] = session;
             _pendingReceives[transferId] = session;
             AddToActiveTransfersOnDispatcher(session);
+
+            // Create download progress card in clipboard shelf
+            try
+            {
+                System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                {
+                    try
+                    {
+                        session.Placeholder = _viewModel?.CreateTransferPlaceholder(
+                            fileName, fileSize, peerDeviceName,
+                            "LAN TCP", "PC");
+                    }
+                    catch (Exception ex) { Logger.LogAction("TRANSFER", $"Placeholder creation failed: {ex.Message}"); }
+                });
+            }
+            catch { }
 
             Logger.LogAction("TRANSFER", $"📥 Accepting transfer: {fileName} ({LanTransferSession.FormatBytes(fileSize)}) from {peerDeviceName} (resume from {LanTransferSession.FormatBytes(resumeFrom)})");
 
@@ -229,6 +295,26 @@ namespace FlyShelf.Classes
                     {
                         Interlocked.Decrement(ref peer.ActiveTransfers);
                     }
+
+                    // Update placeholder to show error on receive failure, then remove after 3s
+                    if (state == TransferState.Failed && session.Placeholder != null)
+                    {
+                        var placeholder = session.Placeholder;
+                        placeholder.TransferStatusText = $"❌ Failed: {session.ErrorMessage}";
+                        _ = Task.Run(async () =>
+                        {
+                            await Task.Delay(3000);
+                            try
+                            {
+                                System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
+                                {
+                                    _viewModel?.DroppedItems.Remove(placeholder);
+                                });
+                            }
+                            catch { }
+                            session.Placeholder = null;
+                        });
+                    }
                 };
             }
 
@@ -243,8 +329,17 @@ namespace FlyShelf.Classes
         /// </summary>
         public LanTransferSession? GetPendingReceiveSession(Guid transferId)
         {
-            _pendingReceives.TryRemove(transferId, out var session);
-            return session ?? (_activeSessions.TryGetValue(transferId, out var active) ? active : null);
+            if (_pendingReceives.TryGetValue(transferId, out var session))
+            {
+                // For chunked transfers, keep in pending until all chunks are received
+                // (multiple TCP connections will look up the same session)
+                if (!session.IsChunked)
+                    _pendingReceives.TryRemove(transferId, out _);
+                else if (session.AllChunksCompleted)
+                    _pendingReceives.TryRemove(transferId, out _);
+                return session;
+            }
+            return _activeSessions.TryGetValue(transferId, out var active) ? active : null;
         }
 
         // ═══ Control: Pause / Resume / Cancel ═══
@@ -379,7 +474,17 @@ namespace FlyShelf.Classes
                         TransferMethod = "LAN TCP"
                     };
                     clip.EvaluateSmartActions();
-                    _viewModel.InsertWithDedup(clip);
+
+                    // Swap placeholder with completed item if placeholder exists
+                    if (session.Placeholder != null)
+                    {
+                        _viewModel.SwapPlaceholderWithCompleted(session.Placeholder, clip);
+                        session.Placeholder = null;
+                    }
+                    else
+                    {
+                        _viewModel.InsertWithDedup(clip);
+                    }
                     _viewModel.PersistHistoryPublic();
 
                     Windows.ToastWindow.ShowToast($"✅ {session.FileName} ({LanTransferSession.FormatBytes(session.FileSize)}) received from {session.PeerDeviceName}");
@@ -404,7 +509,10 @@ namespace FlyShelf.Classes
                 tcpPort = LanTransferEngine.TRANSFER_PORT,
                 sourceDeviceId = SettingsManager.Current.DeviceId ?? Environment.MachineName,
                 sourceDeviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
-                xxhash64 = session.XxHash64 ?? ""
+                xxhash64 = session.XxHash64 ?? "",
+                isChunked = session.IsChunked,
+                numChunks = session.NumChunks,
+                chunkSize = session.ChunkSize
             });
             return await SendWebSocketMessage(peer, envelope);
         }
@@ -622,14 +730,18 @@ namespace FlyShelf.Classes
 
                 // M12 fix: Include xxHash64 in matching to prevent corrupt resume
                 // when same-name/same-size files are different content
+                // Require both hashes to be present and matching — prevents resuming
+                // a same-name/same-size but different-content file (data corruption)
+                if (string.IsNullOrEmpty(xxHash64)) return null;
+
                 return checkpoints
                     .Where(c => c.FileName == fileName
                              && c.FileSize == fileSize
                              && c.PeerDeviceId == peerDeviceId
                              && c.Direction == "Receive"
                              && File.Exists(c.FilePath)
-                             && (string.IsNullOrEmpty(xxHash64) || string.IsNullOrEmpty(c.XxHash64)
-                                 || string.Equals(c.XxHash64, xxHash64, StringComparison.OrdinalIgnoreCase)))
+                             && !string.IsNullOrEmpty(c.XxHash64)
+                             && string.Equals(c.XxHash64, xxHash64, StringComparison.OrdinalIgnoreCase))
                     .OrderByDescending(c => c.BytesTransferred)
                     .FirstOrDefault();
             }

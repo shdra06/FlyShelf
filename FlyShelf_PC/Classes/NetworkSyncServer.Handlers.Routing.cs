@@ -165,6 +165,120 @@ namespace FlyShelf.Classes
                     res.OutputStream.Write(pong, 0, pong.Length);
                     res.Close();
                 }
+                else if (path == "/api/lan/pair-request" && req.HttpMethod == "POST")
+                {
+                    // ═══ Direct LAN Pairing — No Firebase ═══
+                    // Allows devices on the same LAN to pair without cloud services.
+                    // Trust is established via user confirmation dialog on this device.
+                    try
+                    {
+                        using var reader = new System.IO.StreamReader(req.InputStream, Encoding.UTF8);
+                        string body = await reader.ReadToEndAsync();
+                        using var doc = JsonDocument.Parse(body);
+                        var root = doc.RootElement;
+
+                        string reqDeviceId = root.GetProperty("deviceId").GetString() ?? "";
+                        string reqDeviceName = root.GetProperty("deviceName").GetString() ?? "";
+                        string reqDeviceType = root.TryGetProperty("deviceType", out var dt) ? dt.GetString() ?? "PC" : "PC";
+                        string nonce = root.GetProperty("nonce").GetString() ?? "";
+                        int reqHttpPort = root.TryGetProperty("httpPort", out var hp) ? hp.GetInt32() : 8080;
+                        int reqTransferPort = root.TryGetProperty("transferPort", out var tp) ? tp.GetInt32() : LanTransferEngine.TRANSFER_PORT;
+
+                        if (string.IsNullOrEmpty(reqDeviceId) || string.IsNullOrEmpty(nonce))
+                        {
+                            res.StatusCode = 400;
+                            res.Close();
+                            return;
+                        }
+
+                        Logger.LogAction("LAN_PAIR", $"📨 Pair request from {reqDeviceName} ({reqDeviceId}) @ {clientIp}");
+
+                        // Check if already paired
+                        if (DevicePairingManager.GetPairedDevices()?.Any(d => d.DeviceId == reqDeviceId) == true)
+                        {
+                            // Already paired — accept silently
+                            string existingSecret = DevicePairingManager.DeriveLanPairingSecret(nonce, reqDeviceId,
+                                SettingsManager.Current.DeviceId ?? Environment.MachineName);
+
+                            var acceptData = new
+                            {
+                                accepted = true,
+                                deviceId = SettingsManager.Current.DeviceId ?? Environment.MachineName,
+                                deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
+                                sharedSecret = existingSecret,
+                                httpPort = NetworkSyncServer.Instance?.CurrentPort ?? 8080,
+                                transferPort = LanTransferEngine.TRANSFER_PORT
+                            };
+                            string json = JsonSerializer.Serialize(acceptData);
+                            byte[] data = Encoding.UTF8.GetBytes(json);
+                            res.StatusCode = 200;
+                            res.ContentType = "application/json";
+                            res.OutputStream.Write(data, 0, data.Length);
+                            res.Close();
+                            return;
+                        }
+
+                        // Show confirmation dialog on UI thread
+                        bool userAccepted = false;
+                        await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        {
+                            var result = System.Windows.MessageBox.Show(
+                                $"\"{reqDeviceName}\" wants to pair with this device over LAN.\n\n" +
+                                $"Device ID: {reqDeviceId}\n" +
+                                $"IP Address: {clientIp}\n" +
+                                $"Type: {reqDeviceType}\n\n" +
+                                $"Allow this device to sync clipboard and transfer files?",
+                                "FlyShelf — LAN Pair Request",
+                                System.Windows.MessageBoxButton.YesNo,
+                                System.Windows.MessageBoxImage.Question,
+                                System.Windows.MessageBoxResult.No);
+                            userAccepted = (result == System.Windows.MessageBoxResult.Yes);
+                        });
+
+                        if (userAccepted)
+                        {
+                            // Derive shared secret from nonce + both device IDs
+                            string myDeviceId = SettingsManager.Current.DeviceId ?? Environment.MachineName;
+                            string sharedSecret = DevicePairingManager.DeriveLanPairingSecret(nonce, reqDeviceId, myDeviceId);
+
+                            // Store the paired device locally (LAN-only, no Firebase)
+                            DevicePairingManager.PairDeviceViaLan(reqDeviceId, reqDeviceName, reqDeviceType, clientIp, sharedSecret);
+
+                            Logger.LogAction("LAN_PAIR", $"✅ Accepted LAN pair from {reqDeviceName}");
+
+                            var responseData = new
+                            {
+                                accepted = true,
+                                deviceId = myDeviceId,
+                                deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
+                                sharedSecret = sharedSecret,
+                                httpPort = NetworkSyncServer.Instance?.CurrentPort ?? 8080,
+                                transferPort = LanTransferEngine.TRANSFER_PORT
+                            };
+                            string json = JsonSerializer.Serialize(responseData);
+                            byte[] data = Encoding.UTF8.GetBytes(json);
+                            res.StatusCode = 200;
+                            res.ContentType = "application/json";
+                            res.OutputStream.Write(data, 0, data.Length);
+                        }
+                        else
+                        {
+                            Logger.LogAction("LAN_PAIR", $"❌ Rejected LAN pair from {reqDeviceName}");
+                            var rejectData = new { accepted = false };
+                            string json = JsonSerializer.Serialize(rejectData);
+                            byte[] data = Encoding.UTF8.GetBytes(json);
+                            res.StatusCode = 200;
+                            res.ContentType = "application/json";
+                            res.OutputStream.Write(data, 0, data.Length);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.LogAction("LAN_PAIR", $"Pair request error: {ex.Message}");
+                        res.StatusCode = 500;
+                    }
+                    res.Close();
+                }
                 else if (path == "/api/health" && req.HttpMethod == "GET" &&
                          string.IsNullOrEmpty(req.Headers["X-Pairing-Key"]) &&
                          string.IsNullOrEmpty(req.QueryString["key"]) &&
@@ -217,23 +331,6 @@ namespace FlyShelf.Classes
                     Logger.LogAction("WS", $"✅ Peer WebSocket accepted from {peerDeviceId}");
                     var wsContext = await context.AcceptWebSocketAsync(null);
                     _ = Task.Run(() => HandlePeerWebSocket(wsContext.WebSocket, peerDeviceId));
-                }
-                else if (path == "/download" && req.HttpMethod == "GET")
-                {
-                    string dlPairingKey = req.Headers["X-Pairing-Key"] ?? req.QueryString["key"] ?? "";
-                    string dlPin = req.Headers["Authorization"]?.Replace("Bearer ", "") ?? req.QueryString["pin"] ?? "";
-                    bool dlAuthed = DevicePairingManager.IsDevicePaired(dlPairingKey) ||
-                                   (!string.IsNullOrEmpty(dlPin) && ConstantTimeEquals(dlPin, SettingsManager.Current.WebClientPinToken));
-                    if (!dlAuthed)
-                    {
-                        Logger.LogAction("SECURITY", $"⛔ Rejected unauthenticated /download from {req.RemoteEndPoint}");
-                        byte[] err = Encoding.UTF8.GetBytes("{\"error\":\"401 — Download requires authentication\"}");
-                        res.StatusCode = 401;
-                        res.ContentType = "application/json";
-                        res.OutputStream.Write(err, 0, err.Length);
-                        res.Close();
-                    }
-                    else { await ServeFileDownload(req, res); }
                 }
                 else if (path == "/api/pair" && req.HttpMethod == "POST")
                 {
@@ -376,6 +473,7 @@ namespace FlyShelf.Classes
                     else if (path == "/api/relay_upload" && req.HttpMethod == "POST") { await HandleRelayUpload(req, res); }
                     else if (path == "/api/convert_to_pdf" && req.HttpMethod == "POST") { await HandleConvertToPdf(req, res); }
                     else if (path == "/api/merge_pdfs" && req.HttpMethod == "POST") { await HandleMergePdfs(req, res); }
+                    else if (path == "/download" && req.HttpMethod == "GET") { await ServeFileDownload(req, res); }
                     else if (path == "/logs" && req.HttpMethod == "GET") { ServeLogDashboard(res); }
                     else if (path == "/api/logs/stream" && req.HttpMethod == "GET") { await ServeLogStream(req, res); }
                     else if (path == "/api/logs" && req.HttpMethod == "GET") { ServeLogsJson(req, res); }

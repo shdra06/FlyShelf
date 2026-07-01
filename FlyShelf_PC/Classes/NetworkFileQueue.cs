@@ -165,7 +165,10 @@ namespace FlyShelf.Classes
             }
 
             // Deduplicate by path — don't re-add files already queued
-            bool alreadyStaged = StagedFiles.Any(f =>
+            // Thread safety: snapshot the collection to avoid cross-thread InvalidOperationException
+            bool alreadyStaged = false;
+            var snapshot = StagedFiles.ToArray();
+            alreadyStaged = snapshot.Any(f =>
                 string.Equals(f.FilePath, filePath, StringComparison.OrdinalIgnoreCase) &&
                 (f.Status == "Queued" || f.Status == "Sending"));
 

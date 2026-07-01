@@ -152,6 +152,76 @@ namespace FlyShelf.Classes
             return SettingsManager.Current.PairingKey;
         }
 
+        // ═══ Direct LAN Pairing — No Firebase ═══
+
+        /// <summary>
+        /// Derives a shared secret for LAN pairing from a nonce and both device IDs.
+        /// Both sides can independently compute the same secret.
+        /// </summary>
+        public static string DeriveLanPairingSecret(string nonce, string deviceIdA, string deviceIdB)
+        {
+            // Sort device IDs to ensure both sides get the same result regardless of who initiated
+            string[] ids = new[] { deviceIdA, deviceIdB };
+            Array.Sort(ids, StringComparer.Ordinal);
+            string material = $"FlyShelf_LAN_v1:{nonce}:{ids[0]}:{ids[1]}";
+            using var hmac = new System.Security.Cryptography.HMACSHA256(
+                Encoding.UTF8.GetBytes("FlyShelf_LAN_Pairing_2025"));
+            byte[] hash = hmac.ComputeHash(Encoding.UTF8.GetBytes(material));
+            return Convert.ToHexString(hash).ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Pairs a device via direct LAN handshake — completely offline, no Firebase.
+        /// Stores the device in paired_devices.json with PairingSource = "LAN".
+        /// </summary>
+        public static void PairDeviceViaLan(string deviceId, string deviceName, string deviceType, string ipAddress, string sharedSecret)
+        {
+            lock (_lock)
+            {
+                // Check if already paired
+                var existing = _pairedDevices.FirstOrDefault(d => d.DeviceId == deviceId);
+                if (existing != null)
+                {
+                    // Update existing
+                    existing.DeviceName = deviceName;
+                    existing.LastKnownIP = ipAddress;
+                    existing.LastSeen = DateTime.Now;
+                    existing.PairingKey = sharedSecret;
+                }
+                else
+                {
+                    if (_pairedDevices.Count >= MAX_PAIRED_DEVICES)
+                    {
+                        Logger.LogAction("LAN_PAIR", $"Cannot pair — max {MAX_PAIRED_DEVICES} devices reached");
+                        return;
+                    }
+
+                    _pairedDevices.Add(new PairedDevice
+                    {
+                        DeviceId = deviceId,
+                        DeviceName = deviceName,
+                        DeviceType = deviceType,
+                        PairingKey = sharedSecret,
+                        PairedAt = DateTime.Now,
+                        LastSeen = DateTime.Now,
+                        LastKnownIP = ipAddress
+                    });
+                }
+
+                Save();
+            }
+
+            Logger.LogAction("LAN_PAIR", $"✅ Device paired via LAN: {deviceName} ({deviceId}) @ {ipAddress}");
+            OnDevicePaired?.Invoke(deviceId);
+
+            // If we don't have a pairing key yet, create one so PeerManager discovery works
+            if (string.IsNullOrEmpty(SettingsManager.Current.PairingKey))
+            {
+                SettingsManager.Current.PairingKey = sharedSecret;
+                SettingsManager.Save();
+            }
+        }
+
         /// <summary>
         /// Regenerate the pairing key (invalidates all previous QR codes).
         /// </summary>

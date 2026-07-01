@@ -37,6 +37,9 @@ namespace FlyShelf.Classes
 
         private static void EnsureInitialized()
         {
+            // M4 FIX: Skip telemetry infrastructure entirely in Release builds —
+            // no UdpClient, no CSV file, no timer overhead.
+            if (!Logger.IsEnabled) return;
             if (_initialized || _failed) return;
             try
             {
@@ -68,6 +71,7 @@ namespace FlyShelf.Classes
         public static void SendTelemetry(double verticalOffset, double targetOffset, double velocity, double fps, double frameTimeMs, double viewportHeight, double scrollableHeight, string cardsData = "")
         {
             EnsureInitialized();
+            if (!Logger.IsEnabled) return; // M4 FIX: No-op in Release builds
 
             // Process local CSV logging regardless of socket initialization success
             try

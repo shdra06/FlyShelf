@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, Modal, TouchableOpacity, ScrollView, ActivityIndicator,
-  ToastAndroid, Platform, StyleSheet, Alert,
+  ToastAndroid, Platform, StyleSheet, Alert, TextInput,
 } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -24,6 +24,9 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
   const [selectedPages, setSelectedPages] = useState<number[]>([]);  // 1-indexed, in order
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<'select' | 'reorder'>('select');
+  // Android page-range input modal (Alert.prompt is iOS-only)
+  const [pageInputVisible, setPageInputVisible] = useState(false);
+  const [pageInputValue, setPageInputValue] = useState('');
 
   useEffect(() => {
     if (visible && pdfUri) {
@@ -198,6 +201,7 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
   };
 
   return (
+    <>
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={s.overlay}>
         <View style={s.container}>
@@ -254,20 +258,22 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => {
-                      Alert.prompt
-                        ? Alert.prompt('Page Range', 'Enter range (e.g. 1-5)', (text) => {
-                            const [s, e] = text.split('-').map(Number);
-                            if (s && e && s <= e && s >= 1 && e <= pageCount) selectRange(s, e);
-                          })
-                        : (() => {
-                            // Android doesn't have Alert.prompt, use simple toggle
-                            const half = Math.ceil(pageCount / 2);
-                            selectRange(1, half);
-                          })();
+                      if (Platform.OS === 'ios' && Alert.prompt) {
+                        Alert.prompt('Page Range', 'Enter range (e.g. 1-5)', (text) => {
+                          const [s, e] = text.split('-').map(Number);
+                          if (s && e && s <= e && s >= 1 && e <= pageCount) selectRange(s, e);
+                        });
+                      } else {
+                        // Android: show a TextInput modal
+                        setPageInputValue('');
+                        setPageInputVisible(true);
+                      }
                     }}
                     style={s.quickBtn}
+                    accessibilityLabel="Select page range"
+                    accessibilityRole="button"
                   >
-                    <Text style={s.quickBtnText}>First Half</Text>
+                    <Text style={s.quickBtnText}>Range</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={() => {
@@ -352,6 +358,45 @@ export default function PdfPageEditor({ visible, onClose, pdfUri, pdfTitle, outp
         </View>
       </View>
     </Modal>
+      {/* Android Page Range Input Modal */}
+      <Modal visible={pageInputVisible} transparent animationType="fade" onRequestClose={() => setPageInputVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' }}>
+          <View style={{ backgroundColor: '#1E222D', borderRadius: 16, padding: 24, width: 300, borderWidth: 1, borderColor: '#2A2F3A' }}>
+            <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '700', marginBottom: 4 }}>Page Range</Text>
+            <Text style={{ color: '#8A8F98', fontSize: 13, marginBottom: 16 }}>Enter range (e.g. 1-5)</Text>
+            <TextInput
+              value={pageInputValue}
+              onChangeText={setPageInputValue}
+              placeholder="e.g. 1-5"
+              placeholderTextColor="#555C6B"
+              keyboardType="numbers-and-punctuation"
+              style={{ backgroundColor: '#0E1017', color: '#FFF', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, borderWidth: 1, borderColor: '#2A2F3A', marginBottom: 16 }}
+              autoFocus
+            />
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => setPageInputVisible(false)}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#2A2F3A', alignItems: 'center' }}
+              >
+                <Text style={{ color: '#FFF', fontWeight: '600' }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  const [rs, re] = pageInputValue.split('-').map(Number);
+                  if (rs && re && rs <= re && rs >= 1 && re <= pageCount) {
+                    selectRange(rs, re);
+                  }
+                  setPageInputVisible(false);
+                }}
+                style={{ flex: 1, paddingVertical: 12, borderRadius: 10, backgroundColor: '#4A62EB', alignItems: 'center' }}
+              >
+                <Text style={{ color: '#FFF', fontWeight: '700' }}>OK</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 

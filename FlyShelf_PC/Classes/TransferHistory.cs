@@ -195,11 +195,11 @@ namespace FlyShelf.Classes
 
         private void AddEntry(TransferHistoryEntry entry)
         {
-            lock (_lock)
+            // Snapshot for Save() outside the Dispatcher call to avoid deadlock.
+            // Dispatcher.InvokeAsync is safe because Save() snapshots via ToList() under its own lock.
+            System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
             {
-                // Insert newest first — use synchronous Invoke so the entry is in the
-                // collection before Save() snapshots it (InvokeAsync would race).
-                System.Windows.Application.Current?.Dispatcher.Invoke(() =>
+                lock (_lock)
                 {
                     Entries.Insert(0, entry);
 
@@ -208,10 +208,9 @@ namespace FlyShelf.Classes
                     {
                         Entries.RemoveAt(Entries.Count - 1);
                     }
-                });
-            }
-
-            Save();
+                }
+                Save();
+            });
         }
 
         /// <summary>

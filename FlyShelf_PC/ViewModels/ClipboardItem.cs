@@ -30,7 +30,7 @@ namespace FlyShelf.ViewModels
         Group
     }
 
-    public partial class ClipboardItem : INotifyPropertyChanged
+    public partial class ClipboardItem : INotifyPropertyChanged, IDisposable
     {
         public DateTime DateCopied { get; set; } = DateTime.Now;
         public string FilePath { get; set; } = string.Empty;
@@ -578,6 +578,20 @@ namespace FlyShelf.ViewModels
         public DateTime? LeftViewportTime { get; set; }
 
         public event PropertyChangedEventHandler? PropertyChanged;
+
+        // ═══ IDisposable — release BitmapSource refs and large strings ═══
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+
+            Icon = null;
+            SourceAppIcon = null;
+            _rawContent = string.Empty;
+            _zippedArchivePath = string.Empty;
+        }
         
     }
 }

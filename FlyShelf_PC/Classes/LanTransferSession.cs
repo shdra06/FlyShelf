@@ -4,11 +4,13 @@
 // ---------------------------------------------------------------
 using System;
 using System.Buffers;
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using FlyShelf.ViewModels;
 
 namespace FlyShelf.Classes
 {
@@ -125,6 +127,51 @@ namespace FlyShelf.Classes
         /// <summary>True if this transfer failed and can be retried.</summary>
         public bool CanRetry => _state == TransferState.Failed;
 
+        // Auto-retry tracking
+        private int _autoRetryCount;
+        public int AutoRetryCount
+        {
+            get => _autoRetryCount;
+            set { _autoRetryCount = value; OnPropertyChanged(nameof(AutoRetryCount)); }
+        }
+        public const int MAX_AUTO_RETRIES = 3;
+        public static readonly int[] AUTO_RETRY_DELAYS_MS = { 2000, 5000, 10000 };
+
+        /// <summary>
+        /// Reference to the ClipboardItem placeholder shown in the shelf during receive.
+        /// Set by LanTransferManager when a receive session starts.
+        /// Updated with progress during transfer, swapped with final item on completion.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public ClipboardItem? Placeholder { get; set; }
+
+        // ═══ Parallel Chunked Transfer (files >100MB) ═══
+        public bool IsChunked { get; set; }
+        public int NumChunks { get; set; } = 4;
+        public long ChunkSize { get; set; }
+        /// <summary>
+        /// Per-chunk byte progress. Key=chunkIndex, Value=bytes received for that chunk.
+        /// Updated atomically by each chunk's receive task.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public System.Collections.Concurrent.ConcurrentDictionary<int, long> ChunkProgress { get; } = new();
+        /// <summary>
+        /// Per-chunk completion flag. When all values are true, hash verification begins.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonIgnore]
+        public System.Collections.Concurrent.ConcurrentDictionary<int, bool> ChunkCompleted { get; } = new();
+        /// <summary>
+        /// Count of chunks that have completed. Used for thread-safe completion check.
+        /// </summary>
+        private int _completedChunkCount;
+        public int CompletedChunkCount => _completedChunkCount;
+        public bool AllChunksCompleted => _completedChunkCount >= NumChunks;
+        public void MarkChunkCompleted(int chunkIndex)
+        {
+            ChunkCompleted[chunkIndex] = true;
+            Interlocked.Increment(ref _completedChunkCount);
+        }
+
         public string StateDisplayText => _state switch
         {
             TransferState.Queued => "Queued",
@@ -165,6 +212,15 @@ namespace FlyShelf.Classes
                 OnPropertyChanged(nameof(ProgressText));
                 OnPropertyChanged(nameof(ElapsedTime));
             }
+        }
+
+        /// <summary>
+        /// Atomically adds bytes to the total transferred count.
+        /// Used by parallel chunk receivers (each chunk adds its progress independently).
+        /// </summary>
+        public void AddBytesTransferred(long bytes)
+        {
+            Interlocked.Add(ref _bytesTransferred, bytes);
         }
 
         public double ProgressPercent => FileSize > 0 ? Math.Min(100.0, (double)BytesTransferred / FileSize * 100.0) : 0;

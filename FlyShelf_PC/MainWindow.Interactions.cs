@@ -837,6 +837,12 @@ namespace FlyShelf
             if (OverflowPopup != null) OverflowPopup.IsOpen = false;
             try
             {
+                // Dismiss the clipboard before opening Hub — prevents the clipboard from
+                // briefly disappearing behind the Topmost HubWindow and then reappearing
+                // when HubWindow's Topmost is set back to false (both windows are HWND_TOPMOST).
+                if (_isCurrentlySummoned && !_isAnimatingHide)
+                    AnimateAndHide();
+
                 CloseEmojiPicker();
                 if (_hubWindowInstance != null && _hubWindowInstance.IsLoaded)
                 {

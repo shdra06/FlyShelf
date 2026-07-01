@@ -39,13 +39,18 @@ namespace FlyShelf.Classes
         private static readonly string _urlCacheFile = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FlyShelf", "peer_urls.json");
 
-        // ═ ═ ═ Config ═ ═ ═
-        private const int HEARTBEAT_MS = 5_000;            // 5s heartbeat (fast LAN detection)
-        private const int HEARTBEAT_TIMEOUT_MS = 4_000;    // 4s timeout per ping
-        private const int MAX_FAILURES = 3;                // 3 misses = dead (quick failover)
-        private const int DISCOVERY_MS = 30_000;           // Re-scan Firebase every 30s when peers are offline (safety fallback + slow DNS retry)
-        private const int HANDSHAKE_TIMEOUT_LAN_MS = 5_000;   // 5s for LAN
-        private const int HANDSHAKE_TIMEOUT_CF_MS = 8_000;    // 8s for Cloudflare tunnels
+        // ═══ Robust Heartbeat Configuration (6+ device support) ═══
+        private const int HEARTBEAT_MS = 4_000;              // Base heartbeat interval (4s)
+        private const int HEARTBEAT_MS_RELAXED = 8_000;      // Relaxed interval when all peers healthy >60s
+        private const int HEARTBEAT_TIMEOUT_MS = 4_000;      // Per-ping timeout (was 8s — most LAN responses are <200ms)
+        private const int HEARTBEAT_TIMEOUT_LAN_MS = 3_000;  // Transport-aware: LAN peers get faster timeout
+        private const int HEARTBEAT_TIMEOUT_CF_MS_PING = 6_000; // Transport-aware: CF peers get more time
+        private const int MAX_FAILURES = 3;                  // Death detection: 3 × 4s = 12s (was 5 × 8s = 40s)
+        private const int DISCOVERY_MS = 30_000;             // Base Firebase re-scan interval
+        private const int HANDSHAKE_TIMEOUT_LAN_MS = 5_000;  // LAN handshake timeout
+        private const int HANDSHAKE_TIMEOUT_CF_MS = 8_000;   // Cloudflare handshake timeout
+        private const int RELAXED_AFTER_MS = 60_000;         // Switch to relaxed heartbeat after 60s of all-healthy
+        private const int MAX_CONCURRENT_HANDSHAKES = 3;     // Limit simultaneous handshakes for 6+ devices
 
         // ═ ═ ═ Events ═ ═ ═
         public event Action<string, string>? PeerConnected;     // (deviceId, transport)
@@ -59,7 +64,7 @@ namespace FlyShelf.Classes
         {
             PooledConnectionLifetime = TimeSpan.FromMinutes(10),
             PooledConnectionIdleTimeout = TimeSpan.FromMinutes(2),
-            MaxConnectionsPerServer = 20,  // Increased for concurrent multi-peer transfers
+            MaxConnectionsPerServer = 30,  // Increased for concurrent multi-peer transfers
             EnableMultipleHttp2Connections = true,
             AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate,
             ConnectTimeout = TimeSpan.FromSeconds(10)  // Fast failure for dead endpoints
@@ -212,9 +217,9 @@ namespace FlyShelf.Classes
             if (_peers.TryRemove(deviceId, out var peer))
             {
                 Logger.LogAction("PEER", $"Disconnecting unpaired peer: {peer.DeviceName}");
-                try { peer.WsCts?.Cancel(); } catch { } // Best-effort: failure is acceptable
-                try { peer.LiveSocket?.Dispose(); } catch { } // Best-effort: failure is acceptable
-                try { peer.LiveSocket = null; } catch { } // Best-effort: failure is acceptable
+                try { peer.WsCts?.Cancel(); } catch (Exception ex) { Logger.LogAction("PEER_ERR", $"DisconnectPeer cleanup: {ex.Message}"); }
+                try { peer.LiveSocket?.Dispose(); } catch (Exception ex) { Logger.LogAction("PEER_ERR", $"DisconnectPeer cleanup: {ex.Message}"); }
+                try { peer.LiveSocket = null; } catch (Exception ex) { Logger.LogAction("PEER_ERR", $"DisconnectPeer cleanup: {ex.Message}"); }
                 // Remove from URL cache
                 SaveUrlCache();
             }
@@ -538,8 +543,8 @@ namespace FlyShelf.Classes
             // Reset liveness and attempt targeted handshake
             lock (peer.StateLock) { peer.IsAlive = false; peer.Transport = "offline"; }
             peer.ConsecutiveFailures = 0;
-            try { peer.WsCts?.Cancel(); } catch { } // Best-effort: failure is acceptable
-            try { peer.LiveSocket?.Dispose(); } catch { } // Best-effort: failure is acceptable
+            try { peer.WsCts?.Cancel(); } catch (Exception ex) { Logger.LogAction("PEER_ERR", $"HandlePeerUrlUpdate cleanup: {ex.Message}"); }
+            try { peer.LiveSocket?.Dispose(); } catch (Exception ex) { Logger.LogAction("PEER_ERR", $"HandlePeerUrlUpdate cleanup: {ex.Message}"); }
             peer.LiveSocket = null;
 
             await Handshake(peer);
@@ -573,8 +578,8 @@ namespace FlyShelf.Classes
                 // Peer is known but dead — reset and handshake with the fresh URLs
                 existing.IsAlive = false;
                 existing.ConsecutiveFailures = 0;
-                try { existing.WsCts?.Cancel(); } catch { } // Best-effort: failure is acceptable
-                try { existing.LiveSocket?.Dispose(); } catch { } // Best-effort: failure is acceptable
+                try { existing.WsCts?.Cancel(); } catch (Exception ex) { Logger.LogAction("PEER_ERR", $"HandlePeerAnnounce cleanup: {ex.Message}"); }
+                try { existing.LiveSocket?.Dispose(); } catch (Exception ex) { Logger.LogAction("PEER_ERR", $"HandlePeerAnnounce cleanup: {ex.Message}"); }
                 existing.LiveSocket = null;
             }
             else

@@ -42,6 +42,7 @@ import { usePdfEditor } from '../../hooks/usePdfEditor';
 import { useMultiSelect } from '../../hooks/useMultiSelect';
 import { usePairing } from '../../hooks/usePairing';
 import { useModals } from '../../hooks/useModals';
+import { usePcUrlResolver } from '../../hooks/usePcUrlResolver';
 import OnboardingWizard from '../../components/OnboardingWizard';
 import { ActiveDevice } from '../../components/DeviceHub';
 import { mergePdfs as localMergePdfs, convertImageToPdf as localConvertImageToPdf } from '../../utils/pdfUtils';
@@ -86,6 +87,7 @@ export default function SyncScreen() {
   }, []);
   const hasLoadedOnceRef = useRef<boolean>(false);
   const lastActivityRef = useRef<number>(Date.now());
+  // Cloudflare failure tracking — delegated to usePcUrlResolver hook
   const lastSyncedContentRef = useRef<string>('');
   const lastSyncedImageTsRef = useRef<number>(0);
   const sentContentFingerprintsRef = useRef<Set<string>>(new Set());
@@ -209,6 +211,8 @@ export default function SyncScreen() {
     destPath: string;
     source: string;
     sourceDevice: string;
+    retryCount?: number;
+    timestamp?: number;
   }
   const downloadQueueRef = useRef<DownloadQueueItem[]>([]);
   const isDownloadingRef = useRef<boolean>(false);
@@ -312,7 +316,18 @@ export default function SyncScreen() {
           }).catch(() => {});
           if (item.id) { try { await markFileDownloaded(item.id); } catch {} }
         } else {
-          syncLog('DL-QUEUE', `❌ ${item.title} failed (all attempts exhausted)`);
+          const retries = item.retryCount || 0;
+          if (retries < 3) {
+            // Exponential backoff: 2s, 5s, 10s
+            const backoffDelays = [2000, 5000, 10000];
+            const delay = backoffDelays[retries] || 10000;
+            syncLog('DL-QUEUE', `⏳ ${item.title} failed attempt ${retries + 1}/3, retrying in ${delay / 1000}s...`);
+            await new Promise(r => setTimeout(r, delay));
+            item.retryCount = retries + 1;
+            downloadQueueRef.current.push(item);
+          } else {
+            syncLog('DL-QUEUE', `❌ ${item.title} permanently failed after 3 retries`);
+          }
           await FileSystem.deleteAsync(item.destPath, { idempotent: true }).catch(() => {});
         }
       } catch (err: any) {
@@ -389,11 +404,19 @@ export default function SyncScreen() {
   // Scoped Clipboard (only paired devices see each other)
   const pairingKeyRef = useRef<string>('');
   useEffect(() => {
-    getSecureItem('pairingKey').then(k => { if (isValidPairingKey(k)) pairingKeyRef.current = k!; });
+    getSecureItem('pairingKey').then(k => {
+      if (isValidPairingKey(k)) {
+        pairingKeyRef.current = k!;
+        if (Platform.OS === 'android' && AdvanceOverlay?.setPairingKey) AdvanceOverlay.setPairingKey(k!);
+      }
+    });
   }, []);
   // Keep ref in sync when context key changes (e.g. after pairing or regeneration)
   useEffect(() => {
-    if (isValidPairingKey(contextPairingKey)) pairingKeyRef.current = contextPairingKey;
+    if (isValidPairingKey(contextPairingKey)) {
+      pairingKeyRef.current = contextPairingKey;
+      if (Platform.OS === 'android' && AdvanceOverlay?.setPairingKey) AdvanceOverlay.setPairingKey(contextPairingKey);
+    }
   }, [contextPairingKey]);
   /** Returns the Firebase path scoped to the pairing key, e.g. `clipboard/abc123` */
   const clipboardPath = () => {
@@ -404,133 +427,8 @@ export default function SyncScreen() {
     return `clipboard/${pk}`;
   };
 
-  // ─── PC URL (auto-discovered from Firebase, no manual config needed) ───
-  const cachedPcUrlRef = useRef<string | null>(null);
-  const cachedPcUrlTimestampRef = useRef<number>(0);
-  const activeUrlResolutionPromiseRef = useRef<Promise<string> | null>(null);
-
-  const getCachedPcUrl = async (): Promise<string> => {
-    // Return cached URL if fresh (15s TTL)
-    const now = NetworkClock.now();
-    if (cachedPcUrlRef.current && (now - cachedPcUrlTimestampRef.current) < 15_000) {
-      return cachedPcUrlRef.current;
-    }
-
-    if (activeUrlResolutionPromiseRef.current) {
-      return activeUrlResolutionPromiseRef.current;
-    }
-
-    const runResolution = async (): Promise<string> => {
-      const startNow = NetworkClock.now();
-      // Priority 2: Stored pairing URLs from QR scan / code entry
-      try {
-        const storedLocal = await getSecureItem('pairedLocalUrl');
-        const storedGlobal = await getSecureItem('pairedGlobalUrl');
-        const candidates: string[] = [];
-        if (storedLocal) {
-          candidates.push(...storedLocal.split(',').map(s => s.trim()).filter(Boolean));
-        }
-        if (storedGlobal) {
-          candidates.push(storedGlobal.trim());
-        }
-        for (const url of candidates) {
-          try {
-            const res = await fetchWithTimeout(`${url}/api/health`,
-              { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }, 2000);
-            if (res.ok) {
-              cachedPcUrlRef.current = url;
-              cachedPcUrlTimestampRef.current = startNow;
-              return url;
-            }
-          } catch {}
-        }
-      } catch {
-        // Invalidate stale Cloudflare pairing URL if health check failed
-        const pairedGlobal = await getSecureItem('pairedGlobalUrl').catch(() => null);
-        if (pairedGlobal && pairedGlobal.includes('trycloudflare.com')) {
-          removeSecureItem('pairedGlobalUrl').catch(() => {});
-        }
-      }
-
-      // Priority 3: Last-known Cloudflare URL (Phase 4 — cached from previous session)
-      try {
-        const lastCfUrl = await getSecureItem('lastCloudflareUrl');
-        if (lastCfUrl && lastCfUrl.includes('trycloudflare.com')) {
-          try {
-            const res = await fetchWithTimeout(`${lastCfUrl}/api/health`,
-              { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pairingKeyRef.current || '' } }, 3000);
-            if (res.ok) {
-              cachedPcUrlRef.current = lastCfUrl;
-              cachedPcUrlTimestampRef.current = startNow;
-              return lastCfUrl;
-            }
-          } catch {
-            // Invalidate stale Cloudflare URL from storage
-            removeSecureItem('lastCloudflareUrl').catch(() => {});
-          }
-        }
-      } catch {}
-
-      // Priority 4: Firebase auto-discovered devices
-      const pc = activeDevicesRef.current.find((d: any) => d.DeviceType === 'PC');
-      if (pc) {
-        const urls = getDeviceUrls(pc);
-        const resolved = urls.length === 1 ? urls[0] : await resolveOptimalUrl(pc, fetchWithTimeout, pairingKeyRef.current);
-        if (resolved) {
-          cachedPcUrlRef.current = resolved;
-          cachedPcUrlTimestampRef.current = startNow;
-          return resolved;
-        }
-      }
-
-      // Priority 5: Direct Firebase query for PC nodes
-      const pk = pairingKeyRef.current;
-      if (pk && isValidPairingKey(pk)) {
-        try {
-          const nodesSnap = await get(ref(database, `nodes/${pk}`));
-          if (nodesSnap.exists()) {
-            const nodes = nodesSnap.val();
-            for (const key of Object.keys(nodes)) {
-              const node = nodes[key];
-              if (node.DeviceType === 'PC') {
-                const urls = getDeviceUrls(node);
-                for (const url of urls) {
-                  try {
-                    const res = await fetchWithTimeout(`${url}/api/health`, { headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk } }, 2500);
-                    if (res.ok) {
-                      cachedPcUrlRef.current = url;
-                      cachedPcUrlTimestampRef.current = startNow;
-                      return url;
-                    }
-                  } catch {}
-                }
-              }
-            }
-          }
-        } catch {}
-      }
-
-      // Priority 6: manual IP from Settings (legacy fallback)
-      const raw = pcLocalIp?.trim();
-      if (raw) {
-        const parts = raw.split(',');
-        for (const part of parts) {
-          const trimmed = part.trim();
-          if (!trimmed) continue;
-          const fallback = trimmed.startsWith('http') ? trimmed.replace(/\/$/, '') : `http://${trimmed.includes(':') ? trimmed : trimmed + ':8999'}`;
-          return fallback;
-        }
-      }
-      return '';
-    };
-
-    activeUrlResolutionPromiseRef.current = runResolution();
-    try {
-      return await activeUrlResolutionPromiseRef.current;
-    } finally {
-      activeUrlResolutionPromiseRef.current = null;
-    }
-  };
+  // Extracted to usePcUrlResolver hook (C1 decomposition)
+  // NOTE: Hook call is below after activeDevicesRef declaration (~line 525)
 
   // ─── Overlay Sync ───
   const lastNativeSyncRef = useRef<number>(0);
@@ -619,6 +517,8 @@ export default function SyncScreen() {
   const [activeDevices, setActiveDevices] = useState<any[]>([]);
   const [activeDevicesList, setActiveDevicesList] = useState<ActiveDevice[]>([]);
   const activeDevicesRef = useRef<any[]>([]);
+  // ─── PC URL resolver hook (moved here because it depends on activeDevicesRef) ───
+  const { getCachedPcUrl, invalidateCache: invalidatePcUrlCache, recordCloudflareFailure, resetCloudflareFailCount, cachedPcUrlRef, cachedPcUrlTimestampRef } = usePcUrlResolver(pairingKeyRef, activeDevicesRef, pcLocalIp);
   // Keep ref in sync with state so interval callbacks never use stale data
   useEffect(() => { activeDevicesRef.current = activeDevices; }, [activeDevices]);
 
@@ -873,7 +773,7 @@ export default function SyncScreen() {
                 fileUrl: fileItem.Raw!, destPath, source: 'Firebase',
                 sourceDevice: fileItem.SourceDeviceName || 'Cloud',
               });
-            } catch {}
+            } catch (e) { syncLog('FIREBASE', `File download queue error: ${(e as any)?.message || e}`); }
           }
         }
       }
@@ -914,6 +814,8 @@ export default function SyncScreen() {
     const peerDevicesRef = ref(database, `active_devices/${pk}`);
     const unsubscribeDevices = onValue(peerDevicesRef, async (snapshot) => {
       try {
+        // Issue #6: Skip expensive LAN probing if PC is already reachable via direct polling
+        const pcAlreadyReachable = lastWorkingPcUrlRef.current && (NetworkClock.now() - lastSuccessfulPollRef.current) < 10_000;
         if (!snapshot.exists()) {
           // Firebase entry was auto-deleted — keep using cached URLs, don't clear them
           return;
@@ -929,6 +831,11 @@ export default function SyncScreen() {
         for (let i = 0; i < rawDevices.length; i++) {
           const dev = rawDevices[i];
           if (dev.DeviceType === 'PC' && dev.LocalIp && !dev._lanVerified) {
+            // Issue #6: Skip LAN probing if PC already reachable — saves ~1.5s per callback
+            if (pcAlreadyReachable && lastWorkingPcUrlRef.current && !lastWorkingPcUrlRef.current.includes('trycloudflare.com')) {
+              rawDevices[i] = { ...dev, _lanVerified: true, _lanUrl: lastWorkingPcUrlRef.current };
+              continue;
+            }
             const parts = dev.LocalIp.split(',');
             for (const part of parts) {
               const trimmed = part.trim();
@@ -940,8 +847,24 @@ export default function SyncScreen() {
                   rawDevices[i] = { ...dev, _lanVerified: true, _lanUrl: lanUrl };
                   break;
                 }
-              } catch {}
+              } catch (e) { syncLog('LAN-PROBE', `Health check failed for ${trimmed}: ${(e as any)?.message || e}`); }
             }
+          }
+          // Prefer TLS URL over plain HTTP — encrypts pairing key in transit
+          if (dev.DeviceType === 'PC' && dev.TlsUrl && dev.TlsUrl.startsWith('https://') && rawDevices[i]._lanVerified) {
+            try {
+              const tlsUrl = dev.TlsUrl.replace(/\/$/, '');
+              const tlsRes = await fetch(`${tlsUrl}/api/health`, { method: 'GET', headers: { 'X-FlyShelf-Client': 'MobileCompanion', 'X-Pairing-Key': pk }, signal: AbortSignal.timeout(2000) });
+              if (tlsRes.ok) {
+                rawDevices[i] = { ...rawDevices[i], _lanVerified: true, _lanUrl: tlsUrl };
+                setSecureItem('pairedTlsUrl', tlsUrl).catch(() => {});
+                syncLog('LAN-PROBE', `✅ TLS URL preferred: ${tlsUrl.substring(0, 50)}`);
+              }
+            } catch (e) { syncLog('LAN-PROBE', `TLS probe failed for ${dev.TlsUrl}: ${(e as any)?.message || e}`); }
+          }
+          // Cache TLS URL if available (even if probe skipped — save for getCachedPcUrl)
+          if (dev.DeviceType === 'PC' && dev.TlsUrl && dev.TlsUrl.startsWith('https://')) {
+            setSecureItem('pairedTlsUrl', dev.TlsUrl.replace(/\/$/, '')).catch(() => {});
           }
           // Cache Cloudflare URL locally — survives the 5-second Firebase auto-delete
           if (dev.DeviceType === 'PC' && dev.GlobalUrl && dev.GlobalUrl.includes('trycloudflare.com')) {
@@ -996,7 +919,7 @@ export default function SyncScreen() {
                   if (pcIdx >= 0) rawDevices[pcIdx] = { ...rawDevices[pcIdx], _lanVerified: true, _lanUrl: manualUrl, LocalIp: manualUrl };
                   break;
                 }
-              } catch {}
+              } catch (e) { syncLog('LAN-PROBE', `Manual IP health check failed for ${manualUrl}: ${(e as any)?.message || e}`); }
             }
           }
         }
@@ -1142,7 +1065,7 @@ export default function SyncScreen() {
                   } else if (freshBase) {
                     downloadUrl = freshBase;
                   }
-                } catch {}
+                } catch (e) { syncLog('IMG-DL', `URL re-resolution failed: ${(e as any)?.message || e}`); }
                 syncLog('IMG-DL', `Retry #${dlAttempt}: ${downloadUrl.substring(0, 80)}`);
               }
               const dlResult = await Promise.race([
@@ -1206,10 +1129,22 @@ export default function SyncScreen() {
         const syncHeaders: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
         if (pairingKeyRef.current) syncHeaders['X-Pairing-Key'] = pairingKeyRef.current;
         const response = await fetchWithTimeout(`${targetUrl}/api/sync`, { headers: syncHeaders }, timeout);
-        if (!response.ok) { cachedPcUrlRef.current = null; markPcUnreachable(); return; }
+        if (!response.ok) {
+          cachedPcUrlRef.current = null;
+          // Track Cloudflare failures for forced re-resolution (Issue #7)
+          if (targetUrl.includes('trycloudflare.com')) {
+            if (recordCloudflareFailure()) {
+              removeSecureItem('lastCloudflareUrl').catch(() => {});
+              removeSecureItem('pairedGlobalUrl').catch(() => {});
+            }
+          }
+          markPcUnreachable();
+          return;
+        }
         {
           // Phase 1: PC is reachable — disconnect Firebase listener if active
           markPcReachable();
+          resetCloudflareFailCount();
           // Mark this URL as proven-working for the image sweep to use
           lastWorkingPcUrlRef.current = targetUrl;
           // Phase 4: Read X-Global-Url header — PC sends its current Cloudflare URL in every response
@@ -1222,7 +1157,7 @@ export default function SyncScreen() {
                 setSecureItem('lastCloudflareUrl', globalUrl).catch(() => {});
               }
             }
-          } catch {}
+          } catch (e) { syncLog('PC-POLL', `Failed to read X-Global-Url header: ${(e as any)?.message || e}`); }
           const data = await response.json();
           if (data && data.length > 0) {
             const latest = data[0];
@@ -1324,7 +1259,7 @@ export default function SyncScreen() {
                             });
                             clearTimeout(timer);
                             if (h.ok) { lanBase = candidate; break; }
-                          } catch {}
+                          } catch (e) { syncLog('FILE-DL', `LAN health probe failed for ${candidate}: ${(e as any)?.message || e}`); }
                         }
                         if (lanBase) {
                           fileUrl = `${lanBase}/download${pathPart}`;
@@ -1346,7 +1281,7 @@ export default function SyncScreen() {
                                 }
                               }
                             }
-                          } catch {}
+                          } catch (e) { syncLog('FILE-DL', `Cloudflare device lookup failed: ${(e as any)?.message || e}`); }
                           // Also try if targetUrl itself is Cloudflare
                           if (!fileUrl && targetUrl?.includes('trycloudflare.com')) {
                             fileUrl = `${targetUrl}/download${pathPart}`;
@@ -1461,7 +1396,7 @@ export default function SyncScreen() {
                     });
                     clearTimeout(timer);
                     if (h.ok) { lanBase = candidate; break; }
-                  } catch {}
+                  } catch (e) { syncLog('FILE-DL', `LAN probe failed for ${candidate}: ${(e as any)?.message || e}`); }
                 }
                 if (lanBase) {
                   fileUrl = `${lanBase}/download${pathPart}`;
@@ -1482,7 +1417,7 @@ export default function SyncScreen() {
                         }
                       }
                     }
-                  } catch {}
+                  } catch (e) { syncLog('FILE-DL', `Firebase device lookup failed: ${(e as any)?.message || e}`); }
                   if (!fileUrl && targetUrl?.includes('trycloudflare.com')) {
                     fileUrl = `${targetUrl}/download${pathPart}`;
                   }
@@ -1538,7 +1473,19 @@ export default function SyncScreen() {
             return merged;
           });
         }
-      } catch (e) { cachedPcUrlRef.current = null; markPcUnreachable(); }
+      } catch (e) {
+        syncLog('PC-POLL', `Poll failed: ${(e as any)?.message || e}`);
+        cachedPcUrlRef.current = null;
+        // Track Cloudflare failures for forced re-resolution (Issue #7)
+        const failUrl = cachedPcUrlRef.current || '';
+        if (failUrl.includes('trycloudflare.com')) {
+          if (recordCloudflareFailure()) {
+            removeSecureItem('lastCloudflareUrl').catch(() => {});
+            removeSecureItem('pairedGlobalUrl').catch(() => {});
+          }
+        }
+        markPcUnreachable();
+      }
       } finally { pollLockRef.current = false; }
     };
     // Adaptive polling: 2s (LAN active) → 5s (Cloud) → 10s (idle/no PC) → re-evaluate every cycle
@@ -2022,7 +1969,7 @@ export default function SyncScreen() {
         const sendTimeout = targetUrl.includes('trycloudflare.com') ? 8000 : 3000;
         const response = await fetchWithTimeout(`${targetUrl}/api/sync_text`, { method: 'POST', headers: hdrs, body: jsonBody }, sendTimeout);
         localSuccess = response.ok;
-      } catch(e) { cachedPcUrlRef.current = null; }
+      } catch(e) { syncLog('SYNC', `Text transmit to PC failed: ${(e as any)?.message || e}`); cachedPcUrlRef.current = null; }
       // Always add sent text to local clips so it appears in the feed
       const sentItem: ClipItem = {
         id: `local_${NetworkClock.now()}`,
@@ -2435,6 +2382,7 @@ export default function SyncScreen() {
       ])
     ]);
     pairingKeyRef.current = key || '';
+    if (Platform.OS === 'android' && AdvanceOverlay?.setPairingKey && key) AdvanceOverlay.setPairingKey(key);
     pairingTimestampRef.current = parseInt(pairingTs);
     if (workingUrl) {
       cachedPcUrlRef.current = workingUrl;
@@ -2625,6 +2573,7 @@ export default function SyncScreen() {
 
   // ─── Heavy Upload ───
   const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB (optimized to prevent Base64 string memory exhaustion on mobile devices)
+  const LAN_CHUNK_THRESHOLD = 50 * 1024 * 1024; // 50MB — files above this threshold use chunked upload even on LAN (Issue #1)
 
   const executeHeavyUpload = async (targetDeviceOrGlobal: any) => {
     try {
@@ -2675,8 +2624,10 @@ export default function SyncScreen() {
 
         const isCloudflare = resolved.includes('trycloudflare.com');
         const fileSize = size || 0;
+        // Issue #1: Use chunked upload for large files on LAN (>50MB) too, not just Cloudflare
+        const useChunkedUpload = (isCloudflare && fileSize > CHUNK_SIZE) || (!isCloudflare && fileSize > LAN_CHUNK_THRESHOLD);
 
-        if (isCloudflare && fileSize > CHUNK_SIZE) {
+        if (useChunkedUpload) {
           // ── Chunked upload for large files over Cloudflare ──
           if (Platform.OS === 'android') ToastAndroid.show(`📦 Chunked upload: ${Math.ceil(fileSize / CHUNK_SIZE)} chunks`, ToastAndroid.SHORT);
           const sessionId = `${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
@@ -2705,7 +2656,7 @@ export default function SyncScreen() {
                 try {
                   const freshUrl = await getCachedPcUrl();
                   if (freshUrl) resolved = freshUrl;
-                } catch {}
+                } catch (e) { syncLog('UPLOAD', `URL re-resolution failed on retry: ${(e as any)?.message || e}`); }
               }
               try {
                 const res = await FileSystem.uploadAsync(`${resolved}/api/upload_chunk`, chunkTempUri, {

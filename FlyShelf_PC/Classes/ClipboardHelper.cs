@@ -38,7 +38,9 @@ namespace FlyShelf.Classes
                         Logger.LogAction("CLIPBOARD_ERROR", $"SafeSetText failed (attempt {retry + 1}): {ex.Message}");
                         if (retry < 2)
                         {
-                            System.Threading.Thread.Sleep(15);
+                            // M1 FIX: Reduced from 15ms to 5ms. Can't use async here because
+                            // callers go through Dispatcher.Invoke which requires synchronous execution.
+                            System.Threading.Thread.Sleep(5);
                         }
                     }
                 }
@@ -81,7 +83,9 @@ namespace FlyShelf.Classes
                         Logger.LogAction("CLIPBOARD_ERROR", $"SafeSetTextAllowCapture failed (attempt {retry + 1}): {ex.Message}");
                         if (retry < 2)
                         {
-                            System.Threading.Thread.Sleep(15);
+                            // M1 FIX: Reduced from 15ms to 5ms. Can't use async here because
+                            // callers go through Dispatcher.Invoke which requires synchronous execution.
+                            System.Threading.Thread.Sleep(5);
                         }
                     }
                 }
@@ -112,7 +116,9 @@ namespace FlyShelf.Classes
                         Logger.LogAction("CLIPBOARD_ERROR", $"SafeSetFileDropList failed (attempt {retry + 1}): {ex.Message}");
                         if (retry < 2)
                         {
-                            System.Threading.Thread.Sleep(15);
+                            // M1 FIX: Reduced from 15ms to 5ms. Can't use async here because
+                            // callers go through Dispatcher.Invoke which requires synchronous execution.
+                            System.Threading.Thread.Sleep(5);
                         }
                     }
                 }
@@ -149,7 +155,9 @@ namespace FlyShelf.Classes
                         Logger.LogAction("CLIPBOARD_ERROR", $"SafeSetDataObject failed (attempt {retry + 1}): {ex.Message}");
                         if (retry < 2)
                         {
-                            System.Threading.Thread.Sleep(15);
+                            // M1 FIX: Reduced from 15ms to 5ms. Can't use async here because
+                            // callers go through Dispatcher.Invoke which requires synchronous execution.
+                            System.Threading.Thread.Sleep(5);
                         }
                     }
                 }
@@ -186,7 +194,9 @@ namespace FlyShelf.Classes
                         Logger.LogAction("CLIPBOARD_ERROR", $"SafeSetImage failed (attempt {retry + 1}): {ex.Message}");
                         if (retry < 2)
                         {
-                            System.Threading.Thread.Sleep(15);
+                            // M1 FIX: Reduced from 15ms to 5ms. Can't use async here because
+                            // callers go through Dispatcher.Invoke which requires synchronous execution.
+                            System.Threading.Thread.Sleep(5);
                         }
                     }
                 }

@@ -61,19 +61,52 @@ namespace FlyShelf.Classes
         /// </summary>
         public static List<ViewModels.ClipboardItem> LoadHistory()
         {
+            // M2 FIX: Read file content OUTSIDE the lock to avoid holding it during
+            // potentially slow file I/O. Only parsing and collection mutation inside the lock.
+            string? snapshotJson = null;
+            string? backupJson = null;
+            string[]? journalLines = null;
+
+            try
+            {
+                if (File.Exists(_historyPath))
+                {
+                    try { snapshotJson = RunWithRetry(() => File.ReadAllText(_historyPath)); }
+                    catch (JsonException)
+                    {
+                        string backupPath = _historyPath + ".bak";
+                        if (File.Exists(backupPath))
+                            backupJson = RunWithRetry(() => File.ReadAllText(backupPath));
+                        else
+                            throw;
+                    }
+                    catch { /* Will fall through to empty list */ }
+                }
+                if (File.Exists(_journalPath))
+                {
+                    try { journalLines = RunWithRetry(() => File.ReadAllLines(_journalPath)); }
+                    catch { /* Will fall through with null journalLines */ }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("HISTORY_LOAD_ERROR", $"Failed to read history files: {ex.Message}");
+                return new List<ViewModels.ClipboardItem>();
+            }
+
             lock (_lock)
             {
                 try
                 {
                     var items = new List<ViewModels.ClipboardItem>();
 
-                    // Step 1: Load compacted snapshot
-                    if (File.Exists(_historyPath))
+                    // Step 1: Parse compacted snapshot
+                    string? jsonToParse = snapshotJson ?? backupJson;
+                    if (jsonToParse != null)
                     {
                         try
                         {
-                            var json = RunWithRetry(() => File.ReadAllText(_historyPath));
-                            var snapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(json);
+                            var snapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(jsonToParse);
                             if (snapshot != null)
                             {
                                 foreach (var snapshotItem in snapshot)
@@ -88,45 +121,21 @@ namespace FlyShelf.Classes
                                         Logger.LogAction("HISTORY_CLEANUP", $"Pruned dead/deleted snapshot item: {snapshotItem.FileName ?? snapshotItem.RawContent}");
                                 }
                             }
+                            if (backupJson != null && snapshotJson == null)
+                            {
+                                Logger.LogAction("HISTORY_RECOVERY", $"Successfully recovered {items.Count} valid items from backup database!");
+                            }
                         }
                         catch (JsonException jsonEx)
                         {
-                            Logger.LogAction("HISTORY_LOAD_ERROR", $"Primary snapshot failed to deserialize: {jsonEx.Message}. Attempting backup recovery...");
-                            string backupPath = _historyPath + ".bak";
-                            if (File.Exists(backupPath))
-                            {
-                                var backupJson = RunWithRetry(() => File.ReadAllText(backupPath));
-                                var backupSnapshot = JsonSerializer.Deserialize<List<ViewModels.ClipboardItem>>(backupJson);
-                                if (backupSnapshot != null)
-                                {
-                                    int recoveredCount = 0;
-                                    foreach (var snapshotItem in backupSnapshot)
-                                    {
-                                        if (snapshotItem.IsPassword)
-                                        {
-                                            snapshotItem.RawContent = SecureStorage.Decrypt(snapshotItem.RawContent);
-                                        }
-                                        if (IsValidClipboardItem(snapshotItem))
-                                        {
-                                            items.Add(snapshotItem);
-                                            recoveredCount++;
-                                        }
-                                    }
-                                    Logger.LogAction("HISTORY_RECOVERY", $"Successfully recovered {recoveredCount} valid items from backup database!");
-                                }
-                            }
-                            else
-                            {
-                                throw; // Re-throw to fall through if no backup exists
-                            }
+                            Logger.LogAction("HISTORY_LOAD_ERROR", $"Snapshot failed to deserialize: {jsonEx.Message}");
                         }
                     }
 
                     // Step 2: Replay journal entries on top of snapshot
-                    if (File.Exists(_journalPath))
+                    if (journalLines != null)
                     {
-                        var lines = RunWithRetry(() => File.ReadAllLines(_journalPath));
-                        foreach (var line in lines)
+                        foreach (var line in journalLines)
                         {
                             if (string.IsNullOrWhiteSpace(line)) continue;
                             try
@@ -160,7 +169,7 @@ namespace FlyShelf.Classes
                             }
                             catch { /* Skip malformed journal entries */ }
                         }
-                        _journalEntryCount = lines.Length;
+                        _journalEntryCount = journalLines.Length;
                     }
 
                     // Enforce cap

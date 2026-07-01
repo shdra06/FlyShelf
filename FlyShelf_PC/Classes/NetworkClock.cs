@@ -117,6 +117,8 @@ namespace FlyShelf.Classes
                 {
                     Logger.LogAction("CLOCK", "All NTP servers failed — " +
                         (_anchorLoaded ? "using persisted anchor" : "using OS clock"));
+                    // Still start periodic re-sync — NTP might come online later
+                    StartPeriodicResync();
                     return;
                 }
 
@@ -135,12 +137,61 @@ namespace FlyShelf.Classes
 
                 // Persist the anchor for future sessions
                 PersistAnchor(ntpTime.Value);
+                // Start periodic re-sync to detect clock drift over long uptimes
+                StartPeriodicResync();
             }
             catch (Exception ex)
             {
                 Logger.LogAction("CLOCK", $"NTP failed: {ex.Message} — " +
                     (_anchorLoaded ? "using persisted anchor" : "using OS clock"));
             }
+        }
+
+        /// <summary>
+        /// Starts a background timer to re-sync NTP every 6 hours.
+        /// Detects and logs clock drift over long uptimes.
+        /// </summary>
+        private static System.Timers.Timer? _resyncTimer;
+        public static void StartPeriodicResync()
+        {
+            _resyncTimer?.Stop();
+            _resyncTimer = new System.Timers.Timer(6 * 60 * 60 * 1000); // 6 hours
+            _resyncTimer.Elapsed += async (s, e) =>
+            {
+                try
+                {
+                    var previousOffset = _offset;
+                    DateTimeOffset? ntpTime = null;
+                    foreach (var server in NtpServers)
+                    {
+                        ntpTime = await QueryNtpAsync(server);
+                        if (ntpTime.HasValue) break;
+                    }
+                    if (ntpTime.HasValue)
+                    {
+                        _offset = ntpTime.Value - DateTimeOffset.UtcNow;
+                        _synced = true;
+                        double driftSinceLast = Math.Abs((_offset - previousOffset).TotalSeconds);
+                        if (driftSinceLast > 5)
+                        {
+                            _driftDetected = true;
+                            Logger.LogAction("CLOCK", $"⚠️ Periodic re-sync: drift of {driftSinceLast:F1}s detected since last sync");
+                        }
+                        else
+                        {
+                            Logger.LogAction("CLOCK", $"✅ Periodic re-sync OK (drift: {_offset.TotalMilliseconds:F0}ms)");
+                        }
+                        PersistAnchor(ntpTime.Value);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("CLOCK", $"Periodic re-sync failed: {ex.Message}");
+                }
+            };
+            _resyncTimer.AutoReset = true;
+            _resyncTimer.Start();
+            Logger.LogAction("CLOCK", "Periodic NTP re-sync started (every 6 hours)");
         }
 
         /// <summary>

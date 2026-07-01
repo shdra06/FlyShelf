@@ -72,6 +72,9 @@ namespace FlyShelf.Windows
                     {
                         RefreshNetworkQueueDisplay();
                         RefreshNetworkStatusBar();
+                        // Auto-refresh Nearby tab if visible
+                        if (_activeNetworkSubTab == "Nearby")
+                            RefreshNearbyDevices();
                     }
                 };
                 _networkRefreshTimer.Start();
@@ -109,6 +112,7 @@ namespace FlyShelf.Windows
             // Refresh data when switching to a tab
             if (tag == "Queue") RefreshNetworkQueueDisplay();
             if (tag == "History") RefreshHistoryDisplay();
+            if (tag == "Nearby") RefreshNearbyDevices();
             if (tag == "Devices")
             {
                 RefreshDevices_Click(null, null);
@@ -168,6 +172,29 @@ namespace FlyShelf.Windows
                 }
             }
             catch { } // Best-effort: failure is acceptable
+
+            // Update transfer speed dashboard
+            try
+            {
+                var manager = LanTransferManager.Instance;
+                if (manager != null)
+                {
+                    var activeSessions = manager.ActiveTransfers.Where(s => s.IsActive).ToArray();
+                    double totalUpload = activeSessions.Where(s => s.Direction == TransferDirection.Send).Sum(s => s.SpeedBps);
+                    double totalDownload = activeSessions.Where(s => s.Direction == TransferDirection.Receive).Sum(s => s.SpeedBps);
+                    int activeCount = activeSessions.Length;
+
+                    DashboardUploadSpeed.Text = LanTransferSession.FormatSpeed(totalUpload);
+                    DashboardDownloadSpeed.Text = LanTransferSession.FormatSpeed(totalDownload);
+                    DashboardActiveCount.Text = $"{activeCount} active";
+                    DashboardActiveDot.Visibility = activeCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+                    TransferSpeedDashboard.Visibility = (activeCount > 0 || manager.ActiveTransfers.Count > 0) ? Visibility.Visible : Visibility.Collapsed;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogAction("HUB_NET", $"Speed dashboard update failed: {ex.Message}");
+            }
         }
 
         private void AddFilesToQueue_Click(object sender, RoutedEventArgs e)
@@ -578,6 +605,82 @@ namespace FlyShelf.Windows
                     ToastWindow.ShowToast($"🔗 Connecting to {device.DeviceName}...");
                 }
                 catch { } // Best-effort: failure is acceptable
+            }
+        }
+
+        private async void PairNearbyDevice_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is FrameworkElement fe && fe.DataContext is NearbyDeviceInfo device)
+            {
+                try
+                {
+                    ToastWindow.ShowToast($"🔗 Sending pair request to {device.DeviceName}...");
+
+                    // Generate nonce for this pairing session
+                    string nonce = Guid.NewGuid().ToString("N");
+                    string myDeviceId = SettingsManager.Current.DeviceId ?? Environment.MachineName;
+                    string myDeviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName;
+
+                    var pairRequest = new
+                    {
+                        deviceId = myDeviceId,
+                        deviceName = myDeviceName,
+                        deviceType = "PC",
+                        nonce = nonce,
+                        httpPort = NetworkSyncServer.Instance?.CurrentPort ?? 8080,
+                        transferPort = LanTransferEngine.TRANSFER_PORT
+                    };
+
+                    string url = $"http://{device.IpAddress}:{device.HttpPort}/api/lan/pair-request";
+                    using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(60) }; // 60s for user to accept
+                    var content = new System.Net.Http.StringContent(
+                        System.Text.Json.JsonSerializer.Serialize(pairRequest),
+                        System.Text.Encoding.UTF8, "application/json");
+
+                    var response = await http.PostAsync(url, content);
+                    string responseBody = await response.Content.ReadAsStringAsync();
+
+                    using var doc = System.Text.Json.JsonDocument.Parse(responseBody);
+                    var root = doc.RootElement;
+                    bool accepted = root.TryGetProperty("accepted", out var ap) && ap.GetBoolean();
+
+                    if (accepted)
+                    {
+                        string remoteDeviceId = root.GetProperty("deviceId").GetString() ?? device.DeviceId;
+                        string remoteDeviceName = root.GetProperty("deviceName").GetString() ?? device.DeviceName;
+                        string sharedSecret = root.GetProperty("sharedSecret").GetString() ?? "";
+                        int remoteHttpPort = root.TryGetProperty("httpPort", out var rhp) ? rhp.GetInt32() : device.HttpPort;
+                        int remoteTransferPort = root.TryGetProperty("transferPort", out var rtp) ? rtp.GetInt32() : device.TransferPort;
+
+                        // Store paired device locally
+                        DevicePairingManager.PairDeviceViaLan(remoteDeviceId, remoteDeviceName, 
+                            device.DeviceType, device.IpAddress, sharedSecret);
+
+                        // Auto-connect via PeerManager
+                        string lanUrl = $"http://{device.IpAddress}:{remoteHttpPort}";
+                        _ = PeerManager.Instance?.AddManualPeer(remoteDeviceId, remoteDeviceName, lanUrl, remoteTransferPort);
+
+                        device.IsPaired = true;
+                        device.IsConnected = true;
+                        RefreshNearbyDevices();
+                        RefreshPairedDevicesList();
+
+                        ToastWindow.ShowToast($"✅ Paired with {remoteDeviceName} via LAN!");
+                    }
+                    else
+                    {
+                        ToastWindow.ShowToast($"❌ {device.DeviceName} rejected the pair request");
+                    }
+                }
+                catch (TaskCanceledException)
+                {
+                    ToastWindow.ShowToast($"⏱️ Pair request timed out — {device.DeviceName} didn't respond");
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogAction("NETWORK_HUB", $"LAN pair error: {ex.Message}");
+                    ToastWindow.ShowToast($"❌ Pair failed: {ex.Message}");
+                }
             }
         }
 

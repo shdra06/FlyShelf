@@ -15,10 +15,34 @@ namespace FlyShelf.Classes
     {
         public string DeviceId { get; set; } = "";
         public string DeviceName { get; set; } = "";
-        public string LanUrl { get; set; } = "";
-        public string CloudflareUrl { get; set; } = "";
-        public string ActiveUrl { get; set; } = "";
-        public string Transport { get; set; } = "offline";  // "LAN", "Cloudflare", "offline"
+
+        // Thread-safe: these are read/written from HeartbeatLoop, DiscoveryLoop, Handshake,
+        // MonitorWebSocket, Transfer, and URL Update threads concurrently.
+        // Using lock(StateLock) for atomic multi-field updates.
+        private string _lanUrl = "";
+        public string LanUrl
+        {
+            get { lock (StateLock) return _lanUrl; }
+            set { lock (StateLock) _lanUrl = value; }
+        }
+        private string _cloudflareUrl = "";
+        public string CloudflareUrl
+        {
+            get { lock (StateLock) return _cloudflareUrl; }
+            set { lock (StateLock) _cloudflareUrl = value; }
+        }
+        private string _activeUrl = "";
+        public string ActiveUrl
+        {
+            get { lock (StateLock) return _activeUrl; }
+            set { lock (StateLock) _activeUrl = value; }
+        }
+        private string _transport = "offline";
+        public string Transport  // "LAN", "Cloudflare", "offline"
+        {
+            get { lock (StateLock) return _transport; }
+            set { lock (StateLock) _transport = value; }
+        }
         // FIX R8: volatile prevents torn reads when accessed from HeartbeatLoop,
         // MonitorWebSocket, HandlePeerDeath, and Transfer threads concurrently
         private volatile bool _isAlive;
@@ -46,7 +70,18 @@ namespace FlyShelf.Classes
         public CancellationTokenSource? WsCts
         {
             get { lock (StateLock) return _wsCts; }
-            set { lock (StateLock) _wsCts = value; }
+            set
+            {
+                lock (StateLock)
+                {
+                    // Dispose old CTS to prevent resource leak on replacement
+                    if (_wsCts != null && _wsCts != value)
+                    {
+                        try { _wsCts.Dispose(); } catch { /* Best-effort cleanup */ }
+                    }
+                    _wsCts = value;
+                }
+            }
         }
         public SemaphoreSlim SendSemaphore { get; } = new(1, 1);
         public SemaphoreSlim HandshakeLock { get; } = new(1, 1); // Prevents concurrent handshakes from HeartbeatLoop/DiscoveryLoop/UDP/PeerAnnounce/UrlUpdate

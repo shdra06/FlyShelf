@@ -370,10 +370,17 @@ namespace FlyShelf.Classes
                                     string srcDeviceId = root.TryGetProperty("sourceDeviceId", out var si) ? si.GetString() ?? "" : "";
                                     string srcDeviceName = root.TryGetProperty("sourceDeviceName", out var sn) ? sn.GetString() ?? "" : "";
                                     string xxhash = root.TryGetProperty("xxhash64", out var xh) ? xh.GetString() : null;
+                                    // Parse chunk fields (backward compatible — defaults to non-chunked)
+                                    bool isChunked = false;
+                                    int numChunks = 4;
+                                    long chunkSize = 0;
+                                    if (root.TryGetProperty("isChunked", out var chunkedProp)) isChunked = chunkedProp.GetBoolean();
+                                    if (root.TryGetProperty("numChunks", out var numProp)) numChunks = numProp.GetInt32();
+                                    if (root.TryGetProperty("chunkSize", out var sizeProp)) chunkSize = sizeProp.GetInt64();
                                     if (Guid.TryParse(tidStr, out Guid tid))
                                     {
                                         _ = Task.Run(() => LanTransferManager.Instance.HandleTransferOffer(
-                                            tid, fileName, fileSize, srcDeviceId, srcDeviceName, xxhash));
+                                            tid, fileName, fileSize, srcDeviceId, srcDeviceName, xxhash, isChunked, numChunks, chunkSize));
                                     }
                                 }
                                 else if (msgType == "TransferAccept" && LanTransferManager.Instance != null)

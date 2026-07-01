@@ -14,14 +14,22 @@ async function readPdfBytes(uri: string): Promise<Uint8Array> {
     const { uri: localUri } = await FileSystem.downloadAsync(uri, tempPath, {
       headers: { 'X-FlyShelf-Client': 'MobileCompanion' },
     });
-    const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
+    let b64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
+    // Delete temp file immediately after reading — no longer needed on disk
     await FileSystem.deleteAsync(localUri, { idempotent: true });
-    return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    // Memory optimization: convert then null out base64 string so GC can reclaim it
+    // (avoids holding download bytes + base64 string + Uint8Array simultaneously)
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    b64 = ''; // Release base64 string for GC
+    return bytes;
   } else {
     // Local file
     const fileUri = uri.startsWith('file://') ? uri : `file://${uri}`;
-    const base64 = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
-    return Uint8Array.from(atob(base64), c => c.charCodeAt(0));
+    let b64Local = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
+    // Memory optimization: null out base64 after conversion to avoid 3x memory
+    const bytes = Uint8Array.from(atob(b64Local), c => c.charCodeAt(0));
+    b64Local = ''; // Release base64 string for GC
+    return bytes;
   }
 }
 

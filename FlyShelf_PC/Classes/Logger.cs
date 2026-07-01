@@ -309,17 +309,26 @@ namespace FlyShelf.Classes
 
                 // Internet Connectivity
                 sb.AppendLine("── INTERNET CONNECTIVITY ──");
-                // BUG-4 FIX: Use Task.Run so the blocking HTTP calls run off any WPF
-                // SynchronizationContext, preventing a deadlock if this is ever called
-                // from the UI thread. Both requests are diagnostic-only and best-effort.
+                // M3 FIX: Task.Run avoids SynchronizationContext deadlock, and the 10-second
+                // timeout prevents hanging forever if the network is unreachable. Without the
+                // timeout, .GetAwaiter().GetResult() would block indefinitely on a dead network.
                 try
                 {
                     using var client = new System.Net.Http.HttpClient() { Timeout = TimeSpan.FromSeconds(5) };
-                    var authUrl = Task.Run(async () =>
-                        await FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/.json?shallow=true").ConfigureAwait(false)
-                    ).GetAwaiter().GetResult();
-                    var t = Task.Run(async () => await client.GetAsync(authUrl).ConfigureAwait(false)).GetAwaiter().GetResult();
-                    sb.AppendLine($"  Firebase RTDB:     HTTP {(int)t.StatusCode} {(t.IsSuccessStatusCode ? "✓" : "✗")}");
+                    var firebaseTask = Task.Run(async () =>
+                    {
+                        var authUrl = await FirebaseAuthManager.AuthenticateUrl($"{FirebaseAuthManager.FirebaseDatabaseUrl}/.json?shallow=true").ConfigureAwait(false);
+                        return await client.GetAsync(authUrl).ConfigureAwait(false);
+                    });
+                    if (firebaseTask.Wait(TimeSpan.FromSeconds(10)))
+                    {
+                        var t = firebaseTask.Result;
+                        sb.AppendLine($"  Firebase RTDB:     HTTP {(int)t.StatusCode} {(t.IsSuccessStatusCode ? "✓" : "✗")}");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"  Firebase RTDB:     TIMEOUT (>10s)");
+                    }
                 }
                 catch (Exception ex) { sb.AppendLine($"  Firebase RTDB:     FAILED — {ex.InnerException?.Message ?? ex.Message}"); }
 
@@ -329,8 +338,16 @@ namespace FlyShelf.Classes
                     try
                     {
                         using var client = new System.Net.Http.HttpClient() { Timeout = TimeSpan.FromSeconds(10) };
-                        var t = Task.Run(async () => await client.GetAsync($"{CloudDiscoveryManager.CachedGlobalUrl}/api/health").ConfigureAwait(false)).GetAwaiter().GetResult();
-                        sb.AppendLine($"  Cloudflare Tunnel: HTTP {(int)t.StatusCode} {(t.IsSuccessStatusCode ? "✓" : "✗")}");
+                        var cfTask = Task.Run(async () => await client.GetAsync($"{CloudDiscoveryManager.CachedGlobalUrl}/api/health").ConfigureAwait(false));
+                        if (cfTask.Wait(TimeSpan.FromSeconds(10)))
+                        {
+                            var t = cfTask.Result;
+                            sb.AppendLine($"  Cloudflare Tunnel: HTTP {(int)t.StatusCode} {(t.IsSuccessStatusCode ? "✓" : "✗")}");
+                        }
+                        else
+                        {
+                            sb.AppendLine($"  Cloudflare Tunnel: TIMEOUT (>10s)");
+                        }
                     }
                     catch (Exception ex) { sb.AppendLine($"  Cloudflare Tunnel: FAILED — {ex.InnerException?.Message ?? ex.Message}"); }
                 }

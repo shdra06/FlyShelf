@@ -157,6 +157,7 @@ export const font = {
   regular:   'Inter_400Regular',
   medium:    'Inter_500Medium',
   semibold:  'Inter_600SemiBold',
+  semiBold:  'Inter_600SemiBold',  // Alias: both casings work
   bold:      'Inter_700Bold',
   extrabold: 'Inter_800ExtraBold',
 } as const;

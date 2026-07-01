@@ -1446,6 +1446,36 @@
                                         </StackPanel>
                                     </Border>
 
+                                    <!-- Transfer Speed Dashboard -->
+                                    <Border x:Name="TransferSpeedDashboard" Background="{DynamicResource CardBackground}" CornerRadius="8" Padding="12,8" Margin="0,0,0,8" Visibility="Collapsed">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="16"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <!-- Upload Speed -->
+                                            <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="📤" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                <TextBlock Text="Upload:" FontSize="12" Foreground="{DynamicResource SubtleText}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                <TextBlock x:Name="DashboardUploadSpeed" Text="0 B/s" FontSize="13" FontWeight="SemiBold" Foreground="#60A5FA" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <!-- Download Speed -->
+                                            <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="📥" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                <TextBlock Text="Download:" FontSize="12" Foreground="{DynamicResource SubtleText}" VerticalAlignment="Center" Margin="0,0,4,0"/>
+                                                <TextBlock x:Name="DashboardDownloadSpeed" Text="0 B/s" FontSize="13" FontWeight="SemiBold" Foreground="#34D399" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <!-- Active Count -->
+                                            <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Center">
+                                                <Ellipse x:Name="DashboardActiveDot" Width="8" Height="8" Fill="#22C55E" Margin="0,0,6,0" Visibility="Collapsed"/>
+                                                <TextBlock x:Name="DashboardActiveCount" Text="0 active" FontSize="11.5" Foreground="{DynamicResource SubtleText}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+
                                     <!-- Toolbar -->
                                     <Border Style="{StaticResource PremiumSettingStyle}" Padding="14,10">
                                         <Grid>
@@ -1530,6 +1560,13 @@
                                                         <ProgressBar Grid.Row="1" Value="{Binding Progress, FallbackValue=0}" Maximum="100" Height="3" 
                                                                      Margin="0,6,0,0" Background="#106366F1" Foreground="#6366F1"
                                                                      Visibility="{Binding IsTransferring, FallbackValue=Collapsed}"/>
+                                                        <!-- Speed & ETA (visible during active transfer) -->
+                                                        <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,2,0,0" Visibility="{Binding IsTransferring, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+                                                            <Border Background="#2563EB" CornerRadius="4" Padding="6,1" Margin="0,0,6,0">
+                                                                <TextBlock Text="{Binding SpeedText, FallbackValue=''}" FontSize="10" Foreground="White" FontWeight="SemiBold"/>
+                                                            </Border>
+                                                            <TextBlock Text="{Binding EtaText, FallbackValue=''}" FontSize="10" Foreground="{DynamicResource SubtleText}"/>
+                                                        </StackPanel>
                                                     </Grid>
                                                 </Border>
                                             </DataTemplate>
@@ -1755,8 +1792,86 @@
                                         </StackPanel>
                                     </Border>
 
-                                    <!-- Discovered devices list (empty for now) -->
-                                    <ItemsControl x:Name="NearbyDevicesPanel"/>
+                                    <!-- Discovered devices list -->
+                                    <ItemsControl x:Name="NearbyDevicesPanel" Margin="0,8,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <Border Margin="0,0,0,6" Padding="14,12" CornerRadius="10"
+                                                        Background="{DynamicResource CardBackground}">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                            <ColumnDefinition Width="Auto"/>
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <!-- Device icon -->
+                                                        <Border Grid.Column="0" Width="42" Height="42" CornerRadius="21" Margin="0,0,14,0"
+                                                                VerticalAlignment="Center">
+                                                            <Border.Background>
+                                                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                                                    <GradientStop Color="#186366F1" Offset="0"/>
+                                                                    <GradientStop Color="#188B5CF6" Offset="1"/>
+                                                                </LinearGradientBrush>
+                                                            </Border.Background>
+                                                            <TextBlock Text="💻" FontSize="18" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                        </Border>
+
+                                                        <!-- Device info -->
+                                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                                            <TextBlock Text="{Binding DeviceName}" FontSize="14" FontWeight="SemiBold" 
+                                                                       Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorPrimary}"
+                                                                       TextTrimming="CharacterEllipsis"/>
+                                                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                                                <TextBlock Text="{Binding IpAddress}" FontSize="11" FontFamily="Consolas"
+                                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"
+                                                                           Margin="0,0,8,0"/>
+                                                                <!-- Latency badge -->
+                                                                <Border CornerRadius="4" Padding="5,1" Margin="0,0,6,0" Background="#1A22C55E">
+                                                                    <TextBlock Text="{Binding LatencyMs, StringFormat='{}{0}ms'}" 
+                                                                               FontSize="10" FontWeight="Medium" Foreground="#22C55E"/>
+                                                                </Border>
+                                                                <!-- Status text -->
+                                                                <TextBlock Text="{Binding StatusText}" FontSize="10.5" 
+                                                                           Foreground="{DynamicResource MicaWPF.Brushes.TextFillColorTertiary}"/>
+                                                            </StackPanel>
+                                                        </StackPanel>
+
+                                                        <!-- Action buttons -->
+                                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <!-- Pair button (for unpaired devices) -->
+                                                            <ui:Button Padding="12,6" FontSize="11" Margin="4,0"
+                                                                       Click="PairNearbyDevice_Click">
+                                                                <ui:Button.Style>
+                                                                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                                        <Style.Triggers>
+                                                                            <DataTrigger Binding="{Binding IsPaired}" Value="True">
+                                                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                                            </DataTrigger>
+                                                                        </Style.Triggers>
+                                                                    </Style>
+                                                                </ui:Button.Style>
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="🔗" FontSize="12" Margin="0,0,4,0"/>
+                                                                    <TextBlock Text="Pair" FontSize="11" FontWeight="SemiBold"/>
+                                                                </StackPanel>
+                                                            </ui:Button>
+                                                            <!-- Connect button (for paired but offline devices) -->
+                                                            <ui:Button Padding="12,6" FontSize="11" Margin="4,0"
+                                                                       Click="AddNearbyDevice_Click"
+                                                                       Visibility="{Binding IsPaired, Converter={StaticResource BooleanToVisibilityConverter}, FallbackValue=Collapsed}">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <TextBlock Text="⚡" FontSize="12" Margin="0,0,4,0"/>
+                                                                    <TextBlock Text="Connect" FontSize="11" FontWeight="SemiBold"/>
+                                                                </StackPanel>
+                                                            </ui:Button>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
 
                                     <!-- Manual IP entry -->
                                     <Border Style="{StaticResource PremiumSettingStyle}">

@@ -596,6 +596,12 @@ class AdvanceOverlayModule(reactContext: ReactApplicationContext) : ReactContext
     }
 
     @ReactMethod
+    fun setPairingKey(key: String) {
+        val prefs = reactApplicationContext.getSharedPreferences("flyshelf_prefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("flyshelf_pairing_key", key).apply()
+    }
+
+    @ReactMethod
     fun setClipboardSuppressed(text: String) {
         try {
             val cm = reactApplicationContext.getSystemService(Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
@@ -720,6 +726,14 @@ class ScreenshotObserver(private val context: Context) : ContentObserver(Handler
         conn.doOutput = true
         conn.setRequestProperty("Content-Type", "multipart/form-data; boundary=\$boundary")
         conn.setRequestProperty("X-FlyShelf-Client", "MobileCompanion")
+        // Read pairing key from SharedPreferences and attach as auth header
+        try {
+            val prefs = context.getSharedPreferences("flyshelf_prefs", Context.MODE_PRIVATE)
+            val pairingKey = prefs.getString("flyshelf_pairing_key", "") ?: ""
+            if (pairingKey.isNotEmpty()) {
+                conn.setRequestProperty("X-Pairing-Key", pairingKey)
+            }
+        } catch (e: Exception) {}
         conn.connectTimeout = 5000
         conn.readTimeout = 15000
 
