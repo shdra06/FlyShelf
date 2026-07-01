@@ -2449,7 +2449,7 @@
 
                     <!-- CARD LIST -->
                     <ListView x:Name="AltShelfListView" Grid.Column="1" ItemsSource="{Binding DroppedItems}"
-                              Background="Transparent" BorderThickness="0" Margin="4,4,4,12" Padding="0,0,0,50"
+                              Background="Transparent" BorderThickness="0" Margin="4,4,2,14" Padding="0,0,0,50"
                               Focusable="True" FocusVisualStyle="{x:Null}" UseLayoutRounding="True" SnapsToDevicePixels="True"
                               AutomationProperties.Name="Clipboard items list"
                               TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType"
