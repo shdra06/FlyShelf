@@ -43,10 +43,10 @@
                         <Border x:Name="Pill"
                                 Background="#FFFFFF"
                                 Opacity="0.30"
-                                CornerRadius="3"
+                                CornerRadius="4"
                                 HorizontalAlignment="Right"
                                 Width="5"
-                                Margin="0,1,1,1"/>
+                                Margin="0,4,2,4"/>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <!-- HOVER -->
@@ -66,7 +66,7 @@
                                         </DoubleAnimation>
                                         <ThicknessAnimation Storyboard.TargetName="Pill"
                                                             Storyboard.TargetProperty="Margin"
-                                                            To="0,1,1,1" Duration="0:0:0.15">
+                                                            To="0,4,2,4" Duration="0:0:0.15">
                                             <ThicknessAnimation.EasingFunction><CubicEase EasingMode="EaseOut"/></ThicknessAnimation.EasingFunction>
                                         </ThicknessAnimation>
                                     </Storyboard>
@@ -87,7 +87,7 @@
                                         </DoubleAnimation>
                                         <ThicknessAnimation Storyboard.TargetName="Pill"
                                                             Storyboard.TargetProperty="Margin"
-                                                            To="0,1,1,1" Duration="0:0:0.35">
+                                                            To="0,4,2,4" Duration="0:0:0.35">
                                             <ThicknessAnimation.EasingFunction><CubicEase EasingMode="EaseInOut"/></ThicknessAnimation.EasingFunction>
                                         </ThicknessAnimation>
                                     </Storyboard>
@@ -160,10 +160,10 @@
                         <Border x:Name="Pill"
                                 Background="#FFFFFF"
                                 Opacity="0.30"
-                                CornerRadius="3"
+                                CornerRadius="4"
                                 VerticalAlignment="Bottom"
                                 Height="5"
-                                Margin="1,0,1,1"/>
+                                Margin="4,0,4,2"/>
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">

@@ -33,6 +33,7 @@ namespace FlyShelf.Classes
         // TRUSTED (paired P2P devices): Very high limit — never throttle real sync.
         // UNTRUSTED (web client / external): Strict limit — prevent DoS via public URL.
         private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, (int count, long windowStart)> _rateLimits = new();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, DateTime> _pairRequestThrottle = new();
         private const int RATE_LIMIT_TRUSTED_WRITE = 2000;  // Paired devices: effectively unlimited
         private const int RATE_LIMIT_TRUSTED_READ = 2000;
         private const int RATE_LIMIT_EXTERNAL_WRITE = 30;   // Web/external: strict
@@ -167,6 +168,20 @@ namespace FlyShelf.Classes
                 }
                 else if (path == "/api/lan/pair-request" && req.HttpMethod == "POST")
                 {
+                    // Rate limit: max 1 pair request per 30 seconds per IP
+                    if (!_pairRequestThrottle.TryAdd(clientIp, DateTime.UtcNow))
+                    {
+                        if (_pairRequestThrottle.TryGetValue(clientIp, out var lastRequest)
+                            && (DateTime.UtcNow - lastRequest).TotalSeconds < 30)
+                        {
+                            Logger.LogAction("LAN_PAIR", $"⛔ Rate limited pair request from {clientIp}");
+                            res.StatusCode = 429;
+                            res.Close();
+                            return;
+                        }
+                        _pairRequestThrottle[clientIp] = DateTime.UtcNow;
+                    }
+
                     // ═══ Direct LAN Pairing — No Firebase ═══
                     // Allows devices on the same LAN to pair without cloud services.
                     // Trust is established via user confirmation dialog on this device.
@@ -193,30 +208,8 @@ namespace FlyShelf.Classes
 
                         Logger.LogAction("LAN_PAIR", $"📨 Pair request from {reqDeviceName} ({reqDeviceId}) @ {clientIp}");
 
-                        // Check if already paired
-                        if (DevicePairingManager.GetPairedDevices()?.Any(d => d.DeviceId == reqDeviceId) == true)
-                        {
-                            // Already paired — accept silently
-                            string existingSecret = DevicePairingManager.DeriveLanPairingSecret(nonce, reqDeviceId,
-                                SettingsManager.Current.DeviceId ?? Environment.MachineName);
-
-                            var acceptData = new
-                            {
-                                accepted = true,
-                                deviceId = SettingsManager.Current.DeviceId ?? Environment.MachineName,
-                                deviceName = SettingsManager.Current.DeviceName ?? Environment.MachineName,
-                                sharedSecret = existingSecret,
-                                httpPort = NetworkSyncServer.Instance?.CurrentPort ?? 8080,
-                                transferPort = LanTransferEngine.TRANSFER_PORT
-                            };
-                            string json = JsonSerializer.Serialize(acceptData);
-                            byte[] data = Encoding.UTF8.GetBytes(json);
-                            res.StatusCode = 200;
-                            res.ContentType = "application/json";
-                            res.OutputStream.Write(data, 0, data.Length);
-                            res.Close();
-                            return;
-                        }
+                        // Even already-paired devices must confirm re-pairing — prevents secret theft
+                        // Fall through to the normal confirmation flow below
 
                         // Show confirmation dialog on UI thread
                         bool userAccepted = false;

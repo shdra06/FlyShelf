@@ -646,9 +646,9 @@ namespace FlyShelf.Windows
 
                     if (accepted)
                     {
-                        string remoteDeviceId = root.GetProperty("deviceId").GetString() ?? device.DeviceId;
-                        string remoteDeviceName = root.GetProperty("deviceName").GetString() ?? device.DeviceName;
-                        string sharedSecret = root.GetProperty("sharedSecret").GetString() ?? "";
+                        string remoteDeviceId = root.TryGetProperty("deviceId", out var rid) ? rid.GetString() ?? device.DeviceId : device.DeviceId;
+                        string remoteDeviceName = root.TryGetProperty("deviceName", out var rn) ? rn.GetString() ?? device.DeviceName : device.DeviceName;
+                        string sharedSecret = root.TryGetProperty("sharedSecret", out var ss) ? ss.GetString() ?? "" : "";
                         int remoteHttpPort = root.TryGetProperty("httpPort", out var rhp) ? rhp.GetInt32() : device.HttpPort;
                         int remoteTransferPort = root.TryGetProperty("transferPort", out var rtp) ? rtp.GetInt32() : device.TransferPort;
 

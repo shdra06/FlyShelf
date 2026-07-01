@@ -249,11 +249,26 @@ namespace FlyShelf.Classes
                 session.ChunkSize = chunkSize;
 
                 // Pre-allocate file to full size so chunk writers can seek freely
+                // Use OpenOrCreate to preserve partially-received data on resume
                 string? dir = Path.GetDirectoryName(filePath);
                 if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
-                using (var preAlloc = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                if (resumeFrom == 0) // Only pre-allocate fresh files; resumed files already exist
                 {
-                    preAlloc.SetLength(fileSize);
+                    using (var preAlloc = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        preAlloc.SetLength(fileSize);
+                    }
+                }
+                else if (!File.Exists(filePath) || new FileInfo(filePath).Length < fileSize)
+                {
+                    // Resumed but file is missing or truncated — re-create and lose progress
+                    using (var preAlloc = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None))
+                    {
+                        preAlloc.SetLength(fileSize);
+                    }
+                    resumeFrom = 0;
+                    session.BytesTransferred = 0;
+                    Logger.LogAction("TRANSFER", $"⚠️ Chunked resume file missing/truncated — restarting from scratch");
                 }
                 Logger.LogAction("TRANSFER", $"⚡ Chunked receive: {numChunks} parallel streams, file pre-allocated ({LanTransferSession.FormatBytes(fileSize)})");
             }
@@ -610,7 +625,11 @@ namespace FlyShelf.Classes
 
                 // Keep last 100 completed
                 if (CompletedTransfers.Count >= 100)
+                {
+                    var removed = CompletedTransfers[CompletedTransfers.Count - 1];
                     CompletedTransfers.RemoveAt(CompletedTransfers.Count - 1);
+                    try { removed.Dispose(); } catch { }
+                }
                 CompletedTransfers.Insert(0, session);
             });
         }
@@ -675,12 +694,13 @@ namespace FlyShelf.Classes
                 {
                     try
                     {
-                        app.Dispatcher.Invoke(() =>
+                        var op = app.Dispatcher.InvokeAsync(() =>
                         {
                             failedSnapshot = CompletedTransfers
                                 .Where(s => s.IsFailed && s.BytesTransferred > 0)
                                 .ToList();
                         });
+                        op.Wait(TimeSpan.FromSeconds(2));
                     }
                     catch { /* App shutting down */ }
                 }

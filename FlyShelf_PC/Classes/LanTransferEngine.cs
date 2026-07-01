@@ -162,7 +162,7 @@ namespace FlyShelf.Classes
                 if (version != PROTOCOL_VERSION)
                 {
                     Logger.LogAction("TCP_ENGINE", $"Protocol version mismatch: got {version}, expected {PROTOCOL_VERSION}");
-                    try { await new NetworkStream(socket, false).WriteAsync(new byte[] { 0xFF }, 0, 1); } catch { } // Best-effort: failure is acceptable
+                    try { await socket.SendAsync(new byte[] { 0xFF }, SocketFlags.None); } catch { } // Best-effort: failure is acceptable
                     return;
                 }
 
@@ -171,7 +171,7 @@ namespace FlyShelf.Classes
                 if (string.IsNullOrEmpty(pairingKey))
                 {
                     Logger.LogAction("TCP_ENGINE", "No pairing key — rejecting TCP connection");
-                    try { await new NetworkStream(socket, false).WriteAsync(new byte[] { 0xFF }, 0, 1); } catch { } // Best-effort: failure is acceptable
+                    try { await socket.SendAsync(new byte[] { 0xFF }, SocketFlags.None); } catch { } // Best-effort: failure is acceptable
                     return;
                 }
 
@@ -179,7 +179,7 @@ namespace FlyShelf.Classes
                 if (!CryptographicOperations.FixedTimeEquals(receivedHmac, expectedHmac))
                 {
                     Logger.LogAction("TCP_ENGINE", $"⛔ HMAC validation failed for transfer {transferId}");
-                    try { await new NetworkStream(socket, false).WriteAsync(new byte[] { 0xFF }, 0, 1); } catch { } // Best-effort: failure is acceptable
+                    try { await socket.SendAsync(new byte[] { 0xFF }, SocketFlags.None); } catch { } // Best-effort: failure is acceptable
                     return;
                 }
 
@@ -190,7 +190,7 @@ namespace FlyShelf.Classes
                 if (session == null)
                 {
                     Logger.LogAction("TCP_ENGINE", $"No pending session for transfer {transferId} — rejecting");
-                    try { await new NetworkStream(socket, false).WriteAsync(new byte[] { 0xFF }, 0, 1); } catch { } // Best-effort: failure is acceptable
+                    try { await socket.SendAsync(new byte[] { 0xFF }, SocketFlags.None); } catch { } // Best-effort: failure is acceptable
                     return;
                 }
 
@@ -198,11 +198,14 @@ namespace FlyShelf.Classes
                 if (session.IsChunked)
                 {
                     // Read chunk header: [chunkIndex:4][chunkStart:8][chunkEnd:8]
+                    // Read chunk header with timeout
                     byte[] chunkHeader = new byte[CHUNK_HEADER_SIZE];
                     int chunkRead = 0;
+                    using var chunkCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                    chunkCts.CancelAfter(CONNECT_TIMEOUT_MS);
                     while (chunkRead < CHUNK_HEADER_SIZE)
                     {
-                        int n = await socket.ReceiveAsync(chunkHeader.AsMemory(chunkRead, CHUNK_HEADER_SIZE - chunkRead), SocketFlags.None, ct);
+                        int n = await socket.ReceiveAsync(chunkHeader.AsMemory(chunkRead, CHUNK_HEADER_SIZE - chunkRead), SocketFlags.None, chunkCts.Token);
                         if (n == 0) return;
                         chunkRead += n;
                     }
@@ -213,9 +216,16 @@ namespace FlyShelf.Classes
                     Logger.LogAction("TCP_ENGINE", $"📥⚡ Chunk {chunkIndex} connection for transfer {transferId}");
                     await ReceiveChunkAsync(socket, session, chunkIndex, chunkStart, chunkEnd, ct);
 
-                    // Check if ALL chunks are complete — if so, verify hash and finalize
+                    // Check if ALL chunks are complete — use Interlocked to ensure only ONE thread does hash verification
                     if (session.AllChunksCompleted)
                     {
+                        // Race guard: only the first thread to reach here performs verification
+                        if (Interlocked.CompareExchange(ref session._hashVerificationStarted, 1, 0) != 0)
+                        {
+                            Logger.LogAction("TCP_ENGINE", $"Chunk {chunkIndex} — hash verification already in progress by another thread");
+                            return; // Another chunk thread is handling finalization
+                        }
+
                         Logger.LogAction("TCP_ENGINE", $"✅ All {session.NumChunks} chunks received for {session.FileName} — verifying hash");
 
                         // Hash verification

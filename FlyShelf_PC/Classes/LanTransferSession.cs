@@ -164,12 +164,16 @@ namespace FlyShelf.Classes
         /// Count of chunks that have completed. Used for thread-safe completion check.
         /// </summary>
         private int _completedChunkCount;
+        public int _hashVerificationStarted; // Used by Interlocked.CompareExchange in engine
         public int CompletedChunkCount => _completedChunkCount;
         public bool AllChunksCompleted => _completedChunkCount >= NumChunks;
         public void MarkChunkCompleted(int chunkIndex)
         {
-            ChunkCompleted[chunkIndex] = true;
-            Interlocked.Increment(ref _completedChunkCount);
+            // Guard: only increment if this chunk wasn't already completed
+            if (ChunkCompleted.TryAdd(chunkIndex, true))
+            {
+                Interlocked.Increment(ref _completedChunkCount);
+            }
         }
 
         public string StateDisplayText => _state switch
@@ -217,11 +221,25 @@ namespace FlyShelf.Classes
         /// <summary>
         /// Atomically adds bytes to the total transferred count.
         /// Used by parallel chunk receivers (each chunk adds its progress independently).
+        /// Fires PropertyChanged for progress UI updates (throttled to avoid flood).
         /// </summary>
         public void AddBytesTransferred(long bytes)
         {
-            Interlocked.Add(ref _bytesTransferred, bytes);
+            long newTotal = Interlocked.Add(ref _bytesTransferred, bytes);
+            // Throttle PropertyChanged: only fire when progress changes by >= 1%
+            long threshold = Math.Max(FileSize / 100, 1);
+            long lastNotified = Interlocked.Read(ref _lastNotifiedBytes);
+            if (newTotal - lastNotified >= threshold)
+            {
+                if (Interlocked.CompareExchange(ref _lastNotifiedBytes, newTotal, lastNotified) == lastNotified)
+                {
+                    OnPropertyChanged(nameof(BytesTransferred));
+                    OnPropertyChanged(nameof(ProgressPercent));
+                    OnPropertyChanged(nameof(ProgressText));
+                }
+            }
         }
+        private long _lastNotifiedBytes;
 
         public double ProgressPercent => FileSize > 0 ? Math.Min(100.0, (double)BytesTransferred / FileSize * 100.0) : 0;
 
