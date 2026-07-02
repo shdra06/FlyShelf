@@ -189,8 +189,9 @@ namespace FlyShelf.Windows
                     // (they may have been evicted by OptimizeMemoryUsage while the window was hidden)
                     if (HistoryGrid != null && HistoryGrid.Visibility == Visibility.Visible)
                     {
+                        _hubThumbnailRetryCount = 0;
                         Dispatcher.InvokeAsync(() => RenderHubVisibleThumbnails(),
-                            System.Windows.Threading.DispatcherPriority.Background);
+                            System.Windows.Threading.DispatcherPriority.Loaded);
                     }
                 }
                 else
@@ -587,8 +588,9 @@ namespace FlyShelf.Windows
                 if (tag == "History")
                 {
                     // Render visible thumbnails when switching to the Clipboard/History tab
+                    _hubThumbnailRetryCount = 0;
                     Dispatcher.InvokeAsync(() => RenderHubVisibleThumbnails(),
-                        System.Windows.Threading.DispatcherPriority.Background);
+                        System.Windows.Threading.DispatcherPriority.Loaded);
                 }
             }
         }
@@ -1128,6 +1130,8 @@ namespace FlyShelf.Windows
         /// for any Image/QRCode items whose Icon has been evicted (null).
         /// Does NOT evict — eviction is handled by OptimizeMemoryUsage on window close.
         /// </summary>
+        private int _hubThumbnailRetryCount = 0;
+
         private void RenderHubVisibleThumbnails()
         {
             Dispatcher.InvokeAsync(() =>
@@ -1141,7 +1145,17 @@ namespace FlyShelf.Windows
                     HubListView.UpdateLayout();
 
                     if (HubListView.ItemContainerGenerator.Status != System.Windows.Controls.Primitives.GeneratorStatus.ContainersGenerated)
+                    {
+                        // Containers not ready yet — retry after 100ms (up to 5 times)
+                        if (_hubThumbnailRetryCount < 5)
+                        {
+                            _hubThumbnailRetryCount++;
+                            Dispatcher.InvokeAsync(() => RenderHubVisibleThumbnails(),
+                                System.Windows.Threading.DispatcherPriority.Loaded);
+                        }
                         return;
+                    }
+                    _hubThumbnailRetryCount = 0;
 
                     var sv = GetHubScrollViewer();
                     if (sv == null) return;
