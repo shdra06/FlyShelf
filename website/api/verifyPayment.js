@@ -39,7 +39,9 @@ function generateProKey() {
 const ALLOWED_ORIGINS = [
   'https://fly-shelf.vercel.app',
   'https://shdra06.github.io',
-  'https://flyshelf.app'
+  'https://flyshelf.app',
+  'https://www.flyshelf.in',
+  'https://flyshelf.in'
 ];
 
 function setCorsHeaders(req, res) {
@@ -170,7 +172,6 @@ module.exports = async (req, res) => {
     // Check if this payment_id has already been processed.
     // If so, return the existing license key — don't generate a new one.
     // ═══════════════════════════════════════════════════════════════
-    const dbUrl = process.env.FIREBASE_RTDB_URL;
     if (!dbUrl) {
       console.error('[verifyPayment] FIREBASE_RTDB_URL not configured');
       return res.status(500).json({ error: 'Database not configured.' });

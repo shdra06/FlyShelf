@@ -39,7 +39,9 @@ function encryptKeyForJwt(licenseKey) {
 const ALLOWED_ORIGINS = [
   'https://fly-shelf.vercel.app',
   'https://shdra06.github.io',
-  'https://flyshelf.app'
+  'https://flyshelf.app',
+  'https://www.flyshelf.in',
+  'https://flyshelf.in'
 ];
 
 function setCorsHeaders(req, res) {
