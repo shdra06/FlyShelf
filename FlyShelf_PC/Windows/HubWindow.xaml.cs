@@ -381,8 +381,17 @@ namespace FlyShelf.Windows
                 e.Cancel = true;
                 this.Hide();
 
-                // Stop fast-polling when window is hidden
+                // ═══ TIMER CLEANUP: Stop all DispatcherTimers when window is hidden ═══
+                // Prevents timers from firing in the background, wasting CPU and
+                // potentially accessing disposed/stale UI elements.
                 _pairingHandshakeTimer?.Stop();
+                _deviceRefreshTimer?.Stop();
+                _hubScrollHighQualityTimer?.Stop();
+                _collectionChangedDebounce?.Stop();
+                // Timers declared in partial classes (HubWindow.Networking.cs, HubWindow.Settings.cs)
+                _networkRefreshTimer?.Stop();
+                _historyRefreshTimer?.Stop();
+                _hubSearchDebounceTimer?.Stop();
 
                 // Cancel any in-progress update download
                 _updateManager.CancelDownload();
