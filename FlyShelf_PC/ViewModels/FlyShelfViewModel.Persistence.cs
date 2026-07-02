@@ -357,7 +357,7 @@ namespace FlyShelf.ViewModels
                                     try
                                     {
                                         var icon = GetIcon(capturedD.FilePath);
-                                        if (icon != null) Application.Current.Dispatcher.InvokeAsync(() => capturedD.Icon = icon);
+                                        if (icon != null) Application.Current?.Dispatcher?.InvokeAsync(() => capturedD.Icon = icon);
                                     }
                                     catch { } // Best-effort: failure is acceptable
                                 });
@@ -373,7 +373,7 @@ namespace FlyShelf.ViewModels
                                         var bmp = LoadImageThumbnail(imagePath, decodeWidth);
                                         if (bmp != null)
                                         {
-                                            Application.Current.Dispatcher.InvokeAsync(() =>
+                                            Application.Current?.Dispatcher?.InvokeAsync(() =>
                                             {
                                                 capturedD.Icon = bmp;
                                                 capturedD.IsLoadedHighQuality = !IsScrolling;
@@ -389,7 +389,9 @@ namespace FlyShelf.ViewModels
 
                     if (pinnedToAdd.Count > 0)
                     {
-                        await Application.Current.Dispatcher.InvokeAsync(() => DroppedItems.AddRange(pinnedToAdd));
+                        var pinnedDispatcher = Application.Current?.Dispatcher;
+                        if (pinnedDispatcher != null)
+                            await pinnedDispatcher.InvokeAsync(() => DroppedItems.AddRange(pinnedToAdd));
                     }
                 }
             }
@@ -504,7 +506,7 @@ namespace FlyShelf.ViewModels
                 long fSize = new FileInfo(filePath).Length;
                 if (fSize > 50L * 1024 * 1024 && !Classes.LicenseManager.IsPro)
                 {
-                    Application.Current.Dispatcher.InvokeAsync(() =>
+                    Application.Current?.Dispatcher?.InvokeAsync(() =>
                         FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ {Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) exceeds 50 MB Free tier sync limit."));
                     return;
                 }
@@ -530,7 +532,7 @@ namespace FlyShelf.ViewModels
                             if (delivered > 0)
                             {
                                 lanSuccess = true;
-                                Application.Current.Dispatcher.InvokeAsync(() =>
+                                Application.Current?.Dispatcher?.InvokeAsync(() =>
                                     FlyShelf.Windows.ToastWindow.ShowToast($"{label} ({FormatFileSize(fSize)}) synced directly via LAN! \ud83d\udce1"));
                             }
                             else
@@ -549,7 +551,7 @@ namespace FlyShelf.ViewModels
                     {
                         FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"'{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) placed on local server for companion app pulling");
                         lanSuccess = true;
-                        Application.Current.Dispatcher.InvokeAsync(() =>
+                        Application.Current?.Dispatcher?.InvokeAsync(() =>
                             FlyShelf.Windows.ToastWindow.ShowToast($"Synced via LAN! \u26a1 (Available for companion app pulling)"));
                     }
                 }
@@ -566,14 +568,14 @@ namespace FlyShelf.ViewModels
                     FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"Sending '{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) via Cloudflare P2P");
                     var syncItem = item.CloneForSync(downloadUrl);
                     await FlyShelf.Classes.CloudDiscoveryManager.PushToCloudHub(syncItem);
-                    Application.Current.Dispatcher.InvokeAsync(() =>
+                    Application.Current?.Dispatcher?.InvokeAsync(() =>
                         FlyShelf.Windows.ToastWindow.ShowToast($"{label} ({FormatFileSize(fSize)}) synced via P2P \ud83c\udf10"));
                     return;
                 }
 
                 // No LAN success and no Cloudflare tunnel available
                 FlyShelf.Classes.Logger.LogAction($"{label} SYNC", $"'{Path.GetFileName(filePath)}' ({FormatFileSize(fSize)}) — no active LAN peers or Cloudflare tunnel available");
-                Application.Current.Dispatcher.InvokeAsync(() =>
+                Application.Current?.Dispatcher?.InvokeAsync(() =>
                     FlyShelf.Windows.ToastWindow.ShowToast($"\u26a0\ufe0f {Path.GetFileName(filePath)} ({FormatFileSize(fSize)}) — no active LAN peers or Cloudflare tunnel"));
             }
             catch (Exception ex)
@@ -835,7 +837,7 @@ namespace FlyShelf.ViewModels
 
                 if (Application.Current != null)
                 {
-                    Application.Current.Dispatcher.InvokeAsync(() =>
+                    Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
                         var toRemove = DroppedItems.Where(i => !i.IsPinned && i.DateCopied < cutoff).ToList();
                         foreach (var item in toRemove)

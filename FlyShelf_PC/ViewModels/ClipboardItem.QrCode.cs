@@ -38,7 +38,7 @@ namespace FlyShelf.ViewModels
 
                         if (result != null && !string.IsNullOrWhiteSpace(result.Text)) {
 
-                            System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => {
 
                                 // Update item type and content and automatically copy to clipboard!
 
@@ -147,7 +147,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
 
 
 
@@ -170,13 +170,13 @@ namespace FlyShelf.ViewModels
         public void ConvertPdfToWordTask()
         {
 #if MSIX_STORE
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                 FlyShelf.Windows.ToastWindow.ShowToast("⚠️ PDF to Word conversion is not available in the Store version."));
             return;
 #else
             if (!FlyShelf.Classes.LicenseManager.CanConvertDoc())
             {
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     FlyShelf.Classes.UpgradePrompt.ShowDocConvertLimit());
                 return;
             }
@@ -201,7 +201,7 @@ namespace FlyShelf.ViewModels
 
 
 
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
 
 
 
@@ -310,7 +310,7 @@ $word.Quit();
 
 
 
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
 
 
 
@@ -395,7 +395,7 @@ $word.Quit();
 
 
 
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
 
 
 
@@ -442,7 +442,7 @@ $word.Quit();
                     var result = reader.Decode(bmp);
                     if (result != null && !string.IsNullOrWhiteSpace(result.Text))
                     {
-                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() => {
+                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() => {
                             this.ItemType = ClipboardItemType.QRCode;
                             this.RawContent = result.Text;
                             this.EvaluateSmartActions();

@@ -1391,10 +1391,19 @@ namespace FlyShelf
                 IncognitoBadge.Visibility = Visibility.Visible;
                 string remaining = Classes.IncognitoManager.RemainingTimeText;
                 IncognitoBadgeText.Text = string.IsNullOrEmpty(remaining) ? "Incognito" : remaining;
+
+                // Show the popup toggle bar below the header
+                if (IncognitoToggleBar != null) IncognitoToggleBar.Visibility = Visibility.Visible;
+                if (IncognitoToggleBarText != null)
+                    IncognitoToggleBarText.Text = string.IsNullOrEmpty(remaining)
+                        ? "Incognito Mode Active" : $"Incognito — {remaining}";
+                if (IncognitoToggle != null) IncognitoToggle.IsChecked = true;
             }
             else
             {
                 IncognitoBadge.Visibility = Visibility.Collapsed;
+                if (IncognitoToggleBar != null) IncognitoToggleBar.Visibility = Visibility.Collapsed;
+                if (IncognitoToggle != null) IncognitoToggle.IsChecked = false;
             }
         }
 
@@ -1403,6 +1412,15 @@ namespace FlyShelf
             e.Handled = true;
             Classes.IncognitoManager.DisableIncognito();
             Windows.ToastWindow.ShowToast("👁 Clipboard monitoring resumed");
+        }
+
+        private void IncognitoToggle_Click(object sender, RoutedEventArgs e)
+        {
+            if (IncognitoToggle != null && IncognitoToggle.IsChecked == false)
+            {
+                Classes.IncognitoManager.DisableIncognito();
+                Windows.ToastWindow.ShowToast("👁 Clipboard monitoring resumed");
+            }
         }
 
     }

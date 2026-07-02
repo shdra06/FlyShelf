@@ -123,9 +123,11 @@ namespace FlyShelf.ViewModels
                             if (ocrResult == null || ocrResult.Lines.Count < 2)
                             {
                                 Classes.Logger.LogAction("TABLE_OCR", "Insufficient OCR lines for table detection");
-                                await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                                    FlyShelf.Windows.ToastWindow.ShowToast("Could not detect text in the image.")
-                                );
+                                var dispatcherA = System.Windows.Application.Current?.Dispatcher;
+                                if (dispatcherA != null)
+                                    await dispatcherA.InvokeAsync(() =>
+                                        FlyShelf.Windows.ToastWindow.ShowToast("Could not detect text in the image.")
+                                    );
                                 return;
                             }
 
@@ -162,9 +164,11 @@ namespace FlyShelf.ViewModels
                                 if (allWords.Count < 3)
                                 {
                                     Classes.Logger.LogAction("TABLE_OCR", "Too few words for table structure");
-                                    await System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
-                                        FlyShelf.Windows.ToastWindow.ShowToast("Too few words detected for table extraction.")
-                                    );
+                                    var dispatcherB = System.Windows.Application.Current?.Dispatcher;
+                                    if (dispatcherB != null)
+                                        await dispatcherB.InvokeAsync(() =>
+                                            FlyShelf.Windows.ToastWindow.ShowToast("Too few words detected for table extraction.")
+                                        );
                                     return;
                                 }
 
@@ -454,7 +458,7 @@ namespace FlyShelf.ViewModels
                 {
                     string imgPath = FilePath;
                     string method = extractionMethod;
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
                         try
                         {
@@ -481,7 +485,7 @@ namespace FlyShelf.ViewModels
             catch (Exception ex)
             {
                 Classes.Logger.LogAction("TABLE_EXTRACT_FAIL", ex.Message);
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     FlyShelf.Windows.ToastWindow.ShowToast($"Table Extraction Failed: {ex.Message}")
                 );
             }
@@ -519,7 +523,7 @@ namespace FlyShelf.ViewModels
                         if (result.EndsWith("```")) result = result.Substring(0, result.Length - 3).Trim();
                     }
 
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
                         try
                         {

@@ -135,11 +135,15 @@ namespace FlyShelf.ViewModels
 
                 // Combine the already loaded pinned items and newly loaded history items
                 var combinedItems = new List<ClipboardItem>();
-                await Application.Current.Dispatcher.InvokeAsync(() =>
+                var vmDispatcher1 = Application.Current?.Dispatcher;
+                if (vmDispatcher1 != null)
                 {
-                    combinedItems.AddRange(DroppedItems);
-                    DroppedItems.Clear();
-                });
+                    await vmDispatcher1.InvokeAsync(() =>
+                    {
+                        combinedItems.AddRange(DroppedItems);
+                        DroppedItems.Clear();
+                    });
+                }
 
                 combinedItems.AddRange(allItems);
 
@@ -150,7 +154,9 @@ namespace FlyShelf.ViewModels
                 {
                     // PERF: Load the first 40 items synchronously to make startup summon instantaneous
                     var initialBatch = sortedItems.Take(40).ToList();
-                    await Application.Current.Dispatcher.InvokeAsync(() => DroppedItems.AddRange(initialBatch));
+                    var vmDispatcher2 = Application.Current?.Dispatcher;
+                    if (vmDispatcher2 != null)
+                        await vmDispatcher2.InvokeAsync(() => DroppedItems.AddRange(initialBatch));
 
                     // Stream the remaining items in background chunks to keep UI 100% responsive
                     var remainingItems = sortedItems.Skip(40).ToList();
@@ -163,7 +169,9 @@ namespace FlyShelf.ViewModels
                             {
                                 var chunk = remainingItems.Skip(i).Take(chunkSize).ToList();
                                 await System.Threading.Tasks.Task.Delay(50); // Yield UI thread budget
-                                await Application.Current.Dispatcher.InvokeAsync(() => DroppedItems.AddRange(chunk));
+                                var vmDispatcher3 = Application.Current?.Dispatcher;
+                                if (vmDispatcher3 != null)
+                                    await vmDispatcher3.InvokeAsync(() => DroppedItems.AddRange(chunk));
                             }
                         });
                     }
@@ -225,18 +233,26 @@ namespace FlyShelf.ViewModels
                                     var icon = LoadImageThumbnail(item.FilePath, 300);
                                     if (icon != null)
                                     {
-                                        await Application.Current.Dispatcher.InvokeAsync(() =>
+                                        var vmDispatcher4 = Application.Current?.Dispatcher;
+                                        if (vmDispatcher4 != null)
                                         {
-                                            item.Icon = icon;
-                                            item.IsLoadedHighQuality = true;
-                                        });
+                                            await vmDispatcher4.InvokeAsync(() =>
+                                            {
+                                                item.Icon = icon;
+                                                item.IsLoadedHighQuality = true;
+                                            });
+                                        }
                                     }
                                 }
                                 else if (!string.IsNullOrEmpty(item.FilePath))
                                 {
                                     var icon = GetIcon(item.FilePath);
                                     if (icon != null)
-                                        await Application.Current.Dispatcher.InvokeAsync(() => item.Icon = icon);
+                                    {
+                                        var vmDispatcher5 = Application.Current?.Dispatcher;
+                                        if (vmDispatcher5 != null)
+                                            await vmDispatcher5.InvokeAsync(() => item.Icon = icon);
+                                    }
                                 }
                             }
                             catch { } // Best-effort: failure is acceptable
@@ -590,7 +606,7 @@ namespace FlyShelf.ViewModels
             
             // Background Boot Optimization: Shift heavy DNS polling, port binding, and I/O sniffing completely off 
             // the main UI Constructor thread so FlyShelf can bootstrap in under 50ms natively!
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
                 // Auto-reconcile: server should be up if either transport is on
                 bool lanOn = FlyShelf.Classes.SettingsManager.Current.EnableLocalLAN;
