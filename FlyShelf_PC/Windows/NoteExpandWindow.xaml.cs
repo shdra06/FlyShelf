@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Text;
 using System.Windows;
 using System.Windows.Documents;
@@ -327,7 +328,7 @@ namespace FlyShelf.Windows
         // IMAGE PASTE HANDLER
         // ═══════════════════════════════════════════════════════════
 
-        private void NoteRichTextBox_Paste(object sender, DataObjectPastingEventArgs e)
+        private async void NoteRichTextBox_Paste(object sender, DataObjectPastingEventArgs e)
         {
             var dataObject = e.DataObject;
             if (dataObject == null) return;
@@ -361,7 +362,7 @@ namespace FlyShelf.Windows
                         {
                             if (!CanAddImage()) return;
 
-                            string path = NoteManager.SaveImage(img);
+                            string path = await NoteManager.SaveImage(img);
                             var freeformImg = new FreeformImage
                             {
                                 ImagePath = path,
@@ -393,7 +394,7 @@ namespace FlyShelf.Windows
                                 string destDir = NoteManager.GetImagesDirectory();
                                 string destFile = Path.Combine(destDir,
                                     $"note_img_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..6]}_{Path.GetFileName(f)}");
-                                File.Copy(f, destFile, overwrite: true);
+                                await Task.Run(() => File.Copy(f, destFile, overwrite: true));
 
                                 var freeformImg = new FreeformImage
                                 {
