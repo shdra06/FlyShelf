@@ -47,9 +47,9 @@
       const urlParams = new URLSearchParams(window.location.search);
       const deviceId = urlParams.get('deviceId') || 'web_purchase';
 
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ═══════════════════════════════════════════
       // LIGHT/DARK MODE SYSTEM
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ═══════════════════════════════════════════
       const modeToggleBtn = document.getElementById('theme-toggle-btn');
       const modeToggleIcon = document.getElementById('theme-toggle-icon');
       
@@ -85,9 +85,9 @@
         document.querySelectorAll('.scroll-reveal').forEach(el => el.classList.add('visible'));
       }, 100);
 
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ═══════════════════════════════════════════
       // REGION TAB SWITCHING
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ═══════════════════════════════════════════
 
       tabInr.addEventListener('click', () => {
         selectedRegion = 'INR';
@@ -99,7 +99,7 @@
         paypalDetails.style.display = 'none';
         
         btnSubmitPayment.className = 'btn-checkout-pay btn-razorpay';
-        btnSubmitPayment.innerHTML = '<ion-icon name="card-outline"></ion-icon> Pay â‚¹299 via Razorpay';
+        btnSubmitPayment.innerHTML = '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
       });
 
       tabUsd.addEventListener('click', () => {
@@ -115,9 +115,9 @@
         btnSubmitPayment.innerHTML = '<ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card';
       });
 
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ═══════════════════════════════════════════
       // PAYMENT BUTTON CLICK
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ═══════════════════════════════════════════
 
       btnSubmitPayment.addEventListener('click', () => {
         const emailVal = customerEmail.value.trim();
@@ -126,13 +126,13 @@
           return;
         }
 
-        // Both INR and USD use Razorpay â€” just different currencies
+        // Both INR and USD use Razorpay — just different currencies
         openRazorpayCheckout(emailVal, selectedRegion);
       });
 
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ═══════════════════════════════════════════
       // RAZORPAY STANDARD CHECKOUT
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ═══════════════════════════════════════════
 
       async function openRazorpayCheckout(email, region) {
         // Disable button to prevent double-click
@@ -159,7 +159,7 @@
             amount: orderData.amount,
             currency: orderData.currency,
             name: 'FlyShelf Pro',
-            description: 'Lifetime Pro License â€” One-time Payment',
+            description: 'Lifetime Pro License — One-time Payment',
             order_id: orderData.orderId,
             prefill: {
               email: email
@@ -168,7 +168,7 @@
               color: '#0b72e7'
             },
             handler: async function(response) {
-              // â”€â”€ PAYMENT SUCCESS â”€â”€
+              // ── PAYMENT SUCCESS ──
               console.log('Payment successful:', response.razorpay_payment_id);
               
               // Show processing modal
@@ -218,27 +218,27 @@
                   licenseKeyOutput.textContent = generatedKey;
                   btnActivateDeeplink.href = `flyshelf://activate?key=${generatedKey}`;
                   confirmEmail.textContent = email;
-                  confirmAmount.textContent = region === 'USD' ? '$9.99' : 'â‚¹299';
+                  confirmAmount.textContent = region === 'USD' ? '$9.99' : '₹299';
                   spawnConfetti();
                 } else {
-                  alert('Verification could not be completed. Your payment is safe â€” please contact support@flyshelf.app');
+                  alert('Verification could not be completed. Your payment is safe — please contact support@flyshelf.app');
                   modalStageLoading.style.display = 'none';
                 }
               } catch (verifyErr) {
                 console.error(verifyErr);
-                alert('Something went wrong verifying your payment. Your money is safe â€” please contact support@flyshelf.app if your key doesn\'t arrive by email.');
+                alert('Something went wrong verifying your payment. Your money is safe — please contact support@flyshelf.app if your key doesn\'t arrive by email.');
                 modalStageLoading.style.display = 'none';
               }
 
               // Reset button
               btnSubmitPayment.disabled = false;
-              btnSubmitPayment.innerHTML = selectedRegion === 'USD' ? '<ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card' : '<ion-icon name="card-outline"></ion-icon> Pay â‚¹299 via Razorpay';
+              btnSubmitPayment.innerHTML = selectedRegion === 'USD' ? '<ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card' : '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
             },
             modal: {
               ondismiss: function() {
                 // User closed the Razorpay popup
                 btnSubmitPayment.disabled = false;
-                btnSubmitPayment.innerHTML = selectedRegion === 'USD' ? '<ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card' : '<ion-icon name="card-outline"></ion-icon> Pay â‚¹299 via Razorpay';
+                btnSubmitPayment.innerHTML = selectedRegion === 'USD' ? '<ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card' : '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
               }
             }
           };
@@ -249,7 +249,7 @@
             console.error('Payment failed:', response.error);
             alert(`Payment failed: ${response.error.description}\n\nPlease try again.`);
             btnSubmitPayment.disabled = false;
-            btnSubmitPayment.innerHTML = selectedRegion === 'USD' ? '<ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card' : '<ion-icon name="card-outline"></ion-icon> Pay â‚¹299 via Razorpay';
+            btnSubmitPayment.innerHTML = selectedRegion === 'USD' ? '<ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card' : '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
           });
 
           rzp.open();
@@ -258,13 +258,13 @@
           console.error(err);
           alert(err.message || 'Could not initialize payment. Please try again.');
           btnSubmitPayment.disabled = false;
-          btnSubmitPayment.innerHTML = selectedRegion === 'USD' ? '<ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card' : '<ion-icon name="card-outline"></ion-icon> Pay â‚¹299 via Razorpay';
+          btnSubmitPayment.innerHTML = selectedRegion === 'USD' ? '<ion-icon name="card-outline"></ion-icon> Pay $9.99 via Card' : '<ion-icon name="card-outline"></ion-icon> Pay ₹299 via Razorpay';
         }
       }
 
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ═══════════════════════════════════════════
       // COPY LICENSE KEY
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ═══════════════════════════════════════════
 
       // Click on the key box itself to copy
       licenseKeyOutput.addEventListener('click', () => {
@@ -291,9 +291,9 @@
         }, 1800);
       }
 
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ═══════════════════════════════════════════
       // CONFETTI CELEBRATION EFFECT
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ═══════════════════════════════════════════
       function spawnConfetti() {
         const container = document.getElementById('confetti-container');
         if (!container) return;
@@ -316,13 +316,13 @@
         setTimeout(() => { container.innerHTML = ''; }, 4000);
       }
 
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-      // DEEP LINK ACTIVATE â€” copy activation trigger to clipboard
+      // ═══════════════════════════════════════════
+      // DEEP LINK ACTIVATE — copy activation trigger to clipboard
       // The FlyShelf PC app monitors clipboard for the FLYSHELF_ACTIVATE:: prefix
       // and auto-triggers activation when detected.
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ═══════════════════════════════════════════
       function tryActivate(key, feedbackEl) {
-        // Copy key with activation trigger prefix â€” FlyShelf PC app auto-detects this
+        // Copy key with activation trigger prefix — FlyShelf PC app auto-detects this
         const activationString = `FLYSHELF_ACTIVATE::${key}`;
         navigator.clipboard.writeText(activationString).then(() => {
           // Visual feedback on button
@@ -365,16 +365,16 @@
         }
       });
 
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-      // KEY GENERATION â€” Server-side only (security hardened v2.0.0)
+      // ═══════════════════════════════════════════
+      // KEY GENERATION — Server-side only (security hardened v2.0.0)
       // All license key generation now happens exclusively on the
       // Vercel backend (api/verifyPayment.js) after payment verification.
       // HMAC secret is NEVER exposed to the client.
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ═══════════════════════════════════════════
 
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-      // RECENTLY ORDERED â€” sessionStorage cache (15 min)
-      // â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+      // ═══════════════════════════════════════════
+      // RECENTLY ORDERED — sessionStorage cache (15 min)
+      // ═══════════════════════════════════════════
       const recentOrderSection = document.getElementById('recent-order-section');
       const recentOrderKey = document.getElementById('recent-order-key');
       const recentOrderTimer = document.getElementById('recent-order-timer');
@@ -431,7 +431,7 @@
             const pct = Math.max(0, (remaining / EXPIRY_MS) * 100);
             if (recentProgressBar) recentProgressBar.style.width = pct + '%';
             
-            // Color shift: green â†’ yellow â†’ red as time runs low
+            // Color shift: green → yellow → red as time runs low
             if (pct < 20) {
               if (recentProgressBar) recentProgressBar.style.background = 'linear-gradient(90deg, #ff6b6b, #ff4757)';
               recentOrderTimer.style.color = '#ff6b6b';
