@@ -206,7 +206,7 @@ namespace FlyShelf
             else if (msg == WM_CLIPBOARDUPDATE)
             {
                 // GUARD: Skip clipboard events triggered by our own writes
-                if (_isWritingClipboard || _clipboardPanelSuppressed || Classes.IncognitoManager.IsIncognito)
+                if (_isWritingClipboard || _isDragging || _clipboardPanelSuppressed || Classes.IncognitoManager.IsIncognito)
                 {
                     handled = true;
                     return IntPtr.Zero;

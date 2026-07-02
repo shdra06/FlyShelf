@@ -36,6 +36,7 @@ namespace FlyShelf.Windows
             {
                 if (_instance.WindowState == WindowState.Minimized)
                     _instance.WindowState = WindowState.Normal;
+                _instance._vm.Resume();
                 _instance.Activate();
                 _instance.Show();
                 return;
@@ -52,6 +53,7 @@ namespace FlyShelf.Windows
         {
             // Hide instead of closing so we can re-show later
             e.Cancel = true;
+            _vm.Cleanup();
             Hide();
         }
 

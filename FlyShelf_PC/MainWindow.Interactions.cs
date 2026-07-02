@@ -26,6 +26,14 @@ namespace FlyShelf
         /// </summary>
         private Windows.DragPreviewWindow? _dragPreviewWindow;
 
+        /// <summary>
+        /// True while DragDrop.DoDragDrop() is executing its nested message loop.
+        /// Used to suppress WM_CLIPBOARDUPDATE handling during drag operations,
+        /// preventing race conditions where the clipboard monitor fires inside
+        /// the OLE drag-drop message pump.
+        /// </summary>
+        internal static bool _isDragging = false;
+
         private async void ShelfListView_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
         {
             if (_justDeletedAnItem)
@@ -494,6 +502,7 @@ namespace FlyShelf
                             dragDropEffect = dataObj.GetData("Preferred DropEffect") as System.IO.MemoryStream;
 
                             // Record cursor position BEFORE drag starts — we'll use it for fallback paste
+                            _isDragging = true;
                             DragDropEffects result = DragDrop.DoDragDrop(listView, dataObj, DragDropEffects.Copy | DragDropEffects.Move);
                             
                             // ═══ FALLBACK PASTE ═══
@@ -549,6 +558,7 @@ namespace FlyShelf
                         finally
                         {
                             _isInternalDragSource = false;
+                            _isDragging = false;
                             dragDropEffect?.Dispose();
 
                             // ═══ Cleanup Drag Preview ═══

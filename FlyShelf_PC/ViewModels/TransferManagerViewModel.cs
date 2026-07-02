@@ -371,6 +371,25 @@ namespace FlyShelf.ViewModels
             CompletedTransfers.CollectionChanged -= OnSourceCollectionChanged;
         }
 
+        /// <summary>
+        /// Re-subscribes collection events and restarts the refresh timer.
+        /// Called when the singleton window is re-shown after being hidden (which calls Cleanup).
+        /// </summary>
+        public void Resume()
+        {
+            // Re-subscribe (idempotent — unsubscribe first to avoid double-subscribe)
+            ActiveTransfers.CollectionChanged -= OnSourceCollectionChanged;
+            CompletedTransfers.CollectionChanged -= OnSourceCollectionChanged;
+            ActiveTransfers.CollectionChanged += OnSourceCollectionChanged;
+            CompletedTransfers.CollectionChanged += OnSourceCollectionChanged;
+
+            RebuildAllTransfers();
+            RebuildFilteredTransfers();
+
+            if (!_refreshTimer.IsEnabled)
+                _refreshTimer.Start();
+        }
+
         // ═══ INotifyPropertyChanged ═══
         protected void OnPropertyChanged([CallerMemberName] string? name = null)
         {
