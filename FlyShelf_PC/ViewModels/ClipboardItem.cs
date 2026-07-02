@@ -250,16 +250,51 @@ namespace FlyShelf.ViewModels
         }
 
         private string _rawContent = string.Empty;
+        private string _rawContentBackingFile = null; // For very large texts spilled to disk
+
+        /// <summary>
+        /// Full raw text content. No character limit — unlimited text is supported.
+        /// For extremely large texts (>10M chars), content is spilled to a temporary
+        /// backing file to prevent out-of-memory issues, but remains fully accessible.
+        /// </summary>
         public string RawContent
         {
-            get => _rawContent;
+            get
+            {
+                // If content was spilled to disk, reload it on demand
+                if (_rawContent == null && !string.IsNullOrEmpty(_rawContentBackingFile)
+                    && System.IO.File.Exists(_rawContentBackingFile))
+                {
+                    try { _rawContent = System.IO.File.ReadAllText(_rawContentBackingFile); }
+                    catch { _rawContent = string.Empty; }
+                }
+                return _rawContent ?? string.Empty;
+            }
             set
             {
-                // Cap at 2M chars to prevent unbounded memory growth while supporting up to 50K lines of developer code
-                string capped = value?.Length > 2_000_000 ? value.Substring(0, 2_000_000) : value;
-                if (_rawContent != capped)
+                // No character limit — store the full text
+                string newValue = value ?? string.Empty;
+
+                // For very large texts (>10M), spill to backing file to prevent OOM
+                // but keep a truncated preview in memory for UI responsiveness
+                if (newValue.Length > 10_000_000)
                 {
-                    _rawContent = capped;
+                    try
+                    {
+                        string spillDir = System.IO.Path.Combine(
+                            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                            "FlyShelf", "LargeTextSpill");
+                        System.IO.Directory.CreateDirectory(spillDir);
+                        _rawContentBackingFile = System.IO.Path.Combine(spillDir,
+                            $"spill_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString().Substring(0, 6)}.txt");
+                        System.IO.File.WriteAllText(_rawContentBackingFile, newValue);
+                    }
+                    catch { /* If spill fails, keep in memory anyway */ }
+                }
+
+                if (_rawContent != newValue)
+                {
+                    _rawContent = newValue;
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContent)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsLongText)));
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(CollapsedMaxHeight)));
@@ -334,7 +369,7 @@ namespace FlyShelf.ViewModels
         public bool IsGifPreview => IsImagePreview && !string.IsNullOrEmpty(FilePath) && FilePath.EndsWith(".gif", StringComparison.OrdinalIgnoreCase);
         public bool IsStaticImagePreview => IsImagePreview && !IsGifPreview;
         public string GifFilePath => IsGifPreview ? FilePath : "";
-        public bool IsDocPreview => ItemType == ClipboardItemType.Document && (Extension == ".DOCX" || Extension == ".DOC" || Extension == ".TXT" || Extension == ".MD");
+        public bool IsDocPreview => ItemType == ClipboardItemType.Document && (Extension == ".DOCX" || Extension == ".DOC" || Extension == ".TXT");
         public bool IsPdfPreview => ItemType == ClipboardItemType.Pdf;
         public bool IsUrlPreview => ItemType == ClipboardItemType.Url;
         public bool IsCodePreview => ItemType == ClipboardItemType.Code;
@@ -358,6 +393,7 @@ namespace FlyShelf.ViewModels
         // Context Menu Discriminators
         public bool IsTerminalPreview => Extension == ".BAT" || Extension == ".CMD" || Extension == ".PS1";
         public bool IsCPlusPlusPreview => Extension == ".CPP" || Extension == ".C";
+        public bool IsCsvPreview => Extension == ".CSV";
         public string FormatIdentifier 
         { 
             get 
