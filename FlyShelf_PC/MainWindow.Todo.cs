@@ -451,6 +451,7 @@ namespace FlyShelf
             if (sender is FrameworkElement fe && fe.DataContext is TodoItem item)
             {
                 item.IsDone = !item.IsDone;
+                item.LastEdited = DateTime.Now;
                 TodoManager.MarkDirty();
 
                 if (_selectedTodoDay != null)
@@ -485,6 +486,8 @@ namespace FlyShelf
 
         private void TodoItemText_TextChanged(object sender, TextChangedEventArgs e)
         {
+            if (sender is TextBox tb && tb.DataContext is TodoItem item)
+                item.LastEdited = DateTime.Now;
             TodoManager.MarkDirty();
         }
 
@@ -513,6 +516,7 @@ namespace FlyShelf
                 {
                     tb.Text = trimmed;
                     item.Text = trimmed;
+                    item.LastEdited = DateTime.Now;
                     TodoManager.MarkDirty();
                 }
             }
@@ -527,6 +531,7 @@ namespace FlyShelf
                 {
                     tb.Text = trimmed;
                     subtask.Text = trimmed;
+                    subtask.LastEdited = DateTime.Now;
                     TodoManager.MarkDirty();
                 }
             }
@@ -714,6 +719,7 @@ namespace FlyShelf
                         item.TimerMinutes = null; // Reset
                     }
                 }
+                item.LastEdited = DateTime.Now;
                 Classes.TodoManager.MarkDirty();
             }
         }
@@ -816,6 +822,7 @@ namespace FlyShelf
                     TodoPriority.High => TodoPriority.None,
                     _ => TodoPriority.None
                 };
+                item.LastEdited = DateTime.Now;
                 TodoManager.MarkDirty();
             }
         }
@@ -838,13 +845,13 @@ namespace FlyShelf
                 var menu = new ContextMenu();
 
                 var today = new MenuItem { Header = "📅 Today" };
-                today.Click += (s, ev) => { item.DueDate = DateTime.Today; TodoManager.MarkDirty(); };
+                today.Click += (s, ev) => { item.DueDate = DateTime.Today; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
 
                 var tomorrow = new MenuItem { Header = "📅 Tomorrow" };
-                tomorrow.Click += (s, ev) => { item.DueDate = DateTime.Today.AddDays(1); TodoManager.MarkDirty(); };
+                tomorrow.Click += (s, ev) => { item.DueDate = DateTime.Today.AddDays(1); item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
 
                 var nextWeek = new MenuItem { Header = "📅 Next Week" };
-                nextWeek.Click += (s, ev) => { item.DueDate = DateTime.Today.AddDays(7); TodoManager.MarkDirty(); };
+                nextWeek.Click += (s, ev) => { item.DueDate = DateTime.Today.AddDays(7); item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
 
                 var pickDate = new MenuItem { Header = "📅 Pick Date..." };
                 pickDate.Click += (s, ev) =>
@@ -872,6 +879,7 @@ namespace FlyShelf
                         if (calendar.SelectedDate.HasValue)
                         {
                             item.DueDate = calendar.SelectedDate.Value.Date;
+                            item.LastEdited = DateTime.Now;
                             TodoManager.MarkDirty();
                             popup.IsOpen = false;
                         }
@@ -891,7 +899,7 @@ namespace FlyShelf
                 };
 
                 var clear = new MenuItem { Header = "✕ Clear" };
-                clear.Click += (s, ev) => { item.DueDate = null; TodoManager.MarkDirty(); };
+                clear.Click += (s, ev) => { item.DueDate = null; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
 
                 menu.Items.Add(today);
                 menu.Items.Add(tomorrow);
@@ -917,6 +925,7 @@ namespace FlyShelf
             {
                 var subTask = new TodoItem { Text = "", CreatedAt = DateTime.Now };
                 parentItem.SubTasks.Add(subTask);
+                parentItem.LastEdited = DateTime.Now;
                 TodoManager.MarkDirty();
             }
         }
@@ -927,6 +936,7 @@ namespace FlyShelf
             if (sender is FrameworkElement fe && fe.DataContext is TodoItem subTask)
             {
                 subTask.IsDone = !subTask.IsDone;
+                subTask.LastEdited = DateTime.Now;
 
                 // Walk up to find the parent TodoItem and refresh its SubTaskProgress
                 var parent = fe;
@@ -935,6 +945,7 @@ namespace FlyShelf
                     parent = VisualTreeHelper.GetParent(parent) as FrameworkElement;
                     if (parent?.DataContext is TodoItem parentItem && parentItem != subTask && parentItem.SubTasks.Contains(subTask))
                     {
+                        parentItem.LastEdited = DateTime.Now;
                         parentItem.RefreshDisplayProperties();
                         break;
                     }
@@ -979,6 +990,7 @@ namespace FlyShelf
                             item.Tags.Add(capturedTag);
                         // Force property change notification
                         item.Tags = new List<string>(item.Tags);
+                        item.LastEdited = DateTime.Now;
                         TodoManager.MarkDirty();
                     };
                     menu.Items.Add(mi);
@@ -1019,6 +1031,7 @@ namespace FlyShelf
                             else
                                 item.Tags.Add(newTag);
                             item.Tags = new List<string>(item.Tags);
+                            item.LastEdited = DateTime.Now;
                             TodoManager.MarkDirty();
                             popup.IsOpen = false;
                         }
@@ -1089,6 +1102,7 @@ namespace FlyShelf
                     mi.Click += (s, ev) =>
                     {
                         item.Color = capturedHex;
+                        item.LastEdited = DateTime.Now;
                         TodoManager.MarkDirty();
                     };
                     menu.Items.Add(mi);
@@ -1100,6 +1114,7 @@ namespace FlyShelf
                 clearItem.Click += (s, ev) =>
                 {
                     item.Color = "";
+                    item.LastEdited = DateTime.Now;
                     TodoManager.MarkDirty();
                 };
                 menu.Items.Add(clearItem);
@@ -1140,6 +1155,8 @@ namespace FlyShelf
 
         private void DescriptionText_TextChanged(object sender, TextChangedEventArgs e)
         {
+            if (sender is TextBox tb && tb.DataContext is TodoItem item)
+                item.LastEdited = DateTime.Now;
             TodoManager.MarkDirty();
         }
 
@@ -1249,6 +1266,7 @@ namespace FlyShelf
                     TodoRecurrence.Monthly => TodoRecurrence.None,
                     _ => TodoRecurrence.None
                 };
+                item.LastEdited = DateTime.Now;
                 TodoManager.MarkDirty();
             }
         }
@@ -1309,16 +1327,16 @@ namespace FlyShelf
                     priorityMenu.Icon = MI("🏷", "#F59E0B");
                     var pHigh = new MenuItem { Header = "High" };
                     pHigh.Icon = Dot("#EF4444");
-                    pHigh.Click += (s, ev) => { item.Priority = TodoPriority.High; TodoManager.MarkDirty(); };
+                    pHigh.Click += (s, ev) => { item.Priority = TodoPriority.High; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
                     var pMed = new MenuItem { Header = "Medium" };
                     pMed.Icon = Dot("#F59E0B");
-                    pMed.Click += (s, ev) => { item.Priority = TodoPriority.Medium; TodoManager.MarkDirty(); };
+                    pMed.Click += (s, ev) => { item.Priority = TodoPriority.Medium; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
                     var pLow = new MenuItem { Header = "Low" };
                     pLow.Icon = Dot("#22C55E");
-                    pLow.Click += (s, ev) => { item.Priority = TodoPriority.Low; TodoManager.MarkDirty(); };
+                    pLow.Click += (s, ev) => { item.Priority = TodoPriority.Low; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
                     var pNone = new MenuItem { Header = "Clear Priority" };
                     pNone.Icon = MI("✕", "#6B7280");
-                    pNone.Click += (s, ev) => { item.Priority = TodoPriority.None; TodoManager.MarkDirty(); };
+                    pNone.Click += (s, ev) => { item.Priority = TodoPriority.None; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
                     priorityMenu.Items.Add(pHigh);
                     priorityMenu.Items.Add(pMed);
                     priorityMenu.Items.Add(pLow);
@@ -1354,6 +1372,7 @@ namespace FlyShelf
                         item.SubTasks.Add(subTask);
                         item.IsExpanded = true;
                         item.RefreshDisplayProperties();
+                        item.LastEdited = DateTime.Now;
                         TodoManager.MarkDirty();
                         FocusSubtaskWithCaret(item, subTask, true);
                     };
@@ -1361,15 +1380,13 @@ namespace FlyShelf
 
 
                     // Description toggle  —— indigo notes icon
-                    bool hasDesc = !string.IsNullOrWhiteSpace(item.Description);
+                    bool hasDesc = item.IsDescriptionVisible || !string.IsNullOrWhiteSpace(item.Description);
                     var desc = new MenuItem { Header = hasDesc ? "Hide Description" : "Show Description" };
                     desc.Icon = MI("📝", "#6366F1");
                     desc.Click += (s, ev) =>
                     {
-                        if (string.IsNullOrEmpty(item.Description))
-                            item.Description = " ";
-                        else
-                            item.Description = null;
+                        item.IsDescriptionVisible = !item.IsDescriptionVisible;
+                        item.LastEdited = DateTime.Now;
                         TodoManager.MarkDirty();
                     };
                     menu.Items.Add(desc);
@@ -1394,6 +1411,7 @@ namespace FlyShelf
                             TodoRecurrence.Monthly => TodoRecurrence.None,
                             _ => TodoRecurrence.None
                         };
+                        item.LastEdited = DateTime.Now;
                         TodoManager.MarkDirty();
                     };
                     menu.Items.Add(rec);
@@ -1665,25 +1683,25 @@ namespace FlyShelf
         private void TodoItemPriorityHigh_Click(object sender, RoutedEventArgs e)
         {
             var item = GetTodoItemFromMenuContext(sender);
-            if (item != null) { item.Priority = TodoPriority.High; TodoManager.MarkDirty(); }
+            if (item != null) { item.Priority = TodoPriority.High; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); }
         }
 
         private void TodoItemPriorityMedium_Click(object sender, RoutedEventArgs e)
         {
             var item = GetTodoItemFromMenuContext(sender);
-            if (item != null) { item.Priority = TodoPriority.Medium; TodoManager.MarkDirty(); }
+            if (item != null) { item.Priority = TodoPriority.Medium; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); }
         }
 
         private void TodoItemPriorityLow_Click(object sender, RoutedEventArgs e)
         {
             var item = GetTodoItemFromMenuContext(sender);
-            if (item != null) { item.Priority = TodoPriority.Low; TodoManager.MarkDirty(); }
+            if (item != null) { item.Priority = TodoPriority.Low; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); }
         }
 
         private void TodoItemPriorityNone_Click(object sender, RoutedEventArgs e)
         {
             var item = GetTodoItemFromMenuContext(sender);
-            if (item != null) { item.Priority = TodoPriority.None; TodoManager.MarkDirty(); }
+            if (item != null) { item.Priority = TodoPriority.None; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); }
         }
 
         // --- RoutedEventArgs overloads for context menu items ---
@@ -1702,16 +1720,16 @@ namespace FlyShelf
             var menu = new ContextMenu();
 
             var today = new MenuItem { Header = "📅 Today" };
-            today.Click += (s, ev) => { item.DueDate = DateTime.Today; TodoManager.MarkDirty(); };
+            today.Click += (s, ev) => { item.DueDate = DateTime.Today; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
 
             var tomorrow = new MenuItem { Header = "📅 Tomorrow" };
-            tomorrow.Click += (s, ev) => { item.DueDate = DateTime.Today.AddDays(1); TodoManager.MarkDirty(); };
+            tomorrow.Click += (s, ev) => { item.DueDate = DateTime.Today.AddDays(1); item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
 
             var nextWeek = new MenuItem { Header = "📅 Next Week" };
-            nextWeek.Click += (s, ev) => { item.DueDate = DateTime.Today.AddDays(7); TodoManager.MarkDirty(); };
+            nextWeek.Click += (s, ev) => { item.DueDate = DateTime.Today.AddDays(7); item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
 
             var clear = new MenuItem { Header = "Clear" };
-            clear.Click += (s, ev) => { item.DueDate = null; TodoManager.MarkDirty(); };
+            clear.Click += (s, ev) => { item.DueDate = null; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
 
             menu.Items.Add(today);
             menu.Items.Add(tomorrow);
@@ -1746,6 +1764,7 @@ namespace FlyShelf
                     if (tags.Contains(capturedTag)) tags.Remove(capturedTag);
                     else tags.Add(capturedTag);
                     item.Tags = tags;
+                    item.LastEdited = DateTime.Now;
                     TodoManager.MarkDirty();
                 };
                 menu.Items.Add(mi);
@@ -1774,12 +1793,12 @@ namespace FlyShelf
                 string capturedHex = hex;
                 var mi = new MenuItem { Header = $"● {name}" };
                 try { mi.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex)); } catch { } // Best-effort: failure is acceptable
-                mi.Click += (s, ev) => { item.Color = capturedHex; TodoManager.MarkDirty(); };
+                mi.Click += (s, ev) => { item.Color = capturedHex; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
                 menu.Items.Add(mi);
             }
             menu.Items.Add(new Separator());
             var clearMi = new MenuItem { Header = "Clear" };
-            clearMi.Click += (s, ev) => { item.Color = null; TodoManager.MarkDirty(); };
+            clearMi.Click += (s, ev) => { item.Color = null; item.LastEdited = DateTime.Now; TodoManager.MarkDirty(); };
             menu.Items.Add(clearMi);
 
             menu.PlacementTarget = placementTarget;
@@ -1796,6 +1815,7 @@ namespace FlyShelf
             item.SubTasks.Add(newSubtask);
             item.IsExpanded = true;   // expand card so subtask row is visible
             item.RefreshDisplayProperties();
+            item.LastEdited = DateTime.Now;
             TodoManager.MarkDirty();
             // Auto-focus the new subtask so user can type immediately
             FocusSubtaskWithCaret(item, newSubtask, true);
@@ -1807,6 +1827,7 @@ namespace FlyShelf
             var item = GetTodoItemFromMenuContext(sender);
             if (item == null) return;
             item.IsDescriptionVisible = !item.IsDescriptionVisible;
+            item.LastEdited = DateTime.Now;
             TodoManager.MarkDirty();
         }
 
@@ -1822,6 +1843,7 @@ namespace FlyShelf
                 TodoRecurrence.Monthly => TodoRecurrence.None,
                 _ => TodoRecurrence.None
             };
+            item.LastEdited = DateTime.Now;
             TodoManager.MarkDirty();
         }
 
@@ -1936,6 +1958,7 @@ namespace FlyShelf
         {
             if (sender is TextBox tb && tb.DataContext is TodoItem item)
             {
+                item.LastEdited = DateTime.Now;
                 TodoManager.MarkDirty();
             }
         }
@@ -1945,6 +1968,7 @@ namespace FlyShelf
             if (sender is TextBox tb && tb.DataContext is TodoItem item)
             {
                 // Text is already bound TwoWay, just mark dirty
+                item.LastEdited = DateTime.Now;
                 TodoManager.MarkDirty();
             }
         }

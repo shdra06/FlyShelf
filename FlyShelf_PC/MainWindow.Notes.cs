@@ -359,13 +359,13 @@ namespace FlyShelf
                 // Let the XAML DataTrigger on DroppedItems.Count control visibility
                 EmptyStatePanel.ClearValue(VisibilityProperty);
 
-                // NM-FIX: Save synchronously — deferred async saves were being dropped
-                NoteManager.SaveNow();
+                // Debounced save — avoids blocking UI thread on panel close
+                NoteManager.ScheduleSave();
                 return;
             }
 
-            // Normal close path: save synchronously (no spawn pipeline follows)
-            NoteManager.SaveNow();
+            // Debounced save — avoids blocking UI thread on panel close
+            NoteManager.ScheduleSave();
 
             // Animate out
             var fadeAnim = Classes.AnimationHelper.FadeOut();
@@ -493,7 +493,6 @@ namespace FlyShelf
 
             // Update day label
             NotesCurrentDayLabel.Text = "Notes · " + day.DisplayDate;
-            UpdateNoteBulletCount();
         }
 
         private void RebuildSidebar()
@@ -1136,7 +1135,7 @@ namespace FlyShelf
             return false;
         }
 
-        private bool HandleImagePasteForBullet(NoteBullet bullet)
+        private async void HandleImagePasteForBullet_Async(NoteBullet bullet)
         {
             try
             {
@@ -1157,7 +1156,7 @@ namespace FlyShelf
 
                     if (img != null)
                     {
-                        string path = NoteManager.SaveImage(img);
+                        string path = await NoteManager.SaveImage(img);
                         double width = Math.Min(img.PixelWidth, 140);
                         return AssignImageToBullet(bullet, path, width);
                     }
@@ -1173,7 +1172,7 @@ namespace FlyShelf
                             {
                                 string destDir = NoteManager.GetImagesDirectory();
                                 string destFile = Path.Combine(destDir, $"note_img_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N").Substring(0, 6)}_{Path.GetFileName(f)}");
-                                File.Copy(f, destFile, overwrite: true);
+                                await Task.Run(() => File.Copy(f, destFile, overwrite: true));
                                 return AssignImageToBullet(bullet, destFile, 140);
                             }
                         }
@@ -1184,7 +1183,6 @@ namespace FlyShelf
             {
                 Logger.LogAction("NOTES", $"HandleImagePasteForBullet error: {ex.Message}");
             }
-            return false;
         }
 
         private void NotesFreeformBox_PreviewKeyDown(object sender, KeyEventArgs e)
@@ -1255,7 +1253,7 @@ namespace FlyShelf
             }
         }
 
-        private bool HandleImagePasteForFreeform()
+        private async void HandleImagePasteForFreeform_Async()
         {
             if (_selectedNoteDay == null) return false;
             var section = GetActiveFreeformSection();
@@ -1280,7 +1278,7 @@ namespace FlyShelf
                     if (img != null)
                     {
                         if (!CanAddImageToSection(section)) return true; // block paste
-                        string path = NoteManager.SaveImage(img);
+                        string path = await NoteManager.SaveImage(img);
                         var freeformImg = new FreeformImage
                         {
                             ImagePath = path,
@@ -1303,7 +1301,7 @@ namespace FlyShelf
                                 if (!CanAddImageToSection(section)) return true; // block paste
                                 string destDir = NoteManager.GetImagesDirectory();
                                 string destFile = Path.Combine(destDir, $"note_img_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N").Substring(0, 6)}_{Path.GetFileName(f)}");
-                                File.Copy(f, destFile, overwrite: true);
+                                await Task.Run(() => File.Copy(f, destFile, overwrite: true));
                                 var freeformImg = new FreeformImage
                                 {
                                     ImagePath = destFile,
@@ -1321,7 +1319,6 @@ namespace FlyShelf
             {
                 Logger.LogAction("NOTES", $"HandleImagePasteForFreeform error: {ex.Message}");
             }
-            return false;
         }
 
         /// <summary>
@@ -1495,7 +1492,6 @@ namespace FlyShelf
                 if (result == MessageBoxResult.Yes)
                 {
                     NoteManager.DeleteBullet(_selectedNoteDay, bullet);
-                    UpdateNoteBulletCount();
                 }
             }
         }
@@ -1517,7 +1513,7 @@ namespace FlyShelf
                     var img = dataObject.GetData(DataFormats.Bitmap) as BitmapSource;
                     if (img != null)
                     {
-                        string path = NoteManager.SaveImage(img);
+                        string path = await NoteManager.SaveImage(img);
                         double width = Math.Min(img.PixelWidth, 140);
                         if (AssignImageToBullet(bullet, path, width))
                         {
@@ -1540,7 +1536,7 @@ namespace FlyShelf
                                 string destFile = Path.Combine(destDir, $"note_{DateTime.Now:yyyyMMdd_HHmmss}_{Path.GetFileName(f)}");
                                 try
                                 {
-                                    File.Copy(f, destFile, overwrite: true);
+                                    await Task.Run(() => File.Copy(f, destFile, overwrite: true));
                                     if (AssignImageToBullet(bullet, destFile, 140))
                                     {
                                         e.CancelCommand(); // Cancel text paste
@@ -1591,7 +1587,7 @@ namespace FlyShelf
             {
                 if (bullet.HasImage)
                 {
-                    try { File.Delete(bullet.ImagePath); } catch { } // Best-effort: failure is acceptable
+                    _ = Task.Run(() => { try { File.Delete(bullet.ImagePath); } catch { } }); // Best-effort off UI thread
                 }
                 bullet.ImagePath = "";
                 NoteManager.MarkDirty();
@@ -1604,7 +1600,7 @@ namespace FlyShelf
             {
                 if (bullet.HasImage2)
                 {
-                    try { File.Delete(bullet.ImagePath2); } catch { } // Best-effort: failure is acceptable
+                    _ = Task.Run(() => { try { File.Delete(bullet.ImagePath2); } catch { } }); // Best-effort off UI thread
                 }
                 bullet.ImagePath2 = "";
                 NoteManager.MarkDirty();
@@ -1702,8 +1698,6 @@ namespace FlyShelf
                     FocusNotesActiveTextBox();
                 }
             }
-
-            UpdateNoteBulletCount();
         }
 
         private void NotesFreeformBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -1779,7 +1773,7 @@ namespace FlyShelf
                 var img = dataObject.GetData(DataFormats.Bitmap) as BitmapSource;
                 if (img != null)
                 {
-                    string path = NoteManager.SaveImage(img);
+                    string path = await NoteManager.SaveImage(img);
                     var freeformImg = new FreeformImage
                     {
                         ImagePath = path,
@@ -1804,7 +1798,7 @@ namespace FlyShelf
                             string destFile = Path.Combine(destDir, $"note_{DateTime.Now:yyyyMMdd_HHmmss}_{Path.GetFileName(f)}");
                             try
                             {
-                                File.Copy(f, destFile, overwrite: true);
+                                await Task.Run(() => File.Copy(f, destFile, overwrite: true));
                                 var freeformImg = new FreeformImage
                                 {
                                     ImagePath = destFile,
@@ -1873,7 +1867,7 @@ namespace FlyShelf
                     walk = VisualTreeHelper.GetParent(walk);
                 }
 
-                if (fi.HasImage) { try { File.Delete(fi.ImagePath); } catch { } /* Best-effort: failure is acceptable */ }
+                if (fi.HasImage) { _ = Task.Run(() => { try { File.Delete(fi.ImagePath); } catch { } }); /* Best-effort off UI thread */ }
 
                 if (section != null)
                     section.Images.Remove(fi);
@@ -1986,6 +1980,7 @@ namespace FlyShelf
             }
         }
 
+        // TODO: Deduplicate — these templates are also defined in the bullet context menu (NoteBulletMore_Click, ~line 2670)
         private void NotesTemplates_Click(object sender, MouseButtonEventArgs e)
         {
             e.Handled = true;
@@ -2352,7 +2347,6 @@ namespace FlyShelf
                             if (result == MessageBoxResult.Yes)
                             {
                                 NoteManager.DeleteBullet(_selectedNoteDay, bullet);
-                                UpdateNoteBulletCount();
                             }
                         }
                     };
@@ -2595,8 +2589,7 @@ namespace FlyShelf
                         sortPinned.Click += (s, ev) =>
                         {
                             var sorted = _selectedNoteDay.Bullets.OrderByDescending(b => b.IsPinned).ThenBy(b => b.SortOrder).ToList();
-                            _selectedNoteDay.Bullets.Clear();
-                            foreach (var b in sorted) _selectedNoteDay.Bullets.Add(b);
+                            ReplaceBullets(_selectedNoteDay, sorted);
                             NoteManager.MarkDirty();
                         };
                         sortMenu.Items.Add(sortPinned);
@@ -2606,8 +2599,7 @@ namespace FlyShelf
                         sortAZ.Click += (s, ev) =>
                         {
                             var sorted = _selectedNoteDay.Bullets.OrderBy(b => b.Header ?? "").ToList();
-                            _selectedNoteDay.Bullets.Clear();
-                            foreach (var b in sorted) _selectedNoteDay.Bullets.Add(b);
+                            ReplaceBullets(_selectedNoteDay, sorted);
                             NoteManager.MarkDirty();
                         };
                         sortMenu.Items.Add(sortAZ);
@@ -2617,8 +2609,7 @@ namespace FlyShelf
                         sortEdited.Click += (s, ev) =>
                         {
                             var sorted = _selectedNoteDay.Bullets.OrderByDescending(b => b.LastEdited).ToList();
-                            _selectedNoteDay.Bullets.Clear();
-                            foreach (var b in sorted) _selectedNoteDay.Bullets.Add(b);
+                            ReplaceBullets(_selectedNoteDay, sorted);
                             NoteManager.MarkDirty();
                         };
                         sortMenu.Items.Add(sortEdited);
@@ -2628,8 +2619,7 @@ namespace FlyShelf
                         sortCreated.Click += (s, ev) =>
                         {
                             var sorted = _selectedNoteDay.Bullets.OrderByDescending(b => b.CreatedAt).ToList();
-                            _selectedNoteDay.Bullets.Clear();
-                            foreach (var b in sorted) _selectedNoteDay.Bullets.Add(b);
+                            ReplaceBullets(_selectedNoteDay, sorted);
                             NoteManager.MarkDirty();
                         };
                         sortMenu.Items.Add(sortCreated);
@@ -2667,6 +2657,7 @@ namespace FlyShelf
                     menu.Items.Add(new Separator());
 
                     // ── Templates submenu ── amber document icon
+                    // TODO: Deduplicate — these templates are also defined in NotesTemplates_Click (~line 1990)
                     var templatesMenu = new MenuItem { Header = "Templates" };
                     templatesMenu.Icon = MI("📄", "#F59E0B");
 
@@ -2838,14 +2829,6 @@ namespace FlyShelf
             }
         }
 
-        // ═══════════════════════════════════════════════════════════
-        // BULLET COUNT DISPLAY
-        // ═══════════════════════════════════════════════════════════
-
-        private void UpdateNoteBulletCount()
-        {
-            // Bullet count badge was removed from UI — method kept as no-op for callers
-        }
 
     }
 
