@@ -28,12 +28,13 @@ const DB_SECRET = process.env.FIREBASE_DB_SECRET;
  */
 async function firebaseFetch(url, options = {}) {
   if (DB_SECRET) {
-    // [SECURITY FIX v2.5.0]: Use Authorization header instead of URL query param
-    // Prevents the DB secret from appearing in server logs, Firebase audit logs, and proxy logs
-    options.headers = {
-      ...options.headers,
-      'Authorization': `Bearer ${DB_SECRET}`
-    };
+    // Firebase RTDB legacy database secrets MUST be passed as a query parameter.
+    // The Authorization: Bearer header only works with Google OAuth2 access tokens,
+    // NOT with legacy database secrets. Using Bearer with a legacy secret causes
+    // Firebase to silently ignore the auth, resulting in unauthenticated requests
+    // that get blocked by security rules on locked paths.
+    const separator = url.includes('?') ? '&' : '?';
+    url = `${url}${separator}auth=${encodeURIComponent(DB_SECRET)}`;
   } else {
     // [SECURITY FIX v2.4.0]: Fail closed — never allow unauthenticated Firebase access
     throw new Error('[_firebaseAdmin] FIREBASE_DB_SECRET not set — refusing unauthenticated request. Set the environment variable.');
