@@ -1030,8 +1030,24 @@ namespace FlyShelf
                         Point clickPoint = args.GetPosition(track);
                         double newValue = track.ValueFromPoint(clickPoint);
 
+                        // PERF: Set IsScrolling BEFORE the jump so any synchronous layout
+                        // callbacks during virtualization realization can check this flag
+                        // and skip expensive work (e.g., RenderVisibleThumbnails eviction).
+                        if (_viewModel != null) _viewModel.IsScrolling = true;
+
                         sv.ScrollToVerticalOffset(newValue);
                         Classes.SmoothScroll.ResetScrollState(sv);
+
+                        // PERF: Throttle thumbnail loading to 300ms after track jumps.
+                        // The default 30ms timer fires before the virtualizer has settled,
+                        // causing a layout storm. 300ms gives containers time to materialize.
+                        if (_scrollHighQualityTimer != null)
+                        {
+                            _scrollHighQualityTimer.Stop();
+                            _scrollHighQualityTimer.Interval = TimeSpan.FromMilliseconds(300);
+                            _scrollHighQualityTimer.Start();
+                        }
+
                         args.Handled = true;
                     };
                 }

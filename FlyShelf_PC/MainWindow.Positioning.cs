@@ -967,6 +967,7 @@ namespace FlyShelf
             else
             {
                 _scrollHighQualityTimer.Stop();
+                _scrollHighQualityTimer.Interval = TimeSpan.FromMilliseconds(30); // Reset from any track-click throttle
             }
 
             _scrollHighQualityTimer.Start();
@@ -1038,10 +1039,79 @@ namespace FlyShelf
                     Rect viewportRect = new Rect(0, -300, viewportWidth, viewportHeight + 600);
                     int count = ShelfListView.Items.Count;
 
-                    int imageCount = 0;
+                    // ═══ VIEWPORT-BOUNDED SCAN ═══
+                    // Instead of iterating ALL items (O(N) — crushes perf with 500+ items),
+                    // estimate the visible range from the scroll offset and only scan that range
+                    // plus a generous margin. Heterogeneous item heights mean we can't be exact,
+                    // so we use a conservative average and wide margin to ensure all visible items
+                    // are covered. The eviction pass gets a wider range.
+                    const double EstimatedItemHeight = 80.0; // Conservative average for mixed text/image cards
+                    int estimatedFirstVisible = Math.Max(0, (int)((sv.VerticalOffset - 300) / EstimatedItemHeight) - 5);
+                    int estimatedLastVisible  = Math.Min(count - 1, (int)((sv.VerticalOffset + viewportHeight + 300) / EstimatedItemHeight) + 5);
+
+                    // For eviction passes, scan a wider range (2× viewport) to catch items that
+                    // recently left the viewport but might need their eviction timer checked
+                    int scanStart, scanEnd;
+                    if (isEvictionPass)
+                    {
+                        int evictionMargin = (int)(viewportHeight / EstimatedItemHeight) * 3;
+                        scanStart = Math.Max(0, estimatedFirstVisible - evictionMargin);
+                        scanEnd   = Math.Min(count - 1, estimatedLastVisible + evictionMargin);
+                    }
+                    else
+                    {
+                        scanStart = estimatedFirstVisible;
+                        scanEnd   = estimatedLastVisible;
+                    }
+
                     bool anyEvicted = false;
 
-                    for (int i = 0; i < count; i++)
+                    // ═══ PASS 1: Always-loaded first 5 images (cheap, covers top of list) ═══
+                    // These are always kept loaded for instant visibility on summon.
+                    // Only do the loading pass if we're near the top OR if a first-5 image needs loading.
+                    {
+                        int imgCount = 0;
+                        int topScanLimit = Math.Min(count, 50); // Only scan first 50 items for first-5 check
+                        for (int i = 0; i < topScanLimit && imgCount < 5; i++)
+                        {
+                            var item = ShelfListView.Items[i] as ClipboardItem;
+                            if (item == null) continue;
+                            if (item.ItemType != ClipboardItemType.Image && item.ItemType != ClipboardItemType.QRCode) continue;
+                            imgCount++;
+
+                            if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality)
+                            {
+                                item.IsLoadingHighQuality = true;
+                                string filePath = item.FilePath;
+                                int idx = i;
+                                _ = System.Threading.Tasks.Task.Run(() =>
+                                {
+                                    try
+                                    {
+                                        var bmp = ViewModels.FlyShelfViewModel.LoadImageThumbnail(filePath, 300);
+                                        if (bmp != null)
+                                            Dispatcher.InvokeAsync(() =>
+                                            {
+                                                item.Icon = bmp;
+                                                item.IsLoadedHighQuality = true;
+                                                item.IsLoadingHighQuality = false;
+                                            }, System.Windows.Threading.DispatcherPriority.Normal);
+                                        else
+                                            Dispatcher.InvokeAsync(() => item.IsLoadingHighQuality = false);
+                                    }
+                                    catch
+                                    {
+                                        Dispatcher.InvokeAsync(() => item.IsLoadingHighQuality = false);
+                                    }
+                                });
+                            }
+                            // First 5 images are never evicted
+                            item.LeftViewportTime = null;
+                        }
+                    }
+
+                    // ═══ PASS 2: Viewport-bounded scan for loading + eviction ═══
+                    for (int i = scanStart; i <= scanEnd; i++)
                     {
                         var item = ShelfListView.Items[i] as ClipboardItem;
                         if (item == null) continue;
@@ -1049,17 +1119,10 @@ namespace FlyShelf
                         // Only process image and QR code items
                         if (item.ItemType != ClipboardItemType.Image && item.ItemType != ClipboardItemType.QRCode) continue;
 
-                        imageCount++;
-                        bool isFirst5Images = imageCount <= 5;
-
                         var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(i) as FrameworkElement;
                         bool isVisible = false;
 
-                        if (isFirst5Images)
-                        {
-                            isVisible = true; // Sane default: top 5 images are always considered visible!
-                        }
-                        else if (item.IsLoadedHighQuality && !isEvictionPass)
+                        if (item.IsLoadedHighQuality && !isEvictionPass)
                         {
                             // Optimization: if it's already loaded and we are not doing an eviction pass,
                             // we can skip the expensive TransformToAncestor coordinates query!
@@ -1085,9 +1148,8 @@ namespace FlyShelf
                             item.LeftViewportTime = null;
 
                             // Load 300px thumbnail if not loaded/loading.
-                            // During active scrolling (onlyFirstTen=true), skip non-first-5 images
-                            // to avoid BitmapImage decode stutters that cause scroll jitter.
-                            if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality && (!onlyFirstTen || isFirst5Images))
+                            // During active scrolling (onlyFirstTen=true), skip to avoid decode stutters.
+                            if (!item.IsLoadedHighQuality && !item.IsLoadingHighQuality && !onlyFirstTen)
                             {
                                 item.IsLoadingHighQuality = true;
                                 string filePath = item.FilePath;
@@ -1150,14 +1212,14 @@ namespace FlyShelf
                         }
                         else
                         {
-                            // Off-Screen / Scrolled Out: Skip eviction if pinned OR is one of the first 5 images
-                            if (item.IsPinned || isFirst5Images)
+                            // Off-Screen / Scrolled Out: Skip eviction if pinned
+                            if (item.IsPinned)
                             {
                                 item.LeftViewportTime = null;
                                 continue;
                             }
 
-                            // Evict thumbnail ONLY after it has stayed offscreen for at least 10 seconds
+                            // Evict thumbnail ONLY after it has stayed offscreen for at least 5 seconds
                             if (item.Icon != null || item.IsLoadedHighQuality || item.IsLoadingHighQuality)
                             {
                                 if (item.LeftViewportTime == null)

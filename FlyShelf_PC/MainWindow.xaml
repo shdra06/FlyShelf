@@ -582,7 +582,7 @@
                          </ui:Button>
 
 
-                          <!-- ═══ Incognito Mode Badge ═══ -->
+                          <!-- ═══ Incognito Mode Badge (small indicator in header) ═══ -->
                           <Border x:Name="IncognitoBadge" Visibility="Collapsed" Cursor="Hand"
                                   CornerRadius="8" Margin="0,0,6,0" Padding="6,4" VerticalAlignment="Center"
                                   MouseLeftButtonDown="IncognitoBadge_Click"
@@ -890,6 +890,60 @@
                     </Border>
                 </StackPanel>
             </Border>
+
+            <!-- ═══ Incognito Mode Toggle Strip (popup bar below header) ═══ -->
+            <Border x:Name="IncognitoToggleBar" Margin="14,0,14,8" Visibility="Collapsed"
+                    CornerRadius="10" Padding="10,6"
+                    Background="{DynamicResource MicaWPF.Brushes.SmokeFillColorDefault}"
+                    BorderThickness="1"
+                    RenderTransformOrigin="0.5,0">
+                <Border.BorderBrush>
+                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                        <GradientStop Color="#50F59E0B" Offset="0"/>
+                        <GradientStop Color="#30FBBF24" Offset="1"/>
+                    </LinearGradientBrush>
+                </Border.BorderBrush>
+                <Border.Effect>
+                    <DropShadowEffect BlurRadius="8" ShadowDepth="1" Opacity="0.15" Color="#000000"/>
+                </Border.Effect>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <!-- Left: Icon + Text -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                        <ui:SymbolIcon Symbol="EyeOff24" FontSize="15" Foreground="{DynamicResource WarningColor}" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                        <TextBlock x:Name="IncognitoToggleBarText" Text="Incognito Mode Active" FontSize="11.5" FontWeight="SemiBold" VerticalAlignment="Center"
+                                   Foreground="{DynamicResource WarningColor}"/>
+                    </StackPanel>
+                    <!-- Right: Toggle Switch -->
+                    <ToggleButton x:Name="IncognitoToggle" Grid.Column="1" IsChecked="True" Click="IncognitoToggle_Click"
+                                  Width="36" Height="18" Cursor="Hand" VerticalAlignment="Center"
+                                  ToolTip="Toggle off to resume clipboard monitoring">
+                        <ToggleButton.Template>
+                            <ControlTemplate TargetType="ToggleButton">
+                                <Grid>
+                                    <Border x:Name="Track" CornerRadius="9" Width="36" Height="18"
+                                            Background="#60F59E0B" BorderBrush="#50F59E0B" BorderThickness="1"/>
+                                    <Border x:Name="Knob" Width="14" Height="14" CornerRadius="7"
+                                            Background="White" HorizontalAlignment="Right" Margin="0,0,2,0"
+                                            VerticalAlignment="Center"/>
+                                </Grid>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsChecked" Value="False">
+                                        <Setter TargetName="Track" Property="Background" Value="#30808080"/>
+                                        <Setter TargetName="Track" Property="BorderBrush" Value="#30808080"/>
+                                        <Setter TargetName="Knob" Property="HorizontalAlignment" Value="Left"/>
+                                        <Setter TargetName="Knob" Property="Margin" Value="2,0,0,0"/>
+                                    </Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate>
+                        </ToggleButton.Template>
+                    </ToggleButton>
+                </Grid>
+            </Border>
+
         </StackPanel>
 
         <!-- ═══ MASCOT THEME OVERLAYS ═══ -->
@@ -931,7 +985,7 @@
                   VirtualizingStackPanel.IsVirtualizing="True"
                   VirtualizingStackPanel.VirtualizationMode="Recycling"
                   VirtualizingPanel.ScrollUnit="Pixel"
-                  VirtualizingPanel.CacheLength="3,2"
+                  VirtualizingPanel.CacheLength="2,1"
                   VirtualizingPanel.CacheLengthUnit="Page"
                   SelectionMode="Extended" MouseMove="ShelfListView_MouseMove" PreviewMouseLeftButtonDown="ShelfListView_PreviewMouseLeftButtonDown"
                   PreviewMouseLeftButtonUp="ShelfListView_PreviewMouseLeftButtonUp"
@@ -2325,7 +2379,6 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
-                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
                 <!-- TOP BAR -->
@@ -2450,7 +2503,7 @@
 
                     <!-- CARD LIST -->
                     <ListView x:Name="AltShelfListView" Grid.Column="1" ItemsSource="{Binding DroppedItems}"
-                              Background="Transparent" BorderThickness="0" Margin="4,4,2,4" Padding="0,0,0,8"
+                              Background="Transparent" BorderThickness="0" Margin="4,4,2,14" Padding="0,0,0,50"
                               Focusable="True" FocusVisualStyle="{x:Null}" UseLayoutRounding="True" SnapsToDevicePixels="True"
                               AutomationProperties.Name="Clipboard items list"
                               TextOptions.TextFormattingMode="Ideal" TextOptions.TextRenderingMode="ClearType"
@@ -2635,7 +2688,7 @@
                 </Grid>
 
                 <!-- BOTTOM BAR -->
-                <Border Grid.Row="2" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Margin="8,0,8,8" Padding="10,6" CornerRadius="12" Background="{DynamicResource AltBottomBarBg}" BorderBrush="{DynamicResource AltBottomBarBorder}" BorderThickness="1">
+                <Border Grid.Row="1" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Margin="8,0,8,8" Padding="10,6" CornerRadius="12" Background="{DynamicResource AltBottomBarBg}" BorderBrush="{DynamicResource AltBottomBarBorder}" BorderThickness="1">
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <Border Grid.Column="0" Width="28" Height="28" CornerRadius="7" Background="Transparent" Cursor="Hand" ToolTip="More Options" MouseLeftButtonDown="AltMoreOptions_Click"><Border.Style><Style TargetType="Border"><Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource AltSidebarHover}"/></Trigger></Style.Triggers></Style></Border.Style><ui:SymbolIcon Symbol="MoreHorizontal24" FontSize="14" Foreground="{DynamicResource AltTextTertiary}" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
