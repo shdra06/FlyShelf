@@ -2,35 +2,37 @@ import React, { useState, useCallback, useEffect } from 'react';
 import * as Haptics from 'expo-haptics';
 import { StyleSheet, View, Text, TextInput, TouchableOpacity, SafeAreaView, KeyboardAvoidingView, Platform, Alert, Switch, NativeModules, ScrollView, ActivityIndicator } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
 import { useSettings } from '../../context/SettingsContext';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import * as FileSystem from 'expo-file-system/legacy';
 import { getSecureItem } from '../../utils/secureStorage';
 import * as IntentLauncher from 'expo-intent-launcher';
 import Constants from 'expo-constants';
-import { colors, font, radius, shadows, space } from '../../styles/theme';
+import { colors, font, radius, shadows, space, component } from '../../styles/theme';
 import AnimatedPressable from '../../components/AnimatedPressable';
 import DeviceHub from '../../components/DeviceHub';
+import ScreenHeader from '../../components/ScreenHeader';
 import { getDebugLogs, clearDebugLogs, getNetworkLogs, getNetworkLogsText, clearNetworkLogs, onNetworkLogChange, getNetworkLogCount } from '../../utils/debugLog';
 import * as Clipboard from 'expo-clipboard';
 
 const APP_VERSION = Constants.expoConfig?.version || '1.0.0';
 const VERSION_URL = 'https://raw.githubusercontent.com/shdra06/FlyShelf/main/version.json';
 
-// Custom pure-JS slider row
+// Custom pure-JS slider row — themed
 const StepSlider = ({ value, min, max, step, onValueChange, trackColor, thumbColor, label }: { value: number; min: number; max: number; step: number; onValueChange: (v: number) => void; trackColor: string; thumbColor: string; label: string }) => {
   const pct = Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100));
   return (
     <View style={{marginTop: 8}}>
       <View style={{flexDirection: 'row', alignItems: 'center', gap: 10}}>
-        <TouchableOpacity onPress={() => { if (value - step >= min) onValueChange(value - step); }} style={{width: 36, height: 36, borderRadius: 10, backgroundColor: '#2A2F3A', alignItems: 'center', justifyContent: 'center'}} accessibilityLabel={`Decrease ${label}`} accessibilityRole="button">
-          <Text style={{color: '#FFF', fontSize: 18, fontWeight: '800'}}>−</Text>
+        <TouchableOpacity onPress={() => { if (value - step >= min) onValueChange(value - step); }} style={{width: 36, height: 36, borderRadius: 12, backgroundColor: colors.bg.cardHover, alignItems: 'center', justifyContent: 'center'}} accessibilityLabel={`Decrease ${label}`} accessibilityRole="button">
+          <Text style={{color: colors.text.primary, fontSize: 18, fontFamily: font.extrabold}}>−</Text>
         </TouchableOpacity>
-        <View style={{flex: 1, height: 8, backgroundColor: '#2A2F3A', borderRadius: 4, overflow: 'hidden'}}>
-          <View style={{width: `${pct}%`, height: '100%', backgroundColor: trackColor, borderRadius: 4}} />
+        <View style={{flex: 1, height: 6, backgroundColor: colors.bg.cardHover, borderRadius: 3, overflow: 'hidden'}}>
+          <View style={{width: `${pct}%`, height: '100%', backgroundColor: trackColor, borderRadius: 3}} />
         </View>
-        <TouchableOpacity onPress={() => { if (value + step <= max) onValueChange(value + step); }} style={{width: 36, height: 36, borderRadius: 10, backgroundColor: '#2A2F3A', alignItems: 'center', justifyContent: 'center'}} accessibilityLabel={`Increase ${label}`} accessibilityRole="button">
-          <Text style={{color: '#FFF', fontSize: 18, fontWeight: '800'}}>+</Text>
+        <TouchableOpacity onPress={() => { if (value + step <= max) onValueChange(value + step); }} style={{width: 36, height: 36, borderRadius: 12, backgroundColor: colors.bg.cardHover, alignItems: 'center', justifyContent: 'center'}} accessibilityLabel={`Increase ${label}`} accessibilityRole="button">
+          <Text style={{color: colors.text.primary, fontSize: 18, fontFamily: font.extrabold}}>+</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -197,21 +199,20 @@ export default function SettingsScreen() {
   const getUpdateButtonColor = () => {
     switch (updateStatus) {
       case 'available': return '#F59E0B';
-      case 'error': return '#EF4444';
-      default: return '#10B981';
+      case 'error': return colors.accent.error;
+      default: return colors.accent.success;
     }
   };
 
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler({ onScroll: (e) => { scrollY.value = e.contentOffset.y; } });
+
   return (
     <LinearGradient colors={[colors.bg.base, colors.bg.baseEnd]} style={{ flex: 1 }}>
-    <SafeAreaView style={[styles.container, { backgroundColor: 'transparent' }]}>
+    <View style={[styles.container, { backgroundColor: 'transparent' }]}>
+      <ScreenHeader title="Settings" subtitle="Configuration" scrollY={scrollY} />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{flex: 1}}>
-        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-          
-          <View style={styles.header}>
-            <Text style={styles.title}>Settings</Text>
-            <Text style={styles.subtitle}>Configure Sync Variables</Text>
-          </View>
+        <Animated.ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} onScroll={scrollHandler} scrollEventThrottle={16}>
 
           {/* Save Button at the top */}
           <TouchableOpacity style={styles.saveButton} onPress={handleSave} accessibilityLabel="Save configuration" accessibilityRole="button">
@@ -224,7 +225,7 @@ export default function SettingsScreen() {
             
             <View style={styles.inputContainer}>
               <View style={styles.inputHeaderRow}>
-                <IconSymbol name="network" size={20} color="#4A62EB" />
+                <Ionicons name="wifi" size={20} color={colors.accent.primary} />
                 <Text style={styles.inputLabel}>FlyShelf PC API Address</Text>
               </View>
               <TextInput
@@ -232,7 +233,7 @@ export default function SettingsScreen() {
                 value={localIpInput}
                 onChangeText={setLocalIpInput}
                 placeholder="e.g. 192.168.1.5:8999"
-                placeholderTextColor="#4C5361"
+                placeholderTextColor={colors.text.tertiary}
                 keyboardType="numbers-and-punctuation"
                 accessibilityLabel="PC API address"
                 accessibilityRole="text"
@@ -242,7 +243,7 @@ export default function SettingsScreen() {
 
             <View style={[styles.inputContainer, { marginTop: 20 }]}>
               <View style={styles.inputHeaderRow}>
-                <IconSymbol name="iphone" size={20} color="#4A62EB" />
+                <Ionicons name="phone-portrait-outline" size={20} color={colors.accent.primary} />
                 <Text style={styles.inputLabel}>Device Profile Name</Text>
               </View>
               <TextInput
@@ -250,7 +251,7 @@ export default function SettingsScreen() {
                 value={deviceNameInput}
                 onChangeText={setDeviceNameInput}
                 placeholder="e.g. John's Mobile Profile"
-                placeholderTextColor="#4C5361"
+                placeholderTextColor={colors.text.tertiary}
                 accessibilityLabel="Device profile name"
                 accessibilityRole="text"
               />
@@ -262,13 +263,13 @@ export default function SettingsScreen() {
             <View style={[styles.inputContainer, { marginTop: 20 }]}>
               <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
                   <View style={styles.inputHeaderRow}>
-                    <IconSymbol name="cloud" size={20} color="#4A62EB" />
+                    <Ionicons name="cloud-outline" size={20} color={colors.accent.primary} />
                     <Text style={styles.inputLabel}>Cloud Discovery</Text>
                   </View>
                   <Switch 
                     value={globalSyncInput} 
                     onValueChange={setGlobalSyncInput} 
-                    trackColor={{ false: "#2A2F3A", true: "#4A62EB" }} 
+                    trackColor={{ false: colors.text.disabled, true: "rgba(99,132,255,0.4)" }} 
                     thumbColor="#FFF"
                     accessibilityLabel={globalSyncInput ? 'Cloud discovery enabled' : 'Cloud discovery disabled'}
                     accessibilityRole="switch"
@@ -301,7 +302,7 @@ export default function SettingsScreen() {
                   backgroundColor: colors.accent.primaryDim,
                   justifyContent: 'center', alignItems: 'center', marginRight: space.md,
                 }}>
-                  <IconSymbol name="laptopcomputer.and.iphone" size={22} color={colors.accent.primary} />
+                  <Ionicons name="laptop-outline" size={22} color={colors.accent.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ color: colors.text.primary, fontSize: 15, fontFamily: font.semibold }}>
@@ -314,7 +315,7 @@ export default function SettingsScreen() {
                     }
                   </Text>
                 </View>
-                <IconSymbol name="chevron.right" size={16} color={colors.text.tertiary} />
+                <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} />
               </View>
 
               {/* Mini device preview — show small avatars of paired devices */}
@@ -329,8 +330,8 @@ export default function SettingsScreen() {
                       justifyContent: 'center', alignItems: 'center',
                       borderWidth: 1, borderColor: colors.border.subtle,
                     }}>
-                      <IconSymbol 
-                        name={device.deviceType === 'PC' ? 'laptopcomputer' : device.deviceType === 'Mobile' ? 'iphone' : 'globe'}
+                      <Ionicons 
+                        name={device.deviceType === 'PC' ? 'laptop-outline' : device.deviceType === 'Mobile' ? 'phone-portrait-outline' : 'globe-outline'}
                         size={16}
                         color={device.deviceType === 'PC' ? colors.accent.info 
                           : device.deviceType === 'Mobile' ? colors.accent.success 
@@ -353,13 +354,13 @@ export default function SettingsScreen() {
             <View style={styles.inputContainer}>
               <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center'}}>
                   <View style={styles.inputHeaderRow}>
-                    <IconSymbol name="eye" size={20} color="#8B5CF6" />
+                    <Ionicons name="eye-outline" size={20} color={colors.type.image} />
                     <Text style={styles.inputLabel}>Enable Floating Ball</Text>
                   </View>
                   <Switch 
                     value={floatingBallInput} 
                     onValueChange={setFloatingBallInput} 
-                    trackColor={{ false: "#2A2F3A", true: "#8B5CF6" }} 
+                    trackColor={{ false: colors.text.disabled, true: "rgba(167,139,250,0.4)" }} 
                     thumbColor="#FFF"
                     accessibilityLabel={floatingBallInput ? 'Floating ball enabled' : 'Floating ball disabled'}
                     accessibilityRole="switch"
@@ -370,7 +371,7 @@ export default function SettingsScreen() {
 
             <View style={[styles.inputContainer, { marginTop: 16 }]}>
               <View style={styles.inputHeaderRow}>
-                <IconSymbol name="arrow.up.left.and.arrow.down.right" size={20} color="#10B981" />
+                <Ionicons name="resize-outline" size={20} color={colors.accent.success} />
                 <Text style={styles.inputLabel}>Ball Size: {floatingBallSize}dp</Text>
               </View>
               <StepSlider
@@ -388,7 +389,7 @@ export default function SettingsScreen() {
 
             <View style={[styles.inputContainer, { marginTop: 16 }]}>
               <View style={styles.inputHeaderRow}>
-                <IconSymbol name="timer" size={20} color="#F59E0B" />
+                <Ionicons name="timer-outline" size={20} color={colors.accent.warning} />
                 <Text style={styles.inputLabel}>Auto-Hide Delay: {(floatingBallAutoHide / 1000).toFixed(1)}s</Text>
               </View>
               <StepSlider
@@ -644,7 +645,7 @@ export default function SettingsScreen() {
                       );
                     })
                   )}
-                </ScrollView>
+                </Animated.ScrollView>
               </View>
             )}
 
@@ -656,9 +657,9 @@ export default function SettingsScreen() {
           {/* Bottom padding so scroll doesn't cut off behind tab bar */}
           <View style={{ height: 100 }} />
 
-        </ScrollView>
+        </Animated.ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
     </LinearGradient>
   );
 }

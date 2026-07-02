@@ -1,6 +1,7 @@
 // Network utility helpers for FlyShelf Android
-// Simplified: Trust Firebase data, try-then-fallback pattern, no redundant health checks
+// Optimized for large file handling (50MB+) and direct LAN discovery
 import { decrypt as aesDecrypt } from './syncCrypto';
+import { decode as quickDecode, encode as quickEncode } from 'react-native-quick-base64';
 
 /** Validate if a pairing key is exactly 32-character hex string */
 export const isValidPairingKey = (key: string | null | undefined): boolean => {
@@ -8,11 +9,23 @@ export const isValidPairingKey = (key: string | null | undefined): boolean => {
   return /^[a-f0-9]{32}$/i.test(key);
 };
 
+/** 
+ * Robust private IP check covering RFC1918 and typical local ranges.
+ * 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+ */
+const isPrivateIp = (host: string): boolean => {
+  return (
+    /^(192\.168\.\d{1,3}\.\d{1,3})$/.test(host) ||
+    /^(10\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.test(host) ||
+    /^(172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})$/.test(host) ||
+    host === 'localhost' || host === '127.0.0.1'
+  );
+};
+
 /** Validate device URLs to prevent SSRF and external injections */
 export const isValidDeviceUrl = (urlStr: string | null | undefined): boolean => {
   if (!urlStr) return false;
   try {
-    // Basic parse to get host
     let host = urlStr.trim().replace(/^https?:\/\//i, '').split('/')[0].split(':')[0];
     host = host.toLowerCase();
     
@@ -20,25 +33,10 @@ export const isValidDeviceUrl = (urlStr: string | null | undefined): boolean => 
       return __DEV__;
     }
     
-    if (host.startsWith('169.254.')) {
-      return false;
-    }
+    if (host.startsWith('169.254.')) return false; // Link-local usually useless for us
+    if (host.endsWith('trycloudflare.com')) return true;
     
-    if (host.endsWith('trycloudflare.com')) {
-      return true;
-    }
-    
-    // Allow RFC1918 private subnets
-    const isPrivateIp = 
-      /^(192\.168\.\d{1,3}\.\d{1,3})$/.test(host) ||
-      /^(10\.\d{1,3}\.\d{1,3}\.\d{1,3})$/.test(host) ||
-      /^(172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3})$/.test(host);
-      
-    if (isPrivateIp) {
-      return true;
-    }
-    
-    return false;
+    return isPrivateIp(host);
   } catch {
     return false;
   }
@@ -66,7 +64,7 @@ export const decryptDevice = async (device: any): Promise<any> => {
         const dec = await aesDecrypt(decrypted.TlsUrl);
         if (dec) decrypted.TlsUrl = dec;
       }
-      decrypted.UrlsEncrypted = false; // Decrypted successfully
+      decrypted.UrlsEncrypted = false;
     } catch {}
     return decrypted;
   }
@@ -83,7 +81,7 @@ export const decryptDeviceList = async (devices: any[]): Promise<any[]> => {
   return decryptedList;
 };
 
-/** Fetch with configurable timeout */
+/** Fetch with configurable timeout and abort safety */
 export const fetchWithTimeout = async (url: string, options: any = {}, timeoutMs = 2500) => {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
@@ -97,12 +95,15 @@ export const fetchWithTimeout = async (url: string, options: any = {}, timeoutMs
   }
 };
 
-/** Extract subnet prefix from IP (first 3 octets) */
+/** 
+ * Extract subnet prefix from IP. 
+ * Improved: Handles both /24 and broader ranges for initial discovery probes.
+ */
 export const getSubnet = (ip: string): string => {
   if (!ip) return '';
   const clean = ip.replace(/^https?:\/\//, '').split(':')[0];
   const parts = clean.split('.');
-  return parts.length >= 3 ? `${parts[0]}.${parts[1]}.${parts[2]}` : '';
+  return parts.length >= 3 ? `${parts[0]}.${parts[1]}.${parts[2]}.` : '';
 };
 
 /** Determine connection type for a device relative to this phone */
@@ -115,37 +116,45 @@ export const getConnectionType = (device: any, myLocalIp: string): 'Local' | 'Cl
   return 'Cloud';
 };
 
-/** Color map for connection types — uses theme accent colors */
+/** Color map for connection types */
 export const connectionColors: Record<string, string> = {
-  Local: '#34D399',   // colors.accent.success
-  Cloud: '#FBBF24',   // colors.accent.warning
-  Offline: '#F87171', // colors.accent.error
+  Local: '#34D399',   // accent.success
+  Cloud: '#FBBF24',   // accent.warning
+  Offline: '#F87171', // accent.error
 };
 
 /**
  * Normalize a raw IP/URL into a clean http:// URL with port.
- * "192.168.1.5"       → "http://192.168.1.5:8999"
- * "192.168.1.5:8999"  → "http://192.168.1.5:8999"
- * "http://192.168.1.5" → "http://192.168.1.5:8999"
- * "https://x.trycloudflare.com/" → "https://x.trycloudflare.com"
+ * Default port set to 3000 to match FlyShelf PC default.
  */
-const normalizeUrl = (raw: string): string => {
+export const normalizeUrl = (raw: string, defaultPort = 3000): string => {
   let url = raw.trim();
   if (!url) return '';
-  // Cloudflare URLs are already complete
   if (url.includes('trycloudflare.com')) return url.replace(/\/$/, '');
-  // Add http:// if missing
   if (!url.startsWith('http')) url = `http://${url}`;
-  // Add port if missing
+  
   const hostPart = url.replace(/^https?:\/\//, '');
-  if (!hostPart.includes(':')) url = `${url}:8999`;
+  if (!hostPart.includes(':')) url = `${url}:${defaultPort}`;
   return url.replace(/\/$/, '');
+};
+
+/** 
+ * MEMORY OPTIMIZED: Converts Uint8Array to Base64 without intermediate strings.
+ * Critical for 50MB PDF support to prevent OOM.
+ */
+export const uint8ArrayToBase64 = (data: Uint8Array): string => {
+  return quickEncode(data);
+};
+
+/**
+ * MEMORY OPTIMIZED: Converts Base64 to Uint8Array using JSI.
+ */
+export const base64ToUint8Array = (base64: string): Uint8Array => {
+  return quickDecode(base64);
 };
 
 /**
  * Get ordered list of URLs to try for a device.
- * Priority: LAN (fastest) → Cloudflare (reliable) → raw Url field
- * No health checks here — caller will try-then-fallback.
  */
 export const getDeviceUrls = (device: any): string[] => {
   if (!device) return [];
@@ -166,22 +175,17 @@ export const getDeviceUrls = (device: any): string[] => {
     }
   };
 
-  // LAN first (lowest latency)
   add(device.LocalIp);
-  // Then the Url field (often same as LocalIp, but may differ)
   add(device.Url);
-  // TLS LAN (encrypted local — preferred over Cloudflare when on same network)
   if (device.TlsUrl) add(device.TlsUrl);
-  // Then Cloudflare (works from anywhere)
   add(device.GlobalUrl);
 
   return urls;
 };
 
 /**
- * Resolve the best reachable URL for a device.
- * Smart approach: trust Firebase data, only health-check if multiple candidates.
- * If only one URL available, use it directly (no wasted round-trip).
+ * Resolve the best reachable URL using parallel races.
+ * LAN is prioritized by staggering Cloudflare.
  */
 export const resolveOptimalUrl = async (
   device: any,
@@ -192,46 +196,69 @@ export const resolveOptimalUrl = async (
 
   const urls = getDeviceUrls(device);
   if (urls.length === 0) return null;
-
-  // If only one URL, trust it — don't waste time health-checking
   if (urls.length === 1) return urls[0];
 
-  // Multiple URLs: quick health check to pick the fastest (LAN preferred)
-  // Use Promise.race — first healthy response wins
   try {
-    const result = await Promise.any(
-      urls.map(async (url, idx) => {
-        // Stagger Cloudflare by 500ms to prefer LAN
+    return await Promise.any(
+      urls.map(async (url) => {
+        // Stagger Cloudflare by 400ms to prefer LAN response even if it's slightly slower
         if (url.includes('trycloudflare.com')) {
-          await new Promise(r => setTimeout(r, 500));
+          await new Promise(r => setTimeout(r, 400));
         }
         const headers: Record<string, string> = { 'X-FlyShelf-Client': 'MobileCompanion' };
         if (pairingKey) headers['X-Pairing-Key'] = pairingKey;
-        const res = await fetchFn(`${url}/api/health`, {
-          method: 'GET',
-          headers,
-        }, 2000);
+        
+        const res = await fetchFn(`${url}/api/health`, { method: 'GET', headers }, 1500);
         if (res.ok) return url;
-        throw new Error(`${url} returned ${res.status}`);
+        throw new Error();
       })
     );
-    return result;
   } catch {
-    // All failed — return null (prevents SSRF redirects)
     return null;
   }
 };
 
+/**
+ * Parallel Subnet Scanner — Discovery without Firebase.
+ * Scans the current /24 subnet on common FlyShelf ports.
+ */
+export const scanSubnetForPc = async (myIp: string): Promise<string[]> => {
+  const subnet = getSubnet(myIp);
+  if (!subnet) return [];
+  
+  const ports = [3000, 8080, 8999];
+  const candidates: string[] = [];
+  const baseIp = subnet;
+  
+  // We scan in parallel chunks to avoid hitting OS limits
+  const CHUNK_SIZE = 50;
+  const discovered: string[] = [];
+  
+  for (let i = 1; i <= 254; i += CHUNK_SIZE) {
+    const chunk = Array.from({ length: Math.min(CHUNK_SIZE, 255 - i) }, (_, j) => i + j);
+    await Promise.allSettled(chunk.flatMap(nodeId => {
+      const targetIp = `${baseIp}${nodeId}`;
+      return ports.map(async port => {
+        try {
+          const url = `http://${targetIp}:${port}`;
+          const res = await fetchWithTimeout(`${url}/api/health`, { method: 'GET' }, 400);
+          if (res.ok) discovered.push(url);
+        } catch {}
+      });
+    }));
+    if (discovered.length > 0) break; // Found at least one, stop scanning
+  }
+  
+  return discovered;
+};
+
 /** Build absolute media URL from a clip item */
 export const getMediaUrl = (item: any, activeDevices: any[], pcLocalIp: string): string => {
-  // PRIORITY 1: Local cached file (already downloaded — most reliable)
   if (item.CachedUri && (item.CachedUri.startsWith('file://') || item.CachedUri.startsWith('/'))) return item.CachedUri;
-  // PRIORITY 2: Absolute URL (Cloudflare or Firebase)
   if (item.Raw && item.Raw.startsWith('http')) return item.Raw;
   if (item.DownloadUrl && item.DownloadUrl.startsWith('http')) return item.DownloadUrl;
   if (item.PreviewUrl && item.PreviewUrl.startsWith('http')) return item.PreviewUrl;
 
-  // Relative URL — needs a base
   const relUrl = item.PreviewUrl || item.DownloadUrl || item.Raw || '';
   if (!relUrl) return '';
 

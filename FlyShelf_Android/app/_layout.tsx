@@ -44,25 +44,40 @@ Notifications.setNotificationHandler({
 
 import { Platform } from 'react-native';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 const BACKGROUND_FETCH_TASK = 'background-clipboard-sync';
 
 if (Platform.OS !== 'web') {
   TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
     try {
-       // Read the pairing key to scope the query to this user's data
        const pk = await getSecureItem('pairingKey');
        if (!pk) return BackgroundFetch.BackgroundFetchResult.NoData;
+
+       // Optimization: Only notify if the latest item is newer than the last time we checked
+       const lastNotifiedStr = await AsyncStorage.getItem('lastNotifiedTimestamp');
+       const lastNotified = lastNotifiedStr ? parseInt(lastNotifiedStr) : 0;
+
        const snaps = await get(query(ref(database, `clipboard/${pk}`), limitToLast(1)));
        if (snaps.exists()) {
-           await Notifications.scheduleNotificationAsync({
-              content: {
-                 title: "FlyShelf Payload Detected",
-                 body: "A new payload hit the mesh. Tap to inject instantly!",
-              },
-              trigger: null,
-           });
+           const data = snaps.val();
+           const latestKey = Object.keys(data)[0];
+           const latestItem = data[latestKey];
+           const latestTs = latestItem.Timestamp || 0;
+
+           if (latestTs > lastNotified) {
+               await AsyncStorage.setItem('lastNotifiedTimestamp', latestTs.toString());
+               await Notifications.scheduleNotificationAsync({
+                  content: {
+                     title: "FlyShelf Mesh Updated",
+                     body: `New payload from ${latestItem.SourceDeviceName || 'PC'}. Tap to sync!`,
+                  },
+                  trigger: null,
+               });
+               return BackgroundFetch.BackgroundFetchResult.NewData;
+           }
        }
-       return BackgroundFetch.BackgroundFetchResult.NewData;
+       return BackgroundFetch.BackgroundFetchResult.NoData;
     } catch (err) {
        return BackgroundFetch.BackgroundFetchResult.Failed;
     }
@@ -122,6 +137,7 @@ export default function RootLayout() {
           <SettingsProvider>
             <Stack>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="pdf-tools" options={{ headerShown: false, animation: 'slide_from_bottom' }} />
             </Stack>
             <StatusBar style="auto" />
           </SettingsProvider>

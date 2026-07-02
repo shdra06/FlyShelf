@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, useWindowDimensions, Modal, Alert, ScrollView, Image, Platform, FlatList, ToastAndroid, Linking, TextInput, NativeModules } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, SafeAreaView, ActivityIndicator, useWindowDimensions, Modal, Alert, ScrollView, Image, Platform, FlatList, ToastAndroid, Linking, TextInput, NativeModules, Pressable } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import * as Sharing from 'expo-sharing';
 import * as IntentLauncher from 'expo-intent-launcher';
 import * as MediaLibrary from 'expo-media-library';
@@ -12,10 +11,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSettings } from '../../context/SettingsContext';
 import { database } from '../../firebaseConfig';
 import { ref as dbRef, push, set, onValue, query } from 'firebase/database';
-import { colors, font, radius, shadows, space } from '../../styles/theme';
+import { colors, font, radius, shadows, space, component } from '../../styles/theme';
 import AnimatedCard from '../../components/AnimatedCard';
 import AnimatedPressable from '../../components/AnimatedPressable';
 import { decryptDeviceList, isValidPairingKey } from '../../utils/networkHelpers';
+import { router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
+import Animated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import ScreenHeader from '../../components/ScreenHeader';
 
 type DeviceGroup = { id: string; name: string; deviceNames: string[] };
 
@@ -770,7 +774,7 @@ export default function ConnectScreen() {
         accessibilityHint="Tap to select as transfer target"
       >
         <View style={[s.deviceIcon, { backgroundColor: type === 'local' ? '#10B98118' : '#3B82F618' }]}>
-          <IconSymbol name={isPC ? "desktopcomputer" : "iphone"} size={22} color={type === 'local' ? '#10B981' : '#3B82F6'} />
+          <Ionicons name={isPC ? "desktop-outline" : "phone-portrait-outline"} size={22} color={type === 'local' ? '#10B981' : '#3B82F6'} />
         </View>
         <View style={{ flex: 1, marginLeft: 12 }}>
           <Text style={s.deviceName}>{device.DeviceName || 'Unknown'}</Text>
@@ -793,7 +797,7 @@ export default function ConnectScreen() {
             <Text style={{ color: '#555', fontSize: 10 }}>{device.DeviceType}</Text>
           </View>
         </View>
-        <IconSymbol name="chevron.right" size={16} color="#4A5568" />
+        <Ionicons name="chevron-forward" size={16} color={colors.text.tertiary} />
       </TouchableOpacity>
     );
   };
@@ -839,7 +843,7 @@ export default function ConnectScreen() {
         {/* Header with prominent back */}
         <View style={[s.header, { flexDirection: 'row', alignItems: 'center', paddingTop: 50 }]}>
           <TouchableOpacity onPress={() => { setSelectedTarget(null); setMediaAssets([]); setBrowserFiles([]); setSelectedIds(new Set()); }} style={{ marginRight: 14, padding: 10, backgroundColor: '#EF4444', borderRadius: 12 }} accessibilityLabel="Go back" accessibilityRole="button">
-            <IconSymbol name="chevron.left" size={18} color="#FFF" />
+            <Ionicons name="chevron-back" size={18} color="#FFF" />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
             <Text style={[s.title, { fontSize: 22 }]}>Send to {selectedTarget.DeviceName}</Text>
@@ -925,16 +929,16 @@ export default function ConnectScreen() {
                       <Image source={{ uri: asset.uri }} style={{ width: '100%', height: '100%', borderRadius: 10, backgroundColor: '#2A2F3A' }} />
                     ) : (
                       <View style={{ width: '100%', height: '100%', borderRadius: 10, backgroundColor: '#1C1F26', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#2A2F3A' }}>
-                        <IconSymbol name="doc.fill" size={24} color={asset.mediaType === 'pdf' ? '#EF4444' : '#3B82F6'} />
+                        <Ionicons name="document" size={24} color={asset.mediaType === 'pdf' ? '#EF4444' : '#3B82F6'} />
                         <Text style={{ color: '#AAA', fontSize: 8, marginTop: 4, paddingHorizontal: 4 }} numberOfLines={2}>{asset.filename}</Text>
                       </View>
                     )}
                     <TouchableOpacity style={[s.checkCircle, isSelected && s.checkCircleActive]} onPress={() => toggleSelection(asset.id)}>
-                      {isSelected && <IconSymbol name="checkmark" size={12} color="#FFF" />}
+                      {isSelected && <Ionicons name="checkmark" size={12} color="#FFF" />}
                     </TouchableOpacity>
                     {asset.mediaType === 'video' && (
                       <View style={{ position: 'absolute', bottom: 4, left: 4, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5 }}>
-                        <IconSymbol name="play.fill" size={10} color="#FFF" />
+                        <Ionicons name="play" size={10} color="#FFF" />
                       </View>
                     )}
                     {asset.source === 'Browse' && (
@@ -947,7 +951,7 @@ export default function ConnectScreen() {
               })}
               {allDisplayItems.length === 0 && !isScanning && (
                 <View style={{ width: '100%', alignItems: 'center', marginTop: 40 }}>
-                  <IconSymbol name="magnifyingglass" size={40} color="#4A5568" />
+                  <Ionicons name="search" size={40} color={colors.text.tertiary} />
                   <Text style={{ color: '#6B7280', marginTop: 12, fontSize: 14 }}>No files found. Try scanning or browsing.</Text>
                 </View>
               )}
@@ -970,14 +974,14 @@ export default function ConnectScreen() {
           <View style={[s.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.95)' }]}>
             <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setEnlargedPreview(null)} accessibilityLabel="Close preview" accessibilityRole="button">
               <View style={{ padding: 10, backgroundColor: '#2A2F3A', borderRadius: 20 }}>
-                <IconSymbol name="xmark" size={24} color="#FFF" />
+                <Ionicons name="close" size={24} color="#FFF" />
               </View>
             </TouchableOpacity>
             {enlargedPreview && (enlargedPreview.mediaType === 'photo' || enlargedPreview.mediaType === 'video') ? (
               <Image source={{ uri: enlargedPreview.uri }} style={{ width: '100%', height: '80%', resizeMode: 'contain' }} />
             ) : (
               <View style={{ alignItems: 'center' }}>
-                <IconSymbol name="doc.fill" size={80} color="#F59E0B" />
+                <Ionicons name="document" size={80} color={colors.accent.warning} />
                 <Text style={{ color: '#FFF', marginTop: 20, fontSize: 18, fontWeight: 'bold' }}>{enlargedPreview?.filename}</Text>
               </View>
             )}
@@ -1047,21 +1051,35 @@ export default function ConnectScreen() {
 
 
 
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler({ onScroll: (e) => { scrollY.value = e.contentOffset.y; } });
+
   // ─── MAIN SCREEN: Files Browser ───
   return (
     <LinearGradient colors={[colors.bg.base, colors.bg.baseEnd]} style={{ flex: 1 }}>
-    <SafeAreaView style={s.container}>
-      <View style={s.header}>
-        <Text style={s.title}>Files</Text>
-        <Text style={s.subtitle}>Documents & Media Browser</Text>
-      </View>
+    <View style={s.container}>
+      <ScreenHeader
+        title="Files"
+        subtitle="Documents & Media"
+        scrollY={scrollY}
+        rightActions={
+          <Pressable
+            onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/pdf-tools'); }}
+            style={{ padding: 8, borderRadius: 10, backgroundColor: colors.accent.primaryDim }}
+            accessibilityLabel="PDF Tools"
+            accessibilityRole="button"
+          >
+            <Ionicons name="document-text" size={22} color={colors.accent.primary} />
+          </Pressable>
+        }
+      />
 
       {/* Search bar */}
       <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.bg.input, borderRadius: 12, paddingHorizontal: 14, borderWidth: 1, borderColor: colors.border.subtle }}>
-          <IconSymbol name="magnifyingglass" size={16} color={colors.text.tertiary} />
+          <Ionicons name="search" size={16} color={colors.text.tertiary} />
           <TextInput value={fileSearchText} onChangeText={setFileSearchText} placeholder="Search files..." placeholderTextColor={colors.text.tertiary} style={{ flex: 1, color: colors.text.primary, fontSize: 14, paddingVertical: 12, marginLeft: 10 }} accessibilityLabel="Search files" accessibilityRole="search" />
-          {fileSearchText ? <TouchableOpacity onPress={() => setFileSearchText('')} accessibilityLabel="Clear search" accessibilityRole="button" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><IconSymbol name="xmark.circle.fill" size={18} color={colors.text.tertiary} /></TouchableOpacity> : null}
+          {fileSearchText ? <TouchableOpacity onPress={() => setFileSearchText('')} accessibilityLabel="Clear search" accessibilityRole="button" hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}><Ionicons name="close-circle" size={18} color={colors.text.tertiary} /></TouchableOpacity> : null}
         </View>
       </View>
 
@@ -1126,7 +1144,7 @@ export default function ConnectScreen() {
                   <Image source={{ uri: asset.uri }} style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: colors.bg.cardHover }} />
                 ) : (
                   <View style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: `${iconColor}15`, alignItems: 'center', justifyContent: 'center' }}>
-                    <IconSymbol name={isPdf ? 'doc.fill' : isDoc ? 'doc.text.fill' : isVideo ? 'play.rectangle.fill' : 'photo.fill'} size={22} color={iconColor} />
+                    <Ionicons name={isPdf ? 'document' : isDoc ? 'document-text' : isVideo ? 'videocam' : 'image'} size={22} color={iconColor} />
                   </View>
                 )}
                 <View style={{ flex: 1, marginLeft: 12 }}>
@@ -1139,16 +1157,16 @@ export default function ConnectScreen() {
                   </View>
                 </View>
                 <View style={{ flexDirection: 'row', gap: 4 }}>
-                  {(isPdf || isDoc) && <TouchableOpacity onPress={() => openFile(asset)} style={{ padding: 8, backgroundColor: colors.accent.infoDim, borderRadius: 8 }} accessibilityLabel={`Open ${asset.filename || 'file'}`} accessibilityRole="button"><IconSymbol name="arrow.up.right" size={14} color={colors.accent.info} /></TouchableOpacity>}
-                  <TouchableOpacity onPress={() => shareFile(asset)} style={{ padding: 8, backgroundColor: colors.accent.successDim, borderRadius: 8 }} accessibilityLabel={`Share ${asset.filename || 'file'}`} accessibilityRole="button"><IconSymbol name="square.and.arrow.up" size={14} color={colors.accent.success} /></TouchableOpacity>
+                  {(isPdf || isDoc) && <TouchableOpacity onPress={() => openFile(asset)} style={{ padding: 8, backgroundColor: colors.accent.infoDim, borderRadius: 8 }} accessibilityLabel={`Open ${asset.filename || 'file'}`} accessibilityRole="button"><Ionicons name="open-outline" size={14} color={colors.accent.info} /></TouchableOpacity>}
+                  <TouchableOpacity onPress={() => shareFile(asset)} style={{ padding: 8, backgroundColor: colors.accent.successDim, borderRadius: 8 }} accessibilityLabel={`Share ${asset.filename || 'file'}`} accessibilityRole="button"><Ionicons name="share-outline" size={14} color={colors.accent.success} /></TouchableOpacity>
                   <View style={[{ width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: isSelected ? colors.accent.success : colors.text.tertiary, alignItems: 'center', justifyContent: 'center' }, isSelected && { backgroundColor: colors.accent.success }]}>
-                    {isSelected && <IconSymbol name="checkmark" size={12} color="#FFF" />}
+                    {isSelected && <Ionicons name="checkmark" size={12} color="#FFF" />}
                   </View>
                 </View>
               </TouchableOpacity>
             );
           }}
-          ListEmptyComponent={<View style={{ alignItems: 'center', marginTop: 60 }}><IconSymbol name="folder" size={48} color={colors.text.tertiary} /><Text style={{ color: colors.text.secondary, marginTop: 12 }}>No files found</Text></View>}
+          ListEmptyComponent={<View style={{ alignItems: 'center', marginTop: 60 }}><Ionicons name="folder-open-outline" size={48} color={colors.text.tertiary} /><Text style={{ color: colors.text.secondary, marginTop: 12 }}>No files found</Text></View>}
         />
       )}
 
@@ -1195,12 +1213,12 @@ export default function ConnectScreen() {
       <Modal visible={!!enlargedPreview} animationType="fade" transparent>
         <View style={[s.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.95)' }]}>
           <TouchableOpacity style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setEnlargedPreview(null)} accessibilityLabel="Close preview" accessibilityRole="button">
-            <View style={{ padding: 10, backgroundColor: '#2A2F3A', borderRadius: 20 }}><IconSymbol name="xmark" size={24} color="#FFF" /></View>
+            <View style={{ padding: 10, backgroundColor: '#2A2F3A', borderRadius: 20 }}><Ionicons name="close" size={24} color="#FFF" /></View>
           </TouchableOpacity>
           {enlargedPreview && (enlargedPreview.mediaType === 'photo' || enlargedPreview.mediaType === 'video') ? (
             <Image source={{ uri: enlargedPreview.uri }} style={{ width: '100%', height: '80%', resizeMode: 'contain' }} />
           ) : (
-            <View style={{ alignItems: 'center' }}><IconSymbol name="doc.fill" size={80} color="#F59E0B" /><Text style={{ color: '#FFF', marginTop: 20, fontSize: 18, fontWeight: 'bold' }}>{enlargedPreview?.filename}</Text></View>
+            <View style={{ alignItems: 'center' }}><Ionicons name="document" size={80} color={colors.accent.warning} /><Text style={{ color: '#FFF', marginTop: 20, fontSize: 18, fontWeight: 'bold' }}>{enlargedPreview?.filename}</Text></View>
           )}
         </View>
       </Modal>
@@ -1240,7 +1258,7 @@ export default function ConnectScreen() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
     </LinearGradient>
   );
 }

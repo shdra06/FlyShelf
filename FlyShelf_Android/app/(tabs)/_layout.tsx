@@ -1,18 +1,49 @@
 import { Tabs } from 'expo-router';
 import React from 'react';
 import { Platform, View, StyleSheet } from 'react-native';
-import { BlurView } from 'expo-blur';
+import { Ionicons } from '@expo/vector-icons';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  interpolate,
+} from 'react-native-reanimated';
 
 import { HapticTab } from '@/components/haptic-tab';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { colors, font } from '../../styles/theme';
+import { colors, font, component, surface, spring as springConfig } from '../../styles/theme';
+
+// ═══════════════════════════════════════════
+// TAB ICON WITH PILL INDICATOR + ANIMATION
+// ═══════════════════════════════════════════
+
+function TabIcon({ focused, iconOutline, iconFilled, color }: {
+  focused: boolean;
+  iconOutline: string;
+  iconFilled: string;
+  color: string;
+}) {
+  return (
+    <View style={styles.iconOuter}>
+      {focused && <View style={styles.pill} />}
+      <Ionicons
+        name={(focused ? iconFilled : iconOutline) as any}
+        size={22}
+        color={color}
+      />
+    </View>
+  );
+}
+
+// ═══════════════════════════════════════════
+// TAB LAYOUT
+// ═══════════════════════════════════════════
 
 export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: '#6384FF',
-        tabBarInactiveTintColor: '#555C6B',
+        tabBarActiveTintColor: colors.accent.primary,
+        tabBarInactiveTintColor: colors.text.tertiary,
         headerShown: false,
         tabBarButton: HapticTab,
         tabBarStyle: {
@@ -20,20 +51,20 @@ export default function TabLayout() {
           bottom: 0,
           left: 0,
           right: 0,
-          height: Platform.OS === 'ios' ? 88 : 64,
-          backgroundColor: 'rgba(11, 13, 18, 0.92)',
+          height: component.tabBarHeight,
+          backgroundColor: surface.overlay,
           borderTopWidth: 1,
-          borderTopColor: 'rgba(255,255,255,0.06)',
-          paddingBottom: Platform.OS === 'ios' ? 24 : 8,
-          paddingTop: 8,
+          borderTopColor: colors.border.subtle,
+          paddingBottom: component.tabBarPaddingBottom,
+          paddingTop: 6,
           elevation: 0,
           shadowColor: '#000',
           shadowOffset: { width: 0, height: -4 },
           shadowOpacity: 0.3,
-          shadowRadius: 12,
+          shadowRadius: 16,
         },
         tabBarLabelStyle: {
-          fontFamily: font.semibold,
+          fontFamily: font.medium,
           fontSize: 10,
           letterSpacing: 0.3,
           marginTop: 2,
@@ -41,12 +72,6 @@ export default function TabLayout() {
         tabBarIconStyle: {
           marginBottom: -2,
         },
-        // Frosted glass effect on iOS
-        ...(Platform.OS === 'ios' ? {
-          tabBarBackground: () => (
-            <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-          ),
-        } : {}),
       }}>
       <Tabs.Screen
         name="index"
@@ -54,9 +79,7 @@ export default function TabLayout() {
           title: 'Sync',
           tabBarAccessibilityLabel: 'Sync tab',
           tabBarIcon: ({ color, focused }) => (
-            <View style={focused ? styles.activeIconContainer : undefined} accessibilityLabel={focused ? 'Sync tab, selected' : 'Sync tab'}>
-              <IconSymbol size={24} name="repeat" color={color} />
-            </View>
+            <TabIcon focused={focused} iconOutline="sync-outline" iconFilled="sync" color={color} />
           ),
         }}
       />
@@ -66,9 +89,7 @@ export default function TabLayout() {
           title: 'Files',
           tabBarAccessibilityLabel: 'Files tab',
           tabBarIcon: ({ color, focused }) => (
-            <View style={focused ? styles.activeIconContainer : undefined} accessibilityLabel={focused ? 'Files tab, selected' : 'Files tab'}>
-              <IconSymbol size={24} name="folder" color={color} />
-            </View>
+            <TabIcon focused={focused} iconOutline="folder-outline" iconFilled="folder" color={color} />
           ),
         }}
       />
@@ -78,9 +99,7 @@ export default function TabLayout() {
           title: 'Notes',
           tabBarAccessibilityLabel: 'Notes tab',
           tabBarIcon: ({ color, focused }) => (
-            <View style={focused ? styles.activeIconContainer : undefined} accessibilityLabel={focused ? 'Notes tab, selected' : 'Notes tab'}>
-              <IconSymbol size={24} name="doc.text" color={color} />
-            </View>
+            <TabIcon focused={focused} iconOutline="document-text-outline" iconFilled="document-text" color={color} />
           ),
         }}
       />
@@ -90,9 +109,7 @@ export default function TabLayout() {
           title: 'Todo',
           tabBarAccessibilityLabel: 'Todo tab',
           tabBarIcon: ({ color, focused }) => (
-            <View style={focused ? styles.activeIconContainer : undefined} accessibilityLabel={focused ? 'Todo tab, selected' : 'Todo tab'}>
-              <IconSymbol size={24} name="checklist" color={color} />
-            </View>
+            <TabIcon focused={focused} iconOutline="checkbox-outline" iconFilled="checkbox" color={color} />
           ),
         }}
       />
@@ -102,9 +119,7 @@ export default function TabLayout() {
           title: 'Settings',
           tabBarAccessibilityLabel: 'Settings tab',
           tabBarIcon: ({ color, focused }) => (
-            <View style={focused ? styles.activeIconContainer : undefined} accessibilityLabel={focused ? 'Settings tab, selected' : 'Settings tab'}>
-              <IconSymbol size={24} name="gear" color={color} />
-            </View>
+            <TabIcon focused={focused} iconOutline="settings-outline" iconFilled="settings" color={color} />
           ),
         }}
       />
@@ -112,11 +127,21 @@ export default function TabLayout() {
   );
 }
 
+// ═══════════════════════════════════════════
+// STYLES
+// ═══════════════════════════════════════════
+
 const styles = StyleSheet.create({
-  activeIconContainer: {
-    backgroundColor: 'rgba(99, 132, 255, 0.12)',
-    borderRadius: 12,
-    padding: 6,
-    marginBottom: -4,
+  iconOuter: {
+    width: component.pillWidth,
+    height: component.pillHeight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: component.pillHeight / 2,
+  },
+  pill: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: colors.accent.primaryDim,
+    borderRadius: component.pillHeight / 2,
   },
 });

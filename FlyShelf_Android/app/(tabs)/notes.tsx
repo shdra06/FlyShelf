@@ -12,6 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useSettings } from '../../context/SettingsContext';
 import { fetchWithTimeout } from '../../utils/networkHelpers';
+import { NetworkClock } from '../../utils/networkClock';
 import { getSecureItem } from '../../utils/secureStorage';
 import {
   NoteDay, NoteBullet, FreeformSection, SubBulletItem,
@@ -19,7 +20,10 @@ import {
   generateId, formatDisplayDate, isToday, parseDate,
 } from '../../utils/noteTypes';
 import { styles } from '../../styles/notesStyles';
-import { colors, font } from '../../styles/theme';
+import { colors, font, component } from '../../styles/theme';
+import { Ionicons } from '@expo/vector-icons';
+import RAnimated, { useSharedValue, useAnimatedScrollHandler } from 'react-native-reanimated';
+import ScreenHeader from '../../components/ScreenHeader';
 
 // ═══════════════════════════════════════════════════════════
 // CONSTANTS
@@ -133,9 +137,17 @@ export default function NotesScreen() {
   const daysRef = useRef<NoteDay[]>([]);
   const modifiedDatesRef = useRef<Set<string>>(new Set());
   const fabScale = useRef(new Animated.Value(1)).current;
+  const pollCountRef = useRef(0);
+  const syncFailCountRef = useRef(0);
+  const mountedRef = useRef(true);
 
   // Keep ref in sync
   useEffect(() => { daysRef.current = days; }, [days]);
+
+  // Unmount guard
+  useEffect(() => {
+    return () => { mountedRef.current = false; };
+  }, []);
 
   // ─── Generated date chips ───
   const recentDates = useRef(generateRecentDates(RECENT_DAYS_COUNT)).current;
@@ -170,6 +182,12 @@ export default function NotesScreen() {
   // SYNC: Poll for remote notes
   // ═══════════════════════════════════════════════════════════
   const fetchRemoteNotes = useCallback(async () => {
+    // Re-resolve PC URL every 5th poll
+    pollCountRef.current++;
+    if (pollCountRef.current % 5 === 0) {
+      pcUrlRef.current = await getCachedPcUrl();
+    }
+
     if (!pcUrlRef.current || !pairingKey) {
       setSyncStatus('offline');
       return;
@@ -187,12 +205,20 @@ export default function NotesScreen() {
 
       if (!res.ok) {
         setSyncStatus('offline');
+        syncFailCountRef.current++;
+        if (syncFailCountRef.current === 2) {
+          showToast('Notes sync offline — PC may be unreachable');
+        }
         return;
       }
 
       const remoteDays: NoteDay[] = await res.json();
       if (!Array.isArray(remoteDays)) {
         setSyncStatus('offline');
+        syncFailCountRef.current++;
+        if (syncFailCountRef.current === 2) {
+          showToast('Notes sync offline — PC may be unreachable');
+        }
         return;
       }
 
@@ -217,8 +243,18 @@ export default function NotesScreen() {
       });
 
       setSyncStatus('synced');
+      syncFailCountRef.current = 0;
+
+      // Clear dates that were merged from remote to avoid re-POSTing stale data
+      for (const remote of remoteDays) {
+        modifiedDatesRef.current.delete(remote.Date);
+      }
     } catch {
       setSyncStatus('offline');
+      syncFailCountRef.current++;
+      if (syncFailCountRef.current === 2) {
+        showToast('Notes sync offline — PC may be unreachable');
+      }
     }
   }, [pairingKey]);
 
@@ -239,6 +275,7 @@ export default function NotesScreen() {
   const schedulePost = useCallback(() => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(async () => {
+      if (!mountedRef.current) return;
       if (!pcUrlRef.current || !pairingKey) return;
       const modifiedDates = modifiedDatesRef.current;
       if (modifiedDates.size === 0) return;
@@ -262,11 +299,20 @@ export default function NotesScreen() {
         if (res.ok) {
           modifiedDatesRef.current = new Set();
           setSyncStatus('synced');
+          syncFailCountRef.current = 0;
         } else {
           setSyncStatus('offline');
+          syncFailCountRef.current++;
+          if (syncFailCountRef.current === 2) {
+            showToast('Notes sync offline — PC may be unreachable');
+          }
         }
       } catch {
         setSyncStatus('offline');
+        syncFailCountRef.current++;
+        if (syncFailCountRef.current === 2) {
+          showToast('Notes sync offline — PC may be unreachable');
+        }
       }
     }, DEBOUNCE_POST_MS);
   }, [pairingKey]);
@@ -295,7 +341,7 @@ export default function NotesScreen() {
         if (day.Date !== selectedDateKey) return day;
         return {
           ...day,
-          LastModified: Date.now(),
+          LastModified: NetworkClock.now(),
           Bullets: day.Bullets.map(b => b.Id === bulletId ? updater({ ...b, LastEdited: new Date().toISOString() }) : b),
         };
       });
@@ -309,7 +355,7 @@ export default function NotesScreen() {
         if (day.Date !== selectedDateKey) return day;
         return {
           ...day,
-          LastModified: Date.now(),
+          LastModified: NetworkClock.now(),
           FreeformSections: (day.FreeformSections || []).map(s =>
             s.Id === sectionId ? { ...s, Content: content } : s
           ),
@@ -328,7 +374,7 @@ export default function NotesScreen() {
     updateDays(prev => {
       const { days: updated, day, idx } = ensureDay(prev, selectedDateKey);
       const sorted = [...day.Bullets, { ...newBullet, SortOrder: day.Bullets.length }];
-      updated[idx] = { ...day, Bullets: sorted, LastModified: Date.now() };
+      updated[idx] = { ...day, Bullets: sorted, LastModified: NetworkClock.now() };
       return updated;
     }, selectedDateKey);
   }, [selectedDateKey, updateDays]);
@@ -344,7 +390,7 @@ export default function NotesScreen() {
       } else {
         sections.push(section);
       }
-      updated[idx] = { ...day, FreeformSections: sections, LastModified: Date.now() };
+      updated[idx] = { ...day, FreeformSections: sections, LastModified: NetworkClock.now() };
       return updated;
     }, selectedDateKey);
   }, [selectedDateKey, updateDays]);
@@ -356,7 +402,7 @@ export default function NotesScreen() {
         if (day.Date !== selectedDateKey) return day;
         return {
           ...day,
-          LastModified: Date.now(),
+          LastModified: NetworkClock.now(),
           Bullets: day.Bullets.filter(b => b.Id !== bulletId),
         };
       });
@@ -426,7 +472,7 @@ export default function NotesScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     updateDays(prev => {
       const { days: updated, day, idx } = ensureDay(prev, selectedDateKey);
-      updated[idx] = { ...day, IsFreeformMode: !day.IsFreeformMode, LastModified: Date.now() };
+      updated[idx] = { ...day, IsFreeformMode: !day.IsFreeformMode, LastModified: NetworkClock.now() };
       return updated;
     }, selectedDateKey);
   }, [selectedDateKey, updateDays]);
@@ -482,7 +528,7 @@ export default function NotesScreen() {
         b.SortOrder = existingCount + i;
         return b;
       });
-      updated[idx] = { ...day, Bullets: [...day.Bullets, ...newBullets], LastModified: Date.now() };
+      updated[idx] = { ...day, Bullets: [...day.Bullets, ...newBullets], LastModified: NetworkClock.now() };
       return updated;
     }, selectedDateKey);
     setShowTemplates(false);
@@ -774,6 +820,23 @@ export default function NotesScreen() {
   // RENDER: Freeform Section Card
   // ═══════════════════════════════════════════════════════════
 
+  const handleDeleteFreeformSection = useCallback((sectionId: string) => {
+    const currentDay = days.find(d => d.Date === selectedDateKey);
+    if (!currentDay || (currentDay.FreeformSections?.length || 0) <= 1) {
+      showToast('Cannot remove the last section');
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    updateDays(prev => prev.map(day => {
+      if (day.Date !== selectedDateKey) return day;
+      return {
+        ...day,
+        FreeformSections: (day.FreeformSections || []).filter(s => s.Id !== sectionId),
+        LastModified: NetworkClock.now(),
+      };
+    }), selectedDateKey);
+  }, [days, selectedDateKey, updateDays]);
+
   const renderFreeformCard = useCallback(({ item, index }: { item: FreeformSection; index: number }) => (
     <View>
       <View style={styles.freeformCard}>
@@ -789,6 +852,17 @@ export default function NotesScreen() {
           <Text style={styles.freeformTime}>
             {formatTime(item.CreatedAt)}
           </Text>
+          {(freeformData.length > 1) && (
+            <TouchableOpacity
+              onPress={() => handleDeleteFreeformSection(item.Id)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityLabel="Delete freeform section"
+              accessibilityRole="button"
+              style={{ marginLeft: 8, padding: 4 }}
+            >
+              <Ionicons name="trash-outline" size={16} color={colors.text.tertiary} />
+            </TouchableOpacity>
+          )}
         </View>
       </View>
       {/* Add section button between cards */}
@@ -802,7 +876,7 @@ export default function NotesScreen() {
         <Text style={styles.addSectionText}>section</Text>
       </TouchableOpacity>
     </View>
-  ), [updateFreeformSection, handleAddFreeformSection]);
+  ), [updateFreeformSection, handleAddFreeformSection, handleDeleteFreeformSection, freeformData.length]);
 
   // ═══════════════════════════════════════════════════════════
   // RENDER: Empty State
@@ -1021,6 +1095,9 @@ export default function NotesScreen() {
     );
   };
 
+  const scrollY = useSharedValue(0);
+  const scrollHandler = useAnimatedScrollHandler({ onScroll: (e) => { scrollY.value = e.contentOffset.y; } });
+
   return (
     <View style={styles.container}>
       {renderTemplatesModal()}
@@ -1028,11 +1105,13 @@ export default function NotesScreen() {
         colors={[colors.bg.base, colors.bg.baseEnd, colors.bg.base]}
         style={styles.gradient}
       >
-        <SafeAreaView style={styles.gradient} edges={['top']}>
+        <View style={styles.gradient}>
           {/* ─── Header ─── */}
-          <View style={styles.header}>
-            <Text style={styles.title}>Notes</Text>
-            <View style={styles.headerRight}>
+          <ScreenHeader
+            title="Notes"
+            scrollY={scrollY}
+            rightActions={
+              <View style={styles.headerRight}>
               {/* Sync indicator */}
               <View style={styles.syncIndicator}>
                 <View style={[styles.syncDot, { backgroundColor: syncColor }]} />
@@ -1095,8 +1174,8 @@ export default function NotesScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          </View>
-
+          }
+          />
           {/* ─── Day Selector ─── */}
           {renderDayChips()}
 
@@ -1185,7 +1264,7 @@ export default function NotesScreen() {
               <Text style={styles.fabText}>+</Text>
             </TouchableOpacity>
           </Animated.View>
-        </SafeAreaView>
+        </View>
       </LinearGradient>
     </View>
   );

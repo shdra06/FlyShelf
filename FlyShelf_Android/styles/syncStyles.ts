@@ -230,4 +230,64 @@ export const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 0.3,
   },
+
+  // ─── Undo Toast ───
+  undoToast: {
+    position: 'absolute',
+    bottom: 90,
+    left: space.xl,
+    right: space.xl,
+    backgroundColor: colors.bg.elevated,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border.medium,
+    paddingHorizontal: space.xl,
+    paddingVertical: space.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...shadows.elevated,
+    zIndex: 999,
+  },
+  undoToastText: {
+    fontFamily: font.semibold,
+    color: colors.text.secondary,
+    fontSize: 13,
+  },
+  undoToastAction: {
+    fontFamily: font.bold,
+    color: colors.accent.primary,
+    fontSize: 14,
+    letterSpacing: 0.5,
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+  },
+
+  // ─── Incognito Banner ───
+  incognitoBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(251,191,36,0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(251,191,36,0.20)',
+    borderRadius: radius.md,
+    marginHorizontal: space.xl,
+    marginBottom: space.sm,
+    paddingVertical: 6,
+    paddingHorizontal: space.md,
+    gap: 6,
+  },
+  incognitoBannerText: {
+    fontFamily: font.semibold,
+    color: '#FBBF24',
+    fontSize: 12,
+    letterSpacing: 0.2,
+  },
+
+  // ─── Incognito Toggle Button ───
+  incognitoButton: {
+    padding: 10,
+    borderRadius: 10,
+  },
 });

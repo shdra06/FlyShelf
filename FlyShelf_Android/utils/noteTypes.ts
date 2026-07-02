@@ -31,6 +31,7 @@ export type NoteBullet = {
 
 export type FreeformSection = {
   Id: string;
+  Title?: string;
   Content: string;
   CreatedAt: string;
 };
@@ -80,6 +81,7 @@ export type TodoItem = {
   Text: string;
   IsDone: boolean;
   CreatedAt: string;
+  LastEdited?: string;
   Priority: TodoPriority;
   DueDate?: string | null;
   Tags: string[];
@@ -118,7 +120,7 @@ export const createNoteBullet = (content = ''): NoteBullet => ({
   Id: generateId(),
   Header: '',
   Content: content,
-  IsCollapsed: false,
+  IsCollapsed: true,
   ImageDisplayWidth: 200,
   ImageDisplayWidth2: 200,
   CreatedAt: new Date().toISOString(),
@@ -133,6 +135,7 @@ export const createNoteBullet = (content = ''): NoteBullet => ({
 /** Create a blank FreeformSection */
 export const createFreeformSection = (content = ''): FreeformSection => ({
   Id: generateId(),
+  Title: '',
   Content: content,
   CreatedAt: new Date().toISOString(),
 });
@@ -152,6 +155,7 @@ export const createTodoItem = (text = ''): TodoItem => ({
   Text: text,
   IsDone: false,
   CreatedAt: new Date().toISOString(),
+  LastEdited: new Date().toISOString(),
   Priority: 0,
   DueDate: null,
   Tags: [],

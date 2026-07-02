@@ -207,4 +207,93 @@ export const typography = {
     textTransform: 'uppercase' as const,
     color: colors.text.tertiary,
   },
+  /** Compact title for collapsed headers */
+  compactTitle: {
+    fontFamily: font.bold,
+    fontSize: 20,
+    letterSpacing: -0.4,
+    color: colors.text.primary,
+  },
+  /** Subtitle / helper text under title */
+  subtitle: {
+    fontFamily: font.medium,
+    fontSize: 13,
+    color: colors.text.tertiary,
+    letterSpacing: 0.2,
+  },
 } as const;
+
+// ═══════════════════════════════════════════
+// ICON SIZES
+// ═══════════════════════════════════════════
+
+export const iconSize = {
+  xs:  16,
+  sm:  18,
+  md:  22,
+  lg:  26,
+  xl:  32,
+} as const;
+
+// ═══════════════════════════════════════════
+// COMPONENT DIMENSIONS
+// ═══════════════════════════════════════════
+
+import { Platform } from 'react-native';
+
+export const component = {
+  /** Unified header height (content area, excl. safe area) */
+  headerHeight: 56,
+  /** Tab bar total height */
+  tabBarHeight: Platform.OS === 'ios' ? 88 : 72,
+  /** Tab bar content padding bottom */
+  tabBarPaddingBottom: Platform.OS === 'ios' ? 24 : 10,
+  /** Safe area top padding */
+  safeTop: Platform.OS === 'ios' ? 54 : 44,
+  /** Card standard padding */
+  cardPadding: space.lg,
+  /** Button heights */
+  buttonSm: 34,
+  buttonMd: 44,
+  buttonLg: 52,
+  /** FAB size */
+  fabSize: 56,
+  /** Input field height */
+  inputHeight: 48,
+  /** Bottom sheet handle height */
+  sheetHandle: 4,
+  /** Tab bar pill indicator */
+  pillWidth: 64,
+  pillHeight: 32,
+} as const;
+
+// ═══════════════════════════════════════════
+// SURFACE TOKENS (glassmorphism)
+// ═══════════════════════════════════════════
+
+export const surface = {
+  /** Semi-transparent card background for glassmorphic overlays */
+  glass: 'rgba(22, 25, 34, 0.85)',
+  /** Backdrop for modals/sheets */
+  backdrop: 'rgba(0, 0, 0, 0.6)',
+  /** Frosted sheet background */
+  sheet: 'rgba(30, 34, 45, 0.95)',
+  /** Elevated overlay */
+  overlay: 'rgba(11, 13, 18, 0.92)',
+} as const;
+
+// ═══════════════════════════════════════════
+// MATERIAL MOTION DURATIONS
+// ═══════════════════════════════════════════
+
+export const motion = {
+  /** Large transitions: modals, sheets, page changes */
+  emphasized: 500,
+  /** Standard transitions: cards, lists */
+  standard: 300,
+  /** Quick micro-interactions: press, toggle */
+  quick: 150,
+  /** Stagger delay between list items */
+  stagger: 40,
+} as const;
+
