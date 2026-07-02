@@ -1064,7 +1064,7 @@ namespace FlyShelf
                         scanEnd   = estimatedLastVisible;
                     }
 
-                    bool anyEvicted = false;
+                    int evictedCount = 0;
 
                     // ═══ PASS 1: Always-loaded first 5 images (cheap, covers top of list) ═══
                     // These are always kept loaded for instant visibility on summon.
@@ -1234,7 +1234,7 @@ namespace FlyShelf
                                     item.IsLoadedHighQuality = false;
                                     item.IsLoadingHighQuality = false;
                                     item.LeftViewportTime = null;
-                                    anyEvicted = true;
+                                    evictedCount++;
                                 }
                             }
                             else
@@ -1244,9 +1244,10 @@ namespace FlyShelf
                         }
                     }
 
-                    if (anyEvicted)
+                    if (evictedCount >= 3)
                     {
-                        // Force a non-blocking background Gen 2 Garbage Collection to immediately reclaim unmanaged bitmap memory and return it to the OS
+                        // Force a non-blocking background Gen 2 GC only when 3+ images evicted.
+                        // Single-image evictions don't justify the GC cost.
                         System.Threading.Tasks.Task.Run(() =>
                         {
                             System.GC.Collect(2, System.GCCollectionMode.Forced, false);

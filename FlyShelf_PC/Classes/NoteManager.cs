@@ -42,6 +42,7 @@ namespace FlyShelf.Classes
         /// When set, the bullet card renders the image below the text.
         /// </summary>
         private string _imagePath = "";
+        [JsonIgnore] private bool? _hasImageCache;
         public string ImagePath
         {
             get => _imagePath;
@@ -50,6 +51,7 @@ namespace FlyShelf.Classes
                 if (_imagePath != value)
                 {
                     _imagePath = value;
+                    _hasImageCache = null; // Invalidate cache on path change
                     OnPropertyChanged(nameof(ImagePath));
                     OnPropertyChanged(nameof(HasImage));
                 }
@@ -57,9 +59,18 @@ namespace FlyShelf.Classes
         }
 
         [JsonIgnore]
-        public bool HasImage => !string.IsNullOrEmpty(_imagePath) && File.Exists(_imagePath);
+        public bool HasImage
+        {
+            get
+            {
+                if (_hasImageCache == null)
+                    _hasImageCache = !string.IsNullOrEmpty(_imagePath) && File.Exists(_imagePath);
+                return _hasImageCache.Value;
+            }
+        }
 
         private string _imagePath2 = "";
+        [JsonIgnore] private bool? _hasImage2Cache;
         public string ImagePath2
         {
             get => _imagePath2;
@@ -68,6 +79,7 @@ namespace FlyShelf.Classes
                 if (_imagePath2 != value)
                 {
                     _imagePath2 = value;
+                    _hasImage2Cache = null; // Invalidate cache on path change
                     OnPropertyChanged(nameof(ImagePath2));
                     OnPropertyChanged(nameof(HasImage2));
                 }
@@ -75,7 +87,15 @@ namespace FlyShelf.Classes
         }
 
         [JsonIgnore]
-        public bool HasImage2 => !string.IsNullOrEmpty(_imagePath2) && File.Exists(_imagePath2);
+        public bool HasImage2
+        {
+            get
+            {
+                if (_hasImage2Cache == null)
+                    _hasImage2Cache = !string.IsNullOrEmpty(_imagePath2) && File.Exists(_imagePath2);
+                return _hasImage2Cache.Value;
+            }
+        }
 
         private bool _isCollapsed = true;
         public bool IsCollapsed
@@ -614,7 +634,7 @@ namespace FlyShelf.Classes
         /// Save an image from clipboard/file to the notes images directory.
         /// Returns the saved file path.
         /// </summary>
-        public static string SaveImage(System.Windows.Media.Imaging.BitmapSource image)
+        public static async Task<string> SaveImage(System.Windows.Media.Imaging.BitmapSource image)
         {
             // NM-1 FIX: Cap image dimensions to 4096×4096 to prevent huge PNG writes
             const int MAX_DIM = 4096;
@@ -628,14 +648,21 @@ namespace FlyShelf.Classes
                 image = scaled;
             }
 
+            // Freeze so the BitmapSource can be used on a background thread
+            if (!image.IsFrozen) image.Freeze();
+
             var dir = GetImagesDirectory();
             string filename = $"note_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N")[..6]}.png";
             string path = Path.Combine(dir, filename);
 
-            using var stream = new FileStream(path, FileMode.Create);
-            var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
-            encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
-            encoder.Save(stream);
+            // Offload PNG encode + file I/O to background thread to avoid UI lag
+            await Task.Run(() =>
+            {
+                using var stream = new FileStream(path, FileMode.Create);
+                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(image));
+                encoder.Save(stream);
+            });
 
             return path;
         }
@@ -650,7 +677,7 @@ namespace FlyShelf.Classes
         /// <summary>
         /// Schedule a debounced save (2-second cooldown).
         /// </summary>
-        private static void ScheduleSave()
+        public static void ScheduleSave()
         {
             Interlocked.Exchange(ref _isDirty, 1);
             lock (_lock)
@@ -991,7 +1018,8 @@ namespace FlyShelf.Classes
                         SubBullets = b.SubBullets.Select(sb => new { sb.Id, sb.Text, sb.IsDone }).ToList()
                     }).ToList(),
                     FreeformSections = day.FreeformSections.Select(s => new {
-                        s.Id, s.Content, CreatedAt = s.CreatedAt.ToString("o")
+                        s.Id, s.Title, s.Content, CreatedAt = s.CreatedAt.ToString("o"),
+                        ImageCount = s.Images?.Count ?? 0
                     }).ToList(),
                     LastModified = lastMod
                 };

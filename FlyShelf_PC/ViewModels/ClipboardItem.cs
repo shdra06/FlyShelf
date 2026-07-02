@@ -292,7 +292,7 @@ namespace FlyShelf.ViewModels
                     catch { /* If spill fails, keep in memory anyway */ }
                 }
 
-                if (_rawContent != newValue)
+                if (!ReferenceEquals(_rawContent, newValue) && _rawContent != newValue)
                 {
                     _rawContent = newValue;
                     PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContent)));

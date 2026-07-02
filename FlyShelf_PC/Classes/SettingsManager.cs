@@ -527,14 +527,19 @@ namespace FlyShelf.Classes
         }
 
         private static readonly object _saveLock = new();
+        private static System.Threading.Timer _saveDebouncerTimer;
 
         public static void Save()
         {
             try
             {
-                string path = GetConfigPath();
-                System.Threading.Tasks.Task.Run(() =>
+                // Debounce: reset the 500ms timer on each call. Only the last call
+                // within 500ms actually triggers the write. Prevents rapid saves
+                // during slider drags, checkbox toggles, etc.
+                _saveDebouncerTimer?.Dispose();
+                _saveDebouncerTimer = new System.Threading.Timer(_ =>
                 {
+                    string path = GetConfigPath();
                     lock (_saveLock)
                     {
                         try
@@ -552,7 +557,7 @@ namespace FlyShelf.Classes
                             Logger.LogAction("SETTINGS_SAVE", $"Failed to write config: {ex.Message}");
                         }
                     }
-                });
+                }, null, 500, System.Threading.Timeout.Infinite);
             }
             catch (Exception ex)
             {
