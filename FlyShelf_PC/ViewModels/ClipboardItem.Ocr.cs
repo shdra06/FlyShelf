@@ -75,7 +75,7 @@ namespace FlyShelf.ViewModels
 
         private void ExtractTextLocal()
         {
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
                 var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
                 if (mainWin != null)
@@ -109,7 +109,7 @@ namespace FlyShelf.ViewModels
 
                 if (!string.IsNullOrWhiteSpace(result))
                 {
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
                         try { System.Windows.Clipboard.SetText(result); } catch { }
                         FlyShelf.Windows.ToastWindow.ShowToast("✅ AI OCR text copied to clipboard!");
@@ -135,7 +135,7 @@ namespace FlyShelf.ViewModels
         {
             var tcs = new TaskCompletionSource<bool?>();
 
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
                 var dialog = new System.Windows.Window
                 {
@@ -317,7 +317,7 @@ namespace FlyShelf.ViewModels
                         if (modernAutoResult != null)
                         {
                             var (autoText, _) = modernAutoResult.Value;
-                            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                             {
                                 if (this.ItemType != ClipboardItemType.QRCode)
                                 {
@@ -358,7 +358,7 @@ namespace FlyShelf.ViewModels
                                     lineTexts.Add(line.Text);
                                 string ocrText = string.Join("\n", lineTexts);
 
-                                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                                 {
                                     if (this.ItemType != ClipboardItemType.QRCode)
                                     {

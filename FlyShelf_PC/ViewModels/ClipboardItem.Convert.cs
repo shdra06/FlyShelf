@@ -1,13 +1,16 @@
 // ---------------------------------------------------------------
 // ClipboardItem — Document & Image Conversion
-// ConvertDocumentTask, ConvertImageToPdf
+// ConvertDocumentTask, ConvertImageToPdf, ConvertImageFormat,
+// ConvertCsvToXlsx
 // Split from ClipboardItem.Actions.cs for modularity
 // ---------------------------------------------------------------
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 namespace FlyShelf.ViewModels
@@ -34,13 +37,13 @@ namespace FlyShelf.ViewModels
         public void ConvertDocumentTask()
         {
 #if MSIX_STORE
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                 FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Document conversion is not available in the Store version."));
             return;
 #else
             if (!FlyShelf.Classes.LicenseManager.CanConvertDoc())
             {
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     FlyShelf.Classes.UpgradePrompt.ShowDocConvertLimit());
                 return;
             }
@@ -57,7 +60,7 @@ namespace FlyShelf.ViewModels
                         string mdContent = !string.IsNullOrEmpty(RawContent) ? RawContent : FileName;
                         if (string.IsNullOrEmpty(mdContent))
                         {
-                            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                                 FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No markdown content to convert"));
                             return;
                         }
@@ -66,14 +69,14 @@ namespace FlyShelf.ViewModels
                     }
                     else if (string.IsNullOrEmpty(workFilePath) || !File.Exists(workFilePath))
                     {
-                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                             FlyShelf.Windows.ToastWindow.ShowToast("⚠️ File not found — cannot convert"));
                         return;
                     }
 
                     string ext = Path.GetExtension(workFilePath).ToUpperInvariant();
 
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                         FlyShelf.Windows.ToastWindow.ShowToast("Converting to PDF... ♻️")
                     );
 
@@ -119,7 +122,7 @@ namespace FlyShelf.ViewModels
                     // ═══════════════════════════════════════════════════════
                     if (converted && File.Exists(targetPdf))
                     {
-                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                         {
                             var dataObj = new System.Windows.DataObject();
                             dataObj.SetData(System.Windows.DataFormats.FileDrop, new string[] { targetPdf });
@@ -134,14 +137,14 @@ namespace FlyShelf.ViewModels
                     }
                     else
                     {
-                        System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                             FlyShelf.Windows.ToastWindow.ShowToast("Conversion Failed: Install LibreOffice or Microsoft Word ❌")
                         );
                     }
                 }
                 catch (Exception ex)
                 {
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                         FlyShelf.Windows.ToastWindow.ShowToast($"Conversion Error: {ex.Message} ❌")
                     );
                 }
@@ -493,14 +496,14 @@ namespace FlyShelf.ViewModels
         {
             if (!IsImagePreview || string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath))
             {
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Image file not found — cannot convert"));
                 return;
             }
 
             if (!FlyShelf.Classes.LicenseManager.CanConvertImageToPdf())
             {
-                System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     FlyShelf.Classes.UpgradePrompt.ShowImageToPdfLimit());
                 return;
             }
@@ -509,7 +512,7 @@ namespace FlyShelf.ViewModels
             {
                 try
                 {
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                         FlyShelf.Windows.ToastWindow.ShowToast("Converting Image to PDF... 📄")
                     );
 
@@ -593,7 +596,7 @@ namespace FlyShelf.ViewModels
                         writer.Flush();
                     }
 
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
                         var dataObj = new System.Windows.DataObject();
                         dataObj.SetData(System.Windows.DataFormats.FileDrop, new string[] { outputPdf });
@@ -608,11 +611,371 @@ namespace FlyShelf.ViewModels
                 }
                 catch (Exception ex)
                 {
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                         FlyShelf.Windows.ToastWindow.ShowToast($"Image→PDF failed: {ex.Message} ❌")
                     );
                 }
             });
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // IMAGE FORMAT CONVERSION  (PNG ↔ JPG)
+        // ═══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Convert the current image file to a different format ("png" or "jpg").
+        /// Uses WPF's built-in bitmap encoders — no external dependencies.
+        /// </summary>
+        public void ConvertImageFormat(string targetFormat)
+        {
+            if (!IsImagePreview || string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath))
+            {
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ Image file not found — cannot convert"));
+                return;
+            }
+
+            if (!FlyShelf.Classes.LicenseManager.CanConvertImageToPdf())
+            {
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    FlyShelf.Classes.UpgradePrompt.ShowImageToPdfLimit());
+                return;
+            }
+
+            string fmt = targetFormat.ToLowerInvariant().Trim('.');
+            if (fmt != "png" && fmt != "jpg" && fmt != "jpeg")
+            {
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    FlyShelf.Windows.ToastWindow.ShowToast($"⚠️ Unsupported target format: {targetFormat}"));
+                return;
+            }
+
+            // Normalise "jpeg" → "jpg" for the file extension
+            string ext = fmt == "jpeg" ? "jpg" : fmt;
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Converting image to {ext.ToUpperInvariant()}... 🖼️")
+                    );
+
+                    string outputPath = Path.Combine(
+                        Path.GetDirectoryName(FilePath) ?? Path.GetTempPath(),
+                        Path.GetFileNameWithoutExtension(FilePath) + $"_{DateTime.Now:yyyyMMdd_HHmmss}.{ext}");
+
+                    // Load image using WPF's decoder (thread-safe on background threads)
+                    var dec = System.Windows.Media.Imaging.BitmapDecoder.Create(
+                        new Uri(FilePath, UriKind.Absolute),
+                        System.Windows.Media.Imaging.BitmapCreateOptions.PreservePixelFormat,
+                        System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+
+                    var frame = dec.Frames[0];
+
+                    using (var fs = new FileStream(outputPath, FileMode.Create))
+                    {
+                        System.Windows.Media.Imaging.BitmapEncoder encoder;
+                        if (ext == "png")
+                        {
+                            encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                        }
+                        else // jpg
+                        {
+                            encoder = new System.Windows.Media.Imaging.JpegBitmapEncoder { QualityLevel = 95 };
+                        }
+                        encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(frame));
+                        encoder.Save(fs);
+                    }
+
+                    if (!File.Exists(outputPath) || new FileInfo(outputPath).Length == 0)
+                    {
+                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                            FlyShelf.Windows.ToastWindow.ShowToast($"Image conversion failed ❌"));
+                        return;
+                    }
+
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    {
+                        var dataObj = new System.Windows.DataObject();
+                        dataObj.SetData(System.Windows.DataFormats.FileDrop, new string[] { outputPath });
+                        var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
+                        (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Image → {ext.ToUpperInvariant()} converted! ✅ {Path.GetFileName(outputPath)}");
+                        FlyShelf.Classes.LicenseManager.RecordImageToPdf();
+
+                        // Scroll to top after a short delay so the new item is visible
+                        mainWin?.ScrollClipboardToTop();
+                    });
+                }
+                catch (Exception ex)
+                {
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        FlyShelf.Windows.ToastWindow.ShowToast($"Image conversion failed: {ex.Message} ❌")
+                    );
+                }
+            });
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // CSV → XLSX CONVERSION  (raw OpenXML via ZipArchive)
+        // ═══════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Convert a CSV file to XLSX using raw OpenXML (ZIP + XML).
+        /// No external packages required — uses System.IO.Compression.
+        /// </summary>
+        public void ConvertCsvToXlsx()
+        {
+#if MSIX_STORE
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                FlyShelf.Windows.ToastWindow.ShowToast("⚠️ CSV conversion is not available in the Store version."));
+            return;
+#else
+            if (string.IsNullOrEmpty(FilePath) || !File.Exists(FilePath))
+            {
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ CSV file not found — cannot convert"));
+                return;
+            }
+
+            if (!FlyShelf.Classes.LicenseManager.CanConvertDoc())
+            {
+                System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    FlyShelf.Classes.UpgradePrompt.ShowDocConvertLimit());
+                return;
+            }
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        FlyShelf.Windows.ToastWindow.ShowToast("Converting CSV to XLSX... 📊")
+                    );
+
+                    string xlsxPath = Path.Combine(
+                        Path.GetDirectoryName(FilePath) ?? Path.GetTempPath(),
+                        Path.GetFileNameWithoutExtension(FilePath) + $"_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
+
+                    // Parse CSV rows
+                    string csvText = File.ReadAllText(FilePath, Encoding.UTF8);
+                    var rows = ParseCsvRows(csvText);
+
+                    // Build XLSX (ZIP with OpenXML entries)
+                    using (var zip = ZipFile.Open(xlsxPath, ZipArchiveMode.Create))
+                    {
+                        AddZipEntry(zip, "[Content_Types].xml", BuildContentTypesXml());
+                        AddZipEntry(zip, "_rels/.rels", BuildRootRelsXml());
+                        AddZipEntry(zip, "xl/_rels/workbook.xml.rels", BuildWorkbookRelsXml());
+                        AddZipEntry(zip, "xl/workbook.xml", BuildWorkbookXml());
+                        AddZipEntry(zip, "xl/styles.xml", BuildStylesXml());
+                        AddZipEntry(zip, "xl/worksheets/sheet1.xml", BuildSheetXml(rows));
+                    }
+
+                    if (!File.Exists(xlsxPath) || new FileInfo(xlsxPath).Length == 0)
+                    {
+                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                            FlyShelf.Windows.ToastWindow.ShowToast("CSV → XLSX conversion failed ❌"));
+                        return;
+                    }
+
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                    {
+                        var dataObj = new System.Windows.DataObject();
+                        dataObj.SetData(System.Windows.DataFormats.FileDrop, new string[] { xlsxPath });
+                        var mainWin = System.Windows.Application.Current.MainWindow as FlyShelf.MainWindow;
+                        (mainWin?.DataContext as FlyShelf.ViewModels.FlyShelfViewModel)?.HandleDrop(dataObj, true);
+                        FlyShelf.Windows.ToastWindow.ShowToast($"CSV → XLSX converted! ✅ {Path.GetFileName(xlsxPath)}");
+                        FlyShelf.Classes.LicenseManager.RecordDocConversion();
+
+                        // Scroll to top after a short delay so the new item is visible
+                        mainWin?.ScrollClipboardToTop();
+                    });
+                }
+                catch (Exception ex)
+                {
+                    System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        FlyShelf.Windows.ToastWindow.ShowToast($"CSV→XLSX failed: {ex.Message} ❌")
+                    );
+                }
+            });
+#endif
+        }
+
+        // ── CSV Parser (handles quoted fields with commas and newlines) ──
+        private static List<string[]> ParseCsvRows(string csv)
+        {
+            var rows = new List<string[]>();
+            var fields = new List<string>();
+            var field = new StringBuilder();
+            bool inQuotes = false;
+            int i = 0;
+
+            while (i < csv.Length)
+            {
+                char c = csv[i];
+
+                if (inQuotes)
+                {
+                    if (c == '"' && i + 1 < csv.Length && csv[i + 1] == '"')
+                    {
+                        field.Append('"'); // escaped quote
+                        i += 2;
+                    }
+                    else if (c == '"')
+                    {
+                        inQuotes = false;
+                        i++;
+                    }
+                    else
+                    {
+                        field.Append(c);
+                        i++;
+                    }
+                }
+                else
+                {
+                    if (c == '"')
+                    {
+                        inQuotes = true;
+                        i++;
+                    }
+                    else if (c == ',')
+                    {
+                        fields.Add(field.ToString());
+                        field.Clear();
+                        i++;
+                    }
+                    else if (c == '\r' || c == '\n')
+                    {
+                        fields.Add(field.ToString());
+                        field.Clear();
+                        rows.Add(fields.ToArray());
+                        fields.Clear();
+                        // Skip \r\n pair
+                        if (c == '\r' && i + 1 < csv.Length && csv[i + 1] == '\n')
+                            i += 2;
+                        else
+                            i++;
+                    }
+                    else
+                    {
+                        field.Append(c);
+                        i++;
+                    }
+                }
+            }
+
+            // Last field / last row
+            if (field.Length > 0 || fields.Count > 0)
+            {
+                fields.Add(field.ToString());
+                rows.Add(fields.ToArray());
+            }
+
+            return rows;
+        }
+
+        // ── XLSX helpers — minimal OpenXML structure ──
+
+        private static void AddZipEntry(ZipArchive zip, string entryName, string content)
+        {
+            var entry = zip.CreateEntry(entryName, CompressionLevel.Fastest);
+            using (var writer = new StreamWriter(entry.Open(), Encoding.UTF8))
+                writer.Write(content);
+        }
+
+        /// <summary>Column index (0-based) to Excel column letter (A, B, ... Z, AA, AB, ...).</summary>
+        private static string ColIndexToLetter(int index)
+        {
+            var sb = new StringBuilder();
+            while (index >= 0)
+            {
+                sb.Insert(0, (char)('A' + index % 26));
+                index = index / 26 - 1;
+            }
+            return sb.ToString();
+        }
+
+        private static string XmlEscape(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return "";
+            return s.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("\"", "&quot;");
+        }
+
+        private static string BuildContentTypesXml() =>
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
+            "<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">" +
+            "<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>" +
+            "<Default Extension=\"xml\" ContentType=\"application/xml\"/>" +
+            "<Override PartName=\"/xl/workbook.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml\"/>" +
+            "<Override PartName=\"/xl/worksheets/sheet1.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml\"/>" +
+            "<Override PartName=\"/xl/styles.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml\"/>" +
+            "</Types>";
+
+        private static string BuildRootRelsXml() =>
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+            "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"xl/workbook.xml\"/>" +
+            "</Relationships>";
+
+        private static string BuildWorkbookRelsXml() =>
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
+            "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+            "<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" Target=\"worksheets/sheet1.xml\"/>" +
+            "<Relationship Id=\"rId2\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles\" Target=\"styles.xml\"/>" +
+            "</Relationships>";
+
+        private static string BuildWorkbookXml() =>
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
+            "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">" +
+            "<sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets>" +
+            "</workbook>";
+
+        private static string BuildStylesXml() =>
+            "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>" +
+            "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">" +
+            "<fonts count=\"1\"><font><sz val=\"11\"/><name val=\"Calibri\"/></font></fonts>" +
+            "<fills count=\"2\"><fill><patternFill patternType=\"none\"/></fill><fill><patternFill patternType=\"gray125\"/></fill></fills>" +
+            "<borders count=\"1\"><border><left/><right/><top/><bottom/><diagonal/></border></borders>" +
+            "<cellStyleXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\"/></cellStyleXfs>" +
+            "<cellXfs count=\"1\"><xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/></cellXfs>" +
+            "</styleSheet>";
+
+        private static string BuildSheetXml(List<string[]> rows)
+        {
+            var sb = new StringBuilder();
+            sb.Append("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>");
+            sb.Append("<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
+            sb.Append("<sheetData>");
+
+            for (int r = 0; r < rows.Count; r++)
+            {
+                int rowNum = r + 1;
+                sb.Append($"<row r=\"{rowNum}\">");
+                for (int c = 0; c < rows[r].Length; c++)
+                {
+                    string cellRef = $"{ColIndexToLetter(c)}{rowNum}";
+                    string val = rows[r][c];
+
+                    // Try to write numeric values as numbers, everything else as inline strings
+                    if (double.TryParse(val, System.Globalization.NumberStyles.Any,
+                        System.Globalization.CultureInfo.InvariantCulture, out double numVal))
+                    {
+                        sb.Append($"<c r=\"{cellRef}\"><v>{numVal.ToString(System.Globalization.CultureInfo.InvariantCulture)}</v></c>");
+                    }
+                    else
+                    {
+                        sb.Append($"<c r=\"{cellRef}\" t=\"inlineStr\"><is><t>{XmlEscape(val)}</t></is></c>");
+                    }
+                }
+                sb.Append("</row>");
+            }
+
+            sb.Append("</sheetData>");
+            sb.Append("</worksheet>");
+            return sb.ToString();
         }
 
     }

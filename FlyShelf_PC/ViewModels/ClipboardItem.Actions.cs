@@ -683,7 +683,10 @@ namespace FlyShelf.ViewModels
                         long folderSize = Directory.GetFiles(FilePath, "*", SearchOption.AllDirectories)
                             .Sum(f => { try { return new FileInfo(f).Length; } catch { return 0L; } });
                         FormattedSize = $"{FormatBytes(folderSize)} -> {FormatBytes(zipInfo.Length)} zipped";
-                        PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(FormattedSize)));
+                        Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        {
+                            PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(FormattedSize)));
+                        });
                         FlyShelf.Classes.Logger.LogAction("FOLDER ZIP", $"Created zip on demand: {tempZip}");
                     }
 
@@ -718,21 +721,28 @@ namespace FlyShelf.ViewModels
 
             try
             {
-                var peerCount = FlyShelf.Classes.PeerManager.Instance.AliveCount;
+                var peerCount = FlyShelf.Classes.PeerManager.Instance?.AliveCount ?? 0;
                 if (peerCount == 0)
                 {
-                    FlyShelf.Windows.ToastWindow.ShowToast("âš ï¸ No LAN peers connected.");
+                    FlyShelf.Windows.ToastWindow.ShowToast("âš ï¸  No LAN peers connected.");
                     return;
                 }
 
-                FlyShelf.Windows.ToastWindow.ShowToast("ðŸ“¡ Syncing zip via LAN...");
-                int delivered = await FlyShelf.Classes.PeerManager.Instance.PushFileToAllPeers(
+                var peerInstance = FlyShelf.Classes.PeerManager.Instance;
+                if (peerInstance == null)
+                {
+                    FlyShelf.Windows.ToastWindow.ShowToast("⚠️ No LAN peers connected.");
+                    return;
+                }
+
+                FlyShelf.Windows.ToastWindow.ShowToast("📡 Syncing zip via LAN...");
+                int delivered = await peerInstance.PushFileToAllPeers(
                     ZippedArchivePath, FileName ?? "Archive", "Archive");
 
                 if (delivered > 0)
                     FlyShelf.Windows.ToastWindow.ShowToast($"ðŸ“¡ Synced to {delivered} LAN peer(s)!");
                 else
-                    FlyShelf.Windows.ToastWindow.ShowToast("âš ï¸ Failed to sync to any LAN peer.");
+                    FlyShelf.Windows.ToastWindow.ShowToast("âš ï¸  Failed to sync to any LAN peer.");
             }
             catch (Exception ex)
             {

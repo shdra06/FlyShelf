@@ -99,7 +99,7 @@ namespace FlyShelf.ViewModels
                     string ext = Path.GetExtension(files[0]).ToLowerInvariant();
                     if (ext == ".flyshelf-theme" || ext == ".flyshelftheme")
                     {
-                        Application.Current.Dispatcher.InvokeAsync(() =>
+                        Application.Current?.Dispatcher?.InvokeAsync(() =>
                         {
                             string importedName = Classes.ThemeManager.Instance.ImportTheme(files[0]);
                             if (importedName != null)
@@ -126,7 +126,7 @@ namespace FlyShelf.ViewModels
                     if (!string.IsNullOrEmpty(sourceAppName)) groupItem.SourceAppName = sourceAppName;
                     if (sourceAppIcon != null) groupItem.SourceAppIcon = sourceAppIcon;
                     
-                    Application.Current.Dispatcher.InvokeAsync(() =>
+                    Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
                         DeduplicateAndInsert(groupItem);
                     });
@@ -168,7 +168,7 @@ namespace FlyShelf.ViewModels
                 }
 
                 // Phase 2: Batch-insert into ObservableCollection on UI thread
-                Application.Current.Dispatcher.InvokeAsync(() =>
+                Application.Current?.Dispatcher?.InvokeAsync(() =>
                 {
                     // Run deduplication for each individual new item
                     foreach (var newItem in newItems.Select(x => x.item))
@@ -223,7 +223,7 @@ namespace FlyShelf.ViewModels
                                         var bmp = LoadImageThumbnail(filePath, decodeWidth);
                                         if (bmp != null)
                                         {
-                                            Application.Current.Dispatcher.InvokeAsync(() =>
+                                            Application.Current?.Dispatcher?.InvokeAsync(() =>
                                             {
                                                 item.Icon = bmp;
                                                 item.IsLoadedHighQuality = !IsScrolling;
@@ -241,7 +241,7 @@ namespace FlyShelf.ViewModels
                                         var icon = GetIcon(filePath);
                                         if (icon != null)
                                         {
-                                            Application.Current.Dispatcher.InvokeAsync(() =>
+                                            Application.Current?.Dispatcher?.InvokeAsync(() =>
                                             {
                                                 // Double-check: don't overwrite if custom icon was set in the meantime
                                                 if (item.Icon == null)
@@ -282,7 +282,7 @@ namespace FlyShelf.ViewModels
                 // Clipboard writeback
                 if (forceClipboardSync && files.Length <= 10)
                 {
-                    Application.Current.Dispatcher.InvokeAsync(() =>
+                    Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
                         var dropList = new System.Collections.Specialized.StringCollection();
                         dropList.Add(files[0]);
@@ -330,7 +330,7 @@ namespace FlyShelf.ViewModels
                 }
 
                 // Insert immediately into DroppedItems on UI thread
-                Application.Current.Dispatcher.InvokeAsync(() =>
+                Application.Current?.Dispatcher?.InvokeAsync(() =>
                 {
                     DeduplicateAndInsert(item);
                 });
@@ -381,10 +381,14 @@ namespace FlyShelf.ViewModels
 
                         if (isGhostImage)
                         {
-                            await Application.Current.Dispatcher.InvokeAsync(() =>
+                            var ghostDispatcher = Application.Current?.Dispatcher;
+                            if (ghostDispatcher != null)
                             {
-                                RemoveItem(capturedItemToCheck);
-                            });
+                                await ghostDispatcher.InvokeAsync(() =>
+                                {
+                                    RemoveItem(capturedItemToCheck);
+                                });
+                            }
                         }
                     });
 
@@ -409,11 +413,15 @@ namespace FlyShelf.ViewModels
                     {
                         // Completely refuse to save — too large even downscaled
                         Classes.Logger.LogAction("CLIPBOARD", $"⛔ Image rejected: {srcW}×{srcH} raw={rawBytes / 1024 / 1024}MB exceeds {MAX_RAW_BYTES / 1024 / 1024}MB limit. Not saving.");
-                        await Application.Current.Dispatcher.InvokeAsync(() =>
+                        var sizeDispatcher = Application.Current?.Dispatcher;
+                        if (sizeDispatcher != null)
                         {
-                            item.FileName = $"Image too large to save ({srcW}×{srcH})";
-                            item.RawContent = $"Image ({srcW}×{srcH}) — too large to store";
-                        });
+                            await sizeDispatcher.InvokeAsync(() =>
+                            {
+                                item.FileName = $"Image too large to save ({srcW}×{srcH})";
+                                item.RawContent = $"Image ({srcW}×{srcH}) — too large to store";
+                            });
+                        }
                         return; // Skip disk write entirely
                     }
 
@@ -467,7 +475,7 @@ namespace FlyShelf.ViewModels
                         }
 
 
-                        Application.Current.Dispatcher.InvokeAsync(() =>
+                        Application.Current?.Dispatcher?.InvokeAsync(() =>
                         {
                             if (bitmapImage != null)
                                 item.Icon = bitmapImage; // Swap to perfect thumbnail
@@ -545,7 +553,7 @@ namespace FlyShelf.ViewModels
                     catch (Exception ex)
                     {
                         FlyShelf.Classes.Logger.LogAction("IMAGE CORE", $"Failed to encode image: {ex.Message}");
-                        Application.Current.Dispatcher.InvokeAsync(() =>
+                        Application.Current?.Dispatcher?.InvokeAsync(() =>
                         {
                             item.ItemType = ClipboardItemType.Text;
                             item.FileName = "Image Failed to Decode!";
@@ -824,7 +832,7 @@ namespace FlyShelf.ViewModels
                     }
 
                     // Insert directly on UI thread with deduplication
-                    Application.Current.Dispatcher.InvokeAsync(() =>
+                    Application.Current?.Dispatcher?.InvokeAsync(() =>
                     {
                         DeduplicateAndInsert(item);
 

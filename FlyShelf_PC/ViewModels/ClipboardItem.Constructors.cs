@@ -175,7 +175,10 @@ namespace FlyShelf.ViewModels
                 string separator = (fileCount > 0 && folderCount > 0) ? ", " : "";
                 
                 FormattedSize = $"{FormatBytes(totalSize)} • {filesLabel}{separator}{foldersLabel}";
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedSize)));
+                Application.Current?.Dispatcher?.InvokeAsync(() =>
+                {
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedSize)));
+                });
             });
 
 
@@ -380,7 +383,10 @@ namespace FlyShelf.ViewModels
                             
                             RawContent = listing.ToString();
                             
-                            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedSize)));
+                            Application.Current?.Dispatcher?.InvokeAsync(() =>
+                            {
+                                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedSize)));
+                            });
                         }
                         catch (Exception ex)
                         {
@@ -407,9 +413,12 @@ namespace FlyShelf.ViewModels
 
                 // Final properties synchronization to update the UI
                 EvaluateSmartActions();
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedSize)));
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContent)));
-                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ItemType)));
+                Application.Current?.Dispatcher?.InvokeAsync(() =>
+                {
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(FormattedSize)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(RawContent)));
+                    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ItemType)));
+                });
             });
         }
 
@@ -538,7 +547,7 @@ namespace FlyShelf.ViewModels
 
         private void GenerateStackedGroupIcon(string[] files)
         {
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
                 try
                 {
@@ -613,7 +622,7 @@ namespace FlyShelf.ViewModels
 
         internal void GenerateMarkdownIcon()
         {
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
                 try
                 {
@@ -668,7 +677,7 @@ namespace FlyShelf.ViewModels
 
         internal void GeneratePasswordIcon()
         {
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
                 try
                 {
@@ -722,7 +731,7 @@ namespace FlyShelf.ViewModels
 
         internal void GenerateFolderIcon()
         {
-            System.Windows.Application.Current.Dispatcher.InvokeAsync(() =>
+            System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
             {
                 try
                 {
