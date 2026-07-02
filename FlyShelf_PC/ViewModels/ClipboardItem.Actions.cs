@@ -683,7 +683,7 @@ namespace FlyShelf.ViewModels
                         long folderSize = Directory.GetFiles(FilePath, "*", SearchOption.AllDirectories)
                             .Sum(f => { try { return new FileInfo(f).Length; } catch { return 0L; } });
                         FormattedSize = $"{FormatBytes(folderSize)} -> {FormatBytes(zipInfo.Length)} zipped";
-                        Application.Current?.Dispatcher?.InvokeAsync(() =>
+                        System.Windows.Application.Current?.Dispatcher?.InvokeAsync(() =>
                         {
                             PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(FormattedSize)));
                         });

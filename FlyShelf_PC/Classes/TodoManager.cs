@@ -63,6 +63,13 @@ namespace FlyShelf.Classes
 
         public DateTime CreatedAt { get; set; } = DateTime.Now;
 
+        private DateTime _lastEdited = DateTime.Now;
+        public DateTime LastEdited
+        {
+            get => _lastEdited;
+            set { if (_lastEdited != value) { _lastEdited = value; OnPropertyChanged(nameof(LastEdited)); } }
+        }
+
         // ── Priority ────────────────────────────────────────────
         private TodoPriority _priority = TodoPriority.None;
         public TodoPriority Priority
@@ -541,7 +548,7 @@ namespace FlyShelf.Classes
             ScheduleSave();
         }
 
-        private static void ScheduleSave()
+        public static void ScheduleSave()
         {
             Interlocked.Exchange(ref _isDirty, 1);
             lock (_lock)
@@ -838,7 +845,7 @@ namespace FlyShelf.Classes
                 long lastMod = 0;
                 foreach (var item in day.Items)
                 {
-                    long iTs = new DateTimeOffset(item.CreatedAt).ToUnixTimeMilliseconds();
+                    long iTs = new DateTimeOffset(item.LastEdited).ToUnixTimeMilliseconds();
                     if (iTs > lastMod) lastMod = iTs;
                 }
                 if (lastMod == 0) lastMod = new DateTimeOffset(day.Date).ToUnixTimeMilliseconds();
@@ -848,12 +855,14 @@ namespace FlyShelf.Classes
                     Items = day.Items.Select(i => new {
                         i.Id, i.Text, i.IsDone,
                         CreatedAt = i.CreatedAt.ToString("o"),
+                        LastEdited = i.LastEdited.ToString("o"),
                         Priority = (int)i.Priority,
                         DueDate = i.DueDate?.ToString("o"),
                         i.Tags, i.Color, i.Description,
                         SubTasks = i.SubTasks.Select(s => new {
                             s.Id, s.Text, s.IsDone,
                             CreatedAt = s.CreatedAt.ToString("o"),
+                            LastEdited = s.LastEdited.ToString("o"),
                             Priority = (int)s.Priority,
                             DueDate = s.DueDate?.ToString("o"),
                             s.Tags, s.Color, s.Description,
@@ -903,7 +912,7 @@ namespace FlyShelf.Classes
                             long localMod = 0;
                             foreach (var item in localAllDay.Items)
                             {
-                                long iTs = new DateTimeOffset(item.CreatedAt).ToUnixTimeMilliseconds();
+                                long iTs = new DateTimeOffset(item.LastEdited).ToUnixTimeMilliseconds();
                                 if (iTs > localMod) localMod = iTs;
                             }
 

@@ -10,6 +10,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -1090,11 +1091,21 @@ namespace FlyShelf
                 // Ctrl+V → image/file paste
                 if (e.Key == Key.V && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
                 {
-                    if (HandleImagePasteForBullet(bullet))
+                    // Check synchronously if clipboard has image data, then fire async handler
+                    try
                     {
-                        e.Handled = true;
-                        return;
+                        IDataObject data = Clipboard.GetDataObject();
+                        if (data != null && (data.GetDataPresent(DataFormats.Bitmap) ||
+                            data.GetDataPresent(typeof(BitmapSource)) ||
+                            data.GetDataPresent("DeviceIndependentBitmap") ||
+                            (data.GetDataPresent(DataFormats.FileDrop) && data.GetData(DataFormats.FileDrop) is string[] files && files.Any(f => f != null && IsImageFile(f)))))
+                        {
+                            HandleImagePasteForBullet_Async(bullet);
+                            e.Handled = true;
+                            return;
+                        }
                     }
+                    catch { } // Fall through to default paste
                 }
 
                 // Shift+Enter → always add a new sub-bullet below (predictable, no toggle surprises)
@@ -1140,7 +1151,7 @@ namespace FlyShelf
             try
             {
                 IDataObject data = Clipboard.GetDataObject();
-                if (data == null) return false;
+                if (data == null) return;
 
                 if (data.GetDataPresent(DataFormats.Bitmap) || 
                     data.GetDataPresent(typeof(BitmapSource)) ||
@@ -1158,7 +1169,7 @@ namespace FlyShelf
                     {
                         string path = await NoteManager.SaveImage(img);
                         double width = Math.Min(img.PixelWidth, 140);
-                        return AssignImageToBullet(bullet, path, width);
+                        AssignImageToBullet(bullet, path, width);
                     }
                 }
                 else if (data.GetDataPresent(DataFormats.FileDrop))
@@ -1173,7 +1184,7 @@ namespace FlyShelf
                                 string destDir = NoteManager.GetImagesDirectory();
                                 string destFile = Path.Combine(destDir, $"note_img_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N").Substring(0, 6)}_{Path.GetFileName(f)}");
                                 await Task.Run(() => File.Copy(f, destFile, overwrite: true));
-                                return AssignImageToBullet(bullet, destFile, 140);
+                                AssignImageToBullet(bullet, destFile, 140);
                             }
                         }
                     }
@@ -1187,14 +1198,23 @@ namespace FlyShelf
 
         private void NotesFreeformBox_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            // Ctrl+V → image/file paste
             if (e.Key == Key.V && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
             {
-                if (HandleImagePasteForFreeform())
+                // Check synchronously if clipboard has image data, then fire async handler
+                try
                 {
-                    e.Handled = true;
-                    return;
+                    IDataObject data = Clipboard.GetDataObject();
+                    if (data != null && (data.GetDataPresent(DataFormats.Bitmap) ||
+                        data.GetDataPresent(typeof(BitmapSource)) ||
+                        data.GetDataPresent("DeviceIndependentBitmap") ||
+                        (data.GetDataPresent(DataFormats.FileDrop) && data.GetData(DataFormats.FileDrop) is string[] files && files.Any(f => f != null && IsImageFile(f)))))
+                    {
+                        HandleImagePasteForFreeform_Async();
+                        e.Handled = true;
+                        return;
+                    }
                 }
+                catch { } // Fall through to default paste
             }
 
             // ── Inline bullet list mode (Shift+Enter to start/stop) ─────────────────────────
@@ -1255,13 +1275,13 @@ namespace FlyShelf
 
         private async void HandleImagePasteForFreeform_Async()
         {
-            if (_selectedNoteDay == null) return false;
+            if (_selectedNoteDay == null) return;
             var section = GetActiveFreeformSection();
-            if (section == null) return false;
+            if (section == null) return;
             try
             {
                 IDataObject data = Clipboard.GetDataObject();
-                if (data == null) return false;
+                if (data == null) return;
 
                 if (data.GetDataPresent(DataFormats.Bitmap) || 
                     data.GetDataPresent(typeof(BitmapSource)) ||
@@ -1277,7 +1297,7 @@ namespace FlyShelf
 
                     if (img != null)
                     {
-                        if (!CanAddImageToSection(section)) return true; // block paste
+                        if (!CanAddImageToSection(section)) return; // block paste
                         string path = await NoteManager.SaveImage(img);
                         var freeformImg = new FreeformImage
                         {
@@ -1286,7 +1306,7 @@ namespace FlyShelf
                         };
                         section.Images.Add(freeformImg);
                         NoteManager.MarkDirty();
-                        return true;
+                        return;
                     }
                 }
                 else if (data.GetDataPresent(DataFormats.FileDrop))
@@ -1298,7 +1318,7 @@ namespace FlyShelf
                         {
                             if (f != null && IsImageFile(f))
                             {
-                                if (!CanAddImageToSection(section)) return true; // block paste
+                                if (!CanAddImageToSection(section)) return; // block paste
                                 string destDir = NoteManager.GetImagesDirectory();
                                 string destFile = Path.Combine(destDir, $"note_img_{DateTime.Now:yyyyMMdd_HHmmss}_{Guid.NewGuid().ToString("N").Substring(0, 6)}_{Path.GetFileName(f)}");
                                 await Task.Run(() => File.Copy(f, destFile, overwrite: true));
@@ -1309,7 +1329,7 @@ namespace FlyShelf
                                 };
                                 section.Images.Add(freeformImg);
                                 NoteManager.MarkDirty();
-                                return true;
+                                return;
                             }
                         }
                     }
@@ -1500,7 +1520,7 @@ namespace FlyShelf
         // IMAGE PASTE & DROP ON BULLETS
         // ═══════════════════════════════════════════════════════════
 
-        private void NoteBulletText_Paste(object sender, DataObjectPastingEventArgs e)
+        private async void NoteBulletText_Paste(object sender, DataObjectPastingEventArgs e)
         {
             if (sender is TextBox tb && tb.DataContext is NoteBullet bullet)
             {
@@ -1555,6 +1575,16 @@ namespace FlyShelf
         {
             string ext = Path.GetExtension(path).ToLowerInvariant();
             return ext is ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".webp" or ".ico";
+        }
+
+        /// <summary>
+        /// Replace all bullets in a NoteDay with a sorted list, minimizing UI churn.
+        /// Assigns a new ObservableCollection so the binding fires a single PropertyChanged
+        /// Reset notification instead of N individual Add notifications.
+        /// </summary>
+        private static void ReplaceBullets(NoteDay day, List<NoteBullet> sorted)
+        {
+            day.Bullets = new System.Collections.ObjectModel.ObservableCollection<NoteBullet>(sorted);
         }
 
         private void NoteImageResize_MouseWheel(object sender, MouseWheelEventArgs e)
@@ -1740,7 +1770,7 @@ namespace FlyShelf
         /// Intercept paste in freeform TextBox — if clipboard has an image, save it and add
         /// to the day's FreeformImages list instead of pasting text.
         /// </summary>
-        private void NotesFreeformBox_Paste(object sender, DataObjectPastingEventArgs e)
+        private async void NotesFreeformBox_Paste(object sender, DataObjectPastingEventArgs e)
         {
             if (_selectedNoteDay == null) return;
             var dataObject = e.DataObject;

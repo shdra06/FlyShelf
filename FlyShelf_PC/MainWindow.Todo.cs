@@ -168,8 +168,8 @@ namespace FlyShelf
                 // Let the XAML DataTrigger on DroppedItems.Count control visibility
                 EmptyStatePanel.ClearValue(VisibilityProperty);
 
-                // TM-3 FIX: Save synchronously — deferred async saves were being dropped
-                TodoManager.SaveNow();
+                // Debounced save — avoids blocking UI thread on panel close
+                TodoManager.ScheduleSave();
                 return;
             }
 
@@ -180,8 +180,8 @@ namespace FlyShelf
             if (TodoPanel.RenderTransform is TranslateTransform tt)
                 tt.BeginAnimation(TranslateTransform.YProperty, slideAnim);
 
-            // TM-3 FIX: Save synchronously — deferred async saves were being dropped
-            TodoManager.SaveNow();
+            // Debounced save — avoids blocking UI thread on panel close
+            TodoManager.ScheduleSave();
 
             fadeAnim.Completed += (s, ev) =>
             {
