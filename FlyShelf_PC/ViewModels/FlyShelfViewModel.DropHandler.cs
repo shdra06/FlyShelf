@@ -219,14 +219,13 @@ namespace FlyShelf.ViewModels
                                 {
                                     try
                                     {
-                                        int decodeWidth = IsScrolling ? 48 : 300;
-                                        var bmp = LoadImageThumbnail(filePath, decodeWidth);
+                                        var bmp = LoadImageThumbnail(filePath, 300);
                                         if (bmp != null)
                                         {
                                             Application.Current?.Dispatcher?.InvokeAsync(() =>
                                             {
                                                 item.Icon = bmp;
-                                                item.IsLoadedHighQuality = !IsScrolling;
+                                                item.IsLoadedHighQuality = true;
                                             });
                                         }
                                     }
@@ -459,28 +458,30 @@ namespace FlyShelf.ViewModels
                                 encoder.Save(fs);
                             }
 
-                        // Load thumbnail image — only for images within the 4K limit
+                        // Load thumbnail image — always load from saved file (even if oversized,
+                        // the file on disk is already downscaled to ≤4K by the encoder above).
+                        // Always use 300px decode width for sharp thumbnails — this runs on a
+                        // background thread so the UI thread is not blocked.
                         BitmapImage? bitmapImage = null;
-                        if (!isOversized)
+                        try
                         {
-                            try
-                            {
-                                int decodeWidth = IsScrolling ? 48 : 300;
-                                bitmapImage = LoadImageThumbnail(tempFile, decodeWidth);
-                            }
-                            catch (Exception iconEx)
-                            {
-                                Classes.Logger.LogAction("ICON FILE", $"Failed to load saved thumbnail: {iconEx.Message}");
-                            }
+                            bitmapImage = LoadImageThumbnail(tempFile, 300);
+                        }
+                        catch (Exception iconEx)
+                        {
+                            Classes.Logger.LogAction("ICON FILE", $"Failed to load saved thumbnail: {iconEx.Message}");
                         }
 
 
                         Application.Current?.Dispatcher?.InvokeAsync(() =>
                         {
                             if (bitmapImage != null)
+                            {
                                 item.Icon = bitmapImage; // Swap to perfect thumbnail
-
-                            item.IsLoadedHighQuality = !IsScrolling;
+                                item.IsLoadedHighQuality = true;
+                            }
+                            // Don't set IsLoadedHighQuality if bitmapImage is null — this ensures
+                            // RenderVisibleThumbnails will retry loading instead of permanently skipping
 
                             item.FilePath = tempFile;
 

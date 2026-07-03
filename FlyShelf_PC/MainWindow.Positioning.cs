@@ -1045,9 +1045,9 @@ namespace FlyShelf
                     // plus a generous margin. Heterogeneous item heights mean we can't be exact,
                     // so we use a conservative average and wide margin to ensure all visible items
                     // are covered. The eviction pass gets a wider range.
-                    const double EstimatedItemHeight = 80.0; // Conservative average for mixed text/image cards
-                    int estimatedFirstVisible = Math.Max(0, (int)((sv.VerticalOffset - 300) / EstimatedItemHeight) - 5);
-                    int estimatedLastVisible  = Math.Min(count - 1, (int)((sv.VerticalOffset + viewportHeight + 300) / EstimatedItemHeight) + 5);
+                    const double EstimatedItemHeight = 100.0; // Balanced average: text cards ~50px, image cards ~165px
+                    int estimatedFirstVisible = Math.Max(0, (int)((sv.VerticalOffset - 300) / EstimatedItemHeight) - 10);
+                    int estimatedLastVisible  = Math.Min(count - 1, (int)((sv.VerticalOffset + viewportHeight + 300) / EstimatedItemHeight) + 10);
 
                     // For eviction passes, scan a wider range (2× viewport) to catch items that
                     // recently left the viewport but might need their eviction timer checked
@@ -1122,10 +1122,12 @@ namespace FlyShelf
                         var container = ShelfListView.ItemContainerGenerator.ContainerFromIndex(i) as FrameworkElement;
                         bool isVisible = false;
 
-                        if (item.IsLoadedHighQuality && !isEvictionPass)
+                        if (item.IsLoadedHighQuality && !isEvictionPass && item.Icon != null)
                         {
-                            // Optimization: if it's already loaded and we are not doing an eviction pass,
-                            // we can skip the expensive TransformToAncestor coordinates query!
+                            // Optimization: if it's already loaded (with a valid bitmap) and we are not
+                            // doing an eviction pass, skip the expensive TransformToAncestor query.
+                            // The Icon != null guard catches broken states where IsLoadedHighQuality
+                            // was set but the bitmap failed to load — these need to be retried.
                             continue;
                         }
                         else if (container != null && container.IsLoaded)

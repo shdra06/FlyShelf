@@ -369,14 +369,14 @@ namespace FlyShelf.ViewModels
                                 System.Threading.Tasks.Task.Run(() => {
                                     try 
                                     {
-                                        int decodeWidth = IsScrolling ? 48 : 300;
-                                        var bmp = LoadImageThumbnail(imagePath, decodeWidth);
+                                        // Always use 300px — this runs on a background thread
+                                        var bmp = LoadImageThumbnail(imagePath, 300);
                                         if (bmp != null)
                                         {
                                             Application.Current?.Dispatcher?.InvokeAsync(() =>
                                             {
                                                 capturedD.Icon = bmp;
-                                                capturedD.IsLoadedHighQuality = !IsScrolling;
+                                                capturedD.IsLoadedHighQuality = true;
                                             });
                                         }
                                     } catch { } // Best-effort: failure is acceptable
