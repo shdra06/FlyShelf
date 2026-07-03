@@ -626,8 +626,38 @@ namespace FlyShelf.ViewModels
                             
                             if (File.Exists(possiblePath))
                             {
-                                FlyShelf.Classes.Logger.LogAction("DRAG IN", $"Seamlessly resolved ambiguous text format to a localized physical file: {possiblePath}");
-                                item = new ClipboardItem(possiblePath);
+                                // ═══ CONTENT vs DEV FILE DISTINCTION ═══
+                                // When a path is copied as TEXT (not dragged from Explorer), only
+                                // resolve to an actual file item for content/media types that
+                                // benefit from preview (images, PDFs, documents, etc.).
+                                // Dev/script file paths (.py, .bat, .cpp, .ps1, .c, .cs, .js, etc.)
+                                // should stay as plain text — developers copy these paths to use
+                                // them in terminals, scripts, or share them as references.
+                                string pathExt = Path.GetExtension(possiblePath).ToLowerInvariant();
+                                bool isContentFile = pathExt switch
+                                {
+                                    // Images — show thumbnail preview
+                                    ".png" or ".jpg" or ".jpeg" or ".gif" or ".bmp" or ".webp" or ".svg" or ".ico" or ".tiff" => true,
+                                    // Documents — show document card
+                                    ".pdf" or ".doc" or ".docx" or ".txt" or ".md" or ".rtf" => true,
+                                    // Presentations
+                                    ".ppt" or ".pptx" => true,
+                                    // Video — show video card
+                                    ".mp4" or ".mkv" or ".avi" or ".mov" or ".wmv" or ".flv" => true,
+                                    // Audio
+                                    ".mp3" or ".wav" or ".flac" or ".ogg" or ".aac" or ".wma" => true,
+                                    // Archives
+                                    ".zip" or ".rar" or ".7z" or ".tar" or ".gz" or ".apk" => true,
+                                    // Everything else (dev/code files) → keep as text path
+                                    _ => false
+                                };
+
+                                if (isContentFile)
+                                {
+                                    FlyShelf.Classes.Logger.LogAction("DRAG IN", $"Resolved text path to content file: {possiblePath}");
+                                    item = new ClipboardItem(possiblePath);
+                                }
+                                // else: dev file path stays as plain text — will be classified below
                             }
                         }
                     }
